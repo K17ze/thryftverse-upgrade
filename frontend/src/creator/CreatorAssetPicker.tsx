@@ -7,16 +7,18 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
+import { AppGlyph } from '../components/common/AppGlyph';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
-import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
+import { Space, Radius, Typography, IconGrammar, Stroke, Elevation} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -24,16 +26,17 @@ import {
   fetchUserListingsFromApi,
   fetchListingByIdFromApi,
   type ListingSearchResult,
-  type ListingApiItem,
-} from '../services/listingsApi';
+  type ListingApiItem } from '../services/listingsApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { useStore } from '../store/useStore';
 import { fetchLooksFromApi } from '../services/looksApi';
 import { createStableId } from '../utils/createStableId';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { useToast } from '../context/ToastContext';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { Motion } from '../theme/motionTokens';
 import { withAlpha } from '../components/poster/shared/colorUtils';
 import type { CreatorLayer } from './composition';
 import { isCapabilitySupported, getCapabilityForLayerType, isVisualLayer } from './capabilities/registry';
@@ -50,8 +53,7 @@ import Reanimated, {
   interpolate,
   Extrapolation,
   Easing,
-  cancelAnimation,
-} from 'react-native-reanimated';
+  cancelAnimation } from 'react-native-reanimated';
 
 // ── Extracted sheet components (Phase 2: Asset Picker Decomposition) ──
 // These replace the monolithic inline pickers with dedicated, reusable
@@ -103,16 +105,14 @@ function TextEditorAdapter({ onClose, onAddLayer, editingLayer }: { onClose: () 
     if (isEditing && editingLayer) {
       onAddLayer({
         ...editingLayer,
-        payload: { ...editingLayer.payload, ...payload } as typeof editingLayer.payload,
-      } as CreatorLayer);
+        payload: { ...editingLayer.payload, ...payload } as typeof editingLayer.payload } as CreatorLayer);
     } else {
       onAddLayer({
         ...baseLayer(createStableId('text'), 10),
         type: 'text' as const,
         width: 0.6,
         height: 0.1,
-        payload: payload as never,
-      });
+        payload: payload as never });
     }
     onClose();
   }, [isEditing, editingLayer, onAddLayer, onClose]);
@@ -134,8 +134,7 @@ function TextEditorAdapter({ onClose, onAddLayer, editingLayer }: { onClose: () 
         alignment: existingPayload.alignment,
         opacity: 1,
         textEffect: existingPayload.textEffect,
-        textAnimation: existingPayload.textAnimation,
-      } : undefined}
+        textAnimation: existingPayload.textAnimation } : undefined}
       onConfirm={handleConfirm}
     />
   );
@@ -163,13 +162,11 @@ function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; o
           text: sticker.emoji,
           textStyle: 'clean',
           fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
-          textColor: '#ffffff',
+          textColor: TEXT_COLORS[0],
           alignment: 'center',
           opacity: 1,
           textEffect: 'none',
-          textAnimation: 'none',
-        },
-      });
+          textAnimation: 'none' } });
     } else if (sticker.iconRef) {
       // Icon-based sticker → decorative layer
       onAddLayer({
@@ -177,8 +174,7 @@ function StickerBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; o
         type: 'decorative',
         width: 0.15,
         height: 0.15,
-        payload: { shape: 'star', color: '#ffffff', opacity: 1 },
-      });
+        payload: { shape: 'star', color: SHAPE_COLORS[0], opacity: 1 } });
     }
     onClose();
   }, [onAddLayer, onClose]);
@@ -219,21 +215,18 @@ function DrawingWorkspaceAdapter({ onClose, onAddLayer, editingLayer, background
       emoji: s.emojiConfig?.emoji,
       emojiSize: s.emojiConfig?.size ?? 32,
       emojiSpacing: s.emojiConfig?.spacing ?? 24,
-      emojiJitter: s.emojiConfig?.jitter ?? 0,
-    }));
+      emojiJitter: s.emojiConfig?.jitter ?? 0 }));
     if (isEditing && editingLayer) {
       onAddLayer({
         ...editingLayer,
-        payload: { ...editingLayer.payload, strokes },
-      } as CreatorLayer);
+        payload: { ...editingLayer.payload, strokes } } as CreatorLayer);
     } else {
       onAddLayer({
         ...baseLayer(createStableId('draw'), 10),
         type: 'draw',
         width: 0.8,
         height: 0.8,
-        payload: { strokes, opacity: 1 },
-      });
+        payload: { strokes, opacity: 1 } });
     }
     onClose();
   }, [isEditing, editingLayer, onAddLayer, onClose]);
@@ -269,9 +262,7 @@ function AudioBrowserAdapter({ onClose, onAddLayer }: { onClose: () => void; onA
         opacity: 1,
         volume: 1,
         fadeInMs: 0,
-        fadeOutMs: 0,
-      },
-    });
+        fadeOutMs: 0 } });
     onClose();
   }, [onAddLayer, onClose]);
 
@@ -340,10 +331,11 @@ function PickerShell({ title, onClose, children, compact }: { title: string; onC
     <SheetContainer visible={true} onClose={onClose} compact={compact}>
       <KeyboardAwareScrollView contentContainerStyle={{ flex: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" style={{ maxHeight: '100%' }}>
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
           <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
+            <Ionicons name="close" size={22} color={colors.textSecondary} aria-hidden={true} />
           </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+          <View style={styles.headerSpacer} />
         </View>
         {children}
       </KeyboardAwareScrollView>
@@ -363,8 +355,7 @@ function baseLayer(id: string, zIndex: number): Omit<CreatorLayer, 'type' | 'pay
     zIndex,
     locked: false,
     hidden: false,
-    opacity: 1,
-  };
+    opacity: 1 };
 }
 
 // ── Media Picker ───────────────────────────────────────────────────
@@ -411,12 +402,12 @@ interface MediaAsset {
 // "Square" so the filter label matches what it actually does. Querying
 // actual smart albums (iOS Selfies album) requires platform-specific APIs
 // not reliably available through expo-media-library.
-type MediaCategory = 'recent' | 'photos' | 'videos' | 'square';
-const MEDIA_CATEGORIES: { key: MediaCategory; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
-  { key: 'recent', label: 'Recent', icon: 'time-outline' },
-  { key: 'photos', label: 'Photos', icon: 'images-outline' },
-  { key: 'videos', label: 'Videos', icon: 'videocam-outline' },
-  { key: 'square', label: 'Square', icon: 'crop-outline' },
+type MediaCategory = 'recent' | 'photos' | 'videos' | 'albums';
+const MEDIA_CATEGORIES: { key: MediaCategory; label: string }[] = [
+  { key: 'recent', label: 'Recent' },
+  { key: 'photos', label: 'Photos' },
+  { key: 'videos', label: 'Videos' },
+  { key: 'albums', label: 'Albums' },
 ];
 
 // ── MediaGridItem — spring press feedback + spring scale selection badge ──
@@ -425,13 +416,14 @@ function MediaGridItem({
   isSelected,
   selectionOrder,
   onPress,
+  onLongPress,
   colors,
-  styles,
-}: {
+  styles }: {
   asset: MediaAsset;
   isSelected: boolean;
   selectionOrder: number;
   onPress: () => void;
+  onLongPress?: () => void;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
@@ -453,20 +445,20 @@ function MediaGridItem({
   }, [isSelected, reduceMotion, spring, badgeScaleSV]);
 
   const pressStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(pressedSV.value, [0, 1], [1, 0.95], Extrapolation.CLAMP) }],
-  }));
+    transform: [{ scale: interpolate(pressedSV.value, [0, 1], [1, 0.95], Extrapolation.CLAMP) }] }));
 
   const badgeStyle = useAnimatedStyle(() => ({
     transform: [{ scale: badgeScaleSV.value }],
-    opacity: badgeScaleSV.value,
-  }));
+    opacity: badgeScaleSV.value }));
 
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       onPressIn={() => { pressedSV.value = withSpring(1, spring.tap); }}
       onPressOut={() => { pressedSV.value = withSpring(0, spring.tap); }}
       accessibilityLabel={`Select ${asset.mediaType}${isSelected ? `, selected ${selectionOrder}` : ''}`}
+      accessibilityHint="Long-press to preview"
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -488,9 +480,9 @@ function MediaGridItem({
           </View>
         )}
         {isSelected && (
-          <View style={styles.mediaGridSelectedOverlay}>
+          <View style={[styles.mediaGridSelectedOverlay, { borderColor: colors.brand }]}>
             <Reanimated.View style={[styles.mediaGridSelectionBadge, { backgroundColor: colors.brand }, badgeStyle]}>
-              <Text style={[styles.mediaGridSelectionText, { color: colors.textInverse }]}>{selectionOrder}</Text>
+              <Ionicons name="checkmark" size={10} color={colors.scrimTextPrimary} aria-hidden={true} />
             </Reanimated.View>
           </View>
         )}
@@ -499,26 +491,14 @@ function MediaGridItem({
   );
 }
 
-// ── StaticStateIcon — replaces the previous infinite breathing animation.
-// Per AGENTS.md §17, continuous pulsing is prohibited. Empty/permission
-// states use a static icon with a restrained one-shot entrance fade instead.
-function StaticStateIcon({ name, size, color }: { name: React.ComponentProps<typeof Ionicons>['name']; size: number; color: string }) {
-  return (
-    <Ionicons name={name} size={size} color={color} aria-hidden={true} />
-  );
-}
-
 // ── PermissionDeniedState — spring entrance with retry CTA ──
 function PermissionDeniedState({
-  icon,
   title,
   message,
   ctaLabel,
   onCta,
   colors,
-  styles,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  styles }: {
   title: string;
   message: string;
   ctaLabel: string;
@@ -527,23 +507,21 @@ function PermissionDeniedState({
   styles: ReturnType<typeof createStyles>;
 }) {
   const reduceMotion = useReducedMotion();
-  const { spring } = useMotionConfig();
   const entranceSV = useSharedValue(reduceMotion ? 1 : 0);
 
   useEffect(() => {
     if (!reduceMotion) {
-      entranceSV.value = withDelay(100, withSpring(1, spring.entrance));
+      // Per §5.14: entrance uses timing (ease-out), not spring.
+      entranceSV.value = withDelay(100, withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance }));
     }
-  }, [reduceMotion, spring, entranceSV]);
+  }, [reduceMotion, entranceSV]);
 
   const entranceStyle = useAnimatedStyle(() => ({
     opacity: entranceSV.value,
-    transform: [{ translateY: interpolate(entranceSV.value, [0, 1], [20, 0], Extrapolation.CLAMP) }],
-  }));
+    transform: [{ translateY: interpolate(entranceSV.value, [0, 1], [20, 0], Extrapolation.CLAMP) }] }));
 
   return (
     <Reanimated.View style={[styles.mediaPermissionState, entranceStyle]}>
-      <StaticStateIcon name={icon} size={IconGrammar.hero} color={colors.textMuted} />
       <Text style={[styles.mediaPermissionTitle, { color: colors.textPrimary }]}>
         {title}
       </Text>
@@ -562,9 +540,10 @@ function PermissionDeniedState({
   );
 }
 
-function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const { show: showToast } = useToast();
   const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const { spring } = useMotionConfig();
@@ -574,6 +553,10 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  // Long-press preview — shows a transient full-screen preview of the
+  // long-pressed asset (iOS Photos peek pattern).
+  const [previewAsset, setPreviewAsset] = useState<MediaAsset | null>(null);
   // Ordered selection — preserved as an array instead of deriving order
   // from Set iteration semantics (which is not deterministic across JS
   // engines). This ensures the selection order matches the user's tap order.
@@ -607,9 +590,6 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     return () => { cancelled = true; };
   }, [status?.granted]);
 
-  const activeAlbum = albums.find((a) => a.id === activeAlbumId) ?? null;
-  const albumLabel = activeAlbum?.title ?? 'All Photos';
-
   // Spring indicator for category tab
   const tabIndicatorXSV = useSharedValue(0);
   const tabIndicatorWidthSV = useSharedValue(0);
@@ -634,8 +614,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       const opts: any = {
         first: 60,
         mediaType: ['photo', 'video'],
-        sortBy: [['creationTime', false]],
-      };
+        sortBy: [['creationTime', false]] };
       if (!reset && cursorRef.current) {
         opts.after = cursorRef.current;
       }
@@ -656,8 +635,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         // Legacy expo-media-library returns duration in seconds; normalize
         // to milliseconds at the boundary so all downstream logic uses one
         // consistent unit.
-        durationMs: a.duration != null ? Math.round(a.duration * 1000) : undefined,
-      }));
+        durationMs: a.duration != null ? Math.round(a.duration * 1000) : undefined }));
 
       setAssets((prev) => reset ? mapped : [...prev, ...mapped]);
       cursorRef.current = page.endCursor;
@@ -679,10 +657,28 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     }
   }, [status, loadRecentMedia]);
 
+  // ── Pull-to-refresh ──────────────────────────────────────────────
+  // Reloads the first page of the media library. Distinct from the initial
+  // load: the FlashList keeps its scroll position while the data refreshes.
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await loadRecentMedia(true);
+    } finally {
+      if (mountedRef.current) setIsRefreshing(false);
+    }
+  }, [loadRecentMedia]);
+
   // ── Category tab switch with spring indicator ────────────────────
   const handleCategorySwitch = useCallback((cat: MediaCategory) => {
+    if (cat === 'albums') {
+      haptic.selection();
+      setShowAlbumPicker((v) => !v);
+      return;
+    }
     if (cat === activeCategory) return;
     haptic.selection();
+    setShowAlbumPicker(false);
     setActiveCategory(cat);
     const layout = tabLayoutsRef.current[cat];
     if (layout) {
@@ -701,7 +697,6 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     if (activeCategory === 'recent') return assets;
     if (activeCategory === 'photos') return assets.filter(a => a.mediaType === 'image');
     if (activeCategory === 'videos') return assets.filter(a => a.mediaType === 'video');
-    if (activeCategory === 'square') return assets.filter(a => a.mediaType === 'image' && a.width === a.height);
     return assets;
   }, [assets, activeCategory]);
 
@@ -710,13 +705,12 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   // enter the selection. This prevents the user from building a selection
   // that will be rejected downstream by the editor or upload pipeline.
   const MAX_VIDEO_DURATION_MS = 60_000;
-  const videoPreflightError = useRef<string | null>(null);
 
   const toggleSelect = useCallback((asset: MediaAsset) => {
     if (asset.mediaType === 'video') {
       if (asset.durationMs != null && asset.durationMs > MAX_VIDEO_DURATION_MS) {
-        haptic.medium();
-        videoPreflightError.current = `Video is ${Math.floor(asset.durationMs / 1000)}s — max 60s supported`;
+        haptic.error();
+        showToast(`Video is ${Math.floor(asset.durationMs / 1000)}s — max 60s`, 'error');
         return;
       }
     }
@@ -749,28 +743,10 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           mediaType: asset.mediaType,
           contentFit: 'cover',
           videoDurationMs: asset.durationMs,
-          opacity: 1,
-        },
-      });
+          opacity: 1 } });
     });
     onClose();
   }, [selectedIds, assets, onAddLayer, onClose]);
-
-  // ── Reorder selection ──
-  // Move a selected item left or right in the ordered array. This lets the
-  // user correct their tap order before committing to the canvas.
-  const reorderSelection = useCallback((id: string, direction: -1 | 1) => {
-    haptic.selection();
-    setSelectedIds((prev) => {
-      const idx = prev.indexOf(id);
-      if (idx < 0) return prev;
-      const targetIdx = idx + direction;
-      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
-      const next = [...prev];
-      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
-      return next;
-    });
-  }, [haptic]);
 
   const handleTakePhoto = useCallback(async () => {
     haptic.light();
@@ -778,8 +754,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     if (camStatus !== 'granted') return;
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.9,
-    });
+      quality: 0.9 });
     if (!result.canceled && result.assets[0]) {
       onAddLayer({
         ...baseLayer(createStableId('media'), 0),
@@ -790,9 +765,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           mediaUri: result.assets[0].uri,
           mediaType: 'image',
           contentFit: 'cover',
-          opacity: 1,
-        },
-      });
+          opacity: 1 } });
       onClose();
     }
   }, [onAddLayer, onClose]);
@@ -801,9 +774,14 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
     haptic.light();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      quality: 0.9,
-    });
+      quality: 0.9 });
     if (!result.canceled && result.assets[0]) {
+      const durationMs = result.assets[0].duration ?? 0;
+      if (durationMs > MAX_VIDEO_DURATION_MS) {
+        haptic.error();
+        showToast(`Video is ${Math.floor(durationMs / 1000)}s — max 60s`, 'error');
+        return;
+      }
       onAddLayer({
         ...baseLayer(createStableId('media'), 0),
         type: 'media',
@@ -813,14 +791,11 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           mediaUri: result.assets[0].uri,
           mediaType: 'video',
           contentFit: 'cover',
-          // ImagePicker returns duration in milliseconds.
-          videoDurationMs: result.assets[0].duration ?? undefined,
-          opacity: 1,
-        },
-      });
+          videoDurationMs: durationMs || undefined,
+          opacity: 1 } });
       onClose();
     }
-  }, [onAddLayer, onClose]);
+  }, [onAddLayer, onClose, haptic, showToast, MAX_VIDEO_DURATION_MS]);
 
   const handleOpenSettings = useCallback(async () => {
     const { Linking } = await import('react-native');
@@ -832,36 +807,11 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   // ── Tab indicator animated style ─────────────────────────────────
   const tabIndicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tabIndicatorXSV.value }],
-    width: tabIndicatorWidthSV.value,
-  }));
+    width: tabIndicatorWidthSV.value }));
 
   // ── FlashList renderItem ─────────────────────────────────────────
-  const renderItem: ListRenderItem<MediaAsset | 'camera' | 'video'> = useCallback(({ item }) => {
-    if (item === 'camera') {
-      return (
-        <PressScale
-          onPress={handleTakePhoto}
-          style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
-          accessibilityLabel="Take photo with camera"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="camera-outline" size={IconGrammar.hero} color={colors.textPrimary} aria-hidden={true} />
-        </PressScale>
-      );
-    }
-    if (item === 'video') {
-      return (
-        <PressScale
-          onPress={handlePickVideo}
-          style={[styles.mediaGridCell, { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
-          accessibilityLabel="Pick video from gallery"
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="videocam-outline" size={IconGrammar.hero} color={colors.textPrimary} aria-hidden={true} />
-        </PressScale>
-      );
-    }
-    const asset = item as MediaAsset;
+  const renderItem: ListRenderItem<MediaAsset> = useCallback(({ item }) => {
+    const asset = item;
     const isSelected = selectedIds.includes(asset.id);
     const selectionOrder = isSelected ? selectedIds.indexOf(asset.id) + 1 : 0;
     return (
@@ -870,22 +820,41 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         isSelected={isSelected}
         selectionOrder={selectionOrder}
         onPress={() => toggleSelect(asset)}
+        onLongPress={() => setPreviewAsset(asset)}
         colors={colors}
         styles={styles}
       />
     );
-  }, [colors, handleTakePhoto, handlePickVideo, toggleSelect, selectedIds, styles]);
+  }, [colors, toggleSelect, selectedIds, styles]);
 
-  const gridData: (MediaAsset | 'camera' | 'video')[] = useMemo(() => {
-    return ['camera', 'video', ...filteredAssets];
+  const gridData: MediaAsset[] = useMemo(() => {
+    return filteredAssets;
   }, [filteredAssets]);
+
+  // ── Camera hero header — full-width primary action above the grid ──
+  const cameraHero = useMemo(() => (
+    <PressScale
+      onPress={handleTakePhoto}
+      style={styles.mediaCameraHero}
+      accessibilityLabel="Take photo with camera"
+      accessibilityRole="button"
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <AppGlyph name="camera" size={IconGrammar.hero} color={colors.textPrimary} />
+      <Text style={[styles.mediaCameraHeroLabel, { color: colors.textPrimary }]}>
+        Camera
+      </Text>
+    </PressScale>
+  ), [handleTakePhoto, styles, colors]);
 
   // ── Permission states (after all hooks) ──
   if (!status) {
     return (
-      <PickerShell title="Add Media" onClose={onClose}>
-        <View style={styles.mediaLoadingState}>
-          <ActivityIndicator size="large" color={colors.brand} />
+      <PickerShell title="Select" onClose={onClose}>
+        <View style={styles.mediaGridContent}>
+          {Array.from({ length: 18 }).map((_, i) => (
+            <View key={i} style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]} />
+          ))}
         </View>
       </PickerShell>
     );
@@ -893,11 +862,10 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
   if (!status.granted && !status.canAskAgain) {
     return (
-      <PickerShell title="Add Media" onClose={onClose}>
+      <PickerShell title="Select" onClose={onClose}>
         <PermissionDeniedState
-          icon="lock-closed-outline"
           title="Photo access needed"
-          message="Allow access to your photo library to pick media for your creation."
+          message="Allow access to your photos to start creating."
           ctaLabel="Open settings"
           onCta={handleOpenSettings}
           colors={colors}
@@ -909,11 +877,10 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
 
   if (!status.granted) {
     return (
-      <PickerShell title="Add Media" onClose={onClose}>
+      <PickerShell title="Select" onClose={onClose}>
         <PermissionDeniedState
-          icon="images-outline"
-          title="Access your photos"
-          message="We need access to show your recent photos and videos here."
+          title="Photo access needed"
+          message="Allow access to your photos to start creating."
           ctaLabel="Allow access"
           onCta={() => requestPermission()}
           colors={colors}
@@ -928,97 +895,71 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
   return (
     <SheetContainer visible={true} onClose={selectedCount > 0 ? () => { setSelectedIds([]); } : onClose} maxHeight={0.9}>
       <View style={styles.header}>
-        {/* The title stays as the static sheet title regardless of selection
-            state. The selection count is shown in exactly one place — the
-            Add (N) button — to avoid the label-everything AI-tell of
-            restating the count in the title, a badge, and the button
-            (AGENTS.md §4). This matches the MediaBrowserSheet pattern. */}
+        <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Ionicons name="close" size={22} color={colors.textSecondary} aria-hidden={true} />
+        </PressScale>
         <Text style={[styles.title, { color: colors.textPrimary }]}>
-          Add Media
+          Select
         </Text>
-        <View style={styles.headerRight}>
-          {selectedCount > 0 && (
-            <PressScale
-              onPress={handleAddSelected}
-              style={[styles.addBtn, { backgroundColor: colors.brand }]}
-              accessibilityLabel={`Add ${selectedCount} selected media`}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Text style={[styles.addBtnText, { color: colors.textInverse }]}>
-                Add ({selectedCount})
-              </Text>
-            </PressScale>
-          )}
-          <PressScale onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close picker" accessibilityHint="Closes the picker sheet" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} aria-hidden={true} />
-          </PressScale>
-        </View>
+        <PressScale
+          onPress={selectedCount > 0 ? handleAddSelected : onClose}
+          style={styles.doneBtn}
+          accessibilityLabel={selectedCount > 0 ? `Add ${selectedCount} selected media` : 'Done'}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={[styles.doneBtnText, { color: selectedCount > 0 ? colors.brand : colors.textMuted }]}>
+            Done
+          </Text>
+        </PressScale>
       </View>
 
-      {/* Album/source disclosure — per audit: "album/source disclosure" in
-          the canonical MediaAcquireSheet header. Shows the current album
-          name and opens a dropdown to switch between device albums. */}
-      {albums.length > 0 && (
-        <Pressable
-          style={styles.albumDisclosure}
-          onPress={() => { haptic.light(); setShowAlbumPicker((v) => !v); }}
-          accessibilityLabel={`Current album: ${albumLabel}. Tap to change album.`}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: showAlbumPicker }}
-          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
-        >
-          <Ionicons name="folder-open-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />
-          <Text style={[styles.albumDisclosureText, { color: colors.textPrimary }]} numberOfLines={1}>
-            {albumLabel}
-          </Text>
-          <Ionicons name={showAlbumPicker ? 'chevron-up' : 'chevron-down'} size={IconGrammar.badge} color={colors.textMuted} aria-hidden={true} />
-        </Pressable>
-      )}
-
-      {/* Album picker dropdown — flat list of device albums */}
+      {/* Album picker dropdown — triggered from the "Albums" tab.
+          48pt rows, no thumbnails. Row: album name + count + chevron. */}
       {showAlbumPicker && albums.length > 0 && (
-        <View style={[styles.albumPickerDropdown, { borderColor: colors.border }]}>
+        <ScrollView style={styles.albumPickerDropdown} contentContainerStyle={{ paddingBottom: Space.sm }}>
           <Pressable
-            style={[styles.albumPickerItem, activeAlbumId === null && { backgroundColor: colors.brandSubtle }]}
+            style={styles.albumPickerItem}
             onPress={() => {
               haptic.selection();
               setActiveAlbumId(null);
               setShowAlbumPicker(false);
+              setActiveCategory('recent');
             }}
             accessibilityLabel="All Photos album"
             accessibilityRole="button"
             accessibilityState={{ selected: activeAlbumId === null }}
           >
-            <Ionicons name="images-outline" size={IconGrammar.metadata} color={activeAlbumId === null ? colors.brand : colors.textSecondary} aria-hidden={true} />
-            <Text style={[styles.albumPickerItemText, { color: activeAlbumId === null ? colors.brand : colors.textPrimary }]}>
+            <Text style={[styles.albumPickerItemText, { color: activeAlbumId === null ? colors.brand : colors.textPrimary }]} numberOfLines={1}>
               All Photos
             </Text>
-            {activeAlbumId === null && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} aria-hidden={true} />}
+            <Text style={styles.albumPickerItemCount}>{''}</Text>
+            <Ionicons name={activeAlbumId === null ? 'checkmark' : 'chevron-forward'} size={16} color={activeAlbumId === null ? colors.brand : colors.textMuted} aria-hidden={true} />
           </Pressable>
           {albums.slice(0, 12).map((album) => (
             <Pressable
               key={album.id}
-              style={[styles.albumPickerItem, activeAlbumId === album.id && { backgroundColor: colors.brandSubtle }]}
+              style={styles.albumPickerItem}
               onPress={() => {
                 haptic.selection();
                 setActiveAlbumId(album.id);
                 setShowAlbumPicker(false);
+                setActiveCategory('recent');
               }}
               accessibilityLabel={`${album.title} album`}
               accessibilityRole="button"
               accessibilityState={{ selected: activeAlbumId === album.id }}
             >
-              <Ionicons name="folder-outline" size={IconGrammar.metadata} color={activeAlbumId === album.id ? colors.brand : colors.textSecondary} aria-hidden={true} />
               <Text style={[styles.albumPickerItemText, { color: activeAlbumId === album.id ? colors.brand : colors.textPrimary }]} numberOfLines={1}>
                 {album.title}
               </Text>
-              {activeAlbumId === album.id && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} aria-hidden={true} />}
+              <Text style={styles.albumPickerItemCount}>{album.assetCount}</Text>
+              <Ionicons name={activeAlbumId === album.id ? 'checkmark' : 'chevron-forward'} size={16} color={activeAlbumId === album.id ? colors.brand : colors.textMuted} aria-hidden={true} />
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       )}
 
-      {/* Camera roll category tabs with spring indicator */}
+      {/* Category tabs — text-only, 2pt brand underline indicator */}
       <View style={styles.categoryTabRow}>
         <Reanimated.View
           style={[styles.categoryTabIndicator, { backgroundColor: colors.brand }, tabIndicatorStyle]}
@@ -1032,27 +973,20 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               onLayout={(e) => {
                 tabLayoutsRef.current[cat.key] = {
                   x: e.nativeEvent.layout.x,
-                  width: e.nativeEvent.layout.width,
-                };
+                  width: e.nativeEvent.layout.width };
                 if (cat.key === 'recent' && tabIndicatorWidthSV.value === 0) {
                   tabIndicatorWidthSV.value = e.nativeEvent.layout.width;
                 }
               }}
               style={styles.categoryTab}
-              accessibilityLabel={`Category ${cat.label}`}
+              accessibilityLabel={cat.label}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons
-                name={cat.icon}
-                size={IconGrammar.metadata}
-                color={active ? colors.textInverse : colors.textSecondary}
-                aria-hidden={true}
-              />
               <Text style={[
                 styles.categoryTabLabel,
-                { color: active ? colors.textInverse : colors.textSecondary },
+                { color: active ? colors.textPrimary : colors.textSecondary },
               ]}>
                 {cat.label}
               </Text>
@@ -1061,25 +995,30 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         })}
       </View>
 
-      {isLoading ? (
-        <View style={styles.mediaLoadingState}>
-          <ActivityIndicator size="large" color={colors.brand} />
+      {!showAlbumPicker && (isLoading ? (
+        <View style={styles.mediaGridContent}>
+          {Array.from({ length: 18 }).map((_, i) => (
+            <View key={i} style={[styles.mediaGridCell, { backgroundColor: colors.surfaceAlt }]} />
+          ))}
         </View>
       ) : filteredAssets.length === 0 ? (
-        // Empty state
         <View style={styles.mediaEmptyState}>
-          <StaticStateIcon name="images-outline" size={IconGrammar.hero} color={colors.textMuted} />
-          <Text style={[styles.mediaEmptyText, { color: colors.textSecondary }]}>
-            {activeCategory === 'videos' ? 'No videos found' : activeCategory === 'square' ? 'No square photos found' : 'No photos found'}
+          <Text style={[styles.mediaEmptyTitle, { color: colors.textPrimary }]}>
+            No photos yet
           </Text>
-          <PressScale
+          <Text style={[styles.mediaEmptySubtitle, { color: colors.textSecondary }]}>
+            Take photos with the camera to get started.
+          </Text>
+          <Pressable
             onPress={handleTakePhoto}
-            style={[styles.mediaPermissionBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Take photo"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Open camera"
+            accessibilityRole="button"
           >
-            <Text style={[styles.mediaPermissionBtnText, { color: colors.textInverse }]}>Take photo</Text>
-          </PressScale>
+            <Text style={[styles.mediaEmptyLink, { color: colors.brand }]}>
+              Open camera
+            </Text>
+          </Pressable>
         </View>
       ) : (
         <>
@@ -1098,7 +1037,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               accessibilityLabel="Limited photo access — tap to select more photos"
               accessibilityRole="button"
             >
-              <Ionicons name="images-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />
+              <AppGlyph name="media-image" size={IconGrammar.metadata} color={colors.textSecondary} />
               <Text style={[styles.limitedAccessText, { color: colors.textSecondary }]}>
                 Limited access — tap to add more photos
               </Text>
@@ -1106,7 +1045,7 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             </Pressable>
           )}
 
-          {/* Selection preview rail — ordered thumbnails with reorder support */}
+          {/* Selection preview rail — ordered thumbnails with order badge + remove */}
           {selectedCount > 0 && (
             <View style={styles.selectionPreviewRail}>
               <ScrollView
@@ -1117,8 +1056,12 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                 {selectedIds.map((id, index) => {
                   const asset = assets.find((a) => a.id === id);
                   if (!asset) return null;
+                  const isMostRecent = index === selectedIds.length - 1;
                   return (
-                    <View key={id} style={styles.selectionPreviewItem}>
+                    <View
+                      key={id}
+                      style={[styles.selectionPreviewItem, isMostRecent && styles.selectionPreviewItemSelected]}
+                    >
                       <Image
                         source={{ uri: asset.uri }}
                         style={styles.selectionPreviewThumb}
@@ -1129,38 +1072,14 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                           {index + 1}
                         </Text>
                       </View>
-                      {/* Reorder left — move this item earlier in the sequence */}
-                      {index > 0 && (
-                        <Pressable
-                          style={styles.selectionPreviewReorderLeft}
-                          onPress={() => reorderSelection(id, -1)}
-                          hitSlop={4}
-                          accessibilityLabel={`Move ${asset.mediaType} ${index + 1} earlier in selection`}
-                          accessibilityRole="button"
-                        >
-                          <Ionicons name="chevron-back-circle" size={IconGrammar.standard} color={colors.scrimTextPrimary} aria-hidden={true} />
-                        </Pressable>
-                      )}
-                      {/* Reorder right — move this item later in the sequence */}
-                      {index < selectedIds.length - 1 && (
-                        <Pressable
-                          style={styles.selectionPreviewReorderRight}
-                          onPress={() => reorderSelection(id, 1)}
-                          hitSlop={4}
-                          accessibilityLabel={`Move ${asset.mediaType} ${index + 1} later in selection`}
-                          accessibilityRole="button"
-                        >
-                          <Ionicons name="chevron-forward-circle" size={IconGrammar.standard} color={colors.scrimTextPrimary} aria-hidden={true} />
-                        </Pressable>
-                      )}
                       <Pressable
-                        style={styles.selectionPreviewRemove}
+                        style={[styles.selectionPreviewRemove, { backgroundColor: colors.dangerSubtle }]}
                         onPress={() => toggleSelect(asset)}
                         hitSlop={8}
                         accessibilityLabel={`Remove ${asset.mediaType} ${index + 1} from selection`}
                         accessibilityRole="button"
                       >
-                        <Ionicons name="close-circle" size={IconGrammar.standard} color={colors.scrimTextPrimary} aria-hidden={true} />
+                        <Ionicons name="close" size={12} color={colors.danger} aria-hidden={true} />
                       </Pressable>
                     </View>
                   );
@@ -1172,12 +1091,15 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
           {/* Full grid via FlashList for virtualization */}
           <FlashList
             data={gridData}
-            keyExtractor={(item) => typeof item === 'string' ? item : item.id}
+            keyExtractor={(item) => item.id}
             renderItem={renderItem}
             numColumns={GRID_COLUMNS}
             contentContainerStyle={styles.mediaGridContent}
+            ListHeaderComponent={cameraHero}
             onEndReached={() => loadRecentMedia(false)}
             onEndReachedThreshold={0.5}
+            onRefresh={handleRefresh}
+            refreshing={isRefreshing}
             ListFooterComponent={loadingMore ? (
               <View style={styles.mediaGridFooter}>
                 <ActivityIndicator size="small" color={colors.textMuted} />
@@ -1185,10 +1107,28 @@ function MediaPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
             ) : null}
           />
         </>
+      ))}
+
+      {/* ── Long-press preview overlay (iOS Photos peek pattern) ──
+          Shows the full-resolution image while the user holds. Dismisses
+          on touch up. No chrome — the image is the preview. */}
+      {previewAsset && (
+        <Pressable
+          style={styles.previewOverlay}
+          onPress={() => setPreviewAsset(null)}
+          accessibilityLabel="Preview, tap to dismiss"
+          accessibilityRole="button"
+        >
+          <Image
+            source={{ uri: previewAsset.uri }}
+            style={styles.previewImage}
+            contentFit="contain"
+          />
+        </Pressable>
       )}
     </SheetContainer>
   );
-}
+});
 
 // ── Product Picker ─────────────────────────────────────────────────
 // Per spec 10 (Look Architecture V3), the Add item drawer sources are:
@@ -1230,8 +1170,7 @@ async function recordRecentListing(item: ListingSearchResult): Promise<void> {
       title: item.title,
       priceGbp: item.priceGbp,
       imageUrl: item.imageUrl,
-      createdAt: item.createdAt,
-    };
+      createdAt: item.createdAt };
     const filtered = existing.filter((e) => e.id !== entry.id);
     const next = [entry, ...filtered].slice(0, MAX_RECENT);
     await AsyncStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(next));
@@ -1256,14 +1195,14 @@ function listingApiItemToSearchResult(item: ListingApiItem): ListingSearchResult
     brand: item.brand,
     size: item.size,
     condition: item.condition,
-    category: item.category,
-  };
+    category: item.category };
 }
 
 type ProductSourceTab = 'closet' | 'saved' | 'search' | 'recent';
 
-function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const ProductPicker = React.memo(function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
@@ -1417,8 +1356,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
             imageUrl: e.imageUrl,
             rank: 0,
             createdAt: e.createdAt,
-            seller: null,
-          }))
+            seller: null }))
         );
       })
       .catch(() => {
@@ -1444,9 +1382,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
         snapshotTitle: item.title,
         snapshotImageUrl: item.imageUrl ?? undefined,
         snapshotPriceGbp: item.priceGbp,
-        availability: 'active',
-      },
-    });
+        availability: 'active' } });
     onClose();
   }, [onAddLayer, onClose, haptic]);
 
@@ -1488,11 +1424,23 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
     }
   }, [activeTab, doSearch, query]);
 
-  const tabs: Array<{ key: ProductSourceTab; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
-    { key: 'search', label: 'Search', icon: 'search-outline' },
-    { key: 'closet', label: 'My Closet', icon: 'shirt-outline' },
-    { key: 'saved', label: 'Saved', icon: 'bookmark-outline' },
-    { key: 'recent', label: 'Recent', icon: 'time-outline' },
+  const renderProductItem = useCallback<ListRenderItem<ListingSearchResult>>(({ item }) => (
+    <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+      <View style={styles.resultThumb}>
+        {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <AppGlyph name="store-bag" size={IconGrammar.metadata} color={colors.textSecondary} />}
+      </View>
+      <View style={styles.resultInfo}>
+        <Text style={styles.resultName} numberOfLines={1}>{item.title}</Text>
+        <Text style={styles.resultPrice}>{currencySymbol}{item.priceGbp.toFixed(0)}</Text>
+      </View>
+    </Pressable>
+  ), [handleSelect, styles, colors, currencySymbol]);
+
+  const tabs: Array<{ key: ProductSourceTab; label: string }> = [
+    { key: 'search', label: 'Search' },
+    { key: 'closet', label: 'My Closet' },
+    { key: 'saved', label: 'Saved' },
+    { key: 'recent', label: 'Recent' },
   ];
 
   return (
@@ -1506,13 +1454,12 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
               <Pressable
                 key={tab.key}
                 onPress={() => { haptic.light(); setActiveTab(tab.key); }}
-                style={[styles.productTab, isActive && styles.productTabActive]}
+                style={styles.productTab}
                 accessibilityLabel={tab.label}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: isActive }}
               >
-                <Ionicons name={tab.icon} size={IconGrammar.metadata} color={isActive ? colors.brand : colors.textSecondary} aria-hidden={true} />
-                <Text style={[styles.productTabLabel, { color: isActive ? colors.brand : colors.textSecondary }]}>{tab.label}</Text>
+                <Text style={[styles.productTabLabel, { color: isActive ? colors.textPrimary : colors.textSecondary }]}>{tab.label}</Text>
               </Pressable>
             );
           })}
@@ -1554,17 +1501,7 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
         <FlashList
           data={activeResults}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <View style={styles.resultThumb}>
-                {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <Ionicons name="pricetag" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} />}
-              </View>
-              <View style={styles.resultInfo}>
-                <Text style={styles.resultName} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.resultPrice}>£{item.priceGbp.toFixed(0)}</Text>
-              </View>
-            </Pressable>
-          )}
+          renderItem={renderProductItem}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
           drawDistance={250}
@@ -1589,11 +1526,11 @@ function ProductPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       )}
     </PickerShell>
   );
-}
+});
 
 // ── Mention Picker ─────────────────────────────────────────────────
 
-function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const MentionPicker = React.memo(function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -1654,10 +1591,21 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       type: 'mention',
       width: 0.15,
       height: 0.06,
-      payload: { userId: user.id, username: user.username },
-    });
+      payload: { userId: user.id, username: user.username } });
     onClose();
   }, [onAddLayer, onClose]);
+
+  const renderMentionItem = useCallback<ListRenderItem<UserSearchResult>>(({ item }) => (
+    <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+      <View style={styles.resultAvatar}>
+        {item.avatar ? <Image source={{ uri: item.avatar }} style={styles.resultThumbImg} /> : <Text style={styles.resultAvatarText}>{item.username[0]?.toUpperCase()}</Text>}
+      </View>
+      <View style={styles.resultInfo}>
+        <Text style={styles.resultName}>@{item.username}</Text>
+        {item.displayName && <Text style={styles.resultSubtext}>{item.displayName}</Text>}
+      </View>
+    </Pressable>
+  ), [handleSelect, styles]);
 
   return (
     <PickerShell title="Add Mention" onClose={onClose} compact>
@@ -1687,17 +1635,7 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
         <FlashList
           data={results}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select @${item.username}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <View style={styles.resultAvatar}>
-                {item.avatar ? <Image source={{ uri: item.avatar }} style={styles.resultThumbImg} /> : <Text style={styles.resultAvatarText}>{item.username[0]?.toUpperCase()}</Text>}
-              </View>
-              <View style={styles.resultInfo}>
-                <Text style={styles.resultName}>@{item.username}</Text>
-                {item.displayName && <Text style={styles.resultSubtext}>{item.displayName}</Text>}
-              </View>
-            </Pressable>
-          )}
+          renderItem={renderMentionItem}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
           drawDistance={250}
@@ -1706,11 +1644,11 @@ function MentionPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLaye
       )}
     </PickerShell>
   );
-}
+});
 
 // ── Look Picker ────────────────────────────────────────────────────
 
-function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const LookPicker = React.memo(function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -1738,8 +1676,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           id: l.id,
           caption: l.caption || l.title,
           mediaUrl: l.mediaUrl,
-          creatorId: l.creatorId,
-        })));
+          creatorId: l.creatorId })));
     } catch (err) {
       if (!mountedRef.current) return;
       setError((err as Error).message || 'Failed to load looks');
@@ -1765,10 +1702,18 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
       type: 'look',
       width: 0.2,
       height: 0.08,
-      payload: { lookId: item.id, snapshotCaption: item.caption, snapshotImageUrl: item.mediaUrl },
-    });
+      payload: { lookId: item.id, snapshotCaption: item.caption, snapshotImageUrl: item.mediaUrl } });
     onClose();
   }, [onAddLayer, onClose]);
+
+  const renderLookItem = useCallback<ListRenderItem<{ id: string; caption: string; mediaUrl: string; creatorId: string }>>(({ item }) => (
+    <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+      <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} /></View>
+      <View style={styles.resultInfo}>
+        <Text style={styles.resultName} numberOfLines={2}>{item.caption}</Text>
+      </View>
+    </Pressable>
+  ), [handleSelect, styles, colors]);
 
   return (
     <PickerShell title="Add Look" onClose={onClose} compact>
@@ -1798,14 +1743,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
         <FlashList
           data={filtered}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select look ${item.caption}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <View style={styles.resultAvatar}><Ionicons name="shirt-outline" size={IconGrammar.metadata} color={colors.textSecondary} aria-hidden={true} /></View>
-              <View style={styles.resultInfo}>
-                <Text style={styles.resultName} numberOfLines={2}>{item.caption}</Text>
-              </View>
-            </Pressable>
-          )}
+          renderItem={renderLookItem}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
           drawDistance={250}
@@ -1814,7 +1752,7 @@ function LookPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
       )}
     </PickerShell>
   );
-}
+});
 
 // ── Text Picker ────────────────────────────────────────────────────
 // Instagram 2025-2026 parity: 10 fonts, text effects, background color,
@@ -1857,6 +1795,14 @@ const TEXT_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9
 
 const TEXT_BG_COLORS = ['transparent', '#000000', '#ffffff', '#9b0202', '#215634', '#06489A', '#C9A46A', '#6B3245'];
 
+const RAINBOW_GRADIENT = ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000'] as const;
+
+// Content constant: the text-sticker preview stage mimics the dark document
+// canvas in both themes, so it must not track the app background.
+const TEXT_PREVIEW_STAGE_BG = '#0d0d0d';
+
+const DEFAULT_STICKER_BG_COLOR = '#C9A46A';
+
 const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
   { key: 'left', icon: 'text-outline' },
   { key: 'center', icon: 'text' },
@@ -1867,20 +1813,19 @@ const TEXT_ALIGNMENTS: Array<{ key: 'left' | 'center' | 'right'; icon: React.Com
 // Instagram 2025-2026: 10 fonts covering clean, bold, editorial,
 // compact, handwritten, bubble, deco, poster, squeeze, signature
 const TEXT_STYLE_PREVIEW: Record<string, { fontFamily: string; fontSize: number; lineHeight: number }> = {
-  clean: { fontFamily: Typography.family.medium, fontSize: Type.body.size, lineHeight: Type.body.size * 1.3 },
-  headline: { fontFamily: Typography.family.bold, fontSize: Type.title.size, lineHeight: Type.title.size * 1.15 },
-  editorial: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size + 2, lineHeight: (Type.bodyStrong.size + 2) * 1.2 },
-  compact: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, lineHeight: Type.caption.size * 1.3 },
-  handwritten: { fontFamily: Typography.family.regular, fontSize: Type.body.size, lineHeight: Type.body.size * 1.35 },
-  bubble: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size + 4, lineHeight: (Type.bodyStrong.size + 4) * 1.2 },
-  deco: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size, lineHeight: Type.bodyStrong.size * 1.3 },
-  poster: { fontFamily: Typography.family.bold, fontSize: Type.title.size - 4, lineHeight: (Type.title.size - 4) * 1.1 },
-  squeeze: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.size * 1.1 },
-  signature: { fontFamily: Typography.family.regular, fontSize: Type.bodyStrong.size, lineHeight: Type.bodyStrong.size * 1.4 },
-  neon: { fontFamily: Typography.family.bold, fontSize: Type.bodyStrong.size + 4, lineHeight: (Type.bodyStrong.size + 4) * 1.2 },
-};
+  clean: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.size * 1.3 },
+  headline: { fontFamily: TypographyV2.screenTitle.fontFamily, fontSize: TypographyV2.screenTitle.size, lineHeight: TypographyV2.screenTitle.size * 1.15 },
+  editorial: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size + 2, lineHeight: (TypographyV2.bodyStrong.size + 2) * 1.2 },
+  compact: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, lineHeight: TypographyV2.meta.size * 1.3 },
+  handwritten: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.size * 1.35 },
+  bubble: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size + 4, lineHeight: (TypographyV2.bodyStrong.size + 4) * 1.2 },
+  deco: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, lineHeight: TypographyV2.bodyStrong.size * 1.3 },
+  poster: { fontFamily: TypographyV2.screenTitle.fontFamily, fontSize: TypographyV2.screenTitle.size - 4, lineHeight: (TypographyV2.screenTitle.size - 4) * 1.1 },
+  squeeze: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.size * 1.1 },
+  signature: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, lineHeight: TypographyV2.bodyStrong.size * 1.4 },
+  neon: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size + 4, lineHeight: (TypographyV2.bodyStrong.size + 4) * 1.2 } };
 
-function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const TextPicker = React.memo(function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -1890,7 +1835,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
   const [text, setText] = useState(existingPayload?.text ?? '');
   const [textStyle, setTextStyle] = useState<string>(existingPayload?.textStyle ?? 'clean');
-  const [textColor, setTextColor] = useState(existingPayload?.textColor ?? '#ffffff');
+  const [textColor, setTextColor] = useState(existingPayload?.textColor ?? TEXT_COLORS[0]);
   const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>(existingPayload?.alignment ?? 'center');
   const [textEffect, setTextEffect] = useState<string>(existingPayload?.textEffect ?? 'none');
   const [textAnimation, setTextAnimation] = useState<string>(existingPayload?.textAnimation ?? 'none');
@@ -1907,24 +1852,20 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       opacity: 1,
       textEffect,
       textAnimation,
-      backgroundColor: textBgColor !== 'transparent' ? textBgColor : undefined,
-    };
+      backgroundColor: textBgColor !== 'transparent' ? textBgColor : undefined };
     if (isEditing && editingLayer) {
       onAddLayer({
         ...editingLayer,
         payload: {
           ...editingLayer.payload,
-          ...payload,
-        },
-      } as CreatorLayer);
+          ...payload } } as CreatorLayer);
     } else {
       onAddLayer({
         ...baseLayer(createStableId('text'), 10),
         type: 'text',
         width: 0.6,
         height: 0.1,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [text, textStyle, textColor, alignment, textEffect, textAnimation, textBgColor, isEditing, editingLayer, onAddLayer, onClose]);
@@ -1942,8 +1883,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               textStyle === 'neon' && {
                 textShadowColor: textColor,
                 textShadowOffset: { width: 0, height: 0 },
-                textShadowRadius: 12,
-              },
+                textShadowRadius: 12 },
             ]}
             numberOfLines={3}
           >
@@ -1984,8 +1924,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                   s.key === 'neon' && {
                     textShadowColor: textStyle === 'neon' ? colors.brand : textColor,
                     textShadowOffset: { width: 0, height: 0 },
-                    textShadowRadius: 8,
-                  },
+                    textShadowRadius: 8 },
                 ]}
               >
                 {s.label}
@@ -2014,7 +1953,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         {showSpectrum && (
           <View style={styles.spectrumWrap}>
             <LinearGradient
-              colors={['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000']}
+              colors={RAINBOW_GRADIENT}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.spectrumBar}
@@ -2032,6 +1971,8 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 }}
                 accessibilityLabel="Spectrum color picker"
                 accessibilityRole="adjustable"
+                accessibilityHint="Tap to select a color"
+                accessibilityValue={{ text: `Color ${textColor}` }}
               />
             </LinearGradient>
             <View style={[styles.spectrumIndicator, { backgroundColor: textColor }]} />
@@ -2085,7 +2026,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                     { color: sampleColor },
                     e.key === 'shadow' && { textShadowColor: '#000', textShadowOffset: { width: 1, height: 2 }, textShadowRadius: 3 },
                     e.key === 'neon' && { textShadowColor: isActive ? colors.brand : '#7B68EE', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
-                    e.key === 'outline' && { borderWidth: 1, borderColor: sampleColor, paddingHorizontal: Space.xs, borderRadius: Radius.sm },
+                    e.key === 'outline' && { borderWidth: Stroke.standard, borderColor: sampleColor, paddingHorizontal: Space.xs, borderRadius: Radius.sm },
                     e.key === 'glow' && { textShadowColor: isActive ? colors.brand : '#F5D547', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8 },
                   ]}
                 >
@@ -2107,8 +2048,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               typewriter: 'keypad-outline',
               bounce: 'arrow-up-circle-outline',
               fade: 'eye-outline',
-              slide: 'arrow-up-outline',
-            };
+              slide: 'arrow-up-outline' };
             return (
               <Pressable
                 key={a.key}
@@ -2161,7 +2101,7 @@ function TextPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Draw Picker ───────────────────────────────────────────────────
 // Instagram/Snapchat parity: freehand drawing with pen, marker,
@@ -2209,7 +2149,7 @@ function buildSkiaPath(points: DrawPoint[], canvasW: number, canvasH: number): a
   return path;
 }
 
-function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const DrawPicker = React.memo(function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -2220,7 +2160,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
   const [strokes, setStrokes] = useState<DrawStroke[]>(existingStrokes);
   const [redoStack, setRedoStack] = useState<DrawStroke[]>([]);
   const [activeTool, setActiveTool] = useState<'pen' | 'marker' | 'highlighter' | 'neon' | 'eraser' | 'chalk'>('pen');
-  const [activeColor, setActiveColor] = useState('#ffffff');
+  const [activeColor, setActiveColor] = useState(DRAW_COLORS[0]);
   const [brushSize, setBrushSize] = useState(4);
   const [canvasLayout, setCanvasLayout] = useState({ width: 320, height: 400 });
   const [showDrawSpectrum, setShowDrawSpectrum] = useState(false);
@@ -2238,8 +2178,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           points: [...currentPoints],
           color: activeTool === 'eraser' ? '#000000' : activeColor,
           width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
-          tool: activeTool,
-        };
+          tool: activeTool };
       })
       .onUpdate((e) => {
         currentPoints.push({ x: e.x / canvasLayout.width, y: e.y / canvasLayout.height });
@@ -2247,8 +2186,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
           points: [...currentPoints],
           color: activeTool === 'eraser' ? '#000000' : activeColor,
           width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
-          tool: activeTool,
-        };
+          tool: activeTool };
         renderTick.value = renderTick.value + 1;
       })
       .onEnd(() => {
@@ -2257,8 +2195,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
             points: [...currentPoints],
             color: activeTool === 'eraser' ? '#000000' : activeColor,
             width: activeTool === 'highlighter' ? brushSize * 3 : activeTool === 'neon' ? brushSize * 1.5 : brushSize,
-            tool: activeTool,
-          });
+            tool: activeTool });
         }
         currentStroke.value = null;
         currentPoints = [];
@@ -2293,6 +2230,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
   const handleClear = useCallback(() => {
     haptic.medium();
+    haptic.warning();
     setStrokes([]);
     setRedoStack([]);
   }, [haptic]);
@@ -2301,21 +2239,18 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
     haptic.medium();
     const payload: any = {
       strokes,
-      opacity: 1,
-    };
+      opacity: 1 };
     if (isEditing && editingLayer) {
       onAddLayer({
         ...editingLayer,
-        payload: { ...editingLayer.payload, ...payload },
-      } as CreatorLayer);
+        payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
       onAddLayer({
         ...baseLayer(createStableId('draw'), 10),
         type: 'draw',
         width: 0.9,
         height: 0.9,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [strokes, isEditing, editingLayer, onAddLayer, onClose, haptic]);
@@ -2390,6 +2325,9 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                   }}
                   accessibilityLabel="Brush size slider"
                   accessibilityRole="adjustable"
+                  accessibilityHint="Tap higher to decrease, lower to increase brush size"
+                  accessibilityValue={{ min: 2, max: 20, now: brushSize, text: `Brush size ${brushSize}` }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <View style={[styles.brushSliderFill, { height: `${(brushSize - 2) / 18 * 100}%` }]} />
                   <View style={[styles.brushSliderHandle, { bottom: `${(brushSize - 2) / 18 * 100}%` }]}>
@@ -2448,7 +2386,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
             {showDrawSpectrum && (
               <View style={styles.spectrumWrap}>
                 <LinearGradient
-                  colors={['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff', '#ff0000']}
+                  colors={RAINBOW_GRADIENT}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.spectrumBar}
@@ -2463,6 +2401,8 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                     }}
                     accessibilityLabel="Spectrum color picker"
                     accessibilityRole="adjustable"
+                    accessibilityHint="Tap to select a color"
+                    accessibilityValue={{ text: `Color ${activeColor}` }}
                   />
                 </LinearGradient>
                 <View style={[styles.spectrumIndicator, { backgroundColor: activeColor }]} />
@@ -2506,8 +2446,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
                 width: Math.max(4, Math.min(28, brushSize)),
                 height: Math.max(4, Math.min(28, brushSize)),
                 borderRadius: Math.max(2, Math.min(14, brushSize / 2)),
-                backgroundColor: activeTool === 'eraser' ? colors.surfaceAlt : activeColor,
-              },
+                backgroundColor: activeTool === 'eraser' ? colors.surfaceAlt : activeColor },
             ]}
           />
           <Text style={styles.brushPreviewLabel}>{brushSize}px</Text>
@@ -2534,7 +2473,7 @@ function DrawPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── GIF Picker ────────────────────────────────────────────────────
 // GIPHY-style search: trending GIFs on load, search by query.
@@ -2561,7 +2500,7 @@ interface GifResult {
   height: number;
 }
 
-function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const GifPicker = React.memo(function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -2602,8 +2541,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
         stillUrl: g.images?.fixed_height_still?.url ?? g.images?.original_still?.url,
         altText: g.title?.slice(0, 80) ?? 'GIF',
         width: parseInt(g.images?.fixed_height?.width ?? '200', 10),
-        height: parseInt(g.images?.fixed_height?.height ?? '200', 10),
-      })).filter((g: GifResult) => g.gifUrl);
+        height: parseInt(g.images?.fixed_height?.height ?? '200', 10) })).filter((g: GifResult) => g.gifUrl);
       setResults(gifs);
     } catch (err) {
       if (!mountedRef.current) return;
@@ -2645,11 +2583,25 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
         stillUrl: gif.stillUrl,
         altText: gif.altText,
         source: 'giphy',
-        opacity: 1,
-      },
-    });
+        opacity: 1 } });
     onClose();
   }, [onAddLayer, onClose, haptic]);
+
+  const renderGifItem = useCallback<ListRenderItem<GifResult>>(({ item }) => (
+    <Pressable
+      onPress={() => handleSelect(item)}
+      style={styles.gifCell}
+      accessibilityLabel={`Select GIF ${item.altText}`}
+      accessibilityRole="button"
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <Image
+        source={{ uri: item.stillUrl || item.gifUrl }}
+        style={styles.gifThumb}
+        contentFit="cover"
+      />
+    </Pressable>
+  ), [handleSelect, styles]);
 
   return (
     <PickerShell title="GIF" onClose={onClose} compact>
@@ -2705,21 +2657,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
           data={results}
           keyExtractor={(item) => item.id}
           numColumns={2}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => handleSelect(item)}
-              style={styles.gifCell}
-              accessibilityLabel={`Select GIF ${item.altText}`}
-              accessibilityRole="button"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Image
-                source={{ uri: item.stillUrl || item.gifUrl }}
-                style={styles.gifThumb}
-                contentFit="cover"
-              />
-            </Pressable>
-          )}
+          renderItem={renderGifItem}
           style={styles.gifList}
           keyboardShouldPersistTaps="handled"
           drawDistance={250}
@@ -2728,7 +2666,7 @@ function GifPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (
       )}
     </PickerShell>
   );
-}
+});
 
 // ── Music Picker ──────────────────────────────────────────────────
 // Instagram-style music sticker: search trending tracks via iTunes API
@@ -2742,7 +2680,7 @@ interface MusicTrack {
   previewUrl: string;
 }
 
-function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const MusicPicker = React.memo(function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -2777,8 +2715,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         trackName: t.trackName ?? t.collectionName ?? 'Unknown Track',
         artistName: t.artistName ?? '',
         artworkUrl: (t.artworkUrl100 ?? t.artworkUrl60 ?? '').replace('100x100', '200x200'),
-        previewUrl: t.previewUrl ?? '',
-      })).filter((t: MusicTrack) => t.trackId && t.artworkUrl);
+        previewUrl: t.previewUrl ?? '' })).filter((t: MusicTrack) => t.trackId && t.artworkUrl);
       setResults(tracks);
       // Default the live preview to the first track so the sticker is never empty
       if (tracks.length > 0) setPreviewTrack((prev) => prev ?? tracks[0]);
@@ -2818,11 +2755,29 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         opacity: 1,
         volume: 1,
         fadeInMs: 0,
-        fadeOutMs: 0,
-      },
-    });
+        fadeOutMs: 0 } });
     onClose();
   }, [onAddLayer, onClose, haptic]);
+
+  const renderMusicItem = useCallback<ListRenderItem<MusicTrack>>(({ item }) => (
+    <Pressable
+      onPress={() => handleSelect(item)}
+      onPressIn={() => setPreviewTrack(item)}
+      style={({ pressed }) => [styles.musicRow, pressed && { opacity: 0.6 }]}
+      accessibilityLabel={`Select ${item.trackName} by ${item.artistName}`}
+      accessibilityRole="button"
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    >
+      <Image source={{ uri: item.artworkUrl }} style={styles.musicArtwork} contentFit="cover" />
+      <View style={styles.musicInfo}>
+        <Text style={styles.musicTrackName} numberOfLines={1}>{item.trackName}</Text>
+        <Text style={styles.musicArtistName} numberOfLines={1}>{item.artistName}</Text>
+      </View>
+      <View style={styles.musicAddBtn}>
+        <Ionicons name="checkmark" size={IconGrammar.standard} color={colors.brand} aria-hidden={true} />
+      </View>
+    </Pressable>
+  ), [handleSelect, setPreviewTrack, styles, colors]);
 
   return (
     <PickerShell title="Music" onClose={onClose}>
@@ -2836,7 +2791,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               <Text style={styles.musicPreviewArtistName} numberOfLines={1}>{previewTrack.artistName}</Text>
             </View>
             <View style={styles.musicPreviewPlayBtn}>
-              <Ionicons name="play" size={IconGrammar.metadata} color={colors.textInverse} aria-hidden={true} />
+              <Ionicons name="play" size={IconGrammar.metadata} color={colors.brand} aria-hidden={true} />
             </View>
           </>
         ) : (
@@ -2846,7 +2801,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
               <Text style={styles.musicPreviewTrackName}>Select a track</Text>
               <Text style={styles.musicPreviewArtistName}>Search to preview</Text>
             </View>
-            <View style={[styles.musicPreviewPlayBtn, { backgroundColor: colors.surfaceAlt }]}>
+            <View style={styles.musicPreviewPlayBtn}>
               <Ionicons name="play" size={IconGrammar.metadata} color={colors.textMuted} aria-hidden={true} />
             </View>
           </>
@@ -2883,25 +2838,7 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         <FlashList
           data={results}
           keyExtractor={(item) => item.trackId}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => handleSelect(item)}
-              onPressIn={() => setPreviewTrack(item)}
-              style={({ pressed }) => [styles.musicRow, pressed && { opacity: 0.6 }]}
-              accessibilityLabel={`Select ${item.trackName} by ${item.artistName}`}
-              accessibilityRole="button"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Image source={{ uri: item.artworkUrl }} style={styles.musicArtwork} contentFit="cover" />
-              <View style={styles.musicInfo}>
-                <Text style={styles.musicTrackName} numberOfLines={1}>{item.trackName}</Text>
-                <Text style={styles.musicArtistName} numberOfLines={1}>{item.artistName}</Text>
-              </View>
-              <View style={styles.musicAddBtn}>
-                <Ionicons name="checkmark" size={IconGrammar.standard} color={colors.textInverse} aria-hidden={true} />
-              </View>
-            </Pressable>
-          )}
+          renderItem={renderMusicItem}
           style={styles.resultList}
           keyboardShouldPersistTaps="handled"
           drawDistance={250}
@@ -2910,14 +2847,14 @@ function MusicPicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       )}
     </PickerShell>
   );
-}
+});
 
 // ── Quiz Picker ───────────────────────────────────────────────────
 // Instagram 2026 parity: multiple-choice quiz with correct answer.
 
 const QUIZ_EMOJIS = ['🎯', '🔥', '💡', '❓', '✅', '⭐', '🎨', '👍'];
 
-function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const QuizPicker = React.memo(function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -2946,7 +2883,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
   const handleAdd = useCallback(() => {
     if (!question.trim() || options.filter(o => o.trim()).length < 2) return;
-    haptic.medium();
+    haptic.light();
     const cleanOptions = options.filter(o => o.trim()).slice(0, 4);
     const optionObjs = cleanOptions.map((label, i) => ({ id: `opt_${i}_${Date.now()}`, label: label.trim() }));
     const payload: any = {
@@ -2954,8 +2891,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       options: optionObjs,
       correctOptionId: optionObjs[correctIdx]?.id ?? optionObjs[0].id,
       emoji,
-      ...(timerMs ? { timerMs } : {}),
-    };
+      ...(timerMs ? { timerMs } : {}) };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -2964,8 +2900,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         type: 'quiz',
         width: 0.7,
         height: 0.25,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [question, options, correctIdx, emoji, isEditing, editingLayer, onAddLayer, onClose, haptic]);
@@ -3067,7 +3002,7 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
               accessibilityState={{ selected: emoji === e }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Text style={{ fontSize: Type.title.size }}>{e}</Text>
+              <Text style={{ fontSize: TypographyV2.screenTitle.size }}>{e}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -3111,12 +3046,12 @@ function QuizPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Question Picker ───────────────────────────────────────────────
 // Instagram 2026 parity: open-ended question box sticker.
 
-function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const QuestionPicker = React.memo(function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3124,11 +3059,11 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
   const isEditing = editingLayer?.type === 'question';
   const existing = editingLayer?.type === 'question' ? editingLayer.payload : null;
 
+  const QUESTION_BG_COLORS = ['#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a', '#C9A46A'];
+
   const [prompt, setPrompt] = useState(existing?.prompt ?? '');
   const [placeholder, setPlaceholder] = useState(existing?.placeholder ?? 'Type something...');
-  const [bgColor, setBgColor] = useState(existing?.backgroundColor ?? '#9b0202');
-
-  const QUESTION_BG_COLORS = ['#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a', '#C9A46A'];
+  const [bgColor, setBgColor] = useState(existing?.backgroundColor ?? QUESTION_BG_COLORS[0]);
 
   const handleAdd = useCallback(() => {
     if (!prompt.trim()) return;
@@ -3137,8 +3072,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
       prompt: prompt.trim(),
       placeholder: placeholder.trim() || 'Type something...',
       backgroundColor: bgColor,
-      textColor: '#ffffff',
-    };
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -3147,8 +3081,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
         type: 'question',
         width: 0.6,
         height: 0.12,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [prompt, placeholder, bgColor, isEditing, editingLayer, onAddLayer, onClose, haptic]);
@@ -3158,7 +3091,7 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
       <View style={styles.textPickerBody}>
         <View style={[styles.questionPreviewWrap, { backgroundColor: bgColor }]}>
           <View style={styles.questionPreviewIconRow}>
-            <Ionicons name="chatbubble-ellipses" size={IconGrammar.metadata} color="rgba(255,255,255,0.7)" aria-hidden={true} />
+            <Ionicons name="chatbubble-ellipses" size={IconGrammar.metadata} color={colors.scrimTextSecondary} aria-hidden={true} />
           </View>
           <Text style={styles.questionPreviewPrompt}>
             {prompt.trim() || 'Ask me a question'}
@@ -3217,14 +3150,14 @@ function QuestionPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Emoji Slider Picker ───────────────────────────────────────────
 // Instagram 2026 parity: emoji slider for intensity measurement.
 
 const SLIDER_EMOJIS = ['😍', '🔥', '💯', '😂', '🤔', '👍', '❤️', '✨', '🎨', '🛍️'];
 
-function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const EmojiSliderPicker = React.memo(function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3232,12 +3165,12 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
   const isEditing = editingLayer?.type === 'emojiSlider';
   const existing = editingLayer?.type === 'emojiSlider' ? editingLayer.payload : null;
 
+  const SLIDER_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#E06666'];
+
   const [question, setQuestion] = useState(existing?.question ?? '');
   const [emoji, setEmoji] = useState(existing?.emoji ?? '😍');
   const [endLabel, setEndLabel] = useState(existing?.endLabel ?? '');
-  const [sliderColor, setSliderColor] = useState(existing?.sliderColor ?? '#C9A46A');
-
-  const SLIDER_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#E06666'];
+  const [sliderColor, setSliderColor] = useState(existing?.sliderColor ?? SLIDER_COLORS[0]);
 
   const handleAdd = useCallback(() => {
     if (!question.trim()) return;
@@ -3246,8 +3179,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
       question: question.trim(),
       emoji,
       endLabel: endLabel.trim(),
-      sliderColor,
-    };
+      sliderColor };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -3256,8 +3188,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
         type: 'emojiSlider',
         width: 0.6,
         height: 0.1,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [question, emoji, endLabel, sliderColor, isEditing, editingLayer, onAddLayer, onClose, haptic]);
@@ -3311,7 +3242,7 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
               accessibilityState={{ selected: emoji === e }}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Text style={{ fontSize: Type.title.size }}>{e}</Text>
+              <Text style={{ fontSize: TypographyV2.screenTitle.size }}>{e}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -3343,18 +3274,20 @@ function EmojiSliderPicker({ onClose, onAddLayer, editingLayer }: { onClose: () 
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Countdown Picker ──────────────────────────────────────────────
 // Instagram 2026 parity: countdown to a date/time sticker.
 
-function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const CountdownPicker = React.memo(function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
   const isEditing = editingLayer?.type === 'countdown';
   const existing = editingLayer?.type === 'countdown' ? editingLayer.payload : null;
+
+  const COUNTDOWN_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a'];
 
   const [label, setLabel] = useState(existing?.label ?? '');
   const [endDate, setEndDate] = useState(() => {
@@ -3364,9 +3297,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
     d.setHours(18, 0, 0, 0);
     return d;
   });
-  const [color, setColor] = useState(existing?.color ?? '#C9A46A');
-
-  const COUNTDOWN_COLORS = ['#C9A46A', '#9b0202', '#215634', '#06489A', '#6B3245', '#1a1a1a'];
+  const [color, setColor] = useState(existing?.color ?? COUNTDOWN_COLORS[0]);
 
   const handleAdd = useCallback(() => {
     if (!label.trim()) return;
@@ -3375,8 +3306,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
       label: label.trim(),
       endDateTime: endDate.toISOString(),
       color,
-      textColor: '#ffffff',
-    };
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -3385,8 +3315,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
         type: 'countdown',
         width: 0.5,
         height: 0.12,
-        payload,
-      });
+        payload });
     }
     onClose();
   }, [label, endDate, color, isEditing, editingLayer, onAddLayer, onClose, haptic]);
@@ -3400,10 +3329,10 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
     <PickerShell title={isEditing ? 'Edit Countdown' : 'Countdown'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={[styles.textPreview, { backgroundColor: color }]}>
-          <Text style={{ color: '#fff', fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size }}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size }}>
             {label.trim() || 'Event countdown'}
           </Text>
-          <Text style={{ color: 'rgba(255,255,255,0.8)', fontFamily: Typography.family.medium, fontSize: Type.title.size, marginTop: Space.xs }}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: TypographyV2.screenTitle.fontFamily, fontSize: TypographyV2.screenTitle.size, marginTop: Space.xs }}>
             {formatDate(endDate)}
           </Text>
         </View>
@@ -3465,7 +3394,7 @@ function CountdownPicker({ onClose, onAddLayer, editingLayer }: { onClose: () =>
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Shape Picker ───────────────────────────────────────────────────
 
@@ -3480,12 +3409,12 @@ const SHAPES: Array<{ shape: 'circle' | 'square' | 'line' | 'arrow' | 'star' | '
 
 const SHAPE_COLORS = ['#ffffff', '#000000', '#9b0202', '#215634', '#06489A', '#C9A46A', '#E06666', '#7B68EE'];
 
-function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const ShapePicker = React.memo(function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors, screenWidth), [colors, screenWidth]);
-  const [activeColor, setActiveColor] = useState('#ffffff');
+  const [activeColor, setActiveColor] = useState(SHAPE_COLORS[0]);
   const handleSelect = useCallback((shape: typeof SHAPES[0]) => {
     haptic.selection();
     onAddLayer({
@@ -3493,8 +3422,7 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       type: 'decorative',
       width: 0.15,
       height: 0.15,
-      payload: { shape: shape.shape, color: activeColor, opacity: 1 },
-    });
+      payload: { shape: shape.shape, color: activeColor, opacity: 1 } });
     onClose();
   }, [onAddLayer, onClose, activeColor, haptic]);
 
@@ -3556,11 +3484,11 @@ function ShapePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Vote Picker ────────────────────────────────────────────────────
 
-function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const VotePicker = React.memo(function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3612,9 +3540,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
       payload: {
         question: question.trim(),
         options: validOptions,
-        ...(timerMs ? { timerMs } : {}),
-      },
-    });
+        ...(timerMs ? { timerMs } : {}) } });
     onClose();
   }, [question, options, timerMs, canSave, onAddLayer, onClose]);
 
@@ -3649,7 +3575,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
           {timerMs && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'center' }}>
               <Ionicons name="timer-outline" size={IconGrammar.badge} color={colors.textSecondary} aria-hidden={true} />
-              <Text style={{ fontFamily: Typography.family.medium, fontSize: 10, color: colors.textSecondary }}>
+              <Text style={{ fontFamily: Typography.family.medium, fontSize: TypographyV2.meta.size, color: colors.textSecondary }}>
                 {timerMs >= 86400000 ? `${Math.floor(timerMs / 86400000)}d` : timerMs >= 3600000 ? `${Math.floor(timerMs / 3600000)}h` : `${Math.floor(timerMs / 60000)}m`}
               </Text>
             </View>
@@ -3731,7 +3657,7 @@ function VotePicker({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: 
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Unified Sticker Tray ──────────────────────────────────────────
 // Instagram-pattern: ONE sticker entry point that opens a tray with
@@ -3766,23 +3692,21 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
       label: 'Interactive',
       stickers: [
         { key: 'poll', label: 'Poll', icon: 'stats-chart-outline', mode: 'vote', description: '2-option vote' },
-        { key: 'product', label: 'Item', icon: 'pricetag-outline', mode: 'product', description: 'Tag a listing' },
+        { key: 'product', label: 'Item', icon: 'bag-handle-outline', mode: 'product', description: 'Tag a listing' },
         { key: 'look', label: 'Look', icon: 'shirt-outline', mode: 'look', description: 'Tag a look' },
         { key: 'quiz', label: 'Quiz', icon: 'help-circle-outline', mode: 'quiz', description: 'Trivia with answer' },
         { key: 'question', label: 'Ask', icon: 'chatbubble-outline', mode: 'question', description: 'Open Q&A' },
         { key: 'emojiSlider', label: 'Slider', icon: 'happy-outline', mode: 'emojiSlider', description: 'Emoji rating' },
         { key: 'countdown', label: 'Countdown', icon: 'time-outline', mode: 'countdown', description: 'Count to a date' },
-      ],
-    },
+      ] },
     {
       key: 'mentions',
       label: 'Tags',
       stickers: [
         { key: 'mention', label: '@Mention', icon: 'at-outline', mode: 'mention', description: 'Tag a user' },
         { key: 'location', label: 'Location', icon: 'location-outline', mode: 'location', description: 'Tag a place' },
-        { key: 'hashtag', label: 'Hashtag', icon: 'pricetag-outline', mode: 'hashtag', description: 'Topic tag' },
-      ],
-    },
+        { key: 'hashtag', label: 'Hashtag', icon: 'bag-handle-outline', mode: 'hashtag', description: 'Topic tag' },
+      ] },
     {
       key: 'media',
       label: 'Media',
@@ -3790,8 +3714,7 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
         { key: 'gif', label: 'GIF', icon: 'image-outline', mode: 'gif', description: 'Animated sticker' },
         { key: 'music', label: 'Music', icon: 'musical-notes-outline', mode: 'music', description: 'Song sticker' },
         { key: 'link', label: 'Link', icon: 'link-outline', mode: 'link', description: 'Clickable URL' },
-      ],
-    },
+      ] },
     {
       key: 'utility',
       label: 'Utility',
@@ -3799,8 +3722,7 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
         { key: 'time', label: 'Time', icon: 'time-outline', mode: 'time', description: 'Current timestamp' },
         { key: 'weather', label: 'Weather', icon: 'partly-sunny-outline', mode: 'weather', description: 'Conditions' },
         { key: 'shape', label: 'Shapes', icon: 'shapes-outline', mode: 'shape', description: 'Decorative shapes' },
-      ],
-    },
+      ] },
   ] as StickerCategoryDef[]
 ).map((cat) => ({
   ...cat,
@@ -3815,10 +3737,9 @@ const STICKER_CATEGORIES: StickerCategoryDef[] = (
     const capId = getCapabilityForLayerType(layerType);
     if (!capId) return true;
     return isCapabilitySupported(capId);
-  }),
-})).filter((cat) => cat.stickers.length > 0);
+  }) })).filter((cat) => cat.stickers.length > 0);
 
-function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
+const StickerTray = React.memo(function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3835,8 +3756,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
         ...cat,
         stickers: cat.stickers.filter((s) =>
           s.label.toLowerCase().includes(q) || s.description?.toLowerCase().includes(q)
-        ),
-      }))
+        ) }))
       .filter((cat) => cat.stickers.length > 0);
   }, [search]);
 
@@ -3933,9 +3853,7 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
                     accessibilityRole="button"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <View style={styles.stickerCellIcon}>
-                      <Ionicons name={sticker.icon} size={IconGrammar.hero} color={colors.brand} aria-hidden={true} />
-                    </View>
+                    <Ionicons name={sticker.icon} size={IconGrammar.hero} color={colors.brand} aria-hidden={true} />
                     <Text style={styles.stickerCellLabel} numberOfLines={1}>{sticker.label}</Text>
                   </Pressable>
                 ))}
@@ -3946,11 +3864,11 @@ function StickerTray({ onClose, onAddLayer }: { onClose: () => void; onAddLayer:
       </ScrollView>
     </SheetContainer>
   );
-}
+});
 
 // ── Link Picker ───────────────────────────────────────────────────
 
-function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const LinkPicker = React.memo(function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -3960,7 +3878,7 @@ function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
 
   const [url, setUrl] = useState(existingPayload?.url ?? '');
   const [ctaText, setCtaText] = useState(existingPayload?.ctaText ?? 'Link');
-  const [bgColor, setBgColor] = useState(existingPayload?.backgroundColor ?? '#C9A46A');
+  const [bgColor, setBgColor] = useState(existingPayload?.backgroundColor ?? DEFAULT_STICKER_BG_COLOR);
 
   const canSave = url.trim().length > 0 && (url.startsWith('http://') || url.startsWith('https://'));
 
@@ -3970,8 +3888,7 @@ function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       url: url.trim(),
       ctaText: ctaText.trim() || 'Link',
       backgroundColor: bgColor,
-      textColor: '#ffffff',
-    };
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -3980,8 +3897,7 @@ function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         type: 'link',
         width: 0.5,
         height: 0.08,
-        payload,
-      });
+        payload });
     }
     haptic.medium();
     onClose();
@@ -4036,11 +3952,11 @@ function LinkPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Location Picker ───────────────────────────────────────────────
 
-function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const LocationPicker = React.memo(function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -4055,8 +3971,7 @@ function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
   const handleAdd = useCallback(() => {
     if (!canSave) return;
     const payload: any = {
-      placeName: placeName.trim(),
-    };
+      placeName: placeName.trim() };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4065,8 +3980,7 @@ function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
         type: 'location',
         width: 0.4,
         height: 0.06,
-        payload,
-      });
+        payload });
     }
     haptic.medium();
     onClose();
@@ -4095,11 +4009,11 @@ function LocationPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => 
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Hashtag Picker ────────────────────────────────────────────────
 
-function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const HashtagPicker = React.memo(function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -4116,9 +4030,8 @@ function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
     const cleanTag = tag.trim().replace(/^#/, '');
     const payload: any = {
       tag: cleanTag,
-      backgroundColor: '#C9A46A',
-      textColor: '#ffffff',
-    };
+      backgroundColor: DEFAULT_STICKER_BG_COLOR,
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4127,8 +4040,7 @@ function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
         type: 'hashtag',
         width: 0.4,
         height: 0.06,
-        payload,
-      });
+        payload });
     }
     haptic.medium();
     onClose();
@@ -4138,7 +4050,7 @@ function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
     <PickerShell title={isEditing ? 'Edit Hashtag' : 'Add Hashtag'} onClose={onClose} compact>
       <View style={styles.textPickerBody}>
         <View style={styles.stickerPreviewPill}>
-          <Ionicons name="pricetag-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />
+          <Ionicons name="bag-handle-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />
           <Text style={styles.stickerPreviewPillText}>#{tag.replace(/^#/, '') || 'hashtag'}</Text>
         </View>
         <Text style={styles.pickerSectionLabel}>Hashtag</Text>
@@ -4159,11 +4071,11 @@ function HashtagPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Time Picker ───────────────────────────────────────────────────
 
-function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const TimePicker = React.memo(function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -4183,8 +4095,7 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
     const payload: any = {
       displayTime: new Date().toISOString(),
       format,
-      textColor: '#ffffff',
-    };
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4193,8 +4104,7 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
         type: 'time',
         width: 0.3,
         height: 0.06,
-        payload,
-      });
+        payload });
     }
     haptic.medium();
     onClose();
@@ -4233,11 +4143,11 @@ function TimePicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Weather Picker ────────────────────────────────────────────────
 
-function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
+const WeatherPicker = React.memo(function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => void; onAddLayer: (layer: CreatorLayer) => void; editingLayer?: CreatorLayer | null }) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -4267,8 +4177,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
       condition,
       emoji,
       locationName: locationName.trim(),
-      textColor: '#ffffff',
-    };
+      textColor: TEXT_COLORS[0] };
     if (isEditing && editingLayer) {
       onAddLayer({ ...editingLayer, payload: { ...editingLayer.payload, ...payload } } as CreatorLayer);
     } else {
@@ -4277,8 +4186,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
         type: 'weather',
         width: 0.35,
         height: 0.08,
-        payload,
-      });
+        payload });
     }
     haptic.medium();
     onClose();
@@ -4296,7 +4204,7 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
           </View>
           {locationName.trim().length > 0 && (
             <View style={styles.weatherPreviewLocation}>
-              <Ionicons name="location-outline" size={IconGrammar.badge} color="rgba(255,255,255,0.7)" aria-hidden={true} />
+              <Ionicons name="location-outline" size={IconGrammar.badge} color={colors.scrimTextSecondary} aria-hidden={true} />
               <Text style={styles.weatherPreviewLocationText} numberOfLines={1}>{locationName.trim()}</Text>
             </View>
           )}
@@ -4319,8 +4227,8 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
                 accessibilityState={{ selected: isActive }}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Text style={[styles.weatherCellEmoji, isActive && { color: '#fff' }]}>{w.emoji}</Text>
-                <Text style={[styles.weatherCellLabel, isActive && { color: '#fff' }]} numberOfLines={1}>{w.condition}</Text>
+                <Text style={[styles.weatherCellEmoji, isActive && { color: colors.scrimTextPrimary }]}>{w.emoji}</Text>
+                <Text style={[styles.weatherCellLabel, isActive && { color: colors.scrimTextPrimary }]} numberOfLines={1}>{w.condition}</Text>
               </Pressable>
             );
           })}
@@ -4357,81 +4265,56 @@ function WeatherPicker({ onClose, onAddLayer, editingLayer }: { onClose: () => v
       </View>
     </PickerShell>
   );
-}
+});
 
 // ── Styles ─────────────────────────────────────────────────────────
 
 function createStyles(colors: ThemeColors, screenWidth: number) {
   const THUMB_SIZE = Math.floor((screenWidth - Space.md * 2 - Space.xs * (GRID_COLUMNS - 1)) / GRID_COLUMNS);
   return StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, paddingVertical: Space.sm },
-  title: { fontFamily: Typography.family.semibold, fontSize: Type.subtitle.size, color: colors.textPrimary },
-  closeBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center', borderRadius: Radius.sm },
-  mediaOptions: { flexDirection: 'row', justifyContent: 'center', gap: Space.lg, paddingVertical: Space.xl },
-  mediaOption: { alignItems: 'center', gap: 8, minWidth: 80 },
-  mediaOptionLabel: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
-  // ── Album/source disclosure ──
-  albumDisclosure: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  albumDisclosureText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    flex: 1,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm },
+  title: { flex: 1, textAlign: 'center', fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, color: colors.textPrimary },
+  closeBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  headerSpacer: { width: 44, height: 44 },
+  doneBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  doneBtnText: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size },
   albumPickerDropdown: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.md,
     marginHorizontal: Space.md,
-    marginBottom: Space.xs,
-    overflow: 'hidden',
-  },
+    marginBottom: Space.xs },
   albumPickerItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.smMd,
-    minHeight: 40,
-  },
+    height: 48 },
   albumPickerItemText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    flex: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    flex: 1 },
+  albumPickerItemCount: {
+    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.caption.size,
+    color: colors.textMuted },
   // ── Category tabs ──
   categoryTabRow: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
     position: 'relative',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   categoryTabIndicator: {
     position: 'absolute',
-    top: Space.xs,
     bottom: 0,
-    borderRadius: Radius.md,
-    height: 36,
-  },
+    height: 2 },
   categoryTab: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    paddingVertical: Space.sm,
-    zIndex: 1,
-  },
+    paddingVertical: Space.md,
+    zIndex: 1 },
   categoryTabLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.body.size },
   // ── Limited-access banner ──
   limitedAccessBanner: {
     flexDirection: 'row',
@@ -4442,76 +4325,78 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     borderWidth: StyleSheet.hairlineWidth,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   limitedAccessText: {
     flex: 1,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Selection preview rail ──
   selectionPreviewRail: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   selectionPreviewScroll: {
     paddingHorizontal: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   selectionPreviewItem: {
     width: 56,
     height: 56,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    borderRadius: Radius.sm,
+    overflow: 'hidden' },
+  selectionPreviewItemSelected: {
+    borderWidth: 2,
+    borderColor: colors.brand },
   selectionPreviewThumb: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   selectionPreviewOrder: {
     position: 'absolute',
-    top: 4,
-    left: 4,
-    width: 18,
-    height: 18,
+    top: -6,
+    left: -6,
+    width: 20,
+    height: 20,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-  },
+    zIndex: 2 },
   selectionPreviewOrderText: {
-    fontFamily: Typography.family.bold,
-    fontSize: 10,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.meta.size,
+    fontWeight: '700' },
   selectionPreviewRemove: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-  },
-  selectionPreviewReorderLeft: {
-    position: 'absolute',
-    left: 2,
-    top: '50%',
-    marginTop: -9,
-  },
-  selectionPreviewReorderRight: {
-    position: 'absolute',
-    right: 2,
-    bottom: 2,
-  },
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2 },
   // ── Media grid ──
   mediaGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   mediaGridRow: { gap: Space.xs, marginBottom: Space.xs },
+  mediaCameraHero: {
+    width: '100%',
+    aspectRatio: 2,
+    borderRadius: Radius.md,
+    backgroundColor: colors.surfaceAlt,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginBottom: Space.xs },
+  mediaCameraHeroLabel: {
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontSize: TypographyV2.bodyStrong.size,
+    color: colors.textPrimary },
   mediaGridCell: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
     overflow: 'hidden',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   mediaGridThumb: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   mediaGridVideoBadge: {
     position: 'absolute',
     bottom: Space.xs,
@@ -4519,209 +4404,175 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.mediaOverlayScrim,
     paddingHorizontal: Space.xs,
     paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   mediaGridDuration: {
-    color: '#fff',
-    fontSize: 10,
-    fontFamily: Typography.family.medium,
-  },
-  // Selection overlay — subtle tint + border highlight (iOS Photos pattern).
-  // The border communicates selection more clearly than a heavy dark overlay.
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: Typography.family.medium },
   mediaGridSelectedOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.25)',
     borderWidth: 2,
-    borderColor: '#fff',
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.sm },
   mediaGridSelectionBadge: {
     position: 'absolute',
     top: 6,
     right: 6,
-    width: 24,
-    height: 24,
+    width: 16,
+    height: 16,
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
     justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  mediaGridSelectionText: {
-    color: '#000',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  addBtn: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.full,
-  },
-  addBtnText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    alignItems: 'center' },
   mediaGridFooter: {
     paddingVertical: Space.md,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   mediaLoadingState: {
     paddingVertical: Space.xxl,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   mediaEmptyState: {
     paddingVertical: Space.xxl,
     alignItems: 'center',
-    gap: Space.md,
-  },
-  mediaEmptyText: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
-  mediaPermissionState: {
-    paddingVertical: Space.xxl,
-    alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.xl,
-  },
+    paddingHorizontal: Space.xl },
+  mediaEmptyTitle: {
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontWeight: TypographyV2.sectionTitle.weight as any,
+    color: colors.textPrimary },
+  mediaEmptySubtitle: {
+    fontFamily: TypographyV2.body.fontFamily,
+    fontSize: TypographyV2.body.size,
+    color: colors.textSecondary,
+    textAlign: 'center' },
+  mediaEmptyLink: {
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontSize: TypographyV2.bodyStrong.size,
+    color: colors.brand,
+    marginTop: Space.xs },
+  mediaPermissionState: {
+    paddingVertical: Space.xxl + Space.lg,
+    alignItems: 'center',
+    gap: Space.md,
+    paddingHorizontal: Space.xl },
   mediaPermissionTitle: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.title.size,
-    marginTop: Space.sm,
-  },
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontWeight: TypographyV2.sectionTitle.weight as any,
+    color: colors.textPrimary },
   mediaPermissionText: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontSize: TypographyV2.body.size,
+    color: colors.textSecondary,
+    textAlign: 'center' },
   mediaPermissionBtn: {
-    paddingHorizontal: Space.lg,
-    height: 44,
-    borderRadius: Radius.md,
+    width: '100%',
+    height: 52,
+    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: Space.sm,
-  },
+    marginTop: Space.md },
   mediaPermissionBtnText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontSize: TypographyV2.bodyStrong.size,
+    color: colors.textInverse },
   searchRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: 8 },
   searchIcon: {},
   searchInput: {
-    flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: Radius.md,
-    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: Type.body.size, color: colors.textPrimary,
-  },
+    flex: 1, borderWidth: Stroke.standard, borderColor: colors.border, borderRadius: Radius.md,
+    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: TypographyV2.body.size, color: colors.textPrimary },
   // ── Product picker source tabs ──
   resultList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   resultThumb: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   resultThumbImg: { width: '100%', height: '100%' },
-  resultAvatar: { width: 40, height: 40, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center' },
-  resultAvatarText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary },
+  resultAvatar: { width: 40, height: 40, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  resultAvatarText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary },
   resultInfo: { flex: 1, gap: 2 },
-  resultName: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
-  resultPrice: { fontFamily: Typography.family.bold, fontSize: Type.caption.size, color: colors.brand },
-  resultSubtext: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textMuted },
+  resultName: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary },
+  resultPrice: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.brand },
+  resultSubtext: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textMuted },
   loadingBody: { paddingVertical: Space.xl, alignItems: 'center' },
   emptyState: { paddingVertical: Space.xl, alignItems: 'center' },
-  emptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
+  emptyText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textMuted },
   errorBody: { paddingVertical: Space.xl, alignItems: 'center', gap: Space.sm },
-  errorText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
+  errorText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textMuted },
   retryBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  retryBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.brand },
+  retryBtnText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.brand },
   textPickerBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.sm },
   // Live preview area — dark canvas mimicking the poster/look background
   textPreview: {
     minHeight: 90,
     borderRadius: Radius.lg,
-    backgroundColor: '#0d0d0d',
+    backgroundColor: TEXT_PREVIEW_STAGE_BG,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: Space.md + 2,
     paddingHorizontal: Space.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
+    borderColor: colors.scrimTextTertiary },
   textPreviewText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
-  sectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+    fontSize: TypographyV2.body.size },
+  sectionLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
   textInput: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: Radius.lg,
-    paddingHorizontal: Space.md, paddingVertical: Space.md, fontSize: Type.body.size, color: colors.textPrimary, minHeight: 52,
-  },
+    borderWidth: Stroke.standard, borderColor: colors.border, borderRadius: Radius.lg,
+    paddingHorizontal: Space.md, paddingVertical: Space.md, fontSize: TypographyV2.body.size, color: colors.textPrimary, minHeight: 52 },
   saveBtn: { height: 48, borderRadius: Radius.lg, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
   saveBtnDisabled: { opacity: 0.35 },
-  saveBtnText: { color: colors.textInverse, fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, letterSpacing: 0.3 },
-  pickerSectionLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
+  saveBtnText: { color: colors.textInverse, fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, letterSpacing: 0.3 },
+  pickerSectionLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: Space.xs },
   styleScroll: { marginHorizontal: -Space.md, paddingHorizontal: Space.md },
   styleOption: { paddingHorizontal: Space.md + 2, paddingVertical: Space.sm + 2, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt },
-  styleOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: 1.5 },
-  styleOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  styleOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
+  styleOptionText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary },
   styleOptionTextActive: { color: colors.brand },
   colorRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  colorOption: { width: 44, height: 44, borderRadius: Radius.full, borderWidth: 2, borderColor: 'transparent', elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  colorOption: { width: 44, height: 44, borderRadius: Radius.full, borderWidth: 2, borderColor: 'transparent', ...Elevation.card },
   colorOptionActive: { borderColor: colors.brand, shadowColor: colors.brand, shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 0 }, elevation: 2 },
-  colorOptionTransparent: { borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  colorOptionTransparent: { borderWidth: Stroke.standard, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentRow: { flexDirection: 'row', gap: Space.sm },
   alignmentOption: { width: 44, height: 44, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.08) },
   shapeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Space.md, paddingVertical: Space.lg, paddingHorizontal: Space.md },
   shapeOption: { alignItems: 'center', gap: 6, width: 80, paddingVertical: Space.sm },
-  shapeLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  shapeLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   // ── Draw picker ──
   drawBody: { paddingHorizontal: Space.md, paddingBottom: Space.xl, gap: Space.xs },
   drawCanvasWrap: {
     flex: 1,
     minHeight: 280,
     borderRadius: Radius.lg,
-    backgroundColor: '#161616',
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.scrimTextTertiary,
     overflow: 'hidden',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   drawCanvasHint: {
     position: 'absolute',
     bottom: Space.sm,
     left: 0,
     right: 0,
     alignItems: 'center',
-    pointerEvents: 'none',
-  },
+    pointerEvents: 'none' },
   drawCanvasHintText: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    color: 'rgba(255,255,255,0.28)',
-    letterSpacing: 0.3,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.scrimTextTertiary,
+    letterSpacing: 0.3 },
   brushSizeRow: { flexDirection: 'row', gap: Space.md, alignItems: 'center', paddingVertical: Space.xs },
   brushSizeOption: { width: 44, height: 44, borderRadius: Radius.full, justifyContent: 'center', alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   brushSizeOptionActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.08) },
   brushSizeDot: { borderRadius: Radius.full },
   brushPreviewWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs },
-  brushPreviewDot: { elevation: 1, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, shadowOffset: { width: 0, height: 1 } },
-  brushPreviewLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  brushPreviewDot: { ...Elevation.floating },
+  brushPreviewLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   drawActions: { flexDirection: 'row', alignItems: 'center', gap: Space.md, marginTop: Space.md },
   drawActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  drawActionLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  drawActionLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   drawDoneBtn: { paddingHorizontal: Space.xl, paddingVertical: Space.sm, borderRadius: Radius.full, marginLeft: 'auto' },
-  drawDoneBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: '#fff' },
+  drawDoneBtnText: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.textInverse },
   // ── GIF picker ──
   gifList: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   gifRow: { gap: Space.xs, marginBottom: Space.xs },
@@ -4730,94 +4581,92 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     aspectRatio: 1,
     borderRadius: Radius.sm,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   gifThumb: { width: '100%', height: '100%' },
   // ── Music picker ──
-  musicPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginHorizontal: Space.md, marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  musicPreviewCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginHorizontal: Space.md, marginBottom: Space.sm, ...Elevation.card },
   musicPreviewArt: { width: 48, height: 48, borderRadius: Radius.md },
   musicPreviewInfo: { flex: 1, gap: 2 },
-  musicPreviewTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textPrimary },
-  musicPreviewArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
-  musicPreviewPlayBtn: { width: 32, height: 32, borderRadius: Radius.full, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
+  musicPreviewTrackName: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.textPrimary },
+  musicPreviewArtistName: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
+  musicPreviewPlayBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   musicLoadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.sm },
-  musicLoadingText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
+  musicLoadingText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   musicRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, paddingHorizontal: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  musicArtwork: { width: 56, height: 56, borderRadius: Radius.md, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  musicArtwork: { width: 56, height: 56, borderRadius: Radius.md, ...Elevation.floating },
   musicInfo: { flex: 1, gap: 2 },
-  musicTrackName: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textPrimary },
-  musicArtistName: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: colors.textSecondary },
-  musicAddBtn: { width: 36, height: 36, borderRadius: Radius.full, backgroundColor: colors.brand, justifyContent: 'center', alignItems: 'center' },
+  musicTrackName: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.textPrimary },
+  musicArtistName: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
+  musicAddBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   // ── Quiz picker ──
   quizOptionRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
   quizCorrectDot: { width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   quizRemoveBtn: { padding: Space.xs },
   quizAddOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm },
-  quizAddOptionText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.brand },
+  quizAddOptionText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.brand },
   // ── Countdown picker ──
-  countdownDateBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: colors.border },
-  countdownDateText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textPrimary },
+  countdownDateBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.md, borderWidth: Stroke.standard, borderColor: colors.border },
+  countdownDateText: { flex: 1, fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary },
   // ── Sticker tray ──
   stickerSearchWrap: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt, borderRadius: Radius.lg, marginHorizontal: Space.md, marginBottom: Space.sm },
-  stickerSearchInput: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: Space.xs },
+  stickerSearchInput: { flex: 1, fontSize: TypographyV2.body.size, color: colors.textPrimary, fontFamily: TypographyV2.body.fontFamily, paddingVertical: Space.xs },
   stickerSearchClear: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
   stickerCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.xs },
   stickerCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
-  stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
-  stickerCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
+  stickerCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  stickerCategoryChipText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   stickerGridScroll: { flex: 1 },
   stickerGridContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
   stickerCategorySection: { marginBottom: Space.lg },
-  stickerCategoryTitle: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Space.sm },
+  stickerCategoryTitle: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: Space.sm },
   stickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
-  stickerCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', gap: Space.xs, borderWidth: 1, borderColor: colors.borderSubtle },
-  stickerCellIcon: { width: 48, height: 48, borderRadius: Radius.full, backgroundColor: withAlpha(colors.brand, 0.08), justifyContent: 'center', alignItems: 'center' },
-  stickerCellLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  stickerCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', gap: Space.xs, borderWidth: Stroke.standard, borderColor: colors.borderSubtle },
+  stickerCellLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textPrimary },
   stickerEmptyState: { paddingVertical: Space.xxl, alignItems: 'center', gap: Space.md },
-  stickerEmptyText: { fontFamily: Typography.family.medium, fontSize: Type.body.size, color: colors.textMuted },
+  stickerEmptyText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textMuted },
   // ── Sticker preview pill (shared by Link/Location/Hashtag/Time/Weather) ──
   stickerPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.lg, backgroundColor: 'rgba(201,164,106,0.9)', alignSelf: 'center', marginBottom: Space.sm },
-  stickerPreviewPillText: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: '#fff' },
-  stickerPreviewPillEmoji: { fontSize: Type.priceList.size },
+  stickerPreviewPillText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textInverse },
+  stickerPreviewPillEmoji: { fontSize: TypographyV2.priceList.size },
   // ── Weather picker ──
-  weatherPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.xl, backgroundColor: 'rgba(201,164,106,0.95)', alignSelf: 'center', marginBottom: Space.sm, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 3, minWidth: 180 },
-  weatherPreviewEmoji: { fontSize: Type.display.size },
+  weatherPreviewPill: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, borderRadius: Radius.xl, backgroundColor: 'rgba(201,164,106,0.95)', alignSelf: 'center', marginBottom: Space.sm, ...Elevation.floating, minWidth: 180 },
+  weatherPreviewEmoji: { fontSize: TypographyV2.display.size },
   weatherPreviewInfo: { gap: 0 },
-  weatherPreviewTemp: { fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, color: '#fff' },
-  weatherPreviewCondition: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: 'rgba(255,255,255,0.85)' },
+  weatherPreviewTemp: { fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, color: colors.textInverse },
+  weatherPreviewCondition: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.scrimTextSecondary },
   weatherPreviewLocation: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto' },
-  weatherPreviewLocationText: { fontFamily: Typography.family.medium, fontSize: Type.meta.size, color: 'rgba(255,255,255,0.7)' },
+  weatherPreviewLocationText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.scrimTextSecondary },
   weatherGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   weatherCell: { width: 80, height: 80, borderRadius: Radius.lg, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
   weatherCellActive: { backgroundColor: colors.brand },
-  weatherCellEmoji: { fontSize: Type.priceHero.size },
-  weatherCellLabel: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
-  inputCardLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, marginBottom: 6, marginTop: Space.sm },
+  weatherCellEmoji: { fontSize: TypographyV2.priceHero.size },
+  weatherCellLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textAlign: 'center' },
+  inputCardLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, marginBottom: 6, marginTop: Space.sm },
   inputCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.xs },
-  inputCardText: { flex: 1, fontSize: Type.body.size, color: colors.textPrimary, fontFamily: Typography.family.regular, paddingVertical: 2 },
-  inputCardSuffix: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary },
+  inputCardText: { flex: 1, fontSize: TypographyV2.body.size, color: colors.textPrimary, fontFamily: TypographyV2.body.fontFamily, paddingVertical: 2 },
+  inputCardSuffix: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary },
   // ── Spectrum color picker ──
   spectrumWrap: { marginTop: Space.sm, gap: Space.xs },
-  spectrumBar: { height: 36, borderRadius: Radius.full, overflow: 'hidden', position: 'relative', elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
+  spectrumBar: { height: 36, borderRadius: Radius.full, overflow: 'hidden', position: 'relative', ...Elevation.floating },
   spectrumOverlay: { ...StyleSheet.absoluteFill },
-  spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: '#fff', backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4, left: '50%', marginLeft: -14 },
+  spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: colors.textInverse, backgroundColor: colors.textInverse, ...Elevation.modal, left: '50%', marginLeft: -14 },
   spectrumClose: { alignSelf: 'center', paddingVertical: Space.xs },
   // ── Vertical brush size slider ──
-  brushSliderWrap: { position: 'absolute', left: Space.sm, top: '50%', marginTop: -60, zIndex: 10, elevation: 4, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  brushSliderTrack: { width: 28, height: 120, borderRadius: Radius.full, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.1)' },
-  brushSliderFill: { width: '100%', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.full },
+  brushSliderWrap: { position: 'absolute', left: Space.sm, top: '50%', marginTop: -60, zIndex: 10, ...Elevation.modal },
+  brushSliderTrack: { width: 28, height: 120, borderRadius: Radius.full, backgroundColor: colors.mediaOverlayScrim, justifyContent: 'flex-end', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: colors.scrimTextTertiary },
+  brushSliderFill: { width: '100%', backgroundColor: colors.scrimTextTertiary, borderRadius: Radius.full },
   brushSliderHandle: { position: 'absolute', left: '50%', marginLeft: -11, width: 22, height: 22, justifyContent: 'center', alignItems: 'center' },
-  brushSliderDot: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  brushSliderDot: { borderWidth: Stroke.standard, borderColor: colors.scrimTextSecondary },
   // ── Text effect chips (visual preview) ──
   effectChip: { width: 56, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 2 },
-  effectChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: 1.5 },
-  effectChipSample: { fontFamily: Typography.family.bold, fontSize: Type.priceList.size, lineHeight: 24 },
-  effectChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary },
+  effectChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
+  effectChipSample: { fontFamily: TypographyV2.priceList.fontFamily, fontSize: TypographyV2.priceList.size, lineHeight: 24 },
+  effectChipLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   effectChipLabelActive: { color: colors.brand },
   // ── Text animation chips (visual preview) ──
   animChip: { width: 48, height: 56, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm, backgroundColor: colors.surfaceAlt, justifyContent: 'center', alignItems: 'center', gap: 4 },
-  animChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: 1.5 },
-  animChipLabel: { fontFamily: Typography.family.medium, fontSize: 9, color: colors.textSecondary, textAlign: 'center' },
+  animChipActive: { borderColor: colors.brand, backgroundColor: withAlpha(colors.brand, 0.09), borderWidth: Stroke.emphasis },
+  animChipLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textAlign: 'center' },
   animChipLabelActive: { color: colors.brand },
   // ── Draw brush chips (premium tool selection) ──
   brushChipScroll: { gap: Space.sm, paddingVertical: Space.xs },
@@ -4828,47 +4677,53 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   // ── GIF category chips ──
   gifCategoryScroll: { marginHorizontal: -Space.md, marginBottom: Space.sm },
   gifCategoryContent: { paddingHorizontal: Space.md, gap: 8 },
-  gifCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt },
-  gifCategoryChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
+  gifCategoryChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  gifCategoryChipText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   // ── Vote preview ──
   votePreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  votePreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, marginBottom: Space.sm, textAlign: 'center' },
+  votePreviewQuestion: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary, marginBottom: Space.sm, textAlign: 'center' },
   votePreviewOptions: { flexDirection: 'row', gap: Space.sm },
-  votePreviewOption: { flex: 1, paddingVertical: Space.sm, paddingHorizontal: Space.sm, borderRadius: Radius.md, borderWidth: 1.5, alignItems: 'center' },
-  votePreviewOptionText: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  votePreviewOption: { flex: 1, paddingVertical: Space.sm, paddingHorizontal: Space.sm, borderRadius: Radius.md, borderWidth: Stroke.standard, alignItems: 'center' },
+  votePreviewOptionText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textPrimary },
   addOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm, marginBottom: Space.xs },
-  addOptionBtnText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.brand },
-  timerChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, marginRight: Space.sm },
-  timerChipText: { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textSecondary },
+  addOptionBtnText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.brand },
+  timerChip: { paddingHorizontal: 14, paddingVertical: Space.sm, borderRadius: Radius.xl, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, marginRight: Space.sm },
+  timerChipText: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary },
   // ── Quiz preview ──
   quizPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.lg, padding: Space.md, marginBottom: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, gap: Space.xs },
   quizPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
-  quizPreviewEmoji: { fontSize: 22 },
-  quizPreviewQuestion: { flex: 1, fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary },
+  quizPreviewEmoji: { fontSize: TypographyV2.screenTitle.size },
+  quizPreviewQuestion: { flex: 1, fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary },
   quizPreviewOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: Space.sm, paddingHorizontal: Space.md, borderRadius: Radius.md, backgroundColor: colors.surfaceAlt, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   quizPreviewOptionCorrect: { borderColor: colors.success, backgroundColor: withAlpha(colors.success, 0.08) },
-  quizPreviewOptionText: { flex: 1, fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textPrimary },
+  quizPreviewOptionText: { flex: 1, fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textPrimary },
   // ── Question preview (improved) ──
-  questionPreviewWrap: { borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, elevation: 3, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  questionPreviewWrap: { borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, ...Elevation.floating },
   questionPreviewIconRow: { marginBottom: Space.xs },
-  questionPreviewPrompt: { fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: '#fff', lineHeight: Type.bodyStrong.size * 1.3 },
-  questionPreviewInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.md, paddingVertical: Space.sm, paddingHorizontal: Space.md },
-  questionPreviewPlaceholder: { fontFamily: Typography.family.regular, fontSize: Type.caption.size, color: 'rgba(255,255,255,0.6)' },
-  questionPreviewSendDot: { width: 24, height: 24, borderRadius: Radius.full, backgroundColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+  questionPreviewPrompt: { fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.scrimTextPrimary, lineHeight: TypographyV2.bodyStrong.size * 1.3 },
+  questionPreviewInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.scrimTextTertiary, borderRadius: Radius.md, paddingVertical: Space.sm, paddingHorizontal: Space.md },
+  questionPreviewPlaceholder: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.scrimTextSecondary },
+  questionPreviewSendDot: { width: 24, height: 24, borderRadius: Radius.full, backgroundColor: colors.scrimTextSecondary, justifyContent: 'center', alignItems: 'center' },
   // ── Emoji slider preview (improved) ──
-  sliderPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, elevation: 2, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } },
-  sliderPreviewQuestion: { fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textPrimary, textAlign: 'center' },
+  sliderPreviewWrap: { backgroundColor: colors.surface, borderRadius: Radius.xl, padding: Space.md + 2, marginBottom: Space.sm, gap: Space.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border, ...Elevation.card },
+  sliderPreviewQuestion: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary, textAlign: 'center' },
   sliderPreviewRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  sliderPreviewEmoji: { fontSize: Type.display.size },
+  sliderPreviewEmoji: { fontSize: TypographyV2.display.size },
   sliderPreviewTrack: { flex: 1, height: 8, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, position: 'relative' },
   sliderPreviewFill: { height: '100%', borderRadius: Radius.sm },
-  sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: 2, borderColor: '#fff', elevation: 2, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
-  sliderPreviewEndLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary, textAlign: 'center' },
+  sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: 2, borderColor: colors.textInverse, ...Elevation.modal },
+  sliderPreviewEndLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textAlign: 'center' },
   // ── Product source tabs ──
-  productTabBar: { flexDirection: 'row', paddingHorizontal: Space.md, paddingVertical: Space.xs, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  productTabBarContent: { gap: Space.xs, paddingVertical: Space.xs },
-  productTab: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingVertical: Space.sm - 2, paddingHorizontal: Space.md, borderRadius: Radius.full, borderWidth: StyleSheet.hairlineWidth, borderColor: 'transparent' },
-  productTabActive: { borderColor: colors.brand, backgroundColor: colors.brandSubtle },
-  productTabLabel: { fontFamily: Typography.family.medium, fontSize: Type.caption.size, color: colors.textSecondary },
-  });
+  productTabBar: { flexDirection: 'row', paddingHorizontal: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  productTabBarContent: { gap: Space.md },
+  productTab: { paddingVertical: Space.md },
+  productTabLabel: { fontFamily: Typography.family.medium, fontSize: TypographyV2.body.size, color: colors.textSecondary },
+  // ── Long-press preview overlay ──
+  previewOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: colors.background,
+    zIndex: 1000 },
+  previewImage: {
+    ...StyleSheet.absoluteFill,
+  } });
 }

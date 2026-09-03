@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily, IconGrammar, Control, ThumbSize } from '../../theme/designTokens';
+import { Space, Radius, IconGrammar, Control, ThumbSize, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { getCategoryFocalPoint } from '../../utils/media';
@@ -119,7 +120,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     padding: Space.sm,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   imageWrap: {
@@ -155,8 +156,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: Space.xs / 2,
   },
   name: {
-    fontSize: Type.body.size,
-    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     lineHeight: 20,
   },
@@ -166,14 +167,14 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: Space.xs / 2,
   },
   unitPrice: {
-    fontSize: Type.priceList.size,
-    fontFamily: FontFamily.bold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
     color: colors.textPrimary,
     letterSpacing: -0.2,
   },
   perUnit: {
-    fontSize: Type.caption.size,
-    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
   },
   ownershipRow: {
@@ -191,8 +192,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderRadius: Radius.full,
   },
   ownershipText: {
-    fontSize: Type.meta.size,
-    fontFamily: FontFamily.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
   },
   actionBtn: {
@@ -206,8 +207,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'center',
   },
   actionLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.background,
   },
 });

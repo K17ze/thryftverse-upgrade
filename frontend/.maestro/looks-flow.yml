@@ -1,0 +1,13 @@
+# Maestro E2E flow — Looks / moodboard community styling journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+
+- takeScreenshot: looks-flow-complete

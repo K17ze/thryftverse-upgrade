@@ -28,12 +28,12 @@ import Reanimated, {
   withTiming,
   Easing,
   runOnJS,
-  useAnimatedReaction,
-} from 'react-native-reanimated';
+  useAnimatedReaction } from 'react-native-reanimated';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
 import { Motion } from '../../../theme/motionTokens';
-import { Typography, Type, FontFamily, Space, Radius } from '../../../theme/designTokens';
+import { Typography, FontFamily, Space, Radius } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import type { CaptionSegment, CaptionStyle, CaptionTrack } from './CaptionTypes';
 
 // ── Style preset resolution ──────────────────────────────────────────
@@ -42,58 +42,47 @@ import type { CaptionSegment, CaptionStyle, CaptionTrack } from './CaptionTypes'
 const CAPTION_STYLE_MAP: Record<string, Partial<TextStyle>> = {
   clean: {
     fontFamily: FontFamily.regular,
-    fontSize: Type.body.size + 1,
-    lineHeight: (Type.body.size + 1) * 1.35,
-  },
+    fontSize: TypographyV2.body.size + 1,
+    lineHeight: (TypographyV2.body.size + 1) * 1.35 },
   headline: {
     fontFamily: 'Anton_400Regular',
-    fontSize: Type.title.size,
-    lineHeight: Type.title.size * 1.15,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.size * 1.15 },
   editorial: {
     fontFamily: 'PlayfairDisplay_700Bold',
-    fontSize: Type.title.size - 2,
-    lineHeight: (Type.title.size - 2) * 1.2,
-  },
+    fontSize: TypographyV2.screenTitle.size - 2,
+    lineHeight: (TypographyV2.screenTitle.size - 2) * 1.2 },
   compact: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.size * 1.3,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.size * 1.3,
     letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   handwritten: {
     fontFamily: 'Caveat_400Regular',
-    fontSize: Type.body.size + 2,
-    lineHeight: (Type.body.size + 2) * 1.3,
-  },
+    fontSize: TypographyV2.body.size + 2,
+    lineHeight: (TypographyV2.body.size + 2) * 1.3 },
   bubble: {
     fontFamily: 'Pacifico_400Regular',
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.size * 1.2,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.size * 1.2 },
   deco: {
     fontFamily: 'Lobster_400Regular',
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.size * 1.3,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.size * 1.3 },
   poster: {
     fontFamily: 'BebasNeue_400Regular',
-    fontSize: Type.title.size - 4,
-    lineHeight: (Type.title.size - 4) * 1.1,
-  },
+    fontSize: TypographyV2.screenTitle.size - 4,
+    lineHeight: (TypographyV2.screenTitle.size - 4) * 1.1 },
   squeeze: {
     fontFamily: 'BebasNeue_400Regular',
-    fontSize: Type.body.size,
-    lineHeight: Type.body.size * 1.1,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.size * 1.1 },
   signature: {
     fontFamily: 'PlayfairDisplay_400Regular',
     fontStyle: 'italic',
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.size * 1.4,
-  },
-};
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.size * 1.4 } };
 
 function resolveCaptionStyle(style: CaptionStyle): Partial<TextStyle> {
   const base = CAPTION_STYLE_MAP[style.textStyle] ?? CAPTION_STYLE_MAP.clean;
@@ -102,8 +91,7 @@ function resolveCaptionStyle(style: CaptionStyle): Partial<TextStyle> {
     ...base,
     fontSize: style.fontSize || base.fontSize,
     color: style.textColor,
-    textAlign: style.alignment,
-  };
+    textAlign: style.alignment };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -183,8 +171,7 @@ export const CaptionRenderer = React.memo(function CaptionRenderer({
   style,
   bottomInsetPx,
   topInsetPx = 0,
-  isPreview = false,
-}: CaptionRendererProps) {
+  isPreview = false }: CaptionRendererProps) {
   void topInsetPx;
   void isPreview;
   const reducedMotion = useReducedMotion();
@@ -216,8 +203,7 @@ export const CaptionRenderer = React.memo(function CaptionRenderer({
       } else {
         opacitySV.value = withTiming(1, {
           duration: Motion.duration.normal,
-          easing: Easing.out(Easing.ease),
-        });
+          easing: Motion.easing.entrance });
       }
     } else {
       if (reducedMotion) {
@@ -225,15 +211,13 @@ export const CaptionRenderer = React.memo(function CaptionRenderer({
       } else {
         opacitySV.value = withTiming(0, {
           duration: Motion.duration.normal,
-          easing: Easing.in(Easing.ease),
-        });
+          easing: Easing.in(Easing.ease) });
       }
     }
   }, [activeSegment, opacitySV, reducedMotion]);
 
   const containerAnimStyle = useAnimatedStyle(() => ({
-    opacity: opacitySV.value,
-  }));
+    opacity: opacitySV.value }));
 
   if (!track || track.segments.length === 0 || !activeSegment) {
     return null;
@@ -261,8 +245,7 @@ export const CaptionRenderer = React.memo(function CaptionRenderer({
                 backgroundColor: style.backgroundColor,
                 borderRadius: Radius.sm,
                 paddingHorizontal: Space.sm,
-                paddingVertical: Space.xs,
-              }
+                paddingVertical: Space.xs }
             : null,
         ]}
       >
@@ -306,8 +289,7 @@ function WordHighlightText({
   segment,
   timeSV,
   baseStyle,
-  highlightColor,
-}: WordHighlightTextProps) {
+  highlightColor }: WordHighlightTextProps) {
   const words = segment.words!;
   const activeIndexSV = useSharedValue(-1);
 
@@ -364,8 +346,7 @@ interface WordSpanProps {
  */
 function WordSpan({ word, index, activeIndexSV, baseColor, highlightColor }: WordSpanProps) {
   const animStyle = useAnimatedStyle(() => ({
-    color: activeIndexSV.value === index ? highlightColor : baseColor,
-  }));
+    color: activeIndexSV.value === index ? highlightColor : baseColor }));
 
   return (
     <Reanimated.Text style={animStyle}>
@@ -383,15 +364,11 @@ const styles = StyleSheet.create({
     left: Space.md,
     right: Space.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  } as ViewStyle,
+    justifyContent: 'center' } as ViewStyle,
   textWrap: {
-    maxWidth: '90%',
-  } as ViewStyle,
+    maxWidth: '90%' } as ViewStyle,
   text: {
     fontFamily: Typography.family.regular,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  } as TextStyle,
-});
+    textShadowRadius: 3 } as TextStyle });

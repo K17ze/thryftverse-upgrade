@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   createEmptyDocument,
   validateDocument,
@@ -176,6 +176,56 @@ describe('HistoryStack', () => {
     let count = 0;
     while (h.canUndo()) { h.undo(); count++; }
     expect(count).toBeLessThanOrEqual(50);
+  });
+
+  it('coalesces rapid same-label pushes into one entry', () => {
+    const doc = createEmptyDocument('look');
+    const h = new HistoryStack(doc);
+    const doc2 = { ...doc, metadata: { ...doc.metadata, caption: 'a' } };
+    const doc3 = { ...doc, metadata: { ...doc.metadata, caption: 'b' } };
+    h.push(doc2, 'Adjust opacity');
+    h.push(doc3, 'Adjust opacity');
+    expect(h.current()).toEqual(doc3);
+    const undone = h.undo();
+    expect(undone).toEqual(doc);
+    let count = 0;
+    while (h.canUndo()) { h.undo(); count++; }
+    expect(count).toBe(0);
+  });
+
+  it('does not coalesce pushes with different labels', () => {
+    const doc = createEmptyDocument('look');
+    const h = new HistoryStack(doc);
+    h.push({ ...doc, metadata: { ...doc.metadata, caption: 'a' } }, 'Adjust opacity');
+    h.push({ ...doc, metadata: { ...doc.metadata, caption: 'b' } }, 'Trim clip');
+    let count = 0;
+    while (h.canUndo()) { h.undo(); count++; }
+    expect(count).toBe(2);
+  });
+
+  it('does not coalesce same-label pushes more than 600ms apart', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    const doc = createEmptyDocument('look');
+    const h = new HistoryStack(doc);
+    h.push({ ...doc, metadata: { ...doc.metadata, caption: 'a' } }, 'Adjust opacity');
+    vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'));
+    h.push({ ...doc, metadata: { ...doc.metadata, caption: 'b' } }, 'Adjust opacity');
+    vi.useRealTimers();
+    let count = 0;
+    while (h.canUndo()) { h.undo(); count++; }
+    expect(count).toBe(2);
+  });
+
+  it('coalescing after undo still clears the redo stack', () => {
+    const doc = createEmptyDocument('look');
+    const h = new HistoryStack(doc);
+    h.push({ ...doc, metadata: { ...doc.metadata, caption: 'a' } }, 'Edit caption');
+    h.push({ ...doc, metadata: { ...doc.metadata, caption: 'b' } }, 'Other edit');
+    h.undo();
+    expect(h.canRedo()).toBe(true);
+    h.push({ ...doc, metadata: { ...doc.metadata, caption: 'c' } }, 'Edit caption');
+    expect(h.canRedo()).toBe(false);
   });
 });
 

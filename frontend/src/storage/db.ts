@@ -35,7 +35,12 @@ let dbUnavailable = false;
 export function isDbAvailable(): boolean {
   if (Platform.OS === 'web') return false;
   if (dbUnavailable) return false;
-  return dbInstance !== null || dbOpenPromise !== null;
+  // If the DB is already open or opening, it's available.
+  if (dbInstance !== null || dbOpenPromise !== null) return true;
+  // On native platforms, op-sqlite's openDB is a JSI function that exists
+  // only when the native module is linked. If the import resolved but the
+  // function is undefined, the native binding is not linked (e.g. Expo Go).
+  return typeof openDB === 'function';
 }
 
 /**
@@ -56,6 +61,14 @@ export async function getDb(): Promise<OPSQLiteDatabase> {
   if (Platform.OS === 'web') {
     dbUnavailable = true;
     throw new Error('[thryftverse.db] op-sqlite is not available on web.');
+  }
+
+  // Guard: if the op-sqlite native binding is not linked (e.g. Expo Go
+  // without a custom dev client), openDB is undefined. Throw a clean error
+  // instead of a confusing "undefined is not a function" TypeError.
+  if (typeof openDB !== 'function') {
+    dbUnavailable = true;
+    throw new Error('[thryftverse.db] op-sqlite native binding is not linked.');
   }
 
   dbOpenPromise = openDbInternal();

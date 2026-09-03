@@ -154,6 +154,10 @@ export interface PosterStory {
   uniqueViewerCount?: number;
   /** Versioned composition document for WYSIWYG viewer rendering. */
   compositionDocument?: unknown;
+  /** Content type — 'moodboard' when the poster embeds a moodboard canvas. */
+  contentType?: 'media' | 'moodboard';
+  /** Linked moodboard ID when contentType === 'moodboard'. */
+  moodboardId?: string | null;
 }
 
 export interface PosterStoryListResponse {
@@ -403,6 +407,8 @@ export interface PosterApiItem {
   status: 'draft' | 'published' | 'archived';
   expiryHours: number;
   createdAt: string;
+  contentType: 'media' | 'moodboard';
+  moodboardId: string | null;
 }
 
 export interface PosterApiResponse {
@@ -417,13 +423,16 @@ export interface PosterSingleResponse {
 
 export interface PosterCreateBody {
   id: string;
-  mediaUrl: string;
+  mediaUrl?: string;
+  mediaFinalizationId?: string;
   caption?: string;
   textOverlay?: Record<string, unknown>;
   backgroundColor?: string;
   layout?: string;
   status?: 'draft' | 'published' | 'archived';
   expiryHours?: number;
+  contentType?: 'media' | 'moodboard';
+  moodboardId?: string;
 }
 
 // ── API Functions: Stories ──────────────────────────────────────────
@@ -735,6 +744,39 @@ export async function fetchPosterByIdFromApi(posterId: string): Promise<PosterSi
   return fetchJson<PosterSingleResponse>(`/posters/${posterId}`);
 }
 
+/** Moodboard content embedded in a moodboard-type poster. */
+export interface PosterMoodboardContent {
+  ok: boolean;
+  moodboard?: {
+    id: string;
+    creatorId: string;
+    title: string;
+    description: string;
+    theme: string;
+    visibility: string;
+    coverImage: string;
+    revision: number;
+    items: Array<{
+      id: string;
+      listingId: string | null;
+      mediaUrl: string;
+      title: string;
+      priceGbp: number;
+      positionX: number;
+      positionY: number;
+      rotation: number;
+      scale: number;
+      sortOrder: number;
+    }>;
+  };
+  error?: string;
+}
+
+/** Fetch the full moodboard data for a moodboard-type poster. */
+export async function fetchPosterMoodboardContent(posterId: string): Promise<PosterMoodboardContent> {
+  return fetchJson<PosterMoodboardContent>(`/posters/${posterId}/moodboard`);
+}
+
 export async function deletePosterOnApi(posterId: string): Promise<{ ok: boolean }> {
   return fetchJson<{ ok: boolean }>(`/posters/${posterId}`, { method: 'DELETE' });
 }
@@ -789,10 +831,14 @@ export async function recordPosterTagClick(posterId: string, tagId: string): Pro
 // ── Creator Content Scheduling ──────────────────────────────────────
 
 export async function scheduleCreatorDocument(documentId: string, scheduledFor: string | null): Promise<{ ok: boolean }> {
+  // Send both casings so the server accepts the payload regardless of which
+  // field it reads. The casing mismatch was a P0 bug (research report 23):
+  // the frontend sent scheduledFor while the server expected scheduled_for.
+  // The server now accepts both; sending both is the safe bridge.
   return fetchJson<{ ok: boolean }>(`/creator/documents/${documentId}/schedule`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scheduledFor }),
+    body: JSON.stringify({ scheduledFor, scheduled_for: scheduledFor }),
   });
 }
 

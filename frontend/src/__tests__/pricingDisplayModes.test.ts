@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   CurrencyDisplayMode,
-  DEFAULT_GOLD_RATES,
+  DEFAULT_FX_RATES,
   formatPrice,
   toIze,
 } from '../utils/currency';
 
 function buildPricingSurface(mode: CurrencyDisplayMode) {
-  const itemIze = toIze(89.5, 'GBP', DEFAULT_GOLD_RATES);
-  const protectionIze = toIze(5.18, 'GBP', DEFAULT_GOLD_RATES);
-  const postageIze = toIze(2.89, 'GBP', DEFAULT_GOLD_RATES);
+  const itemIze = toIze(89.5, 'GBP', DEFAULT_FX_RATES);
+  const protectionIze = toIze(5.18, 'GBP', DEFAULT_FX_RATES);
+  const postageIze = toIze(2.89, 'GBP', DEFAULT_FX_RATES);
   const totalIze = itemIze + protectionIze + postageIze;
-  const promoteIze = toIze(1.99, 'GBP', DEFAULT_GOLD_RATES);
+  const promoteIze = toIze(1.99, 'GBP', DEFAULT_FX_RATES);
 
   return {
     mode,

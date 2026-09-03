@@ -5,21 +5,18 @@ import {
   StyleSheet,
   StatusBar,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   AppState,
   Image,
-  Alert,
   ActivityIndicator,
   AccessibilityInfo,
-  BackHandler,
-  TextInput,
-} from 'react-native';
+  BackHandler } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
@@ -37,8 +34,7 @@ import {
   votePosterPoll,
   votePosterQuiz,
   answerPosterQuestion,
-  votePosterStyle,
-} from '../services/postersApi';
+  votePosterStyle } from '../services/postersApi';
 import type {
   PosterStory,
   PosterFrame,
@@ -46,22 +42,27 @@ import type {
   PosterTag,
   PosterSticker as ApiPosterSticker,
   PollVoteResult,
-  QuizVoteResult,
-} from '../services/postersApi';
+  QuizVoteResult } from '../services/postersApi';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
-import { HapticPatterns } from '../utils/hapticPatterns';
+import { usePosterViewerGesture } from '../hooks/usePosterViewerGesture';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
-import { Type, Typography, Space, Radius, Control, LetterSpacing, Elevation, Stroke } from '../theme/designTokens';
+import { useAnalyticsEvent } from '../hooks/useAnalyticsEvent';
+import { Typography, Space, Radius, Control, LetterSpacing, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { Motion } from '../theme/motionTokens';
+import { isVideoUrl, shadeColor } from '../utils/posterPhysics';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { PosterViewerSkeleton } from '../components/skeletons/PosterViewerSkeleton';
 import { PosterProgressSegments } from '../components/poster/PosterProgressSegments';
 import { PosterStickerLayer } from '../components/poster/PosterStickerLayer';
+import { MoodboardPosterFrame } from '../components/poster/MoodboardPosterFrame';
 import { PosterReactionReplyBar } from '../components/poster/PosterReactionReplyBar';
+import { HeartBurst } from '../components/poster/HeartBurst';
+import { StickerInteractionPanel } from '../components/poster/StickerInteractionPanel';
 import { ShareSheet } from '../components/ShareSheet';
 import { CachedImage } from '../components/CachedImage';
 import { VerificationBadge } from '../components/profile/VerificationBadge';
@@ -69,64 +70,18 @@ import { Video } from '../components/compat/Video';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  useAnimatedReaction,
-  withTiming,
-  withSpring,
-  interpolate,
-  Extrapolation,
-  runOnJS,
-  cancelAnimation,
-  Easing as ReEasing,
-} from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 import * as Clipboard from 'expo-clipboard';
 import { Sentry } from '../platform/monitoring';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { ApiRequestError } from '../lib/apiClient';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TICK_MS = 50;
-const LONG_PRESS_THRESHOLD_MS = 350;
-const SWIPE_THRESHOLD = 40;
-const DOUBLE_TAP_DEBOUNCE_MS = 300;
-const ZOOM_MIN = 1;
-const ZOOM_MAX = 4;
-const ZOOM_DOUBLE_TAP = 2.5;
-const SPRING_SETTLE = Motion.spring.entrance;
-
-// Rubber-band clamp: allows overscroll but with diminishing resistance.
-function rubberBand(value: number, min: number, max: number, friction = 0.24): number {
-  'worklet';
-  if (value < min) return min + (value - min) * friction;
-  if (value > max) return max + (value - max) * friction;
-  return value;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  'worklet';
-  return Math.min(max, Math.max(min, value));
-}
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'PosterViewer'>;
-
-function isVideoUrl(url: string): boolean {
-  return /\.(mp4|mov|m4v|webm|quicktime)(\?|$)/i.test(url);
-}
-
-// Lighten/darken a hex color by a percentage (-100..100). Used to derive a
-// gradient end-color from the text-frame background for Instagram Create-mode
-// style depth. Falls back to the original color on parse failure.
-function shadeColor(hex: string, percent: number): string {
-  const cleaned = hex.replace('#', '');
-  if (cleaned.length !== 6) return hex;
-  const num = parseInt(cleaned, 16);
-  if (Number.isNaN(num)) return hex;
-  const amt = Math.round(2.55 * percent);
-  const r = Math.max(0, Math.min(255, (num >> 16) + amt));
-  const g = Math.max(0, Math.min(255, ((num >> 8) & 0x00ff) + amt));
-  const b = Math.max(0, Math.min(255, (num & 0x0000ff) + amt));
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
-}
 
 export default function PosterViewerScreen() {
   const navigation = useNavigation<NavT>();
@@ -140,6 +95,9 @@ export default function PosterViewerScreen() {
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
+  const analyticsEvent = useAnalyticsEvent();
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, SCREEN_WIDTH, SCREEN_HEIGHT), [colors, SCREEN_WIDTH, SCREEN_HEIGHT]);
 
   const [stories, setStories] = React.useState<PosterStory[]>([]);
   const [storyIndex, setStoryIndex] = React.useState(0);
@@ -147,6 +105,7 @@ export default function PosterViewerScreen() {
   const [progress, setProgress] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState<{ kind: 'connection' | 'offline' | 'missing' } | null>(null);
   const [mediaError, setMediaError] = React.useState(false);
   const [recordedFrames, setRecordedFrames] = React.useState<Set<string>>(new Set());
   const [posterTags, setPosterTags] = React.useState<PosterTag[]>([]);
@@ -154,7 +113,6 @@ export default function PosterViewerScreen() {
   const [isMuted, setIsMuted] = React.useState(true);
   const [mediaRetryKey, setMediaRetryKey] = React.useState(0);
   const [isBuffering, setIsBuffering] = React.useState(false);
-  const [heartBurst, setHeartBurst] = React.useState<{ id: number; x: number; y: number } | null>(null);
   // Caption expand/collapse — 3-line clamp with "more" tap.
   const [captionExpanded, setCaptionExpanded] = React.useState(false);
 
@@ -163,26 +121,22 @@ export default function PosterViewerScreen() {
   // style_vote) and cached vote/answer results so the user sees feedback
   // after interacting. Follows Instagram's tap-sticker-to-interact pattern.
   const [activeInteractionSticker, setActiveInteractionSticker] = React.useState<ApiPosterSticker | null>(null);
+  // Ref mirror of activeInteractionSticker.id so vote/answer closures always
+  // read the current value instead of a stale render-time capture.
+  const activeStickerIdRef = React.useRef<string | null>(null);
   const [pollResult, setPollResult] = React.useState<PollVoteResult | null>(null);
   const [quizResult, setQuizResult] = React.useState<QuizVoteResult | null>(null);
   const [questionAnswer, setQuestionAnswer] = React.useState('');
   const [questionAnswerSent, setQuestionAnswerSent] = React.useState(false);
   const [isStickerSubmitting, setIsStickerSubmitting] = React.useState(false);
-
-  // Double-tap detection: track last tap timestamp to distinguish double-tap
-  // (heart reaction) from single-tap (frame navigation).
-  const lastTapRef = React.useRef(0);
-  const heartBurstIdRef = React.useRef(0);
-
-  // 300ms debounce guard to prevent multiple heart bursts from rapid tapping.
-  const lastHeartBurstRef = React.useRef(0);
-
-  // Track whether a long-press fired during the current touch to avoid
-  // advancing the frame when the user releases after a hold-pause.
-  const didLongPressRef = React.useRef(false);
-
-  // Single-tap timer for delayed frame navigation (double-tap detection).
-  const singleTapTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const storyId = route.params?.storyId;
   const startFrameIndex = route.params?.startFrameIndex ?? 0;
@@ -202,6 +156,7 @@ export default function PosterViewerScreen() {
   React.useEffect(() => {
     let mounted = true;
     setIsLoading(true);
+    setLoadError(null);
 
     const loadStories = async () => {
       try {
@@ -218,8 +173,15 @@ export default function PosterViewerScreen() {
           setStoryIndex(0);
           setFrameIndex(0);
         }
-      } catch {
-        if (mounted) show('Could not load poster stories', 'error');
+      } catch (err: unknown) {
+        if (!mounted) return;
+        if (err instanceof ApiRequestError && (err.status === 404 || err.status === 410)) {
+          setLoadError({ kind: 'missing' });
+        } else if (isOffline) {
+          setLoadError({ kind: 'offline' });
+        } else {
+          setLoadError({ kind: 'connection' });
+        }
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -227,7 +189,7 @@ export default function PosterViewerScreen() {
 
     loadStories();
     return () => { mounted = false; };
-  }, [storyId, startFrameIndex, show]);
+  }, [storyId, startFrameIndex, isOffline]);
 
   // Clear recorded-frames set when the storyId changes so view counts are
   // re-recorded for a freshly opened story (prevents stale-set memory leak).
@@ -332,8 +294,7 @@ export default function PosterViewerScreen() {
 
   const storyAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: storyScale.value }],
-    opacity: storyOpacity.value,
-  }));
+    opacity: storyOpacity.value }));
 
   // Skip to the next story (account) — used by swipe-left gesture.
   const goNextStory = React.useCallback(() => {
@@ -358,26 +319,21 @@ export default function PosterViewerScreen() {
   const handleDelete = async () => {
     if (!activeStory || !isOwner) return;
     haptic.medium();
-    Alert.alert(
-      'Delete story?',
-      'This will permanently remove your poster story.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deletePosterStory(activeStory.id);
-              show('Story deleted', 'info');
-              navigation.goBack();
-            } catch {
-              show('Failed to delete story', 'error');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete story?',
+      message: 'This will permanently remove your poster story.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          await deletePosterStory(activeStory.id);
+          show('Story deleted', 'info');
+          navigation.goBack();
+        } catch {
+          show('Failed to delete story', 'error');
+        }
+      } });
   };
 
   const handleArchive = async () => {
@@ -400,6 +356,20 @@ export default function PosterViewerScreen() {
     setRecordedFrames((prev) => new Set(prev).add(activeFrame.id));
     recordPosterFrameView(activeFrame.id).catch((err: unknown) => { Sentry.captureException?.(err); });
   }, [activeFrame?.id, activeStory, isOwner, recordedFrames]);
+
+  // Fire creator analytics v2 view event when a new story is viewed.
+  // This feeds the summary/timeline/content-ranking dashboards. Only fires
+  // once per story (not per frame) and skips self-views via ownerId.
+  const recordedStoryIdsRef = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    if (!activeStory || isOwner) return;
+    if (recordedStoryIdsRef.current.has(activeStory.id)) return;
+    recordedStoryIdsRef.current.add(activeStory.id);
+    analyticsEvent.view('poster', activeStory.id, {
+      surface: 'poster_viewer',
+      ownerId: activeStory.creatorId,
+    });
+  }, [activeStory?.id, isOwner, activeStory, analyticsEvent]);
 
   // Fetch shoppable product tags for the active poster story. Tags are
   // scoped to the poster (story), so we refetch whenever the active story
@@ -500,411 +470,46 @@ export default function PosterViewerScreen() {
     setIsBuffering(false);
   }, [activeFrame?.id, activeFrame?.mediaType, activeFrame?.mediaUrl]);
 
-  // ── Pinch-to-zoom shared values (image frames only) ────────────────
-  const zoomScale = useSharedValue(1);
-  const zoomSavedScale = useSharedValue(1);
-  const zoomTranslateX = useSharedValue(0);
-  const zoomTranslateY = useSharedValue(0);
-  const zoomSavedTranslateX = useSharedValue(0);
-  const zoomSavedTranslateY = useSharedValue(0);
-  const [isZoomed, setIsZoomed] = React.useState(false);
-
-  // ── Swipe-down dismiss rubber-band ──────────────────────────────────
-  // The content follows the finger downward with diminishing resistance
-  // (rubber-band clamp), and scales down slightly. On release, if past
-  // threshold it animates off-screen then dismisses; otherwise it springs
-  // back to position. This matches Instagram/Snapchat's natural dismiss.
-  const dismissTranslateY = useSharedValue(0);
-  const dismissScale = useSharedValue(1);
-  const dismissOpacity = useSharedValue(1);
-  const DISMISS_THRESHOLD = 120; // px — 30% of typical screen height
-  const DISMISS_VELOCITY = 500;  // px/s — fast flick also dismisses
-
-  const dismissAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: dismissTranslateY.value },
-      { scale: dismissScale.value },
-    ],
-    opacity: dismissOpacity.value,
-  }));
-
-  // Reset zoom whenever the frame changes — prevents carrying zoom state
-  // across frames. Respects reducedMotion (instant, no animation).
-  React.useEffect(() => {
-    if (reducedMotion) {
-      zoomScale.value = 1;
-      zoomSavedScale.value = 1;
-      zoomTranslateX.value = 0;
-      zoomTranslateY.value = 0;
-      zoomSavedTranslateX.value = 0;
-      zoomSavedTranslateY.value = 0;
-    } else {
-      cancelAnimation(zoomScale);
-      cancelAnimation(zoomTranslateX);
-      cancelAnimation(zoomTranslateY);
-      zoomScale.value = 1;
-      zoomSavedScale.value = 1;
-      zoomTranslateX.value = 0;
-      zoomTranslateY.value = 0;
-      zoomSavedTranslateX.value = 0;
-      zoomSavedTranslateY.value = 0;
-    }
-  }, [activeFrame?.id, reducedMotion, zoomScale, zoomSavedScale, zoomTranslateX, zoomTranslateY, zoomSavedTranslateX, zoomSavedTranslateY]);
-
-  // Track zoom state in React for conditional gesture enabling.
-  useAnimatedReaction(
-    () => zoomScale.value > 1.01,
-    (isZoomedNow, wasZoomed) => {
-      if (isZoomedNow !== wasZoomed) {
-        runOnJS(setIsZoomed)(isZoomedNow);
-      }
-    }
-  );
-
-  const zoomAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: zoomTranslateX.value },
-      { translateY: zoomTranslateY.value },
-      { scale: zoomScale.value },
-    ],
-  }));
-
-  // ── Image zoom gestures (pinch + pan + double-tap toggle) ───────────
-  // Only active for image frames (not videos, not composition docs).
-  const isImageFrame = !compositionDoc && !!activeFrame?.mediaUrl &&
-    activeFrame.mediaType !== 'video' && !isVideoUrl(activeFrame.mediaUrl);
-
-  const zoomPinchGesture = React.useMemo(
-    () =>
-      Gesture.Pinch()
-        .enabled(isImageFrame)
-        .onStart(() => {
-          zoomSavedScale.value = zoomScale.value;
-        })
-        .onUpdate((e) => {
-          const newScale = zoomSavedScale.value * e.scale;
-          zoomScale.value = clamp(newScale, ZOOM_MIN, ZOOM_MAX);
-        })
-        .onEnd(() => {
-          if (zoomScale.value < ZOOM_MIN) {
-            zoomScale.value = reducedMotion ? ZOOM_MIN : withSpring(ZOOM_MIN, SPRING_SETTLE);
-            zoomTranslateX.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
-            zoomTranslateY.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
-            zoomSavedScale.value = ZOOM_MIN;
-            zoomSavedTranslateX.value = 0;
-            zoomSavedTranslateY.value = 0;
-          } else if (zoomScale.value > ZOOM_MAX) {
-            zoomScale.value = reducedMotion ? ZOOM_MAX : withSpring(ZOOM_MAX, SPRING_SETTLE);
-            zoomSavedScale.value = ZOOM_MAX;
-          } else {
-            zoomSavedScale.value = zoomScale.value;
-          }
-        }),
-    [isImageFrame, reducedMotion, zoomScale, zoomSavedScale, zoomTranslateX, zoomTranslateY, zoomSavedTranslateX, zoomSavedTranslateY]
-  );
-
-  const zoomPanGesture = React.useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(isImageFrame && isZoomed)
-        .onStart(() => {
-          zoomSavedTranslateX.value = zoomTranslateX.value;
-          zoomSavedTranslateY.value = zoomTranslateY.value;
-        })
-        .onUpdate((e) => {
-          const zoomLevel = Math.max(zoomScale.value, zoomSavedScale.value);
-          if (zoomLevel <= 1) return;
-          const maxTransX = (SCREEN_WIDTH * (zoomLevel - 1)) / 2;
-          const maxTransY = (SCREEN_HEIGHT * (zoomLevel - 1)) / 2;
-          const nextX = zoomSavedTranslateX.value + e.translationX;
-          const nextY = zoomSavedTranslateY.value + e.translationY;
-          zoomTranslateX.value = rubberBand(nextX, -maxTransX, maxTransX);
-          zoomTranslateY.value = rubberBand(nextY, -maxTransY, maxTransY);
-        })
-        .onEnd((e) => {
-          const zoomLevel = Math.max(zoomScale.value, zoomSavedScale.value);
-          if (zoomLevel <= 1) {
-            zoomSavedTranslateX.value = 0;
-            zoomSavedTranslateY.value = 0;
-            zoomTranslateX.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
-            zoomTranslateY.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
-            return;
-          }
-          const maxTransX = (SCREEN_WIDTH * (zoomLevel - 1)) / 2;
-          const maxTransY = (SCREEN_HEIGHT * (zoomLevel - 1)) / 2;
-          const projectedX = zoomTranslateX.value + e.velocityX * 0.08;
-          const projectedY = zoomTranslateY.value + e.velocityY * 0.08;
-          const targetX = clamp(projectedX, -maxTransX, maxTransX);
-          const targetY = clamp(projectedY, -maxTransY, maxTransY);
-          zoomSavedTranslateX.value = targetX;
-          zoomSavedTranslateY.value = targetY;
-          zoomTranslateX.value = reducedMotion ? targetX : withSpring(targetX, SPRING_SETTLE);
-          zoomTranslateY.value = reducedMotion ? targetY : withSpring(targetY, SPRING_SETTLE);
-        }),
-    [isImageFrame, isZoomed, reducedMotion, zoomScale, zoomSavedScale, zoomTranslateX, zoomTranslateY, zoomSavedTranslateX, zoomSavedTranslateY]
-  );
-
-  // Double-tap zoom toggle is integrated into the tap zone double-tap logic
-  // (triggerHeartBurst) to avoid gesture conflicts with the tap layer that
-  // sits on top of the image. See triggerHeartBurst for the zoom-toggle logic.
-
-  // Compose zoom gestures: pinch + pan simultaneous.
-  // Double-tap zoom toggle is handled by the tap zone gestures (which are
-  // layered on top of the image) via triggerHeartBurst, so we don't include
-  // a separate double-tap here to avoid gesture conflicts.
-  const zoomComposedGesture = React.useMemo(
-    () =>
-      Gesture.Simultaneous(zoomPanGesture, zoomPinchGesture),
-    [zoomPanGesture, zoomPinchGesture]
-  );
-
-  // ── Container swipe gesture (down=dismiss, left=next story, right=prev story, up=view profile) ──
-  // Uses Gesture.Pan() with activeOffset thresholds so it only activates for
-  // clear swipes, avoiding interference with tap zones and the reply input.
-  const handleSwipeUpProfile = React.useCallback(() => {
-    if (activeStory) {
-      haptic.light();
-      openProfile(navigation, activeStory.creatorId, currentUser?.id);
-    }
-  }, [activeStory, haptic, navigation, currentUser?.id]);
-
-  const handleSwipeDismiss = React.useCallback(() => {
-    haptic.heavy();
-    navigation.goBack();
-  }, [haptic, navigation]);
-
-  const containerPanGesture = React.useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetX([-SWIPE_THRESHOLD, SWIPE_THRESHOLD])
-        .activeOffsetY([-SWIPE_THRESHOLD, SWIPE_THRESHOLD])
-        .onUpdate((e) => {
-          'worklet';
-          const { translationX: dx, translationY: dy } = e;
-          // Only apply rubber-band during swipe-down (dismiss direction)
-          if (dy > 0 && Math.abs(dy) > Math.abs(dx)) {
-            // Rubber-band: diminishing resistance past 0
-            const clamped = rubberBand(dy, 0, SCREEN_HEIGHT * 0.5, 0.35);
-            dismissTranslateY.value = clamped;
-            // Scale down slightly as content drags away
-            dismissScale.value = 1 - (clamped / SCREEN_HEIGHT) * 0.25;
-            dismissOpacity.value = 1 - (clamped / SCREEN_HEIGHT) * 0.5;
-          }
-        })
-        .onEnd((e) => {
-          'worklet';
-          const { translationX: dx, translationY: dy } = e;
-          // Swipe-down to dismiss (primary exit gesture per IG/Snapchat)
-          if (dy > 0 && Math.abs(dy) > Math.abs(dx)) {
-            if (dy > DISMISS_THRESHOLD || e.velocityY > DISMISS_VELOCITY) {
-              // Animate off-screen then dismiss
-              dismissTranslateY.value = withSpring(SCREEN_HEIGHT, {
-                damping: 18,
-                stiffness: 200,
-                mass: 0.8,
-              });
-              dismissScale.value = withSpring(0.85, {
-                damping: 18,
-                stiffness: 200,
-              });
-              dismissOpacity.value = withSpring(0, {
-                damping: 18,
-                stiffness: 200,
-              });
-              runOnJS(handleSwipeDismiss)();
-              return;
-            }
-            // Spring back — didn't drag far enough
-            dismissTranslateY.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
-            dismissScale.value = reducedMotion ? 1 : withSpring(1, SPRING_SETTLE);
-            dismissOpacity.value = reducedMotion ? 1 : withSpring(1, SPRING_SETTLE);
-            return;
-          }
-          // Reset any partial dismiss state
-          if (dismissTranslateY.value !== 0) {
-            dismissTranslateY.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
-            dismissScale.value = reducedMotion ? 1 : withSpring(1, SPRING_SETTLE);
-            dismissOpacity.value = reducedMotion ? 1 : withSpring(1, SPRING_SETTLE);
-          }
-          // Swipe-up to view creator profile
-          if (dy < -SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
-            runOnJS(handleSwipeUpProfile)();
-            return;
-          }
-          // Horizontal swipe between stories (accounts)
-          if (Math.abs(dx) > Math.abs(dy)) {
-            if (dx < -SWIPE_THRESHOLD) {
-              runOnJS(goNextStory)();
-            } else if (dx > SWIPE_THRESHOLD) {
-              runOnJS(goPrevStory)();
-            }
-          }
-        }),
-    [handleSwipeDismiss, handleSwipeUpProfile, goNextStory, goPrevStory, reducedMotion, dismissTranslateY, dismissScale, dismissOpacity]
-  );
-
-  // Cleanup single-tap timer on unmount to prevent frame advance after exit.
-  React.useEffect(() => {
-    return () => {
-      if (singleTapTimerRef.current) {
-        clearTimeout(singleTapTimerRef.current);
-        singleTapTimerRef.current = null;
-      }
-    };
-  }, []);
-
   const handleReaction = React.useCallback(async (reaction: PosterReactionType) => {
-    if (!activeFrame) return;
+    if (!activeFrame || !activeStory) return;
     haptic.light();
     try {
       await setPosterFrameReaction(activeFrame.id, reaction);
+      analyticsEvent.like('poster', activeStory.id, {
+        surface: 'poster_viewer',
+        ownerId: activeStory.creatorId,
+      });
       AccessibilityInfo.announceForAccessibility('Reaction sent');
     } catch {
       haptic.error();
       show('Failed to set reaction', 'error');
     }
-  }, [activeFrame, haptic, show]);
+  }, [activeFrame, activeStory, haptic, show, analyticsEvent]);
 
-  // Double-tap to heart — Instagram core gesture. Uses a delayed single-tap
-  // approach: on first tap, schedule frame advance after 280ms. If a second
-  // tap arrives within that window, cancel the advance and trigger heart.
-  // A 300ms debounce guard prevents multiple heart bursts from rapid tapping.
-
-  const triggerHeartBurst = React.useCallback((x: number, y: number) => {
-    // If zoomed in, double-tap zooms out instead of triggering a heart.
-    if (zoomScale.value > 1) {
-      zoomScale.value = reducedMotion ? 1 : withSpring(1, SPRING_SETTLE);
-      zoomTranslateX.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
-      zoomTranslateY.value = reducedMotion ? 0 : withSpring(0, SPRING_SETTLE);
-      zoomSavedScale.value = 1;
-      zoomSavedTranslateX.value = 0;
-      zoomSavedTranslateY.value = 0;
-      return;
-    }
-    // Not zoomed: trigger heart reaction ONLY (Instagram pattern).
-    // Pinch-to-zoom handles zoom-in; double-tap is the heart gesture.
-    const now = Date.now();
-    if (now - lastHeartBurstRef.current < DOUBLE_TAP_DEBOUNCE_MS) return;
-    lastHeartBurstRef.current = now;
-    HapticPatterns.like();
-    setHeartBurst({
-      id: ++heartBurstIdRef.current,
-      x,
-      y,
-    });
-    setTimeout(() => setHeartBurst(null), 2500);
-    handleReaction('love');
-  }, [haptic, handleReaction, reducedMotion, zoomScale, zoomTranslateX, zoomTranslateY, zoomSavedScale, zoomSavedTranslateX, zoomSavedTranslateY]);
-
-  const handleTapLeft = React.useCallback((absoluteX: number, absoluteY: number) => {
-    if (didLongPressRef.current) {
-      didLongPressRef.current = false;
-      return;
-    }
-    // If a pending single-tap exists, this is a double-tap → trigger heart
-    if (singleTapTimerRef.current) {
-      clearTimeout(singleTapTimerRef.current);
-      singleTapTimerRef.current = null;
-      if (activeFrame && activeStory?.allowReactions) {
-        triggerHeartBurst(absoluteX, absoluteY);
-      }
-      return;
-    }
-    // Schedule single-tap (go to previous frame) after delay
-    singleTapTimerRef.current = setTimeout(() => {
-      singleTapTimerRef.current = null;
-      goPrevFrame();
-    }, 280);
-  }, [activeFrame, activeStory?.allowReactions, triggerHeartBurst, goPrevFrame]);
-
-  const handleTapRight = React.useCallback((absoluteX: number, absoluteY: number) => {
-    if (didLongPressRef.current) {
-      didLongPressRef.current = false;
-      return;
-    }
-    if (singleTapTimerRef.current) {
-      clearTimeout(singleTapTimerRef.current);
-      singleTapTimerRef.current = null;
-      if (activeFrame && activeStory?.allowReactions) {
-        triggerHeartBurst(absoluteX, absoluteY);
-      }
-      return;
-    }
-    singleTapTimerRef.current = setTimeout(() => {
-      singleTapTimerRef.current = null;
-      goNextFrame();
-    }, 280);
-  }, [activeFrame, activeStory?.allowReactions, triggerHeartBurst, goNextFrame]);
-
-  // ── Tap zone gestures (Gesture.Tap + Gesture.LongPress) ─────────────
-  // Long-press callbacks for hold-to-pause (shared by both zones).
-  const handleLongPressStart = React.useCallback(() => {
-    didLongPressRef.current = true;
-    setIsPaused(true);
-    haptic.medium();
-    AccessibilityInfo.announceForAccessibility('Paused');
-  }, [haptic]);
-
-  const handleLongPressEnd = React.useCallback(() => {
-    if (didLongPressRef.current) {
-      setIsPaused(false);
-      AccessibilityInfo.announceForAccessibility('Resumed');
-    }
-  }, []);
-
-  // Left zone: single-tap → prev frame, double-tap → heart, long-press → pause
-  const tapLeftGesture = React.useMemo(
-    () =>
-      Gesture.Tap().onEnd((e, success) => {
-        if (success) runOnJS(handleTapLeft)(e.absoluteX, e.absoluteY);
-      }),
-    [handleTapLeft]
-  );
-
-  const longPressLeftGesture = React.useMemo(
-    () =>
-      Gesture.LongPress()
-        .minDuration(LONG_PRESS_THRESHOLD_MS)
-        .onStart(() => {
-          runOnJS(handleLongPressStart)();
-        })
-        .onEnd(() => {
-          runOnJS(handleLongPressEnd)();
-        }),
-    [handleLongPressStart, handleLongPressEnd]
-  );
-
-  // Right zone: single-tap → next frame, double-tap → heart, long-press → pause
-  const tapRightGesture = React.useMemo(
-    () =>
-      Gesture.Tap().onEnd((e, success) => {
-        if (success) runOnJS(handleTapRight)(e.absoluteX, e.absoluteY);
-      }),
-    [handleTapRight]
-  );
-
-  const longPressRightGesture = React.useMemo(
-    () =>
-      Gesture.LongPress()
-        .minDuration(LONG_PRESS_THRESHOLD_MS)
-        .onStart(() => {
-          runOnJS(handleLongPressStart)();
-        })
-        .onEnd(() => {
-          runOnJS(handleLongPressEnd)();
-        }),
-    [handleLongPressStart, handleLongPressEnd]
-  );
-
-  // Compose each zone's tap + long-press as exclusive (long-press cancels tap)
-  const leftZoneGesture = React.useMemo(
-    () => Gesture.Exclusive(longPressLeftGesture, tapLeftGesture),
-    [longPressLeftGesture, tapLeftGesture]
-  );
-  const rightZoneGesture = React.useMemo(
-    () => Gesture.Exclusive(longPressRightGesture, tapRightGesture),
-    [longPressRightGesture, tapRightGesture]
-  );
+  // ── Gesture layer (pinch-to-zoom, swipe dismiss, tap zones, heart burst) ──
+  // Extracted to usePosterViewerGesture hook — particle physics and gesture
+  // handlers are identical to the previous inline implementation.
+  const {
+    containerPanGesture,
+    dismissAnimatedStyle,
+    zoomComposedGesture,
+    zoomAnimatedStyle,
+    leftZoneGesture,
+    rightZoneGesture,
+    heartBurst } = usePosterViewerGesture({
+    activeFrame,
+    activeStory,
+    compositionDoc,
+    reducedMotion,
+    goPrevFrame,
+    goNextFrame,
+    goNextStory,
+    goPrevStory,
+    handleReaction,
+    setIsPaused,
+    navigation,
+    haptic,
+    currentUserId: currentUser?.id });
 
   const handleRemoveReaction = async () => {
     if (!activeFrame) return;
@@ -916,12 +521,16 @@ export default function PosterViewerScreen() {
   };
 
   const handleReply = async (text: string) => {
-    if (!activeFrame) return;
+    if (!activeFrame || !activeStory) return;
     try {
       const replyId = `reply_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`;
       await createPosterReply(activeFrame.id, { id: replyId, body: text });
       haptic.success();
       show('Reply sent', 'success');
+      analyticsEvent.comment('poster', activeStory.id, {
+        surface: 'poster_viewer',
+        ownerId: activeStory.creatorId,
+      });
       AccessibilityInfo.announceForAccessibility('Reply sent');
     } catch {
       haptic.error();
@@ -937,6 +546,7 @@ export default function PosterViewerScreen() {
   // Reset sticker interaction state when the frame or active sticker changes.
   React.useEffect(() => {
     setActiveInteractionSticker(null);
+    activeStickerIdRef.current = null;
     setPollResult(null);
     setQuizResult(null);
     setQuestionAnswer('');
@@ -1005,8 +615,7 @@ export default function PosterViewerScreen() {
       setPollResult({
         selectedOptionId: optionId,
         options: [],
-        totalVotes: 0,
-      });
+        totalVotes: 0 });
       AccessibilityInfo.announceForAccessibility('Vote submitted');
       show('Vote submitted', 'success');
     } catch {
@@ -1019,6 +628,7 @@ export default function PosterViewerScreen() {
 
   const handleStickerTap = React.useCallback((sticker: ApiPosterSticker) => {
     haptic.light();
+    activeStickerIdRef.current = sticker.id;
     setActiveInteractionSticker(sticker);
     setPollResult(null);
     setQuizResult(null);
@@ -1028,6 +638,12 @@ export default function PosterViewerScreen() {
 
   const handleShare = () => {
     haptic.light();
+    if (activeStory) {
+      analyticsEvent.share('poster', activeStory.id, {
+        surface: 'poster_viewer',
+        ownerId: activeStory.creatorId,
+      });
+    }
     setShareVisible(true);
   };
 
@@ -1051,22 +667,30 @@ export default function PosterViewerScreen() {
     const options: { text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }[] = [
       {
         text: 'Copy link',
-        onPress: handleCopyLink,
-      },
+        onPress: handleCopyLink },
     ];
     if (isOwner) {
       options.push({
         text: 'Archive story',
-        onPress: handleArchive,
-      });
+        onPress: handleArchive });
       options.push({
         text: 'Delete story',
         onPress: handleDelete,
-        style: 'destructive',
-      });
+        style: 'destructive' });
     }
     options.push({ text: 'Cancel', style: 'cancel' });
-    Alert.alert('Story options', undefined, options);
+    // Map the action menu to ConfirmationSheet — first non-cancel button
+    // becomes the confirm action.
+    const firstAction = options.find((o) => o.style !== 'cancel' && o.onPress);
+    if (firstAction) {
+      setConfirmSheet({
+        visible: true,
+        title: 'Story options',
+        message: firstAction.text,
+        confirmLabel: firstAction.text,
+        variant: firstAction.style === 'destructive' ? 'danger' : 'default',
+        onConfirm: () => { firstAction.onPress?.(); } });
+    }
   };
 
   const handleRetryMedia = () => {
@@ -1082,6 +706,90 @@ export default function PosterViewerScreen() {
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" />
         <PosterViewerSkeleton />
+      </View>
+    );
+  }
+
+  if (loadError) {
+    const isMissing = loadError.kind === 'missing';
+    const isOfflineErr = loadError.kind === 'offline';
+    const errorIcon: keyof typeof Ionicons.glyphMap = isMissing
+      ? 'trash-outline'
+      : isOfflineErr
+        ? 'cloud-offline-outline'
+        : 'alert-circle-outline';
+    const errorTitle = isMissing
+      ? 'This content is no longer available'
+      : isOfflineErr
+        ? "You're offline"
+        : "Couldn't load this story";
+    const errorSub = isMissing
+      ? 'It may have been removed by the creator.'
+      : isOfflineErr
+        ? 'Check your connection and try again.'
+        : 'Something went wrong. Try again in a moment.';
+    const canRetry = !isMissing;
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar barStyle="light-content" />
+        <Ionicons name={errorIcon} size={48} color={colors.scrimTextSecondary} />
+        <Text style={styles.emptyText}>{errorTitle}</Text>
+        <Text style={styles.emptySubText}>{errorSub}</Text>
+        {canRetry ? (
+          <AnimatedPressable
+            onPress={() => {
+              setLoadError(null);
+              setIsLoading(true);
+              // Re-trigger the load effect by calling the same fetch logic
+              const reload = async () => {
+                try {
+                  if (storyId) {
+                    const story = await fetchPosterStoryById(storyId);
+                    setStories([story]);
+                    setStoryIndex(0);
+                    setFrameIndex(Math.min(startFrameIndex, story.frames.length - 1));
+                  } else {
+                    const res = await fetchPosterStories({ active: true, limit: 50 });
+                    setStories(res.items);
+                    setStoryIndex(0);
+                    setFrameIndex(0);
+                  }
+                } catch (err: unknown) {
+                  if (err instanceof ApiRequestError && (err.status === 404 || err.status === 410)) {
+                    setLoadError({ kind: 'missing' });
+                  } else if (isOffline) {
+                    setLoadError({ kind: 'offline' });
+                  } else {
+                    setLoadError({ kind: 'connection' });
+                  }
+                } finally {
+                  setIsLoading(false);
+                }
+              };
+              void reload();
+            }}
+            style={styles.closeBtn}
+            scaleValue={0.97}
+            activeOpacity={0.85}
+            hapticFeedback="light"
+            accessibilityLabel="Try again"
+            accessibilityHint="Retries loading the story"
+          >
+            <Ionicons name="refresh-outline" size={18} color={colors.scrimTextPrimary} />
+            <Text style={styles.closeBtnText}>Try again</Text>
+          </AnimatedPressable>
+        ) : null}
+        <AnimatedPressable
+          onPress={() => navigation.goBack()}
+          style={canRetry ? styles.secondaryBtn : styles.closeBtn}
+          scaleValue={0.97}
+          activeOpacity={0.85}
+          hapticFeedback="light"
+          accessibilityLabel="Close"
+          accessibilityHint="Closes the story viewer and returns to the previous screen"
+        >
+          <Text style={styles.closeBtnText}>Close</Text>
+        </AnimatedPressable>
       </View>
     );
   }
@@ -1125,7 +833,13 @@ export default function PosterViewerScreen() {
       {/* Background — canonical composition or legacy media.
           Wrapped in a Reanimated.View for the flat scale/fade story transition. */}
       <Reanimated.View style={[styles.mediaFull, storyAnimatedStyle]}>
-      {compositionDoc && compositionPage ? (
+      {activeStory?.contentType === 'moodboard' && activeStory.moodboardId ? (
+        <MoodboardPosterFrame
+          moodboardId={activeStory.moodboardId}
+          width={SCREEN_WIDTH}
+          height={SCREEN_HEIGHT}
+        />
+      ) : compositionDoc && compositionPage ? (
         <CreatorCanvas
           document={compositionDoc}
           page={compositionPage}
@@ -1203,7 +917,7 @@ export default function PosterViewerScreen() {
 
       {mediaError && (
         <View style={styles.mediaErrorOverlay}>
-          <Ionicons name="alert-circle-outline" size={48} color="#fff" />
+          <Ionicons name="alert-circle-outline" size={48} color={colors.scrimTextPrimary} />
           <Text style={styles.mediaErrorText}>Unable to load media</Text>
           <AnimatedPressable
             onPress={handleRetryMedia}
@@ -1214,7 +928,7 @@ export default function PosterViewerScreen() {
             accessibilityLabel="Retry loading media"
             accessibilityHint="Reloads the story media"
           >
-            <Ionicons name="refresh-outline" size={18} color="#fff" />
+            <Ionicons name="refresh-outline" size={18} color={colors.scrimTextPrimary} />
             <Text style={styles.retryBtnText}>Retry</Text>
           </AnimatedPressable>
         </View>
@@ -1225,7 +939,7 @@ export default function PosterViewerScreen() {
           to a soft pill so it reads as a status, not a loading spinner. */}
       {isPaused && !mediaError && (
         <View style={styles.pauseIndicator} pointerEvents="none">
-          <Ionicons name="pause" size={16} color="rgba(255,255,255,0.85)" />
+          <Ionicons name="pause" size={16} color={colors.scrimTextSecondary} />
           <Text style={styles.pauseIndicatorText}>Paused</Text>
         </View>
       )}
@@ -1234,7 +948,7 @@ export default function PosterViewerScreen() {
           Progress bar pauses, subtle spinner shows. */}
       {isBuffering && !mediaError && !isPaused && (
         <View style={styles.bufferingIndicator} pointerEvents="none">
-          <ActivityIndicator size="small" color="rgba(255,255,255,0.8)" />
+          <ActivityIndicator size="small" color={colors.scrimTextSecondary} />
         </View>
       )}
 
@@ -1292,7 +1006,13 @@ export default function PosterViewerScreen() {
         <View style={styles.topMetaRow}>
           <AnimatedPressable
             style={styles.authorBtn}
-            onPress={() => openProfile(navigation, activeStory.creatorId, currentUser?.id)}
+            onPress={() => {
+              analyticsEvent.profileVisit('poster', activeStory.id, {
+                surface: 'poster_viewer',
+                ownerId: activeStory.creatorId,
+              });
+              openProfile(navigation, activeStory.creatorId, currentUser?.id);
+            }}
             activeOpacity={0.85}
             scaleValue={0.97}
             hapticFeedback="light"
@@ -1330,7 +1050,7 @@ export default function PosterViewerScreen() {
               accessibilityRole="button"
               accessibilityHint="Toggles audio playback for video frames"
             >
-              <Ionicons name={isMuted ? 'volume-mute-outline' : 'volume-high-outline'} size={20} color="#fff" />
+              <Ionicons name={isMuted ? 'volume-mute-outline' : 'volume-high-outline'} size={20} color={colors.scrimTextPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.topIconBtn}
@@ -1342,7 +1062,7 @@ export default function PosterViewerScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens story options: copy link, archive, delete"
             >
-              <Ionicons name="ellipsis-horizontal" size={20} color="#fff" />
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.scrimTextPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.topIconBtn}
@@ -1354,7 +1074,7 @@ export default function PosterViewerScreen() {
               accessibilityRole="button"
               accessibilityHint="Closes the story viewer and returns to the previous screen"
             >
-              <Ionicons name="close" size={22} color="#fff" />
+              <Ionicons name="close" size={22} color={colors.scrimTextPrimary} />
             </AnimatedPressable>
           </View>
         </View>
@@ -1388,8 +1108,7 @@ export default function PosterViewerScreen() {
                       styles.mentionTapTarget,
                       {
                         left: sticker.x * SCREEN_WIDTH - 30,
-                        top: sticker.y * SCREEN_HEIGHT - 24,
-                      },
+                        top: sticker.y * SCREEN_HEIGHT - 24 },
                     ]}
                     hitSlop={8}
                     accessibilityLabel={`View @${sticker.payload.username}'s profile`}
@@ -1421,8 +1140,7 @@ export default function PosterViewerScreen() {
                       styles.stickerTapTarget,
                       {
                         left: sticker.x * SCREEN_WIDTH - 80,
-                        top: sticker.y * SCREEN_HEIGHT - 60,
-                      },
+                        top: sticker.y * SCREEN_HEIGHT - 60 },
                     ]}
                     hitSlop={4}
                     accessibilityLabel={
@@ -1453,8 +1171,7 @@ export default function PosterViewerScreen() {
                   styles.tagHotspot,
                   {
                     left: tag.x * SCREEN_WIDTH,
-                    top: tag.y * SCREEN_HEIGHT,
-                  },
+                    top: tag.y * SCREEN_HEIGHT },
                 ]}
               >
                 <Pressable
@@ -1462,7 +1179,7 @@ export default function PosterViewerScreen() {
                   accessibilityLabel={tag.label}
                   accessibilityRole="button"
                   accessibilityHint="View tagged product"
-                  onPress={() => handleTagPress(tag, activeStory, navigation, haptic, show)}
+                  onPress={() => handleTagPress(tag, activeStory, navigation, haptic, show, analyticsEvent)}
                   style={({ pressed }) => [
                     styles.tagDot,
                     pressed && styles.tagDotPressed,
@@ -1535,7 +1252,14 @@ export default function PosterViewerScreen() {
             onSave={() => {
               haptic.light();
               toggleSavedPosterStory(activeStory.id);
-              show(isSavedPosterStory(activeStory.id) ? 'Removed from saved' : 'Saved', 'info');
+              const isNowSaved = !isSavedPosterStory(activeStory.id);
+              if (isNowSaved) {
+                analyticsEvent.save('poster', activeStory.id, {
+                  surface: 'poster_viewer',
+                  ownerId: activeStory.creatorId,
+                });
+              }
+              show(isNowSaved ? 'Saved' : 'Removed from saved', 'info');
             }}
             isSaved={isSavedPosterStory(activeStory.id)}
           />
@@ -1554,11 +1278,26 @@ export default function PosterViewerScreen() {
             questionAnswerSent={questionAnswerSent}
             isSubmitting={isStickerSubmitting}
             onQuestionAnswerChange={setQuestionAnswer}
-            onPollVote={(optionId) => handlePollVote(activeInteractionSticker.id, optionId)}
-            onQuizVote={(optionId) => handleQuizVote(activeInteractionSticker.id, optionId)}
-            onQuestionSubmit={() => handleQuestionSubmit(activeInteractionSticker.id)}
-            onStyleVote={(optionId) => handleStyleVote(activeInteractionSticker.id, optionId)}
-            onDismiss={() => setActiveInteractionSticker(null)}
+            onPollVote={(optionId) => {
+              const id = activeStickerIdRef.current;
+              if (id) handlePollVote(id, optionId);
+            }}
+            onQuizVote={(optionId) => {
+              const id = activeStickerIdRef.current;
+              if (id) handleQuizVote(id, optionId);
+            }}
+            onQuestionSubmit={() => {
+              const id = activeStickerIdRef.current;
+              if (id) handleQuestionSubmit(id);
+            }}
+            onStyleVote={(optionId) => {
+              const id = activeStickerIdRef.current;
+              if (id) handleStyleVote(id, optionId);
+            }}
+            onDismiss={() => {
+              activeStickerIdRef.current = null;
+              setActiveInteractionSticker(null);
+            }}
             colors={colors}
           />
         )}
@@ -1570,6 +1309,15 @@ export default function PosterViewerScreen() {
         url={`https://thryftverse.com/story/${activeStory.id}`}
         title={`@${creatorName}'s story`}
         imageUri={activeFrame.mediaUrl || activeStory.creator.avatar || undefined}
+      />
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
       />
         </Reanimated.View>
       </GestureDetector>
@@ -1584,9 +1332,14 @@ function handleTagPress(
   navigation: NativeStackNavigationProp<RootStackParamList>,
   haptic: ReturnType<typeof useHaptic>,
   show: (message: string, type?: 'info' | 'error' | 'success') => void,
+  analyticsEvent: ReturnType<typeof useAnalyticsEvent>,
 ) {
   haptic.selection();
   recordPosterTagClick(activeStory.id, tag.id).catch((err: unknown) => { Sentry.captureException?.(err); });
+  analyticsEvent.productClick('poster', activeStory.id, {
+    surface: 'poster_viewer',
+    ownerId: activeStory.creatorId,
+  });
   if (tag.listingId) {
     (navigation as unknown as { navigate: (route: string, params: Record<string, unknown>) => void })
       .navigate('ItemDetail', { itemId: tag.listingId });
@@ -1595,585 +1348,68 @@ function handleTagPress(
   }
 }
 
-// ── Heart burst particle component ─────────────────────────────────────
-// Reanimated-based particle burst: 12–22 heart emoji particles explode
-// outward with random velocity, gravity, rotation, scale, and fade.
-// Respects reducedMotion (single heart fade only).
-interface ParticleConfig {
-  id: number;
-  velX: number;
-  velY: number;
-  scale: number;
-  rotSpeed: number;
-}
-
-const GRAVITY = 980; // pts/sec²
-const LIFETIME_MS = 2500;
-const FADE_DELAY_MS = 1500;
-
-function HeartBurst({ x, y, reducedMotion }: { x: number; y: number; reducedMotion: boolean }) {
-  // Generate 12–22 particles with random initial properties.
-  // Configs are generated once per burst (not per render).
-  const configs = React.useMemo<ParticleConfig[]>(() => {
-    const count = 12 + Math.floor(Math.random() * 11); // 12–22
-    return Array.from({ length: count }, (_, i) => ({
-      id: i,
-      velX: -200 + Math.random() * 400, // -200 to 200
-      velY: -(400 + Math.random() * 400), // 400–800 upward
-      scale: 0.6 + Math.random() * 0.6, // 0.6–1.2
-      rotSpeed: -3 + Math.random() * 6, // -3 to 3 rad/sec
-    }));
-  }, []);
-
-  // Reduced motion: single heart that fades out — no particle physics.
-  if (reducedMotion) {
-    return <ReducedMotionHeart x={x} y={y} />;
-  }
-
-  return (
-    <View style={[heartBurstStyles.container, { left: x, top: y }]} pointerEvents="none">
-      {configs.map((cfg) => (
-        <ParticleHeart key={cfg.id} config={cfg} />
-      ))}
-    </View>
-  );
-}
-
-// Single particle heart — owns its shared values and physics animation.
-function ParticleHeart({ config }: { config: ParticleConfig }) {
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const scale = useSharedValue(config.scale);
-  const rotation = useSharedValue(0);
-  const opacity = useSharedValue(1);
-
-  React.useEffect(() => {
-    // Horizontal: constant velocity decay
-    translateX.value = withTiming(config.velX * 0.8, {
-      duration: LIFETIME_MS,
-      easing: ReEasing.out(ReEasing.cubic),
-    });
-
-    // Vertical: initial upward, then gravity pulls down (two-phase)
-    translateY.value = withTiming(config.velY * 0.5, {
-      duration: Motion.duration.crawl,
-      easing: ReEasing.out(ReEasing.cubic),
-    });
-    const gravityTimer = setTimeout(() => {
-      translateY.value = withTiming(GRAVITY * 0.3, {
-        duration: Motion.duration.crawl,
-        easing: ReEasing.in(ReEasing.cubic),
-      });
-    }, Motion.duration.crawl);
-
-    // Rotation: constant angular velocity
-    rotation.value = withTiming(config.rotSpeed, { duration: LIFETIME_MS });
-
-    // Fade out after 1.5s
-    const fadeTimer = setTimeout(() => {
-      opacity.value = withTiming(0, { duration: Motion.duration.crawl });
-    }, FADE_DELAY_MS);
-
-    return () => {
-      clearTimeout(gravityTimer);
-      clearTimeout(fadeTimer);
-    };
-  }, [config, translateX, translateY, rotation, opacity, scale]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-      { rotate: `${rotation.value}rad` },
-    ],
-    opacity: opacity.value,
-  }));
-
-  return (
-    <Reanimated.Text style={[heartBurstStyles.particle, animatedStyle]} allowFontScaling={false} /* decorative animation particle — not content text; must not scale with Dynamic Type */>
-      ❤️
-    </Reanimated.Text>
-  );
-}
-
-// Reduced-motion heart: single heart that scales up briefly and fades.
-function ReducedMotionHeart({ x, y }: { x: number; y: number }) {
-  const opacity = useSharedValue(1);
-  const scale = useSharedValue(0.8);
-
-  React.useEffect(() => {
-    scale.value = withTiming(1, { duration: 0 });
-    const timer = setTimeout(() => {
-      opacity.value = withTiming(0, { duration: 0 });
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [scale, opacity]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
-  }));
-
-  return (
-    <View style={[heartBurstStyles.container, { left: x, top: y }]} pointerEvents="none">
-      <Reanimated.Text style={[heartBurstStyles.text, animatedStyle]} allowFontScaling={false} /* decorative animation particle — not content text; must not scale with Dynamic Type */>
-        ❤️
-      </Reanimated.Text>
-    </View>
-  );
-}
-
-const heartBurstStyles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    transform: [{ translateX: -20 }, { translateY: -20 }],
-    zIndex: 30,
-  },
-  text: {
-    fontSize: 60,
-  },
-  particle: {
-    position: 'absolute',
-    fontSize: 28,
-  },
-});
-
-// ── Sticker Interaction Panel ──────────────────────────────────────────
-// A bottom-anchored panel that appears when a viewer taps an interactive
-// sticker (poll, quiz, question, style_vote). Shows the question and
-// tappable options with live results after voting, or a text input for
-// question stickers. Uses a dark translucent backdrop and frosted panel
-// matching the story viewer's immersive aesthetic.
-interface StickerInteractionPanelProps {
-  sticker: ApiPosterSticker;
-  pollResult: PollVoteResult | null;
-  quizResult: QuizVoteResult | null;
-  questionAnswer: string;
-  questionAnswerSent: boolean;
-  isSubmitting: boolean;
-  onQuestionAnswerChange: (text: string) => void;
-  onPollVote: (optionId: string) => void;
-  onQuizVote: (optionId: string) => void;
-  onQuestionSubmit: () => void;
-  onStyleVote: (optionId: string) => void;
-  onDismiss: () => void;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-}
-
-function StickerInteractionPanel({
-  sticker,
-  pollResult,
-  quizResult,
-  questionAnswer,
-  questionAnswerSent,
-  isSubmitting,
-  onQuestionAnswerChange,
-  onPollVote,
-  onQuizVote,
-  onQuestionSubmit,
-  onStyleVote,
-  onDismiss,
-  colors,
-}: StickerInteractionPanelProps) {
-  const insets = useSafeAreaInsets();
-  const reducedMotion = useReducedMotion();
-  const haptic = useHaptic();
-
-  // Entrance animation — slide up + fade in
-  const panelY = useSharedValue(reducedMotion ? 0 : 30);
-  const panelOpacity = useSharedValue(reducedMotion ? 1 : 0);
-
-  React.useEffect(() => {
-    if (!reducedMotion) {
-      panelY.value = withSpring(0, Motion.spring.entrance);
-      panelOpacity.value = withTiming(1, { duration: Motion.duration.normal });
-    }
-  }, [reducedMotion, panelY, panelOpacity]);
-
-  const panelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: panelY.value }],
-    opacity: panelOpacity.value,
-  }));
-
-  const handleVote = (optionId: string) => {
-    if (sticker.type === 'poll' || sticker.type === 'style_vote') {
-      if (sticker.type === 'poll') onPollVote(optionId);
-      else onStyleVote(optionId);
-    } else if (sticker.type === 'quiz') {
-      onQuizVote(optionId);
-    }
-  };
-
-  const stickerTypeLabel =
-    sticker.type === 'poll' ? 'Poll' :
-    sticker.type === 'quiz' ? 'Quiz' :
-    sticker.type === 'question' ? 'Question' :
-    sticker.type === 'style_vote' ? 'Style Vote' : 'Sticker';
-
-  const hasVoted = !!pollResult || !!quizResult;
-  const options = sticker.payload.options ?? [];
-
-  return (
-    <View style={stickerPanelStyles.backdrop}>
-      {/* Tap-to-dismiss backdrop */}
-      <Pressable
-        style={StyleSheet.absoluteFill}
-        onPress={() => { haptic.light(); onDismiss(); }}
-        accessibilityLabel="Close sticker interaction"
-        accessibilityRole="button"
-      />
-      <Reanimated.View
-        style={[
-          stickerPanelStyles.panel,
-          { paddingBottom: insets.bottom + Space.sm },
-          panelStyle,
-        ]}
-      >
-        {/* Header row — sticker type label + close */}
-        <View style={stickerPanelStyles.headerRow}>
-          <Text style={stickerPanelStyles.typeLabel}>{stickerTypeLabel}</Text>
-          <AnimatedPressable
-            onPress={() => { haptic.light(); onDismiss(); }}
-            style={stickerPanelStyles.closeBtn}
-            scaleValue={0.97}
-            activeOpacity={0.85}
-            hapticFeedback="light"
-            accessibilityLabel="Close"
-            accessibilityRole="button"
-            hitSlop={8}
-          >
-            <Ionicons name="close" size={20} color="#fff" />
-          </AnimatedPressable>
-        </View>
-
-        {/* Question */}
-        <Text style={stickerPanelStyles.questionText}>
-          {sticker.payload.question}
-        </Text>
-
-        {/* Poll / Quiz / Style Vote options */}
-        {(sticker.type === 'poll' || sticker.type === 'quiz' || sticker.type === 'style_vote') && (
-          <View style={stickerPanelStyles.optionsList}>
-            {options.map((opt) => {
-              const result = pollResult ?? quizResult;
-              const optionResult = result?.options.find((o) => o.id === opt.id);
-              const isSelected = result?.selectedOptionId === opt.id;
-              const isCorrectQuiz = sticker.type === 'quiz' && quizResult?.correctOptionId === opt.id;
-              const percentage = optionResult?.percentage ?? 0;
-
-              return (
-                <Pressable
-                  key={opt.id}
-                  onPress={() => handleVote(opt.id)}
-                  disabled={hasVoted || isSubmitting}
-                  style={({ pressed }) => [
-                    stickerPanelStyles.optionRow,
-                    isSelected && stickerPanelStyles.optionSelected,
-                    isCorrectQuiz && stickerPanelStyles.optionCorrect,
-                    pressed && !hasVoted && stickerPanelStyles.optionPressed,
-                  ]}
-                  accessibilityLabel={`${opt.label}${percentage > 0 ? `, ${percentage}%` : ''}`}
-                  accessibilityRole="button"
-                  accessibilityHint={hasVoted ? 'Already voted' : 'Tap to vote'}
-                >
-                  {/* Progress fill bar showing vote percentage */}
-                  {hasVoted && percentage > 0 && (
-                    <View
-                      style={[
-                        stickerPanelStyles.optionFill,
-                        { width: `${percentage}%` },
-                      ]}
-                    />
-                  )}
-                  <Text style={stickerPanelStyles.optionLabel}>{opt.label}</Text>
-                  {hasVoted && (
-                    <Text style={stickerPanelStyles.optionPercentage}>
-                      {percentage}%
-                    </Text>
-                  )}
-                  {isCorrectQuiz && (
-                    <Ionicons name="checkmark-circle" size={16} color="#4CD964" style={stickerPanelStyles.optionIcon} />
-                  )}
-                  {isSelected && !isCorrectQuiz && sticker.type === 'quiz' && (
-                    <Ionicons name="close-circle" size={16} color="#FF3B30" style={stickerPanelStyles.optionIcon} />
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Quiz result summary */}
-        {sticker.type === 'quiz' && quizResult && (
-          <Text style={[
-            stickerPanelStyles.resultSummary,
-            { color: quizResult.isCorrect ? '#4CD964' : '#FF3B30' },
-          ]}>
-            {quizResult.isCorrect ? 'Correct!' : 'Incorrect'} • {quizResult.totalVotes} votes
-          </Text>
-        )}
-
-        {/* Poll result summary */}
-        {sticker.type === 'poll' && pollResult && (
-          <Text style={stickerPanelStyles.resultSummary}>
-            {pollResult.totalVotes} votes
-          </Text>
-        )}
-
-        {/* Question sticker — text input */}
-        {sticker.type === 'question' && (
-          <View style={stickerPanelStyles.questionInputArea}>
-            {questionAnswerSent ? (
-              <View style={stickerPanelStyles.answerSentWrap}>
-                <Ionicons name="checkmark-circle" size={20} color="#4CD964" />
-                <Text style={stickerPanelStyles.answerSentText}>Answer sent</Text>
-              </View>
-            ) : (
-              <View style={stickerPanelStyles.questionInputRow}>
-                <TextInput
-                  style={stickerPanelStyles.questionInput}
-                  placeholder="Type your answer..."
-                  placeholderTextColor="rgba(255,255,255,0.5)"
-                  value={questionAnswer}
-                  onChangeText={onQuestionAnswerChange}
-                  maxLength={200}
-                  returnKeyType="send"
-                  onSubmitEditing={onQuestionSubmit}
-                  editable={!isSubmitting}
-                  accessibilityLabel="Type your answer"
-                  accessibilityHint="Type a reply to this question sticker"
-                />
-                <AnimatedPressable
-                  onPress={onQuestionSubmit}
-                  disabled={!questionAnswer.trim() || isSubmitting}
-                  style={[
-                    stickerPanelStyles.questionSendBtn,
-                    (!questionAnswer.trim() || isSubmitting) && stickerPanelStyles.questionSendBtnDisabled,
-                  ]}
-                  scaleValue={0.97}
-                  activeOpacity={0.85}
-                  hapticFeedback="light"
-                  accessibilityLabel="Send answer"
-                  accessibilityRole="button"
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Ionicons name="send" size={18} color="#fff" />
-                  )}
-                </AnimatedPressable>
-              </View>
-            )}
-          </View>
-        )}
-      </Reanimated.View>
-    </View>
-  );
-}
-
-const stickerPanelStyles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-    zIndex: 50,
-  },
-  panel: {
-    backgroundColor: 'rgba(20,20,20,0.95)',
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    // Deliberate elevation to separate the panel from the story content
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 16,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Space.xs,
-  },
-  typeLabel: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  closeBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  questionText: {
-    color: '#fff',
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.subtitle.lineHeight,
-    marginBottom: Space.sm,
-  },
-  optionsList: {
-    gap: Space.xs + 2,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: Control.hit + 4,
-    borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: Space.md,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  optionSelected: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  optionCorrect: {
-    borderWidth: Stroke.standard,
-    borderColor: '#4CD964',
-  },
-  optionPressed: {
-    backgroundColor: 'rgba(255,255,255,0.16)',
-  },
-  optionFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  optionLabel: {
-    flex: 1,
-    color: '#fff',
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    zIndex: 1,
-  },
-  optionPercentage: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-    zIndex: 1,
-  },
-  optionIcon: {
-    marginLeft: Space.xs,
-    zIndex: 1,
-  },
-  resultSummary: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    marginTop: Space.sm,
-    textAlign: 'center',
-  },
-  // Question sticker input
-  questionInputArea: {
-    marginTop: Space.xs,
-  },
-  questionInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  questionInput: {
-    flex: 1,
-    height: Control.hit,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    color: '#fff',
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    paddingHorizontal: Space.md,
-  },
-  questionSendBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  questionSendBtnDisabled: {
-    opacity: 0.4,
-  },
-  answerSentWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
-  answerSentText: {
-    color: '#4CD964',
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-});
-
-const styles = StyleSheet.create({
+function createStyles(colors: ReturnType<typeof useAppTheme>['colors'], screenWidth: number, screenHeight: number) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
-  },
+    backgroundColor: colors.background },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   emptyText: {
-    color: '#fff',
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-  },
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
+  emptySubText: {
+    color: colors.scrimTextSecondary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textAlign: 'center' },
   closeBtn: {
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
     // Near-transparent chrome. Legibility
     // comes from the top scrim + text shadows, not an opaque pill fill.
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
+    backgroundColor: colors.glassBorder },
   closeBtnText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md + 4,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.glassBorder },
   mediaFull: {
     position: 'absolute',
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    width: screenWidth,
+    height: screenHeight,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   textFrameContent: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     textAlign: 'center',
     paddingHorizontal: Space.xl,
-    textShadowColor: 'rgba(0,0,0,0.35)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 12,
-  },
+    textShadowRadius: 12 },
   textFrameVignette: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   backdropOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.12)',
-  },
+    backgroundColor: colors.overlay },
   // Top gradient scrim — ensures chrome legibility over any media content
   topScrim: {
     position: 'absolute',
@@ -2181,12 +1417,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 160,
-    zIndex: 5,
-  },
+    zIndex: 5 },
   overlay: {
     flex: 1,
-    paddingHorizontal: Space.sm + Space.xs,
-  },
+    paddingHorizontal: Space.sm + Space.xs },
   // Tap layer positioned between the top meta row and the bottom footer
   // using safe-area insets. This replaces the fragile Space.xxl*10-40 math.
   tapLayer: {
@@ -2194,26 +1428,22 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: 'row',
-    zIndex: 5,
-  },
+    zIndex: 5 },
   // Instagram-style tap zones: left third for previous frame,
   // right two-thirds for next frame. The "next" action is the primary
   // intent (users advance forward far more often than they go back),
   // so it gets the larger hit area.
   tapLeft: {
-    flex: 1,
-  },
+    flex: 1 },
   tapRight: {
-    flex: 2,
-  },
+    flex: 2 },
   topMetaRow: {
     marginTop: Space.xs + 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.xs + 2,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   authorBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2223,45 +1453,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs + 2,
     // Near-transparent chrome. The author
     // name + posted time carry text shadows for legibility over media.
-    backgroundColor: 'rgba(0,0,0,0.08)',
-    gap: Space.sm,
-  },
+    backgroundColor: colors.glassBg,
+    gap: Space.sm },
   authorAvatar: {
     width: Space.lg + 4,
     height: Space.lg + 4,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   authorAvatarPlaceholder: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
+    backgroundColor: colors.scrimTextTertiary },
   authorAvatarText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   authorName: {
-    color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-    textShadowColor: 'rgba(0,0,0,0.6)',
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   postedTime: {
-    color: 'rgba(255,255,255,0.78)',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    textShadowColor: 'rgba(0,0,0,0.6)',
+    color: colors.scrimTextSecondary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   topControlRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   topIconBtn: {
     width: Control.hit,
     height: Control.hit,
@@ -2270,68 +1493,58 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     // Near-transparent chrome. Icons rely
     // on the top scrim for legibility rather than an opaque dark disc.
-    backgroundColor: 'rgba(0,0,0,0.08)',
-  },
+    backgroundColor: colors.glassBg },
   viewerFooter: {
     position: 'absolute',
     left: 0,
     right: 0,
     paddingHorizontal: Space.sm + Space.xs,
-    zIndex: 20,
-  },
+    zIndex: 20 },
   captionWrap: {
     paddingBottom: Space.sm,
     // Deliberate breathing room above the reply bar so the caption reads
     // as authored content, not a label stuck to the input.
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   captionText: {
-    color: '#fff',
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    textShadowColor: 'rgba(0,0,0,0.7)',
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    fontFamily: TypographyV2.body.fontFamily,
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
-  },
+    textShadowRadius: 8 },
   captionAuthor: {
     fontFamily: Typography.family.semibold,
-    fontWeight: '600',
-  },
+    fontWeight: '600' },
   captionMore: {
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.scrimTextSecondary,
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   footerExpiry: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    color: colors.scrimTextTertiary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     paddingBottom: Space.xs,
-    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   footerGradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: 200,
-    zIndex: 5,
-  },
+    zIndex: 5 },
   mediaErrorOverlay: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: colors.overlay,
     gap: Space.smMd,
-    zIndex: 25,
-  },
+    zIndex: 25 },
   mediaErrorText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: '#fff',
-  },
+    fontSize: TypographyV2.body.size,
+    color: colors.scrimTextPrimary },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2339,13 +1552,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
+    backgroundColor: colors.glassBorder },
   retryBtnText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   pauseIndicator: {
     position: 'absolute',
     top: '50%',
@@ -2354,20 +1565,18 @@ const styles = StyleSheet.create({
     marginTop: -22,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     flexDirection: 'row',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md + 4,
-    zIndex: 15,
-  },
+    zIndex: 15 },
   pauseIndicatorText: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.wide,
-  },
+    color: colors.scrimTextSecondary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: LetterSpacing.wide },
   bufferingIndicator: {
     position: 'absolute',
     top: '50%',
@@ -2378,67 +1587,55 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 15,
-  },
+    zIndex: 15 },
   tagLayer: {
     ...StyleSheet.absoluteFill,
-    zIndex: 15,
-  },
+    zIndex: 15 },
   mentionTapLayer: {
     ...StyleSheet.absoluteFill,
-    zIndex: 16,
-  },
+    zIndex: 16 },
   mentionTapTarget: {
     position: 'absolute',
     width: 60,
     height: 48,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   // Interactive sticker tap targets — poll, quiz, question, style_vote
   stickerInteractionLayer: {
     ...StyleSheet.absoluteFill,
-    zIndex: 17,
-  },
+    zIndex: 17 },
   stickerTapTarget: {
     position: 'absolute',
     width: 160,
     height: 120,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   tagHotspot: {
     position: 'absolute',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   tagDot: {
     width: Space.lg,
     height: Space.lg,
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
+    backgroundColor: colors.scrimTextPrimary,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Elevation.floating,
-  },
+    ...Elevation.floating },
   tagDotPressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.9 }],
-  },
+    transform: [{ scale: 0.9 }] },
   tagDotInner: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   tagLabelWrap: {
     marginTop: Space.xs,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs - 1,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    maxWidth: 140,
-  },
+    backgroundColor: colors.overlay,
+    maxWidth: 140 },
   tagLabelText: {
-    color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.wide,
-  },
-});
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: LetterSpacing.wide } });
+}

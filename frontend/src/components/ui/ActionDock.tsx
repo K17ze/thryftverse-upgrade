@@ -27,8 +27,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   StyleProp,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated, { SlideInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,12 +35,11 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   Control,
   FontFamily,
   DockConstants,
-  Elevation,
-} from '../../theme/designTokens';
+  Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { LiquidGlassBackdrop } from '../LiquidGlassBackdrop';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -102,8 +100,7 @@ export function ActionDock({
   leading,
   animated = true,
   bottomInset,
-  style,
-}: ActionDockProps) {
+  style }: ActionDockProps) {
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -228,8 +225,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 100,
-  },
+    zIndex: 100 },
   container: {
     width: '100%',
     minWidth: 0,
@@ -239,48 +235,39 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     // Subtle top hairline separates the glass from scroll content.
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
-    ...Elevation.floating,
-  },
+    ...Elevation.floating },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   leading: {
     flexShrink: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   secondaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   secondaryBtn: {
     minWidth: Control.hit,
     minHeight: Control.hit,
     paddingHorizontal: Space.sm,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   secondaryLabel: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   primaryBtn: {
     flex: 1,
     height: DockConstants.primaryButtonHeight,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: Control.hit,
-  },
+    minWidth: Control.hit },
   primaryLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.bold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-});
+    letterSpacing: TypographyV2.body.letterSpacing } });

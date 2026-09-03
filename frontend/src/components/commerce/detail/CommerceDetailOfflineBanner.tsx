@@ -14,7 +14,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../../theme/designTokens';
+import { Space, Radius } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 
 export interface CommerceDetailOfflineBannerProps {
   /** Whether the device is currently offline. */
@@ -25,8 +26,7 @@ export interface CommerceDetailOfflineBannerProps {
 
 export function CommerceDetailOfflineBanner({
   isOffline,
-  lastSyncedLabel,
-}: CommerceDetailOfflineBannerProps) {
+  lastSyncedLabel }: CommerceDetailOfflineBannerProps) {
   const { colors } = useAppTheme();
 
   if (!isOffline) return null;
@@ -37,8 +37,7 @@ export function CommerceDetailOfflineBanner({
         styles.container,
         {
           backgroundColor: colors.warningSubtle,
-          borderColor: colors.warningBorder,
-        },
+          borderColor: colors.warningBorder },
       ]}
     >
       <Ionicons name="cloud-offline-outline" size={14} color={colors.warning} />
@@ -69,22 +68,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     marginHorizontal: Space.md,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   textWrap: {
     flex: 1,
-    gap: Space.xs / 4,
-  },
+    gap: Space.xs / 4 },
   title: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
   subtitle: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing } });

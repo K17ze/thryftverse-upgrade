@@ -4,9 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
-  Pressable,
-} from 'react-native';
+  useWindowDimensions,
+  Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -14,7 +13,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Typography, DockConstants, Type, Radius, Control, Stroke } from '../theme/designTokens';
+import { Space, DockConstants, Radius, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { haptics } from '../utils/haptics';
@@ -24,31 +24,29 @@ import { ListingPreviewFooter } from '../components/listing/ListingPreviewFooter
 import { ListingQualityMeter } from '../components/listing/ListingQualityMeter';
 import { calculateListingQuality } from '../utils/listingQuality';
 import { CachedImage } from '../components/CachedImage';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { t } from '../i18n';
 
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ListingPreview'>;
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const HERO_HEIGHT = SCREEN_H * 0.65;
-
 export default function ListingPreviewScreen({ navigation, route }: Props) {
-  const { preview, origin } = route.params;
+  const { preview, origin } = route.params ?? {};
   const insets = useSafeAreaInsets();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((s) => s.currentUser);
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const HERO_HEIGHT = SCREEN_H * 0.65;
+  const styles = useMemo(() => createStyles(colors, SCREEN_W, HERO_HEIGHT), [colors, SCREEN_W, HERO_HEIGHT]);
 
   const photos = preview?.photos ?? [];
   const title = preview?.title?.trim() || 'Untitled listing';
   const hasRealTitle = !!preview?.title?.trim();
   const priceText = preview?.price != null
-    ? formatFromFiat(preview.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
+    ? formatFromFiat(preview.price, currencyCode, { displayMode: 'fiat' })
     : null;
   const originalPriceText = preview?.originalPrice != null && preview.originalPrice > 0
-    ? formatFromFiat(preview.originalPrice, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
+    ? formatFromFiat(preview.originalPrice, currencyCode, { displayMode: 'fiat' })
     : null;
   const hasDiscount = priceText != null && originalPriceText != null && preview!.originalPrice! > (preview!.price ?? 0);
 
@@ -139,8 +137,7 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
               tags: [],
               shippingMethod: preview?.shippingMethod === 'standard' ? 'standard' : preview?.shippingMethod === 'express' ? 'express' : null,
               shippingPayer: preview?.shippingPayer === 'buyer' ? 'buyer' : preview?.shippingPayer === 'seller' ? 'seller' : null,
-              listingMode: preview?.listingMode ?? 'sell_now',
-            }), [preview])}
+              listingMode: preview?.listingMode ?? 'sell_now' }), [preview])}
             compact
           />
         </View>
@@ -268,39 +265,33 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number, heroHeight: number) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   scrollContent: {
-    paddingBottom: 0,
-  },
+    paddingBottom: 0 },
   heroWrap: {
-    width: SCREEN_W,
-    height: HERO_HEIGHT,
+    width: screenWidth,
+    height: heroHeight,
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   heroEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   heroEmptyText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textMuted },
   topScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: Space.xxl + Space.xxl + Space.xxl + Space.xs,
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   floatingHeader: {
     position: 'absolute',
     top: 0,
@@ -309,16 +300,14 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   controlBtn: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.xxl,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   previewBadge: {
     position: 'absolute',
     bottom: Space.md,
@@ -326,118 +315,97 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   previewBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textInverse,
-    letterSpacing: 0.8,
-  },
+    letterSpacing: 0.8 },
   authoringHint: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     fontStyle: 'italic',
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   contextText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   sectionGroup: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   sectionHeading: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   specGrid: {
     borderWidth: Stroke.hairline,
     borderColor: colors.border,
     borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   specRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Space.sm + Space.xs,
     paddingHorizontal: Space.sm + Space.xs,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   specRowBorder: {
     borderBottomWidth: Stroke.hairline,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   specLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   specValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     textAlign: 'right',
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   descriptionText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.body.lineHeight + Space.xs,
-  },
+    lineHeight: TypographyV2.body.lineHeight + Space.xs },
   descriptionPlaceholder: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
-    fontStyle: 'italic',
-  },
+    fontStyle: 'italic' },
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   sellerAvatar: {
     width: Space.xl + Space.xs,
     height: Space.xl + Space.xs,
-    borderRadius: Radius.xxl,
-  },
+    borderRadius: Radius.xxl },
   sellerAvatarFallback: {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   sellerInfo: {
-    flex: 1,
-  },
+    flex: 1 },
   sellerName: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   sellerSubtext: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: Space.xs / 2,
-  },
-  });
+    marginTop: Space.xs / 2 } });
 }

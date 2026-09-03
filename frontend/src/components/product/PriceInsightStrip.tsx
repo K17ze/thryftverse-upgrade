@@ -2,7 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface PriceInsightStripProps {
   /** Current listing price in fiat */
@@ -56,9 +58,9 @@ export function PriceInsightStrip({
   alertEnabled = false,
   onToggleAlert,
   soldComps,
-  priceHistory,
-}: PriceInsightStripProps) {
+  priceHistory }: PriceInsightStripProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const hasDiscount = originalPrice != null && originalPrice > price;
   const discountPercent = hasDiscount && originalPrice
@@ -82,18 +84,16 @@ export function PriceInsightStrip({
       icon: 'trending-down',
       label: 'Price drop',
       value: `-${discountPercent}%`,
-      tone: 'positive',
-    });
+      tone: 'positive' });
   }
 
   // Sold comparables — truthful market context from similar sold items
   if (soldComps && soldComps.sampleSize > 0) {
     rows.push({
-      icon: 'pricetag-outline',
+      icon: 'cash-outline',
       label: 'Similar sold',
-      value: `£${soldComps.minPrice.toFixed(0)}–£${soldComps.maxPrice.toFixed(0)}`,
-      tone: 'neutral',
-    });
+      value: `${currencySymbol}${soldComps.minPrice.toFixed(0)}–${currencySymbol}${soldComps.maxPrice.toFixed(0)}`,
+      tone: 'neutral' });
   }
 
   // Price history — show if price has changed over time
@@ -106,8 +106,7 @@ export function PriceInsightStrip({
         icon: 'bar-chart-outline',
         label: 'Price history',
         value: `${historyChange > 0 ? '+' : ''}${historyChange}% (${priceHistory.length} changes)`,
-        tone: historyChange < 0 ? 'positive' : 'neutral',
-      });
+        tone: historyChange < 0 ? 'positive' : 'neutral' });
     }
   }
 
@@ -120,8 +119,7 @@ export function PriceInsightStrip({
       icon: 'time-outline',
       label: 'Time on market',
       value: dayLabel,
-      tone: 'neutral',
-    });
+      tone: 'neutral' });
   }
 
   if (showDemand) {
@@ -129,8 +127,7 @@ export function PriceInsightStrip({
       icon: 'heart',
       label: 'Demand',
       value: `${likes} likes`,
-      tone: 'demand',
-    });
+      tone: 'demand' });
   }
 
   return (
@@ -195,74 +192,60 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   sectionTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 10,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   rowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flex: 1,
-  },
+    flex: 1 },
   rowLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   rowValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    textAlign: 'right',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    textAlign: 'right' },
   alertRow: {
-    paddingRight: Space.xs,
-  },
+    paddingRight: Space.xs },
   toggleTrack: {
     width: 36,
     height: 20,
     borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
+    paddingHorizontal: 2 },
   toggleTrackActive: {
-    backgroundColor: `${colors.brand}20`,
-    borderColor: colors.brand,
-  },
+    backgroundColor: colors.brandSubtle,
+    borderColor: colors.brand },
   toggleThumb: {
     width: 14,
     height: 14,
     borderRadius: Radius.md,
     backgroundColor: colors.textMuted,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   toggleThumbActive: {
     backgroundColor: colors.brand,
-    alignSelf: 'flex-end',
-  },
-  });
+    alignSelf: 'flex-end' } });
 }

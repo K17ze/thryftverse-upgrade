@@ -19,10 +19,10 @@ import {
   View,
   StyleSheet,
   Text,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Radius, Space, Typography } from '../../../theme/designTokens';
+import { Radius, Space, Typography, Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { AnimatedPressable } from '../../AnimatedPressable';
@@ -33,8 +33,7 @@ import {
   STROKE_WIDTH_MIN,
   STROKE_WIDTH_MAX,
   STROKE_WIDTH_DEFAULT,
-  type FontFamily,
-} from './fontRegistry';
+  type FontFamily } from './fontRegistry';
 import type { TextAlignment, TextAnimation, TextLayer } from './types';
 import { isLightColor } from '../shared/colorUtils';
 
@@ -73,8 +72,7 @@ export function TextEditSheet({
   allLayers,
   canvasSize,
   onUpdateLayer,
-  onDone,
-}: TextEditSheetProps) {
+  onDone }: TextEditSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -113,15 +111,13 @@ export function TextEditSheet({
 
   const adjustFontSize = (delta: number) => {
     onUpdateLayer(layer.id, {
-      fontSize: Math.min(Math.max(layer.fontSize + delta, FONT_SIZE_MIN), FONT_SIZE_MAX),
-    });
+      fontSize: Math.min(Math.max(layer.fontSize + delta, FONT_SIZE_MIN), FONT_SIZE_MAX) });
   };
 
   const adjustStrokeWidth = (delta: number) => {
     const current = layer.strokeWidth ?? STROKE_WIDTH_DEFAULT;
     onUpdateLayer(layer.id, {
-      strokeWidth: Math.min(Math.max(current + delta, STROKE_WIDTH_MIN), STROKE_WIDTH_MAX),
-    });
+      strokeWidth: Math.min(Math.max(current + delta, STROKE_WIDTH_MIN), STROKE_WIDTH_MAX) });
   };
 
   return (
@@ -208,8 +204,7 @@ export function TextEditSheet({
           style={[styles.toggleBtn, (layer.strokeEnabled ?? false) && styles.toggleBtnActive]}
           onPress={() => {
             onUpdateLayer(layer.id, {
-              strokeEnabled: !(layer.strokeEnabled ?? false),
-            });
+              strokeEnabled: !(layer.strokeEnabled ?? false) });
             haptic.selection();
           }}
           scaleValue={0.92}
@@ -413,13 +408,11 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: 28,
       gap: 12,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.glassBorder,
-    },
+      borderTopColor: colors.glassBorder },
     fontRow: {
       flexDirection: 'row',
       gap: 8,
-      paddingBottom: 2,
-    },
+      paddingBottom: 2 },
     fontPill: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -428,150 +421,122 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 10,
       borderRadius: Radius.full,
       backgroundColor: colors.glassBg,
-      minHeight: 44,
-    },
+      minHeight: 44 },
     fontPillActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     fontPillText: {
       color: colors.textSecondary,
-      fontSize: 14,
-    },
+      fontSize: TypographyV2.body.size },
     fontPillTextActive: {
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     colorRow: {
       flexDirection: 'row',
       gap: 10,
       paddingBottom: 2,
-      paddingTop: 2,
-    },
+      paddingTop: 2 },
     colorOrb: {
       width: 32,
       height: 32,
       borderRadius: Radius.full,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.borderSubtle,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     colorOrbActive: {
       borderWidth: 2,
       borderColor: colors.textPrimary,
-      transform: [{ scale: 1.08 }],
-    },
+      transform: [{ scale: 1.08 }] },
     bgOrb: {
       width: 32,
       height: 32,
       borderRadius: Radius.full,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     bgOrbActive: {
       borderWidth: 2,
       borderColor: colors.textPrimary,
-      transform: [{ scale: 1.08 }],
-    },
+      transform: [{ scale: 1.08 }] },
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: 2,
-    },
+      paddingVertical: 2 },
     toggleLabel: {
       color: colors.textSecondary,
-      fontSize: 14,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: Typography.family.medium },
     toggleBtn: {
       width: 36,
       height: 36,
       borderRadius: Radius.full,
       backgroundColor: colors.glassBg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     toggleBtnActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     toolRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
-      paddingTop: 2,
-    },
+      paddingTop: 2 },
     alignGroup: {
       flexDirection: 'row',
-      gap: 6,
-    },
+      gap: 6 },
     alignBtn: {
       width: 36,
       height: 36,
       borderRadius: Radius.full,
       backgroundColor: colors.glassBg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     alignBtnActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     alignBtnText: {
       color: colors.textSecondary,
-      fontSize: 15,
-      fontFamily: Typography.family.bold,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: Typography.family.bold },
     alignBtnTextActive: {
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     toolDivider: {
       width: 1,
       height: 24,
-      backgroundColor: colors.borderSubtle,
-    },
+      backgroundColor: colors.borderSubtle },
     sizeGroup: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
-    },
+      gap: 6 },
     sizeBtn: {
       width: 36,
       height: 36,
       borderRadius: Radius.full,
       backgroundColor: colors.glassBg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     sizeBtnTextSmall: {
       color: colors.textSecondary,
-      fontSize: 13,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: Typography.family.semibold },
     sizeBtnTextLarge: {
       color: colors.textPrimary,
-      fontSize: 18,
-      fontFamily: Typography.family.bold,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily },
     strokeWidthLabel: {
       color: colors.textPrimary,
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       fontFamily: Typography.family.semibold,
       minWidth: 20,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     doneBtn: {
       alignSelf: 'center',
       backgroundColor: colors.brand,
       borderRadius: Radius.full,
       paddingHorizontal: 40,
       paddingVertical: 12,
-      marginTop: 2,
-    },
+      marginTop: 2 },
     doneBtnText: {
       color: colors.textInverse,
-      fontSize: 15,
-      fontFamily: Typography.family.bold,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: Typography.family.bold } });
 }

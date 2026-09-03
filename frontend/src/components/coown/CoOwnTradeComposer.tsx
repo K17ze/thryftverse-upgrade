@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, PressScale } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 import { CoOwnDepthPreview } from './CoOwnDepthPreview';
@@ -10,8 +11,9 @@ import { CoOwnDepthPreview } from './CoOwnDepthPreview';
 export type CoOwnTradeSide = 'buy' | 'sell';
 export type CoOwnTradeMode = 'market' | 'limit';
 
-/** Phase 2.5: exchange-grade order type. */
-export type CoOwnTicketOrderType = 'protected_instant' | 'limit';
+/** Phase 2.5: exchange-grade order type.
+ * P0.1: 'protected_market' is the backend contract name for protected_instant. */
+export type CoOwnTicketOrderType = 'protected_market' | 'limit' | 'protected_instant';
 
 /** Phase 2.5: duration for resting orders. */
 export type CoOwnTicketDuration = 'GFD' | 'GTC90';
@@ -81,6 +83,9 @@ export interface CoOwnTradeComposerProps {
   postTradePreview?: CoOwnPostTradePreview;
   /** Rights version badge. */
   rightsVersion?: string;
+  /** Phase 2.5: whether the fill estimate is from a live order book or a
+      development-fallback illustrative book. Controls truth-language copy. */
+  bookSource?: 'live' | 'development-fallback';
 }
 
 export function CoOwnTradeComposer({
@@ -109,11 +114,14 @@ export function CoOwnTradeComposer({
   duration,
   postTradePreview,
   rightsVersion,
+  bookSource,
 }: CoOwnTradeComposerProps) {
   const { colors } = useAppTheme();
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const isBuy = side === 'buy';
   const maxForSide = isBuy ? Math.min(availableUnits, maxUnits) : sellableUnits;
+  const isLiveBook = bookSource === 'live';
+  const fillEstimateLabel = isLiveBook ? 'Live estimate' : 'Estimated fill (illustrative)';
 
   // Reservation line text — from computeReservation() (client-side estimate).
   // Labelled as an estimate, not an authoritative server reservation, per
@@ -134,7 +142,7 @@ export function CoOwnTradeComposer({
             <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
           ) : (
             <View style={[styles.image, styles.imageFallback, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="cube-outline" size={20} color={colors.textMuted} />
+              <Ionicons name="image-outline" size={20} color={colors.textMuted} />
             </View>
           )}
         </View>
@@ -201,7 +209,10 @@ export function CoOwnTradeComposer({
       {/* Expandable details — progressive disclosure */}
       {(fillEstimate || depthContext || duration || postTradePreview) && (
         <Pressable
-          style={styles.detailsToggle}
+          style={({ pressed }) => [
+            styles.detailsToggle,
+            pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] },
+          ]}
           onPress={() => setDetailsExpanded((prev) => !prev)}
           accessibilityRole="button"
           accessibilityLabel={detailsExpanded ? 'Collapse details' : 'Expand details'}
@@ -220,10 +231,11 @@ export function CoOwnTradeComposer({
 
       {detailsExpanded && (
         <View style={[styles.detailsSection, { borderTopColor: colors.border }]}>
-          {/* Estimated fill + depth impact are computed from a deterministic
-              illustrative book (Phase 2.5 — no live order book exists yet).
-              Label honestly so this cannot be mistaken for real market depth. */}
-          {(fillEstimate || depthContext) && (
+          {/* Estimated fill + depth impact come from either a live order book
+              or a deterministic development-fallback illustrative book
+              (Phase 2.5). Label honestly so this cannot be mistaken for real
+              market depth when it is not. */}
+          {(fillEstimate || depthContext) && !isLiveBook && (
             <View style={styles.illustrativeNoteWrap}>
               <Text style={[styles.illustrativeNote, { color: colors.textMuted }]}>
                 Illustrative — not live market data. Actual fill depends on the real order book at execution.
@@ -234,7 +246,7 @@ export function CoOwnTradeComposer({
           {/* Estimated fill */}
           {fillEstimate && (
             <View style={styles.detailBlock}>
-              <Text style={[styles.detailHeader, { color: colors.textMuted }]}>Estimated fill (illustrative)</Text>
+              <Text style={[styles.detailHeader, { color: colors.textMuted }]}>{fillEstimateLabel}</Text>
               <DetailRow label="Avg fill price" value={`${fillEstimate.avgFillPrice.toFixed(2)} 1ZE`} colors={colors} />
               <DetailRow label="Worst price" value={`${fillEstimate.worstPrice.toFixed(2)} 1ZE`} colors={colors} />
               <DetailRow label="Units" value={String(fillEstimate.unitsFilled)} colors={colors} />
@@ -319,6 +331,19 @@ export function CoOwnTradeComposer({
           </Text>
         </View>
       ) : null}
+
+      {/* P0: Risk disclosure — visible above the confirm button so the user
+          sees the irrevocable nature of fractional ownership before
+          committing. Concise, truthful, not buried. Shown for buy side only
+          (sells are disposals, not new commitments). */}
+      {isBuy ? (
+        <View style={[styles.riskDisclosureRow, { borderColor: colors.borderSubtle }]}>
+          <Ionicons name="warning-outline" size={13} color={colors.textMuted} />
+          <Text style={[styles.riskDisclosureText, { color: colors.textMuted }]}>
+            Fractional ownership is irrevocable. Subject to corporate actions. No guaranteed return. Past performance does not indicate future results.
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -343,7 +368,7 @@ function DetailRow({
           style={[
             styles.detailRowValue,
             { color: emphasis ? colors.textPrimary : colors.textSecondary },
-            emphasis && { fontFamily: Typography.family.bold },
+            emphasis && { fontFamily: TypographyV2.bodyStrong.fontFamily },
           ]}
           numberOfLines={1}
         >
@@ -384,14 +409,14 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   productTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     lineHeight: 20,
     letterSpacing: -0.2,
   },
   productPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   sidePill: {
     paddingHorizontal: 10,
@@ -399,8 +424,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   sideText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.label.fontFamily,
     letterSpacing: 0.5,
   },
   availRow: {
@@ -417,14 +442,14 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   availLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
     textTransform: 'uppercase',
   },
   availValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   quoteCard: {
     paddingVertical: Space.sm,
@@ -439,14 +464,14 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   quoteLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     flexShrink: 1,
     minWidth: 0,
   },
   quoteValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     flexShrink: 0,
     fontVariant: ['tabular-nums'],
   },
@@ -463,8 +488,8 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   totalLabel: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     flexShrink: 1,
     minWidth: 0,
   },
@@ -474,13 +499,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   totalCaption: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: 2,
   },
   totalValue: {
-    fontSize: Type.priceHero.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceHero.size,
+    fontFamily: TypographyV2.priceHero.fontFamily,
     letterSpacing: -0.5,
     flexShrink: 0,
     fontVariant: ['tabular-nums'],
@@ -495,8 +520,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   settlementText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   // ── Phase 2.5: reservation row ──
   reservationRow: {
@@ -509,10 +534,10 @@ const styles = StyleSheet.create({
   },
   reservationText: {
     flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   // ── Phase 2.5: details toggle + section ──
   detailsToggle: {
@@ -523,10 +548,10 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   detailsToggleText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   detailsSection: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -540,16 +565,16 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   illustrativeNote: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontStyle: 'italic',
   },
   detailHeader: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
     marginBottom: 2,
   },
@@ -561,16 +586,16 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   detailRowLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   detailRowValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
@@ -587,22 +612,22 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   durationText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   postTradeText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
   postTradeDenom: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   // ── Phase 2.5: footer row ──
   footerRow: {
@@ -611,15 +636,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.sm,
   },
+  // ── P0: risk disclosure row ──
+  riskDisclosureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.xs,
+    paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  riskDisclosureText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+  },
   rightsChip: {
     paddingHorizontal: Space.sm,
     paddingVertical: 3,
     borderRadius: Radius.full,
   },
   rightsChipText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 });

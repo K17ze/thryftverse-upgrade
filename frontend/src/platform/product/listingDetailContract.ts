@@ -52,7 +52,7 @@ export const VERIFICATION_TIERS: Record<VerificationTier, VerificationTierInfo> 
   seller: {
     tier: 'seller',
     label: 'Trusted Seller',
-    icon: 'shield-checkmark',
+    icon: 'checkmark-circle',
     color: 'success',
     description: 'Meets seller standards programme',
   },
@@ -301,7 +301,7 @@ export function buildCapabilities(
   currentUserId?: string
 ): ListingCapabilities {
   const isOwner = !!currentUserId && listing.sellerId === currentUserId;
-  const status = listing.status ?? (listing.isSold ? 'sold' : 'unknown');
+  const status = listing.status ?? (listing.isSold ? 'sold' : 'active');
   const isSold = status === 'sold';
   let unavailableReason: ListingCapabilities['unavailableReason'] = null;
   if (isSold) unavailableReason = 'sold';

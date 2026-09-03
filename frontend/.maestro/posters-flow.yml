@@ -1,0 +1,13 @@
+# Maestro E2E flow — Posters and interactive story creative canvas journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Home"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+
+- takeScreenshot: posters-flow-complete

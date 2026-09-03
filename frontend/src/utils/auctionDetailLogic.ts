@@ -4,7 +4,7 @@ import {
   type AuctionEffectiveState,
 } from '../hooks/useServerClock';
 import { formatFinalMinutesCountdown, type AuctionViewerState } from './auctionHomeLogic';
-import type { AuctionFulfilmentSummary } from '../services/marketApi';
+import type { AuctionDetail, AuctionFulfilmentSummary } from '../services/marketApi';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 // ── Detail-level auction input (richer than AuctionHomeItem) ──
@@ -31,7 +31,19 @@ export interface AuctionDetailInput {
   isWatched: boolean;
   cancelledAt: string | null;
   settledAt: string | null;
+  paidAt: string | null;
+  paymentDeadlineAt: string | null;
+  secondChanceOfferedTo: string | null;
+  cancelledBy: string | null;
+  cancelledReason: string | null;
+  antiSniping: {
+    enabled: boolean;
+    extensionSeconds: number;
+    maxExtensions: number;
+    windowSeconds: number;
+  } | null;
   winnerBidderId: string | null;
+  auctionSequence?: number;
   lifecycle: string;
   terminalReason: string | null;
   /**
@@ -55,12 +67,20 @@ export type PrimaryAction =
   | { type: 'viewSimilar'; label: string }
   | { type: 'viewPerformance'; label: string }
   | { type: 'viewOutcome'; label: string }
+  | { type: 'payNow'; label: string }
+  | { type: 'acceptSecondChance'; label: string }
+  | { type: 'relist'; label: string }
+  | { type: 'acceptHighestBid'; label: string }
   | { type: 'none'; label: string };
 
 export type SecondaryAction =
   | { type: 'buyNow'; label: string; priceGbp: number }
   | { type: 'watchingToggle'; label: string }
   | { type: 'share'; label: string }
+  | { type: 'viewResult'; label: string }
+  | { type: 'viewOutcome'; label: string }
+  | { type: 'viewSimilar'; label: string }
+  | { type: 'declineSecondChance'; label: string }
   | { type: 'none'; label: string };
 
 export type ForbiddenAction =
@@ -99,6 +119,9 @@ export type AuctionPresentationLabel =
   | 'Cancelled'
   | 'Settled'
   | 'Awaiting payment'
+  | 'Payment expired'
+  | 'Second chance'
+  | 'Reserve not met'
   | 'Settlement pending'
   | 'Watching'
   | 'Leading'
@@ -383,6 +406,140 @@ export function resolveAuctionPresentationState(
     };
   }
 
+  // ── Reserve not met ──
+  if (effectiveState === 'reserve_not_met') {
+    const viewerMessage = isSeller
+      ? 'Reserve not met. Relist or accept highest bid?'
+      : 'Reserve not met';
+    return {
+      stateLabel: 'Reserve not met',
+      colorKey: 'warning',
+      viewerMessage,
+      viewerTreatment: isSeller ? 'seller' : 'subdued',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'none',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: isSeller
+        ? 'Reserve not met. You can relist or accept the highest bid.'
+        : 'Reserve not met.',
+    };
+  }
+
+  // ── Awaiting payment ──
+  if (effectiveState === 'awaiting_payment') {
+    const deadlineText = auction.paymentDeadlineAt
+      ? new Date(auction.paymentDeadlineAt).toLocaleString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : 'soon';
+    if (viewerState === 'won') {
+      return {
+        stateLabel: 'Awaiting payment',
+        colorKey: 'warning',
+        viewerMessage: `You won. Pay by ${deadlineText}.`,
+        viewerTreatment: 'result',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'elevated',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: `You won. Pay by ${deadlineText}.`,
+      };
+    }
+    if (isSeller) {
+      return {
+        stateLabel: 'Awaiting payment',
+        colorKey: 'warning',
+        viewerMessage: 'Awaiting buyer payment',
+        viewerTreatment: 'seller',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'none',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: 'Awaiting buyer payment.',
+      };
+    }
+    return {
+      stateLabel: 'Awaiting payment',
+      colorKey: 'textSecondary',
+      viewerMessage: `Sold with ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'} · awaiting payment`,
+      viewerTreatment: 'subdued',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'none',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: 'Auction sold. Awaiting buyer payment.',
+    };
+  }
+
+  // ── Payment expired ──
+  if (effectiveState === 'payment_expired') {
+    if (viewerState === 'outbid' || viewerState === 'lost') {
+      return {
+        stateLabel: 'Payment expired',
+        colorKey: 'warning',
+        viewerMessage: 'Second chance available',
+        viewerTreatment: 'warning',
+        primaryAction: actionConfig.primary,
+        secondaryAction: actionConfig.secondary,
+        forbidden: actionConfig.forbidden,
+        urgency: 'none',
+        showBidControls: false,
+        showLiveIndicator: false,
+        accessibilityHint: 'Second chance available. Tap to accept or decline.',
+      };
+    }
+    return {
+      stateLabel: 'Payment expired',
+      colorKey: 'warning',
+      viewerMessage: isSeller ? 'Payment expired' : 'Payment window closed',
+      viewerTreatment: isSeller ? 'seller' : 'subdued',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'none',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: 'Payment window expired.',
+    };
+  }
+
+  // ── Second chance offered ──
+  if (effectiveState === 'second_chance_offered') {
+    const deadlineText = auction.paymentDeadlineAt
+      ? new Date(auction.paymentDeadlineAt).toLocaleString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : 'soon';
+    return {
+      stateLabel: 'Second chance',
+      colorKey: 'warning',
+      viewerMessage: `Second chance · accept by ${deadlineText}`,
+      viewerTreatment: 'warning',
+      primaryAction: actionConfig.primary,
+      secondaryAction: actionConfig.secondary,
+      forbidden: actionConfig.forbidden,
+      urgency: 'elevated',
+      showBidControls: false,
+      showLiveIndicator: false,
+      accessibilityHint: `Second chance. Accept by ${deadlineText}.`,
+    };
+  }
+
   // ── Live ──
   const urgency: AuctionUrgencyLevel = isFinalMinutes ? 'final' : countdownStage === 'moderate' ? 'elevated' : 'restrained';
 
@@ -555,6 +712,86 @@ export function resolveStateAction(
     };
   }
 
+  // Reserve not met — seller can relist or accept
+  if (effectiveState === 'reserve_not_met') {
+    if (viewerState === 'seller') {
+      return {
+        primary: { type: 'relist', label: 'Relist' },
+        secondary: { type: 'viewOutcome', label: 'View outcome' },
+        forbidden: ['placeBid', 'buyNow', 'edit', 'cancel'],
+        viewerMessage: 'Reserve not met. Relist or accept highest bid?',
+        viewerTreatment: 'seller',
+      };
+    }
+    return {
+      primary: { type: 'viewSimilar', label: 'View similar items' },
+      secondary: { type: 'none', label: '' },
+      forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+      viewerMessage: 'Reserve not met',
+      viewerTreatment: 'subdued',
+    };
+  }
+
+  // Awaiting payment — winner pays, seller waits
+  if (effectiveState === 'awaiting_payment') {
+    if (viewerState === 'won') {
+      return {
+        primary: { type: 'payNow', label: 'Pay now' },
+        secondary: { type: 'viewResult', label: 'View result' },
+        forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+        viewerMessage: 'You won this auction · awaiting payment',
+        viewerTreatment: 'result',
+      };
+    }
+    if (viewerState === 'seller') {
+      return {
+        primary: { type: 'viewOutcome', label: 'View outcome' },
+        secondary: { type: 'none', label: '' },
+        forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+        viewerMessage: 'Awaiting buyer payment',
+        viewerTreatment: 'seller',
+      };
+    }
+    return {
+      primary: { type: 'viewSimilar', label: 'View similar items' },
+      secondary: { type: 'none', label: '' },
+      forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+      viewerMessage: `Sold with ${auction.bidCount} bid${auction.bidCount === 1 ? '' : 's'} · awaiting payment`,
+      viewerTreatment: 'subdued',
+    };
+  }
+
+  // Payment expired — second chance may be offered
+  if (effectiveState === 'payment_expired') {
+    if (viewerState === 'outbid' || viewerState === 'lost') {
+      return {
+        primary: { type: 'acceptSecondChance', label: 'Accept second chance' },
+        secondary: { type: 'declineSecondChance', label: 'Decline' },
+        forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+        viewerMessage: 'Second chance available',
+        viewerTreatment: 'warning',
+      };
+    }
+    return {
+      primary: { type: 'viewSimilar', label: 'View similar items' },
+      secondary: { type: 'none', label: '' },
+      forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+      viewerMessage: 'Payment window closed',
+      viewerTreatment: 'subdued',
+    };
+  }
+
+  // Second chance offered — explicit acceptance state
+  if (effectiveState === 'second_chance_offered') {
+    return {
+      primary: { type: 'acceptSecondChance', label: 'Accept second chance' },
+      secondary: { type: 'declineSecondChance', label: 'Decline' },
+      forbidden: ['placeBid', 'buyNow', 'edit', 'cancel', 'relist'],
+      viewerMessage: 'Second chance · accept before it expires',
+      viewerTreatment: 'warning',
+    };
+  }
+
   // Upcoming — no bidding yet
   if (effectiveState === 'upcoming') {
     if (viewerState === 'seller') {
@@ -630,12 +867,50 @@ export function isBuyNowAvailable(auction: AuctionDetailInput, effectiveState: A
 
 // ── Reserve price status ──
 
-export type ReserveStatus = 'none' | 'not-met' | 'met';
+export type ReserveStatus = 'hidden' | 'not_met' | 'met';
 
 export function resolveReserveStatus(auction: { reservePriceGbp: number | null; currentBidGbp: number; bidCount: number }): ReserveStatus {
-  if (auction.reservePriceGbp === null || auction.reservePriceGbp <= 0) return 'none';
-  if (auction.bidCount === 0) return 'not-met';
-  return auction.currentBidGbp >= auction.reservePriceGbp ? 'met' : 'not-met';
+  if (auction.reservePriceGbp === null || auction.reservePriceGbp <= 0) return 'hidden';
+  return auction.currentBidGbp >= auction.reservePriceGbp ? 'met' : 'not_met';
+}
+
+// ── Bid rule (proxy + anti-sniping) ──
+
+export function resolveBidRule(auction: {
+  antiSniping: { enabled: boolean; extensionSeconds: number } | null;
+}): string {
+  const isProxy = auction.antiSniping !== null && auction.antiSniping.enabled;
+  if (isProxy) {
+    return `Proxy bidding · ${auction.antiSniping!.extensionSeconds}s anti-sniping`;
+  }
+  return 'Direct bidding · no extension';
+}
+
+// ── Payment deadline countdown ──
+
+export function resolvePaymentDeadlineCountdown(
+  deadline: string,
+  nowMs: number,
+): { text: string; isExpired: boolean } {
+  const deadlineMs = new Date(deadline).getTime();
+  const remainingMs = deadlineMs - nowMs;
+  if (Number.isNaN(deadlineMs)) {
+    return { text: 'Deadline unavailable', isExpired: false };
+  }
+  if (remainingMs <= 0) {
+    return { text: 'Expired', isExpired: true };
+  }
+  const totalSeconds = Math.floor(remainingMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  if (hours > 48) {
+    const days = Math.floor(hours / 24);
+    return { text: `${days}d left`, isExpired: false };
+  }
+  if (hours > 0) {
+    return { text: `${hours}h ${minutes}m left`, isExpired: false };
+  }
+  return { text: `${minutes}m left`, isExpired: false };
 }
 
 // ── Seller cannot bid ──
@@ -658,7 +933,15 @@ export function resolveDetailPriceLabel(
   auction: AuctionDetailInput,
   effectiveState: AuctionEffectiveState,
 ): DetailPriceLabel {
-  if (effectiveState === 'cancelled' || effectiveState === 'settled' || effectiveState === 'ended') {
+  if (
+    effectiveState === 'cancelled' ||
+    effectiveState === 'settled' ||
+    effectiveState === 'ended' ||
+    effectiveState === 'reserve_not_met' ||
+    effectiveState === 'awaiting_payment' ||
+    effectiveState === 'payment_expired' ||
+    effectiveState === 'second_chance_offered'
+  ) {
     return auction.bidCount > 0 ? 'Final bid' : 'No bids';
   }
   if (effectiveState === 'upcoming') {
@@ -685,6 +968,14 @@ export function resolveDetailCountdown(
   if (timing.effectiveState === 'cancelled') return { text: 'Cancelled', isFinalMinutes: false, stage: 'ended' };
   if (timing.effectiveState === 'settled') return { text: 'Settled', isFinalMinutes: false, stage: 'ended' };
   if (timing.effectiveState === 'ended') return { text: 'Ended', isFinalMinutes: false, stage: 'ended' };
+  if (
+    timing.effectiveState === 'reserve_not_met' ||
+    timing.effectiveState === 'awaiting_payment' ||
+    timing.effectiveState === 'payment_expired' ||
+    timing.effectiveState === 'second_chance_offered'
+  ) {
+    return { text: 'Ended', isFinalMinutes: false, stage: 'ended' };
+  }
   if (timing.effectiveState === 'upcoming') {
     return { text: `Starts in ${formatCountdown(timing.msToStart)}`, isFinalMinutes: false, stage: 'upcoming' };
   }
@@ -867,4 +1158,249 @@ export function formatBidActivityRow(
     isTopBid: index === 0,
     relativeTime: formatRelativeTime(bid.createdAt, serverNow ?? null),
   };
+}
+
+// ── Effective state resolver for AuctionDetail ──
+// Resolves the canonical effective state from a full AuctionDetail record
+// and the current server clock. This mirrors the precedence rules in
+// resolveAuctionTiming but operates on the richer AuctionDetail shape.
+
+export function resolveEffectiveState(
+  auction: AuctionDetail,
+  clockMs: number,
+): AuctionEffectiveState {
+  // 1. Cancelled — highest precedence
+  if (auction.cancelledAt) return 'cancelled';
+  // 2. Settled — explicit settlement
+  if (auction.settledAt) return 'settled';
+  // 3. Winner set or Buy Now terminal — ended regardless of dates
+  if (auction.winnerBidderId) return 'ended';
+  if (auction.terminalReason === 'buy_now') return 'ended';
+  // 4. Authoritative lifecycle from backend (includes post-end states)
+  if (auction.lifecycle === 'ended') return 'ended';
+  if (auction.lifecycle === 'cancelled') return 'cancelled';
+  if (auction.lifecycle === 'settled') return 'settled';
+  if (auction.lifecycle === 'reserve_not_met') return 'reserve_not_met';
+  if (auction.lifecycle === 'awaiting_payment') return 'awaiting_payment';
+  if (auction.lifecycle === 'payment_expired') return 'payment_expired';
+  if (auction.lifecycle === 'second_chance_offered') return 'second_chance_offered';
+  // 5. Scheduled end according to server clock
+  const endsMs = new Date(auction.endsAt).getTime();
+  const startsMs = new Date(auction.startsAt).getTime();
+  if (clockMs >= endsMs) return 'ended';
+  // 6. Live
+  if (clockMs >= startsMs) return 'live';
+  // 7. Upcoming
+  return 'upcoming';
+}
+
+// ── Countdown sentence formatter ──
+// Produces a compact "12m 08s" / "3h 15m" / "2d 5h" string for the
+// primary state sentence and dock subtitle. Uses tabular-friendly
+// zero-padded seconds to prevent per-second layout shift.
+
+export function formatCountdownSentence(ms: number): string {
+  if (ms <= 0) return 'Ended';
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+}
+
+// ── Canonical media array (spec 02_AUCTION §7) ──
+// Maps the backend mediaItems contract to the CommerceMediaStage shape.
+// Maintains imageUrl as a temporary compatibility fallback.
+
+export interface AuctionMediaItemView {
+  id?: string;
+  uri: string;
+  kind: 'image' | 'video';
+  posterUri?: string | null;
+  width?: number | null;
+  height?: number | null;
+  focalPoint: { x: number; y: number } | null;
+  fit: 'cover' | 'contain';
+  altText: string;
+}
+
+export function buildAuctionMediaItems(auction: {
+  title: string;
+  imageUrl: string | null;
+  mediaItems?: Array<{
+    id: string;
+    url: string;
+    type: string;
+    posterUrl?: string | null;
+    order: number;
+    width?: number | null;
+    height?: number | null;
+    focalX?: number | null;
+    focalY?: number | null;
+  }> | null;
+}): AuctionMediaItemView[] {
+  if (auction.mediaItems && auction.mediaItems.length > 0) {
+    return auction.mediaItems
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .map((item) => ({
+        id: item.id,
+        uri: item.url,
+        kind: (item.type === 'video' ? 'video' : 'image') as 'image' | 'video',
+        posterUri: item.posterUrl,
+        width: item.width,
+        height: item.height,
+        focalPoint: item.focalX != null && item.focalY != null
+          ? { x: item.focalX, y: item.focalY }
+          : null,
+        fit: item.focalX != null && item.focalY != null ? 'cover' : 'contain',
+        altText: `${auction.title} ${item.type}`,
+      }));
+  }
+  return auction.imageUrl
+    ? [{
+        uri: auction.imageUrl,
+        kind: 'image' as const,
+        focalPoint: null,
+        fit: 'contain' as const,
+        altText: auction.title,
+      }]
+    : [];
+}
+
+// ── Terminal sale-state derivations (audit P0.5) ──
+
+export function resolveTerminalAmountGbp(auction: {
+  bidCount: number;
+  currentBidGbp: number;
+}): number | null {
+  return auction.bidCount > 0 && Number.isFinite(auction.currentBidGbp)
+    ? auction.currentBidGbp
+    : null;
+}
+
+export function resolveTerminalAmountText(
+  auction: { bidCount: number; currentBidGbp: number },
+  formatFromFiat: (amount: number, currency?: any, opts?: any) => string,
+): string {
+  const amount = resolveTerminalAmountGbp(auction);
+  return amount != null
+    ? formatFromFiat(amount, DEFAULT_CURRENCY_CODE)
+    : 'Amount unavailable';
+}
+
+/** Public version of the private hasValidWinner for AuctionDetail shape. */
+export function auctionHasValidWinner(auction: {
+  winnerBidderId: string | null;
+  bidCount: number;
+} | null): boolean {
+  return auction != null && auction.winnerBidderId != null && auction.bidCount > 0;
+}
+
+export function isAuctionPaymentConfirmed(fulfilment: {
+  paymentStatus?: string;
+} | null): boolean {
+  return fulfilment?.paymentStatus === 'paid';
+}
+
+export function resolveSellerSaleTitle(
+  hasWinner: boolean,
+  settled: boolean,
+  paid: boolean,
+): string {
+  if (!hasWinner) return 'Ended without bids';
+  if (settled) return 'Sold';
+  if (paid) return 'Sold · settlement pending';
+  return 'Sold · awaiting payment';
+}
+
+export function resolveWinnerSubtitle(
+  fulfilment: {
+    buyerNextAction?: string | null;
+    fulfilmentStatus?: string | null;
+  } | null,
+  settled: boolean,
+  paid: boolean,
+): string {
+  if (settled) {
+    return fulfilment?.buyerNextAction
+      ? fulfilment.buyerNextAction
+      : fulfilment?.fulfilmentStatus
+        ? `Fulfilment · ${fulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+        : 'Fulfilment details are not available yet.';
+  }
+  if (paid) return 'Payment confirmed · settlement pending';
+  return fulfilment?.buyerNextAction
+    ? fulfilment.buyerNextAction
+    : 'Complete payment to secure your win.';
+}
+
+export function resolveSellerSubtitle(
+  hasWinner: boolean,
+  fulfilment: {
+    sellerNextAction?: string | null;
+    fulfilmentStatus?: string | null;
+  } | null,
+  settled: boolean,
+  paid: boolean,
+): string {
+  if (!hasWinner) return 'No bids were received.';
+  if (fulfilment?.sellerNextAction) return fulfilment.sellerNextAction;
+  if (settled) {
+    return fulfilment?.fulfilmentStatus
+      ? `Fulfilment · ${fulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
+      : 'Fulfilment details are not available yet.';
+  }
+  if (paid) return 'Payment confirmed · settlement pending.';
+  return 'Awaiting buyer payment.';
+}
+
+// ── Live countdown ms helpers ──
+
+export function resolveLiveMsToEnd(auction: { endsAt: string }, clockMs: number): number {
+  return Math.max(0, new Date(auction.endsAt).getTime() - clockMs);
+}
+
+export function resolveLiveMsToStart(auction: { startsAt: string }, clockMs: number): number {
+  return Math.max(0, new Date(auction.startsAt).getTime() - clockMs);
+}
+
+// ── Countdown colour (single urgency accent) ──
+
+export function resolveCountdownColor(
+  isLive: boolean,
+  liveMsToEnd: number,
+  colors: { textPrimary: string; danger: string; warning: string },
+): string {
+  if (!isLive) return colors.textPrimary;
+  if (liveMsToEnd <= 10_000) return colors.danger;
+  if (liveMsToEnd <= 60_000) return colors.warning;
+  return colors.textPrimary;
+}
+
+// ── Dual-dock geometry resolver ──
+
+export function resolveHasDualDock(params: {
+  showBidControls: boolean;
+  buyNowAvailable: boolean;
+  secondaryActionType: string;
+  isBuyNowLoading: boolean;
+  isPostEnd: boolean;
+  isReserveNotMet: boolean;
+  isSeller: boolean;
+  bidCount: number;
+  isPaymentExpired: boolean;
+  isSecondChanceOffered: boolean;
+  isSecondChanceRecipient: boolean;
+}): boolean {
+  return (
+    (params.showBidControls && params.buyNowAvailable && params.secondaryActionType === 'buyNow' && !params.isBuyNowLoading) ||
+    (params.isPostEnd && (
+      (params.isReserveNotMet && params.isSeller && params.bidCount > 0) ||
+      ((params.isPaymentExpired || params.isSecondChanceOffered) && params.isSecondChanceRecipient)
+    ))
+  );
 }

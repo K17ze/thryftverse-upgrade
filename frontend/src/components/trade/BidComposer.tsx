@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { AppInput } from '../ui/AppInput';
@@ -164,11 +165,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
   },
   bidInfoLabel: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     marginBottom: 2,
   },
   bidInfoValue: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
   },
   bidInfoMin: {
     color: colors.brand,

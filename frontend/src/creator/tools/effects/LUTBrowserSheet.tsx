@@ -25,19 +25,17 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
   Radius,
-  Type,
   Typography,
   FontFamily,
   Control,
   Stroke,
-  IconGrammar,
-} from '../../../theme/designTokens';
+  IconGrammar } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -45,6 +43,8 @@ import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { CreatorSlider } from '../../controls/CreatorSlider';
 import { getBuiltInLUTs, type BuiltInLUT } from './LUTEffect';
 import { LUTPreviewThumb } from './LUTPreviewThumb';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -77,8 +77,7 @@ export function LUTBrowserSheet({
   onApply,
   sourceUri,
   initialLutId = null,
-  initialIntensity = 1,
-}: LUTBrowserSheetProps) {
+  initialIntensity = 1 }: LUTBrowserSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -151,7 +150,7 @@ export function LUTBrowserSheet({
             accessibilityHint="Closes the color grade browser"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
 
@@ -206,8 +205,7 @@ export function LUTBrowserSheet({
             style={[
               styles.applyBtn,
               {
-                backgroundColor: hasSelection ? colors.brand : colors.surfaceAlt,
-              },
+                backgroundColor: hasSelection ? colors.brand : colors.surfaceAlt },
             ]}
             accessibilityLabel="Apply color grade"
             accessibilityRole="button"
@@ -239,76 +237,61 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     content: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-    },
+      fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     // ── Grid ──
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.sm,
       paddingVertical: Space.md,
-      justifyContent: 'flex-start',
-    },
+      justifyContent: 'flex-start' },
     cell: {
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     // ── Description ──
     descriptionWrap: {
       paddingVertical: Space.sm,
       gap: Space.xxs,
       minHeight: Control.hit,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     descriptionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     descriptionBody: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight },
     // ── Slider ──
     sliderWrap: {
       paddingVertical: Space.sm,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     sliderDisabled: {
-      opacity: 0.5,
-    },
+      opacity: 0.5 },
     // ── Footer ──
     footer: {
-      paddingTop: Space.lg,
-    },
+      paddingTop: Space.lg },
     applyBtn: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.md,
       borderRadius: Radius.lg,
-      minHeight: 50,
-    },
+      minHeight: 50 },
     applyBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size } });
 }
 
 // Memoised style factory keyed to colors so re-renders only rebuild when

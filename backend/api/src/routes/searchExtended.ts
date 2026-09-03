@@ -27,13 +27,9 @@ const searchListingsQuerySchema = z.object({
   size: z.string().min(1).optional(),
   priceMin: z.coerce.number().min(0).optional(),
   priceMax: z.coerce.number().min(0).optional(),
-  sort: z.enum(['relevance', 'recent', 'price_asc', 'price_desc']).default('relevance'),
+  sustainableOnly: z.coerce.boolean().optional().default(false),
+  sort: z.enum(['relevance', 'recent', 'price_asc', 'price_desc', 'most_liked', 'ending_soon']).default('relevance'),
   page: z.coerce.number().int().min(1).max(100).default(1),
-});
-
-const autocompleteQuerySchema = z.object({
-  q: z.string().trim().min(1).max(120),
-  limit: z.coerce.number().int().min(1).max(20).default(8),
 });
 
 /**
@@ -53,6 +49,7 @@ async function computeSearchResults(
   sort: string,
   page: number,
   searchPolicyVersion: string,
+  sustainableOnly: boolean,
 ): Promise<Omit<CachedSearchResult, 'cachedAt' | 'fromCache' | 'stale'>> {
   const offset = (page - 1) * limit;
 
@@ -81,12 +78,28 @@ async function computeSearchResults(
     filterConditions.push(`l.price_gbp <= $${filterIdx++}`);
     filterArgs.push(priceMax);
   }
+  if (sustainableOnly) {
+    filterConditions.push(`l.sustainability_grade IN ('A', 'B')`);
+  }
 
   const filterClause = filterConditions.length > 0
     ? `AND ${filterConditions.join(' AND ')}`
     : '';
 
   // Determine ORDER BY based on sort option
+  const extraJoins: string[] = [];
+  const extraSelects: string[] = [];
+  if (sort === 'most_liked') {
+    extraSelects.push('COALESCE(wl.like_count, 0) AS like_count');
+    extraJoins.push(
+      `LEFT JOIN (SELECT listing_id, COUNT(DISTINCT user_id) AS like_count FROM interactions WHERE action = 'wishlist' GROUP BY listing_id) wl ON wl.listing_id = l.id`,
+    );
+  }
+  if (sort === 'ending_soon') {
+    extraSelects.push('a.ends_at');
+    extraJoins.push('LEFT JOIN auctions a ON a.listing_id = l.id');
+  }
+
   let orderBy: string;
   switch (sort) {
     case 'recent':
@@ -97,6 +110,12 @@ async function computeSearchResults(
       break;
     case 'price_desc':
       orderBy = 'l.price_gbp DESC, l.id DESC';
+      break;
+    case 'most_liked':
+      orderBy = 'like_count DESC, l.created_at DESC, l.id DESC';
+      break;
+    case 'ending_soon':
+      orderBy = 'a.ends_at ASC NULLS LAST, l.created_at DESC, l.id DESC';
       break;
     case 'relevance':
     default:
@@ -118,6 +137,8 @@ async function computeSearchResults(
     size: string | null;
     condition: string | null;
     category: string | null;
+    like_count?: string | number | null;
+    ends_at?: string | null;
   }>(
     `
       SELECT
@@ -133,9 +154,10 @@ async function computeSearchResults(
         l.brand,
         l.size,
         l.condition,
-        l.category
+        l.category${extraSelects.length ? `, ${extraSelects.join(', ')}` : ''}
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
+      ${extraJoins.join('\n      ')}
       WHERE l.status = 'active'
         AND (
           l.search_vector @@ websearch_to_tsquery('simple', $1)
@@ -214,9 +236,10 @@ async function computeSearchResults(
     `
       SELECT l.id, l.seller_id, l.title, l.description, l.price_gbp::text, l.image_url, l.created_at::text,
         u.username AS seller_username,
-        l.brand, l.size, l.condition, l.category
+        l.brand, l.size, l.condition, l.category${extraSelects.length ? `, ${extraSelects.join(', ')}` : ''}
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
+      ${extraJoins.join('\n      ')}
       WHERE l.status = 'active'
         AND (
           POSITION(lower($1) IN lower(l.title)) > 0
@@ -227,7 +250,7 @@ async function computeSearchResults(
           OR POSITION(lower($1) IN lower(COALESCE(l.condition, ''))) > 0
         )
         ${filterClause}
-      ORDER BY ${sort === 'price_asc' ? 'l.price_gbp ASC' : sort === 'price_desc' ? 'l.price_gbp DESC' : 'l.created_at DESC'}, l.id DESC
+      ORDER BY ${orderBy}
       LIMIT $${filterIdx} OFFSET $${filterIdx + 1}
     `,
     [q, ...filterArgs, limit, offset]
@@ -283,15 +306,13 @@ async function computeSearchResults(
  * Register the remaining inline search routes that are not already handled
  * by `registerSearchRoutes` in `search.ts`:
  *   GET /search/listings      — cached postgres full-text listing search
- *   GET /search/autocomplete  — autocomplete suggestions (cached)
  *   GET /search/analytics     — recent search analytics summary
  *
- * NOTE: `/search`, `/search/autocomplete` (adapter-backed), `/search/health`,
+ * NOTE: `/search`, `/search/autocomplete`, `/search/health`,
  * `/search/semantic` and `/search/reindex` are registered by `search.ts`.
- * The `/search/autocomplete` route here is the legacy postgres-backed
- * implementation that predates the SearchAdapter. Both are registered; the
- * last registration wins in Fastify, so the order in `index.ts` determines
- * which handler serves the route at runtime.
+ * The `/search/autocomplete` route is solely owned by `search.ts`
+ * (adapter-backed with Redis caching and analytics); no duplicate is
+ * registered here.
  */
 export const registerSearchExtendedRoutes = ({
   app,
@@ -299,7 +320,7 @@ export const registerSearchExtendedRoutes = ({
   redis,
 }: SearchExtendedRouteDependencies): void => {
   app.get('/search/listings', async (request) => {
-    const { q, limit, category, condition, size, priceMin, priceMax, sort, page } =
+    const { q, limit, category, condition, size, priceMin, priceMax, sustainableOnly, sort, page } =
       searchListingsQuerySchema.parse(request.query);
     const searchPolicyVersion = 'listing-search-postgres-v3.0';
     const startTime = Date.now();
@@ -313,6 +334,7 @@ export const registerSearchExtendedRoutes = ({
         size,
         priceMin,
         priceMax,
+        sustainableOnly,
       },
       sort,
       page,
@@ -323,7 +345,7 @@ export const registerSearchExtendedRoutes = ({
     const revalidate = async (): Promise<void> => {
       const freshResult = await computeSearchResults(
         readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
-        searchPolicyVersion,
+        searchPolicyVersion, sustainableOnly,
       );
       await setCachedSearchResult(redis, cacheParams, freshResult);
     };
@@ -352,7 +374,7 @@ export const registerSearchExtendedRoutes = ({
     // ── Cache miss: compute results from DB ──
     const computed = await computeSearchResults(
       readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
-      searchPolicyVersion,
+      searchPolicyVersion, sustainableOnly,
     );
 
     const responseTimeMs = Date.now() - startTime;
@@ -374,71 +396,6 @@ export const registerSearchExtendedRoutes = ({
       ...computed,
       fromCache: false,
       responseTimeMs,
-    };
-  });
-
-  // ── Autocomplete endpoint ─────────────────────────────────────────────────────
-
-  app.get('/search/autocomplete', async (request) => {
-    const { q, limit } = autocompleteQuerySchema.parse(request.query);
-    const startTime = Date.now();
-
-    // Check autocomplete cache first
-    const { getCachedAutocomplete, setCachedAutocomplete } = await import('../lib/searchCache.js');
-    const cached = await getCachedAutocomplete(redis, q);
-    if (cached) {
-      return {
-        ok: true,
-        query: q,
-        suggestions: cached.slice(0, limit),
-        fromCache: true,
-        responseTimeMs: Date.now() - startTime,
-      };
-    }
-
-    // Query database for autocomplete suggestions
-    const result = await readDb.query<{ term: string; suggestion_type: 'item' | 'brand' | 'category'; frequency: string }>(
-      `
-        SELECT
-          MIN(display_term) AS term,
-          suggestion_type,
-          COUNT(*)::text AS frequency
-        FROM (
-          SELECT trim(l.title) AS display_term, lower(trim(l.title)) AS normalized_term, 'item' AS suggestion_type
-          FROM listings l
-          WHERE l.status = 'active' AND lower(trim(l.title)) LIKE lower($1 || '%')
-          UNION ALL
-          SELECT trim(COALESCE(l.brand, '')) AS display_term, lower(trim(COALESCE(l.brand, ''))) AS normalized_term, 'brand' AS suggestion_type
-          FROM listings l
-          WHERE l.status = 'active' AND lower(trim(COALESCE(l.brand, ''))) LIKE lower($1 || '%')
-          UNION ALL
-          SELECT trim(COALESCE(l.category, '')) AS display_term, lower(trim(COALESCE(l.category, ''))) AS normalized_term, 'category' AS suggestion_type
-          FROM listings l
-          WHERE l.status = 'active' AND lower(trim(COALESCE(l.category, ''))) LIKE lower($1 || '%')
-        ) AS suggestions
-        WHERE normalized_term != ''
-        GROUP BY normalized_term, suggestion_type
-        ORDER BY frequency DESC, length(normalized_term) ASC
-        LIMIT $2
-      `,
-      [q, limit]
-    );
-
-    const suggestions = result.rows.map((row) => ({
-      text: row.term,
-      type: row.suggestion_type,
-      score: Number(row.frequency),
-    }));
-
-    // Cache the suggestions (fire-and-forget)
-    void setCachedAutocomplete(redis, q, suggestions);
-
-    return {
-      ok: true,
-      query: q,
-      suggestions,
-      fromCache: false,
-      responseTimeMs: Date.now() - startTime,
     };
   });
 

@@ -1,17 +1,16 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
-  Dimensions,
-} from 'react-native';
+  StyleSheet } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Type, Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useStore } from '../../store/useStore';
 import { useBackendData } from '../../context/BackendDataContext';
 import { useScrollToTop } from '@react-navigation/native';
@@ -20,17 +19,14 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { useToast } from '../../context/ToastContext';
 import { EmptyState } from '../EmptyState';
 import { formatCountdown } from '../../data/tradeHub';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { HorizontalRail } from '../HorizontalRail';
 import { fetchTrendingListings, type TrendingListing } from '../../services/marketApi';
 import { openProductDetail } from '../../platform/product/openProductDetail';
-import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-const { width: SCREEN_W } = Dimensions.get('window');
 
 /* ── Activity item types ── */
 type ActivityType = 'auction_live' | 'fresh_drop' | 'price_drop';
@@ -86,14 +82,12 @@ function LiveNowCard({ auction, now, onPress, styles, formatPrice }: { auction: 
 function ActivityCard({ item, onPress, colors, styles, formatPrice }: { item: ActivityItem; onPress: () => void; colors: ThemeColors; styles: ReturnType<typeof createStyles>; formatPrice: (n: number) => string }) {
   const iconMap: Record<ActivityType, React.ComponentProps<typeof Ionicons>['name']> = {
     auction_live: 'flame-outline',
-    fresh_drop: 'cube-outline',
-    price_drop: 'trending-down-outline',
-  };
+    fresh_drop: 'bag-handle-outline',
+    price_drop: 'trending-down-outline' };
   const accentMap: Record<ActivityType, string> = {
     auction_live: colors.danger,
     fresh_drop: colors.brand,
-    price_drop: colors.warning,
-  };
+    price_drop: colors.warning };
 
   return (
     <AnimatedPressable style={styles.activityCard} onPress={onPress} activeOpacity={0.92}>
@@ -127,25 +121,21 @@ export default function PulseTab() {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const { show } = useToast();
   const { listings } = useBackendData();
-  const { formatFromFiat } = useFormattedPrice();
-  const formatPrice = React.useCallback((n: number) => formatFromFiat(n, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }), [formatFromFiat]);
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const formatPrice = React.useCallback((n: number) => formatFromFiat(n, currencyCode, { displayMode: 'fiat' }), [formatFromFiat, currencyCode]);
   const customAuctions = useStore((state) => state.customAuctions);
   const auctionRuntime = useStore((state) => state.auctionRuntime);
 
-  // Trending state (merged from EditTab to preserve trending rail + style quiz)
+  // Trending state
   const [trending, setTrending] = React.useState<TrendingListing[]>([]);
-  const [trendingLoading, setTrendingLoading] = React.useState(true);
   const [trendingWindow, setTrendingWindow] = React.useState<'24h' | '7d' | '30d'>('24h');
 
   React.useEffect(() => {
     let cancelled = false;
-    setTrendingLoading(true);
     fetchTrendingListings({ window: trendingWindow, limit: 20 })
       .then((items) => { if (!cancelled) setTrending(items); })
-      .catch(() => { if (!cancelled) setTrending([]); })
-      .finally(() => { if (!cancelled) setTrendingLoading(false); });
+      .catch(() => { if (!cancelled) setTrending([]); });
     return () => { cancelled = true; };
   }, [trendingWindow]);
 
@@ -156,8 +146,7 @@ export default function PulseTab() {
         title: t.title,
         brand: t.brand ?? '',
         price: t.priceGbp,
-        image: t.images[0] ?? t.imageUrl ?? '',
-      }));
+        image: t.images[0] ?? t.imageUrl ?? '' }));
     }
     // Fallback to client-side sorting when backend returns no data
     return [...listings]
@@ -169,12 +158,11 @@ export default function PulseTab() {
         title: l.title,
         brand: l.brand ?? '',
         price: l.price,
-        image: l.images[0] ?? '',
-      }));
+        image: l.images[0] ?? '' }));
   }, [trending, listings]);
 
   const [now, setNow] = useState(() => Date.now());
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<any>(null);
   useScrollToTop(scrollRef);
 
   const liveAuctions = useMemo<LiveAuctionItem[]>(() => {
@@ -190,8 +178,7 @@ export default function PulseTab() {
         image: a.image,
         currentBid: a.currentBid,
         endsAtMs: new Date(a.endsAt).getTime(),
-        listingId: a.listingId,
-      }));
+        listingId: a.listingId }));
   }, [customAuctions, now]);
 
   // Tick the clock every second only while there are live auctions, so idle
@@ -214,8 +201,7 @@ export default function PulseTab() {
           id: `auction_${a.id}`, type: 'auction_live',
           title: a.title, subtitle: `Current bid · ${formatPrice(a.currentBid)}`,
           image: a.image, meta: formatCountdown(Math.max(0, endsAtMs - now)),
-          metaAccent: true, actionLabel: 'Bid', routeId: a.listingId,
-        });
+          metaAccent: true, actionLabel: 'Bid', routeId: a.listingId });
       }
     });
 
@@ -226,7 +212,10 @@ export default function PulseTab() {
       items.push({ id: `drop_${l.id}`, type: 'fresh_drop', title: l.title ?? 'New Listing', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? '', meta: formatPrice(l.price), routeId: l.id });
     });
 
-    listings.filter((l) => l.originalPrice && l.originalPrice > l.price).slice(0, 6).forEach((l) => {
+    listings.filter((l) => l.originalPrice && l.originalPrice > l.price)
+      .sort((a, b) => (b.originalPrice! - b.price) / b.originalPrice! - (a.originalPrice! - a.price) / a.originalPrice!)
+      .slice(0, 6)
+      .forEach((l) => {
       const dropPct = Math.round(((l.originalPrice! - l.price) / l.originalPrice!) * 100);
       items.push({ id: `drop_${l.id}_price`, type: 'price_drop', title: l.title ?? 'Item', subtitle: l.brand ?? 'ThryftVerse', image: l.images?.[0] ?? '', meta: `Down ${dropPct}% · Now ${formatPrice(l.price)}`, metaAccent: true, actionLabel: 'View', routeId: l.id });
     });
@@ -249,6 +238,130 @@ export default function PulseTab() {
     navigation.navigate('PulseFeed');
   };
 
+  // ── Infinite loop feed ──────────────────────────────────────────────
+  // The activity feed loops: when the user reaches the end, we append the
+  // same items again (with deduplicated keys via a cycle index). This gives
+  // an infinite scroll discovery experience without requiring a backend
+  // pagination endpoint for the activity feed.
+  const cycleRef = useRef(0);
+  const [feedItems, setFeedItems] = useState<ActivityItem[]>([]);
+
+  useEffect(() => {
+    if (activities.length === 0) {
+      setFeedItems([]);
+      return;
+    }
+    // Seed the feed with the first cycle of activities
+    setFeedItems(activities);
+    cycleRef.current = 1;
+  }, [activities]);
+
+  const handleEndReached = useCallback(() => {
+    if (activities.length === 0) return;
+    cycleRef.current += 1;
+    const cycle = cycleRef.current;
+    setFeedItems((prev) => [
+      ...prev,
+      ...activities.map((item) => ({
+        ...item,
+        id: `${item.id}__cycle${cycle}`,
+      })),
+    ]);
+  }, [activities]);
+
+  const renderActivityItem = useCallback(
+    ({ item }: { item: ActivityItem }) => (
+      <ActivityCard
+        item={item}
+        onPress={() => handleActivityPress(item)}
+        colors={colors}
+        styles={styles}
+        formatPrice={formatPrice}
+      />
+    ),
+    [colors, styles, formatPrice, handleActivityPress],
+  );
+
+  const keyExtractor = useCallback((item: ActivityItem) => item.id, []);
+
+  const ListHeader = useMemo(() => {
+    if (trendingListings.length === 0 && liveAuctions.length === 0) return null;
+    return (
+      <>
+        {/* Trending Now Rail */}
+        {trendingListings.length > 0 && (
+          <View>
+            <DiscoverySectionHeader
+              title="Popular this week"
+              actionLabel="See all"
+              onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' })}
+            />
+            <HorizontalRail contentContainerStyle={styles.trendingScroll}>
+              {trendingListings.map((item) => (
+                <TrendingRailItem
+                  key={item.id}
+                  item={item}
+                  onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'Pulse' }); }}
+                  styles={styles}
+                  formatPrice={formatPrice}
+                />
+              ))}
+            </HorizontalRail>
+            <View style={styles.windowTabs}>
+              {(['24h', '7d', '30d'] as const).map((w) => {
+                const isActive = trendingWindow === w;
+                return (
+                  <AnimatedPressable
+                    key={w}
+                    style={[styles.windowTab, isActive && styles.windowTabActive]}
+                    onPress={() => { haptic.selection(); setTrendingWindow(w); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.windowTabText, isActive && styles.windowTabTextActive]}>
+                      {w === '24h' ? '24 hours' : w === '7d' ? '7 days' : '30 days'}
+                    </Text>
+                  </AnimatedPressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Live Now Rail */}
+        {liveAuctions.length > 0 && (
+          <View>
+            <DiscoverySectionHeader
+              title="Live Now"
+              actionLabel="View all"
+              onAction={handleViewAll}
+            />
+            <HorizontalRail contentContainerStyle={styles.liveScroll}>
+              {liveAuctions.map((auction) => (
+                <LiveNowCard
+                  key={auction.id}
+                  auction={auction}
+                  now={now}
+                  onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'auction', canonicalId: auction.id, sourceSurface: 'Pulse' }); }}
+                  styles={styles}
+                  formatPrice={formatPrice}
+                />
+              ))}
+            </HorizontalRail>
+          </View>
+        )}
+
+        {/* Live Feed header — sits above the FlashList data rows */}
+        <View style={{ marginTop: Space.lg }}>
+          <DiscoverySectionHeader
+            title="Live Feed"
+            actionLabel="View all"
+            onAction={handleViewAll}
+          />
+        </View>
+      </>
+    );
+  }, [trendingListings, liveAuctions, trendingWindow, now, colors, styles, haptic, navigation, formatPrice, handleViewAll]);
+
   if (activities.length === 0 && liveAuctions.length === 0 && trendingListings.length === 0) {
     return (
       <EmptyState
@@ -262,97 +375,17 @@ export default function PulseTab() {
   }
 
   return (
-    <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-      {/* Trending Now Rail (merged from EditTab) */}
-      {trendingListings.length > 0 && (
-        <View>
-          <DiscoverySectionHeader
-            title="Popular this week"
-            actionLabel="See all"
-            onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' })}
-          />
-          <HorizontalRail contentContainerStyle={styles.trendingScroll}>
-            {trendingListings.map((item) => (
-              <TrendingRailItem
-                key={item.id}
-                item={item}
-                onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'Pulse' }); }}
-                styles={styles}
-                formatPrice={formatPrice}
-              />
-            ))}
-          </HorizontalRail>
-          {/* Window tabs below the first rail so the first viewport shows
-              media, not chrome (audit §3.4, §4.5). */}
-          <View style={styles.windowTabs}>
-            {(['24h', '7d', '30d'] as const).map((w) => {
-              const isActive = trendingWindow === w;
-              return (
-                <AnimatedPressable
-                  key={w}
-                  style={[styles.windowTab, isActive && styles.windowTabActive]}
-                  onPress={() => { haptic.selection(); setTrendingWindow(w); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.windowTabText, isActive && styles.windowTabTextActive]}>
-                    {w === '24h' ? '24 hours' : w === '7d' ? '7 days' : '30 days'}
-                  </Text>
-                </AnimatedPressable>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
-      {/* Live Now Rail */}
-      {liveAuctions.length > 0 && (
-        <View>
-          <DiscoverySectionHeader
-            title="Live Now"
-            actionLabel="View all"
-            onAction={handleViewAll}
-          />
-          <HorizontalRail contentContainerStyle={styles.liveScroll}>
-            {liveAuctions.map((auction) => (
-              <LiveNowCard
-                key={auction.id}
-                auction={auction}
-                now={now}
-                onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'auction', canonicalId: auction.id, sourceSurface: 'Pulse' }); }}
-                styles={styles}
-                formatPrice={formatPrice}
-              />
-            ))}
-          </HorizontalRail>
-        </View>
-      )}
-
-      {/* Activity feed */}
-      <View style={{ marginTop: Space.lg }}>
-        <DiscoverySectionHeader
-          title="Live Feed"
-          actionLabel="View all"
-          onAction={handleViewAll}
-        />
-        {activities.map((item) => (
-          <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} colors={colors} styles={styles} formatPrice={formatPrice} />
-        ))}
-      </View>
-
-      {/* Style Quiz (merged from EditTab) */}
-      <View style={{ marginTop: Space.lg }}>
-        <DiscoverySectionHeader
-          title="Find Your Aesthetic"
-        />
-        <AnimatedPressable style={styles.quizCard} onPress={() => navigation.navigate('StyleQuiz')} activeOpacity={0.92}>
-          <Ionicons name="color-palette-outline" size={22} color={colors.brand} />
-          <Text style={styles.quizActionText}>Take the style quiz</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </AnimatedPressable>
-      </View>
-
-      <View style={{ height: 100 }} />
-    </ScrollView>
+    <FlashList
+      ref={scrollRef}
+      data={feedItems}
+      renderItem={renderActivityItem}
+      keyExtractor={keyExtractor}
+      ListHeaderComponent={ListHeader}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+      onEndReached={handleEndReached}
+      onEndReachedThreshold={0.7}
+    />
   );
 }
 
@@ -361,130 +394,40 @@ function createStyles(colors: ThemeColors) {
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
 
   /* Live Now Rail */
   liveScroll: {
     paddingHorizontal: Space.md,
     marginHorizontal: -Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   liveCard: {
     width: 150,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   liveImage: {
     width: '100%',
     height: 120,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   liveContent: {
-    gap: 3,
-  },
+    gap: 3 },
   liveTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   liveBid: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.meta.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   liveText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.warning,
     fontVariant: ['tabular-nums'],
-    marginTop: Space.xs,
-  },
-
-  /* Trending */
-  trendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
-  },
-  trendBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.full,
-    gap: 6,
-  },
-  trendLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  heatDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.sm,
-  },
-
-  /* Hot Sellers */
-  sellerScroll: {
-    paddingHorizontal: Space.md,
-    marginHorizontal: -Space.md,
-    gap: Space.sm,
-  },
-  sellerCard: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: Space.sm,
-    width: 110,
-  },
-  sellerAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
-  sellerName: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    marginTop: Space.sm,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  sellerMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-    marginTop: 2,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-  sellerLiveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-    backgroundColor: colors.successSubtle,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-  },
-  sellerLiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.success,
-  },
-  sellerLiveText: {
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
-    color: colors.success,
-  },
+    marginTop: Space.xs },
 
   /* Activity */
   activityCard: {
@@ -493,139 +436,99 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
     gap: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   activityImage: {
     width: 80,
     height: 80,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   activityContent: {
     flex: 1,
-    gap: 4,
-  },
+    gap: 4 },
   activityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   activityTypeLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.8,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.8 },
   activityTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight },
   activitySubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   activityMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginTop: 2,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   activityMetaAccent: {
     color: colors.danger,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   activityAction: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   activityActionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
 
   /* Trending Rail (merged from EditTab) */
   trendingScroll: {
     paddingHorizontal: Space.md,
     marginHorizontal: -Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   trendingItem: {
     width: 140,
-    gap: 4,
-  },
+    gap: 4 },
   trendingImage: {
     width: 140,
     height: 180,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   trendingBrand: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-    marginTop: Space.xs,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs },
   trendingTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   trendingPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.brand,
-    letterSpacing: Type.caption.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   windowTabs: {
     flexDirection: 'row',
     gap: Space.xs,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   windowTab: {
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   windowTabActive: {
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   windowTabText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   windowTabTextActive: {
-    color: colors.textInverse,
-  },
-
-  /* Style Quiz — flat action row, hairline separator (no surface card) */
-  quizCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.md,
-    gap: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  quizActionText: {
-    flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  });
+    color: colors.textInverse } });
 }

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 type CountdownStage = 'upcoming' | 'plenty' | 'moderate' | 'urgent' | 'final' | 'ended';
 
@@ -175,7 +176,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     letterSpacing: -0.2,
   },
   stageLabel: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.medium,
     letterSpacing: 0.3,
     textTransform: 'uppercase',

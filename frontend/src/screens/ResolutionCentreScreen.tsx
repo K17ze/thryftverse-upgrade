@@ -5,17 +5,20 @@ import {
   StyleSheet,
   Pressable,
   RefreshControl,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Typography, Radius, Type, Stroke } from '../theme/designTokens';
+import { Space, Typography, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useStore } from '../store/useStore';
 import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import type { SupportTicket } from '../store/useStore';
 
 type TicketFilter = 'all' | 'open' | 'resolved' | 'closed';
@@ -27,11 +30,11 @@ const FILTERS: Array<{ value: TicketFilter; label: string; accessibilityLabel: s
   { value: 'closed', label: 'Closed', accessibilityLabel: 'Show closed requests' },
 ];
 
-function getStatusConfig(colors: ThemeColors): Record<string, { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }> {
+function getStatusConfig(colors: ThemeColors): Record<string, { label: string; color: string; icon: string }> {
   return {
-  open: { label: 'Open', color: colors.brand, icon: 'folder-open-outline' },
-  resolved: { label: 'Resolved', color: colors.success, icon: 'checkmark-circle-outline' },
-  closed: { label: 'Closed', color: colors.textMuted, icon: 'close-circle-outline' },
+    open: { label: 'Open', color: colors.brand, icon: 'folder' },
+    resolved: { label: 'Resolved', color: colors.success, icon: 'checkmark-circle-outline' },
+    closed: { label: 'Closed', color: colors.textMuted, icon: 'close' },
   };
 }
 
@@ -94,29 +97,28 @@ export default function ResolutionCentreScreen() {
     return (
       <View>
         <Pressable
-          style={styles.ticketCard}
+          style={styles.ticketRow}
           onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: item.id })}
           accessibilityRole="button"
           accessibilityLabel={`Support request: ${item.topicLabel}, ${statusCfg.label}`}
         >
-          <View style={[styles.statusIconWrap, { backgroundColor: `${statusCfg.color}15` }]}>
-            <Ionicons name={statusCfg.icon} size={18} color={statusCfg.color} />
-          </View>
+          <AppIcon name={statusCfg.icon} size={IconSize.lg} color={statusCfg.color} opticalCenter accessible={false} />
           <View style={styles.ticketInfo}>
             <Text style={styles.ticketTopic} numberOfLines={1}>{item.topicLabel}</Text>
             <Text style={styles.ticketDetails} numberOfLines={2}>{item.details}</Text>
             <View style={styles.ticketMetaRow}>
+              {/* TODO: replace `${statusCfg.color}12` with statusColorSubtle token when available */}
               <View style={[styles.statusPill, { backgroundColor: `${statusCfg.color}12` }]}>
                 <Text style={[styles.ticketStatus, { color: statusCfg.color }]}>{statusCfg.label}</Text>
               </View>
               <Text style={styles.ticketDate}>Updated {formatRelativeDate(item.updatedAt)}</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         </Pressable>
       </View>
     );
-  }, [statusConfig, navigation, styles, colors.textMuted]);
+  }, [statusConfig, navigation, styles]);
 
   return (
     <FlagshipScreen
@@ -127,22 +129,13 @@ export default function ResolutionCentreScreen() {
         />
       }
     >
-      {/* Hero summary — open ticket count */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: openCount > 0 ? colors.brand : colors.surfaceAlt }]}>
-              <Ionicons name="headset" size={18} color={openCount > 0 ? colors.textInverse : colors.textMuted} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {openCount > 0 ? `${openCount} open request${openCount === 1 ? '' : 's'}` : 'No open requests'}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {supportTickets.length} total ticket{supportTickets.length === 1 ? '' : 's'}
-              </Text>
-            </View>
-          </View>
-        </View>
+      {/* Posture summary — flat canvas, no card chrome */}
+      <SettingsInfoBanner
+        tone="info"
+        icon="headset"
+        title={openCount > 0 ? `${openCount} open request${openCount !== 1 ? 's' : ''}` : 'No open requests'}
+        description={`${supportTickets.length} total ticket${supportTickets.length !== 1 ? 's' : ''}`}
+      />
 
       {/* Filter rail */}
       <ScrollView
@@ -206,130 +199,73 @@ export default function ResolutionCentreScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginBottom: Space.md,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xl + Space.xs + 4,
-    height: Space.xl + Space.xs + 4,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroText: { flex: 1 },
-  heroTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  heroSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-  },
   filterRail: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
     paddingVertical: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   filterRailContent: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   filterChip: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 3,
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
+    backgroundColor: colors.surface },
   filterChipActive: {
     borderColor: colors.brand,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   filterChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   filterChipTextActive: {
     color: colors.textInverse,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   filterChipCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    opacity: 0.7,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    opacity: 0.7 },
   listContent: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
-  ticketCard: {
+    paddingTop: Space.sm },
+  ticketRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.smMd,
+    gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    marginBottom: Space.sm,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  statusIconWrap: {
-    width: Space.xl + Space.xs + 4,
-    height: Space.xl + Space.xs + 4,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border },
   ticketInfo: {
     flex: 1,
-    gap: Space.xs / 2 + 1,
-  },
+    gap: Space.xs / 2 + 1 },
   ticketTopic: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   ticketDetails: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.size + 4,
-  },
+    lineHeight: TypographyV2.meta.size + 4 },
   ticketMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   statusPill: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   ticketStatus: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   ticketDate: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted } });
 }

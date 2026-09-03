@@ -34,7 +34,7 @@ export interface CoOwnAsset {
   availableUnits: number;
   unitPriceGBP: number;
   unitPriceStable: number;
-  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+  settlementMode: 'ONEZE';
   issuerJurisdiction?: string;
   marketMovePct24h: number;
   holders: number;
@@ -187,8 +187,8 @@ export function getUserLabel(userId: string) {
   return user ? `@${user.username}` : '@seller';
 }
 
-export function formatMoney(value: number) {
-  return `£${value.toFixed(2)}`;
+export function formatMoney(value: number, currencySymbol: string = '£') {
+  return `${currencySymbol}${value.toFixed(2)}`;
 }
 
 export function formatCompact(value: number) {

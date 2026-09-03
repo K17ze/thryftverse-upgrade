@@ -4,7 +4,8 @@ import { StyleSheet as RNStyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 
 export type CoOwnAssetStatus = 'open' | 'closed' | 'paused';
@@ -126,8 +127,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs,
   },
   imageFallbackText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
   },
   // Gradient overlay for text legibility on any image
@@ -157,8 +158,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.sm,
   },
   statusText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.3,
     color: colors.scrimTextPrimary,
   },
@@ -174,15 +175,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 6,
   },
   eyebrow: {
-    fontSize: Type.label.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 1.0,
-    textTransform: 'uppercase',
+    fontSize: TypographyV2.label.size,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: 0.2,
     color: colors.scrimTextSecondary,
   },
   title: {
-    fontSize: Type.display.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.display.size,
+    fontFamily: TypographyV2.display.fontFamily,
     lineHeight: 34,
     letterSpacing: -0.5,
     color: colors.scrimTextPrimary,
@@ -196,18 +196,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.xs,
   },
   heroPriceLine: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.scrimTextPrimary,
     fontVariant: ['tabular-nums'],
   },
   heroDivider: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.scrimTextTertiary,
   },
   heroAvailability: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.scrimTextSecondary,
     fontVariant: ['tabular-nums'],
   },
@@ -228,8 +228,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.glassBorder,
   },
   actionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.scrimTextPrimary,
   },
 });

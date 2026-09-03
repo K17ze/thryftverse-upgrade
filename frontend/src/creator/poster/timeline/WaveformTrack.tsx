@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Platform, ActivityIndicator } from 'react-native';
-import { Space, FontFamily, Radius } from '../../../theme/designTokens';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, Platform, ActivityIndicator, Pressable } from 'react-native';
+import { Space, FontFamily } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
@@ -11,8 +11,11 @@ import { extractWaveform } from '../../core/audio';
 // On web, @shopify/react-native-skia requires WithSkiaWeb setup which
 // this project does not configure. The try/catch prevents a hard crash;
 // we render a lightweight View-based bar fallback instead.
+//
+// The dynamically-required module is typed via `typeof import(...)`, so
+// the Canvas and RoundedRect components are properly typed — no casts.
 let skiaAvailable = false;
-let SkiaImports: any = null;
+let SkiaImports: typeof import('@shopify/react-native-skia') | null = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mod = require('@shopify/react-native-skia');
@@ -66,27 +69,37 @@ export const WaveformTrack = React.memo(function WaveformTrack({
   height = DEFAULT_HEIGHT,
 }: WaveformTrackProps) {
   const { colors } = useAppTheme();
-  const barColor = color ?? colors.antiqueGold;
+  const barColor = color ?? colors.textMuted;
 
   // ── Async waveform extraction state ──
   const [extractedSamples, setExtractedSamples] = useState<number[] | undefined>(undefined);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractError, setExtractError] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
+
+  const handleRetryExtraction = useCallback(() => {
+    setExtractError(false);
+    setRetryNonce((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     // If samples are provided directly, skip extraction.
     if (providedSamples) {
       setExtractedSamples(undefined);
       setIsExtracting(false);
+      setExtractError(false);
       return;
     }
     if (!audioUri) {
       setExtractedSamples(undefined);
       setIsExtracting(false);
+      setExtractError(false);
       return;
     }
 
     let cancelled = false;
     setIsExtracting(true);
+    setExtractError(false);
 
     extractWaveform(audioUri, barCount)
       .then((data) => {
@@ -101,13 +114,14 @@ export const WaveformTrack = React.memo(function WaveformTrack({
         if (!cancelled) {
           setExtractedSamples(undefined);
           setIsExtracting(false);
+          setExtractError(true);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [audioUri, barCount, providedSamples]);
+  }, [audioUri, barCount, providedSamples, retryNonce]);
 
   // Use provided samples, then extracted samples, then nothing.
   const effectiveSamples = providedSamples ?? extractedSamples;
@@ -126,22 +140,39 @@ export const WaveformTrack = React.memo(function WaveformTrack({
       style={[
         waveStyles.container,
         {
-          height,
-          backgroundColor: colors.surfaceAlt,
+          height: extractError ? undefined : height,
+          backgroundColor: 'transparent',
         },
       ]}
       accessibilityLabel={
         isExtracting
           ? 'Audio waveform track, extracting waveform'
-          : hasSamples
-            ? 'Audio waveform track'
-            : 'Audio waveform track, no audio waveform'
+          : extractError
+            ? "Audio waveform track, couldn't load waveform"
+            : hasSamples
+              ? 'Audio waveform track'
+              : 'Audio waveform track, no audio waveform'
       }
     >
       {isExtracting ? (
         // ── Loading state: small spinner while extracting ──
         <View style={waveStyles.loading}>
           <ActivityIndicator size="small" color={colors.textMuted} />
+        </View>
+      ) : extractError ? (
+        <View style={waveStyles.errorRow}>
+          <Text style={[waveStyles.errorText, { color: colors.textSecondary }]}>
+            Couldn't load waveform
+          </Text>
+          <Pressable
+            onPress={handleRetryExtraction}
+            style={waveStyles.errorRetry}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Retry waveform extraction"
+            accessibilityRole="button"
+          >
+            <Text style={[waveStyles.errorRetryText, { color: colors.brand }]}>Retry</Text>
+          </Pressable>
         </View>
       ) : hasSamples && trackWidth > 0 ? (
         skiaAvailable ? (
@@ -165,12 +196,9 @@ export const WaveformTrack = React.memo(function WaveformTrack({
           />
         )
       ) : (
-        // ── Honest empty state: flat line + subtle label ──
+        // ── Honest empty state: flat line, no label needed ──
         <View style={waveStyles.empty}>
           <View style={[waveStyles.flatLine, { backgroundColor: colors.textMuted }]} />
-          <Text style={[waveStyles.emptyLabel, { color: colors.textMuted }]} numberOfLines={1}>
-            No audio waveform
-          </Text>
         </View>
       )}
     </View>
@@ -197,7 +225,8 @@ function SkiaWaveform({
   barGap,
   color,
 }: SkiaWaveformProps) {
-  const { Canvas, Rect } = SkiaImports;
+  const Canvas = SkiaImports!.Canvas;
+  const RoundedRect = SkiaImports!.RoundedRect;
   const cy = trackHeight / 2;
   const step = barWidth + barGap;
 
@@ -218,14 +247,14 @@ function SkiaWaveform({
   return (
     <Canvas style={{ width: trackWidth, height: trackHeight }}>
       {bars.map((b, i) => (
-        <Rect
+        <RoundedRect
           key={i}
           x={b.x}
           y={b.y}
           width={b.w}
           height={b.h}
+          r={1}
           color={color}
-          rx={1}
         />
       ))}
     </Canvas>
@@ -264,7 +293,7 @@ const ViewWaveform = React.memo(function ViewWaveform({
               marginTop: cy - h / 2,
               marginRight: barGap,
               backgroundColor: color,
-              borderRadius: Radius.none,
+              borderRadius: 1,
             }}
           />
         );
@@ -296,16 +325,34 @@ const waveStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+    flex: 1,
+  },
+  errorText: {
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    flexShrink: 1,
+  },
+  errorRetry: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Space.xs,
+  },
+  errorRetryText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.body.size,
+  },
   flatLine: {
     position: 'absolute',
     left: Space.xs,
     right: Space.xs,
     height: FLAT_LINE_HEIGHT,
-  },
-  emptyLabel: {
-    fontFamily: FontFamily.medium,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    opacity: 0.7,
   },
 });

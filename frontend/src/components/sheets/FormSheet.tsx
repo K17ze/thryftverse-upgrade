@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet, Pressable, Text } from 'react-native';
 import { BottomSheet } from '../BottomSheet';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { FontFamily, Space, Type } from '../../theme/designTokens';
+import { FontFamily, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 /**
  * FormSheet — keyboard-aware, stable title/action, no decorative blur.
@@ -41,8 +42,7 @@ export function FormSheet({
   title,
   leftAction,
   rightAction,
-  snapPoint = 0.6,
-}: FormSheetProps) {
+  snapPoint = 0.6 }: FormSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -109,37 +109,29 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       minHeight: 44,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     actionSlot: {
       minWidth: 64,
-      alignItems: 'flex-start',
-    },
+      alignItems: 'flex-start' },
     actionButton: {
       minHeight: 44,
       justifyContent: 'center',
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     actionText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      color: colors.textSecondary },
     actionTextEmphasis: {
       fontFamily: FontFamily.semibold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     actionTextDestructive: {
       fontFamily: FontFamily.semibold,
-      color: colors.danger,
-    },
+      color: colors.danger },
     title: {
       flex: 1,
       textAlign: 'center',
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
-  });
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary } });

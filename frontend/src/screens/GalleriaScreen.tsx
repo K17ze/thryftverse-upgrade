@@ -3,10 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   RefreshControl,
-  ImageStyle,
-} from 'react-native';
+  ImageStyle } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +14,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -34,16 +34,13 @@ import {
   GALLERIA_DEMO_MODE,
   type GalleriaCollection,
   type GalleriaEditorial,
-  type GalleriaFeaturedAsset,
-} from '../services/galleriaApi';
+  type GalleriaFeaturedAsset } from '../services/galleriaApi';
 import { openProductDetail } from '../platform/product/openProductDetail';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 // ── Layout constants ──
-const { width: SCREEN_W } = Dimensions.get('window');
-const HERO_HEIGHT = Math.round(SCREEN_W * (4 / 5));
-const FEATURED_COLLECTION_HEIGHT = Math.round(SCREEN_W * (5 / 6));
 // Collection rail card dimensions — intentional design constants:
 // 200pt width balances cover-image legibility with ~3 cards visible per viewport;
 // 260pt height gives the cover image room to breathe while keeping curator meta compact.
@@ -52,9 +49,6 @@ const COLLECTION_CARD_HEIGHT = 260;
 const MASONRY_GAP = Space.sm;
 const MASONRY_COLUMN_COUNT = 2;
 const MASONRY_PADDING = Space.md;
-const MASONRY_COL_WIDTH =
-  (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
-  MASONRY_COLUMN_COUNT;
 
 // Skeleton height variation communicates loading without inventing media geometry.
 const SKELETON_ASPECT_RATIOS = [1.25, 1.0, 1.32, 0.92] as const;
@@ -63,17 +57,17 @@ const SKELETON_ASPECT_RATIOS = [1.25, 1.0, 1.32, 0.92] as const;
 // Hero editorial card — full-width, 16:10, title overlaid on image
 // ---------------------------------------------------------------------------
 const HeroEditorialCard = React.memo(function HeroEditorialCard({
-  editorial,
-}: {
+  editorial }: {
   editorial: GalleriaEditorial;
 }) {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
 
   return (
     <View
       style={styles.heroContainer}
       accessibilityRole="image"
-      accessibilityLabel={`Editorial: ${editorial.title}`}
+      accessibilityLabel={t('accessibility.editorial', { title: editorial.title })}
     >
       <CachedImage
         uri={editorial.heroImage}
@@ -88,7 +82,7 @@ const HeroEditorialCard = React.memo(function HeroEditorialCard({
       <View style={styles.heroOverlay} pointerEvents="none">
         <View style={styles.heroEyebrowRow}>
           <View style={styles.heroEyebrowDot} />
-          <Text style={styles.heroEyebrow}>EDITORIAL</Text>
+          <Text style={styles.heroEyebrow}>{t('editorial.eyebrow')}</Text>
         </View>
         <Text style={styles.heroTitle} numberOfLines={3}>
           {editorial.title}
@@ -106,12 +100,12 @@ const HeroEditorialCard = React.memo(function HeroEditorialCard({
 // ---------------------------------------------------------------------------
 const CollectionRailCard = React.memo(function CollectionRailCard({
   collection,
-  onPress,
-}: {
+  onPress }: {
   collection: GalleriaCollection;
   onPress: () => void;
 }) {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
 
   return (
     <AnimatedPressable
@@ -120,8 +114,8 @@ const CollectionRailCard = React.memo(function CollectionRailCard({
       activeOpacity={0.92}
       scaleValue={0.98}
       accessibilityRole="button"
-      accessibilityLabel={`Collection: ${collection.title}`}
-      accessibilityHint="Opens the collection detail"
+      accessibilityLabel={t('accessibility.collection', { title: collection.title })}
+      accessibilityHint={t('accessibility.collectionHint')}
     >
       <View style={styles.collectionImageWrap}>
         <CachedImage
@@ -160,12 +154,12 @@ const CollectionRailCard = React.memo(function CollectionRailCard({
 // ---------------------------------------------------------------------------
 const FeaturedCollectionCard = React.memo(function FeaturedCollectionCard({
   collection,
-  onPress,
-}: {
+  onPress }: {
   collection: GalleriaCollection;
   onPress: () => void;
 }) {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
 
   return (
     <AnimatedPressable
@@ -174,8 +168,8 @@ const FeaturedCollectionCard = React.memo(function FeaturedCollectionCard({
       activeOpacity={0.94}
       scaleValue={0.99}
       accessibilityRole="button"
-      accessibilityLabel={`Featured collection: ${collection.title}`}
-      accessibilityHint="Opens the collection detail"
+      accessibilityLabel={t('accessibility.featuredCollection', { title: collection.title })}
+      accessibilityHint={t('accessibility.collectionHint')}
     >
       <CachedImage
         uri={collection.coverImage}
@@ -199,7 +193,7 @@ const FeaturedCollectionCard = React.memo(function FeaturedCollectionCard({
             contentFit="cover"
           />
           <Text style={styles.featuredCollectionCurator} numberOfLines={1}>
-            Curated by {collection.curator}
+            {t('collections.curatedBy', { curator: collection.curator })}
           </Text>
         </View>
       </View>
@@ -213,14 +207,18 @@ const FeaturedCollectionCard = React.memo(function FeaturedCollectionCard({
 const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
   asset,
   onPress,
-  testID,
-}: {
+  testID }: {
   asset: GalleriaFeaturedAsset;
   onPress: () => void;
   testID?: string;
 }) {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
   const { formatFromFiat } = useFormattedPrice();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   const imageHeight = Math.round(MASONRY_COL_WIDTH * asset.aspectRatio);
 
   return (
@@ -230,8 +228,8 @@ const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
       activeOpacity={0.92}
       scaleValue={0.98}
       accessibilityRole="button"
-      accessibilityLabel={`${asset.title}, valued at ${formatFromFiat(asset.valuation)}`}
-      accessibilityHint="Opens the asset detail"
+      accessibilityLabel={t('accessibility.asset', { title: asset.title, value: formatFromFiat(asset.valuation) })}
+      accessibilityHint={t('accessibility.assetHint')}
       testID={testID}
     >
       <View style={[styles.assetImageWrap, { height: imageHeight }]}>
@@ -264,13 +262,14 @@ const FeaturedAssetCard = React.memo(function FeaturedAssetCard({
 const EditorialListItem = React.memo(function EditorialListItem({
   editorial,
   isLast,
-  size = 'standard',
-}: {
+  size = 'standard' }: {
   editorial: GalleriaEditorial;
   isLast: boolean;
   size?: 'large' | 'standard';
 }) {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
+  const { width: SCREEN_W } = useWindowDimensions();
   const heroHeight = size === 'large'
     ? Math.round(SCREEN_W * (5 / 8))
     : Math.round(SCREEN_W * (9 / 16));
@@ -279,7 +278,7 @@ const EditorialListItem = React.memo(function EditorialListItem({
     <View style={[styles.editorialItem, isLast && styles.editorialItemLast]}>
       <View
         accessibilityRole="image"
-        accessibilityLabel={`Editorial: ${editorial.title}`}
+        accessibilityLabel={t('accessibility.editorial', { title: editorial.title })}
       >
         <View style={[styles.editorialHeroWrap, { height: heroHeight }]}>
           <CachedImage
@@ -326,12 +325,12 @@ const EditorialListItem = React.memo(function EditorialListItem({
 // ---------------------------------------------------------------------------
 // Masonry layout — true Pinterest-style column assignment by shortest height
 // ---------------------------------------------------------------------------
-function buildMasonryColumns(items: GalleriaFeaturedAsset[]): GalleriaFeaturedAsset[][] {
+function buildMasonryColumns(items: GalleriaFeaturedAsset[], colWidth: number): GalleriaFeaturedAsset[][] {
   const cols: GalleriaFeaturedAsset[][] = Array.from({ length: MASONRY_COLUMN_COUNT }, () => []);
   const heights = Array.from({ length: MASONRY_COLUMN_COUNT }, () => 0);
 
   items.forEach((item) => {
-    const imgHeight = Math.round(MASONRY_COL_WIDTH * item.aspectRatio);
+    const imgHeight = Math.round(colWidth * item.aspectRatio);
     const metaHeight = 72; // approximate: collection + title(2 lines) + valuation
     const itemHeight = imgHeight + metaHeight + MASONRY_GAP;
 
@@ -355,6 +354,8 @@ function buildMasonryColumns(items: GalleriaFeaturedAsset[]): GalleriaFeaturedAs
 // ---------------------------------------------------------------------------
 function HeroSkeleton() {
   const styles = useStyles();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const HERO_HEIGHT = Math.round(SCREEN_W * (4 / 5));
   return (
     <View style={styles.heroContainer}>
       <PremiumSkeletonTile width="100%" height={HERO_HEIGHT} borderRadius={Radius.none} />
@@ -364,11 +365,12 @@ function HeroSkeleton() {
 
 function CollectionRailSkeleton() {
   const styles = useStyles();
+  const { t } = useAppTranslation('galleria');
   return (
     <HorizontalRail
       contentContainerStyle={styles.railContent}
       showsHorizontalScrollIndicator={false}
-      accessibilityLabel="Loading curated collections"
+      accessibilityLabel={t('accessibility.loadingCollections')}
     >
       {Array.from({ length: 4 }).map((_, i) => (
         <View key={i} style={[styles.collectionCard, { width: COLLECTION_CARD_WIDTH }]}>
@@ -385,11 +387,14 @@ function CollectionRailSkeleton() {
 
 function FeaturedMasonrySkeleton() {
   const styles = useStyles();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   const skeletonItems = Array.from({ length: 6 }).map((_, i) => ({
     id: `skel-${i}`,
-    aspectRatio: SKELETON_ASPECT_RATIOS[i % SKELETON_ASPECT_RATIOS.length],
-  }));
-  const columns = buildMasonryColumns(skeletonItems as GalleriaFeaturedAsset[]);
+    aspectRatio: SKELETON_ASPECT_RATIOS[i % SKELETON_ASPECT_RATIOS.length] }));
+  const columns = buildMasonryColumns(skeletonItems as GalleriaFeaturedAsset[], MASONRY_COL_WIDTH);
 
   return (
     <View style={styles.masonryGrid}>
@@ -416,6 +421,7 @@ function FeaturedMasonrySkeleton() {
 
 function EditorialSkeleton() {
   const styles = useStyles();
+  const { width: SCREEN_W } = useWindowDimensions();
   const heroHeight = Math.round(SCREEN_W * (9 / 16));
   return (
     <View style={styles.editorialItem}>
@@ -455,6 +461,7 @@ export default function GalleriaScreen() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const reducedMotion = useReducedMotion();
+  const { t } = useAppTranslation('galleria');
 
   const [collections, setCollections] = useState<GalleriaCollection[]>([]);
   const [editorials, setEditorials] = useState<GalleriaEditorial[]>([]);
@@ -481,7 +488,7 @@ export default function GalleriaScreen() {
       setEditorials(eds);
       setFeaturedAssets(assets);
     } catch (e) {
-      setError('We couldn\u2019t load the Galleria. Try again.');
+      setError(t('error.loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -513,8 +520,7 @@ export default function GalleriaScreen() {
         referenceKind: 'co_own',
         canonicalId: asset.id,
         sourceSurface: 'Galleria',
-        sourceItemId: asset.id,
-      });
+        sourceItemId: asset.id });
     },
     [haptic, navigation],
   );
@@ -557,12 +563,12 @@ export default function GalleriaScreen() {
         {GALLERIA_DEMO_MODE && (
           <View style={styles.demoBadgeRow}>
             <View style={styles.demoBadgeDot} />
-            <Text style={styles.demoBadgeText}>Demo content</Text>
+            <Text style={styles.demoBadgeText}>{t('demo.content')}</Text>
           </View>
         )}
 
         {/* ── Section 1: Hero editorial ── */}
-        {loading ? (
+        {loading && editorials.length > 0 ? (
           <HeroSkeleton />
         ) : heroEditorial ? (
           <HeroEditorialCard
@@ -575,7 +581,7 @@ export default function GalleriaScreen() {
           <CollectionRailSkeleton />
         ) : collections.length > 0 ? (
           <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={styles.sectionWrap}>
-            <Text style={styles.sectionEyebrow}>CURATED COLLECTIONS</Text>
+            <Text style={styles.sectionEyebrow}>{t('collections.eyebrow')}</Text>
             {featuredCollection && (
               <FeaturedCollectionCard
                 collection={featuredCollection}
@@ -586,7 +592,7 @@ export default function GalleriaScreen() {
               <HorizontalRail
                 contentContainerStyle={styles.railContent}
                 showsHorizontalScrollIndicator={false}
-                accessibilityLabel="Curated collections rail"
+                accessibilityLabel={t('accessibility.collectionsRail')}
               >
                 {railCollections.map((col) => (
                   <CollectionRailCard
@@ -603,17 +609,18 @@ export default function GalleriaScreen() {
         {/* ── Section 3: Featured Assets — header + loading skeleton ── */}
         {loading ? (
           <>
-            <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
+            <SectionHeader eyebrow={t('assets.eyebrow')} title={t('assets.title')} />
             <FeaturedMasonrySkeleton />
           </>
         ) : featuredAssets.length > 0 ? (
-          <SectionHeader eyebrow="FEATURED ASSETS" title="Co-Own highlights" />
+          <SectionHeader eyebrow={t('assets.eyebrow')} title={t('assets.title')} />
         ) : null}
       </View>
     ),
     [
       loading,
       heroEditorial,
+      editorials.length,
       collections,
       featuredCollection,
       railCollections,
@@ -621,6 +628,7 @@ export default function GalleriaScreen() {
       reducedMotion,
       styles,
       handleCollectionPress,
+      t,
     ],
   );
 
@@ -628,15 +636,15 @@ export default function GalleriaScreen() {
     () => (
       <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2) }}>
         {/* ── Section 4: Editorial list ── */}
-        {loading ? (
+        {loading && editorials.length > 0 ? (
           <>
-            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
+            <SectionHeader eyebrow={t('editorialList.eyebrow')} title={t('editorialList.title')} />
             <EditorialSkeleton />
             <EditorialSkeleton />
           </>
         ) : remainingEditorials.length > 0 ? (
           <>
-            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
+            <SectionHeader eyebrow={t('editorialList.eyebrow')} title={t('editorialList.title')} />
             {remainingEditorials.map((ed, idx) => (
               <EditorialListItem
                 key={ed.id}
@@ -646,39 +654,27 @@ export default function GalleriaScreen() {
               />
             ))}
           </>
-        ) : !loading && heroEditorial === null ? (
-          <>
-            <SectionHeader eyebrow="EDITORIAL" title="Stories from the Galleria" />
-            <EmptyState
-              density="compact"
-              icon="book-outline"
-              title="No editorials available"
-              subtitle="Our editors are preparing new stories. Check back soon."
-            />
-          </>
         ) : null}
 
         {/* ── Section 5: Creative Tools — Poster Studio CTA ── */}
         <View style={styles.stylingToolsWrap}>
-          <SectionHeader eyebrow="CREATIVE TOOLS" title="Make it yours" />
+          <SectionHeader eyebrow={t('creativeTools.eyebrow')} title={t('creativeTools.title')} />
           <AnimatedPressable
             style={styles.moodboardCtaCard}
             onPress={() => { haptic.selection(); navigation.navigate('CreatorStudio', { type: 'poster', openTemplates: true }); }}
             activeOpacity={0.92}
             scaleValue={0.98}
             accessibilityRole="button"
-            accessibilityLabel="Open Poster Studio"
-            accessibilityHint="Create posters, looks, and moodboard collages"
+            accessibilityLabel={t('accessibility.openPosterStudio')}
+            accessibilityHint={t('accessibility.posterStudioHint')}
           >
-            <View style={styles.moodboardCtaIconWrap}>
-              <Ionicons name="create-outline" size={22} color={colors.brand} />
-            </View>
+            <Ionicons name="create-outline" size={22} color={colors.brand} />
             <View style={styles.moodboardCtaCopy}>
               <Text style={styles.moodboardCtaTitle} numberOfLines={1}>
-                Poster Studio
+                {t('creativeTools.posterStudio')}
               </Text>
               <Text style={styles.moodboardCtaSubtitle} numberOfLines={2}>
-                Create posters, looks & moodboard collages
+                {t('creativeTools.posterStudioSub')}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -689,11 +685,13 @@ export default function GalleriaScreen() {
     [
       loading,
       remainingEditorials,
+      editorials.length,
       heroEditorial,
       styles,
       colors,
       haptic,
       navigation,
+      t,
     ],
   );
 
@@ -704,9 +702,9 @@ export default function GalleriaScreen() {
         <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
         <EmptyState
           icon="cloud-offline-outline"
-          title="Galleria unavailable"
+          title={t('error.title')}
           subtitle={error}
-          ctaLabel="Retry"
+          ctaLabel={t('error.retry')}
           onCtaPress={() => void loadAll(false)}
         />
       </View>
@@ -725,9 +723,9 @@ export default function GalleriaScreen() {
         <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
         <EmptyState
           icon="images-outline"
-          title="The Galleria is being curated"
-          subtitle="Our curators are preparing new collections and editorial pieces. Check back soon."
-          ctaLabel="Refresh"
+          title={t('empty.title')}
+          subtitle={t('empty.subtitle')}
+          ctaLabel={t('empty.refresh')}
           onCtaPress={() => void loadAll(false)}
         />
       </View>
@@ -735,14 +733,14 @@ export default function GalleriaScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="coown-screen" style={styles.container}>
       <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
 
       {/* Offline banner */}
       {isOffline && (
         <View style={styles.offlineBanner}>
           <Ionicons name="cloud-offline-outline" size={14} color={colors.scrimTextPrimary} />
-          <Text style={styles.offlineBannerText}>Offline — showing cached Galleria content</Text>
+          <Text style={styles.offlineBannerText}>{t('offline.banner')}</Text>
         </View>
       )}
 
@@ -758,8 +756,7 @@ export default function GalleriaScreen() {
         contentContainerStyle={{
           paddingHorizontal: Math.max(MASONRY_PADDING - MASONRY_GAP / 2, 0),
           paddingTop: insets.top + Space.sm,
-          paddingBottom: Space.xxl,
-        }}
+          paddingBottom: Space.xxl }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -780,23 +777,23 @@ export default function GalleriaScreen() {
 // ---------------------------------------------------------------------------
 function useStyles() {
   const { colors } = useAppTheme();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const HERO_HEIGHT = Math.round(SCREEN_W * (4 / 5));
+  const FEATURED_COLLECTION_HEIGHT = Math.round(SCREEN_W * (5 / 6));
   return React.useMemo(
     () =>
       StyleSheet.create({
         container: {
           flex: 1,
-          backgroundColor: colors.background,
-        },
+          backgroundColor: colors.background },
         stateContainer: {
           flex: 1,
           backgroundColor: colors.background,
           justifyContent: 'center',
           alignItems: 'center',
-          paddingHorizontal: Space.lg,
-        },
+          paddingHorizontal: Space.lg },
         listContent: {
-          paddingBottom: Space.xxl,
-        },
+          paddingBottom: Space.xxl },
         // ── Offline banner ──
         offlineBanner: {
           flexDirection: 'row',
@@ -806,369 +803,306 @@ function useStyles() {
           paddingVertical: Space.sm,
           backgroundColor: colors.surfaceAlt,
           borderBottomWidth: Stroke.hairline,
-          borderBottomColor: colors.border,
-        },
+          borderBottomColor: colors.border },
         offlineBannerText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textSecondary },
         // ── Honest demo indicator (AGENTS.md §11) ──
         demoBadgeRow: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
           paddingHorizontal: Space.md,
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         demoBadgeDot: {
           width: Space.xs,
           height: Space.xs,
           borderRadius: Radius.full,
-          backgroundColor: colors.textMuted,
-        },
+          backgroundColor: colors.textMuted },
         demoBadgeText: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
-          letterSpacing: Type.label.letterSpacing,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing },
         // ── Hero — full-bleed, no card chrome ──
         heroContainer: {
           width: '100%',
           marginBottom: Space.lg,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         heroImage: {
           width: '100%',
-          height: HERO_HEIGHT,
-        } as ImageStyle,
+          height: HERO_HEIGHT } as ImageStyle,
         heroGradient: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          height: '65%',
-        },
+          height: '65%' },
         heroOverlay: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
           padding: Space.lg,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         heroEyebrowRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         heroEyebrowDot: {
           width: Space.xs + 2,
           height: Space.xs + 2,
           borderRadius: Radius.full,
-          backgroundColor: colors.scrimTextPrimary,
-        },
+          backgroundColor: colors.scrimTextPrimary },
         heroEyebrow: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: Type.label.letterSpacing,
-          opacity: 0.9,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing,
+          opacity: 0.9 },
         heroTitle: {
-          fontSize: Type.priceList.size,
-          lineHeight: Type.priceList.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.priceList.size,
+          lineHeight: TypographyV2.priceList.lineHeight,
+          fontFamily: TypographyV2.priceList.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: -0.5,
-        },
+          letterSpacing: -0.5 },
         heroMeta: {
-          fontSize: Type.body.size,
-          fontFamily: Typography.family.medium,
+          fontSize: TypographyV2.body.size,
+          fontFamily: TypographyV2.body.fontFamily,
           color: colors.scrimTextPrimary,
-          opacity: 0.75,
-        },
+          opacity: 0.75 },
         // ── Section wrappers ──
         sectionWrap: {
-          marginBottom: Space.lg,
-        },
+          marginBottom: Space.lg },
         sectionHeaderWrap: {
           paddingHorizontal: Space.md,
           paddingTop: Space.lg,
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         sectionEyebrow: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
-          letterSpacing: Type.label.letterSpacing,
-          marginBottom: Space.xs,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing,
+          marginBottom: Space.xs },
         sectionTitle: {
-          fontSize: Type.priceList.size,
-          lineHeight: Type.priceList.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.priceList.size,
+          lineHeight: TypographyV2.priceList.lineHeight,
+          fontFamily: TypographyV2.priceList.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: -0.4,
-        },
+          letterSpacing: -0.4 },
         // ── Collections rail ──
         railContent: {
           paddingHorizontal: Space.md,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         // ── Featured collection ──
         featuredCollectionContainer: {
           marginHorizontal: Space.md,
           marginBottom: Space.md,
           borderRadius: Radius.xl,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         featuredCollectionImage: {
           width: '100%',
-          height: FEATURED_COLLECTION_HEIGHT,
-        } as ImageStyle,
+          height: FEATURED_COLLECTION_HEIGHT } as ImageStyle,
         featuredCollectionGradient: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          height: '70%',
-        },
+          height: '70%' },
         featuredCollectionOverlay: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
           padding: Space.lg,
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         featuredCollectionTheme: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: Type.label.letterSpacing,
-          opacity: 0.85,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing,
+          opacity: 0.85 },
         featuredCollectionTitle: {
-          fontSize: Type.priceList.size,
-          lineHeight: Type.priceList.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.priceList.size,
+          lineHeight: TypographyV2.priceList.lineHeight,
+          fontFamily: TypographyV2.priceList.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: -0.5,
-        },
+          letterSpacing: -0.5 },
         featuredCollectionCuratorRow: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
-          marginTop: Space.xs,
-        },
+          marginTop: Space.xs },
         featuredCollectionAvatar: {
           width: Space.smMd,
           height: Space.smMd,
-          borderRadius: Radius.full,
-        } as ImageStyle,
+          borderRadius: Radius.full } as ImageStyle,
         featuredCollectionCurator: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
-          opacity: 0.8,
-        },
+          opacity: 0.8 },
         collectionCard: {
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         collectionImageWrap: {
           width: '100%',
           height: COLLECTION_CARD_HEIGHT - 40,
           borderRadius: Radius.lg,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         collectionImage: {
           width: '100%',
-          height: '100%',
-        } as ImageStyle,
+          height: '100%' } as ImageStyle,
         collectionGradient: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          height: '55%',
-        },
+          height: '55%' },
         collectionOverlay: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
           padding: Space.sm,
-          gap: Space.xs / 2,
-        },
+          gap: Space.xs / 2 },
         collectionTheme: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
           opacity: 0.85,
-          letterSpacing: Type.label.letterSpacing - 0.1,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing - 0.1 },
         collectionTitle: {
-          fontSize: Type.subtitle.size,
-          lineHeight: Type.subtitle.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.sectionTitle.size,
+          lineHeight: TypographyV2.sectionTitle.lineHeight,
+          fontFamily: TypographyV2.sectionTitle.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: Type.subtitle.letterSpacing,
-        },
+          letterSpacing: TypographyV2.sectionTitle.letterSpacing },
         collectionMeta: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         collectionAvatar: {
           width: Space.smMd,
           height: Space.smMd,
-          borderRadius: Radius.full,
-        } as ImageStyle,
+          borderRadius: Radius.full } as ImageStyle,
         collectionCurator: {
           flex: 1,
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textSecondary },
         // ── Featured assets masonry ──
         masonryGrid: {
           flexDirection: 'row',
           justifyContent: 'center',
           paddingHorizontal: MASONRY_PADDING,
-          gap: MASONRY_GAP,
-        },
+          gap: MASONRY_GAP },
         masonryColumn: {
           flexDirection: 'column',
-          gap: MASONRY_GAP,
-        },
+          gap: MASONRY_GAP },
         assetCard: {
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         assetImageWrap: {
           width: '100%',
           borderRadius: Radius.lg,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         assetImage: {
           width: '100%',
-          height: '100%',
-        } as ImageStyle,
+          height: '100%' } as ImageStyle,
         assetMeta: {
-          gap: Space.xs / 2,
-        },
+          gap: Space.xs / 2 },
         assetCollection: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
-          letterSpacing: Type.label.letterSpacing - 0.2,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing - 0.2 },
         assetTitle: {
-          fontSize: Type.bodyStrong.size,
-          lineHeight: Type.bodyStrong.lineHeight,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.bodyStrong.size,
+          lineHeight: TypographyV2.bodyStrong.lineHeight,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.body.letterSpacing,
-        },
+          letterSpacing: TypographyV2.body.letterSpacing },
         assetValuation: {
-          fontSize: Type.body.size,
-          lineHeight: Type.body.size - 2,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.body.size,
+          lineHeight: TypographyV2.body.size - 2,
+          fontFamily: TypographyV2.body.fontFamily,
           color: colors.textPrimary,
           fontVariant: ['tabular-nums'],
-          letterSpacing: Type.body.letterSpacing,
-        },
+          letterSpacing: TypographyV2.body.letterSpacing },
         // ── Editorial list ──
         editorialItem: {
           paddingHorizontal: Space.md,
-          marginBottom: Space.lg,
-        },
+          marginBottom: Space.lg },
         editorialItemLast: {
-          marginBottom: Radius.none,
-        },
+          marginBottom: Radius.none },
         editorialHeroWrap: {
           width: '100%',
           borderRadius: Radius.lg,
           overflow: 'hidden',
-          backgroundColor: colors.surfaceAlt,
-        },
+          backgroundColor: colors.surfaceAlt },
         editorialHero: {
           width: '100%',
-          height: '100%',
-        } as ImageStyle,
+          height: '100%' } as ImageStyle,
         editorialHeroGradient: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          height: '40%',
-        },
+          height: '40%' },
         editorialHeroOverlay: {
           position: 'absolute',
           bottom: Space.sm,
-          right: Space.sm,
-        },
+          right: Space.sm },
         editorialReadTime: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.scrimTextPrimary,
-          letterSpacing: Type.label.letterSpacing - 0.2,
+          letterSpacing: TypographyV2.label.letterSpacing - 0.2,
           backgroundColor: colors.overlay,
           paddingHorizontal: Space.xs + 2,
           paddingVertical: Space.xs / 2,
           borderRadius: Radius.sm,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         editorialContent: {
           paddingTop: Space.sm,
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         editorialTitle: {
-          fontSize: Type.subtitle.size,
-          lineHeight: Type.subtitle.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.sectionTitle.size,
+          lineHeight: TypographyV2.sectionTitle.lineHeight,
+          fontFamily: TypographyV2.sectionTitle.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.subtitle.letterSpacing,
-        },
+          letterSpacing: TypographyV2.sectionTitle.letterSpacing },
         editorialTitleLarge: {
-          fontSize: Type.priceList.size,
-          lineHeight: Type.priceList.lineHeight,
-          letterSpacing: -0.4,
-        },
+          fontSize: TypographyV2.priceList.size,
+          lineHeight: TypographyV2.priceList.lineHeight,
+          letterSpacing: -0.4 },
         editorialExcerpt: {
-          fontSize: Type.body.size,
-          lineHeight: Type.body.lineHeight,
-          fontFamily: Typography.family.regular,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.body.size,
+          lineHeight: TypographyV2.body.lineHeight,
+          fontFamily: TypographyV2.body.fontFamily,
+          color: colors.textSecondary },
         editorialAuthorRow: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
-          marginTop: Space.xs / 2,
-        },
+          marginTop: Space.xs / 2 },
         editorialAvatar: {
           width: 18,
           height: 18,
-          borderRadius: Radius.full,
-        } as ImageStyle,
+          borderRadius: Radius.full } as ImageStyle,
         editorialAuthor: {
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textSecondary },
         editorialSeparator: {
           height: StyleSheet.hairlineWidth,
           backgroundColor: colors.border,
-          marginTop: Space.lg,
-        },
+          marginTop: Space.lg },
         // ── Styling Tools — Moodboard CTA ──
         stylingToolsWrap: {
           paddingHorizontal: Space.md,
           marginTop: Space.lg,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         moodboardCtaCard: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -1178,34 +1112,21 @@ function useStyles() {
           borderRadius: Radius.lg,
           borderWidth: Stroke.hairline,
           borderColor: colors.border,
-          backgroundColor: colors.surface,
-        },
-        moodboardCtaIconWrap: {
-          width: Control.hit,
-          height: Control.hit,
-          borderRadius: Radius.md,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colors.surfaceAlt,
-        },
+          backgroundColor: colors.surface },
         moodboardCtaCopy: {
           flex: 1,
-          gap: Space.xs / 2,
-        },
+          gap: Space.xs / 2 },
         moodboardCtaTitle: {
-          fontSize: Type.bodyStrong.size,
-          lineHeight: Type.bodyStrong.lineHeight,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.bodyStrong.size,
+          lineHeight: TypographyV2.bodyStrong.lineHeight,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.body.letterSpacing,
-        },
+          letterSpacing: TypographyV2.body.letterSpacing },
         moodboardCtaSubtitle: {
-          fontSize: Type.caption.size,
-          lineHeight: Type.caption.lineHeight,
-          fontFamily: Typography.family.regular,
-          color: colors.textSecondary,
-        },
-      }),
-    [colors],
+          fontSize: TypographyV2.meta.size,
+          lineHeight: TypographyV2.meta.lineHeight,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: colors.textSecondary } }),
+    [colors, HERO_HEIGHT, FEATURED_COLLECTION_HEIGHT],
   );
 }

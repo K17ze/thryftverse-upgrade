@@ -10,6 +10,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { loadRecentSearchStrings } from '../services/searchHistory';
 
 // ---------------------------------------------------------------------------
 // Store — palette visibility
@@ -32,7 +33,6 @@ export const useCommandPaletteStore = create<CommandPaletteState>((set) => ({
 // AsyncStorage keys
 // ---------------------------------------------------------------------------
 const RECENT_SCREENS_KEY = '@thryftverse_recent_screens';
-const RECENT_SEARCHES_KEY = '@thryftverse_recent_searches';
 const RECENT_COMMANDS_KEY = '@thryftverse_recent_commands';
 const MAX_RECENT_SCREENS = 8;
 const MAX_RECENT_COMMANDS = 5;
@@ -137,20 +137,12 @@ export async function clearRecentCommands(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Recent-search read helper (shares the GlobalSearchScreen key)
+// Recent-search read helper (delegates to the unified search history service)
 // ---------------------------------------------------------------------------
 
 /** Read the persisted recent-search query list (newest first). */
 export async function loadRecentSearches(): Promise<string[]> {
-  try {
-    const raw = await AsyncStorage.getItem(RECENT_SEARCHES_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed as string[];
-    return [];
-  } catch {
-    return [];
-  }
+  return loadRecentSearchStrings();
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, PressScale, CommerceLayout, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
@@ -13,7 +14,6 @@ export interface RelatedItem {
   title: string;
   imageUrl?: string | null;
   priceText: string;
-  izeText?: string;
   badgeText?: string;
   badgeColor?: string;
   metaText?: string;
@@ -36,8 +36,7 @@ export interface CommerceRelatedRailProps {
 export function CommerceRelatedRail({
   label,
   items,
-  onPressItem,
-}: CommerceRelatedRailProps) {
+  onPressItem }: CommerceRelatedRailProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -70,7 +69,7 @@ export function CommerceRelatedRail({
                 />
               ) : (
                 <ImageEmptyGraphic
-                  icon={(mode === 'auction' ? 'trophy-outline' : 'pricetag-outline') as keyof typeof Ionicons.glyphMap}
+                  icon={(mode === 'auction' ? 'trophy-outline' : 'bag-handle-outline') as keyof typeof Ionicons.glyphMap}
                   style={[styles.cardImage, styles.cardImageContainer]}
                 />
               )}
@@ -88,8 +87,8 @@ export function CommerceRelatedRail({
 
                 <Text style={[styles.cardPrice, { color: colors.textPrimary }]}>{item.priceText}</Text>
 
-                {item.izeText ? (
-                  <Text style={[styles.cardIze, { color: colors.textMuted }]}>{item.izeText}</Text>
+                {item.sizeText && mode !== 'standard' ? (
+                  <Text style={[styles.cardSize, { color: colors.textMuted }]}>{item.sizeText}</Text>
                 ) : null}
 
                 {mode === 'auction' ? (
@@ -134,43 +133,35 @@ export function CommerceRelatedRail({
 
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
-    marginTop: Space.xl,
-  },
+    marginTop: Space.xl },
   label: {
     paddingHorizontal: Space.md,
     marginBottom: Space.md,
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: -0.3,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: -0.3 },
   scrollContent: {
     paddingHorizontal: Space.md,
-    gap: Space.sm + Space.xs,
-  },
+    gap: Space.sm + Space.xs },
   card: {
-    width: 148,
-  },
+    width: CommerceLayout.relatedCardWidth },
   cardPressed: {
-    opacity: 0.72,
-    transform: [{ scale: 0.985 }],
-  },
+    opacity: 0.85,
+    transform: [{ scale: PressScale.gentle }] },
   cardImage: {
     width: '100%',
-    height: 168,
-  },
+    height: CommerceLayout.relatedCardImageHeight },
   cardImageContainer: {
     width: '100%',
-    height: 168,
+    height: CommerceLayout.relatedCardImageHeight,
     borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   cardImagePlaceholder: {
     width: '100%',
-    height: 168,
+    height: CommerceLayout.relatedCardImageHeight,
     borderRadius: Radius.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   badge: {
     position: 'absolute',
     top: Space.sm,
@@ -179,40 +170,31 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   badgeText: {
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
     color: colors.scrimTextPrimary,
-    letterSpacing: 0.3,
-  },
+    letterSpacing: 0.3 },
   cardBody: {
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   cardTitle: {
     minHeight: 36,
     marginBottom: Space.xs,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   cardPrice: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
-  cardIze: {
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
+  cardSize: {
     marginTop: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   cardMeta: {
     marginTop: 2,
-    fontSize: 10,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular },
   cardMetaStrong: {
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontFamily: FontFamily.semibold } });

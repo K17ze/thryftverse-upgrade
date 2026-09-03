@@ -6,13 +6,11 @@ import {
   ScrollView,
   StatusBar,
   Linking,
-  Alert,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import { useAppTheme } from '../theme/ThemeContext';
 import {
@@ -25,33 +23,25 @@ import {
   formatTimelineDate,
   isTerminalStatus,
   getParcelEventDisplay,
-  getStatusSemanticKey,
-  parcelEventTimestamp,
   buildTimelineEntries,
-  type StatusTone,
-  type TimelineExtras,
-} from '../utils/orderDetailLogic';
+  computeReviewEligibleAtMs,
+  formatEtaWindowFromSnapshot,
+  parseEstimatedDeliveryDate,
+  isStaleTrackingEvent,
+  formatPackageSummary } from '../utils/orderDetailLogic';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useOrderDetail } from '../hooks/useOrderDetail';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
-import { Space, Typography, Radius, Type, Stroke, Control, ZIndex } from '../theme/designTokens';
-import {
-  CommerceOrder,
-  OrderParcelEvent,
-  getOrder,
-  getOrderParcelEvents,
-  cancelOrder,
-  deliverOrder,
-} from '../services/commerceApi';
+import { Space, Radius, Control, Stroke, ZIndex } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { buildTrackingUrl } from '../services/shippingProviderRegistry';
-import { parseApiError } from '../lib/apiClient';
 import { getListingCoverUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
 import { t } from '../i18n';
-import { CachedImage } from '../components/CachedImage';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { OrderDetailSummary } from '../components/orders/OrderDetailSummary';
 import { OrderTrackingTimeline, TimelineEntry } from '../components/orders/OrderTrackingTimeline';
@@ -59,355 +49,34 @@ import { OrderActionFooter, OrderActionConfig } from '../components/orders/Order
 import { OrderActionsSheet, OrderActionItem } from '../components/orders/OrderActionsSheet';
 import { DispatchCountdown } from '../components/orders/DispatchCountdown';
 import { ReviewPromptSheet } from '../components/orders/ReviewPromptSheet';
+import { InspectionBanner } from '../components/orders/InspectionBanner';
+import { PackageContents } from '../components/orders/PackageContents';
+import { IssueCategorySelector, type IssueCategory } from '../components/orders/IssueCategorySelector';
+import { CompletedOrderSummary } from '../components/orders/CompletedOrderSummary';
+import { OrderCounterpartySection, type CounterpartyInfo } from '../components/orders/OrderCounterpartySection';
+import { EscrowBanner } from '../components/orders/EscrowBanner';
+import { EtaBanner } from '../components/orders/EtaBanner';
+import { ShipmentDetails } from '../components/orders/ShipmentDetails';
+import { TransactionBreakdown } from '../components/orders/TransactionBreakdown';
+import { OrderSupportSection } from '../components/orders/OrderSupportSection';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { OrderDetailSkeleton } from '../components/orders/OrderDetailSkeleton';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
   resolveCapabilities,
-  type OrderCapability,
-} from '../components/orders/orderCapabilities';
+  type OrderCapability } from '../components/orders/orderCapabilities';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type RouteT = RouteProp<RootStackParamList, 'OrderDetail'>;
 
-type OrderMutation = 'cancel' | 'ship' | 'deliver' | 'refund' | null;
-
 // --- Component ---
-
-// ─── InspectionBanner ──────────────────────────────────────────────────────
-// Shown to buyers when status = 'delivered' (not yet 'completed').
-// Presents two clear paths: "Everything is OK" (confirm receipt, releases
-// escrow) or "Report an issue" (opens support with issue categories).
-// The inspection deadline is server-derived — the client does not invent
-// a 2-day window. Per P0-4: "The client may format time. It must not
-// invent a deadline that changes rights, money, delivery promise or
-// eligibility."
-
-function InspectionBanner({
-  inspectionDeadlineAt,
-  onConfirmReceipt,
-  onReportIssue,
-}: {
-  inspectionDeadlineAt: string | null;
-  onConfirmReceipt: () => void;
-  onReportIssue: () => void;
-}) {
-  const { colors } = useAppTheme();
-
-  const daysLeft = useMemo(() => {
-    if (!inspectionDeadlineAt) return null;
-    const deadline = new Date(inspectionDeadlineAt);
-    if (Number.isNaN(deadline.getTime())) return null;
-    return Math.ceil((deadline.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-  }, [inspectionDeadlineAt]);
-
-  const expired = daysLeft != null && daysLeft <= 0;
-
-  return (
-    <View style={[styles.inspectionBanner, { borderColor: `${colors.brand}25`, backgroundColor: `${colors.brand}08` }]}>
-      <View style={styles.inspectionHeader}>
-        <View style={[styles.inspectionIcon, { backgroundColor: `${colors.brand}15` }]}>
-          <Ionicons name="checkmark-circle-outline" size={16} color={colors.brand} aria-hidden={true} />
-        </View>
-        <View style={styles.inspectionHeaderText}>
-          <Text style={[styles.inspectionTitle, { color: colors.textPrimary }]}>
-            {t('orderDetail.inspection.title')}
-          </Text>
-          <Text style={[styles.inspectionSub, { color: colors.textSecondary }]}>
-            {expired
-              ? t('orderDetail.inspection.expired')
-              : daysLeft === 0
-                ? t('orderDetail.inspection.lastDay')
-                : daysLeft === 1
-                  ? t('orderDetail.inspection.oneDayLeft')
-                  : t('orderDetail.inspection.daysLeft', { days: daysLeft ?? 0 })}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.inspectionActions}>
-        <Pressable
-          style={[styles.inspectionPrimaryBtn, { backgroundColor: colors.brand }]}
-          onPress={onConfirmReceipt}
-          accessibilityRole="button"
-          accessibilityLabel={t('orderDetail.inspection.confirmA11yLabel')}
-        >
-          <Ionicons name="checkmark-circle-outline" size={22} color={colors.textInverse} aria-hidden={true} />
-          <Text style={[styles.inspectionPrimaryBtnText, { color: colors.textInverse }]}>
-            {t('orderDetail.inspection.everythingOk')}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.inspectionSecondaryBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-          onPress={onReportIssue}
-          accessibilityRole="button"
-          accessibilityLabel={t('orderDetail.inspection.reportA11yLabel')}
-        >
-          <Ionicons name="alert-circle-outline" size={22} color={colors.danger} aria-hidden={true} />
-          <Text style={[styles.inspectionSecondaryBtnText, { color: colors.danger }]}>
-            {t('orderDetail.inspection.reportIssue')}
-          </Text>
-        </Pressable>
-      </View>
-
-      <Text style={[styles.inspectionFootnote, { color: colors.textMuted }]}>
-        {t('orderDetail.inspection.footnote')}
-      </Text>
-    </View>
-  );
-}
-
-// ─── PackageContents ────────────────────────────────────────────────────────
-// Compact row showing what is in the parcel — thumbnail + title — so the buyer
-// can see WHAT is being tracked without scrolling to a separate section.
-
-function PackageContents({
-  title,
-  imageUrl,
-  subtitle,
-  onPress,
-}: {
-  title: string;
-  imageUrl: string;
-  subtitle?: string;
-  onPress?: () => void;
-}) {
-  const { colors } = useAppTheme();
-  const themed = useMemo(() => ({
-    label: { color: colors.textMuted },
-    title: { color: colors.textPrimary },
-    subtitle: { color: colors.textSecondary },
-  }), [colors]);
-
-  const content = (
-    <View style={styles.packageContentsRow}>
-      <CachedImage
-        uri={imageUrl}
-        style={styles.packageThumb}
-        contentFit="cover"
-      />
-      <View style={styles.packageContentsText}>
-        <Text style={[styles.packageContentsTitle, themed.title]} numberOfLines={2}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text style={[styles.packageContentsSub, themed.subtitle]} numberOfLines={1}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  );
-
-  if (onPress) {
-    return (
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={t('orderDetail.package.viewItemA11y', { title })}
-      >
-        {content}
-      </Pressable>
-    );
-  }
-
-  return content;
-}
-
-// ─── IssueCategorySelector ──────────────────────────────────────────────────
-// Inline expansion that lets the buyer pick a specific issue type before
-// navigating to support. Object-specific categories per spec:
-// item not as described, damaged, wrong item, counterfeit/authenticity,
-// parcel issue, missing contents.
-
-type IssueCategory = {
-  id: string;
-  label: string;
-  description: string;
-};
-
-const ISSUE_CATEGORIES: IssueCategory[] = [
-  { id: 'not_as_described', label: t('orderDetail.issue.notAsDescribed.label'), description: t('orderDetail.issue.notAsDescribed.desc') },
-  { id: 'damaged', label: t('orderDetail.issue.damaged.label'), description: t('orderDetail.issue.damaged.desc') },
-  { id: 'wrong_item', label: t('orderDetail.issue.wrongItem.label'), description: t('orderDetail.issue.wrongItem.desc') },
-  { id: 'counterfeit', label: t('orderDetail.issue.counterfeit.label'), description: t('orderDetail.issue.counterfeit.desc') },
-  { id: 'parcel_issue', label: t('orderDetail.issue.parcelIssue.label'), description: t('orderDetail.issue.parcelIssue.desc') },
-  { id: 'missing_contents', label: t('orderDetail.issue.missingContents.label'), description: t('orderDetail.issue.missingContents.desc') },
-];
-
-function IssueCategorySelector({
-  onSelect,
-  onClose,
-  contextualIssues,
-}: {
-  onSelect: (category: IssueCategory) => void;
-  onClose: () => void;
-  contextualIssues?: IssueCategory[];
-}) {
-  const { colors } = useAppTheme();
-  const themed = useMemo(() => ({
-    sheetBackdrop: { backgroundColor: colors.overlay },
-    sheet: { backgroundColor: colors.surface },
-    title: { color: colors.textPrimary },
-    sub: { color: colors.textSecondary },
-    row: { borderBottomColor: colors.borderSubtle },
-    rowLabel: { color: colors.textPrimary },
-    rowDesc: { color: colors.textMuted },
-    cancelBtn: { color: colors.textMuted },
-    contextHeader: { color: colors.textMuted },
-  }), [colors]);
-
-  const hasContextual = contextualIssues && contextualIssues.length > 0;
-
-  return (
-    <View style={styles.issueSheetBackdrop} accessibilityRole="alert">
-      <Pressable style={[styles.issueSheetBackdropPress, themed.sheetBackdrop]} onPress={onClose} accessibilityLabel="Close issue category selector" />
-      <View style={[styles.issueSheet, themed.sheet]}>
-        <Text style={[styles.issueSheetTitle, themed.title]}>{t('orderDetail.issueSelector.title')}</Text>
-        <Text style={[styles.issueSheetSub, themed.sub]}>
-          {t('orderDetail.issueSelector.subtitle')}
-        </Text>
-
-        {/* Contextual issues — specific to the current order state, shown first */}
-        {hasContextual ? (
-          <>
-            <Text style={[styles.issueContextHeader, themed.contextHeader]}>{t('orderDetail.issueSelector.contextHeader')}</Text>
-            {contextualIssues!.map((category) => (
-              <Pressable
-                key={category.id}
-                style={({ pressed }) => [styles.issueRow, themed.row, pressed && styles.issueRowPressed]}
-                onPress={() => { haptics.tap(); onSelect(category); }}
-                accessibilityRole="button"
-                accessibilityLabel={category.label}
-              >
-                <View style={styles.issueRowText}>
-                  <Text style={[styles.issueRowLabel, themed.rowLabel]}>{category.label}</Text>
-                  <Text style={[styles.issueRowDesc, themed.rowDesc]} numberOfLines={2}>{category.description}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-              </Pressable>
-            ))}
-            <Text style={[styles.issueContextHeader, themed.contextHeader]}>{t('orderDetail.issueSelector.otherHeader')}</Text>
-          </>
-        ) : null}
-
-        {ISSUE_CATEGORIES.map((category) => (
-          <Pressable
-            key={category.id}
-            style={({ pressed }) => [styles.issueRow, themed.row, pressed && styles.issueRowPressed]}
-            onPress={() => { haptics.tap(); onSelect(category); }}
-            accessibilityRole="button"
-            accessibilityLabel={category.label}
-          >
-            <View style={styles.issueRowText}>
-              <Text style={[styles.issueRowLabel, themed.rowLabel]}>{category.label}</Text>
-              <Text style={[styles.issueRowDesc, themed.rowDesc]} numberOfLines={2}>{category.description}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-          </Pressable>
-        ))}
-        <Pressable
-          style={({ pressed }) => [styles.issueCancelBtn, pressed && styles.issueCancelBtnPressed]}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel={t('orderDetail.issueSelector.cancelA11y')}
-        >
-          <Text style={[styles.issueCancelBtnText, themed.cancelBtn]}>{t('orderDetail.issueSelector.cancel')}</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-// ─── CompletedOrderSummary ───────────────────────────────────────────────────
-// Quiet completion state shown when status === 'completed'. Collapses
-// operational chrome (timeline, inspection banner) and prioritises:
-// receipt → review → buy/sell again → support history.
-
-function CompletedOrderSummary({
-  onLeaveReview,
-  onBuyAgain,
-  onViewReceipt,
-  onViewSupportHistory,
-  hasReview,
-}: {
-  onLeaveReview: () => void;
-  onBuyAgain: () => void;
-  onViewReceipt: () => void;
-  onViewSupportHistory: () => void;
-  hasReview: boolean;
-}) {
-  const { colors } = useAppTheme();
-  const themed = useMemo(() => ({
-    label: { color: colors.textMuted },
-    title: { color: colors.textPrimary },
-    actionText: { color: colors.brand },
-    actionRow: { borderBottomColor: colors.borderSubtle },
-  }), [colors]);
-
-  return (
-    <View style={styles.completedSection}>
-      <Text style={[styles.sectionLabel, themed.label]}>{t('orderDetail.completed.label')}</Text>
-      <Text style={[styles.completedTitle, themed.title]}>
-        {t('orderDetail.completed.title')}
-      </Text>
-
-      <Pressable
-        style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
-        onPress={() => { haptics.tap(); onViewReceipt(); }}
-        accessibilityRole="button"
-        accessibilityLabel={t('orderDetail.completed.viewReceiptA11y')}
-      >
-        <Ionicons name="receipt-outline" size={22} color={colors.brand} aria-hidden={true} />
-        <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.viewReceipt')}</Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-      </Pressable>
-
-      {!hasReview ? (
-        <Pressable
-          style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
-          onPress={() => { haptics.tap(); onLeaveReview(); }}
-          accessibilityRole="button"
-          accessibilityLabel={t('orderDetail.completed.leaveReviewA11y')}
-        >
-          <Ionicons name="star-outline" size={22} color={colors.brand} aria-hidden={true} />
-          <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.leaveReview')}</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-        </Pressable>
-      ) : null}
-
-      <Pressable
-        style={({ pressed }) => [styles.completedActionRow, themed.actionRow, pressed && styles.completedActionPressed]}
-        onPress={() => { haptics.tap(); onBuyAgain(); }}
-        accessibilityRole="button"
-        accessibilityLabel={t('orderDetail.completed.buyAgainA11y')}
-      >
-        <Ionicons name="bag-outline" size={22} color={colors.brand} aria-hidden={true} />
-        <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.buyAgain')}</Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-      </Pressable>
-
-      <Pressable
-        style={({ pressed }) => [styles.completedActionRow, pressed && styles.completedActionPressed]}
-        onPress={() => { haptics.tap(); onViewSupportHistory(); }}
-        accessibilityRole="button"
-        accessibilityLabel={t('orderDetail.completed.supportHistoryA11y')}
-      >
-        <Ionicons name="help-circle-outline" size={22} color={colors.brand} aria-hidden={true} />
-        <Text style={[styles.completedActionText, themed.actionText]}>{t('orderDetail.completed.supportHistory')}</Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-      </Pressable>
-    </View>
-  );
-}
 
 export default function OrderDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { listings } = useBackendData();
-  const { orderId } = route.params;
+  const { orderId } = route.params ?? {};
   const { show } = useToast();
   const { colors, isDark } = useAppTheme();
 
@@ -416,167 +85,53 @@ export default function OrderDetailScreen() {
   // via this themed proxy so the screen is fully dark-mode compatible.
   const themed = useMemo(() => ({
     container: { backgroundColor: colors.background },
-    loadingText: { color: colors.textMuted },
     errorTitle: { color: colors.textPrimary },
     errorBody: { color: colors.textMuted },
     retryBtn: { backgroundColor: colors.brand },
     retryBtnText: { color: colors.textInverse },
     orderNumber: { color: colors.textMuted },
-    statusLabel: { color: colors.textPrimary },
     statusExplanation: { color: colors.textSecondary },
     lastUpdated: { color: colors.textMuted },
     refreshErrorText: { color: colors.textMuted },
     retryLink: { color: colors.brand },
     sectionDivider: { backgroundColor: colors.border },
-    sectionLabel: { color: colors.textMuted },
-    counterpartyName: { color: colors.textPrimary },
-    counterpartyBtn: { borderColor: colors.border },
-    counterpartyBtnText: { color: colors.brand },
-    escrowBanner: { backgroundColor: `${colors.success}08`, borderColor: `${colors.success}25` },
-    escrowTitle: { color: colors.textPrimary },
-    escrowSub: { color: colors.textSecondary },
-    escrowCountdown: { color: colors.textMuted },
-    etaBanner: { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}25` },
-    etaLabel: { color: colors.textMuted },
-    etaValue: { color: colors.textPrimary },
-    etaService: { color: colors.textSecondary },
-    etaIconWrap: { backgroundColor: colors.brandSubtle },
-    staleBanner: { backgroundColor: `${colors.warning}08`, borderColor: `${colors.warning}25` },
+    staleBanner: { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder },
     staleText: { color: colors.warning },
-    detailLabel: { color: colors.textSecondary },
-    detailValue: { color: colors.textPrimary },
-    detailValueLink: { color: colors.brand },
-    shippingLabelBtnText: { color: colors.brand },
-    txDivider: { backgroundColor: colors.border },
-    supportLabel: { color: colors.textPrimary },
-    supportSub: { color: colors.textMuted },
-  }), [colors]);
+    detailLabel: { color: colors.textSecondary } }), [colors]);
 
   const currentUser = useStore((state) => state.currentUser);
-  const loadSupportTicketsForOrderFromApi = useStore((state) => state.loadSupportTicketsForOrderFromApi);
   const getSupportTicketsForOrder = useStore((state) => state.getSupportTicketsForOrder);
 
-  const [backendOrder, setBackendOrder] = useState<CommerceOrder | null>(null);
-  const [parcelEvents, setParcelEvents] = useState<OrderParcelEvent[]>([]);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [parcelError, setParcelError] = useState<string | null>(null);
-  const [orderMutation, setOrderMutation] = useState<OrderMutation>(null);
+  const {
+    backendOrder,
+    parcelEvents,
+    hasReview,
+    isInitialLoading,
+    isRefreshing,
+    loadError,
+    parcelError,
+    orderMutation,
+    isMountedRef,
+    refreshOrder,
+    handleCancel,
+    handleDeliver } = useOrderDetail(orderId);
+
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const [reviewPromptVisible, setReviewPromptVisible] = useState(false);
   const [reviewPromptShown, setReviewPromptShown] = useState(false);
   const [issueSelectorVisible, setIssueSelectorVisible] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
-  const isMountedRef = useRef(true);
-  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollViewRef = useRef<ScrollView | null>(null);
   const timelineYRef = useRef(0);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-      }
-    };
-  }, []);
-
-  // --- Fetch order ---
-  const fetchOrder = useCallback(async () => {
-    try {
-      const order = await getOrder(orderId);
-      if (!isMountedRef.current) return;
-      setBackendOrder(order);
-      setLoadError(null);
-      return order;
-    } catch (error) {
-      if (!isMountedRef.current) return;
-      if (!backendOrder) {
-        setLoadError(t('orderDetail.error.loadFailed'));
-      } else {
-        setLoadError(t('orderDetail.error.refreshFailed'));
-      }
-      return null;
-    }
-  }, [orderId, backendOrder]);
-
-  // --- Fetch parcel events ---
-  const fetchParcelEvents = useCallback(async () => {
-    try {
-      const events = await getOrderParcelEvents(orderId);
-      if (!isMountedRef.current) return;
-      setParcelEvents(events);
-      setParcelError(null);
-    } catch {
-      if (!isMountedRef.current) return;
-      setParcelError(t('orderDetail.error.trackingUnavailable'));
-    }
-  }, [orderId]);
-
-  // --- Full refresh ---
-  const refreshOrder = useCallback(async (isManual: boolean = false) => {
-    if (isManual) {
-      setIsRefreshing(true);
-    }
-
-    const [orderResult] = await Promise.all([
-      fetchOrder(),
-      fetchParcelEvents(),
-    ]);
-
-    if (!isMountedRef.current) return;
-
-    if (isManual) {
-      setIsRefreshing(false);
-    } else {
-      setIsInitialLoading(false);
-    }
-
-    return orderResult;
-  }, [fetchOrder, fetchParcelEvents]);
-
-  // --- Focus-aware refresh ---
-  useFocusEffect(
-    useCallback(() => {
-      void (async () => {
-        await refreshOrder(false);
-        void loadSupportTicketsForOrderFromApi(orderId);
-      })();
-
-      return () => {
-        if (refreshIntervalRef.current) {
-          clearInterval(refreshIntervalRef.current);
-          refreshIntervalRef.current = null;
-        }
-      };
-    }, [refreshOrder, orderId, loadSupportTicketsForOrderFromApi])
-  );
-
-  // --- Polling interval based on order status ---
-  useEffect(() => {
-    if (!backendOrder) return;
-
-    const normalisedStatus = normaliseOrderStatus(backendOrder.status);
-    const isTerminal = isTerminalStatus(normalisedStatus);
-    const intervalMs = isTerminal ? 300_000 : 30_000;
-
-    if (refreshIntervalRef.current) {
-      clearInterval(refreshIntervalRef.current);
-    }
-
-    refreshIntervalRef.current = setInterval(() => {
-      void refreshOrder(false);
-    }, intervalMs);
-
-    return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-        refreshIntervalRef.current = null;
-      }
-    };
-  }, [backendOrder?.status, refreshOrder]);
 
   // --- Support tickets ---
   const supportTickets = getSupportTicketsForOrder(orderId);
@@ -591,19 +146,7 @@ export default function OrderDetailScreen() {
   const REVIEW_ELIGIBLE_HOURS = 72;
 
   const reviewEligibleAtMs = useMemo(() => {
-    if (!backendOrder) return null;
-    // Prefer server-derived eligibility timestamp if provided
-    const serverEligible = (backendOrder as any)?.reviewEligibleAt;
-    if (serverEligible) {
-      const ms = new Date(serverEligible).getTime();
-      if (Number.isFinite(ms)) return ms;
-    }
-    // Fall back to deliveredAt + 72h
-    const deliveredAt = backendOrder.deliveredAt;
-    if (!deliveredAt) return null;
-    const ms = new Date(deliveredAt).getTime();
-    if (!Number.isFinite(ms)) return null;
-    return ms + REVIEW_ELIGIBLE_HOURS * 60 * 60 * 1000;
+    return computeReviewEligibleAtMs(backendOrder, REVIEW_ELIGIBLE_HOURS);
   }, [backendOrder]);
 
   const [reviewDeferredUntil, setReviewDeferredUntil] = useState<number | null>(null);
@@ -684,8 +227,7 @@ export default function OrderDetailScreen() {
       const seller = backendOrder.seller ?? (existingListing?.seller ? {
         id: existingListing.seller.id,
         username: existingListing.seller.username,
-        avatar: existingListing.seller.avatar,
-      } : null);
+        avatar: existingListing.seller.avatar } : null);
 
       if (!seller) return null;
 
@@ -693,8 +235,7 @@ export default function OrderDetailScreen() {
         role: 'Seller' as const,
         id: seller.id,
         username: seller.username ?? t('orderDetail.role.sellerFallback', { id: seller.id.slice(0, 8) }),
-        avatar: seller.avatar,
-      };
+        avatar: seller.avatar };
     }
 
     if (isSeller) {
@@ -706,8 +247,7 @@ export default function OrderDetailScreen() {
         role: 'Buyer' as const,
         id: buyer.id,
         username: buyer.username ?? t('orderDetail.role.buyerFallback', { id: buyer.id.slice(0, 8) }),
-        avatar: buyer.avatar,
-      };
+        avatar: buyer.avatar };
     }
 
     return null;
@@ -725,10 +265,9 @@ export default function OrderDetailScreen() {
     if (!backendOrder) return [];
     return buildTimelineEntries(normalisedStatus, backendOrder, parcelEvents, {
       hasOpenResolution: Boolean(openTicket),
-      hasReview: false,
-      deliveredAt: backendOrder.deliveredAt,
-    });
-  }, [backendOrder, normalisedStatus, parcelEvents, openTicket]);
+      hasReview,
+      deliveredAt: backendOrder.deliveredAt });
+  }, [backendOrder, normalisedStatus, parcelEvents, openTicket, hasReview]);
 
   // --- Shipment details ---
   const latestParcelEvent = parcelEvents.length > 0
@@ -777,23 +316,15 @@ export default function OrderDetailScreen() {
 
   // --- ETA from fulfilment snapshot ---
   const snapshot = backendOrder?.fulfilmentSnapshot ?? null;
-  const etaWindow = snapshot?.etaMinDays != null && snapshot?.etaMaxDays != null
-    ? (snapshot.etaMinDays !== snapshot.etaMaxDays
-        ? `${snapshot.etaMinDays}–${snapshot.etaMaxDays} days`
-        : `${snapshot.etaMinDays} day${snapshot.etaMinDays === 1 ? '' : 's'}`)
-    : null;
+  const etaWindow = formatEtaWindowFromSnapshot(snapshot);
 
   // Estimated delivery date is server-derived, not client-invented.
   // Per P0-4: "The client may format time. It must not invent a deadline
   // that changes rights, money, delivery promise or eligibility."
   // The server provides estimatedDeliveryAt; the client only formats it.
   const estimatedDeliveryDate = useMemo(() => {
-    const serverEta = (backendOrder as any)?.estimatedDeliveryAt;
-    if (!serverEta) return null;
-    const d = new Date(serverEta);
-    if (Number.isNaN(d.getTime())) return null;
-    return d;
-  }, [(backendOrder as any)?.estimatedDeliveryAt]);
+    return parseEstimatedDeliveryDate(backendOrder);
+  }, [backendOrder]);
 
   const estimatedDeliveryLabel = estimatedDeliveryDate
     ? estimatedDeliveryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
@@ -803,13 +334,7 @@ export default function OrderDetailScreen() {
   // If the last parcel event is > 48 hours old and the order is still in transit,
   // show a "tracking may be delayed" warning.
   const isStaleTracking = useMemo(() => {
-    if (!latestParcelEvent) return false;
-    if (normalisedStatus !== 'shipped' && normalisedStatus !== 'in transit' && normalisedStatus !== 'out for delivery') return false;
-    const lastTime = latestParcelEvent.occurredAt ?? latestParcelEvent.receivedAt;
-    const lastMs = new Date(lastTime).getTime();
-    if (Number.isNaN(lastMs)) return false;
-    const hoursSince = (Date.now() - lastMs) / (60 * 60 * 1000);
-    return hoursSince > 48;
+    return isStaleTrackingEvent(latestParcelEvent, normalisedStatus);
   }, [latestParcelEvent, normalisedStatus]);
 
   // --- Contextual issue categories ---
@@ -833,8 +358,7 @@ export default function OrderDetailScreen() {
         {
           id: 'carrier_not_scanned',
           label: t('orderDetail.issue.carrierNotScanned.label'),
-          description: t('orderDetail.issue.carrierNotScanned.desc'),
-        },
+          description: t('orderDetail.issue.carrierNotScanned.desc') },
       ];
     }
 
@@ -844,8 +368,7 @@ export default function OrderDetailScreen() {
         {
           id: 'delivery_delayed',
           label: t('orderDetail.issue.deliveryDelayed.label'),
-          description: t('orderDetail.issue.deliveryDelayed.desc'),
-        },
+          description: t('orderDetail.issue.deliveryDelayed.desc') },
       ];
     }
 
@@ -855,13 +378,11 @@ export default function OrderDetailScreen() {
         {
           id: 'parcel_not_found',
           label: t('orderDetail.issue.parcelNotFound.label'),
-          description: t('orderDetail.issue.parcelNotFound.desc'),
-        },
+          description: t('orderDetail.issue.parcelNotFound.desc') },
         {
           id: 'item_problem',
           label: t('orderDetail.issue.itemProblem.label'),
-          description: t('orderDetail.issue.itemProblem.desc'),
-        },
+          description: t('orderDetail.issue.itemProblem.desc') },
       ];
     }
 
@@ -871,8 +392,7 @@ export default function OrderDetailScreen() {
         {
           id: 'track_return',
           label: t('orderDetail.issue.trackReturn.label'),
-          description: t('orderDetail.issue.trackReturn.desc'),
-        },
+          description: t('orderDetail.issue.trackReturn.desc') },
       ];
     }
 
@@ -881,19 +401,8 @@ export default function OrderDetailScreen() {
 
   // --- Package summary from snapshot ---
   const packageSummary = useMemo(() => {
-    const profile = snapshot?.parcelProfile;
-    if (!profile) return null;
-    const parts: string[] = [];
-    if (profile.maxWeightKg != null) {
-      parts.push(profile.maxWeightKg < 1
-        ? `${Math.round(profile.maxWeightKg * 1000)}g`
-        : `${profile.maxWeightKg}kg`);
-    }
-    if (profile.maxLengthCm != null) {
-      parts.push(`≤${profile.maxLengthCm}cm`);
-    }
-    return parts.length > 0 ? parts.join(' · ') : null;
-  }, [snapshot?.parcelProfile]);
+    return formatPackageSummary(snapshot);
+  }, [snapshot]);
 
   const showShipmentDetails = Boolean(
     backendOrder?.shippingProvider
@@ -904,41 +413,6 @@ export default function OrderDetailScreen() {
 
   // --- Order short ID ---
   const shortOrderId = backendOrder?.id ? backendOrder.id.slice(0, 8).toUpperCase() : '';
-
-  // --- Mutation handlers ---
-
-  const handleCancel = useCallback(async () => {
-    if (orderMutation) return;
-    setOrderMutation('cancel');
-    try {
-      await cancelOrder(orderId);
-      show(t('orderDetail.toast.cancelled'), 'info');
-      await refreshOrder(false);
-    } catch (error) {
-      show(parseApiError(error).message, 'error');
-    } finally {
-      if (isMountedRef.current) setOrderMutation(null);
-    }
-  }, [orderMutation, orderId, show, refreshOrder]);
-
-  // handleShip was removed — the 'dispatch' action navigates to
-  // SellerFulfilment (guided flow), never calls shipOrder() directly.
-  // Per HC-P0-02: "Delete dead direct shipping handler if no canonical
-  // action uses it."
-
-  const handleDeliver = useCallback(async () => {
-    if (orderMutation) return;
-    setOrderMutation('deliver');
-    try {
-      await deliverOrder(orderId);
-      show(t('orderDetail.toast.deliveryConfirmed'), 'success');
-      await refreshOrder(false);
-    } catch (error) {
-      show(parseApiError(error).message, 'error');
-    } finally {
-      if (isMountedRef.current) setOrderMutation(null);
-    }
-  }, [orderMutation, orderId, show, refreshOrder]);
 
   // --- Track on carrier site (declared early so footer can reference) ---
   const carrierTrackingUrl = useMemo(() => {
@@ -973,8 +447,7 @@ export default function OrderDetailScreen() {
     navigation.navigate('OrderSupport', {
       orderId,
       categoryId: category.id,
-      categoryLabel: category.label,
-    });
+      categoryLabel: category.label });
   }, [navigation, orderId]);
 
   // --- Action availability (canonical resolver) ---
@@ -989,12 +462,11 @@ export default function OrderDetailScreen() {
       status: backendOrder.status,
       role: isBuyer ? 'buyer' : 'seller',
       hasOpenResolution: Boolean(openTicket),
-      hasReview: false, // review state surfaced separately via reviewPrompt
+      hasReview,
       hasTracking: Boolean(backendOrder.trackingNumber || parcelEvents.length > 0),
       fulfilmentSnapshot: backendOrder.fulfilmentSnapshot ?? null,
-      isSubmitting: orderMutation !== null,
-    });
-  }, [backendOrder, isKnown, isBuyer, openTicket, parcelEvents.length, orderMutation]);
+      isSubmitting: orderMutation !== null });
+  }, [backendOrder, isKnown, isBuyer, openTicket, parcelEvents.length, orderMutation, hasReview]);
 
   const mutationLocked = orderMutation !== null;
 
@@ -1013,16 +485,14 @@ export default function OrderDetailScreen() {
             label: t('orderDetail.action.completePayment'),
             onPress: () => { haptics.heavyPress(); navigation.navigate('Checkout', { orderId }); },
             variant: 'primary',
-            accessibilityLabel: t('orderDetail.action.completePaymentA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.completePaymentA11y') };
         case 'dispatch':
           // Seller paid → guided fulfilment. NEVER a direct generic mark-shipped.
           return {
             label: t('orderDetail.action.shipItem'),
             onPress: () => { haptics.heavyPress(); navigation.navigate('SellerFulfilment', { orderId }); },
             variant: 'primary',
-            accessibilityLabel: t('orderDetail.action.shipItemA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.shipItemA11y') };
         case 'track_order':
           return {
             label: t('orderDetail.action.trackParcel'),
@@ -1036,85 +506,77 @@ export default function OrderDetailScreen() {
               }
             },
             variant: 'primary',
-            accessibilityLabel: t('orderDetail.action.trackParcelA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.trackParcelA11y') };
         case 'inspect':
           // Buyer delivered → check your item before confirming/reviewing.
           return {
             label: t('orderDetail.action.checkItem'),
             onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
             variant: 'primary',
-            accessibilityLabel: t('orderDetail.action.checkItemA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.checkItemA11y') };
         case 'leave_review':
           return {
             label: t('orderDetail.action.leaveReview'),
             onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
             variant: 'primary',
-            accessibilityLabel: t('orderDetail.action.leaveReviewA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.leaveReviewA11y') };
         case 'view_review':
           return {
             label: t('orderDetail.action.viewReview'),
             onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
             variant: 'secondary',
-            accessibilityLabel: t('orderDetail.action.viewReviewA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.viewReviewA11y') };
         case 'confirm_delivery':
           // Demoted secondary — releases escrowed funds (high-consequence).
           return {
             label: t('orderDetail.action.confirmReceipt'),
             onPress: () => {
               haptics.heavyPress();
-              Alert.alert(
-                t('orderDetail.action.confirmReceiptTitle'),
-                t('orderDetail.action.confirmReceiptBody'),
-                [
-                  { text: t('orderDetail.action.notYet'), style: 'cancel' },
-                  { text: t('orderDetail.action.confirmReceipt'), style: 'default', onPress: handleDeliver },
-                ]
-              );
+              setConfirmSheet({
+                visible: true,
+                title: t('orderDetail.action.confirmReceiptTitle'),
+                message: t('orderDetail.action.confirmReceiptBody'),
+                confirmLabel: t('orderDetail.action.confirmReceipt'),
+                cancelLabel: t('orderDetail.action.notYet'),
+                onConfirm: handleDeliver,
+                variant: 'default' });
             },
             variant: 'secondary',
             loading: orderMutation === 'deliver',
             disabled: mutationLocked && orderMutation !== 'deliver',
-            accessibilityLabel: 'Confirm delivery — releases funds to seller',
-          };
+            accessibilityLabel: 'Confirm delivery — releases funds to seller' };
         case 'cancel':
           return {
             label: t('orderDetail.action.cancelOrder'),
             onPress: () => {
               haptics.heavyPress();
-              Alert.alert(
-                t('orderDetail.action.cancelOrderTitle'),
-                isBuyer
+              setConfirmSheet({
+                visible: true,
+                title: t('orderDetail.action.cancelOrderTitle'),
+                message: isBuyer
                   ? t('orderDetail.action.cancelOrderBodyBuyer')
                   : t('orderDetail.action.cancelOrderBodySeller'),
-                [
-                  { text: t('orderDetail.action.keepOrder'), style: 'cancel' },
-                  { text: t('orderDetail.action.cancelOrder'), style: 'destructive', onPress: handleCancel },
-                ]
-              );
+                confirmLabel: t('orderDetail.action.cancelOrder'),
+                cancelLabel: t('orderDetail.action.keepOrder'),
+                onConfirm: handleCancel,
+                variant: 'danger' });
             },
             variant: 'destructive',
             loading: orderMutation === 'cancel',
             disabled: mutationLocked && orderMutation !== 'cancel',
-            accessibilityLabel: t('orderDetail.action.cancelOrder'),
-          };
+            accessibilityLabel: t('orderDetail.action.cancelOrder') };
         case 'report_issue':
           return {
             label: t('orderDetail.action.reportIssue'),
             onPress: () => { haptics.tap(); setIssueSelectorVisible(true); },
             variant: 'secondary',
-            accessibilityLabel: t('orderDetail.action.reportIssueA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.reportIssueA11y') };
         case 'view_resolution':
           return {
             label: t('orderDetail.action.viewResolution'),
             onPress: () => { haptics.tap(); navigation.navigate('SupportTicketDetail', { ticketId: openTicket?.id ?? '' }); },
             variant: 'secondary',
-            accessibilityLabel: t('orderDetail.action.viewResolutionA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.viewResolutionA11y') };
         case 'contact':
           if (!counterparty) return undefined;
           return {
@@ -1125,19 +587,16 @@ export default function OrderDetailScreen() {
                 conversationId: `${counterparty.id}_${backendOrder.listingId}`,
                 focusQuery: counterparty.username,
                 partnerUserId: counterparty.id,
-                itemId: backendOrder.listingId,
-              });
+                itemId: backendOrder.listingId });
             },
             variant: 'secondary',
-            accessibilityLabel: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }),
-          };
+            accessibilityLabel: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }) };
         case 'view_receipt':
           return {
             label: t('orderDetail.action.viewReceipt'),
             onPress: () => { haptics.tap(); navigation.navigate('OrderReceipt', { orderId }); },
             variant: 'secondary',
-            accessibilityLabel: t('orderDetail.action.viewReceiptA11y'),
-          };
+            accessibilityLabel: t('orderDetail.action.viewReceiptA11y') };
         default:
           return undefined;
       }
@@ -1145,8 +604,7 @@ export default function OrderDetailScreen() {
 
     return {
       primary: buildAction(primary),
-      secondary: buildAction(secondary) ?? undefined,
-    };
+      secondary: buildAction(secondary) ?? undefined };
   }, [backendOrder, isKnown, capabilities, carrierTrackingUrl, handleTrackOnCarrierSite, handleDeliver, handleCancel, navigation, orderId, isBuyer, counterparty, openTicket, orderMutation, mutationLocked]);
 
   // --- Copy tracking number ---
@@ -1193,8 +651,7 @@ export default function OrderDetailScreen() {
       key: 'receipt',
       label: t('orderDetail.action.viewReceipt'),
       icon: 'receipt-outline',
-      onPress: () => navigation.navigate('OrderReceipt', { orderId }),
-    });
+      onPress: () => navigation.navigate('OrderReceipt', { orderId }) });
 
     // Guided dispatch is now the primary footer action when the seller can
     // ship — do not duplicate it in overflow (audit finding #1/#9).
@@ -1208,25 +665,21 @@ export default function OrderDetailScreen() {
           conversationId: `${counterparty.id}_${backendOrder?.listingId}`,
           focusQuery: counterparty.username,
           partnerUserId: counterparty.id,
-          itemId: backendOrder?.listingId,
-        }),
-      });
+          itemId: backendOrder?.listingId }) });
     }
 
     actions.push({
       key: 'support',
       label: t('orderDetail.overflow.getHelp'),
       icon: 'help-circle-outline',
-      onPress: () => navigation.navigate('OrderSupport', { orderId }),
-    });
+      onPress: () => navigation.navigate('OrderSupport', { orderId }) });
 
     if (isBuyer) {
       actions.push({
         key: 'buyer_protection',
         label: t('orderDetail.overflow.buyerProtection'),
-        icon: 'shield-checkmark-outline',
-        onPress: () => navigation.navigate('BuyerProtection', { orderId }),
-      });
+        icon: 'checkmark-circle-outline',
+        onPress: () => navigation.navigate('BuyerProtection', { orderId }) });
     }
 
 
@@ -1236,8 +689,7 @@ export default function OrderDetailScreen() {
         label: t('orderDetail.action.viewResolution'),
         icon: 'folder-open-outline',
         onPress: () => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id }),
-        variant: 'primary',
-      });
+        variant: 'primary' });
     }
 
     if (isBuyer && (normalisedStatus === 'delivered' || normalisedStatus === 'completed')) {
@@ -1246,8 +698,7 @@ export default function OrderDetailScreen() {
         label: t('orderDetail.overflow.writeReview'),
         icon: 'star-outline',
         onPress: () => { haptics.tap(); setReviewPromptVisible(true); },
-        variant: 'primary',
-      });
+        variant: 'primary' });
     }
 
     return actions;
@@ -1267,8 +718,7 @@ export default function OrderDetailScreen() {
             paddingTop: insets.top,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: colors.border,
-          }}
+            borderBottomColor: colors.border }}
         />
         <OrderDetailSkeleton />
       </SafeAreaView>
@@ -1287,8 +737,7 @@ export default function OrderDetailScreen() {
             paddingTop: insets.top,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: colors.border,
-          }}
+            borderBottomColor: colors.border }}
         />
         <View style={styles.errorContainer}>
           <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} aria-hidden={true} />
@@ -1319,8 +768,7 @@ export default function OrderDetailScreen() {
             paddingTop: insets.top,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: colors.border,
-          }}
+            borderBottomColor: colors.border }}
         />
         <View style={styles.errorContainer}>
           <Ionicons name="document-outline" size={28} color={colors.textMuted} aria-hidden={true} />
@@ -1345,8 +793,7 @@ export default function OrderDetailScreen() {
           paddingTop: insets.top,
           paddingBottom: Space.sm,
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
-        }}
+          borderBottomColor: colors.border }}
         rightAction={
           <View style={styles.headerRight}>
             <Pressable
@@ -1388,6 +835,7 @@ export default function OrderDetailScreen() {
         <View style={styles.statusHeader}>
           <Text style={[styles.orderNumber, themed.orderNumber]}>ORDER #{shortOrderId}</Text>
           <View style={styles.statusBadgeRow}>
+            {/* TODO: replace `${statusColor}15` with statusColorSubtle token when available */}
             <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <Text style={[styles.statusBadgeText, { color: statusColor }]}>
@@ -1434,7 +882,7 @@ export default function OrderDetailScreen() {
           title={orderTitle}
           imageUrl={orderImage}
           subtitle={orderSubtitle}
-          priceLabel={formatFromFiat(orderSubtotal ?? 0, DEFAULT_CURRENCY_CODE, fiatOpts)}
+          priceLabel={formatFromFiat(orderSubtotal ?? 0, currencyCode, fiatOpts)}
           listingAvailable={listingExists}
           onPress={listingExists && listingId ? () => {
             haptics.tap();
@@ -1446,86 +894,27 @@ export default function OrderDetailScreen() {
 
         {/* 4. Role-aware counterparty */}
         {counterparty ? (
-          <View style={styles.counterpartySection}>
-            <Text style={[styles.sectionLabel, themed.sectionLabel]}>{counterparty.role}</Text>
-            <View style={styles.counterpartyRow}>
-              <Pressable
-                style={styles.counterpartyIdentity}
-                onPress={() => { haptics.tap(); openProfile(navigation, counterparty.id, currentUser?.id); }}
-                accessibilityRole="button"
-                accessibilityLabel={`View ${counterparty.role} profile: ${counterparty.username}`}
-              >
-                <CachedImage
-                  uri={counterparty.avatar ?? ''}
-                  style={styles.counterpartyAvatar}
-                  contentFit="cover"
-                />
-                <Text style={[styles.counterpartyName, themed.counterpartyName]} numberOfLines={1}>
-                  @{counterparty.username}
-                </Text>
-              </Pressable>
-              <View style={styles.counterpartyActions}>
-                <Pressable
-                  style={({ pressed }) => [styles.counterpartyBtn, themed.counterpartyBtn, pressed && styles.counterpartyBtnPressed]}
-                  onPress={() => {
-                    haptics.tap();
-                    navigation.navigate('Chat', {
-                      conversationId: `${counterparty.id}_${backendOrder.listingId}`,
-                      focusQuery: counterparty.username,
-                      partnerUserId: counterparty.id,
-                      itemId: backendOrder.listingId,
-                    });
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Message ${counterparty.role.toLowerCase()}`}
-                >
-                  <Text style={[styles.counterpartyBtnText, themed.counterpartyBtnText]}>Message</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.counterpartyBtn, themed.counterpartyBtn, pressed && styles.counterpartyBtnPressed]}
-                  onPress={() => { haptics.tap(); openProfile(navigation, counterparty.id, currentUser?.id); }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View ${counterparty.role.toLowerCase()} profile`}
-                >
-                  <Text style={[styles.counterpartyBtnText, themed.counterpartyBtnText]}>View profile</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
+          <OrderCounterpartySection
+            counterparty={counterparty}
+            listingId={backendOrder.listingId}
+            currentUserId={currentUser?.id}
+            navigation={navigation}
+            onMessage={(cp, listingId) => {
+              haptics.tap();
+              navigation.navigate('Chat', {
+                conversationId: `${cp.id}_${listingId}`,
+                focusQuery: cp.username,
+                partnerUserId: cp.id,
+                itemId: listingId });
+            }}
+          />
         ) : null}
 
         <View style={[styles.sectionDivider, themed.sectionDivider]} />
 
         {/* 4c. Escrow status indicator — shows when funds are held */}
         {!isCompleted && isBuyer && (normalisedStatus === 'paid' || normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') ? (
-          <View style={[styles.escrowBanner, themed.escrowBanner]}>
-            <Ionicons name="lock-closed" size={16} color={colors.success} aria-hidden={true} />
-            <View style={styles.escrowTextWrap}>
-              <Text style={[styles.escrowTitle, themed.escrowTitle]}>Funds held in escrow</Text>
-              <Text style={[styles.escrowSub, themed.escrowSub]}>
-                {normalisedStatus === 'paid'
-                  ? 'Payment confirmed. Funds are held until the seller dispatches.'
-                  : 'Funds are held. Confirm receipt to release funds to the seller.'}
-              </Text>
-              {(() => {
-                // Escrow release timing is server-derived, not client-invented.
-                // If the server provides an estimatedReleaseAt, show it.
-                // If not, show no countdown — do not invent a 14-day fallback.
-                const releaseAt = (backendOrder as any)?.moneyProjection?.estimatedReleaseAt;
-                if (!releaseAt) return null;
-                const releaseTime = new Date(releaseAt).getTime();
-                if (Number.isNaN(releaseTime)) return null;
-                const now = Date.now();
-                if (now >= releaseTime) return null;
-                const daysLeft = Math.ceil((releaseTime - now) / (24 * 60 * 60 * 1000));
-                return (
-                  <Text style={[styles.escrowCountdown, themed.escrowCountdown]}>
-                    Auto-releases to seller in {daysLeft} day{daysLeft === 1 ? '' : 's'} if not confirmed
-                  </Text>
-                );
-              })()}
-            </View>
-          </View>
+          <EscrowBanner order={backendOrder} normalisedStatus={normalisedStatus} />
         ) : null}
 
         {/* 4d. Buyer inspection window — shown when delivered but not yet completed */}
@@ -1534,14 +923,14 @@ export default function OrderDetailScreen() {
             inspectionDeadlineAt={(backendOrder as any)?.inspectionDeadlineAt ?? null}
             onConfirmReceipt={() => {
               haptics.heavyPress();
-              Alert.alert(
-                'Everything is OK?',
-                'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. This action cannot be undone.',
-                [
-                  { text: 'Not yet', style: 'cancel' },
-                  { text: 'Confirm receipt', style: 'default', onPress: handleDeliver },
-                ]
-              );
+              setConfirmSheet({
+                visible: true,
+                title: 'Everything is OK?',
+                message: 'By confirming, you confirm the item matches the listing. This releases the held funds to the seller. This action cannot be undone.',
+                confirmLabel: 'Confirm receipt',
+                cancelLabel: 'Not yet',
+                onConfirm: handleDeliver,
+                variant: 'default' });
             }}
             onReportIssue={() => {
               haptics.tap();
@@ -1553,7 +942,7 @@ export default function OrderDetailScreen() {
         {/* 4e. Completed order — quiet completion state, operational chrome collapsed */}
         {isCompleted ? (
           <CompletedOrderSummary
-            hasReview={false}
+            hasReview={hasReview}
             onLeaveReview={() => { haptics.tap(); setReviewPromptVisible(true); }}
             onBuyAgain={() => {
               haptics.tap();
@@ -1578,8 +967,6 @@ export default function OrderDetailScreen() {
             style={styles.timelineSection}
             onLayout={(e) => { timelineYRef.current = e.nativeEvent.layout.y; }}
           >
-          <Text style={[styles.sectionLabel, themed.sectionLabel]}>Timeline</Text>
-
           {/* Package contents — compact row so buyer can see WHAT is in the parcel */}
           <View style={styles.packageContentsWrap}>
             <Text style={[styles.packageContentsLabel, themed.detailLabel]}>Package contents</Text>
@@ -1599,20 +986,11 @@ export default function OrderDetailScreen() {
               buyer is never shown a false delivery promise. The stale
               tracking warning below covers the overdue case. */}
           {isBuyer && etaWindow && (normalisedStatus === 'shipped' || normalisedStatus === 'in transit' || normalisedStatus === 'out for delivery') && (!estimatedDeliveryDate || estimatedDeliveryDate.getTime() >= Date.now()) ? (
-            <View style={[styles.etaBanner, themed.etaBanner]}>
-              <View style={[styles.etaIconWrap, themed.etaIconWrap]}>
-                <Ionicons name="cube-outline" size={16} color={colors.brand} aria-hidden={true} />
-              </View>
-              <View style={styles.etaContent}>
-                <Text style={[styles.etaLabel, themed.etaLabel]}>ESTIMATED DELIVERY</Text>
-                <Text style={[styles.etaValue, themed.etaValue]}>
-                  {estimatedDeliveryLabel ? `By ${estimatedDeliveryLabel}` : etaWindow}
-                </Text>
-                {snapshot?.serviceName ? (
-                  <Text style={[styles.etaService, themed.etaService]}>{snapshot.serviceName}</Text>
-                ) : null}
-              </View>
-            </View>
+            <EtaBanner
+              etaWindow={etaWindow}
+              estimatedDeliveryLabel={estimatedDeliveryLabel}
+              serviceName={snapshot?.serviceName ?? null}
+            />
           ) : null}
 
           {/* Stale tracking warning — last event > 48h old while in transit */}
@@ -1646,111 +1024,41 @@ export default function OrderDetailScreen() {
         {!isCompleted && showShipmentDetails ? (
           <>
             <View style={[styles.sectionDivider, themed.sectionDivider]} />
-            <View style={styles.shipmentSection}>
-              <Text style={[styles.sectionLabel, themed.sectionLabel]}>Shipment details</Text>
-              {backendOrder.shippingProvider ? (
-                <DetailRow label="Carrier" value={backendOrder.shippingProvider} />
-              ) : null}
-              {backendOrder.trackingNumber ? (
-                <View style={styles.detailRow}>
-                  <Text style={[styles.detailLabel, themed.detailLabel]}>Tracking number</Text>
-                  <Pressable
-                    onPress={() => handleCopyTracking(backendOrder.trackingNumber!)}
-                    style={styles.copyRow}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Copy tracking number ${backendOrder.trackingNumber}`}
-                  >
-                    <Text style={[styles.detailValueLink, themed.detailValueLink]}>{backendOrder.trackingNumber}</Text>
-                    <Ionicons name="copy-outline" size={16} color={colors.brand} aria-hidden={true} />
-                  </Pressable>
-                </View>
-              ) : null}
-              {carrierTrackingUrl ? (
-                <Pressable
-                  onPress={handleTrackOnCarrierSite}
-                  style={styles.textLinkRow}
-                  accessibilityRole="link"
-                  accessibilityLabel="Track on carrier website"
-                >
-                  <Text style={[styles.textLink, themed.detailValueLink]}>Track on carrier site</Text>
-                  <Ionicons name="open-outline" size={14} color={colors.brand} aria-hidden={true} />
-                </Pressable>
-              ) : null}
-              {shipmentLastUpdated ? (
-                <DetailRow label="Last carrier update" value={shipmentLastUpdated} />
-              ) : null}
-              {packageSummary ? (
-                <DetailRow label="Package" value={packageSummary} />
-              ) : null}
-              {snapshot?.destinationSummary ? (
-                <DetailRow label="Destination" value={snapshot.destinationSummary} />
-              ) : null}
-              {backendOrder.shippingLabelUrl ? (
-                <Pressable
-                  style={styles.shippingLabelBtn}
-                  onPress={() => handleOpenShippingLabel(backendOrder.shippingLabelUrl!)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open shipping label"
-                >
-                  <Ionicons name="open-outline" size={16} color={colors.brand} aria-hidden={true} />
-                  <Text style={[styles.shippingLabelBtnText, themed.shippingLabelBtnText]}>Open shipping label</Text>
-                </Pressable>
-              ) : null}
-            </View>
+            <ShipmentDetails
+              order={backendOrder}
+              carrierTrackingUrl={carrierTrackingUrl}
+              shipmentLastUpdated={shipmentLastUpdated}
+              packageSummary={packageSummary}
+              destinationSummary={snapshot?.destinationSummary}
+              onCopyTracking={handleCopyTracking}
+              onTrackOnCarrierSite={handleTrackOnCarrierSite}
+              onOpenShippingLabel={handleOpenShippingLabel}
+            />
           </>
         ) : null}
 
         <View style={[styles.sectionDivider, themed.sectionDivider]} />
 
         {/* 7. Transaction breakdown */}
-        <View style={styles.transactionSection}>
-          <Text style={[styles.sectionLabel, themed.sectionLabel]}>Transaction</Text>
-          <TxRow label="Item" value={formatFromFiat(subtotal, DEFAULT_CURRENCY_CODE, fiatOpts)} />
-          <TxRow label="Platform charge" value={formatFromFiat(platformCharge, DEFAULT_CURRENCY_CODE, fiatOpts)} />
-          {buyerProtectionFee != null && buyerProtectionFee !== 0 && buyerProtectionFee !== platformCharge ? (
-            <TxRow label="Buyer protection fee" value={formatFromFiat(buyerProtectionFee, DEFAULT_CURRENCY_CODE, fiatOpts)} />
-          ) : null}
-          <TxRow
-            label="Delivery"
-            value={postageFee != null ? formatFromFiat(postageFee, DEFAULT_CURRENCY_CODE, fiatOpts) : 'Not recorded'}
-          />
-          <View style={[styles.txDivider, themed.txDivider]} />
-          <TxRow label="Total" value={formatFromFiat(totalPaid, DEFAULT_CURRENCY_CODE, fiatOpts)} bold />
-        </View>
+        <TransactionBreakdown
+          subtotal={subtotal}
+          platformCharge={platformCharge}
+          buyerProtectionFee={buyerProtectionFee}
+          postageFee={postageFee}
+          totalPaid={totalPaid}
+          formatFromFiat={formatFromFiat}
+          currencyCode={currencyCode}
+          fiatOpts={fiatOpts}
+        />
 
         <View style={[styles.sectionDivider, themed.sectionDivider]} />
 
         {/* 8. Support state */}
-        <View style={styles.supportSection}>
-          {openTicket ? (
-            <Pressable
-              style={({ pressed }) => [styles.supportRow, pressed && styles.supportRowPressed]}
-              onPress={() => { haptics.tap(); navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id }); }}
-              accessibilityRole="button"
-              accessibilityLabel={`Open support request: ${openTicket.topicLabel}`}
-            >
-              <Ionicons name="help-circle-outline" size={22} color={colors.brand} aria-hidden={true} />
-              <View style={styles.supportInfo}>
-                <Text style={[styles.supportLabel, themed.supportLabel]}>Support request open</Text>
-                <Text style={[styles.supportSub, themed.supportSub]}>{openTicket.topicLabel}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-            </Pressable>
-          ) : (
-            <Pressable
-              style={({ pressed }) => [styles.supportRow, pressed && styles.supportRowPressed]}
-              onPress={() => { haptics.tap(); navigation.navigate('OrderSupport', { orderId }); }}
-              accessibilityRole="button"
-              accessibilityLabel="Get support for this order"
-            >
-              <Ionicons name="help-circle-outline" size={22} color={colors.brand} aria-hidden={true} />
-              <View style={styles.supportInfo}>
-                <Text style={[styles.supportLabel, themed.supportLabel]}>Get support</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-            </Pressable>
-          )}
-        </View>
+        <OrderSupportSection
+          openTicket={openTicket}
+          onPressOpenTicket={(ticketId) => navigation.navigate('SupportTicketDetail', { ticketId })}
+          onPressGetSupport={() => navigation.navigate('OrderSupport', { orderId })}
+        />
       </ScrollView>
 
       {/* 9. Sticky role/status action footer */}
@@ -1797,328 +1105,129 @@ export default function OrderDetailScreen() {
           contextualIssues={contextualIssues}
         />
       ) : null}
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </SafeAreaView>
   );
 }
 
-// --- Helper components ---
-
-function TxRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  const { colors } = useAppTheme();
-  const txThemed = useMemo(() => ({
-    label: { color: colors.textSecondary },
-    labelBold: { color: colors.textPrimary },
-    value: { color: colors.textPrimary },
-    valueBold: { color: colors.textPrimary },
-  }), [colors]);
-  return (
-    <View style={txStyles.row}>
-      <Text style={[txStyles.label, txThemed.label, bold && txStyles.labelBold, bold && txThemed.labelBold]}>{label}</Text>
-      <Text style={[txStyles.value, txThemed.value, bold && txStyles.valueBold, bold && txThemed.valueBold]}>{value}</Text>
-    </View>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  const { colors } = useAppTheme();
-  const detailThemed = useMemo(() => ({
-    label: { color: colors.textSecondary },
-    value: { color: colors.textPrimary },
-  }), [colors]);
-  return (
-    <View style={styles.detailRow}>
-      <Text style={[styles.detailLabel, detailThemed.label]}>{label}</Text>
-      <Text style={[styles.detailValue, detailThemed.value]}>{value}</Text>
-    </View>
-  );
-}
-
-const txStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Space.xs + 2,
-  },
-  label: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  labelBold: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-  // Transaction values use tabular-nums per spec — all monetary values aligned
-  value: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    fontVariant: ['tabular-nums'],
-    textAlign: 'right',
-  },
-  // Total uses priceList per spec — hero financial value
-  valueBold: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'],
-    textAlign: 'right',
-  },
-});
-
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   headerBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   headerBtnPressed: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   retryBtnPressed: {
     opacity: 0.85,
-    transform: [{ scale: 0.97 }],
-  },
-  counterpartyBtnPressed: {
-    opacity: 0.7,
-  },
-  supportRowPressed: {
-    opacity: 0.7,
-  },
+    transform: [{ scale: 0.97 }] },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   scrollContent: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.md,
-  },
-  loadingText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    paddingTop: Space.sm },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   errorTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    textAlign: 'center' },
   errorBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'center',
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   retryBtn: {
     paddingVertical: Space.md - 2,
     paddingHorizontal: Space.xl,
     borderRadius: Radius.lg,
     minHeight: Space.xxl,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   retryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   statusHeader: {
     paddingVertical: Space.md,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   // Order number — clear reference, captionElevated with tabular-nums
   orderNumber: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   statusBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 1,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   statusDot: {
     width: Space.sm - 1,
     height: Space.sm - 1,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   statusBadgeText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-  statusLabel: {
-    fontSize: Type.priceHero.size,
-    lineHeight: Type.priceHero.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceHero.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   statusExplanation: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   lastUpdated: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs / 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs / 2 },
   refreshErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   refreshErrorText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   retryLink: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.lg,
-  },
-  sectionLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    textTransform: 'uppercase',
-    marginBottom: Space.sm,
-  },
-  counterpartySection: {
-    paddingVertical: Space.sm,
-  },
-  counterpartyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  counterpartyIdentity: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  counterpartyAvatar: {
-    width: Space.xxl,
-    height: Space.xxl,
-    borderRadius: Radius.full,
-  },
-  counterpartyName: {
-    flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-  counterpartyActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-  },
-  counterpartyBtn: {
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.standard,
-    minHeight: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  counterpartyBtnText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    marginVertical: Space.lg },
   timelineSection: {
-    paddingVertical: Space.sm,
-  },
-  etaBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  etaIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  etaContent: {
-    flex: 1,
-    gap: 2,
-  },
-  etaLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    opacity: 0.6,
-  },
-  etaValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
-  etaService: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    opacity: 0.5,
-  },
+    paddingVertical: Space.sm },
   staleBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -2127,365 +1236,25 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   staleText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    opacity: 0.7,
-  },
-  // ─── Inspection banner ───
-  inspectionBanner: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    gap: Space.sm,
-  },
-  inspectionHeader: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    alignItems: 'flex-start',
-  },
-  inspectionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inspectionHeaderText: {
-    flex: 1,
-    gap: 2,
-  },
-  inspectionTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
-  inspectionSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.size + 4,
-  },
-  inspectionActions: {
-    gap: Space.xs + 2,
-  },
-  inspectionPrimaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.lg,
-    minHeight: 44,
-  },
-  inspectionPrimaryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-  inspectionSecondaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
-  },
-  inspectionSecondaryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-  inspectionFootnote: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.size + 4,
-  },
-  escrowBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm + 2,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  escrowTextWrap: {
-    flex: 1,
-    gap: Space.xs / 2,
-  },
-  escrowTitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  escrowSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  escrowCountdown: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs / 2,
-    fontVariant: ['tabular-nums'],
-  },
-  shipmentSection: {
-    paddingVertical: Space.sm,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Space.sm,
-    gap: Space.md,
-  },
-  detailLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  detailValue: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    textAlign: 'right',
-    flex: 1,
-  },
-  detailValueLink: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
-  copyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-  },
-  shippingLabelBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingVertical: Space.sm + 2,
-    marginTop: Space.xs,
-    minHeight: Control.hit,
-  },
-  shippingLabelBtnText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  // ─── Text link (Track on carrier site) — text action, not a button ───
-  textLinkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.sm,
-    marginTop: Space.xs,
-    minHeight: Control.hit,
-  },
-  textLink: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    opacity: 0.7 },
   // ─── Latest event summary — one muted text line, not a card ───
   latestEventLine: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    marginBottom: Space.sm,
-  },
-  transactionSection: {
-    paddingVertical: Space.sm,
-  },
-  txDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
-  },
-  supportSection: {
-    paddingVertical: Space.sm,
-  },
-  supportRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-    minHeight: Control.hit,
-  },
-  supportInfo: {
-    flex: 1,
-  },
-  supportLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-  supportSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs / 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginBottom: Space.sm },
   // ─── Package contents ───
   packageContentsWrap: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   packageContentsLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    marginBottom: Space.xs,
-  },
-  packageContentsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  packageThumb: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.sm,
-  },
-  packageContentsText: {
-    flex: 1,
-    gap: Space.xxs,
-  },
-  packageContentsTitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  packageContentsSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
-  // ─── Issue category selector ───
-  issueSheetBackdrop: {
-    ...StyleSheet.absoluteFill,
-    zIndex: ZIndex.modal,
-    justifyContent: 'flex-end',
-  },
-  issueSheetBackdropPress: {
-    ...StyleSheet.absoluteFill,
-  },
-  issueSheet: {
-    borderTopLeftRadius: Radius.xxl,
-    borderTopRightRadius: Radius.xxl,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-    paddingBottom: Space.xl,
-    gap: Space.xs,
-  },
-  issueSheetTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-  issueSheetSub: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    marginBottom: Space.sm,
-  },
-  issueContextHeader: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.size + 4,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    textTransform: 'uppercase',
-    marginTop: Space.sm,
-    marginBottom: Space.xs,
-  },
-  issueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
-  issueRowPressed: {
-    opacity: 0.6,
-  },
-  issueRowText: {
-    flex: 1,
-    gap: Space.xxs,
-  },
-  issueRowLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-  issueRowDesc: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
-  issueCancelBtn: {
-    paddingVertical: Space.sm + 2,
-    marginTop: Space.sm,
-    alignItems: 'center',
-    minHeight: Control.hit,
-    justifyContent: 'center',
-  },
-  issueCancelBtnPressed: {
-    opacity: 0.6,
-  },
-  issueCancelBtnText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-  // ─── Completed order summary ───
-  completedSection: {
-    paddingVertical: Space.sm,
-    gap: Space.xs,
-  },
-  completedTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-    marginBottom: Space.sm,
-  },
-  completedActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
-  completedActionPressed: {
-    opacity: 0.6,
-  },
-  completedActionText: {
-    flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginBottom: Space.xs } });

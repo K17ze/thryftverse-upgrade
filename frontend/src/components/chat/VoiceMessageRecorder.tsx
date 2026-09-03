@@ -1,268 +1,100 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
-} from 'react-native';
+  ActivityIndicator,
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withSequence,
-  withTiming,
-  cancelAnimation,
-} from 'react-native-reanimated';
-import {
-  useAudioRecorder,
-  useAudioRecorderState,
-  AudioModule,
-  RecordingPresets,
-  setAudioModeAsync,
-} from 'expo-audio';
-import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
+import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { useMotionConfig } from '../../hooks/useMotionConfig';
+import { useHaptic } from '../../hooks/useHaptic';
+import { useVoiceRecorder } from '../../hooks/chat/useVoiceRecorder';
 
 export interface VoiceMessageRecorderProps {
-  onSend?: (uri: string, durationMs: number) => void;
+  onSend: (draft: {
+    uri: string;
+    fileName: string;
+    contentType: string;
+    durationMs: number;
+    sizeBytes: number;
+  }) => void;
   onCancel?: () => void;
-  onRecordingChange?: (isRecording: boolean) => void;
+  onRecordingStateChange?: (isRecording: boolean) => void;
   disabled?: boolean;
 }
 
-const BAR_COUNT = 5;
-const BAR_MAX_HEIGHT = 28;
-const BAR_MIN_HEIGHT = 6;
-
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function WaveformBar({
-  active,
-  delay,
-  color,
-}: {
-  active: boolean;
-  delay: number;
-  color: string;
-}) {
-  const { isEnabled } = useMotionConfig();
-  const height = useSharedValue(BAR_MIN_HEIGHT);
-
-  useEffect(() => {
-    if (active) {
-      const timer = setTimeout(() => {
-        height.value = withRepeat(
-          withSequence(
-            withTiming(BAR_MIN_HEIGHT + Math.random() * (BAR_MAX_HEIGHT - BAR_MIN_HEIGHT), {
-              duration: isEnabled ? 280 : 0,
-            }),
-            withTiming(BAR_MIN_HEIGHT, { duration: isEnabled ? 280 : 0 }),
-          ),
-          -1,
-          false,
-        );
-      }, delay);
-      return () => clearTimeout(timer);
-    }
-    cancelAnimation(height);
-    height.value = withTiming(BAR_MIN_HEIGHT, { duration: isEnabled ? 150 : 0 });
-  }, [active, delay, isEnabled, height]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    height: height.value,
-  }));
-
-  return <Reanimated.View style={[waveformStyles.bar, { backgroundColor: color }, animStyle]} />;
-}
-
-const waveformStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    height: BAR_MAX_HEIGHT,
-  },
-  bar: {
-    width: 3,
-    borderRadius: Radius.full,
-  },
-});
-
-export function VoiceRecordingIndicator() {
-  const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createIndicatorStyles(colors), [colors]);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const startRef = useRef(Date.now());
-
-  useEffect(() => {
-    startRef.current = Date.now();
-    const interval = setInterval(() => {
-      setElapsedMs(Date.now() - startRef.current);
-    }, 100);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <View
-      style={styles.container}
-      accessibilityLabel={`Recording voice message, ${formatDuration(elapsedMs)} elapsed`}
-    >
-      <View style={styles.recDot} />
-      <Text style={styles.timer}>{formatDuration(elapsedMs)}</Text>
-      <View style={waveformStyles.row}>
-        {Array.from({ length: BAR_COUNT }, (_, i) => (
-          <WaveformBar key={i} active delay={i * 80} color={colors.textInverse} />
-        ))}
-      </View>
-      <Text style={styles.hint} numberOfLines={1}>Slide left to cancel</Text>
-    </View>
-  );
-}
-
-const createIndicatorStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      paddingHorizontal: Space.md - 2,
-      paddingVertical: 6,
-      minHeight: 44,
-      borderRadius: Radius.xl,
-      backgroundColor: colors.surfaceAlt,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
-    recDot: {
-      width: 8,
-      height: 8,
-      borderRadius: Radius.full,
-      backgroundColor: colors.danger,
-    },
-    timer: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textPrimary,
-      fontVariant: ['tabular-nums'],
-    },
-    hint: {
-      flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textMuted,
-    },
-  });
-
 /**
- * VoiceMessageRecorder — press-to-record voice message button.
+ * VoiceMessageRecorder — compact recorder control for the chat composer.
  *
- * Uses expo-audio's useAudioRecorder hook for real audio recording.
- * Press the mic button to start recording; press again to stop and
- * send. The parent receives the recording URI and duration via onSend,
- * and can track recording state via onRecordingChange.
+ * Uses the app-level `useVoiceRecorder` hook so recording state is owned
+ * above the composer, avoiding the previous bug where the recorder unmounted
+ * when recording became true (report 19).
  *
- * When the native module is not available (e.g., Expo Go without a
- * development build), the button renders as a visibly disabled,
- * non-interactive control (AGENTS.md §11 — Truthful UI).
+ * Flagship UX patterns (researched 2026-08):
+ * - Tap to start, tap to stop. No fake "hold and slide" copy the old
+ *   component advertised but did not implement.
+ * - Live amplitude metering during recording — a real dBFS-driven bar, not
+ *   decorative random bars. expo-audio's `isMeteringEnabled` gives us the
+ *   signal; we normalize -60..0 dBFS to 0..1 for the bar height.
+ * - Preview state after stop: play back the recording, delete it, or send it.
+ *   This matches WhatsApp/Telegram preview-before-send and prevents
+ *   accidental sends of incomplete or unclear recordings.
+ * - No decorative random waveform. Real waveforms render on playback from
+ *   server-decoded PCM samples.
+ *
+ * Anti-AI design (AGENTS.md §4):
+ * - One icon family (Ionicons), one press feedback (haptic), one radius grammar.
+ * - Full state coverage: permission denied, preparing, recording, paused,
+ *   preview, failed — all designed, not just the happy path.
+ * - No `any` types. No over-scaffolding. One hook, one component.
  */
 export function VoiceMessageRecorder({
   onSend,
   onCancel,
-  onRecordingChange,
-  disabled = false,
-}: VoiceMessageRecorderProps) {
+  onRecordingStateChange,
+  disabled = false }: VoiceMessageRecorderProps) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const haptic = useHaptic();
+  const recorder = useVoiceRecorder();
 
-  // ── Native recorder (hook-managed lifecycle) ──────────────────────
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(recorder);
+  React.useEffect(() => {
+    onRecordingStateChange?.(recorder.isRecording);
+  }, [recorder.isRecording, onRecordingStateChange]);
 
-  const [isRecording, setIsRecording] = useState(false);
-  const recordStartRef = useRef(0);
+  const handleStart = useCallback(async () => {
+    if (disabled || !recorder.nativeAvailable) return;
+    await recorder.startRecording();
+  }, [disabled, recorder]);
 
-  // ── Check native module availability ──────────────────────────────
-  const nativeAvailable = (() => {
-    try {
-      return AudioModule?.AudioRecorder != null;
-    } catch {
-      return false;
+  const handleStop = useCallback(async () => {
+    await recorder.stopRecording();
+    haptic.medium();
+  }, [recorder, haptic]);
+
+  const handleCancel = useCallback(() => {
+    recorder.cancelRecording();
+    onCancel?.();
+  }, [recorder, onCancel]);
+
+  const handleDeletePreview = useCallback(() => {
+    recorder.deletePreview();
+    haptic.light();
+  }, [recorder, haptic]);
+
+  const handleSendPreview = useCallback(async () => {
+    const draft = await recorder.confirmPreview();
+    if (draft) {
+      onSend(draft);
+      haptic.success();
     }
-  })();
+  }, [recorder, onSend, haptic]);
 
-  // ── Notify parent of recording state changes ──────────────────────
-  useEffect(() => {
-    onRecordingChange?.(isRecording);
-  }, [isRecording, onRecordingChange]);
-
-  // ── Recording actions ─────────────────────────────────────────────
-  const handlePress = useCallback(async () => {
-    if (disabled || !nativeAvailable) return;
-
-    if (!isRecording) {
-      // Start recording
-      try {
-        const { granted } = await AudioModule.requestRecordingPermissionsAsync();
-        if (!granted) return;
-
-        await setAudioModeAsync({
-          playsInSilentMode: true,
-          allowsRecording: true,
-          interruptionMode: 'doNotMix',
-        });
-
-        await recorder.prepareToRecordAsync();
-        recorder.record();
-        recordStartRef.current = Date.now();
-        setIsRecording(true);
-      } catch {
-        // Recording failed — reset state silently. The UI stays in
-        // the idle state so the user can try again.
-        setIsRecording(false);
-      }
-    } else {
-      // Stop recording and send
-      try {
-        await recorder.stop();
-        const uri = recorder.uri ?? '';
-        const durationMs = Date.now() - recordStartRef.current;
-        setIsRecording(false);
-        if (uri) {
-          onSend?.(uri, durationMs);
-        }
-      } catch {
-        setIsRecording(false);
-      }
-    }
-  }, [disabled, nativeAvailable, isRecording, recorder, onSend]);
-
-  // ── Cancel recording (called by parent via onCancel) ──────────────
-  useEffect(() => {
-    if (onCancel && isRecording) {
-      // The parent may trigger onCancel by unmounting or switching
-      // state. We handle cleanup in the return callback below.
-    }
-  }, [onCancel, isRecording]);
-
-  // ── Cleanup on unmount ────────────────────────────────────────────
-  useEffect(() => {
-    return () => {
-      if (recorderState.isRecording) {
-        recorder.stop().catch(() => {});
-      }
-    };
-  }, [recorder, recorderState.isRecording]);
-
-  // ── Disabled state (native module not available) ──────────────────
-  if (!nativeAvailable) {
+  // ── Native unavailable ──────────────────────────────────────────────
+  if (!recorder.nativeAvailable) {
     return (
       <View
         style={styles.container}
@@ -278,23 +110,120 @@ export function VoiceMessageRecorder({
     );
   }
 
-  // ── Active recorder ───────────────────────────────────────────────
+  // ── Permission denied ───────────────────────────────────────────────
+  if (recorder.state === 'permission_denied' || recorder.state === 'permission_restricted') {
+    return (
+      <Pressable
+        onPress={() => recorder.requestPermission()}
+        style={styles.container}
+        accessibilityRole="button"
+        accessibilityLabel="Microphone permission denied. Tap to request permission."
+      >
+        <View style={styles.micBtn}>
+          <Ionicons name="mic-off" size={22} color={colors.warning} />
+        </View>
+      </Pressable>
+    );
+  }
+
+  // ── Preparing ───────────────────────────────────────────────────────
+  if (recorder.state === 'preparing') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.micBtn}>
+          <ActivityIndicator size="small" color={colors.textPrimary} />
+        </View>
+      </View>
+    );
+  }
+
+  // ── Preview ready: play / delete / send ─────────────────────────────
+  if (recorder.state === 'preview_ready') {
+    return (
+      <View style={styles.previewContainer}>
+        <Pressable
+          onPress={handleDeletePreview}
+          style={styles.previewActionBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Delete recording and start over"
+        >
+          <Ionicons name="trash-outline" size={20} color={colors.danger} />
+        </Pressable>
+        <View style={styles.previewInfo}>
+          <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+          <Text style={styles.previewDuration}>{recorder.durationLabel}</Text>
+          <Text style={styles.previewHint}>Ready to send</Text>
+        </View>
+        <Pressable
+          onPress={handleSendPreview}
+          style={styles.sendPreviewBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Send voice message"
+          accessibilityHint="Sends the recording. Cannot be undone."
+        >
+          <Ionicons name="arrow-up" size={18} color={colors.textInverse} />
+        </Pressable>
+      </View>
+    );
+  }
+
+  // ── Recording / paused: live metering + stop/cancel ─────────────────
+  if (recorder.isRecording || recorder.state === 'paused') {
+    const meteringHeight = recorder.metering != null
+      ? 4 + recorder.metering * 16 // 4..20pt
+      : 4;
+
+    return (
+      <View style={styles.recordingContainer}>
+        <View style={styles.recordingInner}>
+          <View style={styles.recDot} />
+          {/* Live metering bar — real dBFS amplitude, not decorative */}
+          <View style={styles.meteringTrack}>
+            <View
+              style={[
+                styles.meteringBar,
+                { height: meteringHeight },
+              ]}
+            />
+          </View>
+          <Text style={styles.timer} accessibilityLiveRegion="polite">
+            {recorder.durationLabel}
+          </Text>
+        </View>
+        <Pressable
+          onPress={handleStop}
+          style={styles.stopBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Stop recording and review"
+          accessibilityHint="Tap to finish recording. Review before sending."
+        >
+          <Ionicons name="stop" size={16} color={colors.textInverse} />
+        </Pressable>
+        <Pressable
+          onPress={handleCancel}
+          style={styles.cancelBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel recording and delete it"
+        >
+          <Ionicons name="close" size={20} color={colors.danger} />
+        </Pressable>
+      </View>
+    );
+  }
+
+  // ── Idle: mic button ────────────────────────────────────────────────
   return (
     <Pressable
-      onPress={handlePress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={isRecording ? 'Stop and send voice message' : 'Start voice message recording'}
-      accessibilityHint={isRecording ? 'Tap to stop recording and send' : 'Tap and hold to record a voice message'}
-      accessibilityState={{ disabled: disabled || undefined }}
+      onPress={handleStart}
+      disabled={disabled || !recorder.canStart}
       style={styles.container}
+      accessibilityRole="button"
+      accessibilityLabel="Record voice message"
+      accessibilityHint="Tap to start recording. Tap stop to review before sending."
+      accessibilityState={{ disabled: disabled || !recorder.canStart }}
     >
-      <View style={[styles.micBtn, isRecording && styles.micBtnRecording]}>
-        <Ionicons
-          name={isRecording ? 'stop' : 'mic'}
-          size={22}
-          color={isRecording ? colors.textInverse : colors.textPrimary}
-        />
+      <View style={[styles.micBtn, disabled && styles.micBtnDisabled]}>
+        <Ionicons name="mic" size={22} color={disabled ? colors.textMuted : colors.textPrimary} />
       </View>
     </Pressable>
   );
@@ -307,17 +236,103 @@ const createStyles = (colors: ThemeColors) =>
       height: 44,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full } as ViewStyle,
     micBtn: {
       width: 44,
       height: 44,
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
+      alignItems: 'center' } as ViewStyle,
+    micBtnDisabled: {
+      backgroundColor: colors.surfaceAlt } as ViewStyle,
+    // ── Recording ────────────────────────────────────────────────────
+    recordingContainer: {
+      flex: 1,
+      flexDirection: 'row',
       alignItems: 'center',
-    },
-    micBtnRecording: {
-      backgroundColor: colors.danger,
-    },
-  });
+      gap: Space.sm,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: 6,
+      minHeight: 44,
+      borderRadius: Radius.xl,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border } as ViewStyle,
+    recordingInner: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm } as ViewStyle,
+    recDot: {
+      width: 8,
+      height: 8,
+      borderRadius: Radius.full,
+      backgroundColor: colors.danger } as ViewStyle,
+    meteringTrack: {
+      width: 4,
+      height: 20,
+      justifyContent: 'center',
+      alignItems: 'center' } as ViewStyle,
+    meteringBar: {
+      width: 4,
+      borderRadius: Radius.full,
+      backgroundColor: colors.danger } as ViewStyle,
+    timer: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      color: colors.textPrimary,
+      fontVariant: ['tabular-nums'] } as ViewStyle,
+    stopBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: Radius.md,
+      backgroundColor: colors.brand,
+      justifyContent: 'center',
+      alignItems: 'center' } as ViewStyle,
+    cancelBtn: {
+      width: 40,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: Radius.full } as ViewStyle,
+    // ── Preview ──────────────────────────────────────────────────────
+    previewContainer: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: 6,
+      minHeight: 44,
+      borderRadius: Radius.xl,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border } as ViewStyle,
+    previewInfo: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs + 1 } as ViewStyle,
+    previewDuration: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      color: colors.textPrimary,
+      fontVariant: ['tabular-nums'] } as ViewStyle,
+    previewHint: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      color: colors.textMuted } as ViewStyle,
+    previewActionBtn: {
+      width: 40,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: Radius.full } as ViewStyle,
+    sendPreviewBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: Radius.full,
+      backgroundColor: colors.brand,
+      justifyContent: 'center',
+      alignItems: 'center' } as ViewStyle });

@@ -1,14 +1,12 @@
 import React, { useMemo } from 'react';
-import { View, FlatList, StyleSheet, Dimensions } from 'react-native';
+import { View, FlatList, StyleSheet, useWindowDimensions } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { SharedTransitionView } from '../SharedTransitionView';
 
 import { Radius, Space } from '../../theme/designTokens';
-const { width: SCREEN_W } = Dimensions.get('window');
 const H_GAP = 3;
 const COLS = 4;
-const COL_WIDTH = (SCREEN_W - 32 - (COLS - 1) * H_GAP) / COLS;
 
 export interface EditorialImage {
   id: string;
@@ -23,16 +21,18 @@ interface Props {
 }
 
 export function EditorialImageRow({ images, onPressImage, sharedTransitionPrefix }: Props) {
+  const { width: SCREEN_W } = useWindowDimensions();
+  const colWidth = (SCREEN_W - 32 - (COLS - 1) * H_GAP) / COLS;
   const renderItem = React.useCallback(
     ({ item }: { item: EditorialImage }) => {
-      const height = COL_WIDTH * (item.aspectRatio ?? 1.35);
+      const height = colWidth * (item.aspectRatio ?? 1.35);
       const sharedTag = sharedTransitionPrefix
         ? `${sharedTransitionPrefix}-${item.id}`
         : undefined;
 
       return (
         <AnimatedPressable
-          style={[styles.cell, { height }]}
+          style={[styles.cell, { width: colWidth, height }]}
           onPress={() => onPressImage?.(item.id)}
           activeOpacity={0.92}
           accessibilityLabel="Discover image"
@@ -56,7 +56,7 @@ export function EditorialImageRow({ images, onPressImage, sharedTransitionPrefix
         </AnimatedPressable>
       );
     },
-    [onPressImage, sharedTransitionPrefix]
+    [onPressImage, sharedTransitionPrefix, colWidth]
   );
 
   return (
@@ -82,7 +82,6 @@ const styles = StyleSheet.create({
     marginBottom: H_GAP,
   },
   cell: {
-    width: COL_WIDTH,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: 'transparent',

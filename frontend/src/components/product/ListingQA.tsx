@@ -4,11 +4,11 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  TextInput,
-} from 'react-native';
+  TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
@@ -46,8 +46,7 @@ export function ListingQA({
   listingId,
   currentUserName,
   isSeller,
-  initialQuestions = [],
-}: ListingQAProps) {
+  initialQuestions = [] }: ListingQAProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [questions, setQuestions] = useState<ListingQuestion[]>(initialQuestions);
@@ -73,8 +72,7 @@ export function ListingQA({
       askerName: currentUserName,
       text: trimmed,
       createdAt: Date.now(),
-      answer: null,
-    };
+      answer: null };
     setQuestions((prev) => [newQuestion, ...prev]);
     setAskText('');
     setIsSubmitting(false);
@@ -98,9 +96,7 @@ export function ListingQA({
               answer: {
                 text: trimmed,
                 responderName: currentUserName,
-                createdAt: Date.now(),
-              },
-            }
+                createdAt: Date.now() } }
           : q,
       ),
     );
@@ -258,20 +254,17 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   sectionTitle: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   countBadge: {
     minWidth: 20,
     height: 20,
@@ -279,18 +272,15 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
+    paddingHorizontal: 6 },
   countText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   askRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   askInput: {
     flex: 1,
     minHeight: 40,
@@ -299,104 +289,86 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   askBtn: {
     width: 40,
     height: 40,
     borderRadius: Radius.md,
     backgroundColor: colors.brand,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   askBtnDisabled: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   emptyWrap: {
     alignItems: 'center',
     paddingVertical: Space.lg,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   emptyText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textMuted },
   emptySubtext: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   qList: {
-    gap: Space.md,
-  },
+    gap: Space.md },
   qItem: {
     paddingBottom: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   qHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginBottom: 6,
-  },
+    marginBottom: 6 },
   avatarPlaceholder: {
     width: 28,
     height: 28,
     borderRadius: Radius.xl,
-    backgroundColor: `${colors.brand}20`,
+    backgroundColor: colors.brandSubtle,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
   qAsker: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   qTime: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   qText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     lineHeight: 19,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   answerWrap: {
     marginLeft: Space.smMd,
     paddingLeft: Space.sm,
     borderLeftWidth: 2,
-    borderLeftColor: colors.success,
-  },
+    borderLeftColor: colors.success },
   answerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   answerLabel: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.success,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.success },
   answerText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     lineHeight: 18,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   answerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -404,22 +376,18 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs + 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.sm,
-    backgroundColor: `${colors.brand}10`,
-    alignSelf: 'flex-start',
-  },
+    backgroundColor: colors.brandSubtle,
+    alignSelf: 'flex-start' },
   answerBtnPressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: 0.97 }] },
   answerBtnText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
   answerInputWrap: {
     marginTop: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   answerInput: {
     minHeight: 40,
     maxHeight: 80,
@@ -427,43 +395,34 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   answerActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   cancelAnswerBtn: {
     paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
+    paddingHorizontal: 12 },
   cancelAnswerPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   cancelAnswerText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   postAnswerBtn: {
     paddingVertical: 6,
     paddingHorizontal: Space.md,
     borderRadius: Radius.sm,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   postAnswerText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.scrimTextPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextPrimary },
   pendingAnswer: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    fontStyle: 'italic',
-  },
-  });
+    fontStyle: 'italic' } });
 }

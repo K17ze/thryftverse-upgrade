@@ -75,9 +75,14 @@ describe('product-detail-flagship-reconstruction: shared compact width', () => {
     expect(assetSrc).not.toMatch(/isCompact\s*=\s*screenWidth\s*<\s*390/);
   });
 
-  it('CommerceDetailStateDock uses useBreakpoint for its stack threshold', () => {
-    expect(dockSrc).toContain('useBreakpoint');
-    // The old hardcoded 360 threshold should not appear.
+  it('CommerceDetailStateDock stacks at the shared compact threshold', () => {
+    // The dock reads viewport width directly and compares against the
+    // shared COMMERCE_DETAIL_COMPACT_WIDTH constant (re-exported as
+    // COMPACT_STACK_THRESHOLD) so the dock, identity and media switch
+    // behaviour at the same breakpoint.
+    expect(dockSrc).toContain('useWindowDimensions');
+    expect(dockSrc).toContain('COMPACT_STACK_THRESHOLD');
+    expect(dockSrc).toMatch(/layout === 'auto' && hasSecondary && screenWidth < COMPACT_STACK_THRESHOLD/);
     expect(dockSrc).not.toMatch(/COMPACT_STACK_THRESHOLD\s*=\s*360/);
   });
 });

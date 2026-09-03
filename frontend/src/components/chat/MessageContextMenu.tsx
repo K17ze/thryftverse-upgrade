@@ -4,18 +4,20 @@ import {
   StyleSheet,
   Modal,
   Animated,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Elevation } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis } from '../ui/Text';
 import { deriveMessageActions } from '../../utils/messageContextMenuCapabilities';
 import type { ActionDef } from '../../utils/messageContextMenuCapabilities';
 import { Motion } from '../../theme/motionTokens';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'edit' | 'delete' | 'retry' | 'report';
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -24,9 +26,9 @@ interface MessageContextMenuProps {
   messageText?: string;
   isOwnMessage?: boolean;
   isFailed?: boolean;
+  /** P2-03: Whether the message is still within the edit window. */
+  canEdit?: boolean;
 }
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export function MessageContextMenu({
   visible,
@@ -35,8 +37,12 @@ export function MessageContextMenu({
   messageText,
   isOwnMessage,
   isFailed,
+  canEdit,
 }: MessageContextMenuProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
+  const reducedMotion = useReducedMotion();
+  const { height: screenHeight } = useWindowDimensions();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const actions = React.useMemo<ActionDef[]>(() => {
@@ -44,42 +50,53 @@ export function MessageContextMenu({
       isOwnMessage: Boolean(isOwnMessage),
       isFailed: Boolean(isFailed),
       messageText,
+      canEdit: Boolean(canEdit),
     });
-  }, [messageText, isOwnMessage, isFailed]);
-  const slideAnim = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  }, [messageText, isOwnMessage, isFailed, canEdit]);
+  const slideAnim = React.useRef(new Animated.Value(screenHeight)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
     if (visible) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: Motion.duration.fast,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: Motion.spring.sheet.damping,
-          stiffness: Motion.spring.sheet.stiffness,
-          mass: Motion.spring.sheet.mass,
-        }),
-      ]).start();
+      if (reducedMotion) {
+        fadeAnim.setValue(1);
+        slideAnim.setValue(0);
+      } else {
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: Motion.duration.fast,
+            useNativeDriver: true,
+          }),
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            damping: Motion.spring.sheet.damping,
+            stiffness: Motion.spring.sheet.stiffness,
+            mass: Motion.spring.sheet.mass,
+          }),
+        ]).start();
+      }
     } else {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: Motion.duration.fast,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: SCREEN_HEIGHT,
-          duration: Motion.duration.slow,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      if (reducedMotion) {
+        fadeAnim.setValue(0);
+        slideAnim.setValue(screenHeight);
+      } else {
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: Motion.duration.fast,
+            useNativeDriver: true,
+          }),
+          Animated.timing(slideAnim, {
+            toValue: screenHeight,
+            duration: Motion.duration.slow,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
     }
-  }, [visible]);
+  }, [visible, reducedMotion, screenHeight]);
 
   const handleAction = (action: MessageAction) => {
     onAction(action);
@@ -144,12 +161,12 @@ export function MessageContextMenu({
             style={styles.cancelBtn}
             onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="Cancel"
+            accessibilityLabel={t('common.cancel')}
             activeOpacity={0.7}
             scaleValue={0.98}
             hapticFeedback="light"
           >
-            <BodyEmphasis color={colors.textPrimary}>Cancel</BodyEmphasis>
+            <BodyEmphasis color={colors.textPrimary}>{t('common.cancel')}</BodyEmphasis>
           </AnimatedPressable>
         </Animated.View>
       </View>
@@ -173,11 +190,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.lg - 4,
     paddingTop: Space.smMd,
     paddingBottom: Space.xl + 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 12,
+    ...Elevation.floating,
   },
   handle: {
     width: 40,

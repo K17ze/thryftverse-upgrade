@@ -91,6 +91,33 @@ Anti-AI composition rules:
   loading/final layout;
 - selection, reply, retry, and destructive modes are explicit and reversible.
 
+### 2026 messaging surface patterns (AGENTS.md §35.3–35.6)
+
+These are verified August 2026 findings from first-party sources, not memory. Apply
+the ones relevant to the worked surface:
+
+**WhatsApp 2026 bubble design (§35.3):** Bubbles are now fully rounded pill-shaped
+with significantly increased radius. The classic tail/pointer has been removed —
+media appears without traditional bubble borders (media IS the bubble). Messages align
+closer to the display edge. Our approach: keep the asymmetric tail radius
+(iMessage-style) which is also flagship; the tail corner at `Radius.sm` (4px) is
+subtle enough. Full pill removal is a design choice, not a requirement.
+
+**iMessage typing dots (§35.4):** Three dots pulsing in sequence, not simultaneously.
+Each dot fades from 30% to 100% opacity with a 200ms stagger. Brand blue on iOS; we
+use `colors.brand` for consistency. Reduced motion: static dots at fixed opacity, no
+animation. Replaces text "typing..." which reads as prototype-grade.
+
+**Unread count badge (§35.6):** Single unread = small 8pt dot in brand color, no
+number. Multiple unread = pill-shaped badge with count, `minWidth: 18, height: 18,
+borderRadius: full`, shows "99+" when over 99. Position: right side of the
+conversation row, after the snippet preview. Brand color background, inverse text.
+Consistent across WhatsApp, iMessage, Telegram.
+
+**Send feedback (§27.9):** Send message is S2 (visual + subtle haptic). Like/react is
+S1 (visual only). Failed send is distinct from unknown-outcome — never show success
+for an ambiguous outcome (§37.7).
+
 ## 5. Implement one vertical slice
 
 Run both `live-signs-convergence-loop.md` and

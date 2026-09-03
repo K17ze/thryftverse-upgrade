@@ -108,6 +108,7 @@ describe('settings preference persistence', () => {
       personalizedAds: false,
       recommendationPersonalization: true,
       thirdPartySharing: false,
+      autoTranslateMessages: false,
     });
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(

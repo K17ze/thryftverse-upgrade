@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { AppState } from 'react-native';
 import type { CreatorDocument, CreatorLayer, CreatorPage } from './composition';
 import {
   createEmptyDocument,
@@ -11,7 +12,7 @@ import {
   POSTER_DEFAULT_ASPECT_RATIO,
   POSTER_DEFAULT_BACKGROUND,
 } from './composition';
-import { HistoryStack } from './history';
+import { useHistoryStack } from './useHistoryStack';
 import { CreatorDraftService } from './drafts';
 import { CreatorAnalytics } from './creatorAnalytics';
 import { getTemplateById } from './templates';
@@ -32,6 +33,10 @@ export interface CreatorContextValue {
   isDirty: boolean;
   autosaveStatus: 'idle' | 'saving' | 'saved' | 'failed';
   isLoadingDraft: boolean;
+  /** Set when a draft load failed on mount (corrupt/missing). null otherwise. */
+  draftError: string | null;
+  /** Clear the draft error and retry loading the given draft id. */
+  retryDraftLoad: (id: string) => void;
 
   setDocument: (doc: CreatorDocument) => void;
   /** Commit a document update through the history stack (undo/redo). */
@@ -295,17 +300,28 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
   }, [initialMediaUri, initialMedia, initialType]);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
-  const [undoLabel, setUndoLabel] = useState<string | null>(null);
-  const [redoLabel, setRedoLabel] = useState<string | null>(null);
+  const {
+    canUndo,
+    canRedo,
+    undoLabel,
+    redoLabel,
+    undo: undoHistory,
+    redo: redoHistory,
+    push: pushHistory,
+    current: getCurrentDoc,
+    reset: resetHistory,
+  } = useHistoryStack(initialDoc);
   const [isDirty, setIsDirty] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
 
-  const historyRef = useRef(new HistoryStack(initialDoc));
   const lastSavedDocRef = useRef(JSON.stringify(initialDoc));
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Always-current reference to the flush-save handler so the AppState
+  // listener and unmount cleanup can invoke the latest implementation
+  // without re-subscribing on every render.
+  const flushSaveRef = useRef<(() => Promise<void>) | null>(null);
 
   // ── Durable project store refs ─────────────────────────────────────
   // Lazy-initialized singletons. The ProjectStore persists project packages
@@ -384,31 +400,21 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     setHasPendingRecovery(false);
   }, []);
 
-  const syncHistoryButtons = useCallback(() => {
-    const h = historyRef.current;
-    setCanUndo(h.canUndo());
-    setCanRedo(h.canRedo());
-    setUndoLabel(h.getUndoLabel());
-    setRedoLabel(h.getRedoLabel());
-  }, []);
-
   const commit = useCallback((doc: CreatorDocument, label: string) => {
-    historyRef.current.push(doc, label);
+    pushHistory(doc, label);
     setDocumentState(doc);
     setIsDirty(true);
-    syncHistoryButtons();
-  }, [syncHistoryButtons]);
+  }, [pushHistory]);
 
   const setDocument = useCallback((doc: CreatorDocument) => {
-    historyRef.current.reset(doc);
+    resetHistory(doc);
     setDocumentState(doc);
     setSelectedLayerId(null);
     setSelectedLayerIds([]);
     setActivePageIndex(0);
     setIsDirty(false);
     lastSavedDocRef.current = JSON.stringify(doc);
-    syncHistoryButtons();
-  }, [syncHistoryButtons]);
+  }, [resetHistory]);
 
   useEffect(() => {
     CreatorAnalytics.sessionStart(initialType);
@@ -419,12 +425,14 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     if (!draftId) return;
     let cancelled = false;
     setIsLoadingDraft(true);
+    setDraftError(null);
     CreatorDraftService.loadDraft(draftId).then((doc) => {
       if (cancelled || !doc) return;
       setDocument(doc);
       CreatorAnalytics.draftLoad(doc.type);
     }).catch(() => {
       // Corrupt or missing draft — stay with empty document
+      if (!cancelled) setDraftError('Failed to load draft');
     }).finally(() => {
       if (!cancelled) setIsLoadingDraft(false);
     });
@@ -446,6 +454,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     if (!sourceDocumentId || draftId || templateId) return;
     let cancelled = false;
     setIsLoadingDraft(true);
+    setDraftError(null);
     CreatorDraftService.loadDraft(sourceDocumentId).then((sourceDoc) => {
       if (cancelled || !sourceDoc) return;
       if (!sourceDoc.metadata.allowRemix) return;
@@ -457,13 +466,14 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
           sourceDocumentId: sourceDoc.id,
           sourceCreatorId: sourceDoc.metadata.sourceCreatorId,
           allowRemix: false,
-          title: `Remix of ${sourceDoc.metadata.title || 'Untitled'}`,
+          title: `Recreated from ${sourceDoc.metadata.title || 'Untitled'}`,
         },
         updatedAt: new Date().toISOString(),
       };
       setDocument(remixedDoc);
     }).catch(() => {
       // Source not found — stay with empty document
+      if (!cancelled) setDraftError('Failed to load draft');
     }).finally(() => {
       if (!cancelled) setIsLoadingDraft(false);
     });
@@ -481,14 +491,13 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
   const addLayer = useCallback((layer: CreatorLayer) => {
     setDocumentState((prev) => {
       const doc = addLayerToPage(prev, activePageIndex, layer);
-      historyRef.current.push(doc, `Add ${layer.type} layer`);
+      pushHistory(doc, `Add ${layer.type} layer`);
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     setSelectedLayerId(layer.id);
     CreatorAnalytics.layerAdd(document.type, layer.type);
-  }, [activePageIndex, syncHistoryButtons, document.type]);
+  }, [activePageIndex, pushHistory, document.type]);
 
   const updateLayer = useCallback((id: string, updates: Partial<CreatorLayer>, label?: string) => {
     setDocumentState((prev) => {
@@ -496,13 +505,12 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       doc.updatedAt = new Date().toISOString();
       // Coalesce rapid updates with the same label into one history entry
       // This prevents history spam when updateLayer is called in rapid succession
-      historyRef.current.push(doc, label ?? 'Update layer');
+      pushHistory(doc, label ?? 'Update layer');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     CreatorAnalytics.layerTransform(document.type, updates.type ?? 'update');
-  }, [activePageIndex, syncHistoryButtons, document.type]);
+  }, [activePageIndex, pushHistory, document.type]);
 
   // Live (no-history) layer update. Mutates the document state so the canvas
   // reflects the change immediately, but does NOT push to the undo/redo stack.
@@ -530,93 +538,85 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     setDocumentState((prev) => {
       const doc = updateLayerInPage(prev, activePageIndex, id, finalUpdates);
       doc.updatedAt = new Date().toISOString();
-      historyRef.current.push(doc, label);
+      pushHistory(doc, label);
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     CreatorAnalytics.layerTransform(document.type, updates.type ?? 'transform');
-  }, [activePageIndex, syncHistoryButtons, document.type]);
+  }, [activePageIndex, pushHistory, document.type]);
 
   const removeLayer = useCallback((id: string) => {
     const layerType = document.pages[activePageIndex]?.layers.find((l) => l.id === id)?.type ?? 'unknown';
     setDocumentState((prev) => {
       const doc = removeLayerFromPage(prev, activePageIndex, id);
-      historyRef.current.push(doc, 'Remove layer');
+      pushHistory(doc, 'Remove layer');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     setSelectedLayerId(null);
     CreatorAnalytics.layerRemove(document.type, layerType);
-  }, [activePageIndex, syncHistoryButtons, document.type, document.pages]);
+  }, [activePageIndex, pushHistory, document.type, document.pages]);
 
   const duplicateLayer = useCallback((id: string) => {
     const layerType = document.pages[activePageIndex]?.layers.find((l) => l.id === id)?.type ?? 'unknown';
     setDocumentState((prev) => {
       const doc = duplicateLayerInPage(prev, activePageIndex, id);
-      historyRef.current.push(doc, 'Duplicate layer');
+      pushHistory(doc, 'Duplicate layer');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     CreatorAnalytics.layerDuplicate(document.type, layerType);
-  }, [activePageIndex, syncHistoryButtons, document.type, document.pages]);
+  }, [activePageIndex, pushHistory, document.type, document.pages]);
 
   const reorderLayer = useCallback((id: string, direction: 'front' | 'forward' | 'backward' | 'back') => {
     setDocumentState((prev) => {
       const doc = reorderLayerZ(prev, activePageIndex, id, direction);
-      historyRef.current.push(doc, `Move ${direction}`);
+      pushHistory(doc, `Move ${direction}`);
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     CreatorAnalytics.layerReorder(document.type, direction);
-  }, [activePageIndex, syncHistoryButtons, document.type]);
+  }, [activePageIndex, pushHistory, document.type]);
 
   const toggleLayerLock = useCallback((id: string) => {
     setDocumentState((prev) => {
       const layer = prev.pages[activePageIndex]?.layers.find((l) => l.id === id);
       if (!layer) return prev;
       const doc = updateLayerInPage(prev, activePageIndex, id, { locked: !layer.locked });
-      historyRef.current.push(doc, layer.locked ? 'Unlock layer' : 'Lock layer');
+      pushHistory(doc, layer.locked ? 'Unlock layer' : 'Lock layer');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
-  }, [activePageIndex, syncHistoryButtons]);
+  }, [activePageIndex, pushHistory]);
 
   const toggleLayerVisibility = useCallback((id: string) => {
     setDocumentState((prev) => {
       const layer = prev.pages[activePageIndex]?.layers.find((l) => l.id === id);
       if (!layer) return prev;
       const doc = updateLayerInPage(prev, activePageIndex, id, { hidden: !layer.hidden });
-      historyRef.current.push(doc, layer.hidden ? 'Show layer' : 'Hide layer');
+      pushHistory(doc, layer.hidden ? 'Show layer' : 'Hide layer');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
-  }, [activePageIndex, syncHistoryButtons]);
+  }, [activePageIndex, pushHistory]);
 
   const updateMetadata = useCallback((updates: Partial<CreatorDocument['metadata']>) => {
     setDocumentState((prev) => {
       const doc = { ...prev, metadata: { ...prev.metadata, ...updates }, updatedAt: new Date().toISOString() };
-      historyRef.current.push(doc, 'Update settings');
+      pushHistory(doc, 'Update settings');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
-  }, [syncHistoryButtons]);
+  }, [pushHistory]);
 
   const updateCanvas = useCallback((updates: Partial<CreatorDocument['canvas']>) => {
     setDocumentState((prev) => {
       const doc = { ...prev, canvas: { ...prev.canvas, ...updates }, updatedAt: new Date().toISOString() };
-      historyRef.current.push(doc, 'Update canvas');
+      pushHistory(doc, 'Update canvas');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
-  }, [syncHistoryButtons]);
+  }, [pushHistory]);
 
   const addPage = useCallback(() => {
     setDocumentState((prev) => {
@@ -626,15 +626,14 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
         pages: [...prev.pages, { id: `page_${Date.now()}`, layers: [] }],
         updatedAt: new Date().toISOString(),
       };
-      historyRef.current.push(doc, 'Add page');
+      pushHistory(doc, 'Add page');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     setActivePageIndex((prev) => prev + 1);
     setSelectedLayerId(null);
     CreatorAnalytics.pageAdd(document.type, document.pages.length + 1);
-  }, [syncHistoryButtons, document.type, document.pages.length]);
+  }, [pushHistory, document.type, document.pages.length]);
 
   const duplicatePage = useCallback((index: number) => {
     setDocumentState((prev) => {
@@ -653,14 +652,13 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       const newPages = [...prev.pages];
       newPages.splice(index + 1, 0, newPage);
       const doc = { ...prev, pages: newPages, updatedAt: new Date().toISOString() };
-      historyRef.current.push(doc, 'Duplicate page');
+      pushHistory(doc, 'Duplicate page');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     setActivePageIndex(index + 1);
     setSelectedLayerId(null);
-  }, [syncHistoryButtons]);
+  }, [pushHistory]);
 
   const reorderPages = useCallback((fromIndex: number, toIndex: number) => {
     setDocumentState((prev) => {
@@ -669,14 +667,13 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       const [moved] = newPages.splice(fromIndex, 1);
       newPages.splice(toIndex, 0, moved);
       const doc = { ...prev, pages: newPages, updatedAt: new Date().toISOString() };
-      historyRef.current.push(doc, 'Reorder pages');
+      pushHistory(doc, 'Reorder pages');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     setActivePageIndex(toIndex);
     setSelectedLayerId(null);
-  }, [syncHistoryButtons]);
+  }, [pushHistory]);
 
   const updatePageDuration = useCallback((index: number, durationMs: number) => {
     setDocumentState((prev) => {
@@ -684,12 +681,11 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       if (!newPages[index]) return prev;
       newPages[index] = { ...newPages[index], durationMs };
       const doc = { ...prev, pages: newPages, updatedAt: new Date().toISOString() };
-      historyRef.current.push(doc, 'Update duration');
+      pushHistory(doc, 'Update duration');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
-  }, [syncHistoryButtons]);
+  }, [pushHistory]);
 
   const removePage = useCallback((index: number) => {
     setDocumentState((prev) => {
@@ -699,36 +695,33 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
         pages: prev.pages.filter((_, i) => i !== index),
         updatedAt: new Date().toISOString(),
       };
-      historyRef.current.push(doc, 'Remove page');
+      pushHistory(doc, 'Remove page');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     setActivePageIndex((prev) => Math.max(0, prev > index ? prev - 1 : prev === index ? Math.max(0, index - 1) : prev));
     setSelectedLayerId(null);
-  }, [syncHistoryButtons]);
+  }, [pushHistory]);
 
   const undo = useCallback(() => {
-    const doc = historyRef.current.undo();
+    const doc = undoHistory();
     if (doc) {
       setDocumentState(doc);
       setSelectedLayerId(null);
       setSelectedLayerIds([]);
-      syncHistoryButtons();
       CreatorAnalytics.undo(document.type);
     }
-  }, [syncHistoryButtons, document.type]);
+  }, [undoHistory, document.type]);
 
   const redo = useCallback(() => {
-    const doc = historyRef.current.redo();
+    const doc = redoHistory();
     if (doc) {
       setDocumentState(doc);
       setSelectedLayerId(null);
       setSelectedLayerIds([]);
-      syncHistoryButtons();
       CreatorAnalytics.redo(document.type);
     }
-  }, [syncHistoryButtons, document.type]);
+  }, [redoHistory, document.type]);
 
   const saveDraft = useCallback(async () => {
     setAutosaveStatus('saving');
@@ -782,7 +775,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     if (!isDirty) return;
     setAutosaveStatus('saving');
     try {
-      const current = historyRef.current.current();
+      const current = getCurrentDoc();
       await CreatorDraftService.saveDraft(current);
       lastSavedDocRef.current = JSON.stringify(current);
       setIsDirty(false);
@@ -861,6 +854,22 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       return true;
     }
     return false;
+  }, [setDocument]);
+
+  // Retry a failed draft load: clears the error, sets loading, and re-attempts.
+  const retryDraftLoad = useCallback((id: string) => {
+    setDraftError(null);
+    setIsLoadingDraft(true);
+    CreatorDraftService.loadDraft(id).then((doc) => {
+      if (doc) {
+        setDocument(doc);
+        CreatorAnalytics.draftLoad(doc.type);
+      }
+    }).catch(() => {
+      setDraftError('Failed to load draft');
+    }).finally(() => {
+      setIsLoadingDraft(false);
+    });
   }, [setDocument]);
 
   // ─── Copy / Paste ────────────────────────────────────────────────────────
@@ -948,12 +957,11 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
         doc = updateLayerInPage(doc, activePageIndex, id, layerUpdates);
       }
       doc.updatedAt = new Date().toISOString();
-      historyRef.current.push(doc, label);
+      pushHistory(doc, label);
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
-  }, [activePageIndex, syncHistoryButtons]);
+  }, [activePageIndex, pushHistory]);
 
   // Live (no-history) position update for multiple layers. Used during
   // multi-select drag so peer layers move together in real-time without
@@ -990,12 +998,11 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       page.layers = [...unselected, ...selected].map((l, i) => ({ ...l, zIndex: i }));
       pages[activePageIndex] = page;
       const doc = { ...prev, pages, updatedAt: new Date().toISOString() };
-      historyRef.current.push(doc, 'Bring to front');
+      pushHistory(doc, 'Bring to front');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
-  }, [activePageIndex, syncHistoryButtons, selectedLayerIds]);
+  }, [activePageIndex, pushHistory, selectedLayerIds]);
 
   // Reorder all selected layers to the back (bottom of z-stack) in one
   // history entry, preserving the relative order of the selected set.
@@ -1011,12 +1018,11 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       page.layers = [...selected, ...unselected].map((l, i) => ({ ...l, zIndex: i }));
       pages[activePageIndex] = page;
       const doc = { ...prev, pages, updatedAt: new Date().toISOString() };
-      historyRef.current.push(doc, 'Send to back');
+      pushHistory(doc, 'Send to back');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
-  }, [activePageIndex, syncHistoryButtons, selectedLayerIds]);
+  }, [activePageIndex, pushHistory, selectedLayerIds]);
 
   // ─── Alignment Tools ─────────────────────────────────────────────────────
   const alignLayerToCenter = useCallback((layerId: string) => {
@@ -1079,15 +1085,14 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
         pages: hasOnlyEmptyPage ? [newPage] : [...prev.pages, newPage],
         updatedAt: new Date().toISOString(),
       };
-      historyRef.current.push(doc, 'Add frame');
+      pushHistory(doc, 'Add frame');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     setActivePageIndex((prev) => prev + 1);
     setSelectedLayerId(null);
     CreatorAnalytics.pageAdd('poster', document.pages.length + 1);
-  }, [document.type, document.pages.length, syncHistoryButtons]);
+  }, [document.type, document.pages.length, pushHistory]);
 
   const addPosterFrames = useCallback((media: CreatorInitialMedia[]) => {
     if (document.type !== 'poster') return;
@@ -1138,12 +1143,11 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
         pages: [...basePages, ...newPages],
         updatedAt: new Date().toISOString(),
       };
-      historyRef.current.push(doc, `Add ${newPages.length} frame${newPages.length > 1 ? 's' : ''}`);
+      pushHistory(doc, `Add ${newPages.length} frame${newPages.length > 1 ? 's' : ''}`);
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
-  }, [document.type, syncHistoryButtons]);
+  }, [document.type, pushHistory]);
 
   const replacePosterFrameMedia = useCallback((pageId: string, media: CreatorInitialMedia) => {
     if (document.type !== 'poster') return;
@@ -1182,12 +1186,11 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       }
       pages[pageIndex] = page;
       const doc = { ...prev, pages, updatedAt: new Date().toISOString() };
-      historyRef.current.push(doc, 'Replace frame media');
+      pushHistory(doc, 'Replace frame media');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
-  }, [document.type, syncHistoryButtons]);
+  }, [document.type, pushHistory]);
 
   const reorderPosterFrames = useCallback((from: number, to: number) => {
     if (document.type !== 'poster') return;
@@ -1345,13 +1348,12 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       const newPages = [...prev.pages];
       newPages[0] = { ...page0, layers: allLayers };
       const doc = { ...prev, pages: newPages, updatedAt: new Date().toISOString() };
-      historyRef.current.push(doc, 'Auto-arrange look');
+      pushHistory(doc, 'Auto-arrange look');
       setIsDirty(true);
-      syncHistoryButtons();
       return doc;
     });
     haptics.selection();
-  }, [document.type, syncHistoryButtons]);
+  }, [document.type, pushHistory]);
 
   // ── Multi-clip capture → poster composition ────────────────────────
   // Creates a new poster composition from a set of captured clips. Each
@@ -1454,7 +1456,7 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     setAutosaveStatus('saving');
     autosaveTimerRef.current = setTimeout(async () => {
-      const current = historyRef.current.current();
+      const current = getCurrentDoc();
       const currentStr = JSON.stringify(current);
       if (currentStr !== lastSavedDocRef.current) {
         try {
@@ -1501,6 +1503,43 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
     };
   }, [document, isDirty]);
 
+  // Keep flushSaveRef pointed at the latest retryAutosave (which reads from
+  // the history stack and guards on isDirty, mirroring the debounce path).
+  useEffect(() => {
+    flushSaveRef.current = retryAutosave;
+  }, [retryAutosave]);
+
+  // Flush pending edits when the app is backgrounded or becomes inactive.
+  // The 5s debounce timer may fire after the OS suspends the app (where the
+  // save may not complete) or be killed before it fires, losing edits. Clear
+  // the pending timer and save immediately on these transitions.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        if (autosaveTimerRef.current) {
+          clearTimeout(autosaveTimerRef.current);
+          autosaveTimerRef.current = null;
+        }
+        flushSaveRef.current?.();
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  // Flush any remaining dirty state on unmount so edits aren't lost when the
+  // provider tears down before the debounce timer fires.
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      flushSaveRef.current?.();
+    };
+  }, []);
+
   const value = useMemo<CreatorContextValue>(
     () => ({
       document,
@@ -1513,6 +1552,8 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       isDirty,
       autosaveStatus,
       isLoadingDraft,
+      draftError,
+      retryDraftLoad,
       setDocument,
       commitDocument: commit,
       setActivePageIndex,
@@ -1582,6 +1623,8 @@ export function CreatorProvider({ children, initialType, draftId, templateId, so
       isDirty,
       autosaveStatus,
       isLoadingDraft,
+      draftError,
+      retryDraftLoad,
       setDocument,
       commit,
       setActivePageIndex,

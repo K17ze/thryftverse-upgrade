@@ -4,9 +4,13 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { config } from '../config.js';
 import {
+  abortMultipartUpload,
   assertObjectMatchesUploadPolicy,
   assertUploadPolicy,
+  completeMultipartUpload,
+  createMultipartUpload,
   createUploadUrl,
+  presignPartUpload,
 } from '../lib/s3.js';
 import { mediaKindForContentType } from '../lib/mediaLifecycle.js';
 import { createModerationProvider } from '../lib/moderation/index.js';
@@ -40,6 +44,7 @@ const uploadRequestSchema = z.object({
       'evidence',
       'review',
       'smoke',
+      'voice',
     ])
     .default('uploads'),
 });
@@ -54,6 +59,7 @@ const finalizeScopeEnum = z.enum([
   'look',
   'evidence',
   'review',
+  'voice',
 ]);
 
 const finalizeRequestSchema = z.object({
@@ -74,6 +80,7 @@ const finalizeRequestSchema = z.object({
       'evidence',
       'review',
       'smoke',
+      'voice',
     ])
     .default('uploads'),
   scope: finalizeScopeEnum.default('general'),
@@ -114,7 +121,26 @@ export const registerUploadRoutes = ({
   resolveAuthenticatedUserId,
   verifyUploadedObject = assertObjectMatchesUploadPolicy,
 }: UploadRouteDependencies) => {
-  app.post('/uploads/presign', async (request) => {
+  app.post('/uploads/presign', {
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: '1 minute',
+      },
+    },
+  }, async (request) => {
+    // Explicit file-size guard before Zod parsing so that oversized files
+    // receive a semantically correct 413 (FILE_TOO_LARGE) instead of the
+    // generic 400 that Zod's .max() constraint would produce.
+    const rawBody = request.body as Record<string, unknown> | null;
+    if (
+      rawBody
+      && typeof rawBody.sizeBytes === 'number'
+      && rawBody.sizeBytes > 500 * 1024 * 1024
+    ) {
+      throw createApiError('FILE_TOO_LARGE', 'File exceeds maximum size of 500MB');
+    }
+
     const payload = uploadRequestSchema.parse(request.body);
     const actorUserId = resolveAuthenticatedUserId(request);
     if (payload.folder === 'smoke' && config.nodeEnv === 'production') {
@@ -194,58 +220,113 @@ export const registerUploadRoutes = ({
       );
     }
 
+    // ── Pre-transaction phase ───────────────────────────────────────
+    // The S3 HEAD verification is a network call that can take hundreds
+    // of milliseconds. Performing it inside the DB transaction held the
+    // FOR UPDATE row locks open across that call, causing lock contention
+    // under concurrent finalize traffic. The intent and any existing
+    // finalization row are read here (without locks), validated, and the
+    // HEAD check is run before the transaction is opened. The transaction
+    // below re-fetches the finalization row with FOR UPDATE for write
+    // serialization but only holds the lock for the duration of the DB
+    // writes themselves.
+    const intentResult = await db.query<{
+      id: string;
+      object_key: string;
+      bucket: string;
+      owner_id: string;
+      folder: string;
+      file_name: string;
+      content_type: string;
+      size_bytes: string;
+      public_url: string;
+      expires_at: string;
+      finalized_at: string | null;
+    }>(
+      `SELECT id, object_key, bucket, owner_id, folder, file_name,
+              content_type, size_bytes::text, public_url,
+              expires_at::text, finalized_at::text
+       FROM upload_intents
+       WHERE object_key = $1
+       LIMIT 1`,
+      [payload.objectKey],
+    );
+
+    if (!intentResult.rowCount) {
+      reply.code(404);
+      return { ok: false, error: 'Upload intent not found or no longer valid' };
+    }
+
+    const intent = intentResult.rows[0];
+    if (intent.owner_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Upload intent belongs to another user' };
+    }
+    if (Date.parse(intent.expires_at) <= Date.now() && !intent.finalized_at) {
+      reply.code(410);
+      return { ok: false, error: 'Upload intent has expired' };
+    }
+    if (payload.bucket && payload.bucket !== intent.bucket) {
+      reply.code(422);
+      return { ok: false, error: 'Upload bucket does not match the presigned intent' };
+    }
+
+    const bucket = intent.bucket;
+    const existing = await db.query<FinalizationRow>(
+      `SELECT id, object_key, bucket, owner_id, folder, file_name, content_type,
+              size_bytes::text, public_url, status, scope, scope_ref_id,
+              head_checked_at::text, failure_reason, metadata,
+              upload_intent_id, media_asset_id,
+              created_at::text, updated_at::text
+       FROM upload_finalizations
+       WHERE bucket = $1 AND object_key = $2
+       LIMIT 1`,
+      [bucket, payload.objectKey],
+    );
+
+    let row = existing.rows[0];
+    if (row && row.owner_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Finalization belongs to another user' };
+    }
+
+    const shouldVerify =
+      !row
+      || row.status !== 'finalized'
+      || row.upload_intent_id !== intent.id;
+
+    let status: 'pending' | 'finalized' | 'failed' = 'pending';
+    let failureReason: string | null = null;
+    let headCheckedAt: string | null = null;
+
+    if (shouldVerify) {
+      try {
+        await verifyUploadedObject(
+          intent.object_key,
+          intent.content_type,
+          Number(intent.size_bytes),
+        );
+        status = 'finalized';
+        headCheckedAt = new Date().toISOString();
+      } catch (error) {
+        status = 'failed';
+        failureReason = error instanceof Error ? error.message : 'HEAD_FAILED';
+        headCheckedAt = new Date().toISOString();
+      }
+    } else if (row?.status === 'finalized') {
+      status = 'finalized';
+    }
+
+    // ── Transaction phase: DB writes only ───────────────────────────
     const client = await db.connect();
     try {
       await client.query('BEGIN');
 
-      const intentResult = await client.query<{
-        id: string;
-        object_key: string;
-        bucket: string;
-        owner_id: string;
-        folder: string;
-        file_name: string;
-        content_type: string;
-        size_bytes: string;
-        public_url: string;
-        expires_at: string;
-        finalized_at: string | null;
-      }>(
-        `SELECT id, object_key, bucket, owner_id, folder, file_name,
-                content_type, size_bytes::text, public_url,
-                expires_at::text, finalized_at::text
-         FROM upload_intents
-         WHERE object_key = $1
-         LIMIT 1
-         FOR UPDATE`,
-        [payload.objectKey],
-      );
-
-      if (!intentResult.rowCount) {
-        await client.query('ROLLBACK');
-        reply.code(404);
-        return { ok: false, error: 'Upload intent not found or no longer valid' };
-      }
-
-      const intent = intentResult.rows[0];
-      if (intent.owner_id !== actorUserId) {
-        await client.query('ROLLBACK');
-        reply.code(403);
-        return { ok: false, error: 'Upload intent belongs to another user' };
-      }
-      if (Date.parse(intent.expires_at) <= Date.now() && !intent.finalized_at) {
-        await client.query('ROLLBACK');
-        reply.code(410);
-        return { ok: false, error: 'Upload intent has expired' };
-      }
-      if (payload.bucket && payload.bucket !== intent.bucket) {
-        await client.query('ROLLBACK');
-        reply.code(422);
-        return { ok: false, error: 'Upload bucket does not match the presigned intent' };
-      }
-
-      const bucket = intent.bucket;
-      const existing = await client.query<FinalizationRow>(
+      // Re-fetch the finalization row with FOR UPDATE to serialize
+      // concurrent finalize calls writing the same object. The intent
+      // data and HEAD result are already in hand from the pre-transaction
+      // phase, so the lock is held only for the writes below.
+      const lockedExisting = await client.query<FinalizationRow>(
         `SELECT id, object_key, bucket, owner_id, folder, file_name, content_type,
                 size_bytes::text, public_url, status, scope, scope_ref_id,
                 head_checked_at::text, failure_reason, metadata,
@@ -257,39 +338,18 @@ export const registerUploadRoutes = ({
          FOR UPDATE`,
         [bucket, payload.objectKey],
       );
+      row = lockedExisting.rows[0] ?? row;
 
-      let row = existing.rows[0];
-      if (row && row.owner_id !== actorUserId) {
-        await client.query('ROLLBACK');
-        reply.code(403);
-        return { ok: false, error: 'Finalization belongs to another user' };
-      }
-
-      const shouldVerify =
-        !row
-        || row.status !== 'finalized'
-        || row.upload_intent_id !== intent.id;
-
-      let status: 'pending' | 'finalized' | 'failed' = 'pending';
-      let failureReason: string | null = null;
-      let headCheckedAt: string | null = null;
-
-      if (shouldVerify) {
-        try {
-          await verifyUploadedObject(
-            intent.object_key,
-            intent.content_type,
-            Number(intent.size_bytes),
-          );
-          status = 'finalized';
-          headCheckedAt = new Date().toISOString();
-        } catch (error) {
-          status = 'failed';
-          failureReason = error instanceof Error ? error.message : 'HEAD_FAILED';
-          headCheckedAt = new Date().toISOString();
-        }
-      } else if (row?.status === 'finalized') {
+      // Reconcile: if another concurrent request already finalized this
+      // object for the same intent while we ran the HEAD check, honour
+      // that result instead of overwriting it with ours.
+      if (
+        row
+        && row.status === 'finalized'
+        && row.upload_intent_id === intent.id
+      ) {
         status = 'finalized';
+        failureReason = null;
       }
 
       const finalizationId = row?.id ?? `fin_${crypto.randomUUID()}`;
@@ -374,7 +434,7 @@ export const registerUploadRoutes = ({
       let mediaAsset: {
         id: string;
         status: string;
-        mediaKind: 'image' | 'video' | 'document';
+        mediaKind: 'image' | 'video' | 'audio' | 'document';
         canonicalUrl: string | null;
       } | null = null;
 
@@ -391,7 +451,7 @@ export const registerUploadRoutes = ({
         const assetResult = await client.query<{
           id: string;
           status: string;
-          media_kind: 'image' | 'video' | 'document';
+          media_kind: 'image' | 'video' | 'audio' | 'document';
           canonical_url: string | null;
         }>(
           `INSERT INTO media_assets (
@@ -410,7 +470,7 @@ export const registerUploadRoutes = ({
            DO UPDATE SET
              intended_purpose = EXCLUDED.intended_purpose,
              metadata = media_assets.metadata || EXCLUDED.metadata
-           RETURNING id, status, media_kind, canonical_url`,
+           RETURNING id, status, media_kind::text, canonical_url`,
           [
             mediaAssetId,
             row.id,
@@ -650,5 +710,505 @@ export const registerUploadRoutes = ({
         }
         : null,
     };
+  });
+
+  // ── Multipart upload endpoints ──────────────────────────────────────
+  //
+  // S3 multipart uploads allow large files (video) to be uploaded in
+  // independent parts. The flow is:
+  //   1. POST /uploads/multipart/initiate — creates the S3 multipart upload
+  //      session and returns the uploadId + presigned URLs for the first
+  //      batch of parts.
+  //   2. PUT (to S3 presigned URL) — client uploads each part directly.
+  //   3. POST /uploads/multipart/:id/parts — requests presigned URLs for
+  //      additional parts (for resumable uploads after app restart).
+  //   4. POST /uploads/multipart/:id/complete — submits part ETags, S3
+  //      assembles the final object, then the backend finalises the upload
+  //      via the same `upload_finalizations` table used by single-PUT.
+  //   5. POST /uploads/multipart/:id/abort — cancels the session and frees
+  //      S3 storage.
+
+  const multipartInitiateSchema = z.object({
+    fileName: z.string().trim().min(1).max(180),
+    contentType: z.string().trim().min(3).max(120),
+    sizeBytes: z.number().int().positive().max(500 * 1024 * 1024),
+    partSize: z.number().int().positive().min(5 * 1024 * 1024).max(50 * 1024 * 1024).default(8 * 1024 * 1024),
+    folder: z
+      .enum([
+        'uploads',
+        'listings',
+        'avatars',
+        'covers',
+        'posters',
+        'looks',
+        'evidence',
+        'review',
+        'smoke',
+        'voice',
+      ])
+      .default('uploads'),
+  });
+
+  const multipartCompleteSchema = z.object({
+    parts: z.array(
+      z.object({
+        partNumber: z.number().int().min(1).max(10000),
+        etag: z.string().min(1).max(256),
+      }),
+    ).min(1).max(10000),
+  });
+
+  const partNumbersSchema = z.object({
+    partNumbers: z.array(z.number().int().min(1).max(10000)).min(1).max(10000),
+  });
+
+  // POST /uploads/multipart/initiate
+  app.post('/uploads/multipart/initiate', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const payload = multipartInitiateSchema.parse(request.body);
+
+    if (payload.folder === 'smoke' && config.nodeEnv === 'production') {
+      throw createApiError('UPLOAD_INVALID', 'The smoke upload namespace is unavailable in production');
+    }
+
+    try {
+      assertUploadPolicy(payload.contentType, payload.sizeBytes);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : '';
+      if (reason === 'UPLOAD_CONTENT_TYPE_NOT_ALLOWED') {
+        throw createApiError('UPLOAD_INVALID', 'This media type is not allowed');
+      }
+      if (reason === 'UPLOAD_SIZE_NOT_ALLOWED') {
+        throw createApiError('UPLOAD_INVALID', 'This file exceeds the upload limit for its media type');
+      }
+      throw error;
+    }
+
+    const safeName = payload.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const key = `${payload.folder}/${actorUserId}/${crypto.randomUUID()}_${safeName}`;
+    const partCount = Math.ceil(payload.sizeBytes / payload.partSize);
+
+    const { uploadId, bucket } = await createMultipartUpload(key, payload.contentType);
+
+    const sessionId = `ump_${crypto.randomUUID()}`;
+    const expiresAt = new Date(Date.now() + config.s3PresignTtlSeconds * 1000).toISOString();
+
+    // Persist the session so it can be resumed after an app restart.
+    await db.query(
+      `INSERT INTO upload_multipart_sessions
+         (id, upload_id, object_key, bucket, owner_id, folder, content_type,
+          size_bytes, part_count, status, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', $10)
+       ON CONFLICT (bucket, object_key, owner_id) DO UPDATE
+       SET upload_id = EXCLUDED.upload_id,
+           status = 'active',
+           expires_at = EXCLUDED.expires_at,
+           initiated_at = NOW()`,
+      [
+        sessionId,
+        uploadId,
+        key,
+        bucket,
+        actorUserId,
+        payload.folder,
+        payload.contentType,
+        payload.sizeBytes,
+        partCount,
+        expiresAt,
+      ],
+    );
+
+    // Presign the first batch of part URLs (up to 100) so the client can
+    // start uploading immediately without a second round-trip.
+    const firstBatchSize = Math.min(partCount, 100);
+    const presignedParts: Array<{ url: string; partNumber: number; expiresInSeconds: number }> = [];
+    for (let i = 1; i <= firstBatchSize; i++) {
+      const part = await presignPartUpload(key, uploadId, i);
+      presignedParts.push(part);
+    }
+
+    return {
+      ok: true,
+      sessionId,
+      uploadId,
+      objectKey: key,
+      bucket,
+      publicUrl: `${config.s3CdnBaseUrl.replace(/\/$/, '')}/${bucket}/${key}`,
+      partSize: payload.partSize,
+      partCount,
+      presignedParts,
+      expiresAt,
+    };
+  });
+
+  // POST /uploads/multipart/:id/parts — request presigned URLs for
+  // additional parts (resumable uploads).
+  app.post('/uploads/multipart/:id/parts', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { id } = z.object({ id: z.string().min(2).max(120) }).parse(request.params);
+    const { partNumbers } = partNumbersSchema.parse(request.body);
+
+    const sessionResult = await db.query<{
+      upload_id: string;
+      object_key: string;
+      bucket: string;
+      owner_id: string;
+      status: string;
+      expires_at: Date | string;
+    }>(
+      `SELECT upload_id, object_key, bucket, owner_id, status, expires_at
+       FROM upload_multipart_sessions
+       WHERE id = $1 LIMIT 1`,
+      [id],
+    );
+
+    if (!sessionResult.rowCount) {
+      reply.code(404);
+      return { ok: false, error: 'Multipart session not found' };
+    }
+    const session = sessionResult.rows[0];
+    if (session.owner_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Access denied' };
+    }
+    if (session.status !== 'active') {
+      reply.code(409);
+      return { ok: false, error: `Session is ${session.status}, not active` };
+    }
+    if (new Date(session.expires_at).getTime() < Date.now()) {
+      reply.code(410);
+      return { ok: false, error: 'Session has expired' };
+    }
+
+    const presignedParts: Array<{ url: string; partNumber: number; expiresInSeconds: number }> = [];
+    for (const partNumber of partNumbers) {
+      const part = await presignPartUpload(session.object_key, session.upload_id, partNumber);
+      presignedParts.push(part);
+    }
+
+    return { ok: true, presignedParts };
+  });
+
+  // POST /uploads/multipart/:id/complete — assemble the final object and
+  // create an upload finalization record.
+  app.post('/uploads/multipart/:id/complete', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { id } = z.object({ id: z.string().min(2).max(120) }).parse(request.params);
+    const { parts } = multipartCompleteSchema.parse(request.body);
+
+    const sessionResult = await db.query<{
+      upload_id: string;
+      object_key: string;
+      bucket: string;
+      owner_id: string;
+      folder: string;
+      content_type: string;
+      size_bytes: string;
+      part_count: number;
+      status: string;
+      expires_at: Date | string;
+    }>(
+      `SELECT upload_id, object_key, bucket, owner_id, folder, content_type,
+              size_bytes::text, part_count, status, expires_at
+       FROM upload_multipart_sessions
+       WHERE id = $1 LIMIT 1`,
+      [id],
+    );
+
+    if (!sessionResult.rowCount) {
+      reply.code(404);
+      return { ok: false, error: 'Multipart session not found' };
+    }
+    const session = sessionResult.rows[0];
+    if (session.owner_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Access denied' };
+    }
+    if (session.status === 'completed') {
+      // Idempotent — return the existing finalization if one exists.
+      const existingFinalization = await db.query<{ id: string }>(
+        `SELECT id FROM upload_finalizations
+         WHERE object_key = $1 AND owner_id = $2 AND status = 'finalized'
+         LIMIT 1`,
+        [session.object_key, actorUserId],
+      );
+      if (existingFinalization.rowCount) {
+        return { ok: true, finalizationId: existingFinalization.rows[0].id, duplicate: true };
+      }
+    }
+    if (session.status !== 'active' && session.status !== 'completed') {
+      reply.code(409);
+      return { ok: false, error: `Session is ${session.status}` };
+    }
+    if (new Date(session.expires_at).getTime() < Date.now()) {
+      reply.code(410);
+      return { ok: false, error: 'Session has expired' };
+    }
+
+    // Complete the S3 multipart upload.
+    const sortedParts = [...parts].sort((a, b) => a.partNumber - b.partNumber);
+    const { location } = await completeMultipartUpload(
+      session.object_key,
+      session.upload_id,
+      sortedParts,
+    );
+
+    // Mark the session as completed.
+    await db.query(
+      `UPDATE upload_multipart_sessions
+       SET status = 'completed', completed_at = NOW()
+       WHERE id = $1`,
+      [id],
+    );
+
+    // Verify the assembled object exists in S3 and matches the declared size.
+    const sizeBytes = Number(session.size_bytes);
+    try {
+      await assertObjectMatchesUploadPolicy(session.object_key, session.content_type, sizeBytes);
+    } catch (verifyError) {
+      request.log.error(
+        { err: verifyError, objectKey: session.object_key },
+        'Multipart upload verification failed',
+      );
+      reply.code(422);
+      return { ok: false, error: 'Assembled object verification failed' };
+    }
+
+    // Create the finalization record — same table as single-PUT uploads so
+    // downstream consumers (listing publication, media assets) work
+    // identically regardless of transport. Then create the media_asset +
+    // media_processing_job rows and enqueue the ingest job, mirroring the
+    // single-PUT finalize path so multipart uploads flow through the same
+    // moderation/derivative pipeline.
+    const finalizationId = `fin_${crypto.randomUUID()}`;
+    const safeName = session.object_key.split('/').pop() ?? 'multipart_upload';
+    const client = await db.connect();
+    let mediaAsset: {
+      id: string;
+      status: string;
+      mediaKind: 'image' | 'video' | 'audio' | 'document';
+      canonicalUrl: string | null;
+    } | null = null;
+    let finalizedRowId = finalizationId;
+    try {
+      await client.query('BEGIN');
+      const finalizationResult = await client.query<{
+        id: string;
+        object_key: string;
+        bucket: string;
+        folder: string;
+        file_name: string;
+        content_type: string;
+        size_bytes: string;
+        public_url: string;
+        scope: string;
+        metadata: unknown;
+      }>(
+        `INSERT INTO upload_finalizations
+           (id, object_key, bucket, owner_id, folder, file_name,
+            content_type, size_bytes, public_url, status, scope,
+            head_checked_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'finalized',
+                 'general', NOW())
+         ON CONFLICT (object_key, bucket) DO UPDATE
+         SET status = 'finalized', head_checked_at = NOW(),
+             updated_at = NOW()
+         RETURNING id, object_key, bucket, folder, file_name, content_type,
+                   size_bytes::text, public_url, scope, metadata`,
+        [
+          finalizationId,
+          session.object_key,
+          session.bucket,
+          actorUserId,
+          session.folder,
+          safeName,
+          session.content_type,
+          sizeBytes,
+          location,
+        ],
+      );
+      const finRow = finalizationResult.rows[0];
+      finalizedRowId = finRow.id;
+
+      // Create the media_asset row — same INSERT pattern as the single-PUT
+      // finalize path so downstream moderation/derivatives run identically.
+      const mediaAssetId = `masset_${crypto.randomUUID()}`;
+      const mediaKind = mediaKindForContentType(finRow.content_type);
+      const assetResult = await client.query<{
+        id: string;
+        status: string;
+        media_kind: 'image' | 'video' | 'audio' | 'document';
+        canonical_url: string | null;
+      }>(
+        `INSERT INTO media_assets (
+           id, upload_finalization_id, owner_id, bucket, object_key,
+           file_name, intended_purpose, media_kind,
+           declared_content_type, declared_size_bytes,
+           original_object_url, status, scan_status,
+           moderation_status, processing_status, metadata
+         )
+         VALUES (
+           $1, $2, $3, $4, $5, $6, $7, $8,
+           $9, $10, $11, 'integrity_verified', 'pending',
+           'pending', 'pending', $12::jsonb
+         )
+         ON CONFLICT (upload_finalization_id)
+         DO UPDATE SET
+           intended_purpose = EXCLUDED.intended_purpose,
+           metadata = media_assets.metadata || EXCLUDED.metadata
+         RETURNING id, status, media_kind::text, canonical_url`,
+        [
+          mediaAssetId,
+          finRow.id,
+          actorUserId,
+          finRow.bucket,
+          finRow.object_key,
+          finRow.file_name,
+          finRow.scope,
+          mediaKind,
+          finRow.content_type,
+          Number(finRow.size_bytes),
+          finRow.public_url,
+          JSON.stringify(finRow.metadata ?? {}),
+        ],
+      );
+      const asset = assetResult.rows[0];
+      await client.query(
+        `UPDATE upload_finalizations
+         SET media_asset_id = $2
+         WHERE id = $1 AND media_asset_id IS DISTINCT FROM $2`,
+        [finRow.id, asset.id],
+      );
+
+      await client.query(
+        `INSERT INTO media_processing_jobs (
+           id, media_asset_id, job_type, status
+         )
+         VALUES ($1, $2, 'inspect_scan_process_moderate', 'pending')
+         ON CONFLICT DO NOTHING`,
+        [`mjob_${crypto.randomUUID()}`, asset.id],
+      );
+
+      mediaAsset = {
+        id: asset.id,
+        status: asset.status,
+        mediaKind: asset.media_kind,
+        canonicalUrl: asset.canonical_url,
+      };
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      request.log.error({ err: error }, 'Failed to create multipart finalization');
+      reply.code(500);
+      return { ok: false, error: 'Failed to finalize multipart upload' };
+    } finally {
+      client.release();
+    }
+
+    // Dispatch media ingest to the durable queue — same fallback-to-inline
+    // moderation behaviour as the single-PUT finalize path.
+    if (mediaAsset) {
+      try {
+        await enqueueMediaIngestJob({
+          assetId: mediaAsset.id,
+          reason: 'multipart_complete',
+        });
+      } catch (queueError) {
+        app.log.error(
+          { err: queueError, assetId: mediaAsset.id },
+          'Failed to enqueue media ingest job — falling back to inline moderation',
+        );
+        if (mediaAsset.mediaKind === 'image' && createModerationProvider().name !== 'mock') {
+          void moderateImageAsset(mediaAsset.id, location)
+            .then((outcome) => {
+              if (outcome.status === 'integrity_verified' || outcome.status === 'processing') {
+                return;
+              }
+              db.query(
+                `UPDATE media_assets
+                 SET moderation_status = $2,
+                     status = CASE WHEN $3 IN ('publishable', 'quarantined', 'processing_failed') THEN $3 ELSE status END
+                 WHERE id = $1
+                   AND status IN ('integrity_verified', 'processing', 'moderation_pending')`,
+                [mediaAsset.id, outcome.moderationStatus, outcome.status],
+              ).catch((dbError) => {
+                app.log.error(
+                  { err: dbError, assetId: mediaAsset.id },
+                  'Failed to persist background moderation outcome',
+                );
+              });
+            })
+            .catch((moderationError) => {
+              app.log.error(
+                { err: moderationError, assetId: mediaAsset.id },
+                'Background image moderation failed',
+              );
+            });
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      finalizationId: finalizedRowId,
+      objectKey: session.object_key,
+      publicUrl: location,
+      sizeBytes,
+      contentType: session.content_type,
+      mediaAsset: mediaAsset
+        ? {
+          ...mediaAsset,
+          publishable: mediaAsset.status === 'publishable'
+            || mediaAsset.status === 'published',
+          processingRequired: mediaAsset.status === 'integrity_verified'
+            || mediaAsset.status === 'processing'
+            || mediaAsset.status === 'moderation_pending'
+            || mediaAsset.status === 'processing_failed',
+        }
+        : null,
+    };
+  });
+
+  // POST /uploads/multipart/:id/abort — cancel the session and free S3
+  // storage consumed by uploaded parts.
+  app.post('/uploads/multipart/:id/abort', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { id } = z.object({ id: z.string().min(2).max(120) }).parse(request.params);
+
+    const sessionResult = await db.query<{
+      upload_id: string;
+      object_key: string;
+      owner_id: string;
+      status: string;
+    }>(
+      `SELECT upload_id, object_key, owner_id, status
+       FROM upload_multipart_sessions
+       WHERE id = $1 LIMIT 1`,
+      [id],
+    );
+
+    if (!sessionResult.rowCount) {
+      reply.code(404);
+      return { ok: false, error: 'Multipart session not found' };
+    }
+    const session = sessionResult.rows[0];
+    if (session.owner_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Access denied' };
+    }
+    if (session.status === 'completed' || session.status === 'aborted') {
+      return { ok: true, duplicate: true, status: session.status };
+    }
+
+    await abortMultipartUpload(session.object_key, session.upload_id);
+    await db.query(
+      `UPDATE upload_multipart_sessions
+       SET status = 'aborted'
+       WHERE id = $1`,
+      [id],
+    );
+
+    return { ok: true };
   });
 };

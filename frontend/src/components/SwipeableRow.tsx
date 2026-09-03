@@ -5,22 +5,21 @@ import {
   StyleSheet,
   PanResponder,
   type PanResponderGestureState,
-  type ViewStyle,
-} from 'react-native';
+  type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withTiming,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useMotionConfig } from '../hooks/useMotionConfig';
-import { Space, Type, FontFamily, Control } from '../theme/designTokens';
+import { Space, FontFamily, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 /**
  * A single swipe action revealed behind a SwipeableRow.
@@ -85,8 +84,7 @@ export function SwipeableRow({
   accessibilityLabel,
   accessibilityHint,
   onPress,
-  style,
-}: SwipeableRowProps) {
+  style }: SwipeableRowProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -243,8 +241,7 @@ export function SwipeableRow({
         onPanResponderTerminate: () => {
           clearLongPressTimer();
           snapBack();
-        },
-      }),
+        } }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [clearLongPressTimer, snapBack, fireHaptic, triggerLeft, triggerRight, haptic]
   );
@@ -256,8 +253,7 @@ export function SwipeableRow({
   const contentStyle = useAnimatedStyle(() => {
     'worklet';
     return {
-      transform: [{ translateX: translateX.value }],
-    };
+      transform: [{ translateX: translateX.value }] };
   });
 
   // The revealed action panels brighten as the user approaches the threshold.
@@ -314,7 +310,7 @@ export function SwipeableRow({
           pointerEvents="none"
         >
           <View style={styles.actionContent}>
-            <Ionicons name={leftAction.icon as any} size={Control.icon} color={colors.textInverse} />
+            <Ionicons name={leftAction.icon as keyof typeof Ionicons.glyphMap} size={Control.icon} color={colors.textInverse} />
             <Text style={styles.actionLabel} numberOfLines={1}>
               {leftAction.label}
             </Text>
@@ -332,7 +328,7 @@ export function SwipeableRow({
           pointerEvents="none"
         >
           <View style={styles.actionContent}>
-            <Ionicons name={rightAction.icon as any} size={Control.icon} color={colors.textInverse} />
+            <Ionicons name={rightAction.icon as keyof typeof Ionicons.glyphMap} size={Control.icon} color={colors.textInverse} />
             <Text style={styles.actionLabel} numberOfLines={1}>
               {rightAction.label}
             </Text>
@@ -356,37 +352,29 @@ const createStyles = (colors: ThemeColors) =>
     container: {
       position: 'relative',
       overflow: 'hidden',
-      backgroundColor: colors.surface,
-    },
+      backgroundColor: colors.surface },
     content: {
       backgroundColor: colors.background,
-      zIndex: 1,
-    },
+      zIndex: 1 },
     actionPanel: {
       position: 'absolute',
       top: 0,
       bottom: 0,
       width: '100%',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     leftPanel: {
       left: 0,
       alignItems: 'flex-start',
-      paddingLeft: Space.lg,
-    },
+      paddingLeft: Space.lg },
     rightPanel: {
       right: 0,
       alignItems: 'flex-end',
-      paddingRight: Space.lg,
-    },
+      paddingRight: Space.lg },
     actionContent: {
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     actionLabel: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       color: colors.textInverse,
-      letterSpacing: 0.1,
-    },
-  });
+      letterSpacing: 0.1 } });

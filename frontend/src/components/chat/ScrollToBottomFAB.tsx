@@ -3,8 +3,10 @@ import { View, StyleSheet, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Typography , Space, Radius, Elevation  } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption } from '../ui/Text';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface ScrollToBottomFABProps {
   unreadCount?: number;
@@ -22,9 +24,12 @@ export function ScrollToBottomFAB({
   bottomOffset,
 }: ScrollToBottomFABProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   if (!visible) return null;
+
+  const unread = unreadCount > 0 ? t('inbox.unread', { count: unreadCount }) : '';
 
   return (
     <View style={[styles.container, bottomOffset !== undefined && { bottom: bottomOffset }, style]}>
@@ -32,8 +37,8 @@ export function ScrollToBottomFAB({
         style={styles.button}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`Scroll to bottom${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
-        accessibilityHint="Scrolls to the latest message"
+        accessibilityLabel={t('inbox.scrollToBottom', { unread })}
+        accessibilityHint={t('inbox.scrollToBottomHint')}
         activeOpacity={0.7}
         scaleValue={0.92}
         hapticFeedback="light"
@@ -65,7 +70,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     ...Elevation.floating,
   },
@@ -84,7 +89,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderColor: colors.background,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
   },
 });

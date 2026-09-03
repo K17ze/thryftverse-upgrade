@@ -22,14 +22,15 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+  AccessibilityInfo } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius, Type, Typography, FontFamily, Stroke } from '../../theme/designTokens';
-import { IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, Typography, FontFamily, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 const TOUCH = 44;
 
@@ -52,6 +53,14 @@ export interface AccessibilityZOrderSheetProps {
 
 type ReorderDirection = 'front' | 'back' | 'forward' | 'backward';
 
+interface ReorderAction {
+  direction: ReorderDirection;
+  label: string;
+  icon: string;
+  disabled: boolean;
+  hint: string;
+}
+
 /**
  * Shows keyboard/button-based z-order alternatives for the selected
  * layer. The host screen passes the layer stack and an onReorder
@@ -69,66 +78,51 @@ export function AccessibilityZOrderSheet({
   const { colors } = useAppTheme();
   const haptic = useHaptic();
 
-  // Sort the mini stack front-to-back (highest zIndex first) so the
-  // list reads top = front, bottom = back, matching the visual stack.
   const sortedLayers = useMemo(
-    () => [...layers].sort((a, b) => b.zIndex - a.zIndex),
+    () => [...layers].sort((a, b) => a.zIndex - b.zIndex),
     [layers],
   );
 
-  const selectedIndex = useMemo(
-    () => sortedLayers.findIndex((l) => l.id === selectedLayerId),
-    [sortedLayers, selectedLayerId],
-  );
+  const selectedIndex = sortedLayers.findIndex((l) => l.id === selectedLayerId);
+  const canEdit = selectedIndex !== -1 && sortedLayers.length > 1;
 
-  const canEdit = !!selectedLayerId && selectedIndex >= 0;
-  const isFront = canEdit && selectedIndex === 0;
-  const isBack = canEdit && selectedIndex === sortedLayers.length - 1;
+  const isFront = selectedIndex === sortedLayers.length - 1;
+  const isBack = selectedIndex === 0;
 
   const handleReorder = useCallback(
     (direction: ReorderDirection) => {
       if (!selectedLayerId) return;
-      haptic.light();
+      haptic.medium();
       onReorder(selectedLayerId, direction);
     },
-    [selectedLayerId, haptic, onReorder],
+    [selectedLayerId, onReorder, haptic],
   );
 
-  const reorderActions: {
-    direction: ReorderDirection;
-    label: string;
-    icon: React.ComponentProps<typeof Ionicons>['name'];
-    disabled: boolean;
-    hint: string;
-  }[] = [
+  const reorderActions: ReorderAction[] = [
     {
       direction: 'front',
       label: 'Bring to Front',
       icon: 'arrow-up-circle-outline',
       disabled: !canEdit || isFront,
-      hint: 'Moves the selected object to the very front of the stack',
-    },
+      hint: 'Moves the selected object to the very front of the stack' },
     {
       direction: 'forward',
-      label: 'Forward One',
+      label: 'Bring Forward',
       icon: 'chevron-up-circle-outline',
       disabled: !canEdit || isFront,
-      hint: 'Moves the selected object forward by one layer',
-    },
+      hint: 'Moves the selected object one step closer to the front' },
     {
       direction: 'backward',
-      label: 'Backward One',
+      label: 'Send Backward',
       icon: 'chevron-down-circle-outline',
       disabled: !canEdit || isBack,
-      hint: 'Moves the selected object backward by one layer',
-    },
+      hint: 'Moves the selected object one step closer to the back' },
     {
       direction: 'back',
       label: 'Send to Back',
       icon: 'arrow-down-circle-outline',
       disabled: !canEdit || isBack,
-      hint: 'Moves the selected object to the very back of the stack',
-    },
+      hint: 'Moves the selected object to the very back of the stack' },
   ];
 
   return (
@@ -144,7 +138,7 @@ export function AccessibilityZOrderSheet({
             accessibilityRole="button"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             Arrange
@@ -164,8 +158,11 @@ export function AccessibilityZOrderSheet({
         ) : (
           <View style={styles.body}>
             {/* ── Current position readout — flat with hairline ── */}
-            <View style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}>
-              <Ionicons name="layers-outline" size={IconGrammar.standard} color={colors.textMuted} />
+            <View
+              style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}
+              accessibilityLiveRegion="polite"
+            >
+              <AppIcon name="layers-outline" size={IconSize.md} color="textMuted" opticalCenter={true} accessible={false} />
               <Text style={[styles.readoutText, { color: colors.textPrimary }]}>
                 Position {selectedIndex + 1} of {sortedLayers.length}
               </Text>
@@ -188,7 +185,7 @@ export function AccessibilityZOrderSheet({
                   accessibilityState={{ disabled: action.disabled }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name={action.icon} size={IconGrammar.hero} color={colors.textPrimary} />
+                  <AppIcon name={action.icon} size={IconSize.hero} color="textPrimary" opticalCenter={true} accessible={false} />
                   <Text
                     style={[styles.actionBtnText, { color: colors.textPrimary }]}
                     numberOfLines={1}
@@ -218,6 +215,7 @@ export function AccessibilityZOrderSheet({
                         styles.stackRow,
                         i > 0 && { borderTopColor: colors.borderSubtle, borderTopWidth: StyleSheet.hairlineWidth },
                       ]}
+                      accessibilityState={{ selected: isSelected }}
                     >
                       <Text
                         style={[
@@ -232,8 +230,7 @@ export function AccessibilityZOrderSheet({
                           styles.stackLabel,
                           {
                             color: isSelected ? colors.textPrimary : colors.textSecondary,
-                            fontWeight: isSelected ? '600' : '400',
-                          },
+                            fontWeight: isSelected ? '600' : '400' },
                         ]}
                         numberOfLines={1}
                       >
@@ -262,61 +259,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-  },
+    fontSize: TypographyV2.sectionTitle.size },
   closeBtn: {
     width: TOUCH,
     height: TOUCH,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   closeBtnPlaceholder: {
-    width: TOUCH,
-  },
+    width: TOUCH },
   body: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.lg,
-    gap: Space.md,
-  },
+    gap: Space.md },
   emptyState: {
     alignItems: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   emptyText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    textAlign: 'center' },
   emptySubtext: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    textAlign: 'center' },
   readout: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.xs,
     paddingVertical: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   readoutText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontVariant: ['tabular-nums'] },
   actionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   actionBtn: {
     flexGrow: 1,
     flexBasis: '47%',
@@ -326,50 +312,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     height: TOUCH,
     borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   actionBtnText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    flexShrink: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    flexShrink: 1 },
   sectionLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.label.size,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.label.size,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase' },
   stackContainer: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    maxHeight: 220,
-  },
+    maxHeight: 220 },
   stackScroll: {},
   stackContent: {
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   stackRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.xs,
     paddingVertical: Space.sm,
-    minHeight: TOUCH,
-  },
+    minHeight: TOUCH },
   stackIndex: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     width: 24,
     textAlign: 'center',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   stackLabel: {
     flex: 1,
     fontFamily: FontFamily.regular,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   stackSelectedText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.meta.size,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: TypographyV2.meta.letterSpacing } });

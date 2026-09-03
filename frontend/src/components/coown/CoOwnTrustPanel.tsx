@@ -2,7 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../theme/designTokens';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface CoOwnTrustPanelProps {
   authenticityStatus?: 'unverified' | 'pending' | 'verified' | null;
@@ -36,6 +38,7 @@ export function CoOwnTrustPanel({
   legalVehicleJurisdiction,
 }: CoOwnTrustPanelProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
 
   const items: Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; positive: boolean }> = [];
 
@@ -59,7 +62,7 @@ export function CoOwnTrustPanel({
 
   if (authenticityStatus === 'verified') {
     const value = authenticityMethod ? `Verified · ${authenticityMethod}` : 'Verified';
-    items.push({ icon: 'shield-checkmark', label: 'Authenticity', value, positive: true });
+    items.push({ icon: 'checkmark-circle', label: 'Authenticity', value, positive: true });
   } else if (authenticityStatus === 'pending') {
     items.push({ icon: 'hourglass-outline', label: 'Authenticity', value: 'Verification pending', positive: false });
   } else if (authenticityStatus === 'unverified') {
@@ -73,18 +76,18 @@ export function CoOwnTrustPanel({
 
   if (custodianName) {
     const value = custodianLocation ? `${custodianName} · ${custodianLocation}` : custodianName;
-    items.push({ icon: 'cube-outline', label: 'Custodian', value, positive: true });
+    items.push({ icon: 'lock-closed-outline', label: 'Custodian', value, positive: true });
   }
 
   if (custodyInsured && custodyInsurer) {
     // Equity-market pattern: disclose insurer, coverage amount, and
     // policy reference — not just the boolean "insured."
     const coverageStr = custodyCoverageGbp != null
-      ? ` · £${custodyCoverageGbp.toLocaleString()} coverage`
+      ? ` · ${currencySymbol}${custodyCoverageGbp.toLocaleString()} coverage`
       : '';
     const policyStr = custodyPolicyRef ? ` · policy ${custodyPolicyRef}` : '';
     items.push({
-      icon: 'shield-checkmark-outline',
+      icon: 'checkmark-circle-outline',
       label: 'Insurance',
       value: `${custodyInsurer}${coverageStr}${policyStr}`,
       positive: true,
@@ -136,13 +139,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   itemLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
-    textTransform: 'uppercase',
   },
   itemValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
 });

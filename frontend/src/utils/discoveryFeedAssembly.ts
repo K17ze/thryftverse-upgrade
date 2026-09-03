@@ -93,7 +93,7 @@ export function assembleDiscoveryFeed(
       // Use getListingCoverUri to always pick an image (not a video) for the
       // tile's primary media. ExpoImage cannot render video URIs, so passing
       // a video here would show a broken tile. Video playback in feed is
-      // handled by the full ProductCardV2, not the lightweight discovery tile.
+      // handled by the full ProductCard, not the lightweight discovery tile.
       getListingCoverUri(listing.images ?? [], ''),
       aspectRatio,
       listing.isSold ? 'sold' : undefined,

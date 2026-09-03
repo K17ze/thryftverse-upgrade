@@ -4,9 +4,9 @@
  * Integrates with React Native's Accessibility API and the app's theme
  * system to provide user-controlled accessibility preferences.
  *
- * Per Design.md: utility canvas mode. Text size uses a visual segmented
- * selector with live preview. Toggle rows use coloured icon badges for
- * visual identity per setting.
+ * Per AGENTS.md §4: flat canvas with hairline separators. Toggle rows use
+ * SettingsRow with transparent icon hit targets. Text size uses a visual
+ * segmented selector with live preview.
  */
 
 import React from 'react';
@@ -15,15 +15,16 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Switch,
-  Pressable,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+  Pressable } from 'react-native';
+import type { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
 import { RootStackParamList } from '../navigation/types';
 import { useAccessibilityPreferences } from '../context/AccessibilityPreferencesContext';
 import type { TextSize } from '../preferences/accessibilityPreferences';
@@ -61,25 +62,23 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
     setReducedMotion: setContextReducedMotion,
     setHighContrast: setContextHighContrast,
     setBoldText: setContextBoldText,
-    setScreenReaderHints: setContextScreenReaderHints,
-  } = useAccessibilityPreferences();
+    setScreenReaderHints: setContextScreenReaderHints } = useAccessibilityPreferences();
 
   // Live preview text — shows the user exactly how their selected text size
   // and bold setting will look in context.
   // immediate feedback on settings reduces uncertainty and builds confidence
   // that the change is real.
-  const previewFontSize = TEXT_SIZES.find((t) => t.value === textSize)?.sample ?? Type.body.size;
+  const previewFontSize = TEXT_SIZES.find((t) => t.value === textSize)?.sample ?? TypographyV2.body.size;
 
   const motionToggles: ToggleConfig[] = [
     {
       key: 'reducedMotion',
       label: 'Reduce motion',
       description: 'Minimise animations and transitions',
-      icon: 'pause',
+      icon: 'pause-outline',
       iconColor: colors.commerceTrust,
       value: reducedMotion,
-      onToggle: (v) => { haptic.selection(); setContextReducedMotion(v); },
-    },
+      onToggle: (v) => { haptic.selection(); setContextReducedMotion(v); } },
   ];
 
   const displayToggles: ToggleConfig[] = [
@@ -87,20 +86,18 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       key: 'highContrast',
       label: 'High contrast',
       description: 'Increase contrast between text and backgrounds',
-      icon: 'contrast',
+      icon: 'contrast-outline',
       iconColor: colors.antiqueGold,
       value: highContrast,
-      onToggle: (v) => { haptic.selection(); setContextHighContrast(v); },
-    },
+      onToggle: (v) => { haptic.selection(); setContextHighContrast(v); } },
     {
       key: 'boldText',
       label: 'Bold text',
       description: 'Make all text heavier for better readability',
-      icon: 'text',
+      icon: 'text-outline',
       iconColor: colors.brand,
       value: boldText,
-      onToggle: (v) => { haptic.selection(); setContextBoldText(v); },
-    },
+      onToggle: (v) => { haptic.selection(); setContextBoldText(v); } },
   ];
 
   const readerToggles: ToggleConfig[] = [
@@ -108,33 +105,24 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
       key: 'screenReaderHints',
       label: 'Additional hints',
       description: 'Provide extra context for screen reader users',
-      icon: 'volume-medium',
+      icon: 'volume-medium-outline',
       iconColor: colors.bronze,
       value: screenReaderHints,
-      onToggle: (v) => { haptic.selection(); setContextScreenReaderHints(v); },
-    },
+      onToggle: (v) => { haptic.selection(); setContextScreenReaderHints(v); } },
   ];
 
-  const renderToggleRow = (config: ToggleConfig) => (
-    <View key={config.key} style={styles.toggleRow}>
-      <View style={styles.toggleInfo}>
-        <View style={[styles.toggleIcon, { backgroundColor: config.iconColor + '18' }]}>
-          <Ionicons name={config.icon} size={20} color={config.iconColor} />
-        </View>
-        <View style={styles.toggleText}>
-          <Text style={styles.toggleLabel}>{config.label}</Text>
-          <Text style={styles.toggleDescription}>{config.description}</Text>
-        </View>
-      </View>
-      <Switch
-        value={config.value}
-        onValueChange={config.onToggle}
-        trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
-        thumbColor={colors.textInverse}
-        accessibilityRole="switch"
-        accessibilityLabel={config.label}
-      />
-    </View>
+  const renderToggleRow = (config: ToggleConfig, index: number, total: number) => (
+    <SettingsRow
+      key={config.key}
+      icon={config.icon}
+      iconColor={config.iconColor}
+      title={config.label}
+      subtitle={config.description}
+      toggleValue={config.value}
+      onToggle={config.onToggle}
+      isFirst={index === 0}
+      isLast={index === total - 1}
+    />
   );
 
   return (
@@ -146,127 +134,87 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero summary */}
-        <View>
-          <View style={styles.heroCard}>
-            <View style={styles.heroIconRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="accessibility" size={22} color={colors.textInverse} />
-              </View>
-              <View style={styles.heroText}>
-                <Text style={styles.heroTitle}>Accessibility</Text>
-                <Text style={styles.heroSubtitle}>
-                  Customise how ThryftVerse looks and feels
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Text Size — visual segmented selector */}
-        <View>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Text size</Text>
-            <Text style={styles.sectionDescription}>
-              Adjust the size of text throughout the app. Works with your device's text size settings.
-            </Text>
-            <View style={styles.textSizeOptions}>
-              {TEXT_SIZES.map((option) => {
-                const isSelected = textSize === option.value;
-                return (
-                  <Pressable
-                    key={option.value}
+        {/* Text Size — visual segmented selector with live preview */}
+        <SettingsSection title="Text size" description="Adjust the size of text throughout the app. Works with your device's text size settings.">
+          <View style={styles.textSizeOptions}>
+            {TEXT_SIZES.map((option) => {
+              const isSelected = textSize === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  style={[
+                    styles.textSizeOption,
+                    isSelected && { backgroundColor: colors.brand, borderColor: colors.brand },
+                  ]}
+                  onPress={() => { haptic.selection(); setContextTextSize(option.value); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Text size ${option.label}`}
+                  accessibilityState={{ selected: isSelected }}
+                >
+                  <Text
                     style={[
-                      styles.textSizeOption,
-                      isSelected && { backgroundColor: colors.brand, borderColor: colors.brand },
+                      styles.textSizeSample,
+                      { fontSize: option.sample },
+                      isSelected && { color: colors.textInverse },
                     ]}
-                    onPress={() => { haptic.selection(); setContextTextSize(option.value); }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Text size ${option.label}`}
-                    accessibilityState={{ selected: isSelected }}
                   >
-                    <Text
-                      style={[
-                        styles.textSizeSample,
-                        { fontSize: option.sample },
-                        isSelected && { color: colors.textInverse },
-                      ]}
-                    >
-                      Aa
-                    </Text>
-                    <Text
-                      style={[
-                        styles.textSizeLabel,
-                        isSelected && { color: colors.textInverse },
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Live preview — shows how body text will look at the selected
-                size and weight. This is the immediate feedback that makes
-                the setting feel real and trustworthy. */}
-            <View style={[styles.previewCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-              <Text style={styles.previewLabel}>Preview</Text>
-              <Text
-                style={[
-                  styles.previewText,
-                  {
-                    fontSize: previewFontSize,
-                    fontFamily: boldText ? Typography.family.bold : Typography.family.regular,
-                    color: colors.textPrimary,
-                    lineHeight: previewFontSize + 6,
-                  },
-                ]}
-              >
-                Browse curated fashion from independent sellers. Every piece is hand-listed — no mass-market noise, just the good stuff.
-              </Text>
-            </View>
+                    Aa
+                  </Text>
+                  <Text
+                    style={[
+                      styles.textSizeLabel,
+                      isSelected && { color: colors.textInverse },
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
-        </View>
+
+          {/* Live preview — flat text block, no card wrapper.
+              Shows how body text will look at the selected size and weight. */}
+          <Text style={styles.previewLabel}>Preview</Text>
+          <Text
+            style={[
+              styles.previewText,
+              {
+                fontSize: previewFontSize,
+                fontFamily: boldText ? Typography.family.bold : Typography.family.regular,
+                color: colors.textPrimary,
+                lineHeight: previewFontSize + 6 },
+            ]}
+          >
+            Browse curated fashion from independent sellers. Every piece is hand-listed — no mass-market noise, just the good stuff.
+          </Text>
+        </SettingsSection>
 
         {/* Motion */}
-        <View>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Motion</Text>
-            {motionToggles.map(renderToggleRow)}
-          </View>
-        </View>
+        <SettingsSection title="Motion">
+          {motionToggles.map((cfg, i) => renderToggleRow(cfg, i, motionToggles.length))}
+        </SettingsSection>
 
         {/* Display */}
-        <View>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Display</Text>
-            {displayToggles.map(renderToggleRow)}
-          </View>
-        </View>
+        <SettingsSection title="Display">
+          {displayToggles.map((cfg, i) => renderToggleRow(cfg, i, displayToggles.length))}
+        </SettingsSection>
 
         {/* Screen Reader */}
-        <View>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Screen reader</Text>
-            {readerToggles.map(renderToggleRow)}
-          </View>
-        </View>
+        <SettingsSection title="Screen reader">
+          {readerToggles.map((cfg, i) => renderToggleRow(cfg, i, readerToggles.length))}
+        </SettingsSection>
 
-        {/* Info note — elevated card */}
-        <View>
-          <View style={styles.noteCard}>
-            <View style={styles.noteIconWrap}>
-              <Ionicons name="information-circle" size={18} color={colors.textMuted} />
-            </View>
-            <View style={styles.noteTextWrap}>
-              <Text style={styles.noteTitle}>Works with your device</Text>
-              <Text style={styles.noteText}>
-                These settings work alongside your device's built-in accessibility features.
-              </Text>
-            </View>
-          </View>
-        </View>
+        {/* Info note — flat row, no card wrapper */}
+        <SettingsSection title="Device settings">
+          <SettingsRow
+            icon="information-circle-outline"
+            title="Works with your device"
+            subtitle="These settings work alongside your device's built-in accessibility features."
+            isFirst
+            isLast
+          />
+        </SettingsSection>
 
         <View style={{ height: Space.xxl }} />
       </ScrollView>
@@ -278,69 +226,10 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scrollContent: { paddingHorizontal: Space.md, paddingBottom: Space.xl },
 
-    // Hero summary
-    heroCard: {
-      borderRadius: Radius.xl,
-      backgroundColor: colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.lg,
-      marginTop: Space.sm,
-    },
-    heroIconRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Control.hit,
-      height: Control.hit,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      marginTop: Space.xs - 2,
-    },
-
-    // Sections
-    section: {
-      marginTop: Space.lg,
-    },
-    sectionTitle: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      textTransform: 'uppercase',
-      letterSpacing: LetterSpacing.caps,
-      opacity: 0.7,
-      marginBottom: Space.xs,
-      paddingHorizontal: Space.xs,
-    },
-    sectionDescription: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      lineHeight: Type.caption.lineHeight,
-      marginBottom: Space.md,
-      paddingHorizontal: Space.xs,
-    },
-
     // Text size selector
     textSizeOptions: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     textSizeOption: {
       flex: 1,
       alignItems: 'center',
@@ -349,103 +238,22 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       borderWidth: Stroke.standard,
       borderColor: colors.border,
-      backgroundColor: colors.surface,
-    },
+      backgroundColor: colors.surface },
     textSizeSample: {
       fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     textSizeLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textSecondary,
-    },
-    previewCard: {
-      marginTop: Space.md,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     previewLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: LetterSpacing.caps,
-      marginBottom: Space.sm,
-    },
+      marginTop: Space.md,
+      marginBottom: Space.sm },
     previewText: {
-      letterSpacing: -0.2,
-    },
-
-    // Toggle rows — flat, hairline-separated
-    toggleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: Space.md,
-      paddingHorizontal: Space.xs,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    toggleInfo: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-      flex: 1,
-    },
-    toggleIcon: {
-      width: Control.chrome,
-      height: Control.chrome,
-      borderRadius: Radius.md,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    toggleText: { flex: 1 },
-    toggleLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
-    toggleDescription: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      marginTop: Space.xs - 2,
-      lineHeight: Type.caption.lineHeight,
-    },
-
-    // Info note — elevated card
-    noteCard: {
-      flexDirection: 'row',
-      gap: Space.md,
-      marginTop: Space.lg,
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      padding: Space.md,
-    },
-    noteIconWrap: {
-      width: Control.chromeCompact,
-      height: Control.chromeCompact,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    noteTextWrap: { flex: 1 },
-    noteTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-      marginBottom: Space.xs - 2,
-    },
-    noteText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      lineHeight: Type.caption.lineHeight,
-    },
-  });
+      letterSpacing: -0.2 } });
 }

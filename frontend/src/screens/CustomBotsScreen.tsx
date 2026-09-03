@@ -3,21 +3,21 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  Alert,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AgentIcon } from '../components/agents/AgentIcon';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CustomBots'>;
 
@@ -34,6 +34,14 @@ export default function CustomBotsScreen({ navigation }: Props) {
 
   const [isLoading, setIsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   useEffect(() => {
     let cancelled = false;
@@ -52,30 +60,24 @@ export default function CustomBotsScreen({ navigation }: Props) {
     conversations.filter((c) => c.botIds?.includes(botId)).length;
 
   const handleDelete = (bot: { id: string; name: string }) => {
-    Alert.alert(
-      'Delete agent?',
-      `${bot.name} will be permanently deleted and removed from all groups.`,
-
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setDeletingId(bot.id);
-            try {
-              await deleteCustomBot(bot.id);
-              show(`${bot.name} deleted`, 'info');
-            } catch {
-              show('Failed to delete agent', 'error');
-            } finally {
-              setDeletingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete agent?',
+      message: `${bot.name} will be permanently deleted and removed from all groups.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        haptic.heavy();
+        setDeletingId(bot.id);
+        try {
+          await deleteCustomBot(bot.id);
+          show(`${bot.name} deleted`, 'info');
+        } catch {
+          show('Failed to delete agent', 'error');
+        } finally {
+          setDeletingId(null);
+        }
+      } });
   };
 
   return (
@@ -189,6 +191,16 @@ export default function CustomBotsScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }
@@ -219,8 +231,7 @@ function BotRow({
   deploymentCount,
   onEdit,
   onDelete,
-  onView,
-}: {
+  onView }: {
   bot: { id: string; name: string; description: string; category: string; isDraft?: boolean; runtimeReady?: boolean; agentConfig?: { model: string } };
   deploymentCount: number;
   onEdit: () => void;
@@ -239,14 +250,12 @@ function BotRow({
       accessibilityLabel={`View ${bot.name}`}
     >
       <View style={styles.row}>
-        <View style={styles.iconWrap}>
-          <AgentIcon
-            category={bot.category}
-            name={bot.name}
-            size={21}
-            color={colors.textPrimary}
-          />
-        </View>
+        <AgentIcon
+          category={bot.category}
+          name={bot.name}
+          size={21}
+          color={colors.textPrimary}
+        />
 
         <View style={styles.botText}>
           <BodyEmphasis numberOfLines={1}>{bot.name}</BodyEmphasis>
@@ -294,125 +303,97 @@ function createStyles(colors: ThemeColors) {
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   createBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   section: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   sectionLabel: {
-    fontSize: Type.meta.size,
-    letterSpacing: Type.meta.letterSpacing,
-    marginLeft: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginLeft: Space.xs },
   card: {
     backgroundColor: colors.background,
-    gap: Space.xs / 4,
-  },
+    gap: Space.xs / 4 },
   rowDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginLeft: Space.xl + Space.xs + Space.sm,
-  },
+    marginLeft: Space.xl + Space.xs + Space.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Space.sm + 2,
-    gap: Space.sm,
-  },
+    minHeight: Control.hit,
+    gap: Space.sm },
   loadingContainer: {
     gap: Space.md,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   skeletonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
   skeletonIcon: {
     width: Space.xl + Space.xs,
     height: Space.xl + Space.xs,
     borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   skeletonCopy: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   skeletonLine: {
     height: 12,
     borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt,
-  },
-  iconWrap: {
-    width: Space.xl + Space.xs,
-    height: Control.hit,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+    backgroundColor: colors.surfaceAlt },
   botText: {
     flex: 1,
     justifyContent: 'center',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   rowActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   rowAction: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   empty: {
     alignItems: 'center',
     paddingHorizontal: Space.lg,
     paddingTop: Space.xxl + Space.xxl + Space.xxl - 24,
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   emptyMark: {
     width: Space.xl + Space.xl - 4,
     height: Space.xl + Space.xl - 4,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   emptyTitle: {
     maxWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl - 4,
     textAlign: 'center',
     color: colors.textPrimary,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily },
   emptyText: {
     textAlign: 'center',
     maxWidth: Space.xxl * 6 + Space.lg - 2,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 1 },
   createEmptyBtn: {
     backgroundColor: colors.brand,
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   createEmptyBtnText: {
     color: colors.textInverse,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   emptyNote: {
     marginTop: Space.xs,
     textAlign: 'center',
-    lineHeight: Type.caption.lineHeight + 1,
-  },
-  });
+    lineHeight: TypographyV2.meta.lineHeight + 1 } });
 }

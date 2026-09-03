@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Type , Space, Radius  } from '../../theme/designTokens';
+import { Space, Radius  } from '../../theme/designTokens';
 import { TradeCard } from './TradeCard';
 import { Meta, BodyEmphasis } from '../ui/Text';
 
@@ -42,9 +42,7 @@ export function MetricGrid({ metrics, columns = 3, style }: MetricGridProps) {
             style={[styles.cell, { flex: 1 / columns }]}
           >
             <TradeCard variant="surface" style={styles.card}>
-              {metric.icon && (
-                <View style={styles.iconWrap}>{metric.icon}</View>
-              )}
+              {metric.icon && metric.icon}
               <BodyEmphasis
                 style={[styles.value, { color: resolveToneColor(metric.tone, colors) }]}
                 numberOfLines={1}
@@ -79,9 +77,7 @@ const styles = StyleSheet.create({
     paddingVertical: Space.smMd,
     paddingHorizontal: Space.sm,
     minHeight: 72,
-  },
-  iconWrap: {
-    marginBottom: Space.xs,
+    gap: Space.xs,
   },
   value: {
     textAlign: 'center',

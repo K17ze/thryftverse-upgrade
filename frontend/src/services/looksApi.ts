@@ -12,6 +12,16 @@ export interface LookCreator {
   id: string;
   username: string | null;
   avatar: string | null;
+  /** Whether the creator has identity/trader verification evidence.
+   *  Backed by seller_trust_evidence (identity_checked / trader_verified). */
+  verified?: boolean;
+}
+
+export interface LookMediaEntry {
+  url: string;
+  mediaType: 'image' | 'video';
+  mediaFinalizationId?: string;
+  mediaAssetId?: string;
 }
 
 export interface LookApiItem {
@@ -23,6 +33,9 @@ export interface LookApiItem {
   mediaUrl: string;
   /** Media type — defaults to 'image' when absent for backward compatibility */
   mediaType?: 'image' | 'video';
+  /** Additional carousel slides beyond the primary mediaUrl. Empty array when
+   *  the look has only one media item. Position 0 is the primary mediaUrl. */
+  mediaUrls?: LookMediaEntry[];
   visibility: 'public' | 'followers' | 'private';
   status: 'draft' | 'published' | 'archived';
   createdAt: string;
@@ -33,6 +46,15 @@ export interface LookApiItem {
   saveCount: number;
   likedByViewer: boolean;
   savedByViewer: boolean;
+  /** Native media pixel width, when the backend exposes it. Used by
+   *  resolveLookTemplate to derive the real tile aspect ratio instead of
+   *  fabricating one from the item index (Design.md §1841). */
+  mediaWidth?: number;
+  /** Native media pixel height, when the backend exposes it. */
+  mediaHeight?: number;
+  /** Pre-computed cover aspect ratio (width / height), when the backend
+   *  exposes it. Takes precedence over mediaWidth/mediaHeight. */
+  coverAspectRatio?: number;
   /** Versioned composition document for collage looks. When present, the
    * viewer should render this canonical composition instead of only mediaUrl. */
   compositionDocument?: unknown;
@@ -75,6 +97,10 @@ export interface LookCreateBody {
   /** Authoritative media lifecycle row returned by upload finalization. */
   mediaAssetId?: string;
   mediaType?: 'image' | 'video';
+  /** Carousel slides beyond the primary mediaUrl. Max 9 additional slides
+   *  (10 total including primary). Each entry with a mediaFinalizationId
+   *  will be verified by the backend. */
+  mediaUrls?: LookMediaEntry[];
   visibility?: 'public' | 'followers' | 'private';
   tags?: LookCreateTag[];
   status?: 'draft' | 'published' | 'archived';
@@ -176,8 +202,16 @@ export interface LookCommentApiItem {
   id: string;
   lookId: string;
   authorId: string;
+  parentId: string | null;
   author: LookCreator;
+  /** Empty for tombstones — deleted comments with live replies keep their
+   *  thread but never serve their body. */
   body: string;
+  /** True when this row is a tombstone (deleted, kept for its replies). */
+  deleted: boolean;
+  likeCount: number;
+  likedByViewer: boolean;
+  replyCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -192,7 +226,7 @@ export async function fetchLookCommentsFromApi(lookId: string): Promise<LookComm
 
 export async function createLookCommentOnApi(
   lookId: string,
-  body: { id: string; body: string }
+  body: { id: string; body: string; parentId?: string }
 ): Promise<{ ok: boolean; comment: LookCommentApiItem }> {
   return fetchJson<{ ok: boolean; comment: LookCommentApiItem }>(`/looks/${lookId}/comments`, {
     method: 'POST',
@@ -208,4 +242,24 @@ export async function deleteLookCommentOnApi(
   return fetchJson<{ ok: boolean }>(`/looks/${lookId}/comments/${commentId}`, {
     method: 'DELETE',
   });
+}
+
+export async function likeLookCommentOnApi(
+  lookId: string,
+  commentId: string
+): Promise<{ ok: boolean; likeCount: number; likedByViewer: boolean }> {
+  return fetchJson<{ ok: boolean; likeCount: number; likedByViewer: boolean }>(
+    `/looks/${lookId}/comments/${commentId}/like`,
+    { method: 'POST' }
+  );
+}
+
+export async function unlikeLookCommentOnApi(
+  lookId: string,
+  commentId: string
+): Promise<{ ok: boolean; likeCount: number; likedByViewer: boolean }> {
+  return fetchJson<{ ok: boolean; likeCount: number; likedByViewer: boolean }>(
+    `/looks/${lookId}/comments/${commentId}/like`,
+    { method: 'DELETE' }
+  );
 }

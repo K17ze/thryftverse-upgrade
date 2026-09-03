@@ -134,6 +134,50 @@ checks fabrication, authorization, races, stale surfaces, leaks, and recovery. I
 independent reviewer or live environment is unavailable, report the corresponding
 validation pending status; do not self-sign.
 
+## 8. Definition of done — live signs (AGENTS.md §37.10)
+
+TypeScript 0 errors + tests pass = engineering-ready. NOT functional completion.
+
+```text
+Functional completion requires:
+  - UI renders real data from a live endpoint (not mock, not hardcoded).
+  - the live endpoint has been hit and returns expected rows (recorded).
+  - every mutation propagates to its full surface set.
+  - the full state matrix is honest, including unknown-outcome.
+  - every trust signal is evidenced by a backend row (fail-closed).
+  - money/creation mutations are transactional + idempotent.
+  - auth + privacy projections are correct (with a test for new entities).
+  - no timer/subscription leak.
+  - live-endpoint cold-critic pass.
+```
+
+When the backend cannot be run live, mark `IMPLEMENTED — LIVE ENDPOINT VALIDATION
+PENDING` and list the endpoints awaiting verification. Do not claim
+`COMPLETE — TARGET MET` without a live endpoint check.
+
+## 9. Two loops, one completion (AGENTS.md §37.11)
+
+A surface is complete only when it has passed **both** the Visual Flagship
+Convergence Loop (`visual-flagship-convergence-loop.md`, AGENTS.md §31) and this
+Live-Signs Convergence Loop (§37). A flagship-looking screen backed by mock data is
+not done. A live-wired screen that looks prototype-grade is not done. Mass visual
+passes that leave screens on mock data are not upgrades — they are decoration over a
+prototype.
+
+## 10. Priority order (AGENTS.md §37.12)
+
+Work functional surfaces where the code proves the largest truth gap — surfaces that
+look done but are not live:
+
+```text
+1. Money surfaces (checkout, wallet, payouts, buy-now, auction settlement)
+2. Trust surfaces (co-own dossier, buyer protection, seller verification, KYC)
+3. Discovery / feed surfaces — must render real data, not mock catalogues
+4. Creator surfaces — publish/edit must persist; analytics must be real
+5. Cross-surface propagation hotspots — anywhere a mutation desyncs another surface
+6. Remaining CRUD / utility surfaces
+```
+
 Research basis, reviewed 25 August 2026: [NIST SSDF](https://csrc.nist.gov/projects/ssdf),
 [OWASP MASVS](https://mas.owasp.org/MASVS/), [OWASP ASVS](https://owasp.org/www-project-application-security-verification-standard/),
 and [OpenTelemetry observability](https://opentelemetry.io/docs/concepts/observability-primer/).

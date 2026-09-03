@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   ViewStyle,
-  StyleProp,
-} from 'react-native';
+  StyleProp } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
@@ -15,9 +14,8 @@ import {
   Radius,
   Stroke,
   Control,
-  Type,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { NotificationEventV2 } from '../../services/notificationsApi';
 
 // ---------------------------------------------------------------------------
@@ -77,6 +75,14 @@ export interface NotificationRowBaseProps {
   style?: StyleProp<ViewStyle>;
 }
 
+const DELIVERY_STATUS_CONFIG: Record<
+  string,
+  { label: string; icon: keyof typeof Ionicons.glyphMap; colorKey: 'textMuted' | 'danger' | 'textSecondary' }
+> = {
+  suppressed: { label: 'Silenced', icon: 'moon-outline', colorKey: 'textMuted' },
+  failed: { label: 'Delivery failed', icon: 'alert-circle-outline', colorKey: 'danger' },
+  queued: { label: 'Pending', icon: 'time-outline', colorKey: 'textSecondary' } };
+
 export function NotificationRowBase({
   event,
   time,
@@ -89,12 +95,12 @@ export function NotificationRowBase({
   children,
   trailing,
   accessibilityLabel,
-  style,
-}: NotificationRowBaseProps) {
+  style }: NotificationRowBaseProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const isUnread = !event.readAt;
   const timeColor = resolveTimestampColor(event.createdAt, colors);
+  const deliveryConfig = DELIVERY_STATUS_CONFIG[event.status];
 
   return (
     <AnimatedPressable
@@ -118,8 +124,10 @@ export function NotificationRowBase({
 
       {/* Body — title + description + aggregated badge */}
       <View style={styles.body}>
-        <View style={styles.headerRow}>
-          {children}
+        <View style={styles.contentHeaderRow}>
+          <View style={styles.textContentWrap}>
+            {children}
+          </View>
           {/* Timestamp — right-aligned, top-right of the body column */}
           <Text
             style={[styles.time, { color: timeColor }]}
@@ -128,16 +136,16 @@ export function NotificationRowBase({
             {time}
           </Text>
         </View>
-        <View style={styles.metaRow}>
-          {aggregatedCount && aggregatedCount > 1 ? (
+        {aggregatedCount && aggregatedCount > 1 ? (
+          <View style={styles.metaRow}>
             <View style={styles.aggregatedBadge}>
               <Text style={styles.aggregatedText}>+{aggregatedCount - 1}</Text>
             </View>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
       </View>
 
-      {/* Trailing slot — action button or chevron */}
+      {/* Trailing slot — action button or item thumbnail */}
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
     </AnimatedPressable>
   );
@@ -152,8 +160,7 @@ export function NotificationThumbnail({
   uri,
   fallbackIcon = 'notifications-outline',
   size = 44,
-  colors,
-}: {
+  colors }: {
   uri?: string;
   fallbackIcon?: keyof typeof Ionicons.glyphMap;
   size?: number;
@@ -180,31 +187,23 @@ export function NotificationThumbnail({
 }
 
 /**
- * Status icon chip — small rounded square with an accent-tinted background.
+ * Status icon — a bare accent-coloured glyph, no decorative circle.
  *
- * The subtle tint lets the row's type be scanned at a glance before any text
- * is read (Instagram/TikTok 2026 pattern). The tint uses the semantic
- * `*Subtle` tokens so it stays restrained and theme-correct in light/dark.
+ * The icon itself is the scannable signal. No background tint, no container
+ * View — just a plain Ionicons glyph at the given size and colour. This
+ * eliminates the grey card-on-card silhouette and lets the row read as a
+ * clean text list (iOS Mail / Gmail notification pattern).
  */
 export function NotificationStatusIcon({
   icon,
   accentColor,
-  accentSubtle,
-  colors,
-  size = 44,
-}: {
+  size = 24 }: {
   icon: keyof typeof Ionicons.glyphMap;
   accentColor: string;
-  /** Subtle background tint — pass the matching `*Subtle` token (e.g. successSubtle). */
-  accentSubtle?: string;
-  colors: ThemeColors;
   size?: number;
 }) {
-  const styles = useMemo(() => createStatusIconStyles(colors, size, accentSubtle), [colors, size, accentSubtle]);
   return (
-    <View style={styles.container}>
-      <Ionicons name={icon} size={size * 0.42} color={accentColor} />
-    </View>
+    <Ionicons name={icon} size={size} color={accentColor} />
   );
 }
 
@@ -213,8 +212,7 @@ export function NotificationActionButton({
   label,
   onPress,
   colors,
-  variant = 'primary',
-}: {
+  variant = 'primary' }: {
   label: string;
   onPress: () => void;
   colors: ThemeColors;
@@ -245,65 +243,72 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     row: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       gap: Space.sm + 2,
       paddingVertical: Space.sm + 4,
       paddingHorizontal: Space.md,
-      minHeight: 72,
-      backgroundColor: colors.background,
+      minHeight: 64,
+      backgroundColor: 'transparent',
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    // Unread rows get a single quiet brand tint — the scannable signal.
-    // Paired with the semibold title, this is enough (Courier/Instagram
-    // pattern: one tint + one weight delta, not a dot + tint + border + bold).
-    rowUnread: {
-      backgroundColor: colors.brandSubtle,
-    },
+      borderBottomColor: colors.border },
+    // Unread is signalled ONLY by the unread dot on the leading element +
+    // semibold title weight (applied by the presenter). No row tint —
+    // a 6% grey wash across all unread rows creates "single grey background
+    // slop" when every row is unread. Linear/Instagram/iOS Mail all use
+    // dot + weight only, never a full-row tint.
+    rowUnread: {},
+    // Attention rows (action-required: outbid, dispute, ship order) use a
+    // danger left border to distinguish them from plain unread rows.
     rowAttention: {
-      // Subtle accent — left border tint, not a giant card.
-      borderLeftWidth: Stroke.emphasis,
-      borderLeftColor: colors.brand,
-    },
+      borderLeftWidth: 2,
+      borderLeftColor: colors.danger,
+      paddingLeft: Space.md - 2 },
     leadingWrap: {
       position: 'relative',
       alignItems: 'center',
       justifyContent: 'center',
-    },
+      paddingTop: Space.xs / 2 },
     unreadDot: {
       position: 'absolute',
-      bottom: 0,
+      top: 0,
       right: 0,
-      width: Space.xs + 4,
-      height: Space.xs + 4,
+      width: Space.xs + 2,
+      height: Space.xs + 2,
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
+      // Functional contrast ring — separates the dot from the underlying
+      // avatar/image. Without this, a dark dot on a dark avatar area is
+      // invisible. This is not decoration; it is contrast separation.
       borderWidth: Stroke.standard,
-      borderColor: colors.background,
-    },
+      borderColor: colors.background },
     body: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
+    contentHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: Space.sm },
+    textContentWrap: {
+      flex: 1,
+      flexDirection: 'column',
+      gap: 2 },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       justifyContent: 'space-between',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     metaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      marginTop: Space.xs / 2,
-    },
+      marginTop: Space.xs / 2 },
     time: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       flexShrink: 0,
-      marginTop: 2,
-    },
+      marginTop: 2 },
     aggregatedBadge: {
       minWidth: Space.md + 4,
       height: Space.md + 4,
@@ -311,20 +316,24 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.xs + 2,
       backgroundColor: colors.brand,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     aggregatedText: {
-      fontSize: Type.meta.size - 2,
+      // Small badge text — no dedicated token below meta; meta - 2 gives ~9px.
+      fontSize: TypographyV2.meta.size - 2,
       fontFamily: FontFamily.bold,
-      color: colors.background,
-    },
+      color: colors.background },
+    deliveryStatus: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs / 2 },
+    deliveryStatusText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular },
     trailing: {
       alignItems: 'center',
       justifyContent: 'center',
       minWidth: Control.hit,
-      minHeight: Control.hit,
-    },
-  });
+      minHeight: Control.hit } });
 }
 
 function createThumbnailStyles(colors: ThemeColors, size: number) {
@@ -332,40 +341,18 @@ function createThumbnailStyles(colors: ThemeColors, size: number) {
     wrap: {
       width: size,
       height: size,
-      borderRadius: Radius.lg,
+      borderRadius: Radius.md,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
+      backgroundColor: 'transparent' },
     image: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     placeholder: {
       width: size,
       height: size,
-      borderRadius: Radius.lg,
-      backgroundColor: colors.surfaceAlt,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
+      borderRadius: Radius.md,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
-  });
-}
-
-function createStatusIconStyles(colors: ThemeColors, size: number, accentSubtle?: string) {
-  return StyleSheet.create({
-    container: {
-      width: size,
-      height: size,
-      borderRadius: Radius.lg,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: accentSubtle ?? 'transparent',
-    },
-  });
+      justifyContent: 'center' } });
 }
 
 function createActionStyles(colors: ThemeColors, variant: 'primary' | 'quiet') {
@@ -380,13 +367,10 @@ function createActionStyles(colors: ThemeColors, variant: 'primary' | 'quiet') {
       borderWidth: isPrimary ? 0 : Stroke.standard,
       borderColor: isPrimary ? 'transparent' : colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     label: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       color: isPrimary ? colors.textInverse : colors.textPrimary,
-      letterSpacing: 0.1,
-    },
-  });
+      letterSpacing: 0.1 } });
 }

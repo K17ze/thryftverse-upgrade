@@ -572,7 +572,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: Radius.full,
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
     borderColor: '#fff',
   },
   rotationHandleWrap: {
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: Stroke.emphasis,
     borderColor: '#fff',
   },
 });

@@ -14,7 +14,8 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Stroke, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -24,7 +25,7 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 // Co-Own specific educational slides — not generic explainer content.
 const SLIDES = [
   {
-    icon: 'cube-outline' as const,
+    icon: 'layers-outline' as const,
     title: 'Own a piece of something desirable',
     body: 'Co-Own lets you buy units of fashion, luxury, and collectable items. You own a real fraction of the item, not the item itself.',
   },
@@ -39,7 +40,7 @@ const SLIDES = [
     body: 'List your units for sale at market price or set a limit. Buyers must match your offer for the trade to fill. Liquidity is not guaranteed.',
   },
   {
-    icon: 'shield-checkmark-outline' as const,
+    icon: 'checkmark-circle-outline' as const,
     title: 'Trust and protection',
     body: 'Issuers are verified sellers. Authenticity, buyer protection, and storage information are shown on each item. Risks are clearly disclosed.',
   },
@@ -138,13 +139,11 @@ export default function CoOwnOnboardingScreen() {
           exiting={slideExit}
           style={styles.heroSlide}
         >
-          <View style={[styles.iconRing, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-            <Ionicons name={slide.icon} size={64} color={colors.brand} />
-          </View>
+          <Ionicons name={slide.icon} size={64} color={colors.brand} style={styles.slideIcon} />
 
           {/* Welcome badge — shown only on the first slide */}
           {index === 0 && (
-            <View style={[styles.welcomeBadge, { backgroundColor: `${colors.brand}15` }]}>
+            <View style={[styles.welcomeBadge, { backgroundColor: colors.brandSubtle }]}>
               <Text style={[styles.welcomeBadgeText, { color: colors.brand }]}>Co-Own investing</Text>
             </View>
           )}
@@ -216,8 +215,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   progressLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide + 0.18,
   },
   headerBtn: {
@@ -229,8 +228,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   skipText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   hero: {
     flex: 1,
@@ -241,21 +240,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconRing: {
-    width: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 8,
-    height: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 8,
-    borderRadius: Space.xxl + Space.xxl + Space.xxl + 8,
-    borderWidth: Stroke.standard,
-    alignItems: 'center',
-    justifyContent: 'center',
+  slideIcon: {
+    marginBottom: Space.md,
   },
   title: {
     marginTop: Space.lg,
-    fontSize: Type.display.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.display.size,
+    fontFamily: TypographyV2.display.fontFamily,
     letterSpacing: LetterSpacing.tight - 0.38,
     textAlign: 'center',
-    lineHeight: Type.display.size - 2,
+    lineHeight: TypographyV2.display.size - 2,
   },
   welcomeBadge: {
     marginTop: Space.md,
@@ -264,16 +258,16 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   welcomeBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.caps - 0.02,
     textTransform: 'uppercase',
   },
   body: {
     marginTop: Space.sm,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.size + 9,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.size + 9,
     textAlign: 'center',
     paddingHorizontal: Space.md,
   },
@@ -288,8 +282,8 @@ const styles = StyleSheet.create({
     maxWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 16,
   },
   checklistTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps - 0.02,
     marginBottom: Space.xs / 2,
@@ -301,9 +295,9 @@ const styles = StyleSheet.create({
   },
   checklistText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.size + 6,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.size + 6,
   },
   footer: {
     paddingTop: Space.lg,
@@ -332,7 +326,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   primaryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
 });

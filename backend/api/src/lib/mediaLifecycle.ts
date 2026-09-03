@@ -183,13 +183,16 @@ export function resolveMediaProcessingOutcome(input: {
 
 export function mediaKindForContentType(
   contentType: string,
-): 'image' | 'video' | 'document' {
+): 'image' | 'video' | 'audio' | 'document' {
   const normalized = contentType.split(';')[0]?.trim().toLowerCase() ?? '';
   if (normalized.startsWith('image/')) {
     return 'image';
   }
   if (normalized.startsWith('video/')) {
     return 'video';
+  }
+  if (normalized.startsWith('audio/')) {
+    return 'audio';
   }
   return 'document';
 }

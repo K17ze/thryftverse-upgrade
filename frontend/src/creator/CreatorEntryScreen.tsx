@@ -5,15 +5,15 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Image as RNImage,
-} from 'react-native';
+  Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Radius, Type, Space, EditorMaterial } from '../theme/designTokens';
+import { Typography, Radius, Space, EditorMaterial, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
-import { BlurView } from 'expo-blur';
 import type { CreatorInitialMedia } from '../navigation/types';
 import CreatorCamera from './CreatorCamera';
 import type { CaptureViewport } from './capture/CaptureViewport';
@@ -51,7 +51,8 @@ function formatRelativeTime(iso: string): string {
 //
 // From the camera the user can:
 //   - capture (photo / video) → enters the editor directly
-//   - open the gallery (MediaBrowserSheet) → selects media → editor
+//   - open the gallery → system picker (zero-permission) → select → editor
+//     (long-press the gallery button for the full library browser)
 //   - switch capture mode (Look / Poster / Search) via the in-camera mode
 //     switch — no route transition, just a reframing
 //   - open Drafts (small affordance in the camera top bar)
@@ -111,8 +112,7 @@ export function CreatorEntryScreen({
   onBlankStart,
   onOpenDraft,
   onVisualSearchCapture,
-  onViewportChange,
-}: CreatorEntryScreenProps) {
+  onViewportChange }: CreatorEntryScreenProps) {
   const insets = useSafeAreaInsets();
   const isPoster = documentType === 'poster';
   const haptic = useHaptic();
@@ -185,15 +185,13 @@ export function CreatorEntryScreen({
         uri,
         kind: 'image',
         width: imgW,
-        height: imgH,
-      };
+        height: imgH };
       onMediaSelected([media]);
     }, () => {
       const media: CreatorInitialMedia = {
         id: `capture_${Date.now()}`,
         uri,
-        kind: 'image',
-      };
+        kind: 'image' };
       onMediaSelected([media]);
     });
   }, [mode, onMediaSelected, onVisualSearchCapture, haptic]);
@@ -224,11 +222,44 @@ export function CreatorEntryScreen({
       kind: a.mediaType,
       width: a.width,
       height: a.height,
-      durationMs: a.durationMs,
-    }));
+      durationMs: a.durationMs }));
     haptic.light();
     onMediaSelected(media);
   }, [mode, onMediaSelected, onVisualSearchCapture, haptic]);
+
+  // ── System picker (zero-permission path) ──
+  // The system image picker (iOS PHPicker / Android Photo Picker) runs
+  // out-of-process and grants access only to the selected items — no broad
+  // Photo Library permission is requested. This is the DEFAULT gallery path:
+  // tap the gallery button → system picker → select → editor. Zero
+  // intermediate decisions (Hick's Law: one choice, not a fork).
+  // The custom MediaBrowserSheet (broad library access) is reachable via
+  // long-press on the gallery button — progressive disclosure for power users.
+  const handleSystemPicker = useCallback(async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsMultipleSelection: mode !== 'visual-search',
+        allowsEditing: false,
+        quality: 1,
+        selectionLimit: mode === 'visual-search' ? 1 : isPoster ? 10 : 6,
+      });
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      const assets: SelectedAsset[] = result.assets.map((a) => ({
+        uri: a.uri,
+        mediaType: a.type === 'video' ? 'video' : 'image',
+        width: a.width || undefined,
+        height: a.height || undefined,
+        durationMs: a.duration != null ? a.duration : undefined,
+        filename: a.fileName ?? undefined,
+      }));
+      handlePhotosConfirm(assets);
+    } catch {
+      // System picker failures are rare (e.g. transient OS state). No
+      // permission prompt was shown, so there's nothing to recover from —
+      // the user can retry from the gallery button.
+    }
+  }, [mode, isPoster, handlePhotosConfirm]);
 
   // ── Drafts: open a draft in the composer ──
   const handleOpenDraft = useCallback((draftId: string) => {
@@ -249,7 +280,8 @@ export function CreatorEntryScreen({
         onCapture={handleCapture}
         onCaptureBatch={handleCaptureBatch}
         onViewportChange={onViewportChange}
-        onGallery={() => { haptic.selection(); setShowPhotos(true); }}
+        onGallery={() => { haptic.selection(); void handleSystemPicker(); }}
+        onGalleryLongPress={() => { haptic.selection(); setShowPhotos(true); }}
         onClose={onClose}
         renderBottomOverlay={() => (
           <View
@@ -259,20 +291,17 @@ export function CreatorEntryScreen({
             <CreatorModeSwitch mode={mode} onModeChange={handleModeChange} />
           </View>
         )}
-        renderTopRightAccessory={() => (
+        renderTopRightAccessory={mode === 'poster' ? () => (
           <Pressable
-            style={styles.textModeAccessory}
+            style={[styles.textModeAccessory, { backgroundColor: colors.surface }]}
             onPress={() => { haptic.light(); onBlankStart(); }}
             accessibilityLabel="Create text poster"
             accessibilityHint="Starts a blank text poster"
             accessibilityRole="button"
           >
-            {/* Glass plate — translucent blur + overlay for on-camera legibility */}
-            <BlurView intensity={EditorMaterial.plate.blurIntensity} tint={EditorMaterial.plate.tint} style={[StyleSheet.absoluteFill, { borderRadius: Radius.full }]} />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.plate.overlay, borderRadius: Radius.full }]} />
             <Text style={[styles.textModeBtnLabel, { color: colors.scrimTextPrimary }]}>Aa</Text>
           </Pressable>
-        )}
+        ) : undefined}
       />
 
       {/* Drafts button — small affordance in the camera top bar, next to
@@ -289,20 +318,22 @@ export function CreatorEntryScreen({
           accessibilityHint="Shows your saved creator drafts"
           accessibilityRole="button"
         >
-          <Ionicons name="documents-outline" size={IconGrammar.standard} color="#fff" />
+          <Ionicons name="documents-outline" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
           {drafts.length > 1 ? (
             <View style={[styles.draftsCountBadge, { backgroundColor: colors.brand }]}>
               <Text style={[styles.draftsCountText, { color: colors.textInverse }]}>{drafts.length}</Text>
             </View>
           ) : (
-            <View style={[styles.draftsBadge, { backgroundColor: colors.brand }]} />
+            <View style={[styles.draftsBadge, { backgroundColor: colors.brand, borderColor: colors.mediaOverlayScrim }]} />
           )}
         </Pressable>
       )}
 
       {/* ── Photos: MediaBrowserSheet (gallery) ──
-          Accessible from the camera's gallery button. Confirms selection
-          → onMediaSelected directly (no intermediate action page). */}
+          Accessible from the camera's gallery button via long-press (the
+          power-user path for broad library access). The ordinary tap
+          launches the zero-permission system picker directly. Confirms
+          selection → onMediaSelected directly (no intermediate action page). */}
       <MediaBrowserSheet
         visible={showPhotos}
         onClose={() => setShowPhotos(false)}
@@ -351,15 +382,15 @@ export function CreatorEntryScreen({
                   {draft.thumbnailUri ? (
                     <Image
                       source={{ uri: draft.thumbnailUri }}
-                      style={styles.draftThumb}
+                      style={[styles.draftThumb, { backgroundColor: colors.mediaOverlayScrim }]}
                       resizeMode="cover"
                     />
                   ) : (
-                    <View style={[styles.draftThumb, styles.draftThumbPlaceholder]}>
+                    <View style={[styles.draftThumb, styles.draftThumbPlaceholder, { backgroundColor: colors.mediaOverlayScrim }]}>
                       <Ionicons
                         name={draft.type === 'poster' ? 'film-outline' : 'square-outline'}
                         size={IconGrammar.hero}
-                        color="rgba(255,255,255,0.2)"
+                        color={colors.scrimTextSecondary}
                       />
                     </View>
                   )}
@@ -386,8 +417,7 @@ export function CreatorEntryScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
-  },
+    backgroundColor: '#000' },
 
   // Camera view — "Aa" text-mode button (Instagram "Create" pattern).
   // Refined chrome: subtle dark fill + hairline white/10 border for
@@ -396,16 +426,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: EditorMaterial.plate.hairline,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   textModeBtnLabel: {
-    fontSize: 17,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: Typography.family.semibold },
 
   // Drafts button — transparent 44pt target (AGENTS.md §4: ordinary controls
   // default to transparent). No fill, no border — the top scrim provides
@@ -416,8 +444,7 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 20,
-  },
+    zIndex: 20 },
   // Subtle brand-color dot — signals "there is something to resume".
   draftsBadge: {
     position: 'absolute',
@@ -426,9 +453,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.4)',
-  },
+    borderWidth: Stroke.standard },
   // Count badge — when there are 2+ drafts, show the number instead of a dot.
   // Uses brand color fill with count text for clearer affordance.
   draftsCountBadge: {
@@ -440,12 +465,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   draftsCountText: {
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: Typography.family.semibold },
 
   // Drafts sheet
   draftsSheetHeader: {
@@ -454,62 +477,48 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.lg,
     paddingTop: Space.sm,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   draftsSheetTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily },
   draftsCloseBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   draftsList: {
-    flex: 1,
-  },
+    flex: 1 },
   draftsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.md,
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   draftCard: {
     width: 140,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   draftThumb: {
     width: 140,
     height: 175,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
+    borderRadius: Radius.md },
   draftThumbPlaceholder: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   draftTitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   draftTimestamp: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   draftsEmpty: {
     textAlign: 'center',
     paddingTop: Space.xl,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
 
   // ── In-camera mode switcher (Look / Poster / Search) ──
   // Subtle text-based segmented control rendered into the camera's bottom
@@ -521,6 +530,4 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    alignItems: 'center',
-  },
-});
+    alignItems: 'center' } });

@@ -12,14 +12,19 @@
  *
  * The audit logs warnings to console.warn in __DEV__ only. It does not
  * throw or fail the render — it is a diagnostic tool for developers.
+ *
+ * Static enforcement of labels/roles/hit-targets is handled by
+ * `eslint-plugin-react-native-a11y` (see eslint.config.mjs). This hook
+ * provides a complementary runtime diagnostic: it walks the React
+ * element tree from the given ref and reports missing labels, roles,
+ * and hit-targets to the dev console.
  */
 
 import { useEffect, RefObject } from 'react';
-import { View } from 'react-native';
 import { auditAccessibility } from '../utils/accessibilityAudit';
 
 export function useA11yAudit(
-  _ref: RefObject<View | null>,
+  _ref: RefObject<any>,
   _screenName: string
 ): void {
   useEffect(() => {

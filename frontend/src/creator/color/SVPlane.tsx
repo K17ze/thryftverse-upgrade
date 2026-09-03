@@ -23,17 +23,17 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  Easing,
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { Radius } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { hsvToRgb, toHexString } from './ColorMath';
 import type { HSV } from './ColorTypes';
 
 // ── Timing ───────────────────────────────────────────────────────────
-const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
+const SNAP_TIMING = { duration: Motion.duration.snapToGuide, easing: Motion.easing.entrance };
 
 // ── Props ────────────────────────────────────────────────────────────
 interface SVPlaneProps {
@@ -144,7 +144,7 @@ export function SVPlane({
 
   // Whether the indicator should have a light or dark border
   const indicatorBorderColor =
-    hsv.v > 0.5 && hsv.s < 0.5 ? '#000000' : '#FFFFFF';
+    hsv.v > 0.5 && hsv.s < 0.5 ? '#000000' : colors.scrimTextPrimary;
 
   return (
     <GestureDetector gesture={panGesture}>
@@ -199,8 +199,6 @@ export function SVPlane({
 const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
-    borderWidth: Stroke.hairline,
-    borderColor: 'rgba(0,0,0,0.1)',
   },
   indicator: {
     position: 'absolute',
@@ -208,10 +206,5 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: Radius.full,
     borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
   },
 });

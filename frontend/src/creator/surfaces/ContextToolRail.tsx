@@ -1,34 +1,8 @@
 /**
- * ContextToolRail — a horizontal, context-sensitive tool rail for the
- * creator department (Poster/Look composers).
- *
- * Replaces the static tool dock pattern with a rail that adapts its visible
- * tool set based on the active {@link ToolContext} (editor mode + selection
- * state). Up to 4 primary actions are always visible; additional tools are
- * revealed under a trailing "More" button.
- *
- * Design requirements (2026 flagship creator UX research, AGENTS.md §4):
- *   - Maximum 4 primary actions visible — the Meta Edits / Instagram / CapCut
- *     pattern. The primary layer (canvas + preview) is ruthlessly guarded
- *     against feature creep. More tools ≠ better; ≤4 immediately relevant
- *     actions is the cognitive-fluency sweet spot.
- *   - Overflow under "More" with specific grouping labels (not a flat list)
- *   - 44pt minimum touch targets (48pt preferred for high-frequency tools)
- *   - Transparent background — no card, no border, no glass container
- *   - Horizontal scroll with hidden scroll indicator
- *   - Tool buttons: 24pt icon + 11pt label (textMuted) below
- *   - Selected/active state: icon turns brand color
- *   - Disabled state: icon at 40% opacity, no press feedback
- *   - Badge: small circle on top-right of icon for counts
- *   - "More" button: always last, ellipsis-horizontal icon
- *   - 4pt spacing between tools, 16pt horizontal padding on rail
- *   - Haptic feedback has one owner: CreatorToolButton
- *
- * Anatomy:
- *   ┌────────────────────────────────────────┐
- *   │  [icon]  [icon]  [icon]  [icon]  [⋯]  │
- *   │  Text    Sticker Music  Effects More   │
- *   └────────────────────────────────────────┘
+ * ContextToolRail — horizontal, context-sensitive tool rail for the
+ * creator department (Poster/Look composers). Adapts its visible tool
+ * set based on the active ToolContext. Up to 4 primary actions are
+ * visible; additional tools are revealed under a trailing "More" button.
  */
 
 import React, { useCallback, useMemo } from 'react';
@@ -65,10 +39,7 @@ export interface ContextToolRailProps {
 
 // ── Constants ───────────────────────────────────────────────────────
 
-/** Maximum primary tools visible before overflow. The 2026 flagship creator
- *  UX research (Meta Edits, Instagram, CapCut) converges on ≤4 immediately
- *  relevant actions — the primary layer is ruthlessly guarded against
- *  feature creep. More tools ≠ better; cognitive fluency peaks at 4. */
+/** Maximum primary tools before overflow — context determines actual count. */
 const MAX_PRIMARY = 4;
 /** Badge diameter. */
 const BADGE_SIZE = 16;
@@ -183,7 +154,7 @@ const MoreButton = React.memo(function MoreButton({
       label="More"
       onPress={onPress}
       accessibilityLabel="More tools"
-      accessibilityHint="Opens additional creative tools — layers, transitions, templates, and advanced editing"
+      accessibilityHint="More editing tools"
     />
   );
 });
@@ -196,6 +167,7 @@ export function ContextToolRail({
   onOverflowPress,
   style,
 }: ContextToolRailProps) {
+  const { colors } = useAppTheme();
   const { pinned, recordUse } = usePinnedTools();
 
   // Resolve the active tool set from the registry.
@@ -246,10 +218,8 @@ export function ContextToolRail({
     void recordUse(toolId);
   }, [recordUse]);
 
-  // Colors are now resolved inside CreatorToolButton (theme-aware).
-  // The neutral default keeps the rail visually restrained per AGENTS.md §4
-  // (hierarchy over decoration). Active state is driven by `tool.active`
-  // and `tool.selectedStyle` on the ToolDefinition.
+  // Colors are resolved inside CreatorToolButton (theme-aware).
+  // Active state is driven by `tool.active` and `tool.selectedStyle`.
 
   const handleOverflow = useCallback(() => {
     if (onOverflowPress) {
@@ -257,14 +227,39 @@ export function ContextToolRail({
     }
   }, [onOverflowPress]);
 
+  // Split primary tools into weighted primary and secondary groups.
+  // A hairline separator is rendered between the two when both exist,
+  // giving the rail a clear visual hierarchy without decorative chrome.
+  const { weightedPrimary, weightedSecondary } = useMemo(() => {
+    const primary: ToolDefinition[] = [];
+    const secondary: ToolDefinition[] = [];
+    for (const tool of primaryTools) {
+      if (tool.weight === 'primary') primary.push(tool);
+      else secondary.push(tool);
+    }
+    return { weightedPrimary: primary, weightedSecondary: secondary };
+  }, [primaryTools]);
+
+  const hasSeparator = weightedPrimary.length > 0 && weightedSecondary.length > 0;
+
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       style={[styles.rail, style]}
       contentContainerStyle={styles.railContent}
+      accessibilityRole="toolbar"
+      accessibilityLabel="Creator tools"
     >
-      {primaryTools.map((tool) => (
+      {weightedPrimary.map((tool) => (
+        <RailToolButton
+          key={tool.id}
+          tool={tool}
+          onToolUsed={handleToolUsed}
+        />
+      ))}
+      {hasSeparator && <View style={[styles.separator, { backgroundColor: colors.border }]} />}
+      {weightedSecondary.map((tool) => (
         <RailToolButton
           key={tool.id}
           tool={tool}
@@ -300,6 +295,14 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // ── Primary/secondary separator ──
+  // A hairline vertical divider between weighted-primary and weighted-
+  // secondary tools. Communicates hierarchy without decorative chrome.
+  separator: {
+    width: StyleSheet.hairlineWidth,
+    height: Space.lg, // 24pt — spans the tool button visual height
+    marginHorizontal: Space.xs, // 4pt — matches inter-tool gap
   },
   // ── Badge overlay ──
   // Positioned at the top-right corner of the tool button.

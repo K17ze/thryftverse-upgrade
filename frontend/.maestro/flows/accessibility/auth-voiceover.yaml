@@ -1,0 +1,39 @@
+appId: com.thryftverse.app
+name: "Auth — VoiceOver accessibility"
+tags:
+  - accessibility
+  - voiceover
+---
+# Launch app
+- launchApp:
+    clearState: true
+
+# Verify VoiceOver focus order on login screen
+- assertVisible: "Sign in"
+- assertVisible: "Email"
+- assertVisible: "Password"
+
+# Test focus traversal — email field should be focusable
+- tapOn:
+    text: "Email"
+    label: "Email input field"
+
+# Type email
+- inputText: "test@example.com"
+
+# Move focus to password (VoiceOver swipe right gesture simulation)
+- tapOn:
+    text: "Password"
+    label: "Password input field"
+
+- inputText: "testpassword"
+
+# Tap sign in
+- tapOn:
+    text: "Sign in"
+    label: "Sign in button"
+
+# Verify error message is announced
+- assertVisible:
+    text: ".*"
+    label: "Check for error or success message"

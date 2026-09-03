@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { CommercePaymentMethod } from '../../services/commerceApi';
 
@@ -23,8 +24,7 @@ export function CheckoutPaymentSelector({
   selectedId,
   onSelect,
   isSelecting,
-  onAddCard,
-}: Props) {
+  onAddCard }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
@@ -57,11 +57,11 @@ export function CheckoutPaymentSelector({
               }`}
             >
               <View style={styles.rowLeft}>
-                <View style={[styles.cardIconWrap, isSelected && styles.cardIconWrapSelected]}>
+                <View style={styles.cardIconWrap}>
                   {method.type === 'apple_pay' ? (
-                    <Text style={styles.walletIconText}>Pay</Text>
+                    <Text style={styles.walletIconText}>Apple Pay</Text>
                   ) : method.type === 'google_pay' ? (
-                    <Text style={styles.walletIconText}>G</Text>
+                    <Text style={styles.walletIconText}>Google Pay</Text>
                   ) : method.type === 'bank_account' ? (
                     <Ionicons
                       name="business"
@@ -131,16 +131,14 @@ export function CheckoutPaymentSelector({
 
 const createStyles = (colors: any) => StyleSheet.create({
   title: {
-    fontSize: 18,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
     textAlign: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   listContent: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -149,68 +147,52 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   rowSelected: {
-    backgroundColor: `${colors.brand}06`,
-  },
+    backgroundColor: colors.brandSubtle },
   rowPressed: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,
-    flex: 1,
-  },
+    flex: 1 },
   cardIconWrap: {
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardIconWrapSelected: {
-    backgroundColor: `${colors.brand}15`,
-  },
+    justifyContent: 'center' },
   walletIconText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontWeight: '700',
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   rowInfo: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   methodLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   methodLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   methodDetails: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   defaultBadge: {
-    backgroundColor: `${colors.brand}12`,
+    backgroundColor: colors.brandSubtle,
     borderRadius: Radius.md,
     paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
+    paddingVertical: 1 },
   defaultBadgeText: {
-    fontSize: 10,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.brand,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+    letterSpacing: 0.5 },
   addCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -218,25 +200,20 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: Space.sm + 2,
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   addCardRowPressed: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   addCardIconWrap: {
     width: 36,
     height: 36,
     borderRadius: Radius.md,
-    backgroundColor: `${colors.brand}12`,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   addCardText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.brand },
   trustFooter: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -244,12 +221,9 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: 5,
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   trustText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: 0.2,
-  },
-});
+    letterSpacing: 0.2 } });

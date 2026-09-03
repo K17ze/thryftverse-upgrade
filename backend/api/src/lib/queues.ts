@@ -44,6 +44,28 @@ export interface RetentionSweepJobData {
   reason: 'scheduled' | 'manual';
 }
 
+export interface AnalyticsAggregationJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface PushReceiptReconciliationJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface ScheduledPublicationSweepJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface BackupExpiryJobData {
+  reason: 'scheduled' | 'manual';
+}
+
+export interface DsarExportJobData {
+  requestId: string;
+  userId: string;
+  reason: 'scheduled' | 'manual';
+}
+
 export interface MediaIngestJobData {
   assetId: string;
   reason: string;
@@ -64,18 +86,20 @@ export interface MediaEmbeddingJobData {
 }
 
 // ---------------------------------------------------------------------------
-// Importer assisted extraction queue — ML-assisted structured extraction from
-// catalogue photos. Kept separate from catalog_import so extraction model
-// latency never blocks the import saga. Every extracted field is advisory
-// until the seller confirms it through the human confirmation gate.
+// Importer extraction intelligence queue — ML-assisted structured extraction
+// from catalogue photos. Kept separate from catalog_import so extraction
+// model latency never blocks the import saga. Every candidate is advisory
+// until the seller accepts it through the revision-checked field-decision
+// command. Model identity is server-owned; the job carries the runId and
+// the server-selected model bundle.
 // ---------------------------------------------------------------------------
 
 export interface ImporterExtractionJobData {
-  extractionId: string;
+  runId: string;
   itemId: string;
   mediaAssetId: string | null;
-  modelId: string;
-  modelVersion: string;
+  modelBundleId: string;
+  modelBundleVersion: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +150,23 @@ export interface CatalogImportReconcileJobData {
   publicationKey: string;
 }
 
+// ---------------------------------------------------------------------------
+// Agent run queue — durable execution of agent invocations. Decouples chat
+// message creation from model latency: a 30-second provider timeout no
+// longer blocks the message response. Each job carries the runId so the
+// worker can load the pinned version, deployment, and trigger context from
+// the agent_runs table.
+// ---------------------------------------------------------------------------
+
+export interface AgentRunJobData {
+  runId: string;
+  botId: string;
+  conversationId: string;
+  actorUserId: string;
+  triggerMessageId: string | null;
+  messageText: string;
+}
+
 type CatalogImportJobData =
   | CatalogImportDiscoveryJobData
   | CatalogImportHydrationJobData
@@ -141,7 +182,12 @@ type InfraJobData =
   | OnezeMintReserveJobData
   | ReconciliationJobData
   | OutboxDrainJobData
-  | RetentionSweepJobData;
+  | RetentionSweepJobData
+  | AnalyticsAggregationJobData
+  | PushReceiptReconciliationJobData
+  | ScheduledPublicationSweepJobData
+  | BackupExpiryJobData
+  | DsarExportJobData;
 
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
@@ -151,6 +197,11 @@ interface QueueHandlers {
   handleReconciliationJob: (job: ReconciliationJobData) => Promise<void>;
   handleOutboxDrainJob: (job: OutboxDrainJobData) => Promise<void>;
   handleRetentionSweepJob: (job: RetentionSweepJobData) => Promise<void>;
+  handleAnalyticsAggregationJob: (job: AnalyticsAggregationJobData) => Promise<void>;
+  handlePushReceiptReconciliationJob: (job: PushReceiptReconciliationJobData) => Promise<void>;
+  handleScheduledPublicationSweepJob: (job: ScheduledPublicationSweepJobData) => Promise<void>;
+  handleBackupExpiryJob: (job: BackupExpiryJobData) => Promise<void>;
+  handleDsarExportJob: (job: DsarExportJobData) => Promise<void>;
   handleMediaIngestJob: (job: MediaIngestJobData) => Promise<void>;
   handleMediaEmbeddingJob: (job: MediaEmbeddingJobData) => Promise<void>;
   handleModerationTriageJob: (job: ModerationTriageJobData) => Promise<void>;
@@ -162,6 +213,7 @@ interface QueueHandlers {
   handleCatalogImportPublicationJob: (job: CatalogImportPublicationJobData) => Promise<void>;
   handleCatalogImportRetentionJob: (job: CatalogImportRetentionJobData) => Promise<void>;
   handleCatalogImportReconcileJob: (job: CatalogImportReconcileJobData) => Promise<void>;
+  handleAgentRunJob: (job: AgentRunJobData) => Promise<void>;
 }
 
 export interface BackgroundJobLogger {
@@ -216,13 +268,15 @@ const CATALOG_IMPORT_QUEUE_NAME = 'catalog_import';
 const MEDIA_EMBEDDING_QUEUE_NAME = 'media_embedding';
 const MODERATION_TRIAGE_QUEUE_NAME = 'moderation_triage';
 const IMPORTER_EXTRACTION_QUEUE_NAME = 'importer_extraction';
-const PUSH_DLQ_NAME = `${PUSH_QUEUE_NAME}:dlq`;
-const INFRA_DLQ_NAME = `${INFRA_QUEUE_NAME}:dlq`;
-const MEDIA_INGEST_DLQ_NAME = `${MEDIA_INGEST_QUEUE_NAME}:dlq`;
-const CATALOG_IMPORT_DLQ_NAME = `${CATALOG_IMPORT_QUEUE_NAME}:dlq`;
-const MEDIA_EMBEDDING_DLQ_NAME = `${MEDIA_EMBEDDING_QUEUE_NAME}:dlq`;
-const MODERATION_TRIAGE_DLQ_NAME = `${MODERATION_TRIAGE_QUEUE_NAME}:dlq`;
-const IMPORTER_EXTRACTION_DLQ_NAME = `${IMPORTER_EXTRACTION_QUEUE_NAME}:dlq`;
+export const AGENT_RUN_QUEUE_NAME = 'agent-runs';
+export const AGENT_RUN_DLQ_NAME = 'agent-runs-dlq';
+const PUSH_DLQ_NAME = `${PUSH_QUEUE_NAME}-dlq`;
+const INFRA_DLQ_NAME = `${INFRA_QUEUE_NAME}-dlq`;
+const MEDIA_INGEST_DLQ_NAME = `${MEDIA_INGEST_QUEUE_NAME}-dlq`;
+const CATALOG_IMPORT_DLQ_NAME = `${CATALOG_IMPORT_QUEUE_NAME}-dlq`;
+const MEDIA_EMBEDDING_DLQ_NAME = `${MEDIA_EMBEDDING_QUEUE_NAME}-dlq`;
+const MODERATION_TRIAGE_DLQ_NAME = `${MODERATION_TRIAGE_QUEUE_NAME}-dlq`;
+const IMPORTER_EXTRACTION_DLQ_NAME = `${IMPORTER_EXTRACTION_QUEUE_NAME}-dlq`;
 const DLQ_RETENTION_SECONDS = 7 * 24 * 60 * 60;
 
 export const QUEUE_DLQ_MAP: Record<string, string> = {
@@ -232,6 +286,7 @@ export const QUEUE_DLQ_MAP: Record<string, string> = {
   [CATALOG_IMPORT_QUEUE_NAME]: CATALOG_IMPORT_DLQ_NAME,
   [MEDIA_EMBEDDING_QUEUE_NAME]: MEDIA_EMBEDDING_DLQ_NAME,
   [IMPORTER_EXTRACTION_QUEUE_NAME]: IMPORTER_EXTRACTION_DLQ_NAME,
+  [AGENT_RUN_QUEUE_NAME]: AGENT_RUN_DLQ_NAME,
 };
 
 const pushQueue = new Queue<PushJobData>(PUSH_QUEUE_NAME, {
@@ -290,6 +345,20 @@ const importerExtractionDlq = new Queue<ImporterExtractionJobData>(IMPORTER_EXTR
   connection: queueConnection,
 });
 
+export const agentRunQueue = new Queue<AgentRunJobData>(AGENT_RUN_QUEUE_NAME, {
+  connection: queueConnection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 5_000 },
+    removeOnComplete: { count: 100 },
+    removeOnFail: { count: 500 },
+  },
+});
+
+export const agentRunDlq = new Queue<AgentRunJobData>(AGENT_RUN_DLQ_NAME, {
+  connection: queueConnection,
+});
+
 export const dlqQueues: Record<string, Queue> = {
   [PUSH_DLQ_NAME]: pushDlq,
   [INFRA_DLQ_NAME]: infraDlq,
@@ -298,6 +367,7 @@ export const dlqQueues: Record<string, Queue> = {
   [MEDIA_EMBEDDING_DLQ_NAME]: mediaEmbeddingDlq,
   [MODERATION_TRIAGE_DLQ_NAME]: moderationTriageDlq,
   [IMPORTER_EXTRACTION_DLQ_NAME]: importerExtractionDlq,
+  [AGENT_RUN_DLQ_NAME]: agentRunDlq,
 };
 
 export const mainQueues: Record<string, Queue> = {
@@ -308,6 +378,7 @@ export const mainQueues: Record<string, Queue> = {
   [MEDIA_EMBEDDING_QUEUE_NAME]: mediaEmbeddingQueue,
   [MODERATION_TRIAGE_QUEUE_NAME]: moderationTriageQueue,
   [IMPORTER_EXTRACTION_QUEUE_NAME]: importerExtractionQueue,
+  [AGENT_RUN_QUEUE_NAME]: agentRunQueue,
 };
 
 function moveToDlq(
@@ -351,6 +422,7 @@ let catalogImportWorker: Worker<CatalogImportJobData> | null = null;
 let mediaEmbeddingWorker: Worker<MediaEmbeddingJobData> | null = null;
 let moderationTriageWorker: Worker<ModerationTriageJobData> | null = null;
 let importerExtractionWorker: Worker<ImporterExtractionJobData> | null = null;
+let agentRunWorker: Worker<AgentRunJobData> | null = null;
 
 export function startBackgroundWorkers(
   handlers: QueueHandlers,
@@ -430,6 +502,16 @@ export function startBackgroundWorkers(
             await handlers.handleOutboxDrainJob(job.data as OutboxDrainJobData);
           } else if (job.name === 'retention_sweep') {
             await handlers.handleRetentionSweepJob(job.data as RetentionSweepJobData);
+          } else if (job.name === 'analytics_aggregation') {
+            await handlers.handleAnalyticsAggregationJob(job.data as AnalyticsAggregationJobData);
+          } else if (job.name === 'push_receipt_reconciliation') {
+            await handlers.handlePushReceiptReconciliationJob(job.data as PushReceiptReconciliationJobData);
+          } else if (job.name === 'scheduled_publication_sweep') {
+            await handlers.handleScheduledPublicationSweepJob(job.data as ScheduledPublicationSweepJobData);
+          } else if (job.name === 'backup_expiry_check') {
+            await handlers.handleBackupExpiryJob(job.data as BackupExpiryJobData);
+          } else if (job.name === 'dsar_export') {
+            await handlers.handleDsarExportJob(job.data as DsarExportJobData);
           }
 
           const durationMs = Date.now() - jobStart;
@@ -744,6 +826,57 @@ export function startBackgroundWorkers(
       }
     });
   }
+
+  if (!agentRunWorker) {
+    agentRunWorker = new Worker<AgentRunJobData>(
+      AGENT_RUN_QUEUE_NAME,
+      async (job) => {
+        const jobStart = Date.now();
+        logJobEvent('info', { queue: AGENT_RUN_QUEUE_NAME, job: job.name, jobId: job.id }, 'background_job_started');
+        try {
+          await handlers.handleAgentRunJob(job.data);
+          const durationMs = Date.now() - jobStart;
+          recordBackgroundJob({
+            queue: AGENT_RUN_QUEUE_NAME,
+            job: job.name,
+            result: 'completed',
+          });
+          recordBackgroundJobDuration({
+            queue: AGENT_RUN_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('info', { queue: AGENT_RUN_QUEUE_NAME, job: job.name, jobId: job.id, durationMs }, 'background_job_completed');
+        } catch (error) {
+          const durationMs = Date.now() - jobStart;
+          recordBackgroundJob({
+            queue: AGENT_RUN_QUEUE_NAME,
+            job: job.name,
+            result: 'failed',
+          });
+          recordBackgroundJobDuration({
+            queue: AGENT_RUN_QUEUE_NAME,
+            job: job.name,
+            durationSeconds: durationMs / 1000,
+          });
+          logJobEvent('error', { queue: AGENT_RUN_QUEUE_NAME, job: job.name, jobId: job.id, durationMs, err: error }, 'background_job_failed');
+          throw error;
+        }
+      },
+      {
+        connection: workerConnection,
+        concurrency: 4,
+      }
+    );
+    agentRunWorker.on('error', (err) => {
+      logJobEvent('warn', { err: err.message }, 'agentRunWorker error');
+    });
+    agentRunWorker.on('failed', (job, err) => {
+      if (job) {
+        moveToDlq(agentRunDlq, AGENT_RUN_QUEUE_NAME, job, err);
+      }
+    });
+  }
 }
 
 export async function enqueuePushNotificationJob(input: PushJobData): Promise<void> {
@@ -864,6 +997,67 @@ export async function enqueueRetentionSweepJob(
   );
 }
 
+export async function enqueueAnalyticsAggregationJob(
+  reason: AnalyticsAggregationJobData['reason'] = 'scheduled',
+): Promise<void> {
+  const timeBucket = Math.floor(Date.now() / (15 * 60 * 1000));
+  await infraQueue.add(
+    'analytics_aggregation',
+    { reason },
+    {
+      jobId: `analytics_aggregation_${reason}_${timeBucket}`,
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 10_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 100,
+    },
+  );
+}
+
+export async function enqueuePushReceiptReconciliationJob(
+  reason: PushReceiptReconciliationJobData['reason'] = 'scheduled',
+): Promise<void> {
+  const timeBucket = Math.floor(Date.now() / (5 * 60 * 1000));
+  await infraQueue.add(
+    'push_receipt_reconciliation',
+    { reason },
+    {
+      jobId: `push_receipt_reconciliation_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 30_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 100,
+    },
+  );
+}
+
+export async function enqueueScheduledPublicationSweepJob(
+  reason: ScheduledPublicationSweepJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // Run every 30 seconds — the SLO target is "within 60 seconds of due time".
+  const timeBucket = Math.floor(Date.now() / 30_000);
+  await infraQueue.add(
+    'scheduled_publication_sweep',
+    { reason },
+    {
+      jobId: `scheduled_publication_sweep_${reason}_${timeBucket}`,
+      attempts: 2,
+      backoff: {
+        type: 'exponential',
+        delay: 10_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 100,
+    },
+  );
+}
+
 export async function enqueueMediaIngestJob(input: MediaIngestJobData): Promise<void> {
   await mediaIngestQueue.add(
     'media_ingest',
@@ -923,9 +1117,9 @@ export async function enqueueModerationTriageJob(input: ModerationTriageJobData)
 }
 
 export async function enqueueImporterExtractionJob(input: ImporterExtractionJobData): Promise<void> {
-  // Deterministic job id: the extractionId is unique per run, so re-queuing
-  // the same extraction is a no-op.
-  const jobId = `importer_extraction_${input.extractionId}`;
+  // Deterministic job id: the runId is unique per run, so re-queuing
+  // the same run is a no-op.
+  const jobId = `importer_extraction_${input.runId}`;
   await importerExtractionQueue.add(
     'importer_extraction_run',
     input,
@@ -1058,6 +1252,22 @@ export async function enqueueCatalogImportReconcileJob(
   );
 }
 
+export async function enqueueDsarExportJob(
+  input: DsarExportJobData,
+): Promise<void> {
+  await infraQueue.add(
+    'dsar_export',
+    input,
+    {
+      jobId: `dsar_export_${input.requestId}`,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 30_000 },
+      removeOnComplete: true,
+      removeOnFail: 100,
+    },
+  );
+}
+
 export async function closeBackgroundQueues(): Promise<void> {
   if (pushWorker) {
     await pushWorker.close();
@@ -1089,18 +1299,25 @@ export async function closeBackgroundQueues(): Promise<void> {
     importerExtractionWorker = null;
   }
 
+  if (agentRunWorker) {
+    await agentRunWorker.close();
+    agentRunWorker = null;
+  }
+
   await pushQueue.close();
   await infraQueue.close();
   await mediaIngestQueue.close();
   await mediaEmbeddingQueue.close();
   await moderationTriageQueue.close();
   await importerExtractionQueue.close();
+  await agentRunQueue.close();
   await pushDlq.close();
   await infraDlq.close();
   await mediaIngestDlq.close();
   await mediaEmbeddingDlq.close();
   await moderationTriageDlq.close();
   await importerExtractionDlq.close();
+  await agentRunDlq.close();
   await workerConnection.quit();
   await queueConnection.quit();
 }

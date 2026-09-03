@@ -5,8 +5,7 @@ import {
   StyleSheet,
   Pressable,
   useWindowDimensions,
-  AccessibilityInfo,
-} from 'react-native';
+  AccessibilityInfo } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,16 +14,15 @@ import Reanimated, {
   withTiming,
   Easing,
   runOnJS,
-  type SharedValue,
-} from 'react-native-reanimated';
+  type SharedValue } from 'react-native-reanimated';
 import {
   GestureDetector,
   Gesture,
-  FlatList,
-} from 'react-native-gesture-handler';
+  FlatList } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -46,15 +44,12 @@ const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) =
   return v;
 };
 
-const subComponentStyles = StyleSheet.create({
+const createSubComponentStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
-    backgroundColor: '#0a0a0a',
-  },
+    backgroundColor: colors.background },
   image: {
     width: '100%',
-    height: '100%',
-  },
-});
+    height: '100%' } });
 
 interface MediaPageProps {
   uri: string;
@@ -66,6 +61,8 @@ interface MediaPageProps {
 }
 
 function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoomStart }: MediaPageProps) {
+  const { colors } = useAppTheme();
+  const subComponentStyles = React.useMemo(() => createSubComponentStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
   const [failed, setFailed] = useState(false);
   const scale = useSharedValue(1);
@@ -145,8 +142,7 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
 
   const composed = Gesture.Simultaneous(Gesture.Race(doubleTap, pan), pinch);
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
-  }));
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }] }));
 
   return (
     <GestureDetector gesture={composed}>
@@ -173,6 +169,8 @@ function MediaPage({ uri, width, height, onDoubleTap, sharedTransitionTag, onZoo
 }
 
 function VideoPage({ uri, width, height, shouldPlay }: { uri: string; width: number; height: number; shouldPlay: boolean }) {
+  const { colors } = useAppTheme();
+  const subComponentStyles = React.useMemo(() => createSubComponentStyles(colors), [colors]);
   return (
     <View style={[subComponentStyles.page, { width, height }]}>
       <Video
@@ -223,8 +221,7 @@ export function ProductMediaGallery({
   onZoomStart,
   onOpenFullscreen,
   bigHeartOpacity,
-  bigHeartScale,
-}: ProductMediaGalleryProps) {
+  bigHeartScale }: ProductMediaGalleryProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -243,8 +240,7 @@ export function ProductMediaGallery({
 
   const bigHeartStyle = useAnimatedStyle(() => ({
     opacity: bigHeartOpacity.value,
-    transform: [{ scale: bigHeartScale.value }],
-  }));
+    transform: [{ scale: bigHeartScale.value }] }));
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
@@ -310,7 +306,7 @@ export function ProductMediaGallery({
         style={[StyleSheet.absoluteFill, styles.bigHeartWrap, bigHeartStyle]}
         pointerEvents="none"
       >
-        <Ionicons name="heart" size={100} color="#fff" style={styles.bigHeartIcon} />
+        <Ionicons name="heart" size={100} color={colors.scrimTextPrimary} style={styles.bigHeartIcon} />
       </Reanimated.View>
 
       {isSold && (
@@ -327,7 +323,7 @@ export function ProductMediaGallery({
           {...PressPresets.iconButton}
           accessibilityLabel="Go back"
         >
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} />
         </AnimatedPressable>
 
         <View style={styles.headerRight}>
@@ -337,7 +333,7 @@ export function ProductMediaGallery({
             {...PressPresets.iconButton}
             accessibilityLabel="Share this listing"
           >
-            <Ionicons name="share-outline" size={24} color="#fff" />
+            <Ionicons name="share-outline" size={24} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -350,7 +346,7 @@ export function ProductMediaGallery({
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={24}
-              color={isSaved ? colors.brand : '#fff'}
+              color={isSaved ? colors.brand : colors.scrimTextPrimary}
             />
           </AnimatedPressable>
 
@@ -360,7 +356,7 @@ export function ProductMediaGallery({
               onToggle={onToggleFav}
               size={24}
               activeColor={colors.danger}
-              inactiveColor="#fff"
+              inactiveColor={colors.scrimTextPrimary}
             />
           </View>
         </View>
@@ -383,7 +379,7 @@ export function ProductMediaGallery({
       {/* Video badge */}
       {images.length > 0 && isVideoUri(images[activeIndex]) && (
         <View style={styles.videoBadge}>
-          <Ionicons name="play-circle" size={16} color="#fff" />
+          <Ionicons name="play-circle" size={16} color={colors.scrimTextPrimary} />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
       )}
@@ -418,7 +414,7 @@ export function ProductMediaGallery({
                   />
                   {isVid && (
                     <View style={styles.thumbnailVideoBadge}>
-                      <Ionicons name="play" size={8} color="#fff" />
+                      <Ionicons name="play" size={8} color={colors.scrimTextPrimary} />
                     </View>
                   )}
                 </Pressable>
@@ -436,27 +432,23 @@ function createStyles(colors: ThemeColors) {
   heroContainer: {
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   topScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: 120,
-    backgroundColor: 'rgba(0,0,0,0.12)',
-  },
+    backgroundColor: colors.glassBg },
   bigHeartWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 5,
-  },
+    zIndex: 5 },
   bigHeartIcon: {
-    shadowColor: '#000',
+    shadowColor: colors.textPrimary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
+    shadowRadius: 10 },
   soldOverlay: {
     position: 'absolute',
     bottom: Space.lg,
@@ -464,14 +456,12 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.success,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   soldText: {
     color: colors.background,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 1 },
   floatingHeader: {
     position: 'absolute',
     top: 0,
@@ -480,34 +470,29 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   headerRight: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   controlBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   indexBadge: {
     position: 'absolute',
     bottom: Space.sm,
     right: Space.md,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   indexText: {
-    color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   videoBadge: {
     position: 'absolute',
     bottom: Space.sm,
@@ -515,43 +500,36 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   videoBadgeText: {
-    color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   thumbnailStrip: {
     position: 'absolute',
     bottom: 40,
     left: 0,
-    right: 0,
-  },
+    right: 0 },
   thumbnailContent: {
     paddingHorizontal: Space.md,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   thumbnail: {
     width: 40,
     height: 40,
     borderRadius: Radius.sm,
     overflow: 'hidden',
     opacity: 0.5,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
+    borderWidth: Stroke.emphasis,
+    borderColor: 'transparent' },
   thumbnailActive: {
     opacity: 1,
-    borderColor: '#fff',
-  },
+    borderColor: colors.scrimTextPrimary },
   thumbnailImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   thumbnailVideoBadge: {
     position: 'absolute',
     bottom: 2,
@@ -559,9 +537,7 @@ function createStyles(colors: ThemeColors) {
     width: 14,
     height: 14,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  });
+    justifyContent: 'center' } });
 }

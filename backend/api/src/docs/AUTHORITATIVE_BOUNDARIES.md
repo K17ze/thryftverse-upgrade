@@ -98,19 +98,18 @@ belong to deterministic code, policy rules, and accountable human review.
   directly mutate account status. Fraud reports
   (`POST /fraud/report`) are stored for moderator review.
 
-### Reserve / Escrow (1ze Token Pricing)
+### Reserve / Escrow (1ze At-Par Pricing)
 
 - **Authority:** `lib/pricingEngine.ts`
-- **Boundary:** The 1ze token pricing engine is deterministic,
-  bounded-parameter commerce logic. Buy/sell/cross-border prices are
-  calculated from fixed markup/markdown bps, PPP factors, and
-  operator-set FX rates. No ML model sets token prices.
+- **Boundary:** The 1ze at-par pricing engine is deterministic,
+  transparent-fee e-money logic. 1 1ZE = $1.00 USD at par. Prices are
+  calculated from the anchor value, FX rates, and bounded platform
+  fees. No ML model sets token prices. There is no markup/markdown/PPP
+  token economics model.
 - **Enforcement:** `validatePricingProfileInput()` enforces hard
-  bounds on all parameters (markup 1500–2500 bps, markdown 1000–2000
-  bps, cross-border fee 500–1500 bps, PPP 0.7–1.0).
-  `findPricingArbitrageViolations()` deterministically detects
-  arbitrage opportunities. All rates are operator-set via
-  `setOnezeAnchorConfig()` and `setInternalFxRate()`.
+  bounds on platform fees (100–300 bps for load, withdraw, and FX
+  fees). All rates are operator-set via `setOnezeAnchorConfig()` and
+  `setInternalFxRate()`.
 
 ---
 

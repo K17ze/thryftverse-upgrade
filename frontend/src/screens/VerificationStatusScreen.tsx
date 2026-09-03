@@ -7,12 +7,12 @@ import {
   Pressable,
   RefreshControl,
   ActivityIndicator,
-  Linking,
-} from 'react-native';
+  Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipFormSection } from '../components/flagship';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -113,8 +113,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
         label: 'Email confirmed',
         detail: emailVerified ? 'Verified' : 'Pending — check your inbox',
         status: emailVerified ? 'complete' : 'pending',
-        icon: emailVerified ? 'checkmark-circle' : 'mail-outline',
-      },
+        icon: emailVerified ? 'checkmark-circle' : 'mail-outline' },
       {
         label: 'Identity details',
         detail:
@@ -122,8 +121,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
             ? 'Not started'
             : 'Submitted',
         status: effectiveStatus === 'unverified' ? 'pending' : 'complete',
-        icon: 'person-outline',
-      },
+        icon: 'person-outline' },
       {
         label: 'Document check',
         detail:
@@ -142,8 +140,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
             : docStatus === 'rejected'
             ? 'pending'
             : 'pending',
-        icon: 'card-outline',
-      },
+        icon: 'card-outline' },
       {
         label: 'Selfie & liveness',
         detail:
@@ -160,8 +157,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
             : livenessStatus === 'pending'
             ? 'active'
             : 'pending',
-        icon: 'scan-outline',
-      },
+        icon: 'scan-outline' },
       {
         label: 'Final review',
         detail:
@@ -178,8 +174,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
             : effectiveStatus === 'in_review'
             ? 'active'
             : 'pending',
-        icon: 'shield-checkmark-outline',
-      },
+        icon: 'checkmark-circle-outline' },
     ];
   }, [backendStatus, emailVerified, effectiveStatus]);
 
@@ -220,9 +215,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
         }
       >
         {/* ── Status hero ── */}
-        <View>
-          <StatusHero status={effectiveStatus} colors={colors} styles={styles} />
-        </View>
+        <StatusHero status={effectiveStatus} />
 
         {/* ── Status-specific content ── */}
         {effectiveStatus === 'unverified' && (
@@ -261,7 +254,7 @@ export default function VerificationStatusScreen({ navigation }: Props) {
                 <ReviewCheckItem icon="document-text-outline" text="Your identity details match the document provided" colors={colors} styles={styles} />
                 <ReviewCheckItem icon="scan-outline" text="Document is genuine and not tampered with" colors={colors} styles={styles} />
                 <ReviewCheckItem icon="happy-outline" text="Selfie matches the document photo" colors={colors} styles={styles} />
-                <ReviewCheckItem icon="shield-checkmark-outline" text="Sanctions and fraud screening" colors={colors} styles={styles} />
+                <ReviewCheckItem icon="lock-closed-outline" text="Sanctions and fraud screening" colors={colors} styles={styles} />
                 <View style={[styles.etaBanner, { backgroundColor: colors.surfaceAlt }]}>
                   <Ionicons name="time-outline" size={16} color={colors.warning} />
                   <Text style={[styles.etaText, { color: colors.textSecondary }]}>
@@ -281,9 +274,9 @@ export default function VerificationStatusScreen({ navigation }: Props) {
               style={styles.section}
             >
               <View style={styles.panelContent}>
-                <BenefitItem icon="shield-checkmark" text="Verified seller badge on your profile and listings" colors={colors} styles={styles} />
+                <BenefitItem icon="checkmark-circle-outline" text="Verified seller badge on your profile and listings" colors={colors} styles={styles} />
                 <BenefitItem icon="trending-up-outline" text="Higher listing visibility in search and discovery" colors={colors} styles={styles} />
-                <BenefitItem icon="cube-outline" text="Higher selling limits and Co-Own eligibility" colors={colors} styles={styles} />
+                <BenefitItem icon="layers-outline" text="Higher selling limits and Co-Own eligibility" colors={colors} styles={styles} />
                 <BenefitItem icon="people-outline" text="Buyer trust — verified sellers sell faster" colors={colors} styles={styles} />
               </View>
             </FlagshipFormSection>
@@ -358,15 +351,11 @@ export default function VerificationStatusScreen({ navigation }: Props) {
 }
 
 // ── Status hero ──
-function StatusHero({
-  status,
-  colors,
-  styles,
-}: {
-  status: EffectiveStatus;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-}) {
+// Flat, prominent status block — no card, no circle. The icon colour + bold
+// subtitle-size title carry the visual hierarchy (per AGENTS.md flat canvas).
+function StatusHero({ status }: { status: EffectiveStatus }) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const config = STATUS_HERO_CONFIG[status];
   const accentColor =
     config.accent === 'success'
@@ -378,21 +367,22 @@ function StatusHero({
       : colors.brand;
 
   return (
-    <FlagshipFormSection variant="state" tone={config.accent} style={styles.section}>
-      <View style={styles.heroRow}>
-        <View style={[styles.heroIcon, { backgroundColor: `${accentColor}18` }]}>
-          <Ionicons name={config.icon} size={28} color={accentColor} />
-        </View>
-        <View style={styles.heroBody}>
-          <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-            {config.title}
-          </Text>
-          <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-            {config.subtitle}
-          </Text>
-        </View>
+    <View style={styles.statusHero}>
+      <Ionicons
+        name={config.icon}
+        size={32}
+        color={accentColor}
+        style={styles.statusHeroIcon}
+      />
+      <View style={styles.statusHeroBody}>
+        <Text style={[styles.statusHeroTitle, { color: colors.textPrimary }]}>
+          {config.title}
+        </Text>
+        <Text style={[styles.statusHeroSubtitle, { color: colors.textSecondary }]}>
+          {config.subtitle}
+        </Text>
       </View>
-    </FlagshipFormSection>
+    </View>
   );
 }
 
@@ -404,35 +394,29 @@ const STATUS_HERO_CONFIG: Record<
     title: 'Not verified',
     subtitle: 'Verify your identity to unlock seller benefits',
     icon: 'alert-circle-outline',
-    accent: 'brand',
-  },
+    accent: 'brand' },
   in_review: {
     title: 'In review',
     subtitle: 'We are checking your submission — typically within 24 hours',
     icon: 'hourglass-outline',
-    accent: 'warning',
-  },
+    accent: 'warning' },
   verified: {
     title: 'Verified',
     subtitle: 'Your identity is confirmed. You have the verified seller badge.',
-    icon: 'shield-checkmark',
-    accent: 'success',
-  },
+    icon: 'checkmark-circle',
+    accent: 'success' },
   rejected: {
     title: 'Verification declined',
     subtitle: 'Your submission could not be verified. Resubmit to try again.',
     icon: 'close-circle-outline',
-    accent: 'danger',
-  },
-};
+    accent: 'danger' } };
 
 // ── Sub-components ──
 function ReviewCheckItem({
   icon,
   text,
   colors,
-  styles,
-}: {
+  styles }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   text: string;
   colors: ThemeColors;
@@ -450,8 +434,7 @@ function BenefitItem({
   icon,
   text,
   colors,
-  styles,
-}: {
+  styles }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   text: string;
   colors: ThemeColors;
@@ -469,8 +452,7 @@ function TimelineRow({
   step,
   isLast,
   colors,
-  styles,
-}: {
+  styles }: {
   step: TimelineStep;
   isLast: boolean;
   colors: ThemeColors;
@@ -505,57 +487,42 @@ function createStyles(colors: ThemeColors) {
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xl,
-    },
-    section: {
-      marginBottom: Space.md,
-    },
-    heroRow: {
+      paddingBottom: Space.xl },
+    statusHero: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
-    },
-    heroIcon: {
-      width: Control.hit + Space.sm,
-      height: Control.hit + Space.sm,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    heroBody: {
-      flex: 1,
-    },
-    heroTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      marginBottom: Space.xs / 2,
-    },
-    heroSubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight,
-    },
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.lg },
+    statusHeroIcon: {
+      marginBottom: 0 },
+    statusHeroBody: {
+      flex: 1 },
+    statusHeroTitle: {
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      marginBottom: 2 },
+    statusHeroSubtitle: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
+    section: {
+      marginBottom: Space.md },
     panelContent: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     panelBody: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight },
     checkRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.xs / 2,
-    },
+      paddingVertical: Space.xs / 2 },
     checkText: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight },
     etaBanner: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -563,75 +530,59 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.md,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     etaText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     primaryBtn: {
       height: Control.hit + 2,
       borderRadius: Radius.md,
       backgroundColor: colors.brand,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     primaryBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textInverse },
     timelineList: {
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     timelineRow: {
       flexDirection: 'row',
       gap: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     timelineRowLast: {
-      minHeight: 0,
-    },
+      minHeight: 0 },
     timelineMarkerCol: {
       width: Space.xl - Space.xs,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     timelineDot: {
       width: Space.xl - Space.xs,
       height: Space.xl - Space.xs,
       borderRadius: Radius.xl,
       borderWidth: Stroke.standard + Stroke.hairline,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     timelineConnector: {
       width: StyleSheet.hairlineWidth,
       flex: 1,
       minHeight: Space.md + Space.xs,
-      marginTop: Space.xs / 2,
-    },
+      marginTop: Space.xs / 2 },
     timelineBody: {
       flex: 1,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     timelineLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-      marginBottom: Space.xs / 4,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      marginBottom: Space.xs / 4 },
     timelineDetail: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     footerLink: {
       alignItems: 'center',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     footerLinkText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily } });
 }

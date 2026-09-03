@@ -5,20 +5,18 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Control,
   Stroke,
-  DockConstants,
-} from '../../theme/designTokens';
+  DockConstants } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface Props {
   visible: boolean;
@@ -49,8 +47,7 @@ export function ImportBulkCorrectionSheet({
   selectedCount,
   onApply,
   availableCategories,
-  availableConditions,
-}: Props) {
+  availableConditions }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -193,8 +190,7 @@ export function ImportBulkCorrectionSheet({
 
 function FieldSection({
   label,
-  children,
-}: {
+  children }: {
   label: string;
   children: React.ReactNode;
 }) {
@@ -213,8 +209,7 @@ function PillRow({
   options,
   selected,
   onSelect,
-  styles,
-}: {
+  styles }: {
   options: string[];
   selected: string | null;
   onSelect: (value: string) => void;
@@ -270,8 +265,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
   StyleSheet.create({
     backdrop: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: colors.overlay,
-    },
+      backgroundColor: colors.overlay },
     sheet: {
       position: 'absolute',
       left: 0,
@@ -280,75 +274,61 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       backgroundColor: colors.surface,
       borderTopLeftRadius: Radius.xl,
       borderTopRightRadius: Radius.xl,
-      maxHeight: '85%',
-    },
+      maxHeight: '85%' },
     safeArea: {
-      flex: 1,
-    },
+      flex: 1 },
     handle: {
       width: HANDLE_WIDTH,
       height: HANDLE_HEIGHT,
       borderRadius: HANDLE_HEIGHT / 2,
       backgroundColor: colors.borderSubtle,
       alignSelf: 'center',
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     title: {
       marginTop: Space.md,
       paddingHorizontal: Space.md,
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary },
     scroll: {
-      flex: 1,
-    },
+      flex: 1 },
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.md,
-    },
+      paddingBottom: Space.md },
     actions: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
       paddingBottom: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     cancelButton: {
       alignItems: 'center',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     cancelText: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textMuted },
     applyButton: {
       height: DockConstants.primaryButtonHeight,
       borderRadius: Radius.sm,
       backgroundColor: colors.brand,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     applyButtonDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     applyText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      color: colors.textInverse },
     applyTextDisabled: {
-      opacity: 0.7,
-    },
+      opacity: 0.7 },
     pillRowContent: {
       gap: Space.sm,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     pill: {
       minHeight: Control.hit,
       paddingHorizontal: Space.md,
@@ -357,42 +337,33 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       borderWidth: Stroke.standard,
       borderColor: colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     pillSelected: {
       backgroundColor: colors.brandSubtle,
-      borderColor: colors.brandBorder,
-    },
+      borderColor: colors.brandBorder },
     pillText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.label.size,
-      lineHeight: Type.label.lineHeight,
-      letterSpacing: Type.label.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight,
+      letterSpacing: TypographyV2.label.letterSpacing,
+      color: colors.textPrimary },
     pillTextSelected: {
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     emptyHint: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textMuted,
-      paddingVertical: Space.sm,
-    },
-  });
+      paddingVertical: Space.sm } });
 
 const createSectionStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
   StyleSheet.create({
     section: {
       gap: Space.sm,
-      paddingTop: Space.lg,
-    },
+      paddingTop: Space.lg },
     sectionLabel: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.metaElevated.size,
-      lineHeight: Type.metaElevated.lineHeight,
-      letterSpacing: Type.metaElevated.letterSpacing,
-      color: colors.textMuted,
-    },
-  });
+      fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight,
+      letterSpacing: TypographyV2.label.letterSpacing,
+      color: colors.textMuted } });

@@ -21,17 +21,15 @@ import {
   ScrollView,
   StyleSheet,
   type ViewStyle,
-  type TextStyle,
-} from 'react-native';
+  type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Control,
-  Stroke,
-} from '../../../theme/designTokens';
+  Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -39,8 +37,7 @@ import {
   CreatorColorPicker,
   fromHexString,
   toHexString,
-  normalize,
-} from '../../color/';
+  normalize } from '../../color/';
 import type { CreatorColor, RecentColor } from '../../color/';
 import {
   getAllPalettes,
@@ -49,8 +46,9 @@ import {
   loadCustomPalette,
   saveCustomPalette,
   type Palette,
-  type PaletteName,
-} from './DrawingPaletteSystem';
+  type PaletteName } from './DrawingPaletteSystem';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 
 // ── Props ──────────────────────────────────────────────────────────────
 
@@ -61,12 +59,13 @@ export interface DrawingPaletteBarProps {
   onColorChange: (color: CreatorColor) => void;
   /** Commit — updates color and creates a history entry. */
   onColorCommit: (color: CreatorColor) => void;
-  /** Recent colors from useCreatorColorHistory (for the color picker). */
+  /** Recents list for the shared picker. */
   recents?: RecentColor[];
-  /** Called when a color is committed and should be added to recents. */
+  /** Callback when recent is selected. */
   onCommitRecent?: (color: CreatorColor) => void;
-  /** Accessibility label for the bar. */
+  /** Accessibility label for the palette bar container. */
   accessibilityLabel?: string;
+  style?: ViewStyle;
 }
 
 const SWATCH_SIZE = Control.hit; // 44pt
@@ -78,23 +77,23 @@ export function DrawingPaletteBar({
   color,
   onColorChange,
   onColorCommit,
-  recents = [],
+  recents,
   onCommitRecent,
-  accessibilityLabel = 'Drawing palette',
+  accessibilityLabel = 'Drawing color palette',
+  style,
 }: DrawingPaletteBarProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const activeHex = useMemo(() => toHexString(normalize(color)), [color]);
-
-  // ── Palette state ──
   const [activePalette, setActivePalette] = useState<PaletteName>('default');
   const [customColors, setCustomColors] = useState<string[]>([]);
-  const [showPaletteSheet, setShowPaletteSheet] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showPaletteSheet, setShowPaletteSheet] = useState(false);
 
-  // Load the persisted custom palette on mount.
+  const activeHex = useMemo(() => toHexString(normalize(color)), [color]);
+
+  // Load custom palette on mount
   useEffect(() => {
     let cancelled = false;
     loadCustomPalette()
@@ -103,32 +102,37 @@ export function DrawingPaletteBar({
           setCustomColors(loaded);
         }
       })
-      .catch(() => {
-        // Storage read failure is non-fatal — custom palette stays empty.
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // The colors shown in the bar come from the active palette. For 'custom',
-  // we use the persisted custom colors (empty until the user saves some).
-  const currentColors = useMemo<string[]>(() => {
-    if (activePalette === 'custom') return customColors;
-    return getPalette(activePalette);
-  }, [activePalette, customColors]);
+  const allPalettes = useMemo<Palette[]>(() => {
+    const predefined = getAllPalettes();
+    const custom: Palette = {
+      name: 'custom',
+      label: 'Custom',
+      colors: customColors,
+    };
+    return [...predefined, custom];
+  }, [customColors]);
 
-  // ── Selection handlers ──
-  const handleSelectSwatch = useCallback(
+  const activeColors = useMemo<string[]>(
+    () => (activePalette === 'custom' ? customColors : getPalette(activePalette)),
+    [activePalette, customColors],
+  );
+
+  const handleSelectColor = useCallback(
     (hex: string) => {
-      haptic.light();
+      haptic.selection();
       const parsed = fromHexString(hex);
       if (parsed) {
-        const normalizedColor = normalize(parsed);
-        onColorCommit(normalizedColor);
+        onColorChange(parsed);
+        onColorCommit(parsed);
       }
     },
-    [haptic, onColorCommit],
+    [haptic, onColorChange, onColorCommit],
   );
 
   const handleSelectPalette = useCallback(
@@ -150,44 +154,26 @@ export function DrawingPaletteBar({
 
   const handleColorCommit = useCallback(
     (c: CreatorColor) => {
-      const normalizedColor = normalize(c);
-      onColorCommit(normalizedColor);
-      onCommitRecent?.(normalizedColor);
+      onColorCommit(c);
     },
-    [onColorCommit, onCommitRecent],
+    [onColorCommit],
   );
 
-  // Save the current color into the custom palette and switch to it.
   const handleSaveCustomColor = useCallback(
     async (c: CreatorColor) => {
+      haptic.medium();
       const hex = toHexString(normalize(c));
-      // Deduplicate and prepend.
-      const next = [hex, ...customColors.filter((h) => h !== hex)].slice(0, 12);
-      setCustomColors(next);
-      setActivePalette('custom');
-      try {
-        const persisted = await saveCustomPalette(next);
-        setCustomColors(persisted);
-      } catch {
-        // Persistence failure is non-fatal — the in-memory palette still works.
+      if (!customColors.includes(hex)) {
+        const next = [hex, ...customColors].slice(0, 24);
+        setCustomColors(next);
+        await saveCustomPalette(next);
       }
     },
-    [customColors],
+    [customColors, haptic],
   );
 
-  // ── Palette sheet data ──
-  const allPalettes = useMemo<Palette[]>(() => {
-    const predefined = getAllPalettes();
-    const custom: Palette = {
-      name: 'custom',
-      label: 'Custom',
-      colors: customColors,
-    };
-    return [...predefined, custom];
-  }, [customColors]);
-
   return (
-    <View style={styles.root} accessibilityLabel={accessibilityLabel}>
+    <View style={[styles.root, style]} accessibilityLabel={accessibilityLabel}>
       {/* Swatch row */}
       <ScrollView
         horizontal
@@ -195,18 +181,18 @@ export function DrawingPaletteBar({
         contentContainerStyle={styles.swatchRow}
         accessibilityLabel="Current palette colors"
       >
-        {currentColors.map((hex) => {
-          const selected = hex.toLowerCase() === activeHex.toLowerCase();
+        {activeColors.map((hex) => {
+          const isSelected = hex.toLowerCase() === activeHex.toLowerCase();
           return (
             <PressScale
               key={hex}
               accessibilityLabel={`Color ${hex}`}
               accessibilityRole="button"
-              accessibilityState={{ selected }}
-              onPress={() => handleSelectSwatch(hex)}
+              accessibilityState={{ selected: isSelected }}
+              onPress={() => handleSelectColor(hex)}
               style={[
                 styles.swatchOuter,
-                selected ? { borderColor: colors.brand } : {},
+                isSelected ? { borderColor: colors.brand } : {},
               ]}
             >
               <View style={[styles.swatchFill, { backgroundColor: hex }]} />
@@ -224,14 +210,15 @@ export function DrawingPaletteBar({
             styles.customColorBtn,
             {
               backgroundColor: showColorPicker ? colors.brandSubtle : colors.surfaceAlt,
-              borderColor: showColorPicker ? colors.brand : colors.borderSubtle,
-            },
+              borderColor: showColorPicker ? colors.brand : colors.borderSubtle },
           ]}
         >
-          <Ionicons
+          <AppIcon
             name="color-palette-outline"
-            size={Control.iconCompact}
-            color={showColorPicker ? colors.brand : colors.textSecondary}
+            size={IconSize.sm}
+            color={showColorPicker ? 'brand' : 'textSecondary'}
+            opticalCenter={true}
+            accessible={false}
           />
         </PressScale>
 
@@ -245,14 +232,15 @@ export function DrawingPaletteBar({
             styles.paletteSwitchBtn,
             {
               backgroundColor: colors.surfaceAlt,
-              borderColor: colors.borderSubtle,
-            },
+              borderColor: colors.borderSubtle },
           ]}
         >
-          <Ionicons
+          <AppIcon
             name="grid-outline"
-            size={Control.iconCompact}
-            color={colors.textSecondary}
+            size={IconSize.sm}
+            color="textSecondary"
+            opticalCenter={true}
+            accessible={false}
           />
           <Text style={styles.paletteSwitchLabel} numberOfLines={1}>
             {getPaletteLabel(activePalette)}
@@ -279,10 +267,12 @@ export function DrawingPaletteBar({
             onPress={() => handleSaveCustomColor(color)}
             style={styles.saveCustomBtn}
           >
-            <Ionicons
-              name="add-circle-outline"
-              size={Control.iconCompact}
-              color={colors.brand}
+            <AppIcon
+              name="addCircle"
+              size={IconSize.sm}
+              color="brand"
+              opticalCenter={true}
+              accessible={false}
             />
             <Text style={styles.saveCustomText}>Save to Custom</Text>
           </PressScale>
@@ -306,7 +296,7 @@ export function DrawingPaletteBar({
               onPress={() => setShowPaletteSheet(false)}
               style={styles.sheetClose}
             >
-              <Ionicons name="close" size={Control.icon} color={colors.textPrimary} />
+              <AppIcon name="close" size={IconSize.md} color="textPrimary" opticalCenter={true} accessible={false} />
             </PressScale>
           </View>
 
@@ -358,15 +348,13 @@ export function DrawingPaletteBar({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: {
-      gap: Space.sm,
-    } as ViewStyle,
+      gap: Space.sm } as ViewStyle,
     swatchRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: SWATCH_GAP,
       paddingVertical: Space.xxs,
-      paddingRight: Space.md,
-    } as ViewStyle,
+      paddingRight: Space.md } as ViewStyle,
     swatchOuter: {
       width: SWATCH_SIZE,
       height: SWATCH_SIZE,
@@ -375,21 +363,18 @@ function createStyles(colors: ThemeColors) {
       borderColor: 'transparent',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: Stroke.standard,
-    } as ViewStyle,
+      padding: Stroke.standard } as ViewStyle,
     swatchFill: {
       width: SWATCH_SIZE - Stroke.standard * 2 - Stroke.emphasis * 2,
       height: SWATCH_SIZE - Stroke.standard * 2 - Stroke.emphasis * 2,
-      borderRadius: Radius.full,
-    } as ViewStyle,
+      borderRadius: Radius.full } as ViewStyle,
     customColorBtn: {
       width: SWATCH_SIZE,
       height: SWATCH_SIZE,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
       alignItems: 'center',
-      justifyContent: 'center',
-    } as ViewStyle,
+      justifyContent: 'center' } as ViewStyle,
     paletteSwitchBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -397,61 +382,51 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.smMd,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
-      gap: Space.xs,
-    } as ViewStyle,
+      gap: Space.xs } as ViewStyle,
     paletteSwitchLabel: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textSecondary,
-    } as TextStyle,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textSecondary } as TextStyle,
     colorPickerSection: {
       gap: Space.sm,
-      paddingTop: Space.xs,
-    } as ViewStyle,
+      paddingTop: Space.xs } as ViewStyle,
     saveCustomBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       alignSelf: 'flex-start',
       height: Control.hit,
-      paddingHorizontal: Space.sm,
-    } as ViewStyle,
+      paddingHorizontal: Space.sm } as ViewStyle,
     saveCustomText: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.brand,
-    } as TextStyle,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.brand } as TextStyle,
     // ── Palette sheet ──
     sheetContainer: {
       flex: 1,
-      paddingHorizontal: Space.md,
-    } as ViewStyle,
+      paddingHorizontal: Space.md } as ViewStyle,
     sheetHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    } as ViewStyle,
+      paddingVertical: Space.sm } as ViewStyle,
     sheetTitle: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    } as TextStyle,
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary } as TextStyle,
     sheetClose: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    } as ViewStyle,
+      justifyContent: 'center' } as ViewStyle,
     paletteList: {
-      paddingVertical: Space.sm,
-    } as ViewStyle,
+      paddingVertical: Space.sm } as ViewStyle,
     // Flattened row — no inner card background; hairline separator between rows.
     paletteRow: {
       flexDirection: 'row',
@@ -460,31 +435,25 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.xs,
       borderBottomWidth: Stroke.hairline,
-      borderColor: colors.borderSubtle,
-    } as ViewStyle,
+      borderColor: colors.borderSubtle } as ViewStyle,
     paletteRowLabel: {
       flex: 1,
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textPrimary,
-    } as TextStyle,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textPrimary } as TextStyle,
     paletteRowSwatches: {
       flexDirection: 'row',
-      gap: Space.xs,
-    } as ViewStyle,
+      gap: Space.xs } as ViewStyle,
     // Preview swatch thumbnail — canvas-specific size; no design token maps to it.
     paletteRowSwatch: {
       width: 20,
       height: 20,
       borderRadius: Radius.full,
       borderWidth: Stroke.hairline,
-      borderColor: colors.borderSubtle,
-    } as ViewStyle,
+      borderColor: colors.borderSubtle } as ViewStyle,
     paletteRowEmpty: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.meta.size,
-      color: colors.textMuted,
-    } as TextStyle,
-  });
+      fontSize: TypographyV2.meta.size,
+      color: colors.textMuted } as TextStyle });
 }

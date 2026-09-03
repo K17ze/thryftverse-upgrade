@@ -24,14 +24,17 @@ import {
   StyleSheet,
   TextInput,
   Keyboard,
-} from 'react-native';
+  AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius, Type, Typography, FontFamily, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Typography, FontFamily, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 const TOUCH = 44;
 const FINE_STEP = 0.01; // 1%
@@ -58,8 +61,7 @@ export function AccessibilityMoveSheet({
   layerId,
   position,
   onClose,
-  onMove,
-}: AccessibilityMoveSheetProps) {
+  onMove }: AccessibilityMoveSheetProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -85,10 +87,12 @@ export function AccessibilityMoveSheet({
       if (!position) return;
       const next = {
         x: axis === 'x' ? clamp(position.x + delta) : position.x,
-        y: axis === 'y' ? clamp(position.y + delta) : position.y,
-      };
+        y: axis === 'y' ? clamp(position.y + delta) : position.y };
       haptic.selection();
       onMove(next.x, next.y);
+      AccessibilityInfo.announceForAccessibility(
+        `Position ${Math.round(next.x * 100)} percent X, ${Math.round(next.y * 100)} percent Y`,
+      );
     },
     [position, clamp, haptic, onMove],
   );
@@ -102,12 +106,18 @@ export function AccessibilityMoveSheet({
     haptic.light();
     onMove(nx, ny);
     Keyboard.dismiss();
+    AccessibilityInfo.announceForAccessibility(
+      `Position ${Math.round(nx * 100)} percent X, ${Math.round(ny * 100)} percent Y`,
+    );
   }, [position, xText, yText, clamp, haptic, onMove]);
 
   const handleCenter = useCallback(() => {
     if (!position) return;
     haptic.medium();
     onMove(0.5, 0.5);
+    AccessibilityInfo.announceForAccessibility(
+      'Position 50 percent X, 50 percent Y',
+    );
   }, [position, haptic, onMove]);
 
   const handleCoarseToggle = useCallback(() => {
@@ -130,7 +140,7 @@ export function AccessibilityMoveSheet({
             accessibilityRole="button"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
           <Text style={[styles.title, { color: colors.textPrimary }]}>
             Move
@@ -150,7 +160,10 @@ export function AccessibilityMoveSheet({
         ) : (
           <View style={styles.body}>
             {/* ── Current position readout — flat with hairline ── */}
-            <View style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}>
+            <View
+              style={[styles.readout, { borderBottomColor: colors.borderSubtle }]}
+              accessibilityLiveRegion="polite"
+            >
               <View style={styles.readoutCell}>
                 <Text style={[styles.readoutLabel, { color: colors.textMuted }]}>
                   X
@@ -189,8 +202,7 @@ export function AccessibilityMoveSheet({
                       styles.toggleText,
                       {
                         color: !coarse ? colors.brand : colors.textSecondary,
-                        textDecorationLine: !coarse ? 'underline' : 'none',
-                      },
+                        textDecorationLine: !coarse ? 'underline' : 'none' },
                     ]}
                   >
                     Fine
@@ -209,8 +221,7 @@ export function AccessibilityMoveSheet({
                       styles.toggleText,
                       {
                         color: coarse ? colors.brand : colors.textSecondary,
-                        textDecorationLine: coarse ? 'underline' : 'none',
-                      },
+                        textDecorationLine: coarse ? 'underline' : 'none' },
                     ]}
                   >
                     Coarse
@@ -231,7 +242,7 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-up" size={IconGrammar.hero} color={colors.textPrimary} />
+                  <AppIcon name="up" size={IconSize.hero} color="textPrimary" opticalCenter={true} accessible={false} />
                 </PressScale>
                 <View style={styles.nudgeSpacer} />
               </View>
@@ -244,10 +255,10 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-back" size={IconGrammar.hero} color={colors.textPrimary} />
+                  <AppIcon name="back" size={IconSize.hero} color="textPrimary" opticalCenter={true} accessible={false} />
                 </PressScale>
                 <View style={styles.nudgeCenter}>
-                  <Ionicons name="move" size={IconGrammar.standard} color={colors.textMuted} />
+                  <AppIcon name="move" size={IconSize.md} color="textMuted" opticalCenter={true} accessible={false} />
                 </View>
                 <PressScale
                   onPress={() => nudge('x', step)}
@@ -257,7 +268,7 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-forward" size={IconGrammar.hero} color={colors.textPrimary} />
+                  <AppIcon name="forward" size={IconSize.hero} color="textPrimary" opticalCenter={true} accessible={false} />
                 </PressScale>
               </View>
               <View style={styles.nudgeRow}>
@@ -270,7 +281,7 @@ export function AccessibilityMoveSheet({
                   accessibilityRole="button"
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="chevron-down" size={IconGrammar.hero} color={colors.textPrimary} />
+                  <AppIcon name="down" size={IconSize.hero} color="textPrimary" opticalCenter={true} accessible={false} />
                 </PressScale>
                 <View style={styles.nudgeSpacer} />
               </View>
@@ -289,7 +300,7 @@ export function AccessibilityMoveSheet({
                   keyboardType="number-pad"
                   maxLength={3}
                   accessibilityLabel="X position in percent"
-                  accessibilityHint="Enter the horizontal position from 0 to 100 percent"
+                  accessibilityHint="Enter a number from 0 to 100"
                   returnKeyType="done"
                   onSubmitEditing={handleApplyNumeric}
                 />
@@ -305,7 +316,7 @@ export function AccessibilityMoveSheet({
                   keyboardType="number-pad"
                   maxLength={3}
                   accessibilityLabel="Y position in percent"
-                  accessibilityHint="Enter the vertical position from 0 to 100 percent"
+                  accessibilityHint="Enter a number from 0 to 100"
                   returnKeyType="done"
                   onSubmitEditing={handleApplyNumeric}
                 />
@@ -334,7 +345,7 @@ export function AccessibilityMoveSheet({
               accessibilityRole="button"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="locate-outline" size={IconGrammar.standard} color={colors.textInverse} />
+              <AppIcon name="locate-outline" size={IconSize.md} color="textInverse" opticalCenter={true} accessible={false} />
               <Text style={[styles.centerBtnText, { color: colors.textInverse }]}>
                 Center on Canvas
               </Text>
@@ -352,161 +363,129 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-  },
+    fontSize: TypographyV2.sectionTitle.size },
   closeBtn: {
     width: TOUCH,
     height: TOUCH,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   closeBtnPlaceholder: {
-    width: TOUCH,
-  },
+    width: TOUCH },
   body: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.lg,
-    gap: Space.md,
-  },
+    gap: Space.md },
   emptyState: {
     alignItems: 'center',
     paddingVertical: Space.xl,
     gap: Space.sm,
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   emptyText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    textAlign: 'center' },
   emptySubtext: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    textAlign: 'center' },
   readout: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   readoutCell: {
     flex: 1,
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   readoutDivider: {
     width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
-  },
+    alignSelf: 'stretch' },
   readoutLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.label.size,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.label.size,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase' },
   readoutValue: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.body.size,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.body.size,
+    fontVariant: ['tabular-nums'] },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   toggleLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   toggleGroup: {
     flexDirection: 'row',
-    gap: Space.md,
-  },
+    gap: Space.md },
   toggleBtn: {
     paddingHorizontal: Space.xs,
     height: TOUCH - 8,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   toggleText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   nudgePad: {
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   nudgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   nudgeBtn: {
     width: TOUCH,
     height: TOUCH,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   nudgeCenter: {
     width: TOUCH,
     height: TOUCH,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   nudgeSpacer: {
     width: TOUCH,
-    height: TOUCH,
-  },
+    height: TOUCH },
   inputRow: {
     flexDirection: 'row',
-    gap: Space.md,
-  },
+    gap: Space.md },
   inputCell: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   inputLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.label.size,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.label.size,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase' },
   input: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     borderWidth: Stroke.standard,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     height: TOUCH,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   applyBtn: {
     height: 50,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-  },
+    borderWidth: Stroke.standard },
   applyBtnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   centerBtn: {
     flexDirection: 'row',
     height: 50,
     justifyContent: 'center',
     alignItems: 'center',
     gap: Space.sm,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   centerBtnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size } });

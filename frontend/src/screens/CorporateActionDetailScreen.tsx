@@ -18,20 +18,21 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, DockConstants, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, DockConstants, Stroke, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { haptics } from '../utils/haptics';
 import {
   CoOwnStickyActionDock,
   CoOwnCorporateActionRow,
   CoOwnStateCanvas,
   type CoOwnCorporateActionType,
-  type CoOwnCorporateActionStatus,
-} from '../components/coown';
+  type CoOwnCorporateActionStatus } from '../components/coown';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnAssetDetailSkeleton } from '../components/coown/CoOwnSkeletons';
 import { AppButton } from '../components/ui/AppButton';
 import { fetchCoOwnAssetCorporateActions, fetchGovernanceVotes, castGovernanceVote, type CoOwnCorporateAction } from '../services/marketApi';
 import { useToast } from '../context/ToastContext';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type RouteT = RouteProp<RootStackParamList, 'CorporateActionDetail'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -47,20 +48,12 @@ const ACTION_DESCRIPTIONS: Record<string, string> = {
   revaluation: 'An independent revaluation of the underlying asset.',
   insurance_proceeds: 'Insurance proceeds distributed to unit-holders.',
   liquidation: 'Wind-down of the asset vehicle and distribution of remaining proceeds.',
-  vote: 'A holder vote on a specified resolution.',
-};
+  vote: 'A holder vote on a specified resolution.' };
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function formatAmount(minor: number | null): string | null {
-  if (minor === null || minor === undefined) return null;
-  const major = minor / 100;
-  const sign = major >= 0 ? '+' : '−';
-  return `${sign}£${Math.abs(major).toFixed(2)}`;
 }
 
 export default function CorporateActionDetailScreen() {
@@ -69,6 +62,17 @@ export default function CorporateActionDetailScreen() {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { currencySymbol } = useFormattedPrice();
+
+  const formatAmount = React.useCallback(
+    (minor: number | null): string | null => {
+      if (minor === null || minor === undefined) return null;
+      const major = minor / 100;
+      const sign = major >= 0 ? '+' : '−';
+      return `${sign}${currencySymbol}${Math.abs(major).toFixed(2)}`;
+    },
+    [currencySymbol],
+  );
 
   const {
     assetId,
@@ -79,8 +83,7 @@ export default function CorporateActionDetailScreen() {
     status,
     recordDateLabel,
     paymentDateLabel,
-    actionId,
-  } = route.params;
+    actionId } = route.params;
 
   const [fetchedAction, setFetchedAction] = React.useState<CoOwnCorporateAction | null>(null);
   const [loading, setLoading] = React.useState(!!actionId);
@@ -459,113 +462,94 @@ function createStyles(colors: ThemeColors) {
   content: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    gap: Space.md,
-  },
+    gap: Space.md },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   section: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   sectionTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   sectionBody: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   dateRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   dateLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   dateValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   amountLabel: {
-    fontSize: Type.priceHero.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceHero.size,
+    fontFamily: TypographyV2.priceHero.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.priceHero.letterSpacing,
-    marginTop: Space.sm,
-  },
+    letterSpacing: TypographyV2.priceHero.letterSpacing,
+    marginTop: Space.sm },
   totalLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs },
   voteResults: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.md,
     padding: Space.md,
     marginBottom: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   voteResultsTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   voteResultRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   voteResultLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    width: Space.xxl + Space.lg,
-  },
+    width: Space.xxl + Space.lg },
   voteResultDot: {
     width: Space.xs + 2,
     height: Space.xs + 2,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   voteResultLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   voteResultBar: {
     flex: 1,
     height: Space.sm,
     borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   voteResultFill: {
     height: '100%',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   voteResultPct: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     width: Space.xxl,
     textAlign: 'right',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   voteTotalRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -573,32 +557,27 @@ function createStyles(colors: ThemeColors) {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: Space.sm,
     marginTop: Space.xs,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   voteTotal: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   voteHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   voteHeaderIcon: {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   voteHeaderText: { flex: 1 },
   voteHeaderSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight + 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
   myVoteBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -607,31 +586,25 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs,
     borderRadius: Radius.full,
     alignSelf: 'flex-start',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   myVoteText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   inputLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginBottom: Space.xs },
   voteInput: {
     borderWidth: Stroke.standard,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     minHeight: Space.xxl + Space.sm + Space.xs,
     maxHeight: Space.xxl + Space.xxl + Space.lg,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   voteButtons: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
-});
+    gap: Space.sm } });
 }

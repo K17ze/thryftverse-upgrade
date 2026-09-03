@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
-import { AnimatedPressable } from '../AnimatedPressable';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface CoOwnEducationTopic {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -71,17 +71,19 @@ export function CoOwnEducationCard({
       </View>
 
       {onLearnMore ? (
-        <AnimatedPressable
+        <Pressable
           onPress={onLearnMore}
-          scaleValue={0.97}
-          hapticFeedback="light"
-          style={[styles.learnMoreBtn, { borderColor: colors.border }]}
+          style={({ pressed }) => [
+            styles.learnMoreBtn,
+            { borderColor: colors.border },
+            pressed && styles.learnMorePressed,
+          ]}
           accessibilityRole="button"
           accessibilityLabel={learnMoreLabel}
         >
           <Text style={[styles.learnMoreText, { color: colors.textPrimary }]}>{learnMoreLabel}</Text>
           <Ionicons name="arrow-forward" size={15} color={colors.textPrimary} />
-        </AnimatedPressable>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -95,8 +97,8 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     letterSpacing: -0.3,
   },
   topicsList: {
@@ -119,13 +121,13 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   topicTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     letterSpacing: -0.2,
   },
   topicText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     lineHeight: 18,
   },
   learnMoreBtn: {
@@ -135,11 +137,14 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     marginTop: Space.xs,
   },
+  learnMorePressed: {
+    opacity: 0.6,
+  },
   learnMoreText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
 });

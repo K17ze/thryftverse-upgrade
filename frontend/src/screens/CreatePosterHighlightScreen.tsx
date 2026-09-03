@@ -8,15 +8,15 @@ import {
   ActivityIndicator,
   FlatList,
   ScrollView,
-  Dimensions,
-  AccessibilityInfo,
-} from 'react-native';
+  useWindowDimensions,
+  AccessibilityInfo } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Control, Stroke, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useHaptic } from '../hooks/useHaptic';
@@ -27,20 +27,19 @@ import { makeStableId } from '../utils/createStableId';
 import {
   fetchPosterStoryArchive,
   createPosterHighlight,
-  type PosterStory,
-} from '../services/postersApi';
+  type PosterStory } from '../services/postersApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreatePosterHighlight'>;
 
-const { width: SCREEN_W } = Dimensions.get('window');
 const NUM_COLS = 3;
-const THUMB_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * (NUM_COLS - 1)) / NUM_COLS;
 const COVER_PREVIEW_W = 120;
 const COVER_THUMB_W = 52;
 
 export default function CreatePosterHighlightScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const THUMB_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * (NUM_COLS - 1)) / NUM_COLS;
+  const styles = React.useMemo(() => createStyles(colors, THUMB_SIZE), [colors, THUMB_SIZE]);
   const { show } = useToast();
   const haptic = useHaptic();
   const currentUser = useStore((state) => state.currentUser);
@@ -94,8 +93,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
           mediaType: frame.mediaType,
           backgroundColor: frame.backgroundColor,
           storyId: story.id,
-          storyCreatedAt: story.createdAt,
-        });
+          storyCreatedAt: story.createdAt });
       }
     }
     return frames;
@@ -168,8 +166,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
         id: highlightId,
         title: title.trim(),
         coverFrameId: resolvedCoverFrameId,
-        frameIds,
-      });
+        frameIds });
 
       haptic.success();
       AccessibilityInfo.announceForAccessibility('Highlight created');
@@ -225,7 +222,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
           )}
           {isCover && (
             <View style={styles.coverBadge}>
-              <Ionicons name="star" size={12} color={colors.textInverse} />
+              <Ionicons name="image-outline" size={12} color={colors.textInverse} />
               <Text style={styles.coverBadgeText}>Cover</Text>
             </View>
           )}
@@ -257,7 +254,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
         {/* Skeleton title input */}
         <View style={styles.titleSection}>
           <SkeletonLoader width="70%" height={Control.hit} borderRadius={Radius.lg} />
-          <SkeletonLoader width={32} height={Type.caption.size} borderRadius={Radius.sm} />
+          <SkeletonLoader width={32} height={TypographyV2.meta.size} borderRadius={Radius.sm} />
         </View>
         {/* Skeleton grid of thumbnails */}
         <View style={styles.gridContent}>
@@ -349,7 +346,7 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
                   </View>
                 )}
                 <View style={styles.coverPreviewBadge}>
-                  <Ionicons name="star" size={12} color={colors.textInverse} />
+                  <Ionicons name="image-outline" size={12} color={colors.textInverse} />
                   <Text style={styles.coverPreviewBadgeText}>Cover</Text>
                 </View>
               </View>
@@ -423,100 +420,85 @@ export default function CreatePosterHighlightScreen({ navigation, route }: Props
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, thumbSize: number) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.sm,
-      paddingVertical: Space.sm + 2,
-    },
+      paddingVertical: Space.sm + 2 },
     iconBtn: {
       width: Control.hit,
       height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     topTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     saveBtn: {
       paddingHorizontal: Space.xl,
       height: Control.hit + 4,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     saveBtnDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     saveBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textInverse },
     titleSection: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     titleInput: {
       flex: 1,
       height: Control.hit,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
       borderWidth: Stroke.standard,
       borderColor: colors.border,
       borderRadius: Radius.lg,
       paddingHorizontal: Space.md,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     titleInputFocused: {
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
     titleCount: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     sectionLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       paddingHorizontal: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     gridContent: {
       paddingHorizontal: Space.md,
       paddingBottom: Space.xxl,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     thumbWrap: {
-      width: THUMB_SIZE,
-      marginBottom: Space.sm,
-    },
+      width: thumbSize,
+      marginBottom: Space.sm },
     thumb: {
-      width: THUMB_SIZE,
+      width: thumbSize,
       aspectRatio: 9 / 16,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       overflow: 'hidden',
-      position: 'relative',
-    },
+      position: 'relative' },
     thumbSelected: {
       borderWidth: Stroke.emphasis,
       borderColor: colors.brand,
@@ -524,25 +506,21 @@ function createStyles(colors: ThemeColors) {
       shadowOpacity: 0.2,
       shadowRadius: 4,
       shadowOffset: { width: 0, height: 0 },
-      elevation: 2,
-    },
+      elevation: 2 },
     thumbCover: {
       borderWidth: Stroke.emphasis,
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
     thumbImage: {
       width: '100%',
       height: '100%',
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     thumbPlaceholder: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
-      padding: Space.xs,
-    },
+      padding: Space.xs },
     checkBadge: {
       position: 'absolute',
       top: 4,
@@ -554,8 +532,7 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.background,
       borderWidth: 2,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     coverBadge: {
       position: 'absolute',
       bottom: 4,
@@ -567,42 +544,31 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 3,
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
-      shadowColor: '#000',
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 2,
-    },
+      ...Elevation.modal },
     coverBadgeText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textInverse },
     // ── Cover preview section ──────────────────────────────────────────
     coverSection: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     coverSectionLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     coverPreviewWrap: {
       alignItems: 'center',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     coverPreview: {
-      position: 'relative',
-    },
+      position: 'relative' },
     coverPreviewImage: {
       width: COVER_PREVIEW_W,
       aspectRatio: 9 / 16,
       borderRadius: Radius.md,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     coverPreviewBadge: {
       position: 'absolute',
       bottom: 6,
@@ -614,71 +580,55 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 3,
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
-      shadowColor: '#000',
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 2,
-    },
+      ...Elevation.modal },
     coverPreviewBadgeText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textInverse },
     coverSelector: {
       gap: Space.xs,
       paddingVertical: Space.sm,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     coverThumbWrap: {
       width: COVER_THUMB_W,
       aspectRatio: 9 / 16,
       borderRadius: Radius.sm,
       borderWidth: Stroke.standard,
       borderColor: 'transparent',
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     coverThumbActive: {
       borderWidth: Stroke.emphasis,
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
     coverThumb: {
       width: '100%',
       height: '100%',
       borderRadius: Radius.sm,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     coverThumbText: {
-      fontSize: 9,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
-      padding: 3,
-    },
+      padding: 3 },
     skeletonGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emptyBody: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
       marginTop: Space.xxl,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emptyTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textSecondary },
     emptyHint: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted,
       textAlign: 'center',
-      paddingHorizontal: Space.xl,
-    },
-  });
+      paddingHorizontal: Space.xl } });
 }

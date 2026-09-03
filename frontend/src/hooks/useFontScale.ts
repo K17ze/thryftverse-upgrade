@@ -1,6 +1,7 @@
 import { useWindowDimensions, PixelRatio, Platform } from 'react-native';
 
-/**
+
+import { TypographyV2 } from '../theme/typography.v2';/**
  * Maximum font scale multiplier applied to design-token font sizes.
  *
  * The OS allows users to set very large font scales (up to ~2x on Android,
@@ -33,7 +34,7 @@ export const MAX_FONT_SCALE = 1.5;
  *
  * ```ts
  * const fontScale = useFontScale();
- * const fontSize = Type.body.size * fontScale;
+ * const fontSize = TypographyV2.body.size * fontScale;
  * ```
  *
  * Per AGENTS.md §13 (Accessibility) and audit 12: "all flagship screens work

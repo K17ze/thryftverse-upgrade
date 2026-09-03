@@ -332,16 +332,11 @@ export class MeilisearchSearchAdapter implements SearchAdapter {
   }
 
   retrievalInfo(): RetrievalInfo {
-    // No code-level evidence proves a production embedder is configured on
-    // this Meilisearch instance. We report embedderConfigured = false until
-    // a hybrid/semantic search actually succeeds (see vectorSearch.ts),
-    // which flips the per-response marker to true. This keeps the default
-    // honest: the adapter does not pretend vector search is available just
-    // because a Meilisearch URL is set.
+    const actuallyMeili = this.client !== null;
     return {
-      backend: 'meilisearch',
+      backend: actuallyMeili ? 'meilisearch' : 'in_memory',
       embedderConfigured: false,
-      searchEngineVersion: 'meilisearch-0.60',
+      searchEngineVersion: actuallyMeili ? 'meilisearch-0.60' : 'in-memory-v1',
     };
   }
 }

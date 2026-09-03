@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Alert, View, Text, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -18,12 +18,14 @@ import { useToast } from '../context/ToastContext';
 import { OrderHistoryRow } from '../components/trade';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { parseApiError } from '../lib/apiClient';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { haptics } from '../utils/haptics';
 import { formatCoOwnIze } from '../utils/currency';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { CoOwnStateCanvas } from '../components/coown';
 import type { OrderStatus } from '../data/coOwnModels';
 import { t } from '../i18n';
@@ -131,6 +133,15 @@ export default function CoOwnOrderHistoryScreen() {
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [cancellingOrderId, setCancellingOrderId] = React.useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   const syncRemoteHistory = React.useCallback(async () => {
     if (!viewerId) {
@@ -186,32 +197,29 @@ export default function CoOwnOrderHistoryScreen() {
     if (!viewerId || item.source !== 'backend') return;
     const orderId = Number(item.id.replace(/^coOwn_order_/, ''));
     if (!Number.isInteger(orderId) || orderId <= 0) return;
-    Alert.alert(
-      'Cancel remaining order?',
-      `Any unfilled ${item.side} units will be cancelled and the reserved ${item.side === 'buy' ? '1ZE' : 'units'} released.`,
-      [
-        { text: 'Keep order', style: 'cancel' },
-        {
-          text: 'Cancel remaining',
-          style: 'destructive',
-          onPress: () => {
-            setCancellingOrderId(item.id);
-            void cancelCoOwnOrder(item.assetId, orderId, viewerId)
-              .then(() => {
-                setRemoteEntries((previous) => previous.map((entry) => (
-                  entry.id === item.id ? { ...entry, status: 'cancelled' as const } : entry
-                )));
-                show('Remaining order cancelled and reservation released.', 'success');
-              })
-              .catch((error) => {
-                const parsed = parseApiError(error, 'Unable to cancel this order');
-                show(parsed.message, 'error');
-              })
-              .finally(() => setCancellingOrderId(null));
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Cancel remaining order?',
+      message: `Any unfilled ${item.side} units will be cancelled and the reserved ${item.side === 'buy' ? '1ZE' : 'units'} released.`,
+      confirmLabel: 'Cancel remaining',
+      cancelLabel: 'Keep order',
+      onConfirm: () => {
+        setCancellingOrderId(item.id);
+        void cancelCoOwnOrder(item.assetId, orderId, viewerId)
+          .then(() => {
+            setRemoteEntries((previous) => previous.map((entry) => (
+              entry.id === item.id ? { ...entry, status: 'cancelled' as const } : entry
+            )));
+            show('Remaining order cancelled and reservation released.', 'success');
+          })
+          .catch((error) => {
+            const parsed = parseApiError(error, 'Unable to cancel this order');
+            show(parsed.message, 'error');
+          })
+          .finally(() => setCancellingOrderId(null));
+      },
+      variant: 'danger',
+    });
   }, [show, viewerId]);
 
   React.useEffect(() => { void syncRemoteHistory(); }, [syncRemoteHistory]);
@@ -224,7 +232,7 @@ export default function CoOwnOrderHistoryScreen() {
 
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
-    navigation.navigate('Portfolio');
+    navigation.navigate('CoOwnHub');
   }, [navigation]);
 
   const entries = React.useMemo(() => {
@@ -386,6 +394,17 @@ export default function CoOwnOrderHistoryScreen() {
           }
         }}
       />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }
@@ -414,9 +433,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   sideTabText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   sideTabTextActive: {
     fontFamily: Typography.family.semibold,
@@ -441,9 +460,9 @@ const styles = StyleSheet.create({
   },
   periodButtonText: {
     flexShrink: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   listContent: {
     paddingBottom: Space.xl,

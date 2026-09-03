@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface Props {
   count?: number;
@@ -14,7 +15,7 @@ export function OrderRowSkeleton({ count = 4 }: Props) {
         <View key={i} style={styles.row}>
           <SkeletonLoader width={64} height={64} borderRadius={Radius.md} />
           <View style={styles.textCol}>
-            <SkeletonLoader width="70%" height={14} borderRadius={Radius.md} />
+            <SkeletonLoader width="70%" height={TypographyV2.body.size} borderRadius={Radius.md} />
             <SkeletonLoader width="45%" height={10} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
             <SkeletonLoader width="30%" height={10} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
           </View>
@@ -32,8 +33,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
+    paddingVertical: Space.smMd,
+    gap: Space.smMd,
   },
   textCol: {
     flex: 1,

@@ -1,15 +1,23 @@
 {
   "core": {
-    "workingDir": ".reg",
     "actualDir": "src/__tests__/__screenshots__/actual",
     "expectedDir": "src/__tests__/__screenshots__/expected",
     "diffDir": "src/__tests__/__screenshots__/diff",
-    "report": "./report.html",
-    "threshold": 0.1
+    "matchingThreshold": 0.001,
+    "thresholdRate": 0,
+    "enableAntialias": true
   },
   "plugins": {
-    "reg-keygen-git-hash-plugin": {
-      "targetDir": "src/__tests__/__screenshots__/expected"
+    "reg-keygen-git-hash-plugin": true,
+    "reg-publish-github-plugin": {
+      "pluginName": "reg-publish-github-plugin",
+      "backend": "releases",
+      "retentionDays": 30,
+      "retentionCount": 10,
+      "protectedRetentionCount": 20
+    },
+    "reg-notify-github-with-api-plugin": {
+      "pluginName": "reg-notify-github-with-api-plugin"
     }
   }
 }

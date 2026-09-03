@@ -3,7 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 
 interface Props {
@@ -42,8 +43,7 @@ export function AuctionStickyBidDock({
   terminalMessage,
   terminalIcon,
   terminalAccent,
-  disabled,
-}: Props) {
+  disabled }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
@@ -118,70 +118,57 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     paddingTop: Space.sm,
     backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   contextLine: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
     textAlign: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   actionRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   primaryBtn: {
     flex: 1,
     paddingVertical: Space.md + 2,
     borderRadius: Radius.sm,
     backgroundColor: colors.brand,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   btnDisabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   primaryText: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: colors.textInverse,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   secondaryBtn: {
     paddingHorizontal: Space.md + 4,
     paddingVertical: Space.md + 2,
     borderRadius: Radius.sm,
     backgroundColor: colors.surface,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   secondaryText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.textPrimary },
   terminalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   terminalText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   sellerText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    color: colors.textPrimary,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    color: colors.textPrimary } });

@@ -10,7 +10,7 @@ export { UploadJobStore } from './UploadJobStore';
 export { UploadManager } from './UploadManager';
 export { MultipartUploader } from './MultipartUploader';
 export { detectMimeType, deriveFileName } from './MimeDetector';
-export { useUploadManager } from './useUploadManager';
+export { useUploadManager, getSharedManager, resumeCreatorUploads } from './useUploadManager';
 export type {
   UploadJob,
   UploadJobStatus,
@@ -24,4 +24,4 @@ export type {
 } from './UploadTypes';
 export { DEFAULT_PART_SIZE, MULTIPART_THRESHOLD_BYTES } from './UploadTypes';
 export type { QueueParams, UseUploadManagerResult } from './useUploadManager';
-export type { MultipartUploaderOptions } from './MultipartUploader';
+export type { MultipartUploaderOptions, MultipartCompleteResult } from './MultipartUploader';

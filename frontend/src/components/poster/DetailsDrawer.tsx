@@ -5,9 +5,8 @@ import {
   Text,
   TextInput,
   ScrollView,
-  Dimensions,
-  ActivityIndicator,
-} from 'react-native';
+  useWindowDimensions,
+  ActivityIndicator } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
@@ -15,13 +14,13 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  withDelay,
-} from 'react-native-reanimated';
+  withDelay } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { Listing } from '../../domain';
 import { CachedImage } from '../CachedImage';
 import { getListingCoverUri } from '../../utils/media';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Typography, Radius, Space, Stroke, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { KeyboardAwareScrollView } from '../../platform/keyboard/KeyboardProvider';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -31,9 +30,6 @@ import { Motion } from '../../theme/motionTokens';
 
 /** Spring config shape returned by useMotionConfig().spring.* */
 type SpringConfig = { damping: number; stiffness: number; mass: number };
-
-const { height: SCREEN_H } = Dimensions.get('window');
-const DRAWER_HEIGHT = SCREEN_H * 0.55;
 
 interface DetailsDrawerProps {
   visible: boolean;
@@ -64,16 +60,17 @@ export default function DetailsDrawer({
   listings,
   onPublish,
   isPublishing,
-  currentUserId,
-}: DetailsDrawerProps) {
+  currentUserId }: DetailsDrawerProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const { spring, isEnabled } = useMotionConfig();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { height: SCREEN_H } = useWindowDimensions();
+  const drawerHeight = SCREEN_H * 0.55;
+  const styles = React.useMemo(() => createStyles(colors, drawerHeight), [colors, drawerHeight]);
 
   // Reanimated shared values for spring slide-up + backdrop fade
-  const translateYSV = useSharedValue(DRAWER_HEIGHT);
+  const translateYSV = useSharedValue(drawerHeight);
   const backdropOpacitySV = useSharedValue(0);
   const closeBtnScaleSV = useSharedValue(1);
   const closeBtnOpacitySV = useSharedValue(0);
@@ -95,24 +92,21 @@ export default function DetailsDrawer({
       );
     } else {
       // Spring slide-down exit
-      translateYSV.value = withSpring(DRAWER_HEIGHT, spring.entrance as SpringConfig);
+      translateYSV.value = withSpring(drawerHeight, spring.entrance as SpringConfig);
       backdropOpacitySV.value = withTiming(0, { duration: Motion.duration.fast });
       closeBtnOpacitySV.value = withTiming(0, { duration: Motion.duration.fast });
     }
   }, [visible, translateYSV, backdropOpacitySV, closeBtnOpacitySV, spring]);
 
   const drawerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateYSV.value }],
-  }));
+    transform: [{ translateY: translateYSV.value }] }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacitySV.value,
-  }));
+    opacity: backdropOpacitySV.value }));
 
   const closeBtnStyle = useAnimatedStyle(() => ({
     opacity: closeBtnOpacitySV.value,
-    transform: [{ scale: closeBtnScaleSV.value }],
-  }));
+    transform: [{ scale: closeBtnScaleSV.value }] }));
 
   const handleClosePressIn = () => {
     if (isEnabled) {
@@ -325,93 +319,77 @@ export default function DetailsDrawer({
   );
 }
 
-function createStyles(colors: any) {
+function createStyles(colors: any, drawerHeight: number) {
   return StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   drawer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: DRAWER_HEIGHT,
+    height: drawerHeight,
     backgroundColor: colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: 'hidden',
-  },
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    overflow: 'hidden' },
   keyboardWrap: {
-    flex: 1,
-  },
+    flex: 1 },
   handleRow: {
     alignItems: 'center',
     paddingTop: 10,
-    paddingBottom: 6,
-  },
+    paddingBottom: 6 },
   handle: {
     width: 36,
     height: 4,
     borderRadius: Radius.sm,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
   // Close button — positioned top-right, transparent 44pt hit target
   closeBtnWrap: {
     position: 'absolute',
     top: 8,
     right: Space.sm,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   closeBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   section: {
-    gap: 8,
-  },
+    gap: Space.sm },
   sectionLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+    letterSpacing: 0.5 },
   listingRow: {
     gap: 10,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   listingCard: {
     width: 100,
     borderRadius: Radius.xl,
     overflow: 'hidden',
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+    borderWidth: Stroke.standard,
+    borderColor: colors.border },
   listingCardSelected: {
     borderColor: colors.brand,
-    borderWidth: 2,
-  },
+    borderWidth: 2 },
   listingImage: {
     width: '100%',
-    height: 90,
-  },
+    height: 90 },
   listingMeta: {
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   listingTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   selectedBadge: {
     position: 'absolute',
     top: 6,
@@ -421,75 +399,62 @@ function createStyles(colors: any) {
     borderRadius: Radius.lg,
     backgroundColor: colors.brand,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   emptyText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    paddingVertical: 20,
-  },
+    paddingVertical: 20 },
   expiryRow: {
     flexDirection: 'row',
-    gap: 8,
-  },
+    gap: Space.sm },
   expiryPill: {
     flex: 1,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     paddingVertical: 10,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   expiryPillActive: {
     borderColor: colors.brand,
-    backgroundColor: colors.brandSubtle,
-  },
+    backgroundColor: colors.brandSubtle },
   expiryPillText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   expiryPillTextActive: {
     color: colors.brand,
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   captionInput: {
     minHeight: 80,
     borderRadius: Radius.xl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    paddingHorizontal: 12,
-    paddingTop: 12,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    paddingHorizontal: Space.smMd,
+    paddingTop: Space.smMd },
   charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   publishBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Space.sm,
     backgroundColor: colors.brand,
     borderRadius: Radius.xl,
     paddingVertical: 14,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   publishBtnDisabled: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   publishBtnText: {
     color: '#fff',
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily } });
 }

@@ -21,6 +21,7 @@ import {
   saveNavigationState,
   clearNavigationState,
 } from './navigationPersistence';
+import { withScreenErrorBoundary } from '../components/ScreenErrorBoundary';
 
 // Eager — initial routes needed immediately at startup.
 // AuthLandingScreen is the initial route when unauthenticated;
@@ -95,9 +96,11 @@ export default function AppNavigator() {
     return () => { mounted = false; };
   }, [storeOnboardingComplete]);
 
-  if (!ageCheckChecked || !onboardingChecked) {
-    return null;
-  }
+  // Hooks must be called unconditionally — before any early return — to
+  // satisfy the Rules of Hooks. All hooks below are called on every render
+  // regardless of whether the age/onboarding checks have completed.
+  const navigationContainerRef = React.useContext(NavigationContainerRefContext);
+  const restoredRef = React.useRef(false);
 
   // First-launch users see the age gate, then onboarding, before auth.
   // Returning users go straight to the auth/main entry point.
@@ -113,10 +116,8 @@ export default function AppNavigator() {
           : 'MainTabs'
         : 'AuthLanding';
 
-  const navigationContainerRef = React.useContext(NavigationContainerRefContext);
-  const restoredRef = React.useRef(false);
-
   React.useEffect(() => {
+    if (!ageCheckChecked || !onboardingChecked) return;
     if (!navigationContainerRef) return;
 
     const restore = () => {
@@ -149,7 +150,7 @@ export default function AppNavigator() {
       readyUnsub?.();
       stateUnsub?.();
     };
-  }, [navigationContainerRef, initialRoute]);
+  }, [navigationContainerRef, initialRoute, ageCheckChecked, onboardingChecked]);
 
   React.useEffect(() => {
     if (!isAuthenticated) {
@@ -160,19 +161,34 @@ export default function AppNavigator() {
 
   React.useEffect(() => {
     if (!__DEV__) return;
-    if (!navigationContainerRef?.isReady()) return;
-    const state = navigationContainerRef.getRootState();
-    const registeredNames = new Set<string>(state.routeNames);
-    const missing = ROOT_STACK_ROUTES.filter(
-      (route) => !registeredNames.has(route),
-    );
-    if (missing.length > 0) {
-      console.warn(
-        '[Navigation] RootStack routes declared in RootStackParamList but not registered as <Stack.Screen> in AppNavigator:',
-        missing,
+
+    const checkRoutes = () => {
+      if (!navigationContainerRef?.isReady()) return;
+      const state = navigationContainerRef.getRootState();
+      const registeredNames = new Set<string>(state.routeNames);
+      const missing = ROOT_STACK_ROUTES.filter(
+        (route) => !registeredNames.has(route),
       );
-    }
+      if (missing.length > 0) {
+        console.warn(
+          '[Navigation] RootStack routes declared in RootStackParamList but not registered as <Stack.Screen> in AppNavigator:',
+          missing,
+        );
+      }
+    };
+
+    // Run immediately if the navigator is already ready, otherwise
+    // wait for the 'ready' event before checking.
+    checkRoutes();
+    const readyUnsub = navigationContainerRef?.addListener('ready', checkRoutes);
+    return () => {
+      readyUnsub?.();
+    };
   }, [navigationContainerRef]);
+
+  if (!ageCheckChecked || !onboardingChecked) {
+    return null;
+  }
 
   return (
     <View style={{ flex: 1 }}>
@@ -227,7 +243,6 @@ export default function AppNavigator() {
       <Stack.Screen name="CategoryTree" getComponent={() => require('../screens/CategoryTreeScreen').default} />
       <Stack.Screen name="Filter" getComponent={() => require('../screens/FilterScreen').default} options={formSheetScreenOptions} />
       <Stack.Screen name="GlobalSearch" getComponent={() => require('../screens/GlobalSearchScreen').default} />
-      <Stack.Screen name="UnifiedDiscovery" getComponent={() => require('../screens/UnifiedDiscoveryScreen').default} />
       <Stack.Screen name="NotificationsList" getComponent={() => require('../screens/NotificationsScreen').default} />
 
       {/* ── Creator Studio ── */}
@@ -246,9 +261,7 @@ export default function AppNavigator() {
       <Stack.Screen name="CatalogImportReview" getComponent={() => require('../screens/CatalogImportReviewScreen').default} />
       <Stack.Screen name="CatalogImportItem" getComponent={() => require('../screens/CatalogImportItemScreen').default} />
       <Stack.Screen name="CatalogImportSummary" getComponent={() => require('../screens/CatalogImportSummaryScreen').default} />
-      <Stack.Screen name="TradeHub" getComponent={() => require('../screens/TradeHubScreen').default} />
       <Stack.Screen name="AuctionHome" getComponent={() => require('../screens/AuctionHomeScreen').default} />
-      <Stack.Screen name="Auctions" getComponent={() => require('../screens/AuctionsScreen').default} />
       <Stack.Screen name="SellerAuctionCentre" getComponent={() => require('../screens/SellerAuctionCentreScreen').default} />
       <Stack.Screen name="CreateAuction" getComponent={() => require('../screens/CreateAuctionScreen').default} options={modalScreenOptions} />
       <Stack.Screen name="AuctionDetail" getComponent={() => require('../screens/AuctionDetailScreen').default} />
@@ -279,21 +292,20 @@ export default function AppNavigator() {
       {/* ── Chat & Messaging ── */}
       <Stack.Screen name="Chat" getComponent={() => require('../screens/ChatScreen').default} />
       <Stack.Screen name="Inbox" getComponent={() => require('../screens/InboxScreen').default} />
-      <Stack.Screen name="CreateGroupChat" getComponent={() => require('../screens/CreateGroupChatScreen').default} options={modalScreenOptions} />
-      <Stack.Screen name="GroupChat" getComponent={() => require('../screens/GroupChatScreen').default} />
-      <Stack.Screen name="GroupChatInfo" getComponent={() => require('../screens/GroupChatInfoScreen').default} />
-      <Stack.Screen name="GroupMembers" getComponent={() => require('../screens/GroupMembersScreen').default} />
-      <Stack.Screen name="GroupBotManagement" getComponent={() => require('../screens/GroupBotManagementScreen').default} />
-      <Stack.Screen name="BotDirectory" getComponent={() => require('../screens/BotDirectoryScreen').default} />
-      <Stack.Screen name="BotDetail" getComponent={() => require('../screens/BotDetailScreen').default} />
-      <Stack.Screen name="CustomBots" getComponent={() => require('../screens/CustomBotsScreen').default} />
-      <Stack.Screen name="BotBuilder" getComponent={() => require('../screens/BotBuilderScreen').default} options={modalScreenOptions} />
-      <Stack.Screen name="EditGroup" getComponent={() => require('../screens/EditGroupScreen').default} />
+      <Stack.Screen name="CreateGroupChat" getComponent={withScreenErrorBoundary(() => require('../screens/CreateGroupChatScreen').default, 'CreateGroupChat')} options={modalScreenOptions} />
+      <Stack.Screen name="GroupChat" getComponent={withScreenErrorBoundary(() => require('../screens/GroupChatScreen').default, 'GroupChat')} />
+      <Stack.Screen name="GroupChatInfo" getComponent={withScreenErrorBoundary(() => require('../screens/GroupChatInfoScreen').default, 'GroupChatInfo')} />
+      <Stack.Screen name="GroupMembers" getComponent={withScreenErrorBoundary(() => require('../screens/GroupMembersScreen').default, 'GroupMembers')} />
+      <Stack.Screen name="GroupPermissions" getComponent={withScreenErrorBoundary(() => require('../screens/GroupPermissionsScreen').default, 'GroupPermissions')} />
+      <Stack.Screen name="GroupBotManagement" getComponent={withScreenErrorBoundary(() => require('../screens/GroupBotManagementScreen').default, 'GroupBotManagement')} />
+      <Stack.Screen name="BotDirectory" getComponent={withScreenErrorBoundary(() => require('../screens/BotDirectoryScreen').default, 'BotDirectory')} />
+      <Stack.Screen name="BotDetail" getComponent={withScreenErrorBoundary(() => require('../screens/BotDetailScreen').default, 'BotDetail')} />
+      <Stack.Screen name="CustomBots" getComponent={withScreenErrorBoundary(() => require('../screens/CustomBotsScreen').default, 'CustomBots')} />
+      <Stack.Screen name="BotBuilder" getComponent={withScreenErrorBoundary(() => require('../screens/BotBuilderScreen').default, 'BotBuilder')} options={modalScreenOptions} />
+      <Stack.Screen name="EditGroup" getComponent={withScreenErrorBoundary(() => require('../screens/EditGroupScreen').default, 'EditGroup')} />
 
       {/* ── Social / Profile ── */}
       <Stack.Screen name="UserProfile" getComponent={() => require('../screens/UserProfileScreen').default} />
-      <Stack.Screen name="Followers" getComponent={() => require('../screens/FollowersScreen').default} />
-      <Stack.Screen name="Following" getComponent={() => require('../screens/FollowingScreen').default} />
       <Stack.Screen name="ConnectionList" getComponent={() => require('../screens/ConnectionListScreen').default} />
       <Stack.Screen name="LookDetail" getComponent={() => require('../screens/LookDetailScreen').default} />
 
@@ -334,14 +346,14 @@ export default function AppNavigator() {
       <Stack.Screen name="DataPrivacy" getComponent={() => require('../screens/DataPrivacyScreen').default} />
       <Stack.Screen name="NotificationPreferences" getComponent={() => require('../screens/NotificationPreferencesScreen').default} />
       <Stack.Screen name="AIAgentIntegration" getComponent={() => require('../screens/AIAgentIntegrationScreen').default} />
-      <Stack.Screen name="AgentActivity" getComponent={() => require('../screens/AgentActivityScreen').default} />
+      <Stack.Screen name="AgentLedger" getComponent={() => require('../screens/AgentLedgerScreen').default} />
 
       {/* ── Wallet & Payments ── */}
       <Stack.Screen name="Wallet" getComponent={() => require('../screens/WalletScreen').default} />
       {/* Wallet V3 — focused money-movement destinations (spec 17) */}
       <Stack.Screen name="SellerEarnings" getComponent={() => require('../screens/SellerEarningsScreen').default} />
       <Stack.Screen name="WalletConvert" getComponent={() => require('../screens/WalletConvertScreen').default} />
-      <Stack.Screen name="WalletActivity" getComponent={() => require('../screens/WalletActivityScreen').default} />
+      <Stack.Screen name="WalletHistory" getComponent={() => require('../screens/WalletHistoryScreen').default} />
       <Stack.Screen name="MyOrders" getComponent={() => require('../screens/MyOrdersScreen').default} />
 
       {/* ── Commerce ── (orders, offers, checkout, listings) */}
@@ -448,10 +460,11 @@ export default function AppNavigator() {
       {/* Moodboard editor — modal editor (home list is in the Home tab stack) */}
       <Stack.Screen name="MoodboardEditor" getComponent={() => require('../screens/MoodboardEditorScreen').default} options={modalScreenOptions} />
 
-      {/* Galleria collection detail — accessible from UnifiedDiscovery (root) and HomeStack */}
+      {/* Galleria collection detail — accessible from HomeStack and GalleriaScreen */}
       <Stack.Screen name="GalleriaCollectionDetail" getComponent={() => require('../screens/GalleriaCollectionDetailScreen').default} />
 
       {/* ── Discovery & Editorial ── (galleria, algorithm, moodboards, explore, AI search) */}
+      <Stack.Screen name="UnifiedDiscovery" getComponent={() => require('../screens/UnifiedDiscoveryScreen').default} options={{ headerShown: false }} />
       <Stack.Screen name="Galleria" getComponent={() => require('../screens/GalleriaScreen').default} />
       <Stack.Screen name="YourAlgorithm" getComponent={() => require('../screens/YourAlgorithmScreen').default} />
       <Stack.Screen name="ConversationalSearch" getComponent={() => require('../screens/ConversationalSearchScreen').default} />

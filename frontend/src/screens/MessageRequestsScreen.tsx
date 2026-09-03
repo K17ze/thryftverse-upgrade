@@ -3,9 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
@@ -14,19 +12,23 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useHaptic } from '../hooks/useHaptic';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { CachedImage } from '../components/CachedImage';
 import { Caption } from '../components/ui/Text';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { EmptyState } from '../components/EmptyState';
 import { ConversationListSkeleton } from '../components/skeletons/ConversationListSkeleton';
 import { useBackendData } from '../context/BackendDataContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { blockUser } from '../services/profileApi';
 import { deleteConversationOnApi, acceptMessageRequestOnApi } from '../services/chatApi';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -36,7 +38,9 @@ export default function MessageRequestsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const haptic = useHaptic();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
 
   const conversations = useStore((state) => state.conversations);
   const conversationsLoaded = useStore((state) => state.conversationsLoaded);
@@ -49,6 +53,14 @@ export default function MessageRequestsScreen() {
 
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const requestConversations = useMemo(() => {
     return conversations.filter((c) => messageRequests.includes(c.id));
@@ -73,10 +85,10 @@ export default function MessageRequestsScreen() {
     try {
       await acceptMessageRequestOnApi(id);
       acceptMessageRequest(id);
-      show('Request accepted', 'success');
+      show(t('requests.accepted'), 'success');
       navigation.navigate('Chat', { conversationId: id });
     } catch {
-      show('Could not accept this request. Check your connection and try again.', 'error');
+      show(t('requests.acceptError'), 'error');
     } finally {
       setPendingId(null);
       setPendingAction(null);
@@ -85,67 +97,59 @@ export default function MessageRequestsScreen() {
 
   const handleDelete = (id: string) => {
     if (pendingId) return;
-    Alert.alert(
-      'Delete request?',
-      'This removes the request. They can still send another message later.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setPendingId(id);
-            setPendingAction('delete');
-            try {
-              await deleteConversationOnApi(id, 'me');
-              declineMessageRequest(id);
-              show('Request deleted', 'info');
-            } catch {
-              show('Could not delete this request. Check your connection and try again.', 'error');
-            } finally {
-              setPendingId(null);
-              setPendingAction(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: t('requests.deleteConfirmationTitle'),
+      message: t('requests.deleteConfirmationMessage'),
+      confirmLabel: t('common.delete'),
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setPendingId(id);
+        setPendingAction('delete');
+        try {
+          await deleteConversationOnApi(id, 'me');
+          declineMessageRequest(id);
+          show(t('requests.deleted'), 'info');
+        } catch {
+          show(t('requests.deleteError'), 'error');
+        } finally {
+          setPendingId(null);
+          setPendingAction(null);
+        }
+      } });
   };
 
   const handleBlock = (id: string, name: string) => {
     if (pendingId) return;
-    Alert.alert(
-      `Block ${name}?`,
-      'They will not be able to message you or see your profile. The request will be removed.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Block',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setPendingId(id);
-            setPendingAction('block');
-            const counterpartyId = resolveCounterpartyId(id);
-            try {
-              if (counterpartyId) {
-                await blockUser(counterpartyId);
-                toggleBlockedUser(counterpartyId);
-              }
-              await deleteConversationOnApi(id, 'me');
-              declineMessageRequest(id);
-              show(`${name} blocked`, 'info');
-            } catch {
-              show('Could not block this account. Check your connection and try again.', 'error');
-            } finally {
-              setPendingId(null);
-              setPendingAction(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: t('requests.blockConfirmationTitle', { name }),
+      message: t('requests.blockConfirmationMessage'),
+      confirmLabel: t('common.block'),
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setPendingId(id);
+        setPendingAction('block');
+        const counterpartyId = resolveCounterpartyId(id);
+        try {
+          if (counterpartyId) {
+            await blockUser(counterpartyId);
+            toggleBlockedUser(counterpartyId);
+          }
+          await deleteConversationOnApi(id, 'me');
+          declineMessageRequest(id);
+          show(t('requests.blocked', { name }), 'info');
+        } catch {
+          show(t('requests.blockError'), 'error');
+        } finally {
+          setPendingId(null);
+          setPendingAction(null);
+        }
+      } });
   };
 
   const handleReport = (id: string, _name: string) => {
@@ -153,7 +157,7 @@ export default function MessageRequestsScreen() {
     haptic.light();
     const counterpartyId = resolveCounterpartyId(id);
     if (!counterpartyId) {
-      show('This account cannot be reported here.', 'error');
+      show(t('requests.reportError'), 'error');
       return;
     }
     navigation.navigate('Report', { type: 'user', targetId: counterpartyId });
@@ -224,12 +228,12 @@ export default function MessageRequestsScreen() {
                 <CachedImage uri={listing.images[0]} style={styles.listingThumb} contentFit="cover" />
               ) : (
                 <View style={styles.listingThumbPlaceholder}>
-                  <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
+                  <Ionicons name="bag-handle-outline" size={14} color={colors.textMuted} />
                 </View>
               )}
               <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
               {listing.price != null && (
-                <Text style={styles.listingPrice}>£{listing.price.toFixed(2)}</Text>
+                <Text style={styles.listingPrice}>{formatFromFiat(listing.price, currencyCode)}</Text>
               )}
             </View>
           )}
@@ -245,10 +249,10 @@ export default function MessageRequestsScreen() {
               hapticFeedback="light"
               disabled={isPending}
               accessibilityRole="button"
-              accessibilityLabel="Delete message request"
+              accessibilityLabel={t('requests.deleteMessageRequest')}
               accessibilityState={{ busy: isPending && pendingAction === 'delete', disabled: isPending }}
             >
-              {renderActionContent('delete', 'Delete')}
+              {renderActionContent('delete', t('common.delete'))}
             </AnimatedPressable>
             <AnimatedPressable
               style={[styles.requestAccept, isPending && pendingAction !== 'accept' && styles.actionDisabledBg]}
@@ -258,7 +262,7 @@ export default function MessageRequestsScreen() {
               hapticFeedback="medium"
               disabled={isPending}
               accessibilityRole="button"
-              accessibilityLabel="Accept message request"
+              accessibilityLabel={t('requests.acceptMessageRequest')}
               accessibilityState={{ busy: isPending && pendingAction === 'accept', disabled: isPending }}
             >
               {renderActionContent('accept', 'Accept')}
@@ -276,12 +280,12 @@ export default function MessageRequestsScreen() {
               hapticFeedback="medium"
               disabled={isPending}
               accessibilityRole="button"
-              accessibilityLabel={`Block ${displayTitle}`}
+              accessibilityLabel={t('common.blockWithName', { name: displayTitle })}
               accessibilityState={{ busy: isPending && pendingAction === 'block', disabled: isPending }}
               style={styles.safetyLink}
             >
               <Ionicons name="ban-outline" size={13} color={colors.danger} />
-              <Text style={styles.safetyLinkTextDanger}>Block</Text>
+              <Text style={styles.safetyLinkTextDanger}>{t('common.block')}</Text>
             </AnimatedPressable>
             <View style={styles.safetyDivider} />
             <AnimatedPressable
@@ -291,11 +295,11 @@ export default function MessageRequestsScreen() {
               hapticFeedback="light"
               disabled={isPending}
               accessibilityRole="button"
-              accessibilityLabel={`Report ${displayTitle}`}
+              accessibilityLabel={t('common.reportWithName', { name: displayTitle })}
               style={styles.safetyLink}
             >
               <Ionicons name="flag-outline" size={13} color={colors.textMuted} />
-              <Text style={styles.safetyLinkText}>Report</Text>
+              <Text style={styles.safetyLinkText}>{t('common.report')}</Text>
             </AnimatedPressable>
           </View>
         </View>
@@ -310,20 +314,19 @@ export default function MessageRequestsScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.screenRoot}>
       <ScreenHeader
-        title="Message requests"
+        title={t('requests.title')}
         onBack={() => navigation.goBack()}
         style={{
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
-        }}
+          borderBottomColor: colors.border }}
       />
       {showLoading ? (
         <ConversationListSkeleton count={5} />
       ) : showEmpty ? (
         <EmptyState
           icon="mail-outline"
-          title="No message requests"
-          subtitle="Messages from people you don't follow appear here."
+          title={t('requests.noRequests')}
+          subtitle={t('requests.noRequestsSubtitle')}
         />
       ) : (
         <FlashList
@@ -334,6 +337,15 @@ export default function MessageRequestsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'danger'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </SafeAreaView>
   );
 }
@@ -341,8 +353,7 @@ export default function MessageRequestsScreen() {
 function BodyEmphasisLine({
   title,
   time,
-  colors,
-}: {
+  colors }: {
   title: string;
   time?: string;
   colors: ThemeColors;
@@ -367,54 +378,43 @@ const styles$inline = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   requestName: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: undefined,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   requestTime: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.body.fontFamily,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypeStyles.body.fontFamily } });
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screenRoot: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     listContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
     requestRow: {
       paddingVertical: Space.md,
       paddingHorizontal: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     requestIdentity: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.sm + 2,
-    },
+      gap: Space.sm + 2 },
     requestText: {
       flex: 1,
       justifyContent: 'center',
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     requestHandle: {
-      marginTop: -Space.xs / 2,
-    },
+      marginTop: -Space.xs / 2 },
     requestPreview: {
-      lineHeight: Type.caption.lineHeight + 2,
-      marginTop: Space.xs / 2,
-    },
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      marginTop: Space.xs / 2 },
     // ── Marketplace context — flat hairline row, not a nested card ──
     listingContext: {
       flexDirection: 'row',
@@ -422,37 +422,31 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
       paddingTop: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     listingThumb: {
       width: Space.xl + 4,
       height: Space.xl + 4,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     listingThumbPlaceholder: {
       width: Space.xl + 4,
       height: Space.xl + 4,
       borderRadius: Radius.sm,
       backgroundColor: colors.surface,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     listingTitle: {
       flex: 1,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textSecondary,
-    },
+      color: colors.textSecondary },
     listingPrice: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     // ── Primary actions ──
     requestActions: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     requestDecline: {
       flex: 1,
       alignItems: 'center',
@@ -461,67 +455,54 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     requestDeclineText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     requestAccept: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       minHeight: Control.hit,
       borderRadius: Radius.md,
-      backgroundColor: colors.textPrimary,
-    },
+      backgroundColor: colors.textPrimary },
     requestAcceptText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textInverse,
-    },
+      color: colors.textInverse },
     actionDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     actionDisabledBg: {
-      opacity: 0.5,
-    },
+      opacity: 0.5 },
     // ── Safety actions — quiet text links, not equal buttons ──
     safetyActions: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     safetyLink: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingVertical: Space.xs,
       paddingHorizontal: Space.sm,
-      minHeight: 36,
-    },
+      minHeight: 36 },
     safetyLinkTextDanger: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.danger,
-    },
+      color: colors.danger },
     safetyLinkText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     safetyDivider: {
       width: 1,
       height: 14,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     requestSeparator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
       marginLeft: Space.md,
-      marginRight: Space.md,
-    },
-  });
+      marginRight: Space.md } });
 }

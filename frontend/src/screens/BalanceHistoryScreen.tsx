@@ -9,10 +9,10 @@ import { useStore } from '../store/useStore';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { listUserTransactions, UserTransaction } from '../services/commerceApi';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
-import { Space, Radius, Type, Typography, IconGrammar } from '../theme/designTokens';
+import { Space, IconGrammar } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { useToast } from '../context/ToastContext';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 const PAGE_SIZE = 50;
 
@@ -55,7 +55,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const { show } = useToast();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const { isOffline } = useConnectivity();
   const [transactions, setTransactions] = useState<UserTransaction[]>([]);
@@ -175,9 +175,9 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                 styles.heroValue,
                 { color: netFlow >= 0 ? colors.success : colors.danger },
               ]}
-              accessibilityLabel={`Net flow ${formatFromFiat(Math.abs(netFlow), DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
+              accessibilityLabel={`Net flow ${formatFromFiat(Math.abs(netFlow), currencyCode, { displayMode: 'fiat' })}`}
             >
-              {netFlow >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(netFlow), DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+              {netFlow >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(netFlow), currencyCode, { displayMode: 'fiat' })}
             </Text>
             <Text style={[styles.heroSubtitle, { color: colors.textMuted }]}>
               {transactions.length} transaction{transactions.length === 1 ? '' : 's'}
@@ -190,7 +190,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
             {transactions.map((tx, idx) => (
               <View key={tx.id}>
                 <View style={styles.txRow}>
-                  <View style={[styles.txIcon, { backgroundColor: colorForType(tx.type, tx.lineType, colors) + '22' }]}>
+                  <View style={styles.txIcon}>
                     <Ionicons name={iconForType(tx.type, tx.lineType)} size={IconGrammar.metadata} color={colorForType(tx.type, tx.lineType, colors)} />
                   </View>
                   <View style={styles.txInfo}>
@@ -198,7 +198,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                     <Text style={styles.txDate}>{formatDateLabel(tx.createdAt)}</Text>
                   </View>
                   <Text style={[styles.txAmount, { color: tx.direction === 'credit' ? colors.success : colors.textPrimary }]}>
-                    {tx.direction === 'credit' ? '+' : '-'}{formatFromFiat(Math.abs(tx.amount), DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+                    {tx.direction === 'credit' ? '+' : '-'}{formatFromFiat(Math.abs(tx.amount), currencyCode, { displayMode: 'fiat' })}
                   </Text>
                 </View>
                 {idx < transactions.length - 1 && <View style={styles.separator} />}
@@ -232,40 +232,35 @@ function createStyles(colors: ThemeColors) {
   heroSection: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   heroLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase' },
   heroValue: {
-    fontSize: Type.priceHero.size,
-    lineHeight: Type.priceHero.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceHero.letterSpacing,
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight,
+    fontFamily: TypographyV2.priceHero.fontFamily,
+    letterSpacing: TypographyV2.priceHero.letterSpacing,
     fontVariant: ['tabular-nums'],
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   heroSubtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs },
   sectionLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   // ── Flat transaction rows — no card wrapper ──
   txRow: {
     flexDirection: 'row',
@@ -273,61 +268,49 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     minHeight: 56,
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   txIcon: {
     width: 36,
     height: 36,
-    borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   txInfo: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   txLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.textPrimary },
   txDate: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.textMuted },
   txAmount: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
-    marginLeft: Space.md + 36 + Space.sm + 2,
-  },
+    marginLeft: Space.md + 36 + Space.sm + 2 },
   loadMoreBtn: {
     alignItems: 'center',
     paddingVertical: Space.md,
     marginTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-  },
+    borderTopColor: colors.borderSubtle },
   loadMoreBtnPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   loadMoreText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.brand,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  });
+    letterSpacing: TypographyV2.body.letterSpacing } });
 }

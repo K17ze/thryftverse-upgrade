@@ -6,7 +6,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { listCoOwnAssets } from '../services/marketApi';
@@ -16,12 +17,10 @@ import {
   CoOwnLeaderboardSkeleton,
   CoOwnStateCanvas,
   CoOwnOfflineBanner,
-  CoOwnReconciliationBanner,
 } from '../components/coown';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -41,7 +40,7 @@ interface LeaderboardAsset {
 export default function AssetLeaderboardScreen() {
   const navigation = useNavigation<NavT>();
   const { colors } = useAppTheme();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
 
@@ -99,7 +98,7 @@ export default function AssetLeaderboardScreen() {
 
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
-    navigation.navigate('Portfolio');
+    navigation.navigate('CoOwnHub');
   }, [navigation]);
 
   // ── Rankings (no speculative price-move metrics) ──
@@ -139,18 +138,12 @@ export default function AssetLeaderboardScreen() {
 
   const renderList = (
     title: string,
-    icon: React.ComponentProps<typeof Ionicons>['name'],
     data: Array<LeaderboardAsset & { allocatedPct?: number }>,
     metric: (asset: LeaderboardAsset & { allocatedPct?: number }) => { primary: string; secondary: string },
     sectionIndex: number
   ) => data.length > 0 ? (
     <View style={[styles.section, sectionIndex > 0 && styles.sectionSeparated, sectionIndex > 0 && { borderTopColor: colors.border }]}>
-      <View style={styles.sectionHeader}>
-        <View style={[styles.sectionIcon, { backgroundColor: colors.surfaceAlt }]}>
-          <Ionicons name={icon} size={15} color={colors.textSecondary} />
-        </View>
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>{title}</Text>
-      </View>
+      <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.25}>{title}</Text>
 
       {data.map((asset, idx) => {
         const metricValue = metric(asset);
@@ -171,18 +164,17 @@ export default function AssetLeaderboardScreen() {
               containerStyle={styles.thumbContainer}
               contentFit="cover"
               emptyLabel={asset.title}
-              emptyIcon="diamond-outline"
+              emptyIcon="image-outline"
             />
             <View style={styles.rowBody}>
               <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={1.25}>{asset.title}</Text>
               <View style={styles.priceRow}>
                 <Text style={[styles.rowPrice, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{format1ze(asset.unitPriceGBP)}</Text>
-                <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{formatFromFiat(asset.unitPriceGBP, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+                <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{formatFromFiat(asset.unitPriceGBP, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
             </View>
             <View style={styles.metricGroup}>
               <Text style={[styles.metric, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.78} maxFontSizeMultiplier={1.2}>{metricValue.primary}</Text>
-              <Text style={[styles.metricLabel, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{metricValue.secondary}</Text>
             </View>
           </AnimatedPressable>
         );
@@ -196,7 +188,6 @@ export default function AssetLeaderboardScreen() {
         header={
           <FlagshipHeader
             title="Market overview"
-            subtitle="Issued supply and recency"
             onBack={handleBack}
           />
         }
@@ -214,7 +205,6 @@ export default function AssetLeaderboardScreen() {
         header={
           <FlagshipHeader
             title="Market overview"
-            subtitle="Issued supply and recency"
             onBack={handleBack}
           />
         }
@@ -236,7 +226,6 @@ export default function AssetLeaderboardScreen() {
         header={
           <FlagshipHeader
             title="Market overview"
-            subtitle="Issued supply and recency"
             onBack={handleBack}
           />
         }
@@ -267,7 +256,6 @@ export default function AssetLeaderboardScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
-      <CoOwnReconciliationBanner isActive={false} />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -283,21 +271,18 @@ export default function AssetLeaderboardScreen() {
       >
         {renderList(
           'Most allocated',
-          'pie-chart-outline',
           topAllocated,
           (asset) => ({ primary: `${Math.round((asset.allocatedPct ?? 0) * 100)}%`, secondary: 'units allocated' }),
           0
         )}
         {renderList(
           'Available supply',
-          'layers-outline',
           mostAvailable,
           (asset) => ({ primary: `${asset.availableUnits}/${asset.totalUnits}`, secondary: 'units available' }),
           1
         )}
         {renderList(
           'New issues',
-          'time-outline',
           newestListings,
           (asset) => ({
             primary: asset.createdAt
@@ -324,23 +309,11 @@ const styles = StyleSheet.create({
   sectionSeparated: {
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginBottom: Space.sm,
-  },
-  sectionIcon: {
-    width: Control.chromeCompact,
-    height: Control.chromeCompact,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   sectionTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    marginBottom: Space.sm,
   },
   row: {
     minHeight: Space.xxl + Space.lg,
@@ -355,9 +328,9 @@ const styles = StyleSheet.create({
   },
   rank: {
     width: Space.md + Space.xs,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
     textAlign: 'center',
   },
@@ -375,9 +348,9 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   rowTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
   priceRow: {
     flexDirection: 'row',
@@ -387,16 +360,16 @@ const styles = StyleSheet.create({
   },
   rowPrice: {
     flexShrink: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
   },
   rowSub: {
     flexShrink: 1,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
   },
   metricGroup: {
@@ -406,18 +379,18 @@ const styles = StyleSheet.create({
     gap: Space.xs / 4,
   },
   metric: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
     textAlign: 'right',
     maxWidth: '100%',
   },
   metricLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'right',
   },
 });

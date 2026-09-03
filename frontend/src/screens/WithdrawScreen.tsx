@@ -7,8 +7,7 @@ import { View,
   Text,
   StyleSheet,
   TextInput,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
@@ -16,9 +15,9 @@ import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { CURRENCIES, DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { COPY } from '../constants/copy';
 import { useToast } from '../context/ToastContext';
+import { useA11yAudit } from '../hooks/useA11yAudit';
 import { useStore } from '../store/useStore';
 import { parseApiError } from '../lib/apiClient';
 import {
@@ -31,22 +30,21 @@ import {
   listPayoutAccounts,
   listPayoutRequests,
   getWalletSnapshot,
+  lookupPayoutByIdempotencyKey,
   PayoutAccountPayload,
-  PayoutRequestPayload,
-} from '../services/walletApi';
+  PayoutRequestPayload } from '../services/walletApi';
 import { getUserCountryCapabilities, UserCountryCapabilities } from '../services/capabilitiesApi';
-import { Typography, Space, Radius, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import {
   convertDisplayToGbpAmount,
   getDefaultWithdrawDisplayAmount,
-  sanitizeDecimalInput,
-} from '../utils/currencyAuthoringFlows';
+  sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import {
   formatCountryPolicyScope,
   formatPayoutPolicyHint,
-  isPaymentMethodAllowed,
-} from '../utils/capabilityPolicy';
+  isPaymentMethodAllowed } from '../utils/capabilityPolicy';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { BiometricGatePrompt } from '../components/security/BiometricGate';
@@ -54,10 +52,12 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { useHaptic } from '../hooks/useHaptic';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { createStableId } from '../utils/createStableId';
+import { useUnknownOutcomeReconciliation } from '../hooks/useUnknownOutcomeReconciliation';
 import { t } from '../i18n';
+import { track } from '../analytics';
 
 
-type WithdrawStep = 'form' | 'confirm' | 'success';
+type WithdrawStep = 'form' | 'confirm' | 'success' | 'unknown_outcome';
 
 interface WithdrawSuccessData {
   reference: string;
@@ -83,29 +83,23 @@ const PAYOUT_STATUS_CONFIG: Record<PayoutStatus, PayoutStatusConfig> = {
   requested: {
     label: t('withdraw.status.pending'),
     subtitle: t('withdraw.status.awaitingReview'),
-    colorKey: 'textMuted',
-  },
+    colorKey: 'textMuted' },
   processing: {
     label: t('withdraw.status.processing'),
     subtitle: t('withdraw.status.transferInitiated'),
-    colorKey: 'warning',
-  },
+    colorKey: 'warning' },
   paid: {
     label: t('withdraw.status.paid'),
     subtitle: t('withdraw.status.bankConfirmed'),
-    colorKey: 'success',
-  },
+    colorKey: 'success' },
   failed: {
     label: t('withdraw.status.failed'),
     subtitle: t('withdraw.status.transferCouldNotComplete'),
-    colorKey: 'danger',
-  },
+    colorKey: 'danger' },
   cancelled: {
     label: t('withdraw.status.cancelled'),
     subtitle: '',
-    colorKey: 'textMuted',
-  },
-};
+    colorKey: 'textMuted' } };
 
 function resolvePayoutStatusConfig(status: PayoutStatus): PayoutStatusConfig {
   return PAYOUT_STATUS_CONFIG[status] ?? PAYOUT_STATUS_CONFIG.requested;
@@ -114,6 +108,8 @@ function resolvePayoutStatusConfig(status: PayoutStatus): PayoutStatusConfig {
 type WithdrawalsLoadState = 'idle' | 'loading' | 'loaded' | 'error';
 
 export default function WithdrawScreen() {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'WithdrawScreen');
   useScreenCaptureProtection();
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
@@ -124,20 +120,21 @@ export default function WithdrawScreen() {
   const [isHydratingBalance, setIsHydratingBalance] = useState(true);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const idempotencyKeyRef = useRef<string | null>(null);
+  const isMountedRef = useRef(true);
+  const { reconcile } = useUnknownOutcomeReconciliation();
   const [isConnectingPayout, setIsConnectingPayout] = useState(false);
   const [payoutAccount, setPayoutAccount] = useState<PayoutAccountPayload | null>(null);
   const [countryCapabilities, setCountryCapabilities] = useState<UserCountryCapabilities | null>(null);
   const [successData, setSuccessData] = useState<WithdrawSuccessData | null>(null);
   const [withdrawals, setWithdrawals] = useState<PayoutRequestPayload[]>([]);
   const [withdrawalsLoadState, setWithdrawalsLoadState] = useState<WithdrawalsLoadState>('idle');
-  const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates, rateUpdatedAt } = useCurrencyContext();
+  const { currencySymbol, formatFromFiat } = useFormattedPrice();
+  const { currencyCode, fxRates, rateUpdatedAt } = useCurrencyContext();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const currentUser = useStore((state) => state.currentUser);
-  const currencySymbol = CURRENCIES[currencyCode].symbol;
 
   // ── Biometric gate (OWASP M5) ──
   // Withdrawals move money out of the wallet. Require biometric re-authentication
@@ -145,9 +142,9 @@ export default function WithdrawScreen() {
   const biometricGate = useBiometricGate();
 
   useEffect(() => {
-    const displayAmount = getDefaultWithdrawDisplayAmount(availableBalance, currencyCode, goldRates);
+    const displayAmount = getDefaultWithdrawDisplayAmount(availableBalance, currencyCode, fxRates);
     setAmount(displayAmount.toFixed(2));
-  }, [availableBalance, currencyCode, goldRates]);
+  }, [availableBalance, currencyCode, fxRates]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -277,7 +274,7 @@ export default function WithdrawScreen() {
   }, [currentUser?.id, loadWithdrawals]);
 
   const numericAmountDisplay = Number(amount) || 0;
-  const numericAmount = Number(convertDisplayToGbpAmount(numericAmountDisplay, currencyCode, goldRates).toFixed(2));
+  const numericAmount = Number(convertDisplayToGbpAmount(numericAmountDisplay, currencyCode, fxRates).toFixed(2));
   const exceedsBalance = numericAmount > availableBalance;
   const canWithdraw =
     numericAmount > 0
@@ -305,21 +302,18 @@ export default function WithdrawScreen() {
           payoutAccount.status === 'active'
             ? t('withdraw.payout.connectedProfile')
             : t('withdraw.payout.verificationPending'),
-        details: `${payoutAccount.gatewayId} · ${payoutAccount.currency}${payoutLocation}`,
-      };
+        details: `${payoutAccount.gatewayId} · ${payoutAccount.currency}${payoutLocation}` };
     }
 
     if (!allowBankAccounts) {
       return {
         name: t('withdraw.payout.bankUnavailable'),
-        details: 'Country policy will route withdrawals through supported payout rails.',
-      };
+        details: 'Country policy will route withdrawals through supported payout rails.' };
     }
 
     return {
       name: t('withdraw.form.connectPayoutProfile'),
-      details: 'Verify your identity and bank details to enable payouts',
-    };
+      details: 'Verify your identity and bank details to enable payouts' };
   }, [allowBankAccounts, payoutAccount]);
 
   const ensureCapabilities = async (): Promise<UserCountryCapabilities | null> => {
@@ -388,9 +382,7 @@ export default function WithdrawScreen() {
           ?? 'GB',
         metadata: {
           source: 'withdraw_screen_stripe_connect_sync',
-          capabilityPolicyVersion: resolvedCapabilities?.policyVersion ?? null,
-        },
-      });
+          capabilityPolicyVersion: resolvedCapabilities?.policyVersion ?? null } });
     }
 
     if (activeAccount.status !== 'active') {
@@ -414,8 +406,7 @@ export default function WithdrawScreen() {
     if (payoutAccount && payoutAccount.status === 'active') {
       return {
         account: payoutAccount,
-        capabilities: resolvedCapabilities,
-      };
+        capabilities: resolvedCapabilities };
     }
 
     const existingAccounts = await listPayoutAccounts(currentUser.id);
@@ -426,15 +417,13 @@ export default function WithdrawScreen() {
       setPayoutAccount(activeAccount);
       return {
         account: activeAccount,
-        capabilities: resolvedCapabilities,
-      };
+        capabilities: resolvedCapabilities };
     }
 
     const createdAccount = await connectOrSyncPayoutAccount(resolvedCapabilities);
     return {
       account: createdAccount,
-      capabilities: resolvedCapabilities,
-    };
+      capabilities: resolvedCapabilities };
   };
 
   const handleConnectPayout = async () => {
@@ -510,8 +499,7 @@ export default function WithdrawScreen() {
         const fxQuote = await getIzeFxQuote({
           fromCurrency: 'GBP',
           toCurrency: payoutCurrency,
-          amount: amountGbp,
-        });
+          amount: amountGbp });
 
         payoutAmount = Number(fxQuote.quote.convertedAmount.toFixed(2));
       }
@@ -531,9 +519,7 @@ export default function WithdrawScreen() {
                 source: 'withdraw_screen_request',
                 enteredDisplayAmount: numericAmountDisplay,
                 enteredDisplayCurrency: currencyCode,
-                payoutMode: 'sale_proceeds_only',
-              },
-            }
+                payoutMode: 'sale_proceeds_only' } }
           : {
               payoutAccountId: payoutProfile.id,
               amount: payoutAmount,
@@ -543,22 +529,21 @@ export default function WithdrawScreen() {
                 source: 'withdraw_screen_request',
                 enteredDisplayAmount: numericAmountDisplay,
                 enteredDisplayCurrency: currencyCode,
-                payoutMode: 'sale_proceeds_only',
-              },
-            };
+                payoutMode: 'sale_proceeds_only' } };
+
+      track('withdrawal_initiated', { amount: amountGbp, currency: payoutCurrency });
 
       const payoutResponse = await createPayoutRequest(currentUser.id, payoutRequestInput);
 
       const nextBalance = Number(Math.max(0, availableBalance - amountGbp).toFixed(2));
       setAvailableBalance(nextBalance);
-      setAmount(getDefaultWithdrawDisplayAmount(nextBalance, currencyCode, goldRates).toFixed(2));
+      setAmount(getDefaultWithdrawDisplayAmount(nextBalance, currencyCode, fxRates).toFixed(2));
 
       setSuccessData({
         reference: payoutResponse.payoutRequest.providerPayoutRef ?? payoutResponse.payoutRequest.id,
         amountGbp,
         payoutCurrency,
-        createdAt: payoutResponse.payoutRequest.createdAt,
-      });
+        createdAt: payoutResponse.payoutRequest.createdAt });
       haptic.success();
       idempotencyKeyRef.current = null;
       setStep('success');
@@ -567,6 +552,46 @@ export default function WithdrawScreen() {
       void loadWithdrawals(currentUser.id);
     } catch (error) {
       const isNetworkError = isOffline || (error instanceof Error && /network|fetch|timeout/i.test(error.message));
+
+      if (isNetworkError && idempotencyKey) {
+        // Lost response during payout submission — the server may have
+        // committed. Show unknown_outcome and poll for the authoritative
+        // status instead of telling the user the payout failed (which
+        // invites an unsafe retry that could create a duplicate).
+        setStep('unknown_outcome');
+        show('We are confirming your withdrawal. Please do not submit again.');
+
+        const result = await reconcile<PayoutRequestPayload>({
+          lookup: () => lookupPayoutByIdempotencyKey(currentUser.id, idempotencyKey),
+          onAcknowledged: (payoutRequest) => {
+            setSuccessData({
+              reference: payoutRequest.providerPayoutRef ?? payoutRequest.id,
+              amountGbp: payoutRequest.amountGbp,
+              payoutCurrency: payoutRequest.amountCurrency,
+              createdAt: payoutRequest.createdAt });
+            haptic.success();
+            idempotencyKeyRef.current = null;
+            setStep('success');
+            void loadWithdrawals(currentUser.id);
+          },
+          onSafeToRetry: () => {
+            idempotencyKeyRef.current = null;
+            setStep('form');
+            show('No withdrawal was created. Please try again.', 'info');
+          },
+          onUnresolved: () => {
+            // Keep the idempotency key so a manual retry doesn't create
+            // a duplicate. The user can check their withdrawal history.
+            setStep('form');
+            show('We could not confirm your withdrawal. Check your history before retrying.', 'info');
+          },
+          shouldContinue: () => isMountedRef.current });
+
+        if (result.outcome === 'acknowledged' || result.outcome === 'safe_to_retry' || result.outcome === 'unresolved') {
+          return;
+        }
+      }
+
       const parsed = parseApiError(error, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Unable to submit withdrawal right now.');
       show(parsed.message, 'error');
       setStep('form');
@@ -581,6 +606,11 @@ export default function WithdrawScreen() {
       void biometricGate.authenticate('Authenticate to withdraw funds');
     }
   }, [biometricGate.status, biometricGate.isAuthenticating, biometricGate.authenticate]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   // ── Biometric gate: block the withdrawal form until authenticated ──
   if (biometricGate.status === 'pending' || biometricGate.status === 'locked') {
@@ -628,6 +658,37 @@ export default function WithdrawScreen() {
     );
   }
 
+  // ── Unknown outcome step ──
+  // The withdrawal response was lost. We are polling the backend to
+  // determine whether the payout was committed. The user must not retry
+  // until the status is resolved.
+  if (step === 'unknown_outcome') {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Checking withdrawal"
+            onBack={() => { /* prevent back — don't abandon reconciliation */ }}
+            backIcon="arrow-back"
+          />
+        }
+        scrollEnabled={false}
+      >
+        <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
+          <Ionicons name="hourglass-outline" size={48} color={colors.textMuted} />
+          <Text style={[styles.unknownTitle, { color: colors.textPrimary }]}>
+            Confirming your request
+          </Text>
+          <Text style={[styles.unknownBody, { color: colors.textSecondary }]}>
+            We lost connection while submitting your withdrawal. We are
+            checking whether it went through. Please do not submit again
+            until we confirm.
+          </Text>
+        </View>
+      </FlagshipScreen>
+    );
+  }
+
   // ── Success step ──
   if (step === 'success' && successData) {
     const shortRef = successData.reference.slice(0, 12).toUpperCase();
@@ -635,8 +696,7 @@ export default function WithdrawScreen() {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
-      minute: '2-digit',
-    });
+      minute: '2-digit' });
     return (
       <FlagshipScreen
         header={
@@ -667,21 +727,21 @@ export default function WithdrawScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={{ alignItems: 'center', paddingHorizontal: Space.md }}>
-            <View style={[styles.successIconCircle, { backgroundColor: `${colors.success}22` }]}>
+            <View style={[styles.successIconCircle, { backgroundColor: colors.successSubtle }]}>
               <Ionicons name="checkmark-circle" size={40} color={colors.success} />
             </View>
             <Text style={[styles.successTitle, { color: colors.textPrimary }]}>
               Withdrawal requested
             </Text>
             <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
-              {formatFromFiat(successData.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} is on its way
+              {formatFromFiat(successData.amountGbp, currencyCode, { displayMode: 'fiat' })} is on its way
             </Text>
           </View>
 
           <View>
             <FlagshipFormSection variant="flat" title="Withdrawal details">
               <FlagshipMetricLine label="Reference" value={shortRef} />
-              <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} separated />
+              <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, currencyCode, { displayMode: 'fiat' })} separated />
               <FlagshipMetricLine label="Currency" value={successData.payoutCurrency} separated />
               <FlagshipMetricLine label="Requested" value={formattedDate} separated />
               <FlagshipMetricLine label="Estimated arrival" value="1–3 business days" separated />
@@ -730,7 +790,7 @@ export default function WithdrawScreen() {
               accessibilityLabel={
                 isWithdrawing
                   ? 'Processing withdrawal'
-                  : `Confirm withdrawal of ${formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`
+                  : `Confirm withdrawal of ${formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })}`
               }
               accessibilityHint="Submits your withdrawal request"
             />
@@ -753,9 +813,9 @@ export default function WithdrawScreen() {
         >
           <View>
             <FlagshipFormSection variant="flat" title="Withdrawal summary">
-              <FlagshipMetricLine label="Amount" value={formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} />
-              <FlagshipMetricLine label="Fee" value={formatFromFiat(0, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} separated />
-              <FlagshipMetricLine label="You receive" value={formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })} emphasis separated />
+              <FlagshipMetricLine label="Amount" value={formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })} />
+              <FlagshipMetricLine label="Fee" value={formatFromFiat(0, currencyCode, { displayMode: 'fiat' })} separated />
+              <FlagshipMetricLine label="You receive" value={formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })} emphasis separated />
               <FlagshipMetricLine label="Destination" value={destinationLabel} separated />
               <FlagshipMetricLine label="Estimated arrival" value="1–3 business days" separated />
             </FlagshipFormSection>
@@ -784,6 +844,7 @@ export default function WithdrawScreen() {
 
   return (
     <FlagshipScreen
+      ref={a11yRef}
       header={
         <FlagshipHeader
           title="Withdraw Balance"
@@ -818,7 +879,7 @@ export default function WithdrawScreen() {
             style={[styles.primaryBtn, !canWithdraw && styles.primaryBtnDisabled]}
             titleStyle={styles.primaryText}
             accessibilityLabel={
-              `Review withdrawal of ${formatFromFiat(numericAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`
+              `Review withdrawal of ${formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })}`
             }
             accessibilityHint="Proceeds to the confirmation step"
           />
@@ -826,7 +887,7 @@ export default function WithdrawScreen() {
       }
     >
       {isOffline && (
-        <View style={[styles.offlineBanner, { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border }]}>
+        <View style={[styles.offlineBanner, { backgroundColor: colors.dangerSubtle, borderBottomColor: colors.border }]}>
           <Ionicons name="cloud-offline-outline" size={16} color={colors.danger} />
           <Text style={[styles.offlineBannerText, { color: colors.textPrimary }]}>
             {COPY.offline}
@@ -845,7 +906,7 @@ export default function WithdrawScreen() {
           <View style={{ marginTop: Space.md }}>
             <FlagshipMetricLine
               label="Available to withdraw"
-              value={formatFromFiat(availableBalance, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+              value={formatFromFiat(availableBalance, currencyCode, { displayMode: 'fiat' })}
               emphasis
             />
           </View>
@@ -865,7 +926,7 @@ export default function WithdrawScreen() {
               accessibilityHint="Enter the amount to withdraw from your available balance"
             />
           </View>
-          <Text style={styles.availableText}>Available: {formatFromFiat(availableBalance, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+          <Text style={styles.availableText}>Available: {formatFromFiat(availableBalance, currencyCode, { displayMode: 'fiat' })}</Text>
           {policyScopeLabel ? <Text style={styles.policyLabel}>Policy scope: {policyScopeLabel}</Text> : null}
           {payoutPolicyHint ? <Text style={styles.policyHint}>{payoutPolicyHint}</Text> : null}
           {exceedsBalance ? <Text style={styles.balanceError}>Entered amount exceeds available balance.</Text> : null}
@@ -961,8 +1022,7 @@ export default function WithdrawScreen() {
                     const formattedDate = new Date(item.createdAt).toLocaleDateString('en-GB', {
                       day: 'numeric',
                       month: 'short',
-                      year: 'numeric',
-                    });
+                      year: 'numeric' });
                     return (
                       <View
                         key={item.id}
@@ -970,14 +1030,14 @@ export default function WithdrawScreen() {
                           styles.withdrawalRow,
                           !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
                         ]}
-                        accessibilityLabel={`Withdrawal of ${formatFromFiat(item.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}, ${statusConfig.label}, ${formattedDate}`}
+                        accessibilityLabel={`Withdrawal of ${formatFromFiat(item.amountGbp, currencyCode, { displayMode: 'fiat' })}, ${statusConfig.label}, ${formattedDate}`}
                       >
                         <View style={styles.withdrawalLeft}>
                           <Text
                             style={[styles.withdrawalAmount, { color: colors.textPrimary }]}
                             numberOfLines={1}
                           >
-                            {formatFromFiat(item.amountGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+                            {formatFromFiat(item.amountGbp, currencyCode, { displayMode: 'fiat' })}
                           </Text>
                           <Text style={[styles.withdrawalDate, { color: colors.textMuted }]}>
                             {formattedDate}
@@ -1016,90 +1076,85 @@ export default function WithdrawScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Space.xl, gap: Space.md },
+  unknownTitle: { fontSize: TypographyV2.sectionTitle.size, fontFamily: TypographyV2.sectionTitle.fontFamily, textAlign: 'center' },
+  unknownBody: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, textAlign: 'center', lineHeight: TypographyV2.body.lineHeight },
   skeletonContainer: { paddingHorizontal: Space.md + Space.xs, paddingTop: Space.md },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Space.md, height: Space.xl + Space.xl + 8, borderBottomWidth: Stroke.standard, borderBottomColor: colors.border },
   backBtn: { width: Control.hit, height: Control.hit, justifyContent: 'center', alignItems: 'flex-start' },
-  headerTitle: { fontSize: Type.subtitle.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+  headerTitle: { fontSize: TypographyV2.sectionTitle.size, fontFamily: TypographyV2.sectionTitle.fontFamily, color: colors.textPrimary },
   offlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: Stroke.standard,
-  },
+    borderBottomWidth: Stroke.standard },
   offlineBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
 
   content: { flex: 1 },
 
   amountWrap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.md, marginTop: Space.xl + Space.xl - 8, marginBottom: Space.sm + Space.xs },
-  currencySymbol: { fontSize: Type.priceHero.size + 16, fontFamily: Typography.family.bold, color: colors.textPrimary, marginRight: Space.sm },
-  amountInput: { fontSize: Type.priceHero.size + 28, fontFamily: Typography.family.bold, color: colors.textPrimary, minWidth: Space.xxl * 3 + Space.xs + 2, fontVariant: ['tabular-nums'] },
+  currencySymbol: { fontSize: TypographyV2.priceHero.size + 16, fontFamily: TypographyV2.priceHero.fontFamily, color: colors.textPrimary, marginRight: Space.sm },
+  amountInput: { fontSize: TypographyV2.priceHero.size + 28, fontFamily: TypographyV2.priceHero.fontFamily, color: colors.textPrimary, minWidth: Space.xxl * 3 + Space.xs + 2, fontVariant: ['tabular-nums'] },
   availableText: {
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     color: colors.textSecondary,
     marginBottom: Space.sm,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   policyLabel: {
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     color: colors.textMuted,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   policyHint: {
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     color: colors.textMuted,
-    marginBottom: Space.lg + Space.xs,
-  },
+    marginBottom: Space.lg + Space.xs },
   balanceError: {
     textAlign: 'center',
     paddingHorizontal: Space.md,
     marginTop: Space.xs,
     marginBottom: Space.md + 4,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.danger },
 
   addBankBtn: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.sm + Space.xs },
   addBankText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    color: colors.brand },
   railHintText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     color: colors.textMuted,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + Space.xs,
-  },
+    paddingVertical: Space.sm + Space.xs },
 
   footer: { paddingVertical: Space.md + 4, borderTopWidth: Stroke.standard, borderTopColor: colors.border, backgroundColor: colors.background },
   // Estimated arrival row — clear disclosure per spec
@@ -1109,44 +1164,38 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     marginBottom: Space.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   arrivalLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   arrivalLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   arrivalValue: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   feeText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     color: colors.textMuted,
     textAlign: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   primaryBtn: { backgroundColor: colors.textPrimary, height: Space.xl + Space.xl + 8, borderRadius: Space.lg + 4, alignItems: 'center', justifyContent: 'center' },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: colors.background, fontSize: Type.body.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
+  primaryText: { color: colors.background, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, fontVariant: ['tabular-nums'] },
   secondaryBtn: {
     height: Space.xl + 8,
     borderRadius: Space.lg + 4,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
 
   // ── Flat note (success + confirm) — no border, no radius ──
   flatNote: {
@@ -1154,8 +1203,7 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'flex-start',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
 
   // ── Success step ──
   successIconCircle: {
@@ -1164,97 +1212,80 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   successTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
     textAlign: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   successSubtitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
     textAlign: 'center',
-    marginBottom: Space.xl,
-  },
+    marginBottom: Space.xl },
   flatNoteText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   rateTimestampRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   rateTimestampText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // ── Recent withdrawals — flat list, hairline separators ──
   withdrawalsStatusText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-    paddingVertical: Space.sm,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    paddingVertical: Space.sm },
   withdrawalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
   withdrawalLeft: {
     flex: 1,
-    marginRight: Space.sm,
-  },
+    marginRight: Space.sm },
   withdrawalAmount: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     fontVariant: ['tabular-nums'],
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   withdrawalDate: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   withdrawalRight: {
     alignItems: 'flex-end',
-    maxWidth: '45%',
-  },
+    maxWidth: '45%' },
   withdrawalStatusLine: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   withdrawalDot: {
     width: 7,
     height: 7,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   withdrawalStatusLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   withdrawalStatusSubtitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-    textAlign: 'right',
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'right' } });
 }

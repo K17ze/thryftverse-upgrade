@@ -4,11 +4,11 @@ import { NativeSheet } from '../../platform/native';
 import {
   KeyboardAwareScrollView,
   KeyboardStickyView,
-  type KeyboardAwareScrollViewRef,
-} from '../../platform/keyboard/KeyboardProvider';
+  type KeyboardAwareScrollViewRef } from '../../platform/keyboard/KeyboardProvider';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { haptics } from '../../utils/haptics';
 import { reportReview, type ReviewReportReason } from '../../services/reviewApi';
 
@@ -33,8 +33,7 @@ export function ReviewReportSheet({
   reviewId,
   onDismiss,
   onSubmitted,
-  onError,
-}: ReviewReportSheetProps) {
+  onError }: ReviewReportSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [selected, setSelected] = useState<ReviewReportReason | null>(null);
@@ -158,43 +157,36 @@ function createStyles(colors: ThemeColors) {
     header: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     title: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     scroll: { flex: 1 },
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     reasonRow: {
       paddingVertical: Space.md + 2,
       borderBottomWidth: StyleSheet.hairlineWidth,
       minHeight: 52,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     reasonLabel: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     detailsWrap: {
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     detailsInput: {
       borderWidth: StyleSheet.hairlineWidth,
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.md - 2,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.regular,
-      minHeight: 48,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      minHeight: 48 },
     submitBtn: {
       height: 52,
       borderRadius: Radius.full,
@@ -202,12 +194,9 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       marginHorizontal: Space.md,
       marginTop: Space.sm,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     submitBtnText: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.semibold,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily } });
 }

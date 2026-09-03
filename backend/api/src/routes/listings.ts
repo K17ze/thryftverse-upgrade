@@ -23,6 +23,7 @@ import {
   scoreProductRecommendation,
 } from '../lib/productRecommendationPolicy.js';
 import { validateListingActivation } from '../lib/listingCategoryPolicy.js';
+import { getTaxonomyNormaliser, normaliseTaxonomyValue } from '../lib/taxonomyValidation.js';
 import { moderateListingText } from '../lib/moderation/moderationService.js';
 import { appendDomainEvent, completeDomainOutboxEvent } from '../lib/domainOutbox.js';
 import { enqueueOutboxDrainJob } from '../lib/queues.js';
@@ -36,6 +37,7 @@ import {
 import { evaluatePriceAlertsForListing } from './priceAlerts.js';
 import { recordListingCreated } from '../lib/metrics.js';
 import type { AuthenticatedUser } from '../lib/auth.js';
+import { calculateImpact } from '../lib/impactCalculator.js';
 
 // â”€â”€ Local helpers (mirrored from index.ts) â”€â”€
 
@@ -143,13 +145,14 @@ app.get('/listings', async (request) => {
     condition: z.string().optional(),
     minPrice: z.coerce.number().nonnegative().optional(),
     maxPrice: z.coerce.number().nonnegative().optional(),
-    sort: z.enum(['newest', 'price_asc', 'price_desc']).optional().default('newest'),
+    sustainableOnly: z.coerce.boolean().optional().default(false),
+    sort: z.enum(['newest', 'price_asc', 'price_desc', 'most_liked', 'ending_soon']).optional().default('newest'),
     limit: z.coerce.number().int().min(1).max(200).optional().default(100),
     cursor: z.string().optional(),
   });
   const params = querySchema.parse(request.query ?? {});
 
-  const conditions: string[] = ["status = 'active'"];
+  const conditions: string[] = ["l.status = 'active'"];
   const args: unknown[] = [];
 
   if (params.q) {
@@ -186,6 +189,9 @@ app.get('/listings', async (request) => {
     conditions.push(`price_gbp <= $${args.length + 1}`);
     args.push(params.maxPrice);
   }
+  if (params.sustainableOnly) {
+    conditions.push(`l.sustainability_grade IN ('A', 'B')`);
+  }
 
   let cursorData: { sortValue: string | number; id: string } | null = null;
   if (params.cursor) {
@@ -197,12 +203,29 @@ app.get('/listings', async (request) => {
     }
   }
 
+  const extraJoins: string[] = [];
+  const extraSelects: string[] = [];
+  if (params.sort === 'most_liked') {
+    extraSelects.push('COALESCE(wl.like_count, 0) AS like_count');
+    extraJoins.push(
+      `LEFT JOIN (SELECT listing_id, COUNT(DISTINCT user_id) AS like_count FROM interactions WHERE action = 'wishlist' GROUP BY listing_id) wl ON wl.listing_id = l.id`,
+    );
+  }
+  if (params.sort === 'ending_soon') {
+    extraSelects.push('a.ends_at');
+    extraJoins.push('LEFT JOIN auctions a ON a.listing_id = l.id');
+  }
+
   const orderBy =
     params.sort === 'price_asc'
       ? 'price_gbp ASC, l.id ASC'
       : params.sort === 'price_desc'
         ? 'price_gbp DESC, l.id DESC'
-        : 'l.created_at DESC, l.id DESC';
+        : params.sort === 'most_liked'
+          ? 'like_count DESC, l.id DESC'
+          : params.sort === 'ending_soon'
+            ? 'a.ends_at ASC NULLS LAST, l.id DESC'
+            : 'l.created_at DESC, l.id DESC';
 
   if (cursorData) {
     if (params.sort === 'price_asc') {
@@ -210,6 +233,12 @@ app.get('/listings', async (request) => {
       args.push(cursorData.sortValue, cursorData.id);
     } else if (params.sort === 'price_desc') {
       conditions.push(`(price_gbp, l.id) < ($${args.length + 1}, $${args.length + 2})`);
+      args.push(cursorData.sortValue, cursorData.id);
+    } else if (params.sort === 'most_liked') {
+      conditions.push(`(COALESCE(like_count, 0), l.id) < ($${args.length + 1}, $${args.length + 2})`);
+      args.push(cursorData.sortValue, cursorData.id);
+    } else if (params.sort === 'ending_soon') {
+      conditions.push(`(a.ends_at, l.id) > ($${args.length + 1}, $${args.length + 2})`);
       args.push(cursorData.sortValue, cursorData.id);
     } else {
       conditions.push(`(l.created_at, l.id) < ($${args.length + 1}, $${args.length + 2})`);
@@ -234,14 +263,19 @@ app.get('/listings', async (request) => {
     original_price_gbp: number | string | null;
     created_at: string;
     seller_username: string | null;
+    sustainability_grade: string | null;
+    like_count?: string | number | null;
+    ends_at?: string | null;
   }>(
     `
       SELECT
         l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
         l.status, l.category, l.brand, l.size, l.condition, l.original_price_gbp, l.created_at,
-        u.username AS seller_username
+        l.sustainability_grade,
+        u.username AS seller_username${extraSelects.length ? `, ${extraSelects.join(', ')}` : ''}
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
+      ${extraJoins.join('\n      ')}
       WHERE ${conditions.join(' AND ')}
       ORDER BY ${orderBy}
       LIMIT $${args.length + 1}
@@ -295,7 +329,11 @@ app.get('/listings', async (request) => {
     ? Buffer.from(JSON.stringify({
         sortValue: params.sort === 'price_asc' || params.sort === 'price_desc'
           ? Number(lastRow.price_gbp)
-          : lastRow.created_at,
+          : params.sort === 'most_liked'
+            ? Number(lastRow.like_count ?? 0)
+            : params.sort === 'ending_soon'
+              ? lastRow.ends_at ?? null
+              : lastRow.created_at,
         id: lastRow.id,
       })).toString('base64')
     : undefined;
@@ -323,6 +361,7 @@ app.get('/listings', async (request) => {
         condition: row.condition,
         originalPriceGbp: row.original_price_gbp === null ? null : Number(row.original_price_gbp),
         createdAt: row.created_at,
+        sustainabilityGrade: row.sustainability_grade,
         seller: row.seller_username
           ? {
               id: row.seller_id,
@@ -348,11 +387,12 @@ app.get('/search/listings', async (request) => {
     size: z.string().min(1).optional(),
     priceMin: z.coerce.number().min(0).optional(),
     priceMax: z.coerce.number().min(0).optional(),
+    sustainableOnly: z.coerce.boolean().optional().default(false),
     sort: z.enum(['relevance', 'recent', 'price_asc', 'price_desc']).default('relevance'),
     page: z.coerce.number().int().min(1).max(100).default(1),
   });
 
-  const { q, limit, category, condition, size, priceMin, priceMax, sort, page } =
+  const { q, limit, category, condition, size, priceMin, priceMax, sustainableOnly, sort, page } =
     querySchema.parse(request.query);
   const searchPolicyVersion = 'listing-search-postgres-v3.0';
   const startTime = Date.now();
@@ -366,6 +406,7 @@ app.get('/search/listings', async (request) => {
       size,
       priceMin,
       priceMax,
+      sustainableOnly,
     },
     sort,
     page,
@@ -376,7 +417,7 @@ app.get('/search/listings', async (request) => {
   const revalidate = async (): Promise<void> => {
     const freshResult = await computeSearchResults(
       readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
-      searchPolicyVersion,
+      searchPolicyVersion, sustainableOnly,
     );
     await setCachedSearchResult(redis, cacheParams, freshResult);
   };
@@ -405,7 +446,7 @@ app.get('/search/listings', async (request) => {
   // â”€â”€ Cache miss: compute results from DB â”€â”€
   const computed = await computeSearchResults(
     readDb, q, limit, category, condition, size, priceMin, priceMax, sort, page,
-    searchPolicyVersion,
+    searchPolicyVersion, sustainableOnly,
   );
 
   const responseTimeMs = Date.now() - startTime;
@@ -447,6 +488,7 @@ async function computeSearchResults(
   sort: string,
   page: number,
   searchPolicyVersion: string,
+  sustainableOnly: boolean,
 ): Promise<Omit<CachedSearchResult, 'cachedAt' | 'fromCache' | 'stale'>> {
   const offset = (page - 1) * limit;
 
@@ -474,6 +516,9 @@ async function computeSearchResults(
   if (priceMax !== undefined) {
     filterConditions.push(`l.price_gbp <= $${filterIdx++}`);
     filterArgs.push(priceMax);
+  }
+  if (sustainableOnly) {
+    filterConditions.push(`l.sustainability_grade IN ('A', 'B')`);
   }
 
   const filterClause = filterConditions.length > 0
@@ -1109,7 +1154,7 @@ app.post('/visual-search', async (request, reply) => {
     condition: z.string().optional(),
     minPrice: z.coerce.number().nonnegative().optional(),
     maxPrice: z.coerce.number().nonnegative().optional(),
-    sort: z.enum(['newest', 'price_asc', 'price_desc']).optional().default('newest'),
+    sort: z.enum(['newest', 'price_asc', 'price_desc', 'most_liked', 'ending_soon']).optional().default('newest'),
     limit: z.coerce.number().int().min(1).max(100).optional().default(48),
   });
   const payload = bodySchema.parse(request.body ?? {});
@@ -2344,6 +2389,8 @@ app.post('/listings', {
         originalPriceGbp: { type: 'number', minimum: 0 },
         shippingMethod: { type: 'string', minLength: 1 },
         shippingPayer: { type: 'string', minLength: 1 },
+        materialComposition: { type: 'string', minLength: 1, maxLength: 100 },
+        weightKg: { type: 'number', minimum: 0.01, maximum: 100 },
       },
     },
   },
@@ -2365,6 +2412,8 @@ app.post('/listings', {
     originalPriceGbp: z.number().nonnegative().optional(),
     shippingMethod: z.string().min(1).optional(),
     shippingPayer: z.string().min(1).optional(),
+    materialComposition: z.string().min(1).max(100).optional(),
+    weightKg: z.number().positive().max(100).optional(),
   });
 
   const payload = bodySchema.parse(request.body);
@@ -2376,6 +2425,15 @@ app.post('/listings', {
     reply.code(422);
     return { ok: false, error: 'A verified cover upload is required' };
   }
+
+  // Normalise taxonomy free-text against the canonical taxonomy_nodes set
+  // (name + synonyms) so casing/synonym drift collapses to one value before
+  // persistence. Unknown values pass through — lenient until backfill (P2 #25).
+  const taxonomyNormaliser = await getTaxonomyNormaliser(readDb);
+  payload.category = normaliseTaxonomyValue(taxonomyNormaliser.category, payload.category);
+  payload.brand = normaliseTaxonomyValue(taxonomyNormaliser.brand, payload.brand);
+  payload.size = normaliseTaxonomyValue(taxonomyNormaliser.size, payload.size);
+  payload.condition = normaliseTaxonomyValue(taxonomyNormaliser.condition, payload.condition);
 
   // Category-aware activation validation â€” only for active listings.
   // Drafts bypass validation so sellers can save incomplete work.
@@ -2517,9 +2575,10 @@ app.post('/listings', {
         INSERT INTO listings (
           id, seller_id, title, description, price_gbp, image_url,
           status, category, brand, size, condition,
-          original_price_gbp, shipping_method, shipping_payer
+          original_price_gbp, shipping_method, shipping_payer,
+          material_composition, weight_kg
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         ON CONFLICT (id) DO UPDATE
         SET title = EXCLUDED.title,
             description = EXCLUDED.description,
@@ -2533,6 +2592,8 @@ app.post('/listings', {
             original_price_gbp = EXCLUDED.original_price_gbp,
             shipping_method = EXCLUDED.shipping_method,
             shipping_payer = EXCLUDED.shipping_payer,
+            material_composition = EXCLUDED.material_composition,
+            weight_kg = EXCLUDED.weight_kg,
             updated_at = NOW()
         WHERE listings.seller_id = EXCLUDED.seller_id
         RETURNING id
@@ -2552,6 +2613,8 @@ app.post('/listings', {
         payload.originalPriceGbp ?? null,
         payload.shippingMethod ?? null,
         payload.shippingPayer ?? null,
+        payload.materialComposition ?? null,
+        payload.weightKg ?? null,
       ],
     );
     if (!inserted.rowCount) {
@@ -2728,6 +2791,35 @@ app.post('/listings', {
 
     await client.query('COMMIT');
 
+    // Compute sustainability grade from impact data (best-effort, non-blocking)
+    if (payload.materialComposition && payload.weightKg) {
+      try {
+        const impactResult = await calculateImpact(
+          {
+            material: payload.materialComposition,
+            weightKg: payload.weightKg,
+            category: payload.category ?? '',
+          },
+          db,
+        );
+        if (impactResult) {
+          const grade = impactResult.co2eAvoidedKg >= 20 ? 'A'
+            : impactResult.co2eAvoidedKg >= 10 ? 'B'
+            : impactResult.co2eAvoidedKg >= 1 ? 'C'
+            : 'D';
+          await db.query(
+            `UPDATE listings SET sustainability_grade = $1 WHERE id = $2`,
+            [grade, payload.id],
+          );
+        }
+      } catch (gradeError) {
+        request.log.warn(
+          { err: gradeError, listingId: payload.id },
+          'Failed to compute sustainability grade — listing saved without grade',
+        );
+      }
+    }
+
     if (upsertPriceEvent) {
       try {
         await evaluatePriceAlertsForListing({
@@ -2864,15 +2956,20 @@ app.get('/listings/:listingId', async (request, reply) => {
     shipping_method: string | null;
     shipping_payer: string | null;
     created_at: string;
+    updated_at: string | null;
     media_frozen_at: string | null;
     seller_username: string | null;
+    sustainability_grade: string | null;
+    material_composition: string | null;
+    weight_kg: string | null;
   }>(
     `
       SELECT
         l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
         l.status, l.category, l.brand, l.size, l.condition,
         l.original_price_gbp, l.shipping_method, l.shipping_payer, l.created_at,
-        l.media_frozen_at,
+        l.updated_at, l.media_frozen_at,
+        l.sustainability_grade, l.material_composition, l.weight_kg::text,
         u.username AS seller_username
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
@@ -2973,7 +3070,11 @@ app.get('/listings/:listingId', async (request, reply) => {
       shippingMethod: row.shipping_method,
       shippingPayer: row.shipping_payer,
       createdAt: row.created_at,
+      updatedAt: row.updated_at ?? row.created_at,
       mediaFrozenAt: row.media_frozen_at,
+      sustainabilityGrade: row.sustainability_grade,
+      materialComposition: row.material_composition,
+      weightKg: row.weight_kg === null ? null : Number(row.weight_kg),
       seller: row.seller_username
         ? {
             id: row.seller_id,
@@ -3086,6 +3187,116 @@ app.get('/policies/:policyKey', async (request, reply) => {
       publishedAt: policyRow.published_at,
     },
   };
+});
+
+// ── POST /listings/:listingId/view — record a listing view interaction ──
+// Feeds the `interactions` table so seller analytics (views, conversion
+// rate, top performers) have real data. Idempotent via a per-view
+// idempotency key. Self-views (seller viewing own listing) are skipped.
+app.post('/listings/:listingId/view', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+
+  // Optional auth — anonymous views are still useful for aggregate counts.
+  await optionalAuthenticate(request, '/listings/:listingId/view');
+  const viewerUserId = (request as any).authUser?.userId as string | undefined;
+
+  const bodySchema = z.object({
+    idempotencyKey: z.string().min(4).max(200).optional(),
+    qualified: z.boolean().optional(),
+  });
+  const body = bodySchema.parse(request.body ?? {});
+
+  // Verify the listing exists and is public
+  const listingResult = await readDb.query<{ seller_id: string; status: string }>(
+    `SELECT seller_id, status FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId],
+  );
+  if (!listingResult.rows[0]) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+
+  // Skip self-views — a seller viewing their own listing is not a
+  // meaningful engagement signal for their analytics.
+  if (viewerUserId && viewerUserId === listingResult.rows[0].seller_id) {
+    return { ok: true, recorded: false, reason: 'self_view' };
+  }
+
+  // Only record views for public listings
+  if (!['active', 'sold'].includes(listingResult.rows[0].status)) {
+    return { ok: true, recorded: false, reason: 'not_public' };
+  }
+
+  // Anonymous views use a synthetic user ID so the interaction is still
+  // recorded for aggregate counts. Authenticated views use the real ID.
+  const effectiveUserId = viewerUserId ?? `anon_${(request.ip ?? 'unknown').slice(0, 32)}`;
+  const action = body.qualified ? 'qualified_detail_view' : 'view';
+  const idempotencyKey = body.idempotencyKey ?? `view_${listingId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  try {
+    await db.query(
+      `INSERT INTO interactions (user_id, listing_id, action, strength, idempotency_key, created_at)
+       VALUES ($1, $2, $3, 1.0, $4, NOW())
+       ON CONFLICT DO NOTHING`,
+      [effectiveUserId, listingId, action, idempotencyKey],
+    );
+  } catch {
+    // Best-effort — analytics must never break the viewing flow.
+  }
+
+  return { ok: true, recorded: true };
+});
+
+// ── POST /listings/:listingId/interact — record a like/save/share ──
+// Feeds the `interactions` table for seller analytics engagement metrics.
+app.post('/listings/:listingId/interact', async (request, reply) => {
+  const paramsSchema = z.object({ listingId: z.string().min(2) });
+  const { listingId } = paramsSchema.parse(request.params);
+
+  await optionalAuthenticate(request, '/listings/:listingId/interact');
+  const userId = (request as any).authUser?.userId as string | undefined;
+
+  if (!userId) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required' };
+  }
+
+  const bodySchema = z.object({
+    action: z.enum(['like', 'save', 'share']),
+    idempotencyKey: z.string().min(4).max(200).optional(),
+  });
+  const body = bodySchema.parse(request.body ?? {});
+
+  // Verify the listing exists
+  const listingResult = await readDb.query<{ seller_id: string; status: string }>(
+    `SELECT seller_id, status FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId],
+  );
+  if (!listingResult.rows[0]) {
+    reply.code(404);
+    return { ok: false, error: 'Listing not found' };
+  }
+
+  // Skip self-interactions
+  if (userId === listingResult.rows[0].seller_id) {
+    return { ok: true, recorded: false, reason: 'self_interaction' };
+  }
+
+  const idempotencyKey = body.idempotencyKey ?? `${body.action}_${listingId}_${userId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  try {
+    await db.query(
+      `INSERT INTO interactions (user_id, listing_id, action, strength, idempotency_key, created_at)
+       VALUES ($1, $2, $3, 1.0, $4, NOW())
+       ON CONFLICT DO NOTHING`,
+      [userId, listingId, body.action, idempotencyKey],
+    );
+  } catch {
+    // Best-effort
+  }
+
+  return { ok: true, recorded: true };
 });
 
 app.get('/listings/:listingId/sold-comparables', async (request, reply) => {
@@ -4025,6 +4236,15 @@ app.patch('/listings/:listingId', async (request, reply) => {
   });
 
   const payload = bodySchema.parse(request.body);
+
+  // Normalise taxonomy free-text against the canonical taxonomy_nodes set
+  // (name + synonyms) so casing/synonym drift collapses to one value before
+  // persistence. Unknown values pass through — lenient until backfill (P2 #25).
+  const taxonomyNormaliser = await getTaxonomyNormaliser(readDb);
+  payload.category = normaliseTaxonomyValue(taxonomyNormaliser.category, payload.category);
+  payload.brand = normaliseTaxonomyValue(taxonomyNormaliser.brand, payload.brand);
+  payload.size = normaliseTaxonomyValue(taxonomyNormaliser.size, payload.size);
+  payload.condition = normaliseTaxonomyValue(taxonomyNormaliser.condition, payload.condition);
 
   const sets: string[] = [];
   const values: unknown[] = [];

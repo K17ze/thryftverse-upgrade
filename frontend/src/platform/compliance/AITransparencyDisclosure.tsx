@@ -26,11 +26,11 @@ import {
   Pressable,
   ScrollView,
   AccessibilityRole,
-  Linking,
-} from 'react-native';
+  Linking } from 'react-native';
 import { appStorage } from '../../storage/mmkv';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 const DISMISSED_KEY = '@thryftverse/ai_disclosure_dismissed';
 const DISMISSED_TIMESTAMP_KEY = '@thryftverse/ai_disclosure_dismissed_at';
@@ -63,39 +63,32 @@ const FEATURE_INFO: Record<AIFeature, FeatureInfo> = {
     title: 'Personalized Recommendations',
     description:
       'We use a recommendation engine that analyses your browsing history, likes, purchases, and saved items to suggest listings you may be interested in. The model runs on our servers and does not access your private messages.',
-    dataProcessed: ['Browsing history', 'Liked items', 'Purchase history', 'Saved searches'],
-  },
+    dataProcessed: ['Browsing history', 'Liked items', 'Purchase history', 'Saved searches'] },
   search: {
     title: 'AI-Powered Search',
     description:
       'Search results are ranked using a machine learning model that considers relevance, listing quality, and your past interactions. The search index is rebuilt periodically from listing data.',
-    dataProcessed: ['Search queries', 'Click-through data', 'Listing metadata'],
-  },
+    dataProcessed: ['Search queries', 'Click-through data', 'Listing metadata'] },
   'image-labeling': {
     title: 'On-Device Image Labeling',
     description:
       'When you upload photos, we use on-device ML Kit to suggest tags and categories. Image processing happens entirely on your device — no images are sent to our servers for labeling.',
-    dataProcessed: ['Local image data (on-device only)'],
-  },
+    dataProcessed: ['Local image data (on-device only)'] },
   'conversational-search': {
     title: 'Conversational AI Search',
     description:
       'You can search using natural language. Your query is sent to our AI service, which interprets intent and returns relevant listings. Queries are not stored beyond the session.',
-    dataProcessed: ['Search query text', 'Session ID'],
-  },
+    dataProcessed: ['Search query text', 'Session ID'] },
   'price-prediction': {
     title: 'Price Predictions',
     description:
       'For Co-Own assets, we display AI-generated price predictions based on historical market data. These are estimates, not financial advice, and should not be the sole basis for investment decisions.',
-    dataProcessed: ['Historical price data', 'Market indicators'],
-  },
+    dataProcessed: ['Historical price data', 'Market indicators'] },
   'fraud-detection': {
     title: 'Fraud Detection',
     description:
       'We use automated systems to detect potentially fraudulent activity. These systems analyse transaction patterns, listing content, and account behaviour. Suspicious activity is flagged for human review.',
-    dataProcessed: ['Transaction patterns', 'Account metadata', 'Listing content'],
-  },
-};
+    dataProcessed: ['Transaction patterns', 'Account metadata', 'Listing content'] } };
 
 const ALL_FEATURES: AIFeature[] = [
   'recommendations',
@@ -147,8 +140,7 @@ export function resetAIDisclosureDismissed(): void {
 export function AITransparencyDisclosure({
   features = ALL_FEATURES,
   visible,
-  onDismiss,
-}: AITransparencyDisclosureProps): React.JSX.Element | null {
+  onDismiss }: AITransparencyDisclosureProps): React.JSX.Element | null {
   const { colors } = useAppTheme();
   const [expandedFeature, setExpandedFeature] = useState<AIFeature | null>(null);
 
@@ -178,139 +170,115 @@ export function AITransparencyDisclosure({
     overlay: {
       flex: 1,
       backgroundColor: colors.overlay,
-      justifyContent: 'flex-end',
-    },
+      justifyContent: 'flex-end' },
     sheet: {
       backgroundColor: colors.surface,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
       maxHeight: '85%',
-      paddingBottom: 34,
-    },
+      paddingBottom: 34 },
     header: {
       paddingHorizontal: Space.lg,
       paddingTop: Space.lg,
-      paddingBottom: 12,
-    },
+      paddingBottom: 12 },
     handle: {
       width: 40,
       height: 4,
       borderRadius: 2,
       backgroundColor: colors.border,
       alignSelf: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     title: {
-      fontSize: 24,
+      fontSize: TypographyV2.screenTitle.size,
       fontWeight: '700',
       color: colors.textPrimary,
-      marginBottom: 6,
-    },
+      marginBottom: 6 },
     subtitle: {
-      fontSize: 15,
+      fontSize: TypographyV2.bodyStrong.size,
       color: colors.textSecondary,
-      lineHeight: 21,
-    },
+      lineHeight: TypographyV2.bodyStrong.lineHeight },
     sectionLabel: {
-      fontSize: 13,
+      fontSize: TypographyV2.label.size,
       fontWeight: '600',
       color: colors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
       paddingHorizontal: Space.lg,
       paddingTop: 20,
-      paddingBottom: 8,
-    },
+      paddingBottom: 8 },
     featureRow: {
       paddingHorizontal: Space.lg,
       paddingVertical: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     featureTitle: {
-      fontSize: 17,
+      fontSize: TypographyV2.sectionTitle.size,
       fontWeight: '600',
       color: colors.textPrimary,
-      marginBottom: 4,
-    },
+      marginBottom: 4 },
     featureDescription: {
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       color: colors.textSecondary,
-      lineHeight: 20,
-    },
+      lineHeight: TypographyV2.body.lineHeight },
     dataLabel: {
-      fontSize: 13,
+      fontSize: TypographyV2.meta.size,
       fontWeight: '500',
       color: colors.textMuted,
       marginTop: 8,
-      marginBottom: 4,
-    },
+      marginBottom: 4 },
     dataChip: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 6,
-    },
+      gap: 6 },
     chip: {
       backgroundColor: colors.surfaceAlt,
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderRadius: 8,
       marginRight: 6,
-      marginBottom: 4,
-    },
+      marginBottom: 4 },
     chipText: {
-      fontSize: 12,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      color: colors.textSecondary },
     controlsSection: {
       paddingHorizontal: Space.lg,
-      paddingTop: 20,
-    },
+      paddingTop: 20 },
     controlItem: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: 14,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     controlText: {
-      fontSize: 15,
+      fontSize: TypographyV2.bodyStrong.size,
       color: colors.textPrimary,
-      flex: 1,
-    },
+      flex: 1 },
     controlChevron: {
-      fontSize: 18,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      color: colors.textMuted },
     contactSection: {
       paddingHorizontal: Space.lg,
       paddingTop: 20,
-      paddingBottom: 8,
-    },
+      paddingBottom: 8 },
     contactText: {
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       color: colors.textSecondary,
-      lineHeight: 20,
-    },
+      lineHeight: TypographyV2.body.lineHeight },
     buttonRow: {
       flexDirection: 'row',
       paddingHorizontal: Space.lg,
       paddingTop: Space.lg,
-      gap: 12,
-    },
+      gap: 12 },
     primaryButton: {
       flex: 1,
       backgroundColor: colors.brand,
       paddingVertical: Space.md,
-      borderRadius: 14,
-      alignItems: 'center',
-    },
+      borderRadius: Radius.xl,
+      alignItems: 'center' },
     primaryButtonText: {
-      fontSize: 17,
+      fontSize: TypographyV2.sectionTitle.size,
       fontWeight: '600',
-      color: colors.textInverse,
-    },
-  });
+      color: colors.textInverse } });
 
   return (
     <Modal visible={visible} transparent animationType="slide" accessible accessibilityRole={summaryRole}>

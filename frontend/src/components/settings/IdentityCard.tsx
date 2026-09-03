@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { User } from '../../store/useStore';
@@ -52,7 +53,7 @@ export function IdentityCard({ user, onPress, variant = 'default' }: IdentityCar
             <Text style={[styles.meta, { color: colors.textSecondary }]}>{isCommanding ? 'Tap to edit your profile' : 'Account details, privacy and security'}</Text>
           )}
           {user?.isVerified && (
-            <View style={[styles.verifiedRow, { backgroundColor: `${colors.success}18` }]}>
+            <View style={[styles.verifiedRow, { backgroundColor: colors.successSubtle }]}>
               <Ionicons name="checkmark-circle" size={12} color={colors.success} />
               <Text style={[styles.verifiedLabel, { color: colors.success }]}>Verified</Text>
             </View>
@@ -72,46 +73,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: Space.md,
-    gap: Space.md,
-  },
+    gap: Space.md },
   avatar: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_RADIUS,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   avatarImage: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
-    borderRadius: AVATAR_RADIUS,
-  },
+    borderRadius: AVATAR_RADIUS },
   avatarFallback: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_RADIUS,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   avatarInitial: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily },
   text: {
-    flex: 1,
-  },
+    flex: 1 },
   name: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-    lineHeight: Type.subtitle.lineHeight,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    lineHeight: TypographyV2.sectionTitle.lineHeight },
   meta: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: 2,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   verifiedRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -120,50 +113,40 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs / 2,
     paddingHorizontal: Space.xs + 2,
     borderRadius: Radius.sm,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   verifiedLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   rootCommanding: {
     paddingVertical: Space.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   avatarLarge: {
     width: Space.xxl + Space.xxl + Space.xs,
     height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.full,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   avatarImageLarge: {
     width: Space.xxl + Space.xxl + Space.xs,
     height: Space.xxl + Space.xxl + Space.xs,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   avatarFallbackLarge: {
     width: Space.xxl + Space.xxl + Space.xs,
     height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   avatarInitialLarge: {
-    fontSize: Type.display.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.display.size,
+    fontFamily: TypographyV2.display.fontFamily },
   nameLarge: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
+    lineHeight: TypographyV2.screenTitle.lineHeight },
   handle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: 2,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
-});
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight } });

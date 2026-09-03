@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable, BackHandler } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Radius, Space, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 export interface NativeMenuOption {
   label: string;
   onPress: () => void;
@@ -67,33 +68,22 @@ function createStyles(colors: ThemeColors) {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.overlay,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   menu: {
     backgroundColor: colors.surface,
     borderRadius: Radius.xl,
     paddingVertical: Space.xs,
     minWidth: 200,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
+    ...Elevation.modal },
   option: {
     paddingVertical: 12,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   optionText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   optionTextDestructive: {
-    color: colors.danger,
-  },
+    color: colors.danger },
   optionTextDisabled: {
-    color: colors.textMuted,
-  },
-  });
+    color: colors.textMuted } });
 }

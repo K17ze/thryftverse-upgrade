@@ -9,7 +9,7 @@ import Reanimated, {
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../theme/motionTokens';
-import { Typography, Space } from '../theme/designTokens';
+import { Typography, Space, Stroke} from '../theme/designTokens';
 
 interface AnimatedBadgeProps {
   count: number;
@@ -73,7 +73,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     position: 'absolute',
     top: -4,
     right: -4,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
     borderColor: colors.background,
   },
   text: {

@@ -1,13 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
-import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
-export type AppEmptyStateVariant = 'default' | 'compact' | 'illustrated';
+export type AppEmptyStateVariant = 'default' | 'compact';
 
 export interface AppEmptyStateProps {
   icon?: React.ReactNode;
@@ -19,8 +18,8 @@ export interface AppEmptyStateProps {
 }
 
 /**
- * Unified empty-state primitive covering default, compact, and illustrated
- * variants. Replaces the fragmented EmptyState and AnimatedEmptyState
+ * Unified empty-state primitive covering default and compact variants.
+ * Replaces the fragmented EmptyState and AnimatedEmptyState
  * implementations with a single accessible component backed by design
  * tokens. The optional `icon` slot accepts any ReactNode (Ionicons name,
  * Lottie animation, or custom graphic) so callers control the visual
@@ -32,24 +31,12 @@ export function AppEmptyState({
   description,
   action,
   variant = 'default',
-  style,
-}: AppEmptyStateProps) {
-  const { colors } = useAppTheme();
+  style }: AppEmptyStateProps) {
   const reducedMotion = useReducedMotion();
   const enter = reducedMotion ? undefined : FadeIn.duration(300);
   const compact = variant === 'compact';
-  const illustrated = variant === 'illustrated';
 
-  const renderIcon = () => {
-    if (icon) return icon;
-    return (
-      <Ionicons
-        name="cube-outline"
-        size={compact ? 24 : 38}
-        color={colors.brand}
-      />
-    );
-  };
+  // No icon rendered unless a caller provides one — avoids decorative defaults.
 
   return (
     <View
@@ -57,16 +44,14 @@ export function AppEmptyState({
       accessibilityRole="summary"
       accessibilityLabel={title}
     >
-      <Reanimated.View
-        entering={enter}
-        style={[
-          styles.iconRing,
-          compact && styles.iconRingCompact,
-          illustrated && styles.iconRingIllustrated,
-        ]}
-      >
-        {renderIcon()}
-      </Reanimated.View>
+      {icon ? (
+        <Reanimated.View
+          entering={enter}
+          style={{ alignItems: 'center', marginBottom: compact ? Space.sm : Space.md }}
+        >
+          {icon}
+        </Reanimated.View>
+      ) : null}
 
       <Reanimated.Text
         entering={enter}
@@ -100,62 +85,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: Space.xl + Space.sm,
     paddingVertical: Space.xxl + Space.sm,
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   containerCompact: {
     flex: 0,
     minHeight: 228,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md + Space.sm,
-    gap: Space.xs + 2,
-  },
-  iconRing: {
-    width: 96,
-    height: 96,
-    borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Space.md,
-  },
-  iconRingCompact: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.full,
-    marginBottom: Space.sm,
-  },
-  iconRingIllustrated: {
-    borderWidth: 0,
-    width: 'auto',
-    height: 'auto',
-    borderRadius: 0,
-    marginBottom: Space.md,
-  },
+    gap: Space.xs + 2 },
   title: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
     letterSpacing: -0.2,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   titleCompact: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight },
   description: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: 0.08,
     textAlign: 'center',
-    lineHeight: Type.body.lineHeight + 1,
-    maxWidth: 260,
-  },
+    lineHeight: TypographyV2.body.lineHeight + 1,
+    maxWidth: 260 },
   descriptionCompact: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 1,
-    maxWidth: 310,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 1,
+    maxWidth: 310 },
   actionWrap: {
-    marginTop: Space.md + 4,
-  },
-});
+    marginTop: Space.md + 4 } });

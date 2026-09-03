@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
+import { Space, Radius, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { SupportMessage as SupportMessageType } from '../../contracts/support';
 import { SupportEvidenceRow } from './SupportEvidenceRow';
 
@@ -91,29 +92,25 @@ function createStyles(colors: ThemeColors) {
     systemWrap: {
       alignItems: 'center',
       paddingVertical: Space.sm,
-      paddingHorizontal: Space.lg,
-    },
+      paddingHorizontal: Space.lg },
     systemText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       textAlign: 'center',
-      lineHeight: Type.caption.lineHeight + 2,
-    },
+      lineHeight: TypographyV2.meta.lineHeight + 2 },
 
     // ── Rows ──
     customerRow: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     otherRow: {
       flexDirection: 'row',
       justifyContent: 'flex-start',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
 
     // ── Bubbles ──
     customerBubble: {
@@ -121,56 +118,48 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.brand,
       borderRadius: Radius.chat,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm + Space.xs,
-    },
+      paddingVertical: Space.sm + Space.xs },
     otherBubble: {
       maxWidth: '78%',
       backgroundColor: colors.surface,
       borderRadius: Radius.chat,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm + Space.xs,
-    },
+      paddingVertical: Space.sm + Space.xs },
 
     // ── Author label ──
     authorLabel: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       color: colors.textSecondary,
-      letterSpacing: Type.meta.letterSpacing,
-      marginBottom: Space.xs / 2,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginBottom: Space.xs / 2 },
 
     // ── Body text ──
     customerText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textInverse,
-      lineHeight: Type.body.lineHeight + 2,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      lineHeight: TypographyV2.body.lineHeight + 2,
+      letterSpacing: TypographyV2.body.letterSpacing },
     otherText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textPrimary,
-      lineHeight: Type.body.lineHeight + 2,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      lineHeight: TypographyV2.body.lineHeight + 2,
+      letterSpacing: TypographyV2.body.letterSpacing },
 
     // ── Timestamp ──
     customerTime: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textInverse,
       opacity: 0.7,
       marginTop: Space.xs / 2,
-      alignSelf: 'flex-end',
-    },
+      alignSelf: 'flex-end' },
     otherTime: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       marginTop: Space.xs / 2,
-      alignSelf: 'flex-end',
-    },
-  });
+      alignSelf: 'flex-end' } });
 }

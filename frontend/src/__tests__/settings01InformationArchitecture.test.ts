@@ -383,6 +383,43 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     const navSrc = readSrc('navigation/types.ts');
     const appNavSrc = readSrc('navigation/AppNavigator.tsx');
 
+    // ── Comprehensive route registration audit (item-26 Phase 1) ──
+    // Every route declared in RootStackParamList MUST be registered as a
+    // <Stack.Screen> in AppNavigator. This prevents the crash-on-navigate
+    // class of defects where a route is declared and navigated to but never
+    // registered.
+    it('registers every ROOT_STACK_ROUTES entry as a Stack.Screen', () => {
+      // Extract the ROOT_STACK_ROUTES array from types.ts
+      const routesMatch = navSrc.match(
+        /export const ROOT_STACK_ROUTES\s*=\s*\[([\s\S]*?)\] as const;/,
+      );
+      expect(routesMatch).not.toBeNull();
+      const routeNames = (routesMatch![1]
+        .match(/'([^']+)'/g) ?? [])
+        .map((s) => s.replace(/'/g, ''));
+
+      expect(routeNames.length).toBeGreaterThan(0);
+
+      // RuntimeSmokeTest is dev-only — it's conditionally registered
+      const devOnlyRoutes = new Set(['RuntimeSmokeTest']);
+
+      const missing: string[] = [];
+      for (const route of routeNames) {
+        if (devOnlyRoutes.has(route)) continue;
+        // Check for either name="RouteName" or name='RouteName'
+        const pattern = new RegExp(`name=["']${route}["']`);
+        if (!pattern.test(appNavSrc)) {
+          missing.push(route);
+        }
+      }
+
+      if (missing.length > 0) {
+        // eslint-disable-next-line no-console
+        console.error('Missing route registrations:', missing);
+      }
+      expect(missing).toEqual([]);
+    });
+
     it('has AccountControl route type', () => {
       expect(navSrc).toContain('AccountControl: undefined');
     });

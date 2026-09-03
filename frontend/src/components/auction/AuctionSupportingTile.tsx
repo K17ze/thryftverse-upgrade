@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AuctionValueLockup } from './AuctionValueLockup';
@@ -25,7 +26,7 @@ interface Props {
   cardWidth?: number;
 }
 
-export function AuctionSupportingTile({
+function AuctionSupportingTileBase({
   title,
   imageUrl,
   brand,
@@ -36,8 +37,7 @@ export function AuctionSupportingTile({
   state,
   viewerState,
   onPress,
-  cardWidth,
-}: Props) {
+  cardWidth }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   return (
@@ -80,27 +80,27 @@ export function AuctionSupportingTile({
   );
 }
 
+const AuctionSupportingTile = React.memo(AuctionSupportingTileBase);
+AuctionSupportingTile.displayName = 'AuctionSupportingTile';
+export { AuctionSupportingTile };
+
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   card: {
     flex: 1,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   imageWrap: {
     position: 'relative',
     aspectRatio: 4 / 3,
     borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   imageContainer: {
     borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   image: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   liveDot: {
     position: 'absolute',
     top: Space.xs,
@@ -108,8 +108,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     width: 7,
     height: 7,
     borderRadius: Radius.full,
-    backgroundColor: colors.danger,
-  },
+    backgroundColor: colors.danger },
   outbidDot: {
     position: 'absolute',
     top: Space.xs,
@@ -117,29 +116,23 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     width: 7,
     height: 7,
     borderRadius: Radius.full,
-    backgroundColor: colors.danger,
-  },
+    backgroundColor: colors.danger },
   body: {
     paddingTop: Space.xs,
-    gap: 1,
-  },
+    gap: 1 },
   brand: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textPrimary,
     letterSpacing: -0.2,
-    lineHeight: 16,
-  },
+    lineHeight: 16 },
   time: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
-  },
-});
+    fontVariant: ['tabular-nums'] } });

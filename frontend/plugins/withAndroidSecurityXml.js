@@ -138,18 +138,17 @@ function buildNetworkSecurityConfig() {
     </domain-config>
 
     <debug-overrides>
-        <domain-config cleartextTrafficPermitted="true">
-            <domain includeSubdomains="false">localhost</domain>
-            <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- In debug builds (android:debuggable="true"), allow cleartext to
+             any host so the Expo dev client can connect to the Metro bundler
+             on the host machine's LAN IP (e.g. 192.168.x.x:8081) and the
+             local API at 10.0.2.2:4000. This override does NOT apply to
+             release/production builds. -->
+        <base-config cleartextTrafficPermitted="true">
             <trust-anchors>
                 <certificates src="system"/>
                 <certificates src="user"/>
             </trust-anchors>
-        </domain-config>
-        <trust-anchors>
-            <certificates src="system"/>
-            <certificates src="user"/>
-        </trust-anchors>
+        </base-config>
     </debug-overrides>
 </network-security-config>`;
 }

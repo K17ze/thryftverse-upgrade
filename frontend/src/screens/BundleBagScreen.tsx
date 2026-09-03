@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -16,29 +17,9 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'BundleBag'>;
-
-interface BundleTier {
-  itemCount: number;
-  discountPercent: number;
-  label: string;
-}
-
-const BUNDLE_TIERS: BundleTier[] = [
-  { itemCount: 2, discountPercent: 10, label: '2 items: 10% off' },
-  { itemCount: 3, discountPercent: 15, label: '3 items: 15% off' },
-  { itemCount: 5, discountPercent: 20, label: '5+ items: 20% off' },
-];
-
-function getBundleDiscount(selectedCount: number): number {
-  if (selectedCount >= 5) return 20;
-  if (selectedCount >= 3) return 15;
-  if (selectedCount >= 2) return 10;
-  return 0;
-}
 
 export default function BundleBagScreen() {
   const { colors } = useAppTheme();
@@ -47,7 +28,7 @@ export default function BundleBagScreen() {
   const route = useRoute<RouteT>();
   const { sellerId, sellerName } = route.params ?? { sellerId: '', sellerName: '' };
   const { listings, isSyncing, refreshListings } = useBackendData();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
   const { show } = useToast();
 
@@ -66,10 +47,10 @@ export default function BundleBagScreen() {
     return selectedItems.reduce((sum, l) => sum + l.price, 0);
   }, [selectedItems]);
 
-  const discountPercent = getBundleDiscount(selectedItems.length);
-  const discountAmount = (subtotal * discountPercent) / 100;
-  const combinedShipping = selectedItems.length > 0 ? 3.99 : 0;
-  const total = subtotal - discountAmount + combinedShipping;
+  // Shipping is not available from the backend for bundle orders — do not
+  // fabricate a number. Show "Calculated at checkout" in the summary instead.
+  // Bundle discounts are not supported by the backend — do not fabricate tiers.
+  const total = subtotal;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -92,11 +73,12 @@ export default function BundleBagScreen() {
 
   const handleCheckout = () => {
     if (selectedItems.length < 2) {
-      show('Select at least 2 items to get bundle savings.', 'info');
+      show('Select at least 2 items to create a bundle.', 'info');
       return;
     }
-    show(`Bundle checkout for ${selectedItems.length} items — £${total.toFixed(2)} total. Proceeding to checkout.`, 'success');
-    // Navigate to the first item's checkout — in production this would be a multi-item checkout
+    // Bundle checkout (multi-item) is not supported by the backend. Be honest
+    // with the user instead of silently checking out only the first item.
+    show('Checkout each item individually. Starting with the first selected item.', 'info');
     navigation.navigate('Checkout', { itemId: selectedItems[0].id });
   };
 
@@ -123,7 +105,7 @@ export default function BundleBagScreen() {
         )}
         <View style={styles.itemInfo}>
           <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.itemPrice}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+          <Text style={styles.itemPrice}>{formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}</Text>
           {item.size && <Text style={styles.itemMeta}>Size: {item.size}</Text>}
         </View>
       </AnimatedPressable>
@@ -156,12 +138,9 @@ export default function BundleBagScreen() {
         </View>
       ) : (
         <View style={styles.body}>
-          {/* Hero summary — bundle status */}
-          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {/* Hero summary — flat, no card */}
+          <View style={styles.heroWrap}>
             <View style={styles.heroRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="storefront" size={18} color={colors.textInverse} />
-              </View>
               <View style={styles.heroText}>
                 <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
                   {selectedItems.length} selected
@@ -170,40 +149,14 @@ export default function BundleBagScreen() {
                   {sellerListings.length} items from {sellerName ?? 'this seller'}
                 </Text>
               </View>
-              {discountPercent > 0 && (
-                <View style={[styles.heroBadge, { backgroundColor: colors.brandSubtle }]}>
-                  <Text style={[styles.heroBadgeText, { color: colors.brand }]}>{discountPercent}% off</Text>
-                </View>
-              )}
             </View>
-          </View>
-
-          {/* Bundle tier hints */}
-          <View style={styles.tiersRow}>
-            {BUNDLE_TIERS.map((tier) => {
-              const achieved = selectedItems.length >= tier.itemCount;
-              return (
-                <View
-                  key={tier.itemCount}
-                  style={[styles.tierChip, achieved && styles.tierChipActive]}
-                >
-                  <Ionicons
-                    name={achieved ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={12}
-                    color={achieved ? colors.brand : colors.textMuted}
-                  />
-                  <Text style={[styles.tierChipText, achieved && styles.tierChipTextActive]}>
-                    {tier.label}
-                  </Text>
-                </View>
-              );
-            })}
           </View>
 
           <FlashList
             data={sellerListings}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
+            ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
             contentContainerStyle={styles.list}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             // Performance: bundle bags can list many seller items; FlashList
@@ -215,24 +168,18 @@ export default function BundleBagScreen() {
             <View style={styles.footer}>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Subtotal ({selectedItems.length} items)</Text>
-                <Text style={styles.summaryValue}>{formatFromFiat(subtotal, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.summaryValue}>{formatFromFiat(subtotal, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
-              {discountAmount > 0 && (
-                <View style={styles.summaryRow}>
-                  <Text style={[styles.summaryLabel, { color: colors.brand }]}>Bundle discount ({discountPercent}%)</Text>
-                  <Text style={[styles.summaryValue, { color: colors.brand }]}>-{formatFromFiat(discountAmount, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
-                </View>
-              )}
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Combined shipping</Text>
-                <Text style={styles.summaryValue}>{formatFromFiat(combinedShipping, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.summaryLabel}>Shipping</Text>
+                <Text style={styles.summaryValue}>Calculated at checkout</Text>
               </View>
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>{formatFromFiat(total, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.totalValue}>{formatFromFiat(total, currencyCode, { displayMode: 'fiat' })}</Text>
               </View>
               <AppButton
-                title={selectedItems.length < 2 ? 'Select 2+ for bundle savings' : `Checkout bundle · ${formatFromFiat(total, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
+                title={selectedItems.length < 2 ? 'Select 2+ items' : `Checkout · ${formatFromFiat(total, currencyCode, { displayMode: 'fiat' })}`}
                 variant="primary"
                 size="lg"
                 style={styles.checkoutBtn}
@@ -251,106 +198,44 @@ export default function BundleBagScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    marginBottom: Space.sm,
-  },
+  heroWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm },
   heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xl + 8,
-    height: Space.xl + 8,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+    gap: Space.md },
   heroText: { flex: 1 },
   heroTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   heroSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-  },
-  heroBadge: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-  },
-  heroBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs / 2 },
   loadingBody: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   body: {
-    flex: 1,
-  },
-  tiersRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
-  tierChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs + 1,
-    borderRadius: Radius.xl,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  tierChipActive: {
-    borderColor: colors.brand,
-    backgroundColor: `${colors.brand}10`,
-  },
-  tierChipText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
-  tierChipTextActive: {
-    color: colors.brand,
-    fontFamily: Typography.family.semibold,
-  },
+    flex: 1 },
   list: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    gap: Space.sm,
-    paddingBottom: 300,
-  },
+    paddingBottom: 300 },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    paddingVertical: Space.sm + 2 },
   itemRowSelected: {
-    borderColor: colors.brand,
-    backgroundColor: `${colors.brand}08`,
-  },
+    backgroundColor: colors.brandSubtle },
+  itemSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderSubtle },
   checkbox: {
     width: Space.lg,
     height: Space.lg,
@@ -358,41 +243,33 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.emphasis,
     borderColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   checkboxChecked: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   itemImage: {
     width: Space.xxl + Space.sm,
     height: Space.xxl + Space.sm,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   itemImagePlaceholder: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemInfo: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   itemTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   itemPrice: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    color: colors.textPrimary },
   itemMeta: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -403,43 +280,34 @@ function createStyles(colors: ThemeColors) {
     borderTopColor: colors.border,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Space.xs / 2,
-  },
+    paddingVertical: Space.xs / 2 },
   summaryLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   summaryValue: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   totalRow: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     marginTop: Space.xs,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   totalLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   totalValue: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    color: colors.textPrimary },
   checkoutBtn: {
     marginTop: Space.sm,
-    width: '100%',
-  },
-  });
+    width: '100%' } });
 }

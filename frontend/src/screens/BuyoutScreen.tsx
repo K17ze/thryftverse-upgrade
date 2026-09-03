@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TextInput, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -10,17 +10,18 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { parseApiError } from '../lib/apiClient';
-import { fetchCoOwnAssetById, fetchCoOwnHoldings, createCoOwnBuyoutOffer } from '../services/marketApi';
+import { fetchCoOwnAssetById, fetchCoOwnHoldings, createCoOwnBuyoutOffer, MarketCoOwnAsset } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { CachedImage } from '../components/CachedImage';
-import { Space, Radius, Type, Typography, DockConstants, Stroke } from '../theme/designTokens';
+import { Space, Radius, DockConstants, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import {
   CoOwnStateCanvas,
-  CoOwnStickyActionDock,
-} from '../components/coown';
+  CoOwnStickyActionDock } from '../components/coown';
 
 type RouteT = RouteProp<RootStackParamList, 'Buyout'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -33,13 +34,13 @@ export default function BuyoutScreen() {
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencySymbol } = useFormattedPrice();
   const { width: screenWidth } = useWindowDimensions();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
 
   const buyoutAssetId = route.params?.assetId;
 
-  const [asset, setAsset] = React.useState<any>(null);
+  const [asset, setAsset] = React.useState<MarketCoOwnAsset | null>(null);
   const [sharesOwned, setSharesOwned] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
@@ -48,6 +49,15 @@ export default function BuyoutScreen() {
   const [offerPrice, setOfferPrice] = React.useState('');
   const [targetUnits, setTargetUnits] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   React.useEffect(() => {
     if (!buyoutAssetId) { setIsLoading(false); setIsError(true); return; }
@@ -97,38 +107,33 @@ export default function BuyoutScreen() {
       return;
     }
 
-    Alert.alert(
-      'Submit buyout offer?',
-      `Offer £${priceNum.toFixed(2)}${unitsNum ? ` for ${unitsNum} units` : ' for remaining units'}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit offer',
-          style: 'default',
-          onPress: async () => {
-            setSubmitting(true);
-            try {
-              await createCoOwnBuyoutOffer(asset.id, {
-                bidderUserId: currentUser.id,
-                offerPriceGbp: priceNum,
-                targetUnits: unitsNum,
-              });
-              haptics.success();
-              show('Buyout offer submitted', 'success');
-              setOfferPrice('');
-              setTargetUnits('');
-              navigation.replace('AssetDetail', { assetId: asset.id });
-            } catch (err) {
-              const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
-              const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Failed to submit buyout offer');
-              show(parsed.message, 'error');
-            } finally {
-              setSubmitting(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Submit buyout offer?',
+      message: `Offer ${currencySymbol}${priceNum.toFixed(2)}${unitsNum ? ` for ${unitsNum} units` : ' for remaining units'}?`,
+      confirmLabel: 'Submit offer',
+      cancelLabel: 'Cancel',
+      onConfirm: async () => {
+        setSubmitting(true);
+        try {
+          await createCoOwnBuyoutOffer(asset.id, {
+            bidderUserId: currentUser.id,
+            offerPriceGbp: priceNum,
+            targetUnits: unitsNum });
+          haptics.success();
+          show('Buyout offer submitted', 'success');
+          setOfferPrice('');
+          setTargetUnits('');
+          navigation.replace('AssetDetail', { assetId: asset.id });
+        } catch (err) {
+          const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
+          const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : 'Failed to submit buyout offer');
+          show(parsed.message, 'error');
+        } finally {
+          setSubmitting(false);
+        }
+      },
+      variant: 'default' });
   }, [asset, currentUser?.id, offerPrice, targetUnits, navigation, show]);
 
   if (isLoading) {
@@ -238,7 +243,7 @@ export default function BuyoutScreen() {
         {/* Buyout offer form — flat section */}
         {!ownsAll && (
           <View style={styles.formSection}>
-            <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Offer price (£)</Text>
+            <Text style={[styles.formLabel, { color: colors.textSecondary }]}>Offer price ({currencySymbol})</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.textPrimary }]}
               value={offerPrice}
@@ -301,6 +306,17 @@ export default function BuyoutScreen() {
           </View>
         )}
       </CoOwnStickyActionDock>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }
@@ -308,83 +324,67 @@ export default function BuyoutScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   image: {
     width: '100%',
     borderRadius: Radius.lg,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   title: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing + 0.1,
-    lineHeight: Type.title.lineHeight,
-    marginBottom: Space.md,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing + 0.1,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    marginBottom: Space.md },
   positionSection: {
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   positionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   positionRowLast: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   positionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   positionValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   statusSection: {
     paddingVertical: Space.lg,
     gap: Space.sm,
     alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   statusTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing + 0.1,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing + 0.1,
+    textAlign: 'center' },
   statusBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight,
+    textAlign: 'center' },
   formSection: {
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   formLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginBottom: Space.xs },
   input: {
     borderWidth: Stroke.standard,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'] },
   formHint: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs } });

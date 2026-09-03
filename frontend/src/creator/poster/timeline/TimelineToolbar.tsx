@@ -13,6 +13,9 @@ import { PressScale } from '../../CreatorAnimations';
 import { formatTimecode, type PosterClip } from './TimelineTypes';
 import { getToolLabel, getSliderLabel } from '../../core/a11y/CanvasAccessibilityLabels';
 
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
+
 // ───────────────────────────────────────────────────────────────────────────
 // TimelineToolbar — context-sensitive toolbar for the selected clip.
 //
@@ -83,7 +86,13 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
             accessibilityState={{ selected: isPlaying }}
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name={isPlaying ? 'pause' : 'play'} size={IconGrammar.metadata} color={colors.textPrimary} />
+            <AppIcon
+              name={isPlaying ? 'pause' : 'play'}
+              size={IconSize.sm}
+              color="textPrimary"
+              opticalCenter={true}
+              accessible={false}
+            />
           </PressScale>
           <Text style={[toolbarStyles.timecode, { color: colors.textSecondary }]}>
             {formatTimecode(currentTimeMs ?? 0)} / {formatTimecode(totalDurationMs ?? 0)}
@@ -119,6 +128,7 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
           min={SPEED_MIN}
           max={SPEED_MAX}
           step={0.25}
+          neutralValue={1}
           formatValue={(v) => `${v.toFixed(2)}x`}
           color={colors.brand}
           onChange={onSpeedChange}
@@ -156,7 +166,7 @@ export const TimelineToolbar = React.memo(function TimelineToolbar({
 
 // ── Tool button ───────────────────────────────────────────────────────
 interface ToolButtonProps {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: string;
   label: string;
   a11yLabel?: string;
   onPress: () => void;
@@ -186,7 +196,7 @@ const ToolButton = React.memo(function ToolButton({
       accessibilityRole="button"
       hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
     >
-      <Ionicons name={icon} size={IconGrammar.standard} color={tint} />
+      <AppIcon name={icon} size={IconSize.lg} color={danger ? 'danger' : 'textPrimary'} opticalCenter={true} accessible={false} />
       <Text style={[toolbarStyles.toolLabel, { color: tint }]} numberOfLines={1}>
         {label}
       </Text>
@@ -196,15 +206,16 @@ const ToolButton = React.memo(function ToolButton({
 
 // ── Slider row (speed / volume) ───────────────────────────────────────
 interface SliderRowProps {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: string;
   label: string;
   value: number;
   min: number;
   max: number;
   step: number;
-  formatValue: (v: number) => string;
+  neutralValue?: number;
+  formatValue: (value: number) => string;
   color: string;
-  onChange: (v: number) => void;
+  onChange: (value: number) => void;
   haptic: ReturnType<typeof useHaptic>;
 }
 
@@ -215,6 +226,7 @@ const SliderRow = React.memo(function SliderRow({
   min,
   max,
   step,
+  neutralValue,
   formatValue,
   color,
   onChange,
@@ -230,33 +242,35 @@ const SliderRow = React.memo(function SliderRow({
   const range = max - min;
   const ratio = range > 0 ? (value - min) / range : 0;
   const pct = Math.round(ratio * 100);
-
-  const panGesture = React.useMemo(() =>
-    Gesture.Pan()
-      .onBegin((e) => {
-        'worklet';
-        const w = widthSV.value;
-        if (w <= 0) return;
-        const r = Math.max(0, Math.min(1, e.x / w));
-        const v = min + Math.round(r * range / step) * step;
-        runOnJS(haptic.selection)();
-        runOnJS(onChange)(Math.max(min, Math.min(max, v)));
-      })
-      .onChange((e) => {
-        'worklet';
-        const w = widthSV.value;
-        if (w <= 0) return;
-        const r = Math.max(0, Math.min(1, e.x / w));
-        const v = min + Math.round(r * range / step) * step;
-        runOnJS(onChange)(Math.max(min, Math.min(max, v)));
-      }),
+  const fillLeft = min < 0 ? Math.min(50, pct) : 0;
+  const fillWidth = min < 0 ? Math.abs(pct - 50) : pct;
+  const panGesture = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .onBegin((e) => {
+          'worklet';
+          const w = widthSV.value;
+          if (w <= 0) return;
+          const r = Math.max(0, Math.min(1, e.x / w));
+          const v = min + Math.round((r * range) / step) * step;
+          runOnJS(haptic.selection)();
+          runOnJS(onChange)(Math.max(min, Math.min(max, v)));
+        })
+        .onChange((e) => {
+          'worklet';
+          const w = widthSV.value;
+          if (w <= 0) return;
+          const r = Math.max(0, Math.min(1, e.x / w));
+          const v = min + Math.round((r * range) / step) * step;
+          runOnJS(onChange)(Math.max(min, Math.min(max, v)));
+        }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [min, max, range, step, onChange, haptic]
   );
 
   return (
     <View style={toolbarStyles.sliderRow}>
-      <Ionicons name={icon} size={IconGrammar.metadata} color={colors.textSecondary} />
+      <AppIcon name={icon} size={IconSize.sm} color="textSecondary" opticalCenter={true} accessible={false} />
       <Text style={[toolbarStyles.sliderLabel, { color: colors.textSecondary }]}>{label}</Text>
       <GestureDetector gesture={panGesture}>
         <View
@@ -266,7 +280,12 @@ const SliderRow = React.memo(function SliderRow({
           accessibilityRole="adjustable"
         >
           <View style={[toolbarStyles.sliderTrackBg, { backgroundColor: colors.border }]} />
-          <View style={[toolbarStyles.sliderFill, { width: `${pct}%`, backgroundColor: color }]} />
+          <View
+            style={[
+              toolbarStyles.sliderFill,
+              { left: `${fillLeft}%`, width: `${fillWidth}%`, backgroundColor: color },
+            ]}
+          />
           <View style={[toolbarStyles.sliderThumb, { left: `${pct}%`, backgroundColor: color }]} />
         </View>
       </GestureDetector>

@@ -40,7 +40,7 @@ export interface Rect {
  *
  * `viewRect` is the on-screen rectangle of the guide area (after safe-area
  * and chrome subtraction). `authoredAspectRatio` is the target aspect ratio
- * for the current capture mode (e.g. 3:4 for poster, 9:16 for look) — when
+ * for the current capture mode (e.g. 9:16 for poster, 4:5 for look) — when
  * set, the guide frame is inset within `viewRect` to match that ratio so
  * the brackets describe the actual capture crop, not the available space.
  */

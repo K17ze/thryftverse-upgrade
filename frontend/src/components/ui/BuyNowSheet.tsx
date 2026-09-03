@@ -3,29 +3,28 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
 import { AppButton } from './AppButton';
 import { CachedImage } from '../CachedImage';
 import { Meta, Body, Headline } from './Text';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import {
   isBuyNowValid,
   mapApiErrorToTransactionError,
   shouldCloseSheetDueToLifecycle,
   isSheetStateStale,
-  type TransactionError,
-} from '../../utils/transactionSheetLogic';
+  type TransactionError } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
 import { createStableId } from '../../utils/createStableId';
-import { toIze, formatAuctionIze } from '../../utils/currency';
+import { toIze, formatAuctionIze, type FxRates } from '../../utils/currency';
 import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
-import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import type { AuctionDetailResponse, BuyNowResult } from '../../services/marketApi';
+import type { AuctionEffectiveState } from '../../hooks/useServerClock';
 
 export interface BuyNowSheetAuctionContext {
   id: string;
@@ -33,7 +32,7 @@ export interface BuyNowSheetAuctionContext {
   imageUrl: string | null;
   buyNowPriceGbp: number | null;
   sellerName: string;
-  effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+  effectiveState: AuctionEffectiveState;
   isSeller: boolean;
 }
 
@@ -42,6 +41,7 @@ interface BuyNowSheetProps {
   onDismiss: () => void;
   auction: BuyNowSheetAuctionContext;
   currencyCode: SupportedCurrencyCode;
+  fxRates: Partial<FxRates>;
   formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: any) => string;
   onSubmitBuyNow: (gbpAmount: number, idempotencyKey: string) => Promise<BuyNowResult>;
   onRefreshDetail: () => Promise<AuctionDetailResponse | null>;
@@ -54,10 +54,10 @@ export function BuyNowSheet({
   onDismiss,
   auction,
   currencyCode,
+  fxRates,
   formatFromFiat,
   onSubmitBuyNow,
-  onRefreshDetail,
-}: BuyNowSheetProps) {
+  onRefreshDetail }: BuyNowSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [stage, setStage] = React.useState<BuyNowStage>('review');
@@ -91,8 +91,7 @@ export function BuyNowSheet({
             : 'This auction has ended. Buy Now is no longer available.',
         canRetry: false,
         transactionPossible: false,
-        isAmbiguous: false,
-      });
+        isAmbiguous: false });
       setStage('error');
     }
   }, [visible, auction.effectiveState]);
@@ -101,15 +100,14 @@ export function BuyNowSheet({
     buyNowPriceGbp: auction.buyNowPriceGbp,
     isSeller: auction.isSeller,
     effectiveState: auction.effectiveState,
-    isSubmitting,
-  });
+    isSubmitting });
 
   const handleConfirm = async () => {
     if (!canBuyNow || !auction.buyNowPriceGbp) return;
 
     // PASS 4: Authoritative preflight when stale
     let effectivePrice = authoritativePrice ?? auction.buyNowPriceGbp;
-    let authoritativeState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled' = auction.effectiveState;
+    let authoritativeState: AuctionEffectiveState = auction.effectiveState;
 
     setIsPreflighting(true);
     try {
@@ -121,8 +119,7 @@ export function BuyNowSheet({
             message: 'Unable to verify current auction state. Check your connection and try again.',
             canRetry: true,
             transactionPossible: true,
-            isAmbiguous: true,
-          });
+            isAmbiguous: true });
           setStage('error');
           return;
         }
@@ -141,8 +138,7 @@ export function BuyNowSheet({
             message: 'This auction is no longer live. Buy Now is unavailable.',
             canRetry: false,
             transactionPossible: false,
-            isAmbiguous: false,
-          });
+            isAmbiguous: false });
           setStage('error');
           return;
         }
@@ -156,8 +152,7 @@ export function BuyNowSheet({
             currentBuyNowPriceGbp: serverPrice,
             canRetry: true,
             transactionPossible: true,
-            isAmbiguous: false,
-          });
+            isAmbiguous: false });
           setStage('review');
           return;
         }
@@ -195,8 +190,11 @@ export function BuyNowSheet({
         parsed.message,
         parsed.isNetworkError,
         parsed.structuredDetails,
+        currencyCode,
+        fxRates,
       );
       setError(txError);
+      haptics.error();
 
       if (txError.isAmbiguous) {
         // Ambiguous failure — preserve the same idempotency key for replay
@@ -251,7 +249,7 @@ export function BuyNowSheet({
   const displayPriceGbp = authoritativePrice ?? auction.buyNowPriceGbp;
 
   const priceText = displayPriceGbp
-    ? formatFromFiat(displayPriceGbp, DEFAULT_CURRENCY_CODE)
+    ? formatFromFiat(displayPriceGbp, currencyCode)
     : '—';
 
   const displayPriceText = displayPriceGbp && currencyCode !== 'GBP'
@@ -320,6 +318,30 @@ export function BuyNowSheet({
                 <Text style={styles.errorText}>{error.message}</Text>
               </View>
             )}
+
+            {/* P0: Risk disclosure — binding purchase, payment due, no
+                cancellation. Presented above the confirm button so the
+                user acknowledges the irreversible nature before acting. */}
+            <View style={styles.commitmentBlock}>
+              <View style={styles.commitmentRow}>
+                <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
+                <Text style={styles.commitmentText}>
+                  This is a binding purchase at the fixed price.
+                </Text>
+              </View>
+              <View style={styles.commitmentRow}>
+                <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+                <Text style={styles.commitmentText}>
+                  Payment is due promptly after the auction ends.
+                </Text>
+              </View>
+              <View style={styles.commitmentRow}>
+                <Ionicons name="lock-closed-outline" size={14} color={colors.textSecondary} />
+                <Text style={styles.commitmentText}>
+                  You cannot cancel a Buy Now after it is confirmed.
+                </Text>
+              </View>
+            </View>
 
             {/* Single decisive action */}
             <AppButton
@@ -432,111 +454,92 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   itemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   itemThumb: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemThumbContainer: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemThumbPlaceholder: {
     width: 44,
     height: 44,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemHeaderText: {
-    flex: 1,
-  },
+    flex: 1 },
   itemTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   itemSeller: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   stageContent: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   // ── Fixed-price experience ──
   fixedPriceLabel: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     marginTop: Space.xs,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
+    letterSpacing: 0.8 },
   fixedPriceBlock: {
     alignItems: 'center',
     paddingVertical: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   fixedPriceValue: {
-    fontSize: Type.display.size + 4,
-    lineHeight: Type.display.lineHeight + 4,
+    fontSize: TypographyV2.display.size + 4,
+    lineHeight: TypographyV2.display.lineHeight + 4,
     fontWeight: '700',
-    letterSpacing: Type.display.letterSpacing,
+    letterSpacing: TypographyV2.display.letterSpacing,
     color: colors.textPrimary,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.display.fontFamily,
+    fontVariant: ['tabular-nums'] },
   fixedPriceIze: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.brand,
-    fontFamily: Typography.family.medium,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'] },
   fixedPriceEquivalent: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   fixedPriceContext: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'center',
     lineHeight: 20,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   dominantAction: {
     width: '100%',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   dismissLink: {
     alignItems: 'center',
     paddingVertical: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   dismissLinkText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.body.fontFamily },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -545,82 +548,79 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: colors.dangerSubtle,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   errorText: {
     flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.danger,
-    fontFamily: Typography.family.medium,
-    lineHeight: 18,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: 18 },
   actions: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   actionBtn: {
-    flex: 1,
-  },
+    flex: 1 },
   primaryBtn: {},
   centerStage: {
     alignItems: 'center',
     paddingVertical: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   submittingText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   submittingSpinnerWrap: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   submittingDetail: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   successIcon: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   successTitle: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    color: colors.textPrimary },
   successDetail: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     textAlign: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   doneBtn: {
     minWidth: 160,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   errorIcon: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   errorIconSmall: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   errorTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     textAlign: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   // R09: Unknown-outcome recovery hint
   ambiguousHint: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: Space.md,
-    lineHeight: 18,
-  },
-  });
+    lineHeight: 18 },
+  // ── Risk disclosure ──
+  commitmentBlock: {
+    gap: Space.xs / 2,
+    paddingVertical: Space.xs },
+  commitmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingVertical: Space.xs / 2 },
+  commitmentText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    color: colors.textSecondary,
+    fontFamily: TypographyV2.meta.fontFamily } });
 }

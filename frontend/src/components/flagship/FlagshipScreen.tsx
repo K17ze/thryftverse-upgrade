@@ -36,9 +36,11 @@ export interface FlagshipScreenProps {
   /** When true, the scroll content also respects the bottom safe-area inset
    *  (useful for full-bleed scroll surfaces without a sticky footer). */
   respectBottomInset?: boolean;
+  /** Screen-level testID for Maestro visual-regression cropOn / tapOn selectors. */
+  testID?: string;
 }
 
-export function FlagshipScreen({
+export const FlagshipScreen = React.forwardRef<View, FlagshipScreenProps>(function FlagshipScreen({
   children,
   header,
   stickyFooter,
@@ -50,7 +52,8 @@ export function FlagshipScreen({
   scrollRef,
   footerInsetHeight,
   respectBottomInset = false,
-}: FlagshipScreenProps) {
+  testID,
+}, ref) {
   const { colors, isDark } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -140,7 +143,7 @@ export function FlagshipScreen({
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
+    <SafeAreaView ref={ref} testID={testID} style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       {keyboardAvoiding ? (
         <KeyboardStickyView style={{ flex: 1 }}>
@@ -151,7 +154,7 @@ export function FlagshipScreen({
       )}
     </SafeAreaView>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

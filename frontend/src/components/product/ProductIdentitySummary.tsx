@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { ListingEngagementSummary } from '../../platform/product';
 
 export interface ProductIdentitySummaryProps {
@@ -27,8 +28,7 @@ export function ProductIdentitySummary({
   discountPercent,
   protectionTotal,
   izeText,
-  engagement,
-}: ProductIdentitySummaryProps) {
+  engagement }: ProductIdentitySummaryProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const engagementParts: string[] = [];
@@ -113,68 +113,58 @@ function createStyles(colors: ThemeColors) {
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   brand: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   title: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.title.lineHeight + 2,
-    letterSpacing: Type.title.letterSpacing,
-    marginBottom: Space.sm,
-  },
+    lineHeight: TypographyV2.screenTitle.lineHeight + 2,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
+    marginBottom: Space.sm },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: Space.sm,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   price: {
-    fontSize: Type.priceHero.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceHero.size,
+    fontFamily: TypographyV2.priceHero.fontFamily,
     color: colors.textPrimary,
     letterSpacing: -0.6,
     flexShrink: 1,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   originalPrice: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textMuted,
     textDecorationLine: 'line-through',
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   dropBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: Radius.sm,
     backgroundColor: colors.danger,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   dropBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.scrimTextPrimary,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   interestRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   interestText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   watchingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -182,32 +172,26 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.danger}12`,
-    flexShrink: 0,
-  },
+    backgroundColor: colors.dangerSubtle,
+    flexShrink: 0 },
   watchingText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
   protectionTotal: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   izeText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     marginTop: 2,
-    letterSpacing: 0.1,
-  },
+    letterSpacing: 0.1 },
   engagementText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: Space.xs,
-  },
-  });
+    marginTop: Space.xs } });
 }

@@ -16,19 +16,20 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { haptics } from '../utils/haptics';
 import {
-  CoOwnStateCanvas,
-} from '../components/coown';
+  CoOwnStateCanvas } from '../components/coown';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnActivitySkeleton } from '../components/coown/CoOwnSkeletons';
-import { fetchCoOwnDistributions, fetchDripEnrollments, updateDripEnrollment, type CoOwnDistribution } from '../services/marketApi';
+import { fetchCoOwnDistributions, fetchDripEnrollments, updateDripEnrollment, fetchCoOwnAssetById, type CoOwnDistribution } from '../services/marketApi';
 import { formatCoOwnIze } from '../utils/currency';
 import { useToast } from '../context/ToastContext';
 import { Switch } from 'react-native';
 import { AppButton } from '../components/ui/AppButton';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type RouteT = RouteProp<RootStackParamList, 'DistributionHistory'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -36,11 +37,6 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 function formatDistributionAmount(minor: number): string {
   const major = minor / 100;
   return formatCoOwnIze(major);
-}
-
-function formatPerUnit(minor: number): string {
-  const major = minor / 100;
-  return `£${major.toFixed(2)}/unit`;
 }
 
 function formatDate(iso: string | null): string {
@@ -56,11 +52,18 @@ export default function DistributionHistoryScreen() {
   const { colors } = useAppTheme();
   const filterAssetId = route.params?.assetId;
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { formatFromFiat } = useFormattedPrice();
+
+  const formatPerUnit = React.useCallback(
+    (minor: number) => `${formatFromFiat(minor / 100)}/unit`,
+    [formatFromFiat]
+  );
 
   const [distributions, setDistributions] = React.useState<CoOwnDistribution[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [assetTitles, setAssetTitles] = React.useState<Record<string, string>>({});
 
   // DRIP enrollment state
   const { show: showToast } = useToast();
@@ -78,6 +81,24 @@ export default function DistributionHistoryScreen() {
       const dripMap: Record<string, boolean> = {};
       dripResult.forEach((e) => { dripMap[e.assetId] = e.enrolled; });
       setDripEnrollments(dripMap);
+
+      // Fetch asset titles for all unique assetIds so we never expose raw IDs.
+      const uniqueAssetIds = new Set<string>();
+      result.items.forEach((d) => uniqueAssetIds.add(d.assetId));
+      dripResult.forEach((e) => uniqueAssetIds.add(e.assetId));
+      const titleEntries = await Promise.all(
+        Array.from(uniqueAssetIds).map(async (id) => {
+          try {
+            const asset = await fetchCoOwnAssetById(id);
+            return [id, asset.title] as const;
+          } catch {
+            return [id, ''] as const;
+          }
+        })
+      );
+      const titleMap: Record<string, string> = {};
+      titleEntries.forEach(([id, title]) => { if (title) titleMap[id] = title; });
+      setAssetTitles(titleMap);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load distributions');
     } finally {
@@ -92,7 +113,7 @@ export default function DistributionHistoryScreen() {
 
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
-    navigation.navigate('Portfolio');
+    navigation.navigate('CoOwnHub');
   }, [navigation]);
 
   const handleRefresh = React.useCallback(() => {
@@ -195,7 +216,7 @@ export default function DistributionHistoryScreen() {
                     <View style={styles.dripAssetInfo}>
                       <View style={[styles.dripAssetDot, { backgroundColor: enrolled ? colors.success : colors.textMuted }]} />
                       <Text style={[styles.dripAssetName, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {assetId.slice(0, 20)}…
+                        {assetTitles[assetId] ?? 'Asset'}
                       </Text>
                       {enrolled && (
                         <View style={[styles.dripEnrolledBadge, { backgroundColor: colors.successSubtle }]}>
@@ -210,7 +231,7 @@ export default function DistributionHistoryScreen() {
                       trackColor={{ false: colors.surfaceAlt, true: colors.brand }}
                       thumbColor={colors.surfaceElevated}
                       accessibilityRole="switch"
-                      accessibilityLabel={`DRIP for ${assetId}`}
+                      accessibilityLabel={`DRIP for ${assetTitles[assetId] ?? 'asset'}`}
                     />
                   </View>
                 ))}
@@ -286,178 +307,144 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     gap: Space.sm,
-    paddingBottom: Space.xxl,
-  },
+    paddingBottom: Space.xxl },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   summaryCard: {
     borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.lg,
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   summaryLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   summaryValue: {
-    fontSize: Type.priceHero.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceHero.size,
+    fontFamily: TypographyV2.priceHero.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.priceHero.letterSpacing,
-  },
+    letterSpacing: TypographyV2.priceHero.letterSpacing },
   summaryCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   distCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   distHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    padding: Space.md,
-  },
+    padding: Space.md },
   distIcon: {
     width: Control.chrome,
     height: Control.chrome,
     borderRadius: Radius.md,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   distHeaderText: {
-    flex: 1,
-  },
+    flex: 1 },
   distType: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   distDate: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs - 2,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   amountBadge: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   amountText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   distDetails: {
     padding: Space.md,
     gap: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   detailLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   detailValue: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   dripCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   dripHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.md,
-  },
+    gap: Space.md },
   dripIcon: {
     width: Space.xl + 8,
     height: Space.xl + 8,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   dripHeaderText: {
-    flex: 1,
-  },
+    flex: 1 },
   dripTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   dripBody: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs - 2,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   dripAssetList: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: Space.sm,
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   dripAssetRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   dripAssetInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flex: 1,
-  },
+    flex: 1 },
   dripAssetDot: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   dripAssetName: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    flex: 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    flex: 1 },
   dripEnrolledBadge: {
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 2,
-    paddingVertical: Space.xs - 2,
-  },
+    paddingVertical: Space.xs - 2 },
   dripEnrolledText: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily },
   dripEmptyWrap: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs,
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   dripEmpty: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    flex: 1,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    flex: 1 } });
 }

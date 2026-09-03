@@ -3,14 +3,18 @@
 # Phase 5 WP9/P5-19: Dual-mode golden suite
 #
 # This flow runs the golden-route screenshot capture in TWO modes:
-#   1. fixture-design  — EXPO_PUBLIC_MOCK_MODE=fixture-design
+#   1. fixture-design  — EXPO_PUBLIC_MOCK_MODE=fixture-design (build-time)
 #      Captures the design-truth baseline using fixture data. This is the
 #      "what the screen should look like with ideal data" baseline.
-#   2. integration-truth — EXPO_PUBLIC_MOCK_MODE=integration-truth
+#   2. integration-truth — EXPO_PUBLIC_MOCK_MODE=integration-truth (build-time)
 #      Captures the backend-truth baseline using seeded backend data.
 #      Differences between fixture and integration baselines are either
 #      contract bugs (backend missing fields) or design bugs (UI assumes
 #      fields that the backend doesn't guarantee).
+#
+# EXPO_PUBLIC_MOCK_MODE is a build-time env var embedded in the JS bundle
+# by EAS. Set it in the eas.json build profile's env block, not as a
+# Maestro --env flag.
 #
 # Parity contract:
 #   The fixture and integration screenshots should be visually equivalent
@@ -21,30 +25,40 @@
 #     - Real backend data being empty (seeding gap → seed script fix)
 #     - UI fabricating data that the backend doesn't provide (UI fix)
 #
+# Parity is checked with pixelmatch (see scripts/check-golden-parity.mjs).
+# A diff > 5% between fixture and integration mode is flagged as a parity
+# violation.
+#
 # Device matrix (per mode):
 #   iOS:  iPhone 15 (regular), iPhone SE 3rd gen (compact), iPhone 15 Pro Max (large)
 #   Android: Pixel 7 (mid-range), Pixel 5 (lower-memory)
 #   Each in: light, dark
 #
 # Usage:
-#   # Fixture mode
-#   EXPO_PUBLIC_MOCK_MODE=fixture-design \
-#     maestro test .maestro/dual-mode-golden-suite.yml \
-#       --output .maestro/screenshots/fixture
+#   # Fixture mode (build with EXPO_PUBLIC_MOCK_MODE=fixture-design)
+#   maestro test .maestro/dual-mode-golden-suite.yml \
+#     --output .maestro/screenshots/fixture
 #
-#   # Integration mode (requires seeded backend running)
-#   EXPO_PUBLIC_MOCK_MODE=integration-truth \
-#     maestro test .maestro/dual-mode-golden-suite.yml \
-#       --output .maestro/screenshots/integration
+#   # Integration mode (build with EXPO_PUBLIC_MOCK_MODE=integration-truth)
+#   maestro test .maestro/dual-mode-golden-suite.yml \
+#     --output .maestro/screenshots/integration
+#
+#   # Assert mode (regression check — requires baselines in output dir)
+#   maestro test .maestro/dual-mode-golden-suite.yml \
+#     --env VISUAL_MODE=assert \
+#     --output .maestro/screenshots/fixture
 #
 #   # Promote to baselines
 #   cp -r .maestro/screenshots/fixture src/__tests__/__screenshots__/fixture
 #   cp -r .maestro/screenshots/integration src/__tests__/__screenshots__/integration
 #
-#   # Run parity check
-#   node scripts/check-golden-parity.mjs
+#   # Run parity check (pixel-level diff with pixelmatch)
+#   npm run visual:parity
 
 appId: ${MAESTRO_APP_ID}
+env:
+  VISUAL_MODE: "capture"
+  THRESHOLD: "98"
 ---
 # ── Core: Home ──
 - launchApp:
@@ -52,7 +66,18 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Home"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-home-populated
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-home-populated.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "home-feed-container"
 
 # ── Core: Search ──
 - tapOn:
@@ -60,9 +85,31 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-search-idle
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-search-idle.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "search-screen"
 - inputText: "vintage denim"
+- waitForAnimationToEnd:
+    timeout: 2000
 - takeScreenshot: golden-search-results
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-search-results.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "search-screen"
 - clearText
 - back
 
@@ -72,13 +119,36 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Explore"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-browse-populated
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-browse-populated.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "browse-screen"
 - tapOn:
-    point: "50%, 40%"
+    id: "golden-browse-first-product"
+    optional: true
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-pdp-fixed
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-pdp-fixed.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "item-detail-screen"
 - back
 
 # ── Core: Sell ──
@@ -87,7 +157,18 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-sell-empty
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-sell-empty.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "sell-screen"
 - back
 
 # ── Core: Profile (self) ──
@@ -96,7 +177,18 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Profile"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-profile-self
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-profile-self.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "profile-screen"
 
 # ── Core: Settings ──
 - tapOn:
@@ -104,7 +196,18 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-settings-root
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-settings-root.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "settings-screen"
 - back
 
 # ── Core: Inbox ──
@@ -113,15 +216,38 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Inbox"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-inbox-populated
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-inbox-populated.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "inbox-screen"
 
 # ── Core: Chat ──
 - tapOn:
-    point: "50%, 30%"
+    id: "golden-inbox-first-conversation"
+    optional: true
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-chat-populated
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-chat-populated.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "chat-screen"
 - back
 
 # ── Auctions ──
@@ -130,13 +256,36 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Explore"
     timeout: 3000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-auction-home
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-auction-home.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "auction-screen"
 - tapOn:
-    point: "50%, 50%"
+    id: "golden-auction-first-card"
+    optional: true
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-auction-detail
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-auction-detail.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "auction-detail-screen"
 - back
 
 # ── Co-Own Hub ──
@@ -145,13 +294,36 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Explore"
     timeout: 3000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-coown-hub
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-coown-hub.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "coown-screen"
 - tapOn:
-    point: "50%, 40%"
+    id: "golden-coown-first-asset"
+    optional: true
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-coown-asset-detail
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-coown-asset-detail.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "asset-detail-screen"
 - back
 
 # ── Portfolio ──
@@ -160,12 +332,25 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Profile"
     timeout: 3000
+- waitForAnimationToEnd:
+    timeout: 2000
 - tapOn:
     text: "Portfolio"
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-coown-portfolio
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-coown-portfolio.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "portfolio-screen"
 - back
 
 # ── Poster / Create ──
@@ -179,6 +364,8 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-poster-camera
 - back
 
@@ -187,6 +374,8 @@ appId: ${MAESTRO_APP_ID}
     label: "Inbox"
 - assertVisible:
     label: "Inbox"
+    timeout: 3000
+- waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: golden-notifications
 

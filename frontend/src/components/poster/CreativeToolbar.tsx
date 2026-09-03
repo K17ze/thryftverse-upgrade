@@ -5,9 +5,9 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  useReducedMotion,
-} from 'react-native-reanimated';
+  useReducedMotion } from 'react-native-reanimated';
 import { Typography, Radius, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -65,8 +65,7 @@ const ToolButton = React.memo(function ToolButton({ tool, isActive, onPress }: T
   }, [isActive, reduceMotion, scaleSV, spring]);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scaleSV.value }],
-  }));
+    transform: [{ scale: scaleSV.value }] }));
 
   const size = tool.primary ? 44 : 36;
   const iconSize = tool.primary ? 22 : 18;
@@ -96,14 +95,13 @@ const ToolButton = React.memo(function ToolButton({ tool, isActive, onPress }: T
                 width: size,
                 height: size,
                 borderRadius: size / 2,
-                backgroundColor: colors.brandSubtle,
-              },
+                backgroundColor: colors.brandSubtle },
             ]}
           >
             <Ionicons name={tool.icon} size={iconSize} color={colors.brand} />
           </View>
         ) : (
-          // Inactive: transparent with subtle border
+          // Inactive: transparent hit target
           <View
             style={[
               styles.toolIconBg,
@@ -111,10 +109,7 @@ const ToolButton = React.memo(function ToolButton({ tool, isActive, onPress }: T
                 width: size,
                 height: size,
                 borderRadius: size / 2,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.18)',
-                backgroundColor: 'transparent',
-              },
+                backgroundColor: 'transparent' },
             ]}
           >
             <Ionicons name={tool.icon} size={iconSize} color="rgba(255,255,255,0.9)" />
@@ -175,8 +170,7 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     paddingBottom: Space.lg,
     paddingHorizontal: 12,
-    zIndex: 15,
-  },
+    zIndex: 15 },
   toolbar: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -186,42 +180,33 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xxl,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    alignSelf: 'center',
-  },
+    alignSelf: 'center' },
   toolBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
     paddingHorizontal: 6,
     paddingVertical: Space.xs,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   toolIconWrap: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   toolIconBg: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Hairline divider between tool groups
   groupDivider: {
     width: 1,
     height: 28,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
+    backgroundColor: 'rgba(255,255,255,0.12)' },
   toolLabel: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
-    color: 'rgba(255,255,255,0.75)',
-  },
+    color: 'rgba(255,255,255,0.75)' },
   toolLabelActive: {
     color: colors.brand,
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   toolLabelSecondary: {
-    fontSize: 9,
-    fontFamily: Typography.family.medium,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily } });
 }

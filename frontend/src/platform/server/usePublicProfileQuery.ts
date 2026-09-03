@@ -4,6 +4,9 @@ import {
   fetchPublicProfileAggregate,
   PublicProfileUser,
   PublicProfileAggregate,
+  PublicProfileAway,
+  PublicProfileTrader,
+  PublicProfileStorefrontSummary,
 } from '../../services/profileApi';
 import { queryKeys } from './queryKeys';
 
@@ -20,5 +23,11 @@ export function usePublicProfileQuery(userId: string | null | undefined) {
     // Backward-compatible accessor: existing consumers expect .data to be PublicProfileUser
     data: query.data?.user as PublicProfileUser | undefined,
     aggregate: query.data,
+    // Authoritative away state from the aggregate (holiday mode + message).
+    away: query.data?.away,
+    // DSA Article 30 trader disclosure from the aggregate.
+    trader: query.data?.trader,
+    // Published storefront summary from the aggregate.
+    storefront: query.data?.storefront,
   };
 }

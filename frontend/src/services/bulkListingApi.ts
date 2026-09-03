@@ -2,6 +2,7 @@ import { createListingOnApi } from './listingsApi';
 import { formatFiatAmount } from '../utils/currency';
 import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { makeStableId } from '../utils/createStableId';
+import { CONDITION_NAMES } from '../contracts/taxonomy';
 
 // ---------------------------------------------------------------------------
 // Bulk Listing — types and orchestration for batch listing creation.
@@ -43,7 +44,6 @@ const MIN_TITLE_LENGTH = 3;
 const MAX_TITLE_LENGTH = 80;
 const MIN_PRICE = 0.5;
 const MAX_PRICE = 100000;
-const VALID_CONDITIONS = ['New with tags', 'Very good', 'Good', 'Satisfactory'];
 
 /**
  * Client-side validation for a single bulk listing draft.
@@ -72,7 +72,7 @@ export function validateBulkListing(item: BulkListingItem): ValidationResult {
     errors.push('Category is required.');
   }
 
-  if (!item.condition || !VALID_CONDITIONS.includes(item.condition)) {
+  if (!item.condition || !CONDITION_NAMES.includes(item.condition)) {
     errors.push('Condition is required.');
   }
 

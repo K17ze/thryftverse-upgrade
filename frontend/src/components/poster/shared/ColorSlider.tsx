@@ -22,17 +22,16 @@ import {
   Text,
   LayoutChangeEvent,
   ViewStyle,
-  AccessibilityRole,
-} from 'react-native';
+  AccessibilityRole } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withTiming,
-  runOnJS,
-} from 'react-native-reanimated';
-import { Radius, Space, Stroke, Type } from '../../../theme/designTokens';
+  runOnJS } from 'react-native-reanimated';
+import { Radius, Space, Stroke, Elevation } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { Motion } from '../../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -58,13 +57,11 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     sliderWrap: {
       flexDirection: 'column',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     sliderLabel: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary,
-      fontWeight: '500',
-    },
+      fontWeight: '500' },
     sliderTrack: {
       height: SLIDER_TRACK_HEIGHT,
       borderRadius: Radius.sm,
@@ -72,8 +69,7 @@ function createStyles(colors: ThemeColors) {
       position: 'relative',
       // 44pt touch target — track height is 36, vertical padding extends hit area
       minHeight: MIN_TOUCH_TARGET,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     sliderThumb: {
       position: 'absolute',
       width: SLIDER_THUMB_SIZE,
@@ -85,25 +81,18 @@ function createStyles(colors: ThemeColors) {
       marginLeft: -SLIDER_THUMB_SIZE / 2,
       top: (SLIDER_TRACK_HEIGHT - SLIDER_THUMB_SIZE) / 2,
       // Subtle elevation — thumb lifts above the track
-      shadowColor: '#000',
-      shadowOpacity: 0.2,
-      shadowRadius: 3,
-      shadowOffset: { width: 0, height: 1 },
-      elevation: 3,
-    },
+      ...Elevation.modal },
     hueSegmentRow: {
       flexDirection: 'row',
       position: 'absolute',
       top: 0,
       bottom: 0,
       left: 0,
-      right: 0,
-    },
+      right: 0 },
     sizeSliderRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     sizeSliderTrack: {
       flex: 1,
       height: SLIDER_TRACK_HEIGHT,
@@ -111,36 +100,29 @@ function createStyles(colors: ThemeColors) {
       overflow: 'hidden',
       position: 'relative',
       minHeight: MIN_TOUCH_TARGET,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     sizeSliderGradient: {
       position: 'absolute',
       top: 0,
       bottom: 0,
       left: 0,
       right: 0,
-      backgroundColor: 'rgba(128,128,128,0.2)',
-    },
+      backgroundColor: 'rgba(128,128,128,0.2)' },
     sizeSliderValue: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary,
       minWidth: 40,
       textAlign: 'right',
-      fontWeight: '500',
-    },
+      fontWeight: '500' },
     sizePreview: {
       width: MIN_TOUCH_TARGET,
       height: MIN_TOUCH_TARGET,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     sizePreviewDot: {
-      backgroundColor: '#FFFFFF',
-    },
+      backgroundColor: '#FFFFFF' },
     disabledOverlay: {
-      opacity: 0.4,
-    },
-  });
+      opacity: 0.4 } });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -187,8 +169,7 @@ export function HueSlider({
   onDragStart,
   onDragEnd,
   disabled = false,
-  accessibilityLabel,
-}: HueSliderProps) {
+  accessibilityLabel }: HueSliderProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
@@ -259,8 +240,7 @@ export function HueSlider({
             thumbPos.value = withSpring(thumbPos.value, {
               damping: reducedMotion ? 100 : Motion.spring.tap.damping,
               stiffness: reducedMotion ? 1000 : Motion.spring.tap.stiffness,
-              mass: Motion.spring.tap.mass,
-            });
+              mass: Motion.spring.tap.mass });
           }
           isDraggingSV.value = false;
           if (onDragEnd) {
@@ -274,8 +254,7 @@ export function HueSlider({
   );
 
   const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: thumbPos.value }],
-  }));
+    transform: [{ translateX: thumbPos.value }] }));
 
   return (
     <View style={[styles.sliderWrap, disabled && styles.disabledOverlay]}>
@@ -327,8 +306,7 @@ export function SaturationLightnessSlider({
   onDragStart,
   onDragEnd,
   disabled = false,
-  accessibilityLabel,
-}: SaturationLightnessSliderProps) {
+  accessibilityLabel }: SaturationLightnessSliderProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
@@ -392,8 +370,7 @@ export function SaturationLightnessSlider({
             thumbPos.value = withSpring(thumbPos.value, {
               damping: reducedMotion ? 100 : Motion.spring.tap.damping,
               stiffness: reducedMotion ? 1000 : Motion.spring.tap.stiffness,
-              mass: Motion.spring.tap.mass,
-            });
+              mass: Motion.spring.tap.mass });
           }
           isDraggingSV.value = false;
           if (onDragEnd) {
@@ -407,8 +384,7 @@ export function SaturationLightnessSlider({
   );
 
   const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: thumbPos.value }],
-  }));
+    transform: [{ translateX: thumbPos.value }] }));
 
   // Build gradient segments from base color
   const SEGMENTS = 12;
@@ -492,8 +468,7 @@ export function SizeSlider({
   showValueLabel = true,
   valueSuffix = 'px',
   disabled = false,
-  accessibilityLabel,
-}: SizeSliderProps) {
+  accessibilityLabel }: SizeSliderProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
@@ -557,8 +532,7 @@ export function SizeSlider({
             thumbPos.value = withSpring(thumbPos.value, {
               damping: reducedMotion ? 100 : Motion.spring.tap.damping,
               stiffness: reducedMotion ? 1000 : Motion.spring.tap.stiffness,
-              mass: Motion.spring.tap.mass,
-            });
+              mass: Motion.spring.tap.mass });
           }
           isDraggingSV.value = false;
           if (onDragEnd) {
@@ -572,8 +546,7 @@ export function SizeSlider({
   );
 
   const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: thumbPos.value }],
-  }));
+    transform: [{ translateX: thumbPos.value }] }));
 
   const previewSize = Math.max(4, Math.min(value, 40));
 
@@ -589,8 +562,7 @@ export function SizeSlider({
                 height: previewSize,
                 borderRadius: previewSize / 2,
                 backgroundColor: previewColor,
-                opacity: previewOpacity,
-              },
+                opacity: previewOpacity },
             ]}
           />
         </View>
@@ -654,8 +626,7 @@ export function GenericSlider({
   thumbColor = '#FFFFFF',
   label,
   disabled = false,
-  accessibilityLabel,
-}: GenericSliderProps) {
+  accessibilityLabel }: GenericSliderProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
@@ -718,8 +689,7 @@ export function GenericSlider({
             thumbPos.value = withSpring(thumbPos.value, {
               damping: reducedMotion ? 100 : Motion.spring.tap.damping,
               stiffness: reducedMotion ? 1000 : Motion.spring.tap.stiffness,
-              mass: Motion.spring.tap.mass,
-            });
+              mass: Motion.spring.tap.mass });
           }
           isDraggingSV.value = false;
           if (onDragEnd) {
@@ -733,13 +703,11 @@ export function GenericSlider({
   );
 
   const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: thumbPos.value }],
-  }));
+    transform: [{ translateX: thumbPos.value }] }));
 
   // Fill style — animated width following thumb position
   const fillStyle = useAnimatedStyle(() => ({
-    width: thumbPos.value,
-  }));
+    width: thumbPos.value }));
 
   const resolvedTrackColor = trackColor ?? colors.surfaceAlt;
   const resolvedFillColor = fillColor ?? colors.brand;
@@ -761,8 +729,7 @@ export function GenericSlider({
               top: 0,
               bottom: 0,
               left: 0,
-              backgroundColor: resolvedFillColor,
-            },
+              backgroundColor: resolvedFillColor },
             fillStyle,
           ]}
         />

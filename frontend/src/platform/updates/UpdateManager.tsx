@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { SlideInDown } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Radius, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { AnimatedPressable } from '../../components/AnimatedPressable';
 import { useUpdateCheck } from './useUpdateCheck';
@@ -36,15 +37,14 @@ export function UpdateManager(): React.ReactElement | null {
     Sentry.addBreadcrumb?.({
       category: 'ui.action',
       message: 'OTA update: user tapped update',
-      level: 'info',
-    });
+      level: 'info' });
     fetchAndReload();
   }, [fetchAndReload]);
 
   if (!isUpdateAvailable) return null;
 
   const styles = createStyles(colors);
-  const entering = reducedMotion ? undefined : SlideInDown.duration(280).springify().damping(20);
+  const entering = reducedMotion ? undefined : SlideInDown.springify().damping(20);
 
   return (
     <Reanimated.View
@@ -90,31 +90,24 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm + 2,
       backgroundColor: colors.surfaceElevated,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     content: {
       flexDirection: 'row',
       alignItems: 'center',
-      flex: 1,
-    },
+      flex: 1 },
     icon: {
-      marginRight: Space.sm,
-    },
+      marginRight: Space.sm },
     message: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     button: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs + 2,
       backgroundColor: colors.brandSubtle,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     buttonText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.brand,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.brand } });
 }

@@ -21,8 +21,11 @@ import React from 'react';
 import { View, Text, StyleSheet, type TextStyle, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, FontFamily, Control, IconGrammar, PressScale } from '../../theme/designTokens';
+import { Space, FontFamily, Control, IconGrammar, PressScale } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize, type SemanticIconName } from '../../theme/iconTokens';
 
 export interface FlagshipNavigationRowProps {
   /** Primary title — the row's identity. */
@@ -33,8 +36,8 @@ export interface FlagshipNavigationRowProps {
   titleStyle?: TextStyle;
   /** Style override for the subtitle text. */
   subtitleStyle?: TextStyle;
-  /** Optional leading icon name (Ionicons). Rendered directly — no circle. */
-  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** Optional leading icon name (SemanticIconName or Ionicons). Rendered directly — no circle. */
+  icon?: SemanticIconName | React.ComponentProps<typeof Ionicons>['name'];
   /** Leading icon color override. */
   iconColor?: string;
   /** Custom trailing node (overrides chevron). */
@@ -80,8 +83,7 @@ export function FlagshipNavigationRow({
   accessibilityHint,
   children,
   minHeight = Control.hit,
-  style,
-}: FlagshipNavigationRowProps) {
+  style }: FlagshipNavigationRowProps) {
   const { colors } = useAppTheme();
   const isTappable = !!onPress && !disabled;
   const resolvedShowChevron =
@@ -95,19 +97,19 @@ export function FlagshipNavigationRow({
 
   const resolvedLabel = accessibilityLabel ?? [title, subtitle].filter(Boolean).join(', ');
 
-  const leadingWidth = icon ? Control.iconCompact + Space.xs : 0;
+  const leadingWidth = icon ? Control.icon : 0;
 
   const content = (
     <View style={[styles.inner, { minHeight }, style]}>
       <View style={styles.contentRow}>
         {icon ? (
-          <View style={styles.iconWrap}>
-            <Ionicons
-              name={icon}
-              size={Control.iconCompact}
-              color={iconColor ?? (danger ? colors.danger : colors.textSecondary)}
-            />
-          </View>
+          <AppIcon
+            name={icon}
+            size={IconSize.md}
+            color={iconColor ?? (danger ? colors.danger : colors.textSecondary)}
+            opticalCenter
+            accessible={false}
+          />
         ) : null}
 
         <View style={styles.textWrap}>
@@ -131,7 +133,7 @@ export function FlagshipNavigationRow({
           <View style={styles.trailing}>{trailing}</View>
         ) : resolvedShowChevron ? (
           <View style={styles.trailing}>
-            <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} />
+            <AppIcon name="forward" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
           </View>
         ) : null}
       </View>
@@ -143,7 +145,7 @@ export function FlagshipNavigationRow({
           style={[
             styles.separator,
             { backgroundColor: colors.border },
-            separatorInset && { marginLeft: Space.md + leadingWidth + Space.sm },
+            separatorInset && { marginLeft: icon ? leadingWidth + Space.sm : 0 },
           ]}
         />
       ) : null}
@@ -151,7 +153,17 @@ export function FlagshipNavigationRow({
   );
 
   if (!isTappable) {
-    return content;
+    return (
+      <View
+        accessible
+        accessibilityRole={onPress ? 'button' : 'text'}
+        accessibilityLabel={resolvedLabel}
+        accessibilityHint={accessibilityHint}
+        accessibilityState={{ disabled: !!disabled }}
+      >
+        {content}
+      </View>
+    );
   }
 
   return (
@@ -174,50 +186,35 @@ export function FlagshipNavigationRow({
 const styles = StyleSheet.create({
   pressable: {},
   inner: {
-    paddingVertical: Space.sm + Space.xs,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-    minHeight: Control.hit,
-  },
-  iconWrap: {
-    width: Control.iconCompact + Space.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    gap: Space.sm },
   textWrap: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   title: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   subtitle: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   trailing: {
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 1,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   children: {
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginTop: Space.sm + Space.xs,
-  },
-});
+    marginTop: Space.sm } });

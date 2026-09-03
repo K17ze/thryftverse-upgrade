@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 // Mirrors BuyerProtectionScreen layout: coverage summary card (icon + title + subtitle + detail rows),
 // "What's covered" section card with checklist, claims history placeholder, claim CTA button.
@@ -16,7 +17,7 @@ export function BuyerProtectionSkeleton() {
         <View style={styles.coverageHeader}>
           <SkeletonLoader width={48} height={48} borderRadius={Radius.full} />
           <View style={styles.coverageHeaderText}>
-            <SkeletonLoader width={140} height={18} borderRadius={Radius.sm} />
+            <SkeletonLoader width={140} height={TypographyV2.itemTitle.size} borderRadius={Radius.sm} />
             <SkeletonLoader width={180} height={13} borderRadius={Radius.sm} style={{ marginTop: 6 }} />
           </View>
         </View>
@@ -39,12 +40,12 @@ export function BuyerProtectionSkeleton() {
 
       {/* What's covered section */}
       <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <SkeletonLoader width={130} height={17} borderRadius={Radius.sm} />
+        <SkeletonLoader width={130} height={TypographyV2.sectionTitle.size} borderRadius={Radius.sm} />
         <View style={styles.coverageList}>
           {Array.from({ length: 4 }).map((_, i) => (
             <View key={i} style={styles.coverageItem}>
               <SkeletonLoader width={18} height={18} borderRadius={Radius.full} />
-              <SkeletonLoader width={180} height={14} borderRadius={Radius.sm} />
+              <SkeletonLoader width={180} height={TypographyV2.body.size} borderRadius={Radius.sm} />
             </View>
           ))}
         </View>
@@ -65,7 +66,7 @@ const styles = StyleSheet.create({
   coverageCard: {
     borderRadius: Radius.xl,
     padding: Space.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   coverageHeader: {
     flexDirection: 'row',
@@ -74,7 +75,7 @@ const styles = StyleSheet.create({
   },
   coverageHeaderText: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   coverageDetails: {
     marginTop: Space.md,
@@ -88,7 +89,7 @@ const styles = StyleSheet.create({
   sectionCard: {
     borderRadius: Radius.xl,
     padding: Space.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     gap: Space.sm,
   },
   coverageList: {

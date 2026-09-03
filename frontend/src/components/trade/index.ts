@@ -8,3 +8,5 @@ export { CoOwnAssetCard } from './CoOwnAssetCard';
 export { OrderHistoryRow } from './OrderHistoryRow';
 export type { MetricItem } from './MetricGrid';
 export type { OrderSide, OrderStatus } from './OrderHistoryRow';
+export { MarketBookRow } from './MarketBookRow';
+export type { MarketBookRowProps } from './MarketBookRow';

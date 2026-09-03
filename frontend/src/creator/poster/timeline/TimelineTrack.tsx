@@ -2,7 +2,7 @@ import React, { useCallback } from 'react';
 import { View, StyleSheet, Pressable, LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSharedValue } from 'react-native-reanimated';
-import { Space } from '../../../theme/designTokens';
+import { Space, Control } from '../../../theme/designTokens';
 import { IconGrammar } from '../../../theme/designTokens';
 import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
@@ -15,7 +15,7 @@ import type { PosterClip } from './TimelineTypes';
 // TimelineTrack — the primary clip track.
 //
 // Renders ClipThumb for each clip side by side (width proportional to each
-// clip's speed-adjusted duration) inside a single 60pt-tall rounded track.
+// clip's speed-adjusted duration) inside a single 64pt-tall rounded track.
 // The Playhead is overlaid on top and scrubs the full track width.
 //
 // The track uses a fixed pixel-per-ms scale derived from the measured track
@@ -23,7 +23,7 @@ import type { PosterClip } from './TimelineTypes';
 // to their real wall-clock length.
 // ───────────────────────────────────────────────────────────────────────────
 
-const TRACK_HEIGHT = 60;
+const TRACK_HEIGHT = 64;
 const CLIP_GAP = Space.xxs;
 const TRANSITION_ICON_SIZE = 22;
 
@@ -75,7 +75,10 @@ export const TimelineTrack = React.memo(function TimelineTrack({
   // overlaid on the track without disturbing the proportional clip layout.
   // The clipsRow has paddingHorizontal: Space.xxs and each ClipThumb has
   // marginRight: CLIP_GAP, so the boundary center after clip[i] is at:
-  //   padX + sum(width[0..i]) + CLIP_GAP / 2
+  //   padX + sum(width[0..i]) + i * CLIP_GAP + CLIP_GAP / 2
+  // The i * CLIP_GAP term accounts for the marginRight gap that precedes
+  // each clip after the first — without it, boundaries drift right as
+  // clip count grows.
   const boundaryCenters = React.useMemo(() => {
     if (clips.length < 2 || pxPerMs <= 0) return [];
     const padX = Space.xxs;
@@ -84,7 +87,7 @@ export const TimelineTrack = React.memo(function TimelineTrack({
     for (let i = 0; i < clips.length - 1; i++) {
       const w = Math.max(24, clips[i].durationMs * pxPerMs - CLIP_GAP);
       cumWidth += w;
-      centers.push(padX + cumWidth + CLIP_GAP / 2);
+      centers.push(padX + cumWidth + i * CLIP_GAP + CLIP_GAP / 2);
     }
     return centers;
   }, [clips, pxPerMs]);
@@ -104,7 +107,7 @@ export const TimelineTrack = React.memo(function TimelineTrack({
         trackStyles.container,
         {
           height: TRACK_HEIGHT,
-          backgroundColor: colors.surfaceAlt,
+          backgroundColor: colors.background,
         },
       ]}
       accessibilityLabel="Timeline clip track"
@@ -119,8 +122,7 @@ export const TimelineTrack = React.memo(function TimelineTrack({
               width={width}
               isSelected={clip.id === selectedClipId}
               onPress={() => onSelectClip(clip.id)}
-              onTrimStart={(deltaMs) => onTrimClip(clip.id, 'start', deltaMs)}
-              onTrimEnd={(deltaMs) => onTrimClip(clip.id, 'end', deltaMs)}
+              onTrimCommit={(edge, deltaMs) => onTrimClip(clip.id, edge, deltaMs)}
             />
           );
         })}
@@ -141,7 +143,12 @@ export const TimelineTrack = React.memo(function TimelineTrack({
               <Pressable
                 key={`transition-${i}`}
                 onPress={() => handleTransitionPress(i)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={{
+                  top: (Control.hit - TRANSITION_ICON_SIZE) / 2,
+                  bottom: (Control.hit - TRANSITION_ICON_SIZE) / 2,
+                  left: (Control.hit - TRANSITION_ICON_SIZE) / 2,
+                  right: (Control.hit - TRANSITION_ICON_SIZE) / 2,
+                }}
                 accessibilityLabel={
                   hasTransition ? `Transition ${presetId}, tap to change` : 'Add transition between clips'
                 }
@@ -193,7 +200,8 @@ const trackStyles = StyleSheet.create({
   },
   // Transition icon — a compact 22pt circle centered on the clip boundary.
   // The visible glyph is 14pt; the 22pt circle is the visual anchor. The
-  // hitSlop on the Pressable extends the tap target to ~42pt (AGENTS.md §13).
+  // hitSlop on the Pressable extends the tap target to 44pt (Control.hit,
+  // AGENTS.md §13).
   transitionIcon: {
     position: 'absolute',
     top: '50%',
@@ -204,10 +212,5 @@ const trackStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
   },
 });

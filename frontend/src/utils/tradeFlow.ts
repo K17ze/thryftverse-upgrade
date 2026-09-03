@@ -1,4 +1,5 @@
 import { sanitizeDecimalInput, sanitizeIntegerInput } from './currencyAuthoringFlows';
+import { gbpToMinor, mulGbpUnits, feeGbp, addGbp, subGbp, minorToGbp, parseGbpToMinor } from './money';
 
 export const CO_OWN_FEE_RATE = 0.01;
 export const CO_OWN_MAX_UNITS = 20;
@@ -6,10 +7,6 @@ export const CO_OWN_MAX_UNITS = 20;
 // ── Wallet fee rates — single source of truth for all fee percentages ──
 /** 1% platform fee on Co-Own trades (buy/sell). */
 export const CO_OWN_TRADE_FEE_RATE = 0.01;
-/** 1% platform spread on external load (fiat → 1ZE). */
-export const CO_OWN_LOAD_FEE_RATE = 0.01;
-/** 0.5% fee on 1ZE → fiat redemption. */
-export const CO_OWN_CONVERT_FEE_RATE = 0.005;
 
 export type TradeOrderMode = 'market' | 'limit';
 export type TradeSide = 'buy' | 'sell';
@@ -21,8 +18,43 @@ export type TradeSide = 'buy' | 'sell';
  * semantics. "Protected instant" = marketable limit with a visible protection
  * price (never an uncapped market order in an illiquid asset, source §6.3).
  * "Limit" = resting order. GTT in Phase 3.
+ *
+ * P0.1: The backend order type for protected_instant is 'protected_market'.
+ * The frontend ticket type remains 'protected_instant' for UX labeling, but
+ * the backend contract uses 'protected_market' with maxPriceGbp/minPriceGbp.
  */
-export type CoOwnOrderType = 'protected_instant' | 'limit';
+export type CoOwnOrderType = 'protected_market' | 'limit' | 'protected_instant';
+
+/**
+ * P0.1: The backend order instruction for a protected_market order.
+ * Uses maxPriceGbp (buy) or minPriceGbp (sell) as the protection cap —
+ * never limitPriceGbp, which is reserved for resting limit orders.
+ */
+export interface ProtectedMarketInstruction {
+  type: 'protected_market';
+  side: 'buy' | 'sell';
+  units: number;
+  /** Worst acceptable price for a buy (cap). */
+  maxPriceGbp?: number;
+  /** Worst acceptable price for a sell (floor). */
+  minPriceGbp?: number;
+}
+
+/**
+ * P0.1: Build a protected_market order instruction. The protection cap is
+ * the worst-case price the order will fill at — buys use maxPriceGbp, sells
+ * use minPriceGbp. The order walks the book like a market order but will
+ * not fill beyond the cap; any unfilled remainder is cancelled (never rests).
+ */
+export function buildProtectedMarketInstruction(
+  side: TradeSide,
+  units: number,
+  protectionPriceGbp: number,
+): ProtectedMarketInstruction {
+  return side === 'buy'
+    ? { type: 'protected_market', side, units, maxPriceGbp: protectionPriceGbp }
+    : { type: 'protected_market', side, units, minPriceGbp: protectionPriceGbp };
+}
 
 /** Duration for resting orders. */
 export type CoOwnOrderDuration = 'GFD' | 'GTC90';
@@ -86,34 +118,46 @@ export function computeReservation(
   feeSchedule: CoOwnFeeSchedule = DEFAULT_FEE_SCHEDULE,
   buffer: number = 0,
 ): ReservationBreakdown {
+  // Use BigInt minor units for exact arithmetic — no IEEE 754 drift.
+  // The BigInt math is internal only; we convert back to numbers at the
+  // return boundary so UI components keep their existing number contracts.
+  const priceMinor = gbpToMinor(protectionPrice);
+  const bufferMinor = gbpToMinor(buffer);
+
   if (side === 'buy') {
-    const principal = protectionPrice * quantity;
-    const maxFee = principal * feeSchedule.rate + feeSchedule.fixed;
-    const totalReserve1ZE = principal + maxFee + buffer;
+    const principalMinor = mulGbpUnits(priceMinor, quantity);
+    const maxFeeMinor = addGbp(
+      feeGbp(principalMinor, feeSchedule.rate),
+      gbpToMinor(feeSchedule.fixed),
+    );
+    const totalReserve1ZEMinor = addGbp(addGbp(principalMinor, maxFeeMinor), bufferMinor);
     return {
-      principal,
-      maxFee,
+      principal: minorToGbp(principalMinor),
+      maxFee: minorToGbp(maxFeeMinor),
       buffer,
-      totalReserve1ZE,
+      totalReserve1ZE: minorToGbp(totalReserve1ZEMinor),
       totalReserveUnits: 0,
-      gross: principal,
-      fee: maxFee,
-      total: totalReserve1ZE - buffer,
+      gross: minorToGbp(principalMinor),
+      fee: minorToGbp(maxFeeMinor),
+      total: minorToGbp(subGbp(totalReserve1ZEMinor, bufferMinor)),
     };
   } else {
     // Sell: units are reserved, not cash. Proceeds are computed but not reserved.
-    const gross = protectionPrice * quantity;
-    const fee = gross * feeSchedule.rate + feeSchedule.fixed;
-    const net = gross - fee;
+    const grossMinor = mulGbpUnits(priceMinor, quantity);
+    const feeMinor = addGbp(
+      feeGbp(grossMinor, feeSchedule.rate),
+      gbpToMinor(feeSchedule.fixed),
+    );
+    const netMinor = subGbp(grossMinor, feeMinor);
     return {
       principal: 0,
       maxFee: 0,
       buffer: 0,
       totalReserve1ZE: 0,
       totalReserveUnits: quantity,
-      gross,
-      fee,
-      total: net,
+      gross: minorToGbp(grossMinor),
+      fee: minorToGbp(feeMinor),
+      total: minorToGbp(netMinor),
     };
   }
 }
@@ -157,20 +201,22 @@ export function estimateFill(
   // Buy: walk asks (ascending). Sell: walk bids (descending).
   const levels = side === 'buy' ? book.asks : book.bids;
   let remaining = quantity;
-  let totalCost = 0;
+  let totalCostMinor = 0n; // BigInt accumulator — no floating point drift
   let worstPrice = 0;
   let unitsFilled = 0;
 
   for (const level of levels) {
     if (remaining <= 0) break;
     const fillQty = Math.min(remaining, level.size);
-    totalCost += fillQty * level.price;
+    // Exact: price_minor * units
+    totalCostMinor = addGbp(totalCostMinor, mulGbpUnits(gbpToMinor(level.price), fillQty));
     unitsFilled += fillQty;
     worstPrice = level.price;
     remaining -= fillQty;
   }
 
   const slippageBeyondDepth = remaining > 0;
+  const totalCost = minorToGbp(totalCostMinor);
   const avgFillPrice = unitsFilled > 0 ? totalCost / unitsFilled : 0;
 
   return {
@@ -205,6 +251,48 @@ export function computeDepthWithinBand(
     .reduce((sum, l) => sum + l.size, 0);
 
   return { depthUnits, midPrice: mid };
+}
+
+/**
+ * P0.2: Check whether an order book snapshot is fresh enough to be
+ * considered authoritative for trading decisions.
+ *
+ * A book is fresh if:
+ *   - it has a valid serverTimestamp (not null/empty/invalid)
+ *   - the age of the timestamp is within the staleness threshold
+ *
+ * @param book the order book snapshot (or any object exposing
+ *             `serverTimestamp` and `stalenessThresholdSeconds`)
+ * @param nowMs current time in milliseconds (Date.now())
+ * @param stalenessThresholdSeconds max acceptable age in seconds; when
+ *        omitted, falls back to `book.stalenessThresholdSeconds`, then 15s
+ * @returns true if the book is fresh, false if stale or invalid
+ */
+export function isBookFresh(
+  book: { serverTimestamp?: string | null; stalenessThresholdSeconds?: number } | null | undefined,
+  nowMs: number,
+  stalenessThresholdSeconds?: number,
+): boolean {
+  if (!book) {
+    return false;
+  }
+
+  const serverTimestamp = book.serverTimestamp;
+  if (!serverTimestamp) {
+    return false;
+  }
+
+  const timestampMs = Date.parse(serverTimestamp);
+  if (!Number.isFinite(timestampMs)) {
+    return false;
+  }
+
+  // If no threshold is provided, fall back to the book's own
+  // stalenessThresholdSeconds, then to a 15-second default.
+  const thresholdSeconds = stalenessThresholdSeconds ?? book.stalenessThresholdSeconds ?? 15;
+  const ageSeconds = (nowMs - timestampMs) / 1000;
+
+  return ageSeconds <= thresholdSeconds;
 }
 
 /**

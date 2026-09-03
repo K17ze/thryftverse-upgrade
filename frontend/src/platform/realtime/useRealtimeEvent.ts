@@ -20,7 +20,7 @@
  * ```
  */
 import { useEffect, useRef, useState } from 'react';
-import { useRealtime } from './RealtimeProvider';
+import { useRealtimeSafe } from './RealtimeProvider';
 import type { RealtimeEnvelope } from './types';
 
 /**
@@ -34,7 +34,8 @@ export function useRealtimeEvent<TPayload = Record<string, unknown>>(
   topic: string,
   eventType?: string,
 ): RealtimeEnvelope<TPayload> | null {
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
   const [envelope, setEnvelope] = useState<RealtimeEnvelope<TPayload> | null>(null);
   const topicRef = useRef(topic);
   const typeRef = useRef(eventType);
@@ -42,6 +43,7 @@ export function useRealtimeEvent<TPayload = Record<string, unknown>>(
   typeRef.current = eventType;
 
   useEffect(() => {
+    if (!client) return;
     // Subscribe to the topic on the client.
     client.subscribe([topic]);
 
@@ -74,10 +76,12 @@ export function useRealtimeEventHistory<TPayload = Record<string, unknown>>(
   topic: string,
   maxEvents: number = 100,
 ): RealtimeEnvelope<TPayload>[] {
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
   const [events, setEvents] = useState<RealtimeEnvelope<TPayload>[]>([]);
 
   useEffect(() => {
+    if (!client) return;
     client.subscribe([topic]);
 
     const unsubscribe = client.on<TPayload>(topic, (event) => {
@@ -115,10 +119,12 @@ export function useRealtimeEventHistory<TPayload = Record<string, unknown>>(
  * ```
  */
 export function useRealtimeResnapshot(topic: string): boolean {
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
   const [flag, setFlag] = useState(false);
 
   useEffect(() => {
+    if (!client) return;
     const unsubscribe = client.onResnapshot((resnapshotTopic) => {
       if (resnapshotTopic === topic) {
         setFlag(true);

@@ -2,11 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 import type { CoOwnPositionState } from '../../data/coOwnModels';
 
-export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+export type CoOwnSettlementMode = 'ONEZE';
 
 /** Supply buckets — the instrument series structure (§01 §3). */
 export interface CoOwnSupplyBuckets {
@@ -65,10 +66,7 @@ export function CoOwnOwnershipPanel({
 }: CoOwnOwnershipPanelProps) {
   const { colors } = useAppTheme();
 
-  const settlementLabel = settlementMode === 'GBP' ? 'GBP'
-    : settlementMode === 'TVUSD' ? 'TVUSD'
-    : settlementMode === 'ONEZE' ? '1ZE'
-    : 'GBP + TVUSD';
+  const settlementLabel = '1ZE';
   const statusLabel = status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Fully allocated';
   const statusColor = status === 'open' ? colors.success : status === 'paused' ? colors.textSecondary : colors.textMuted;
 
@@ -92,9 +90,6 @@ export function CoOwnOwnershipPanel({
     >
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} numberOfLines={1}>
-            OWNERSHIP
-          </Text>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your stake</Text>
         </View>
         <View style={styles.headerRight}>
@@ -220,7 +215,7 @@ export function CoOwnOwnershipPanel({
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>{settlementLabel}</Text>
         </View>
         <View style={styles.footerItem}>
-          <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
+          <Ionicons name="cash-outline" size={14} color={colors.textMuted} />
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>{feePct}% fee</Text>
         </View>
       </View>
@@ -304,17 +299,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  sectionEyebrow: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 1.0,
-    textTransform: 'uppercase',
-  },
   sectionTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     letterSpacing: -0.4,
-    lineHeight: Type.title.lineHeight,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
   },
   statusPill: {
     flexDirection: 'row',
@@ -330,18 +319,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   statusText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
   },
   priceBlock: {
     gap: 4,
   },
   priceLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
-    textTransform: 'uppercase',
   },
   priceRow: {
     flexDirection: 'row',
@@ -349,13 +337,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   priceValue: {
-    fontSize: Type.priceHero.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceHero.size,
+    fontFamily: TypographyV2.priceHero.fontFamily,
     letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   pricePer: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -370,14 +359,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
-    textTransform: 'uppercase',
   },
   statValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   allocationBlock: {
     gap: 6,
@@ -387,12 +376,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   allocationLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   allocationRemaining: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   allocationBarBg: {
     height: 5,
@@ -414,8 +405,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   viewerTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   viewerStats: {
     flexDirection: 'row',
@@ -425,12 +416,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   viewerStatLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   viewerStatValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
   footerRow: {
     flexDirection: 'row',
@@ -444,8 +436,8 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   footerText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   // ── New styles for supply section ──
   headerRight: {
@@ -459,10 +451,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   rightsBadgeText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   supplySection: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -471,11 +463,10 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   supplyHeader: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
   },
   supplyRows: {
     gap: Space.xs,
@@ -487,10 +478,10 @@ const styles = StyleSheet.create({
     minHeight: 22,
   },
   supplyRowLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   supplyRowRight: {
     flexDirection: 'row',
@@ -498,14 +489,14 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   supplyRowNote: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   supplyRowMissing: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   // ── New styles for viewer position grid ──
   viewerPositionGrid: {
@@ -525,9 +516,9 @@ const styles = StyleSheet.create({
     paddingTop: Space.xs,
   },
   viewerDenomLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 });

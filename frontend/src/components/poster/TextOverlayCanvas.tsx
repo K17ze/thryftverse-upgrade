@@ -29,6 +29,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { KeyboardStickyView } from '../../platform/keyboard/KeyboardProvider';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -267,7 +268,7 @@ function createStyles(colors: any) {
     },
     addTextLabel: {
       color: colors.textPrimary,
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       fontFamily: Typography.family.semibold,
     },
     controlsWrap: {

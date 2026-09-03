@@ -45,11 +45,11 @@ import {
   Pressable,
   ScrollView,
   useWindowDimensions,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -70,14 +70,12 @@ import {
   withAlpha,
   normalize,
   toHexString,
-  toRgbaString,
-} from './ColorMath';
+  toRgbaString } from './ColorMath';
 import type {
   CreatorColor,
   HSV,
   RecentColor,
-  ProjectPaletteEntry,
-} from './ColorTypes';
+  ProjectPaletteEntry } from './ColorTypes';
 
 
 
@@ -116,8 +114,7 @@ export function CreatorColorPicker({
   mediaUris = [],
   onCommitRecent,
   style,
-  accessibilityLabel = 'Color picker',
-}: CreatorColorPickerProps) {
+  accessibilityLabel = 'Color picker' }: CreatorColorPickerProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -233,7 +230,7 @@ export function CreatorColorPicker({
             accessibilityLabel={`Current color ${currentHex}. Tap to expand color picker.`}
             accessibilityRole="button"
           >
-            <View style={styles.colorWellCheckerboard} />
+            <View />
           </PressScale>
 
           <HexColorField
@@ -338,24 +335,18 @@ export function CreatorColorPicker({
 
         {/* Recents */}
         {recents.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Recent</Text>
-            <RecentColors
-              recents={recents}
-              onPick={handlePickColor}
-            />
-          </View>
+          <RecentColors
+            recents={recents}
+            onPick={handlePickColor}
+          />
         )}
 
         {/* Project palette */}
         {projectPalette.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>In this project</Text>
-            <ProjectPalette
-              palette={projectPalette}
-              onPick={handlePickColor}
-            />
-          </View>
+          <ProjectPalette
+            palette={projectPalette}
+            onPick={handlePickColor}
+          />
         )}
 
         {/* Collapse button */}
@@ -381,73 +372,44 @@ function usePickerStyles(colors: ThemeColors) {
     () =>
       StyleSheet.create({
         compactContainer: {
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         compactRow: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.sm,
-          minHeight: Control.hit,
-        },
+          minHeight: Control.hit },
         colorWell: {
-          width: 36,
-          height: 36,
+          width: 44,
+          height: 44,
           borderRadius: Radius.md,
           borderWidth: Stroke.hairline,
-          borderColor: 'rgba(0,0,0,0.1)',
-          overflow: 'hidden',
-        },
-        colorWellCheckerboard: {
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(255,255,255,0.1)',
-        },
+          borderColor: colors.borderSubtle,
+          overflow: 'hidden' },
         compactHexField: {
-          flex: 1,
-        },
+          flex: 1 },
         compactEyedropper: {},
         expandBtn: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         expandedContainer: {
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         expandedContent: {
           gap: Space.sm,
-          paddingVertical: Space.xs,
-        },
+          paddingVertical: Space.xs },
         fieldsRow: {
           flexDirection: 'row',
           gap: Space.sm,
-          alignItems: 'flex-end',
-        },
+          alignItems: 'flex-end' },
         hexField: {
-          flex: 1,
-        },
-        section: {
-          gap: Space.xs,
-        },
-        sectionLabel: {
-          fontFamily: Typography.family.semibold,
-          fontSize: Type.label.size,
-          letterSpacing: Type.label.letterSpacing,
-          color: colors.textSecondary,
-          textTransform: 'uppercase',
-        },
+          flex: 1 },
         collapseBtn: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
           justifyContent: 'center',
-          alignSelf: 'center',
-        },
-      }),
+          alignSelf: 'center' } }),
     [colors],
   );
 }

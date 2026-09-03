@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
@@ -133,7 +134,7 @@ export function CoOwnAssetCard({
               <CachedImage uri={issuerAvatar} style={styles.issuerAvatar} contentFit="cover" />
             ) : (
               <View style={[styles.issuerAvatar, { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                <Text style={{ fontSize: Type.meta.size - 2, fontFamily: Typography.family.bold, color: colors.textPrimary }}>
+                <Text style={{ fontSize: TypographyV2.meta.size - 2, fontFamily: TypographyV2.meta.fontFamily, color: colors.textPrimary }}>
                   {issuerHandle.slice(0, 1).toUpperCase()}
                 </Text>
               </View>
@@ -199,7 +200,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     overflow: 'hidden',
     marginHorizontal: Space.md,
@@ -259,7 +260,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.sm,
     minHeight: Space.xl + Space.sm + 2,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 10,
@@ -277,7 +278,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: Radius.xl,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',

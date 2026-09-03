@@ -13,7 +13,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, ExchangeLayout } from '../../theme/designTokens';
+import { Space, Radius, ExchangeLayout } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { MARKET_COLORS, type CoOwnMarketMode } from '../../constants/colors';
 
 export interface CoOwnMarketStatusStripProps {
@@ -217,14 +218,14 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '45deg' }],
   },
   modeLabel: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
   },
   separator: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   staleBadge: {
     flexDirection: 'row',
@@ -236,21 +237,21 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   staleBadgeText: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
   },
   sessionLabel: {
     flex: 1,
-    fontSize: Type.meta.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   countdown: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
     letterSpacing: 0,
   },
@@ -263,10 +264,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   chipText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 });
 

@@ -1,23 +1,21 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  type SharedValue,
-} from 'react-native-reanimated';
+  type SharedValue } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Radius, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { isVideoUri } from '../../utils/media';
 import { ImageViewer } from '../ImageViewer';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AnimatedHeart } from '../AnimatedHeart';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 interface ListingMediaHeroProps {
   images: string[];
@@ -50,11 +48,11 @@ export function ListingMediaHero({
   onDoubleTap,
   bigHeartOpacity,
   bigHeartScale,
-  scrollY,
-}: ListingMediaHeroProps) {
+  scrollY }: ListingMediaHeroProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const heroStyle = useAnimatedStyle(() => {
@@ -64,14 +62,12 @@ export function ListingMediaHero({
     const parallaxTranslate = interpolate(scrollY.value, [0, 360], [0, 90], Extrapolation.CLAMP);
     const scale = interpolate(overscroll, [-120, 0], [1.16, 1], Extrapolation.CLAMP);
     return {
-      transform: [{ translateY: pullDownTranslate + parallaxTranslate }, { scale }],
-    };
+      transform: [{ translateY: pullDownTranslate + parallaxTranslate }, { scale }] };
   });
 
   const bigHeartStyle = useAnimatedStyle(() => ({
     opacity: bigHeartOpacity.value,
-    transform: [{ scale: bigHeartScale.value }],
-  }));
+    transform: [{ scale: bigHeartScale.value }] }));
 
   const heroHeight = SCREEN_H * 0.65;
 
@@ -91,7 +87,7 @@ export function ListingMediaHero({
         style={[StyleSheet.absoluteFill, styles.bigHeartWrap, bigHeartStyle]}
         pointerEvents="none"
       >
-        <Ionicons name="heart" size={100} color="#fff" style={styles.bigHeartIcon} />
+        <Ionicons name="heart" size={100} color={colors.scrimTextPrimary} style={styles.bigHeartIcon} />
       </Reanimated.View>
 
       {isSold && (
@@ -110,7 +106,7 @@ export function ListingMediaHero({
 
       {images.length > 0 && isVideoUri(images[activeIndex]) && (
         <View style={styles.videoBadge}>
-          <Ionicons name="play-circle" size={16} color="#fff" />
+          <Ionicons name="play-circle" size={16} color={colors.scrimTextPrimary} />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
       )}
@@ -122,7 +118,7 @@ export function ListingMediaHero({
           {...PressPresets.iconButton}
           accessibilityLabel="Go back"
         >
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} />
         </AnimatedPressable>
 
         <View style={styles.headerRight}>
@@ -132,7 +128,7 @@ export function ListingMediaHero({
             {...PressPresets.iconButton}
             accessibilityLabel="Share this listing"
           >
-            <Ionicons name="share-outline" size={24} color="#fff" />
+            <Ionicons name="share-outline" size={24} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -145,7 +141,7 @@ export function ListingMediaHero({
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={24}
-              color={isSaved ? colors.brand : '#fff'}
+              color={isSaved ? colors.brand : colors.scrimTextPrimary}
             />
           </AnimatedPressable>
 
@@ -155,7 +151,7 @@ export function ListingMediaHero({
               onToggle={onToggleFav}
               size={24}
               activeColor={colors.danger}
-              inactiveColor="#fff"
+              inactiveColor={colors.scrimTextPrimary}
             />
           </View>
         </View>
@@ -164,33 +160,29 @@ export function ListingMediaHero({
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
   heroContainer: {
-    width: SCREEN_W,
+    width: screenWidth,
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   topScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: 120,
-    backgroundColor: 'rgba(0,0,0,0.12)',
-  },
+    backgroundColor: colors.glassBg },
   bigHeartWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 5,
-  },
+    zIndex: 5 },
   bigHeartIcon: {
-    shadowColor: '#000',
+    shadowColor: colors.textPrimary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
+    shadowRadius: 10 },
   soldOverlay: {
     position: 'absolute',
     bottom: 32,
@@ -198,28 +190,24 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.success,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   soldText: {
     color: colors.background,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 1 },
   indexBadge: {
     position: 'absolute',
     bottom: 16,
     right: 16,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   indexText: {
-    color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   videoBadge: {
     position: 'absolute',
     bottom: 16,
@@ -227,16 +215,14 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   videoBadgeText: {
-    color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   floatingHeader: {
     position: 'absolute',
     top: 0,
@@ -245,19 +231,15 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   headerRight: {
     flexDirection: 'row',
-    gap: 12,
-  },
+    gap: 12 },
   controlBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  });
+    justifyContent: 'center' } });
 }

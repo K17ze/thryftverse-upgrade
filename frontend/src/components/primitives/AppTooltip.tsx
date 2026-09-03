@@ -7,28 +7,24 @@ import {
   View,
   ViewStyle,
   StyleProp,
-  Dimensions,
-  type AccessibilityRole,
-} from 'react-native';
+  useWindowDimensions,
+  type AccessibilityRole } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withSpring,
   Easing as ReanimatedEasing,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
   Radius,
   Space,
-  Type,
-  Typography,
   Elevation,
-  ZIndex,
-} from '../../theme/designTokens';
+  ZIndex } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 const ReanimatedView = Reanimated.View;
 
@@ -56,7 +52,6 @@ const ARROW_SIZE = 8;
 const TOOLTIP_PADDING_H = Space.sm;
 const TOOLTIP_PADDING_V = Space.xs;
 const MAX_WIDTH = 240;
-const SCREEN = Dimensions.get('window');
 
 /**
  * AppTooltip — a positioned tooltip that appears relative to a wrapped
@@ -73,9 +68,9 @@ export function AppTooltip({
   placement = 'top',
   trigger = 'press',
   duration = 0,
-  style,
-}: AppTooltipProps) {
+  style }: AppTooltipProps) {
   const { colors, isDark } = useAppTheme();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { spring } = useMotionConfig();
   const reducedMotion = useReducedMotion();
   const anchorRef = React.useRef<View>(null);
@@ -109,7 +104,7 @@ export function AppTooltip({
       setRect({ x, y, width, height });
       let resolved = placement;
       if (placement === 'top' && y < 120) resolved = 'bottom';
-      if (placement === 'bottom' && y + height > SCREEN.height - 120) resolved = 'top';
+      if (placement === 'bottom' && y + height > screenHeight - 120) resolved = 'top';
       setComputedPlacement(resolved);
       setVisible(true);
       clearAutoDismiss();
@@ -117,7 +112,7 @@ export function AppTooltip({
         timeoutRef.current = setTimeout(dismiss, duration);
       }
     });
-  }, [placement, duration, dismiss, clearAutoDismiss]);
+  }, [placement, duration, dismiss, clearAutoDismiss, screenHeight]);
 
   React.useEffect(() => {
     if (visible) {
@@ -134,12 +129,11 @@ export function AppTooltip({
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    transform: [{ scale: scale.value }],
-  }));
+    transform: [{ scale: scale.value }] }));
 
   const tooltipLayout = React.useMemo(
-    () => (rect ? computeTooltipLayout(rect, computedPlacement) : null),
-    [rect, computedPlacement],
+    () => (rect ? computeTooltipLayout(rect, computedPlacement, screenWidth, screenHeight) : null),
+    [rect, computedPlacement, screenWidth, screenHeight],
   );
 
   const triggerProps = React.useMemo(() => {
@@ -179,7 +173,7 @@ interface TooltipLayout {
   top: number;
 }
 
-function computeTooltipLayout(rect: MeasuredRect, placement: AppTooltipPlacement): TooltipLayout {
+function computeTooltipLayout(rect: MeasuredRect, placement: AppTooltipPlacement, screenWidth: number, screenHeight: number): TooltipLayout {
   const centerX = rect.x + rect.width / 2;
   const centerY = rect.y + rect.height / 2;
   const estimatedWidth = Math.min(MAX_WIDTH, 200);
@@ -188,24 +182,20 @@ function computeTooltipLayout(rect: MeasuredRect, placement: AppTooltipPlacement
   switch (placement) {
     case 'top':
       return {
-        left: clamp(centerX - estimatedWidth / 2, 8, SCREEN.width - estimatedWidth - 8),
-        top: rect.y - estimatedHeight - ARROW_SIZE - Space.xxs,
-      };
+        left: clamp(centerX - estimatedWidth / 2, 8, screenWidth - estimatedWidth - 8),
+        top: rect.y - estimatedHeight - ARROW_SIZE - Space.xxs };
     case 'bottom':
       return {
-        left: clamp(centerX - estimatedWidth / 2, 8, SCREEN.width - estimatedWidth - 8),
-        top: rect.y + rect.height + ARROW_SIZE + Space.xxs,
-      };
+        left: clamp(centerX - estimatedWidth / 2, 8, screenWidth - estimatedWidth - 8),
+        top: rect.y + rect.height + ARROW_SIZE + Space.xxs };
     case 'left':
       return {
         left: rect.x - estimatedWidth - ARROW_SIZE - Space.xxs,
-        top: clamp(centerY - estimatedHeight / 2, 8, SCREEN.height - estimatedHeight - 8),
-      };
+        top: clamp(centerY - estimatedHeight / 2, 8, screenHeight - estimatedHeight - 8) };
     case 'right':
       return {
         left: rect.x + rect.width + ARROW_SIZE + Space.xxs,
-        top: clamp(centerY - estimatedHeight / 2, 8, SCREEN.height - estimatedHeight - 8),
-      };
+        top: clamp(centerY - estimatedHeight / 2, 8, screenHeight - estimatedHeight - 8) };
   }
 }
 
@@ -218,30 +208,25 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
   const arrowBase = {
     position: 'absolute' as const,
     width: 0,
-    height: 0,
-  };
+    height: 0 };
   return StyleSheet.create({
     host: {
-      alignSelf: 'flex-start',
-    } as ViewStyle,
+      alignSelf: 'flex-start' } as ViewStyle,
     overlay: {
       ...StyleSheet.absoluteFill,
-      zIndex: ZIndex.dropdown,
-    } as ViewStyle,
+      zIndex: ZIndex.dropdown } as ViewStyle,
     tooltip: {
       backgroundColor: tooltipBg,
       paddingHorizontal: TOOLTIP_PADDING_H,
       paddingVertical: TOOLTIP_PADDING_V,
       borderRadius: Radius.sm,
-      ...Elevation.floating,
-    } as ViewStyle,
+      ...Elevation.floating } as ViewStyle,
     text: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.scrimTextPrimary,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    } as ViewStyle,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight } as ViewStyle,
     arrow: arrowBase as ViewStyle,
     arrow_top: {
       bottom: -ARROW_SIZE,
@@ -252,8 +237,7 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
       borderTopWidth: ARROW_SIZE,
       borderLeftColor: 'transparent',
       borderRightColor: 'transparent',
-      borderTopColor: tooltipBg,
-    } as ViewStyle,
+      borderTopColor: tooltipBg } as ViewStyle,
     arrow_bottom: {
       top: -ARROW_SIZE,
       left: '50%',
@@ -263,8 +247,7 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
       borderBottomWidth: ARROW_SIZE,
       borderLeftColor: 'transparent',
       borderRightColor: 'transparent',
-      borderBottomColor: tooltipBg,
-    } as ViewStyle,
+      borderBottomColor: tooltipBg } as ViewStyle,
     arrow_left: {
       right: -ARROW_SIZE,
       top: '50%',
@@ -274,8 +257,7 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
       borderLeftWidth: ARROW_SIZE,
       borderTopColor: 'transparent',
       borderBottomColor: 'transparent',
-      borderLeftColor: tooltipBg,
-    } as ViewStyle,
+      borderLeftColor: tooltipBg } as ViewStyle,
     arrow_right: {
       left: -ARROW_SIZE,
       top: '50%',
@@ -285,7 +267,5 @@ function createStyles(colors: ThemeColors, isDark: boolean) {
       borderRightWidth: ARROW_SIZE,
       borderTopColor: 'transparent',
       borderBottomColor: 'transparent',
-      borderRightColor: tooltipBg,
-    } as ViewStyle,
-  });
+      borderRightColor: tooltipBg } as ViewStyle });
 }

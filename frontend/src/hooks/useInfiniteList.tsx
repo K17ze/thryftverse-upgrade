@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator, Pressable, StyleSheet } from 'react-nati
 import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -440,12 +441,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
   },
   emptyText: {
-    fontSize: 15,
+    fontSize: TypographyV2.bodyStrong.size,
     textAlign: 'center',
     marginBottom: 12,
   },
   retryText: {
-    fontSize: 15,
+    fontSize: TypographyV2.bodyStrong.size,
     fontWeight: '600',
   },
   footerContainer: {

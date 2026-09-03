@@ -27,6 +27,19 @@ declare module 'i18next' {
       messaging: (typeof flattenedResources)['messaging'];
       settings: (typeof flattenedResources)['settings'];
       commerce: (typeof flattenedResources)['commerce'];
+      myProfile: (typeof flattenedResources)['myProfile'];
+      galleria: (typeof flattenedResources)['galleria'];
+      agentLedger: (typeof flattenedResources)['agentLedger'];
+      liveStreamViewer: (typeof flattenedResources)['liveStreamViewer'];
+      liveShopping: (typeof flattenedResources)['liveShopping'];
+      conversationalSearch: (typeof flattenedResources)['conversationalSearch'];
+      aiAgent: (typeof flattenedResources)['aiAgent'];
+      algorithm: (typeof flattenedResources)['algorithm'];
+      aiListing: (typeof flattenedResources)['aiListing'];
+      report: (typeof flattenedResources)['report'];
+      appeal: (typeof flattenedResources)['appeal'];
+      coOwn: (typeof flattenedResources)['coOwn'];
+      stateCopy: (typeof flattenedResources)['stateCopy'];
     };
   }
 }

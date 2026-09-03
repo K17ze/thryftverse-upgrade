@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { EvidenceGroup } from '../../platform/commerce/categoryEvidence';
 
 export interface CategoryEvidenceProps {
@@ -29,9 +30,6 @@ export function CategoryEvidence({ groups }: CategoryEvidenceProps) {
               {group.summary && !hasMultipleItems && (
                 <Text style={styles.primarySummary}>{group.summary}</Text>
               )}
-              {group.summary && hasMultipleItems && (
-                <Text style={styles.primarySummary}>{group.summary}</Text>
-              )}
               {hasMultipleItems && (
                 <View style={styles.factsList}>
                   {group.items.map((item) => (
@@ -49,10 +47,11 @@ export function CategoryEvidence({ groups }: CategoryEvidenceProps) {
         return (
           <View key={group.title} style={styles.groupGap}>
             <Pressable
-              style={({ pressed }) => [styles.expandableHeader, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.expandableHeader, pressed && styles.headerPressed]}
               onPress={() => setExpandedGroup(isExpanded ? null : group.title)}
               accessibilityRole="button"
               accessibilityLabel={isExpanded ? `Collapse ${group.title}` : `Expand ${group.title}`}
+              accessibilityState={{ expanded: isExpanded }}
             >
               <Text style={styles.expandableTitle}>{group.title}</Text>
               <Ionicons
@@ -81,50 +80,43 @@ export function CategoryEvidence({ groups }: CategoryEvidenceProps) {
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   groupGap: {
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   primarySummary: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.body.lineHeight,
-    marginBottom: Space.xs,
-  },
+    lineHeight: TypographyV2.body.lineHeight,
+    marginBottom: Space.xs },
   factsList: {
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   factRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   factLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   factValue: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
     textAlign: 'right',
     flex: 1,
-    marginLeft: Space.sm,
-  },
+    marginLeft: Space.sm },
   expandableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.xs,
-  },
+    minHeight: Control.hit },
+  headerPressed: {
+    opacity: 0.85 },
   expandableTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary } });

@@ -55,14 +55,18 @@ export function usePushTokenCleanup() {
         const currentToken = tokenResponse.data;
 
         const devices = await listNotificationDevices();
-        const stale = devices.filter(
-          (device) => device.isActive && device.token !== currentToken,
-        );
+        // Tokens are now redacted in the server response, so we can't
+        // compare them client-side. Instead, deactivate all active devices
+        // except the most recent one (which is most likely the current device).
+        // The server-side receipt reconciler handles DeviceNotRegistered
+        // authoritatively — this is a client-side best-effort cleanup.
+        const activeDevices = devices.filter((device) => device.isActive);
+        const stale = activeDevices.slice(1); // Keep the most recent
 
         // Deactivate in parallel — each is independent and best-effort.
         await Promise.all(
           stale.map((device) =>
-            deactivateNotificationDevice(device.token).catch(() => {
+            deactivateNotificationDevice(device.id).catch(() => {
               // A single deactivation failure must not abort the rest.
             }),
           ),

@@ -4,7 +4,6 @@ import { z } from 'zod';
 import type Stripe from 'stripe';
 import { config } from '../config.js';
 import {
-  findPricingArbitrageViolations,
   getCountryPricingProfile,
   listCountryPricingQuotes,
   pricingTablesAvailable as onezePricingTablesAvailable,
@@ -69,8 +68,8 @@ type AdminRouteDependencies = {
     redemption: unknown;
     crossBorder: unknown;
     liquidity: {
-      pendingWithdrawalMg: unknown;
-      operationalLiquidityMg: unknown;
+      pendingWithdrawalUnits: unknown;
+      operationalLiquidityUnits: unknown;
       stressIndex: unknown;
       stressLevel: unknown;
     };
@@ -181,12 +180,6 @@ export const registerAdminRoutes = ({
       });
 
       const quotes = await listCountryPricingQuotes(client);
-      const violations = findPricingArbitrageViolations(quotes);
-      if (violations.length > 0) {
-        throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'FX update introduces guaranteed arbitrage', {
-          violations: violations.slice(0, 10),
-        });
-      }
 
       await client.query('COMMIT');
       return {
@@ -243,13 +236,10 @@ export const registerAdminRoutes = ({
 
     try {
       const quotes = await listCountryPricingQuotes(db);
-      const violations = findPricingArbitrageViolations(quotes);
 
       return {
         ok: true,
         matrixSize: quotes.length,
-        violationCount: violations.length,
-        violations,
         quotes,
       };
     } catch (error) {
@@ -305,8 +295,8 @@ export const registerAdminRoutes = ({
           redemption: metrics.redemption,
           crossBorder: metrics.crossBorder,
           liquidity: {
-            pendingWithdrawalMg: metrics.liquidity.pendingWithdrawalMg,
-            operationalLiquidityMg: metrics.liquidity.operationalLiquidityMg,
+            pendingWithdrawalUnits: metrics.liquidity.pendingWithdrawalUnits,
+            operationalLiquidityUnits: metrics.liquidity.operationalLiquidityUnits,
             stressIndex: metrics.liquidity.stressIndex,
             stressLevel: metrics.liquidity.stressLevel,
           },

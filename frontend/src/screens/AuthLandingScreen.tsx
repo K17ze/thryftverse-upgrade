@@ -4,10 +4,8 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  Dimensions,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +13,8 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
-import { Typography, Radius, Type, Space, FontSize, Stroke, Control } from '../theme/designTokens';
+import { Typography, Radius, Space, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -23,8 +22,6 @@ import { AppInput } from '../components/ui/AppInput';
 import { useStore } from '../store/useStore';
 import { consumeMagicLink, loginWithAppleIdentityToken, loginWithGoogleIdToken, loginWithPassword, type MagicLinkConsumeError } from '../services/authApi';
 import { loginWithPasskey } from '../services/passkeyApi';
-
-const { width, height } = Dimensions.get('window');
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -75,8 +72,7 @@ export default function AuthLandingScreen() {
     clientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || 'dev-client-id-placeholder',
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_IOS_CLIENT_ID,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID || 'dev-android-client-id-placeholder',
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID,
-  });
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID });
 
   const handleMagicLink = useCallback(
     async (url: string | null) => {
@@ -106,8 +102,7 @@ export default function AuthLandingScreen() {
       try {
         const result = await consumeMagicLink({
           token,
-          email,
-        });
+          email });
         login(result.storeUser);
         setTwoFactorEnabled(result.user.twoFactorEnabled);
         navigation.replace('MainTabs');
@@ -162,8 +157,7 @@ export default function AuthLandingScreen() {
         token,
         email: magicLinkEmailRef.current,
         twoFactorCode: magicLinkUseRecovery ? undefined : twoFactorCode,
-        recoveryCode: magicLinkUseRecovery ? recoveryCode : undefined,
-      });
+        recoveryCode: magicLinkUseRecovery ? recoveryCode : undefined });
       login(result.storeUser);
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
@@ -279,8 +273,7 @@ export default function AuthLandingScreen() {
         email: result.user.email,
         username: result.user.username,
         role: result.user.role,
-        emailVerified: result.user.emailVerified,
-      } as never);
+        emailVerified: result.user.emailVerified } as never);
       setTwoFactorEnabled(false);
       navigation.replace('MainTabs');
     } catch (err) {
@@ -309,8 +302,7 @@ export default function AuthLandingScreen() {
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
+        ] });
 
       if (!credential.identityToken) {
         throw new Error('Missing Apple identity token');
@@ -335,57 +327,14 @@ export default function AuthLandingScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       <SafeAreaView style={styles.safeArea}>
-        {/* Middle - main copy. The brand wordmark "THRYFT" is the value
-            proposition; no unexplained eyebrow chrome competing for the
-            text budget (§4). */}
+        {/* Wordmark — top-left, not centered. The product name is the
+            only identity element above the actions. No subtitle, no
+            trust row, no decorative chrome competing for attention. */}
+        <Text style={styles.wordmark} maxFontSizeMultiplier={1.2}>
+          ThryftVerse
+        </Text>
 
-        {/* Middle - main copy */}
-        <View style={styles.content}>
-          <Text
-            style={styles.title}
-            maxFontSizeMultiplier={1.2}
-          >
-            THRYFT
-          </Text>
-
-          <Text
-            style={styles.subtitle}
-            maxFontSizeMultiplier={1.3}
-          >
-            buy, sell, trade. no noise.
-          </Text>
-
-          {/* Trust signals — a single line of honest proof, not a flat row
-              of decorative icons. Per §11 and 2026 research (Landra), trust
-              signals must be proof, not claims. The buyer-protection text
-              links to the real policy so it is an actionable destination,
-              not dead text. We do not fabricate seller counts or transaction
-              volumes — the proof is qualitative and verifiable. */}
-          <View
-            style={styles.trustRow}
-            accessibilityRole="text"
-            accessibilityLabel="From independent sellers and creators. Buyer protection on every purchase."
-          >
-            <Text style={styles.trustText} maxFontSizeMultiplier={1.3}>
-              From independent sellers and creators ·{' '}
-            </Text>
-            <Pressable
-              onPress={() => void Linking.openURL('https://thryftverse.app/buyer-protection')}
-              accessibilityRole="link"
-              accessibilityLabel="Buyer protection policy"
-              accessibilityHint="Opens the buyer protection policy in your browser"
-            >
-              <Text style={styles.trustLink} maxFontSizeMultiplier={1.3}>
-                Buyer protection on every purchase
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Inline auth error banner — accessible, recoverable.
-            A calm error banner with a clear dismiss control
-            communicates competence. The danger-tinted surface is restrained
-            so it informs without alarming. */}
+        {/* Inline auth error banner — accessible, recoverable. */}
         {authError ? (
           <View
             style={styles.errorBanner}
@@ -408,9 +357,7 @@ export default function AuthLandingScreen() {
         {/* Inline 2FA challenge for magic-link sign-in. The backend does NOT
             consume the token when TWO_FACTOR_REQUIRED is returned (the
             transaction rolls back), so the same token can be retried with a
-            2FA code. This is a focused inline state — one dominant action
-            ("Verify"), one restrained secondary ("Use recovery code" toggle
-            + "Cancel") — matching the screen's visual language. */}
+            2FA code. */}
         {magicLinkTwoFactorRequired ? (
           <View
             style={styles.twoFactorNotice}
@@ -419,7 +366,7 @@ export default function AuthLandingScreen() {
           >
             <View style={styles.twoFactorNoticeHeader}>
               <View style={[styles.twoFactorNoticeIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
-                <Ionicons name="shield-checkmark-outline" size={18} color={colors.commerceTrust} />
+                <Ionicons name="lock-closed-outline" size={18} color={colors.commerceTrust} />
               </View>
               <Text style={styles.twoFactorNoticeTitle} maxFontSizeMultiplier={1.3}>
                 Two-factor authentication required
@@ -524,16 +471,17 @@ export default function AuthLandingScreen() {
           </View>
         ) : null}
 
-        {/* Bottom — CTAs. Per 2026 research (Gummble, Eleken), social login
-            buttons go at the TOP — the old pattern of burying them below
-            email fields is dead. Apple first (platform native on iOS),
-            Google second. Full-width labeled buttons, not icon circles,
-            so the path is obvious to a distracted user. Email signup is
-            the secondary path below a "or continue with email" divider. */}
-        <View
-          style={styles.footer}
-        >
-          {/* Social login — primary path, full-width labeled buttons */}
+        {isMagicLinkLoading && (
+          <Text style={styles.magicLinkLoadingText} accessibilityLiveRegion="polite" maxFontSizeMultiplier={1.3}>
+            Signing you in from your email link...
+          </Text>
+        )}
+
+        {/* Actions anchored to the bottom. Two primary social paths
+            (Apple, Google) as full-width buttons. Passkey and email
+            are quiet text links — not equal-weight pills — because
+            they are secondary paths, not the main entry. */}
+        <View style={styles.footer}>
           <AnimatedPressable
             style={[styles.socialFullBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
             activeOpacity={0.85}
@@ -574,73 +522,58 @@ export default function AuthLandingScreen() {
             </AnimatedPressable>
           ) : null}
 
-          {/* Passkey — phishing-resistant sign-in (NCSC recommended) */}
-          <AnimatedPressable
-            style={[styles.socialFullBtn, (!!socialLoading || isMagicLinkLoading) && styles.socialBtnDisabled]}
-            activeOpacity={0.85}
+          {/* Secondary paths as text links — not equal-weight pills.
+              Passkey, email signup, and login are real paths but not
+              the dominant entry. Text links create clear hierarchy. */}
+          <Pressable
             onPress={handlePasskeySignIn}
             disabled={!!socialLoading || isMagicLinkLoading}
+            style={styles.textLinkBtn}
             accessibilityRole="button"
             accessibilityLabel="Sign in with passkey"
             accessibilityHint="Use Face ID, Touch ID, or a security key to sign in"
           >
             {socialLoading === 'passkey' ? (
-              <ActivityIndicator color={colors.textPrimary} size="small" />
+              <ActivityIndicator color={colors.textSecondary} size="small" />
             ) : (
-              <>
-                <Ionicons name="key-outline" size={20} color={colors.textPrimary} />
-                <Text style={styles.socialFullText} maxFontSizeMultiplier={1.2}>Sign in with passkey</Text>
-              </>
+              <Text style={styles.textLinkText} maxFontSizeMultiplier={1.3}>
+                Use passkey
+              </Text>
             )}
-          </AnimatedPressable>
+          </Pressable>
 
-          {isMagicLinkLoading && (
-            <Text style={styles.magicLinkLoadingText} accessibilityLiveRegion="polite" maxFontSizeMultiplier={1.3}>
-              Signing you in from your email link...
-            </Text>
-          )}
-
-          {/* Divider — separates social from email path */}
-          <View style={styles.socialDivider}>
-            <View style={styles.socialDividerLine} />
-            <Text style={styles.socialDividerText} maxFontSizeMultiplier={1.3}>or continue with email</Text>
-            <View style={styles.socialDividerLine} />
-          </View>
-
-          {/* Email signup — secondary path */}
-          <AnimatedPressable
-            style={styles.primaryBtn}
-            activeOpacity={0.9}
+          <Pressable
             onPress={() => navigation.navigate('SignUp')}
+            style={styles.textLinkBtn}
             accessibilityRole="button"
             accessibilityLabel="Sign up with email"
             accessibilityHint="Opens the sign-up screen"
           >
-            <Text style={styles.primaryText} maxFontSizeMultiplier={1.2}>Sign up with email</Text>
-          </AnimatedPressable>
+            <Text style={styles.textLinkText} maxFontSizeMultiplier={1.3}>
+              Sign up with email
+            </Text>
+          </Pressable>
 
-          {/* Already have an account — bottom link */}
-          <AnimatedPressable
-            style={styles.secondaryBtn}
-            activeOpacity={0.8}
+          <Pressable
             onPress={() => navigation.navigate('Login')}
+            style={styles.textLinkBtn}
             accessibilityRole="button"
             accessibilityLabel="Log in to existing account"
             accessibilityHint="Opens the login screen"
           >
-            <Text style={styles.secondaryText} maxFontSizeMultiplier={1.3}>Already have an account? Log in</Text>
-          </AnimatedPressable>
+            <Text style={styles.textLinkText} maxFontSizeMultiplier={1.3}>
+              Already have an account? Log in
+            </Text>
+          </Pressable>
 
-          {/* Terms — navigable links (§11). "Terms of Service" and
-              "Privacy Policy" open the real documents, so the control has
-              an actionable destination rather than being dead text. */}
+          {/* Terms + trust — bottom, quiet. One line, not a banner. */}
           <Text style={styles.termsText} maxFontSizeMultiplier={1.3}>
             by continuing, you agree to our{' '}
             <Text
               style={styles.termsLink}
               onPress={() => void Linking.openURL('https://thryftverse.app/terms')}
             >
-              terms of service
+              terms
             </Text>
             {' '}and{' '}
             <Text
@@ -649,7 +582,7 @@ export default function AuthLandingScreen() {
             >
               privacy policy
             </Text>
-            .
+            .{' '}buyer protection on every purchase.
           </Text>
 
           {__DEV__ && (
@@ -670,8 +603,7 @@ export default function AuthLandingScreen() {
                   // composition.
                   const result = await loginWithPassword({
                     email: 'marie@seed.test',
-                    password: 'seed12345',
-                  });
+                    password: 'seed12345' });
                   login(result.storeUser);
                   setTwoFactorEnabled(result.user.twoFactorEnabled);
                   // Hydrate the full profile (avatar, displayName, bio, …)
@@ -710,247 +642,160 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   safeArea: {
     flex: 1,
-    justifyContent: 'space-between',
-  },
-  content: {
-    paddingHorizontal: Space.lg - 2,
-    paddingBottom: Space.md + 2,
-  },
-  title: {
-    fontSize: FontSize.giant,
+    justifyContent: 'flex-end' },
+  // Wordmark — top-left, restrained. No giant centered title.
+  wordmark: {
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: Typography.family.extrabold,
     color: colors.textPrimary,
-    lineHeight: FontSize.giant + 2,
-    letterSpacing: -2,
-    marginBottom: Space.smMd,
-  },
-  subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-    lineHeight: Type.caption.size + 4,
-    letterSpacing: 0.24,
-  },
-  trustRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    marginTop: Space.md + 4,
-  },
-  trustText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-    letterSpacing: 0.2,
-  },
-  trustLink: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-    letterSpacing: 0.2,
-    textDecorationLine: 'underline',
-  },
+    letterSpacing: -0.5,
+    paddingHorizontal: Space.lg,
+    paddingTop: Space.xxl },
   footer: {
-    paddingHorizontal: Space.lg + 4,
-    paddingBottom: Space.sm + 6,
-    gap: Space.sm + 2,
-  },
+    paddingHorizontal: Space.lg,
+    paddingBottom: Space.xxl,
+    gap: Space.sm + 2 },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs + 2,
-    marginHorizontal: Space.lg + 4,
+    marginHorizontal: Space.lg,
     marginBottom: Space.xs + 2,
     borderRadius: Radius.lg,
     backgroundColor: colors.dangerSubtle,
     borderWidth: Stroke.standard,
-    borderColor: colors.dangerBorder,
-  },
+    borderColor: colors.dangerBorder },
   errorBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    lineHeight: Type.caption.size + 2,
-  },
+    lineHeight: TypographyV2.meta.size + 2 },
   twoFactorNotice: {
-    paddingHorizontal: Space.lg + 4,
+    paddingHorizontal: Space.lg,
     paddingVertical: Space.md + 2,
-    marginHorizontal: Space.lg + 4,
+    marginHorizontal: Space.lg,
     marginBottom: Space.xs + 2,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   twoFactorNoticeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   twoFactorNoticeIcon: {
     width: Control.icon,
     height: Control.icon,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   twoFactorNoticeTitle: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   twoFactorNoticeBody: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.size + 4,
-    marginBottom: Space.sm + 2,
-  },
+    lineHeight: TypographyV2.meta.size + 4,
+    marginBottom: Space.sm + 2 },
   twoFactorNoticePrimaryBtn: {
     backgroundColor: colors.brand,
-    height: Space.xl + Space.xl + 4,
+    height: 52,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   twoFactorNoticePrimaryText: {
     color: colors.textInverse,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0.2,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 0.2 },
   twoFactorNoticeCancel: {
     alignSelf: 'center',
     marginTop: Space.sm,
     paddingVertical: Space.xs,
     paddingHorizontal: Space.md,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   twoFactorNoticeCancelText: {
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   twoFactorNoticeInput: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   twoFactorNoticeToggle: {
     alignSelf: 'flex-start',
     paddingVertical: Space.xs,
     paddingHorizontal: Space.xs,
     marginBottom: Space.xs,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   twoFactorNoticeToggleText: {
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    textDecorationLine: 'underline',
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textDecorationLine: 'underline' },
   twoFactorNoticeError: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    lineHeight: Type.caption.size + 2,
-    marginBottom: Space.sm,
-  },
-  primaryBtn: {
-    backgroundColor: colors.brand,
-    height: Space.xl + Space.xl + 8,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryText: {
-    color: colors.textInverse,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0.2,
-  },
-  secondaryBtn: {
-    height: Space.xl + Space.xl + 4,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.md,
-  },
-  secondaryText: {
-    color: colors.textSecondary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.1,
-  },
+    lineHeight: TypographyV2.meta.size + 2,
+    marginBottom: Space.sm },
+  // Primary social buttons — Apple + Google. Full-width, clear hierarchy.
   socialFullBtn: {
     flexDirection: 'row',
-    height: Space.xl + Space.xl + 4,
+    height: 52,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm + 2,
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   socialFullText: {
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.1,
-  },
-  socialDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    marginTop: Space.xs,
-    marginBottom: Space.xs,
-  },
-  socialDividerLine: {
-    flex: 1,
-    height: Stroke.hairline,
-    backgroundColor: colors.border,
-  },
-  socialDividerText: {
-    color: colors.textMuted,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 0.1 },
   socialBtnDisabled: {
-    opacity: 0.7,
-  },
-  magicLinkLoadingText: {
-    marginTop: Space.sm,
+    opacity: 0.7 },
+  // Secondary paths — text links, not pills. Creates clear hierarchy.
+  textLinkBtn: {
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Space.xs },
+  textLinkText: {
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
+  magicLinkLoadingText: {
+    color: colors.textSecondary,
+    fontSize: TypographyV2.meta.size,
     textAlign: 'center',
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    paddingHorizontal: Space.lg,
+    marginBottom: Space.sm },
   termsText: {
     color: colors.textMuted,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
-    lineHeight: Type.caption.lineHeight,
-    marginTop: Space.xs,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    marginTop: Space.sm },
   termsLink: {
     color: colors.textSecondary,
     fontFamily: Typography.family.semibold,
-    textDecorationLine: 'underline',
-  },
+    textDecorationLine: 'underline' },
   devBypassBtn: {
     marginTop: Space.smMd,
     paddingVertical: Space.sm + 2,
@@ -959,13 +804,10 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.successSubtle,
     borderWidth: Stroke.standard,
     borderColor: colors.successBorder,
-    alignSelf: 'center',
-  },
+    alignSelf: 'center' },
   devBypassText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.success,
-    textAlign: 'center',
-  },
-});
+    textAlign: 'center' } });
 }

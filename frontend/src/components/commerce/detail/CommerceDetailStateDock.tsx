@@ -1,16 +1,19 @@
-import React from 'react';
-import { View, StyleSheet, Text, Pressable, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, Text, Pressable, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Radius, Typography, Elevation, DockConstants, CommerceLayout } from '../../../theme/designTokens';
+import { Space, Radius, Elevation, DockConstants, CommerceLayout, PressScale, Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
+import { Motion } from '../../../theme/motionTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useHaptic } from '../../../hooks/useHaptic';
-import { useBreakpoint } from '../../../hooks/useBreakpoint';
 import { CachedImage } from '../../CachedImage';
+import { COMMERCE_DETAIL_COMPACT_WIDTH } from './types';
 import type { CommerceDetailDockLayout } from './types';
+
+const COMPACT_STACK_THRESHOLD = COMMERCE_DETAIL_COMPACT_WIDTH;
 
 /**
  * Sticky state/action dock — the bottom dock that holds the current
@@ -55,6 +58,11 @@ export interface CommerceDetailStateDockAction {
   disabled?: boolean;
   /** Optional loading state for async actions. */
   loading?: boolean;
+  /** When true, the dock owns the commitment haptic (medium, synchronous
+   * on press). Defaults to true for the primary action and false for the
+   * secondary. Screens must not pre-fire their own haptic for actions
+   * where the dock owns commitment. */
+  commitment?: boolean;
   accessibilityLabel?: string;
 }
 
@@ -85,6 +93,10 @@ export interface CommerceDetailStateDockProps {
   /** When true, renders a buyer protection strip above the dock. Only
    *  render when protection is actually available. */
   showProtectionStrip?: boolean;
+  /** Optional quiet single-line notice (risk/trust disclosure) rendered
+   *  directly above the action row so it stays visible with the
+   *  commitment action. No card, no badge chrome. */
+  notice?: React.ReactNode;
   /** Detected commerce tier for category-adaptive trust strip copy. */
   commerceTier?: 'standard' | 'authenticated_luxury' | 'specialist' | 'brokered';
   /** Primary action (max 1). Required when no blocked state is shown. */
@@ -115,23 +127,23 @@ export function CommerceDetailStateDock({
   shippingHint,
   lowStockHint,
   showProtectionStrip = false,
+  notice,
   commerceTier,
   primaryAction,
   secondaryAction,
   elevated = false,
   bottomInset,
-  layout = 'auto',
-}: CommerceDetailStateDockProps) {
+  layout = 'auto' }: CommerceDetailStateDockProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
+  const { width: screenWidth } = useWindowDimensions();
   const safeBottom = bottomInset ?? insets.bottom;
-  const { isCommerceCompact } = useBreakpoint();
+  const [primaryLabelWidth, setPrimaryLabelWidth] = useState<number | null>(null);
 
-  // Dock surface fill — used for both the container background and the
-  // gradient elevation overlay so they stay in sync across light/dark
-  // and elevated/non-elevated states.
+  // Dock surface fill — used for the container background across
+  // light/dark and elevated/non-elevated states.
   const dockBackground = elevated ? colors.surfaceElevated : colors.background;
 
   // Per spec 05 §4: auto stacks on compact widths to prevent label
@@ -140,11 +152,14 @@ export function CommerceDetailStateDock({
   const primaryIsEmphasized = primaryAction?.primary !== false;
   const shouldStack =
     layout === 'stacked' ||
-    (layout === 'auto' && hasSecondary && isCommerceCompact);
+    (layout === 'auto' && hasSecondary && screenWidth < COMPACT_STACK_THRESHOLD);
 
-  const handlePress = (action: CommerceDetailStateDockAction) => {
+  // Haptic ownership: the dock fires the commitment haptic (medium,
+  // synchronous on press) only for actions that declare commitment.
+  // Default: the primary action commits, the secondary does not.
+  const handlePress = (action: CommerceDetailStateDockAction, isPrimary: boolean) => {
     if (action.disabled || action.loading) return;
-    if (!reducedMotion) haptic.medium();
+    if (action.commitment ?? isPrimary) haptic.medium();
     action.onPress();
   };
 
@@ -159,22 +174,9 @@ export function CommerceDetailStateDock({
         {
           backgroundColor: dockBackground,
           paddingBottom: Math.max(safeBottom + Space.xs, Space.sm),
-          borderTopColor: colors.border,
-        },
+          borderTopColor: colors.border },
       ]}
     >
-      {/* ── Gradient elevation overlay (top edge) ──
-          A subtle LinearGradient at the very top of the dock that fades
-          from transparent to the dock background color over ~12px. This
-          creates a premium "lift" effect (eBay/Vestiaire pattern) where
-          content scrolling under the dock fades out naturally. Sits
-          above the dock content at the top edge, pointer-events none. */}
-      <LinearGradient
-        pointerEvents="none"
-        colors={['transparent', dockBackground]}
-        locations={[0, 1]}
-        style={styles.topGradientOverlay}
-      />
       {/* ── Trust strip (top section of the unified dock) ──
           Flattened into the dock surface — no separate surface; a hairline
           borderBottom divides it from the action row.
@@ -231,13 +233,23 @@ export function CommerceDetailStateDock({
         }
         return null;
       })()}
+      {/* ── Quiet notice line (risk/trust disclosure) ──
+          Single caption line directly above the action row so the
+          disclosure stays visible with the commitment action. No card,
+          no badge — flat on the dock surface. */}
+      {notice ? (
+        <View style={styles.noticeRow}>
+          {notice}
+        </View>
+      ) : null}
       <View style={shouldStack ? styles.rowStacked : styles.row}>
         <View style={styles.valueCluster}>
           {/* Product thumbnail — anchors the user to the product when
               they've scrolled past the hero. Small, quiet, no border.
               Per AGENTS.md: visible containment must have meaning. The
               thumbnail is informational, not a container. */}
-          {thumbnailUri && !stateBadge ? (
+          {/* Product thumbnail — only in stacked layout to prevent squishing price in horizontal dock */}
+          {shouldStack && thumbnailUri && !stateBadge ? (
             <CachedImage
               uri={thumbnailUri}
               style={styles.thumbnail}
@@ -250,6 +262,7 @@ export function CommerceDetailStateDock({
               <Text
                 style={[styles.originalValue, { color: colors.textMuted }]}
                 accessibilityRole="text"
+                numberOfLines={1}
               >
                 {originalValue}
               </Text>
@@ -258,6 +271,9 @@ export function CommerceDetailStateDock({
               <Text
                 style={[styles.value, { color: colors.textPrimary }]}
                 accessibilityRole="text"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
               >
                 {value}
               </Text>
@@ -307,7 +323,7 @@ export function CommerceDetailStateDock({
           ) : null}
           {secondaryAction ? (
             <Pressable
-              onPress={() => handlePress(secondaryAction)}
+              onPress={() => handlePress(secondaryAction, false)}
               disabled={secondaryAction.disabled || secondaryAction.loading}
               style={({ pressed }) => [
                 shouldStack ? styles.secondaryActionStacked : styles.secondaryAction,
@@ -318,8 +334,7 @@ export function CommerceDetailStateDock({
               accessibilityRole="button"
               accessibilityState={{
                 disabled: secondaryAction.disabled,
-                busy: secondaryAction.loading,
-              }}
+                busy: secondaryAction.loading }}
             >
               {secondaryAction.loading ? (
                 <ActivityIndicator size="small" color={colors.textPrimary} />
@@ -330,8 +345,7 @@ export function CommerceDetailStateDock({
                     {
                       color: secondaryAction.disabled
                         ? colors.textMuted
-                        : colors.textSecondary,
-                    },
+                        : colors.textSecondary },
                   ]}
                 >
                   {secondaryAction.label}
@@ -341,7 +355,7 @@ export function CommerceDetailStateDock({
           ) : null}
           {primaryAction ? (
             <Pressable
-              onPress={() => handlePress(primaryAction)}
+              onPress={() => handlePress(primaryAction, true)}
               disabled={primaryAction.disabled || primaryAction.loading}
               style={({ pressed }) => [
                 shouldStack ? styles.primaryActionStacked : styles.primaryAction,
@@ -352,8 +366,10 @@ export function CommerceDetailStateDock({
                       ? colors.brand
                       : colors.background,
                   borderColor: colors.border,
-                  borderWidth: primaryIsEmphasized ? 0 : 1,
-                },
+                  borderWidth: primaryIsEmphasized ? 0 : Stroke.standard },
+                primaryAction.loading && primaryLabelWidth != null
+                  ? { minWidth: primaryLabelWidth + Space.xl * 2 }
+                  : null,
                 pressed && !primaryAction.disabled && styles.pressed,
                 primaryAction.disabled && styles.disabled,
               ]}
@@ -361,11 +377,13 @@ export function CommerceDetailStateDock({
               accessibilityRole="button"
               accessibilityState={{
                 disabled: primaryAction.disabled,
-                busy: primaryAction.loading,
-              }}
+                busy: primaryAction.loading }}
             >
               {primaryAction.loading ? (
-                <ActivityIndicator size="small" color={primaryIsEmphasized ? colors.textInverse : colors.textPrimary} />
+                <ActivityIndicator
+                  size="small"
+                  color={primaryIsEmphasized ? colors.textInverse : colors.textPrimary}
+                />
               ) : (
                 <Text
                   style={[
@@ -375,9 +393,12 @@ export function CommerceDetailStateDock({
                         ? colors.textMuted
                         : primaryIsEmphasized
                           ? colors.textInverse
-                          : colors.textPrimary,
-                    },
+                          : colors.textPrimary },
                   ]}
+                  onLayout={(e) => {
+                    const w = e.nativeEvent.layout.width;
+                    if (w > 0) setPrimaryLabelWidth(w);
+                  }}
                 >
                   {primaryAction.label}
                 </Text>
@@ -396,7 +417,7 @@ export function CommerceDetailStateDock({
   // Single FadeIn entry transition — no spring. The dock fades in over
   // 280ms when the Buy Now section becomes active.
   return (
-    <Animated.View style={styles.wrapper} entering={FadeIn.duration(280)}>
+    <Animated.View style={styles.wrapper} entering={FadeIn.duration(Motion.duration.slow)}>
       {content}
     </Animated.View>
   );
@@ -408,8 +429,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 100,
-  },
+    zIndex: 100 },
   // ── Buyer protection strip ──
   // Flattened into the dock surface with a hairline divider.
   protectionStrip: {
@@ -418,13 +438,11 @@ const styles = StyleSheet.create({
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   protectionText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   container: {
     width: '100%',
     minWidth: 0,
@@ -434,28 +452,13 @@ const styles = StyleSheet.create({
     // Per Design.md Elevation.floating: the dock is a genuinely floating
     // surface separating persistent action from scroll content.
     // Spec: 8px offset, 0.12 opacity, 16px radius.
-    ...Elevation.floating,
-  },
-  // ── Gradient elevation overlay ──
-  // Thin gradient pinned to the top edge of the dock, fading from
-  // transparent to the dock background color over ~12px. Creates a
-  // premium "lift" effect where scroll content fades out naturally
-  // under the dock (eBay/Vestiaire pattern). pointerEvents none so it
-  // never intercepts touches on the dock content below.
-  topGradientOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 12,
-  },
+    ...Elevation.floating },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.md,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   // Per spec 05 §4: stacked layout — value cluster on top, actions
   // below in a full-width row. Prevents label truncation on compact
   // widths while preserving 44–48pt hit targets.
@@ -463,71 +466,63 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'stretch',
     gap: Space.sm,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   valueCluster: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flexShrink: 1,
-  },
+    flexShrink: 0,
+    minWidth: 84 },
   // Text cluster inside the value cluster — holds value, label, subtitle.
   // Needed so the thumbnail sits to the left and text stacks vertically.
   valueTextCluster: {
     flexDirection: 'column',
-    gap: Space.xs,
-    flexShrink: 1,
-  },
+    gap: 2,
+    flexShrink: 0 },
   // Product thumbnail — tokenized via CommerceLayout.dockThumbnailSize.
   // Radius.md (8px) matches the primary action radius for visual coherence.
   thumbnail: {
     width: CommerceLayout.dockThumbnailSize,
     height: CommerceLayout.dockThumbnailSize,
     borderRadius: Radius.md,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   value: {
     // Per Design.md: price-list (20px) is the correct size for dock
     // values. price-large (28px) is reserved for checkout totals.
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.priceList.size,
+    lineHeight: TypographyV2.priceList.lineHeight,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
+    fontVariant: ['tabular-nums'] },
   // Strikethrough original price — quiet, muted, shown above current
   // value when a discount is active. Depop/eBay pattern.
   originalValue: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     textDecorationLine: 'line-through',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   valueLabel: {
     // Per Design.md trust/commerce card micro spec: captionElevated
     // (13px) for trust copy and metadata labels. The value label
     // ("Current bid", "Your listing") is a metadata label that
     // benefits from slightly larger size for legibility in the dock.
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   actionCluster: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flexShrink: 0,
-  },
-  // Stacked action cluster: full-width row, primary consumes available
-  // space, secondary is constrained.
+    flexShrink: 0 },
+  // Stacked action cluster: full-width row, twin CTA split per Design.md
+  // dock micro spec — secondary takes 40%, primary the remainder, 8px gap.
   actionClusterStacked: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flexGrow: 1,
-  },
+    flexGrow: 1 },
   // Per Design.md button-primary spec: full-pill (Radius.full), 52px
   // height, brand fill, body-strong typography. The dock micro spec
   // confirms: "Primary CTA: full-pill." Primary action uses full-pill
@@ -539,8 +534,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 120,
-  },
+    minWidth: 120 },
   // Stacked primary: flexes to consume available width so the label
   // never truncates on compact widths.
   primaryActionStacked: {
@@ -550,13 +544,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexGrow: 1,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   primaryActionText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   // Per Design.md: secondary is a quiet text control, not a full
   // outlined button. Reduces visual noise so the primary action
   // dominates. Secondary action is a text link to reduce visual
@@ -566,57 +558,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   secondaryActionStacked: {
     minHeight: DockConstants.secondaryButtonHeight,
     paddingHorizontal: Space.md,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-  },
+    flexBasis: '40%',
+    flexShrink: 0 },
   secondaryActionText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   pressed: {
     opacity: 0.85,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: PressScale.tap }] },
   // Disabled state — opacity reduction per research: "Use opacity
   // reduction (40%), avoid graying out (can be confused with secondary
   // actions)."
   disabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   subtitle: {
     // Per Design.md trust/commerce card micro spec: captionElevated
     // (13px) for trust copy and state explanations. The subtitle
     // ("Complete rights disclosure", "This item has been sold") is
     // contextual copy that benefits from the slightly larger size.
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // Shipping hint — quiet, muted, shown below the price when shipping
   // context is available. Shipping cost shown inline with price for
   // transparency.
   shippingHint: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
+  // ── Quiet notice line ──
+  // Single-line disclosure slot above the action row. No card, no
+  // badge — flat on the dock surface.
+  noticeRow: {
+    paddingBottom: Space.xs + 2 },
   // ── Low-stock indicator ──
   // Subtle warning text shown above the primary CTA when real inventory
   // data indicates low stock. 12sp, warning color, single line — quiet
   // urgency that doesn't disrupt the dock layout.
   lowStockHint: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing } });

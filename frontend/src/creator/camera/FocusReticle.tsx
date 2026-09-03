@@ -15,6 +15,7 @@ import Reanimated, {
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 // Animated SVG circle for focus reticle color transition
 const ReanimatedCircle = Reanimated.createAnimatedComponent(SvgCircle);
@@ -23,8 +24,8 @@ const DEFAULT_SIZE = 70;
 
 export interface FocusReticleProps {
   /** The screen-space point where the reticle should appear. When non-null,
-   *  the reticle springs in (0→1), transitions from blue→green after 600ms,
-   *  then fades out after 1.5s and calls `onDismiss`. */
+   *  the reticle springs in (0→1), then fades out after 1.6s and calls
+   *  `onDismiss`. */
   focusPoint: { x: number; y: number } | null;
   /** Reticle diameter in pixels (default 70). */
   size?: number;
@@ -38,7 +39,7 @@ export interface FocusReticleProps {
  *
  * Springs in from scale 0→1 with a bouncy entrance, holds briefly to
  * confirm the tap was registered, then fades out after ~1.2s. The ring
- * stays a single neutral-white colour — the parent component calls
+ * stays a single scrim-text-primary colour — the parent component calls
  * CameraRef.focusTo() to perform real focus metering on supported
  * devices. On unsupported devices the reticle shows as a tap indicator
  * only.
@@ -48,6 +49,7 @@ export interface FocusReticleProps {
  */
 export function FocusReticle({ focusPoint, size = DEFAULT_SIZE, onDismiss }: FocusReticleProps) {
   const { spring } = useMotionConfig();
+  const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
 
@@ -62,9 +64,9 @@ export function FocusReticle({ focusPoint, size = DEFAULT_SIZE, onDismiss }: Foc
     };
   });
 
-  // ── Ring colour: steady white — tap registered, no lock claim ──
+  // ── Ring colour: scrim text primary — tap registered, no lock claim ──
   const reticleProps = useAnimatedProps(() => ({
-    stroke: 'rgba(255,255,255,0.9)',
+    stroke: colors.scrimTextPrimary,
   }));
 
   // ── Trigger animation lifecycle whenever focusPoint changes ──
@@ -105,6 +107,9 @@ export function FocusReticle({ focusPoint, size = DEFAULT_SIZE, onDismiss }: Foc
         reticleStyle,
       ]}
       pointerEvents="none"
+      accessibilityLabel="Focus point"
+      accessibilityHint="Camera focused at this point"
+      accessibilityLiveRegion="polite"
     >
       <Svg width={size} height={size}>
         <ReanimatedCircle
@@ -115,8 +120,6 @@ export function FocusReticle({ focusPoint, size = DEFAULT_SIZE, onDismiss }: Foc
           fill="none"
           animatedProps={reticleProps}
         />
-        {/* Crosshair dot — camera overlay, always high contrast on dark preview */}
-        <SvgCircle cx={size / 2} cy={size / 2} r={2} fill="#fff" fillOpacity={0.8} />
       </Svg>
     </Reanimated.View>
   );

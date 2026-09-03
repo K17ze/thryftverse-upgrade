@@ -2,7 +2,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { Radius, Space, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 export type SyncStatusTone = 'live' | 'syncing' | 'offline';
 
@@ -20,16 +21,14 @@ function resolveToneStyles(tone: SyncStatusTone, colors: ThemeColors) {
         background: colors.successSubtle,
         border: colors.borderSubtle,
         iconColor: colors.success,
-        textColor: colors.success,
-      };
+        textColor: colors.success };
     case 'syncing':
       return {
         icon: 'sync-outline' as keyof typeof Ionicons.glyphMap,
         background: colors.warningSubtle,
         border: colors.borderSubtle,
         iconColor: colors.warning,
-        textColor: colors.warning,
-      };
+        textColor: colors.warning };
     case 'offline':
     default:
       return {
@@ -37,8 +36,7 @@ function resolveToneStyles(tone: SyncStatusTone, colors: ThemeColors) {
         background: colors.dangerSubtle,
         border: colors.borderSubtle,
         iconColor: colors.danger,
-        textColor: colors.danger,
-      };
+        textColor: colors.danger };
   }
 }
 
@@ -54,8 +52,7 @@ export function SyncStatusPill({ tone, label, compact = false }: SyncStatusPillP
         compact && styles.pillCompact,
         {
           backgroundColor: toneStyle.background,
-          borderColor: toneStyle.border,
-        },
+          borderColor: toneStyle.border },
       ]}
     >
       <Ionicons name={toneStyle.icon} size={compact ? 11 : 12} color={toneStyle.iconColor} />
@@ -71,25 +68,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderRadius: Radius.full,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    maxWidth: 150,
-  },
+    maxWidth: 150 },
   pillCompact: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     gap: 4,
-    maxWidth: 130,
-  },
+    maxWidth: 130 },
   text: {
     color: colors.textSecondary,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.1,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.1 },
   textCompact: {
-    fontSize: 10,
-  },
-});
+    fontSize: TypographyV2.meta.size } });

@@ -5,9 +5,9 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withSequence,
 } from 'react-native-reanimated';
-import { Radius, Typography, Type, Space } from '../../theme/designTokens';
+import { Radius, Typography, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -18,9 +18,7 @@ import { RecordingRing } from './RecordingRing';
 // the bottom bar, small enough to leave the viewfinder unobstructed.
 const SHUTTER_SIZE = 78;
 const SHUTTER_INNER = 60;
-const SHUTTER_RING_WIDTH = 5;
-
-export type CameraMode = 'photo' | 'video' | 'boomerang';
+const SHUTTER_RING_WIDTH = 4;
 
 export interface ShutterButtonProps {
   /** Called when the user presses the shutter. The press spring animation
@@ -77,13 +75,15 @@ export function ShutterButton({
     transform: [{ scale: shutterScale.value }],
   }));
 
-  const handlePress = React.useCallback(() => {
-    // Snappy down, smooth back up — use withSequence so both animations run
+  const handlePressIn = React.useCallback(() => {
     if (!reducedMotion) {
-      shutterScale.value = withSequence(
-        withSpring(0.92, spring.tap),
-        withSpring(1, spring.entrance),
-      );
+      shutterScale.value = withSpring(0.92, spring.tap);
+    }
+  }, [reducedMotion, shutterScale, spring]);
+
+  const handlePress = React.useCallback(() => {
+    if (!reducedMotion) {
+      shutterScale.value = withSpring(1, spring.entrance);
     }
     onPress();
   }, [reducedMotion, shutterScale, spring, onPress]);
@@ -102,18 +102,20 @@ export function ShutterButton({
   return (
     <Pressable
       onPress={handlePress}
+      onPressIn={handlePressIn}
       onLongPress={videoCaptureEnabled && !handsFreeMode ? onLongPress : undefined}
       onPressOut={videoCaptureEnabled ? onPressOut : undefined}
       delayLongPress={250}
       hitSlop={24}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
     >
       <Reanimated.View
         style={[
           styles.outer,
-          { borderColor: handsFreeMode && !isRecording ? colors.antiqueGold : colors.brand },
+          { borderColor: handsFreeMode && !isRecording ? colors.brand : colors.brand },
           shutterStyle,
         ]}
       >
@@ -126,16 +128,17 @@ export function ShutterButton({
         <View
           style={[
             styles.inner,
+            { backgroundColor: colors.scrimTextPrimary },
             isRecording && styles.innerRecording,
             isRecording && { backgroundColor: colors.danger },
-            handsFreeMode && !isRecording && { backgroundColor: colors.antiqueGold },
+            handsFreeMode && !isRecording && { backgroundColor: colors.brand },
           ]}
         />
         {/* Speed indicator badge — shows the current speed multiplier
             on the shutter when a non-1× speed is selected */}
         {showSpeedIndicator && !isRecording && (
-          <View style={styles.speedBadge}>
-            <Text style={styles.speedBadgeText}>{speedMode}×</Text>
+          <View style={[styles.speedBadge, { backgroundColor: colors.mediaOverlayScrim }]}>
+            <Text style={[styles.speedBadgeText, { color: colors.scrimTextPrimary }]}>{speedMode}×</Text>
           </View>
         )}
       </Reanimated.View>
@@ -144,11 +147,9 @@ export function ShutterButton({
 }
 
 const styles = StyleSheet.create({
-  // Camera overlay — always high contrast on dark preview. The shutter ring
-  // + inner fill are white on the dark camera preview in both themes; the
-  // theme has no `textOnMedia` token, so literal white is retained here.
+  // Camera overlay — shutter ring + inner fill use scrim text tokens for
+  // high contrast on the dark camera preview in both themes.
   // Outer ring — brand color border (applied inline via colors.brand).
-  // The white inner fill remains for high contrast on the dark preview.
   outer: {
     width: SHUTTER_SIZE,
     height: SHUTTER_SIZE,
@@ -163,7 +164,7 @@ const styles = StyleSheet.create({
     width: SHUTTER_INNER,
     height: SHUTTER_INNER,
     borderRadius: SHUTTER_INNER / 2,
-    backgroundColor: '#fff',
+    // backgroundColor applied inline via colors.scrimTextPrimary (theme token)
   },
   innerRecording: {
     width: SHUTTER_INNER * 0.6,
@@ -179,11 +180,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xxs,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    // backgroundColor applied inline via colors.mediaOverlayScrim (theme token)
   },
   speedBadgeText: {
     fontFamily: Typography.family.bold,
-    fontSize: 10.5,
-    color: '#fff',
+    fontSize: TypographyV2.meta.size,
+    // color applied inline via colors.scrimTextPrimary (theme token)
   },
 });

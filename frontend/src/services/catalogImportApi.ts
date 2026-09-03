@@ -672,3 +672,259 @@ export async function fetchPublicationReceipt(
 // Re-export the shared error types so callers can import everything from one
 // module without reaching into `lib/apiClient` directly.
 export { ApiRequestError };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Extraction Intelligence — converged extraction domain (migration 192)
+//
+// Server-owned model identity, bound media, honest outcomes, revision-checked
+// field decisions that converge into canonical normalised_fields/provenance.
+// The client never supplies modelId/modelVersion.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ExtractionJobState =
+  | 'queued'
+  | 'running'
+  | 'retry_wait'
+  | 'terminal'
+  | 'superseded';
+
+export type ExtractionOutcome =
+  | 'succeeded'
+  | 'partial'
+  | 'unavailable_no_model'
+  | 'ineligible'
+  | 'source_missing'
+  | 'failed'
+  | 'cancelled'
+  | 'outcome_unknown';
+
+export type CandidateValidationState =
+  | 'unvalidated'
+  | 'valid'
+  | 'invalid'
+  | 'warning'
+  | 'abstained';
+
+export type CandidateSourceModule =
+  | 'unknown'
+  | 'source_structured'
+  | 'ocr'
+  | 'barcode'
+  | 'vision'
+  | 'catalog_match'
+  | 'deterministic_map'
+  | 'copy_generation';
+
+export type FieldDecisionKind = 'accepted' | 'rejected' | 'edited';
+
+export interface FieldCandidateDTO {
+  id: string;
+  fieldName: string;
+  value: unknown;
+  rank: number;
+  calibratedConfidence: number | null;
+  abstained: boolean;
+  validationState: CandidateValidationState;
+  policyFlags: string[];
+  sourceModule: CandidateSourceModule;
+  evidence: Record<string, unknown>;
+}
+
+export interface ExtractionRunDTO {
+  id: string;
+  itemId: string;
+  modelBundleId: string;
+  modelBundleVersion: string;
+  mediaAssetId: string | null;
+  jobState: ExtractionJobState;
+  outcome: ExtractionOutcome | null;
+  errorCode: string | null;
+  attemptCount: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  candidates: FieldCandidateDTO[];
+  coveredFields: string[];
+  abstainedFields: string[];
+  flaggedFields: string[];
+  isEmpty: boolean;
+}
+
+export interface FieldDecisionDTO {
+  id: string;
+  itemId: string;
+  candidateId: string | null;
+  runId: string;
+  fieldName: string;
+  decision: FieldDecisionKind;
+  finalValue: unknown;
+  appliedFieldRevision: string | null;
+  appliedAt: string | null;
+  createdAt: string;
+}
+
+export interface BulkFieldDecisionResult {
+  applied: number;
+  rejected: number;
+  conflicts: Array<{ itemId: string; fieldName: string; reason: string }>;
+}
+
+// ── Response envelopes ──────────────────────────────────────────────────────
+
+interface TriggerExtractionResponse {
+  ok: true;
+  runId: string;
+  jobState: ExtractionJobState;
+  outcome: ExtractionOutcome | null;
+}
+
+interface GetExtractionRunResponse {
+  run: ExtractionRunDTO;
+}
+
+interface FieldDecisionResponse {
+  decision: FieldDecisionDTO;
+}
+
+interface BulkFieldDecisionResponse {
+  result: BulkFieldDecisionResult;
+}
+
+interface FieldDecisionsResponse {
+  decisions: FieldDecisionDTO[];
+}
+
+// ── API methods ─────────────────────────────────────────────────────────────
+
+/**
+ * Trigger an extraction run for an import item. The server selects the
+ * model bundle — the client never supplies model identity. mediaAssetId
+ * is optional; when omitted, the item's primary verified media is used.
+ */
+export async function triggerExtractionRun(
+  itemId: string,
+  mediaAssetId?: string,
+): Promise<{ runId: string; jobState: ExtractionJobState; outcome: ExtractionOutcome | null }> {
+  try {
+    const payload = await fetchJson<TriggerExtractionResponse>(
+      `/catalog-imports/items/${encodeURIComponent(itemId)}/extraction-runs`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaAssetId }),
+      }
+    );
+    return { runId: payload.runId, jobState: payload.jobState, outcome: payload.outcome };
+  } catch (cause) {
+    throw toError(cause);
+  }
+}
+
+/**
+ * Get the latest (non-superseded) extraction run for an item, with its
+ * field candidates.
+ */
+export async function fetchLatestExtractionRun(
+  itemId: string
+): Promise<ExtractionRunDTO | null> {
+  try {
+    const payload = await fetchJson<GetExtractionRunResponse>(
+      `/catalog-imports/items/${encodeURIComponent(itemId)}/extraction-runs/latest`
+    );
+    return payload.run ?? null;
+  } catch (cause) {
+    // 404 means no run exists — return null, not an error.
+    const err = cause instanceof CatalogImportError ? cause : new CatalogImportError(cause);
+    if (err.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * Apply a single field decision (accept/reject/edit). Revision-checked:
+ * the baseFieldRevision must match the item's current field_revision.
+ */
+export async function applyFieldDecision(
+  itemId: string,
+  params: {
+    runId: string;
+    candidateId?: string;
+    fieldName: string;
+    decision: FieldDecisionKind;
+    finalValue?: unknown;
+    baseFieldRevision: string;
+  }
+): Promise<FieldDecisionDTO> {
+  try {
+    const payload = await fetchJson<FieldDecisionResponse>(
+      `/catalog-imports/items/${encodeURIComponent(itemId)}/field-decisions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          runId: params.runId,
+          candidateId: params.candidateId,
+          fieldName: params.fieldName,
+          decision: params.decision,
+          finalValue: params.finalValue,
+          baseFieldRevision: params.baseFieldRevision,
+        }),
+      }
+    );
+    return payload.decision;
+  } catch (cause) {
+    throw toError(cause);
+  }
+}
+
+/**
+ * Apply multiple field decisions for a single item in one transaction.
+ * If any decision conflicts (revision mismatch), the conflicts are
+ * returned — the seller must refresh and re-decide.
+ */
+export async function applyBulkFieldDecisions(
+  itemId: string,
+  params: {
+    baseFieldRevision: string;
+    decisions: Array<{
+      runId: string;
+      candidateId?: string;
+      fieldName: string;
+      decision: FieldDecisionKind;
+      finalValue?: unknown;
+    }>;
+  }
+): Promise<BulkFieldDecisionResult> {
+  try {
+    const payload = await fetchJson<BulkFieldDecisionResponse>(
+      `/catalog-imports/items/${encodeURIComponent(itemId)}/field-decisions/bulk`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseFieldRevision: params.baseFieldRevision,
+          decisions: params.decisions,
+        }),
+      }
+    );
+    return payload.result;
+  } catch (cause) {
+    throw toError(cause);
+  }
+}
+
+/**
+ * Get the field decision history for an item (newest-first).
+ */
+export async function fetchFieldDecisions(
+  itemId: string
+): Promise<FieldDecisionDTO[]> {
+  try {
+    const payload = await fetchJson<FieldDecisionsResponse>(
+      `/catalog-imports/items/${encodeURIComponent(itemId)}/field-decisions`
+    );
+    return Array.isArray(payload.decisions) ? payload.decisions : [];
+  } catch (cause) {
+    throw toError(cause);
+  }
+}

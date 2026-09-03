@@ -2,20 +2,18 @@ import React, { useMemo } from 'react';
 import { Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import {
   NotificationRowBase,
-  NotificationStatusIcon,
-} from './NotificationRowBase';
+  NotificationStatusIcon } from './NotificationRowBase';
 import {
   Space,
-  Type,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   readPayloadNumber,
   readPayloadString,
-  type NotificationEventV2,
-} from '../../services/notificationsApi';
+  type NotificationEventV2 } from '../../services/notificationsApi';
 
 // ---------------------------------------------------------------------------
 // FinancialNotificationRow — payout / refund events
@@ -35,20 +33,19 @@ export interface FinancialNotificationRowProps {
 interface FinancialVisual {
   icon: keyof typeof Ionicons.glyphMap;
   accentKey: 'success' | 'warning';
-  accentSubtleKey: 'successSubtle' | 'warningSubtle';
   typeLabel: string;
 }
 
 function resolveFinancialVisual(eventType: NotificationEventV2['eventType']): FinancialVisual {
   switch (eventType) {
     case 'payout_processed':
-      return { icon: 'cash-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', typeLabel: 'Payout' };
+      return { icon: 'cash-outline', accentKey: 'success', typeLabel: 'Payout' };
     case 'refund_completed':
-      return { icon: 'return-down-back-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', typeLabel: 'Refund' };
+      return { icon: 'return-down-back-outline', accentKey: 'warning', typeLabel: 'Refund' };
     case 'order_refunded':
-      return { icon: 'return-down-back-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', typeLabel: 'Refund' };
+      return { icon: 'return-down-back-outline', accentKey: 'warning', typeLabel: 'Refund' };
     default:
-      return { icon: 'wallet-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', typeLabel: 'Transaction' };
+      return { icon: 'wallet-outline', accentKey: 'success', typeLabel: 'Transaction' };
   }
 }
 
@@ -57,25 +54,24 @@ export function FinancialNotificationRow({
   time,
   aggregatedCount,
   inAttentionSection = false,
-  onPress,
-}: FinancialNotificationRowProps) {
+  onPress }: FinancialNotificationRowProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const visual = useMemo(() => resolveFinancialVisual(event.eventType), [event.eventType]);
   const accentColor = colors[visual.accentKey] ?? colors.brand;
-  const accentSubtle = colors[visual.accentSubtleKey];
   const isUnread = !event.readAt;
 
   // Structured amount from the payload — never from prose text.
   const amount = readPayloadNumber(event.payload, 'amountGbp') ?? readPayloadNumber(event.payload, 'amount');
-  const currency = readPayloadString(event.payload, 'currency') ?? '£';
+  const currency = readPayloadString(event.payload, 'currency') ?? currencySymbol;
   const status = readPayloadString(event.payload, 'status') ?? 'processed';
 
   const amountText = amount != null ? `${currency}${amount.toFixed(2)}` : null;
-  const description = amountText
-    ? `${amountText} · ${visual.typeLabel} · ${status}`
-    : `${visual.typeLabel} · ${status}`;
+  // The amount is the visual anchor of a financial notification — render it
+  // as a dedicated tabular-figures element rather than burying it in prose.
+  const description = `${visual.typeLabel} · ${status}`;
 
   const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${visual.typeLabel}${amountText ? ` of ${amountText}` : ''}. ${status}. ${time}`;
 
@@ -83,9 +79,7 @@ export function FinancialNotificationRow({
     <NotificationStatusIcon
       icon={visual.icon}
       accentColor={accentColor}
-      accentSubtle={accentSubtle}
-      colors={colors}
-      size={44}
+      size={24}
     />
   );
 
@@ -102,6 +96,11 @@ export function FinancialNotificationRow({
       <Text style={[styles.title, isUnread && styles.titleUnread]} numberOfLines={1}>
         {event.title || visual.typeLabel}
       </Text>
+      {amountText ? (
+        <Text style={styles.amount} numberOfLines={1}>
+          {amountText}
+        </Text>
+      ) : null}
       <Text style={styles.body} numberOfLines={2}>
         {description}
       </Text>
@@ -112,21 +111,24 @@ export function FinancialNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyLarge.lineHeight,
-      paddingRight: Space.xxl + Space.sm,
-    },
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      flexShrink: 1 },
     titleUnread: {
       color: colors.textPrimary,
+      fontFamily: FontFamily.semibold },
+    amount: {
+      fontSize: TypographyV2.body.size + 2,
       fontFamily: FontFamily.semibold,
-    },
+      color: colors.textPrimary,
+      lineHeight: TypographyV2.body.size + 8,
+      fontVariant: ['tabular-nums'],
+      marginTop: Space.xs / 2 },
     body: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      lineHeight: TypographyV2.body.lineHeight } });
 }

@@ -16,11 +16,12 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { Meta, Body, BodyEmphasis } from '../components/ui/Text';
-import { Space, Radius, Type, Typography, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { getMyAuctionBids, getWatchlist, type MyAuctionBid, type MarketAuction } from '../services/marketApi';
 import { haptics } from '../utils/haptics';
 import { useBucketedServerClock } from '../hooks/useServerClock';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { useCurrencyContext } from '../context/CurrencyContext';
 import { t } from '../i18n';
 
 
@@ -53,8 +54,7 @@ const BID_FILTERS: Array<{ value: BidFilter; label: string; accessibilityLabel: 
 const WATCHING_FILTER: { value: BidFilter; label: string; accessibilityLabel: string } = {
   value: 'watching',
   label: 'Watching',
-  accessibilityLabel: 'Show watched auctions',
-};
+  accessibilityLabel: 'Show watched auctions' };
 
 function marketAuctionToActivity(a: MarketAuction): ActivityItem {
   return {
@@ -70,8 +70,7 @@ function marketAuctionToActivity(a: MarketAuction): ActivityItem {
     createdAt: a.createdAt,
     sellerUsername: a.seller.username,
     lifecycle: a.lifecycle,
-    terminalReason: a.terminalReason,
-  };
+    terminalReason: a.terminalReason };
 }
 
 function bidToActivity(b: MyAuctionBid): ActivityItem {
@@ -88,8 +87,7 @@ function bidToActivity(b: MyAuctionBid): ActivityItem {
     createdAt: b.createdAt,
     sellerUsername: b.auction.sellerUsername,
     lifecycle: b.auction.lifecycle,
-    terminalReason: b.auction.terminalReason,
-  };
+    terminalReason: b.auction.terminalReason };
 }
 
 function getStateInfo(state: ActivityItem['bidState'], colors: ThemeColors): { label: string; color: string; icon: keyof typeof Ionicons.glyphMap; nextAction: string } {
@@ -123,6 +121,7 @@ export default function MyBidsScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode } = useCurrencyContext();
   const { isOffline } = useConnectivity();
   const { minuteClock } = useBucketedServerClock(null);
 
@@ -217,12 +216,11 @@ export default function MyBidsScreen() {
         onPress={() => navigation.navigate('AuctionDetail', {
           auctionId: item.auctionId,
           // One-tap rebid: auto-open BidSheet when the user is outbid
-          openBidSheet: item.bidState === 'outbid',
-        })}
+          openBidSheet: item.bidState === 'outbid' })}
         activeOpacity={0.92}
         scaleValue={0.985}
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}, ${stateInfo.label}, your bid ${formatFromFiat(item.amountGbp, DEFAULT_CURRENCY_CODE)}`}
+        accessibilityLabel={`${item.title}, ${stateInfo.label}, your bid ${formatFromFiat(item.amountGbp, currencyCode)}`}
         accessibilityHint={item.bidState === 'outbid' ? 'Opens auction with bid sheet ready to place a new bid' : 'Opens auction details'}
       >
         {/* Edge-aligned imagery */}
@@ -255,7 +253,7 @@ export default function MyBidsScreen() {
               <View>
                 <Meta style={styles.activityPriceLabel}>Your bid</Meta>
                 <Body style={styles.activityPriceValue} numberOfLines={1}>
-                  {formatFromFiat(item.amountGbp, DEFAULT_CURRENCY_CODE, { izeFractionDigits: 3 })}
+                  {formatFromFiat(item.amountGbp, currencyCode, { izeFractionDigits: 3 })}
                 </Body>
               </View>
             )}
@@ -263,7 +261,7 @@ export default function MyBidsScreen() {
               <View style={[item.amountGbp > 0 && styles.activityPriceCol]}>
                 <Meta style={styles.activityPriceLabel}>Current</Meta>
                 <Body style={styles.activityPriceValue} numberOfLines={1}>
-                  {formatFromFiat(item.currentBidGbp, DEFAULT_CURRENCY_CODE, { izeFractionDigits: 3 })}
+                  {formatFromFiat(item.currentBidGbp, currencyCode, { izeFractionDigits: 3 })}
                 </Body>
               </View>
             )}
@@ -286,8 +284,7 @@ export default function MyBidsScreen() {
                 style={({ pressed }) => [styles.bidAgainBtn, pressed && { opacity: 0.8 }]}
                 onPress={() => navigation.navigate('AuctionDetail', {
                   auctionId: item.auctionId,
-                  openBidSheet: true,
-                })}
+                  openBidSheet: true })}
                 accessibilityRole="button"
                 accessibilityLabel={`Bid again on ${item.title}`}
               >
@@ -310,6 +307,7 @@ export default function MyBidsScreen() {
     styles,
     navigation,
     formatFromFiat,
+    currencyCode,
   ]);
 
   return (
@@ -430,164 +428,133 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   stateRail: {
     flexGrow: 0,
     flexShrink: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   stateRailContent: {
     paddingHorizontal: Space.md,
     alignItems: 'center',
     minHeight: Control.hit,
-    gap: Space.md,
-  },
+    gap: Space.md },
   stateRailTab: {
     minHeight: Control.hit,
     paddingHorizontal: Space.xs,
     alignItems: 'center',
     justifyContent: 'center',
     borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
+    borderBottomColor: 'transparent' },
   stateRailTabActive: {
-    borderBottomColor: colors.brand,
-  },
+    borderBottomColor: colors.brand },
   stateRailTabPressed: {
-    opacity: 0.62,
-  },
+    opacity: 0.62 },
   stateRailText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   stateRailTextActive: {
     color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   sortChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs / 2 + 1,
-  },
+    gap: Space.xs / 2 + 1 },
   listContent: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   loadingWrap: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   loadMoreWrap: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   // ── Activity row — edge-aligned imagery, no bordered card ──
   activityRow: {
     flexDirection: 'row',
     paddingVertical: Space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   activityImageWrap: {
-    marginRight: Space.sm,
-  },
+    marginRight: Space.sm },
   activityImage: {
     width: Space.xxl + Space.xxl + Space.xl - 8,
     height: Space.xxl + Space.xxl + Space.xl - 8,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   activityImageContainer: {
     width: Space.xxl + Space.xxl + Space.xl - 8,
     height: Space.xxl + Space.xxl + Space.xl - 8,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   activityImagePlaceholder: {
     width: Space.xxl + Space.xxl + Space.xl - 8,
     height: Space.xxl + Space.xxl + Space.xl - 8,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   activityBody: {
     flex: 1,
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   activityTitle: {
-    fontSize: Type.body.size,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.body.size,
+    marginBottom: Space.xs },
   activityStateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginBottom: Space.xs + 2,
-  },
+    marginBottom: Space.xs + 2 },
   activityState: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontWeight: '600',
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   activityPriceRow: {
     flexDirection: 'row',
     gap: Space.md,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   activityPriceCol: {
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: colors.border,
-    paddingLeft: Space.md,
-  },
+    paddingLeft: Space.md },
   activityPriceLabel: {
-    fontSize: Type.meta.size - 1,
+    fontSize: TypographyV2.meta.size - 1,
     color: colors.textMuted,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.caps,
     textTransform: 'uppercase',
-    marginBottom: Space.xs / 2,
-  },
+    marginBottom: Space.xs / 2 },
   activityPriceValue: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontWeight: '600',
     color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'] },
   activityMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   activityMetaCol: {
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   activityMetaLabel: {
-    fontSize: Type.meta.size - 1,
+    fontSize: TypographyV2.meta.size - 1,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps,
-  },
+    letterSpacing: LetterSpacing.caps },
   activityMetaValue: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.medium,
-    marginTop: Space.xs / 4,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs / 4 },
   activityNextRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    marginLeft: 'auto',
-  },
+    marginLeft: 'auto' },
   activityNextText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.brand,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   bidAgainBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -597,12 +564,9 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 2,
     minHeight: Control.chromeCompact,
-    marginLeft: 'auto',
-  },
+    marginLeft: 'auto' },
   bidAgainText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textInverse,
-    fontFamily: Typography.family.bold,
-  },
-  });
+    fontFamily: TypographyV2.meta.fontFamily } });
 }

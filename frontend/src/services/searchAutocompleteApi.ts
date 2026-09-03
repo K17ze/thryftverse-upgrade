@@ -11,6 +11,8 @@
  */
 
 import { fetchJson } from '../lib/apiClient';
+import { loadRecentSearchStrings, recordRecentSearch } from './searchHistory';
+import { TAXONOMY_SEED } from '../contracts/taxonomy';
 
 // ---------------------------------------------------------------------------
 // Demo-mode flag — single source of truth
@@ -122,27 +124,9 @@ const CATALOGUE: CatalogueEntry[] = [
   { term: 'Oversized', type: 'style' },
   { term: 'Retro', type: 'style' },
   // Sizes
-  { term: 'XS', type: 'size' },
-  { term: 'S', type: 'size' },
-  { term: 'M', type: 'size' },
-  { term: 'L', type: 'size' },
-  { term: 'XL', type: 'size' },
-  { term: 'XXL', type: 'size' },
-  { term: 'UK 6', type: 'size' },
-  { term: 'UK 8', type: 'size' },
-  { term: 'UK 10', type: 'size' },
-  { term: 'UK 12', type: 'size' },
-  { term: 'UK 14', type: 'size' },
+  ...TAXONOMY_SEED.sizes.map(s => ({ term: s.name, type: 'size' as const })),
   // Colours
-  { term: 'Black', type: 'color' },
-  { term: 'White', type: 'color' },
-  { term: 'Beige', type: 'color' },
-  { term: 'Brown', type: 'color' },
-  { term: 'Navy', type: 'color' },
-  { term: 'Olive', type: 'color' },
-  { term: 'Burgundy', type: 'color' },
-  { term: 'Cream', type: 'color' },
-  { term: 'Grey', type: 'color' },
+  ...TAXONOMY_SEED.colours.map(c => ({ term: c.name, type: 'color' as const })),
 ];
 
 // Curated trending searches — shown when the input is empty and focused.
@@ -214,14 +198,6 @@ function fuzzyConfidence(query: string, term: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// In-memory recent-search store (per user, demo mode)
-// ---------------------------------------------------------------------------
-
-const recentStore = new Map<string, string[]>();
-const RECENT_KEY = (userId: string) => `autocomplete_recent_${userId}`;
-const RECENT_MAX = 8;
-
-// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -235,10 +211,10 @@ const RECENT_MAX = 8;
  *
  * Results are de-duplicated and ranked by confidence, then type diversity.
  */
-export function fetchAutocomplete(
+export async function fetchAutocomplete(
   query: string,
   userId?: string,
-): AutocompleteResponse {
+): Promise<AutocompleteResponse> {
   const normalized = normalize(query);
   if (!normalized) {
     return { suggestions: [], query, isDemo: AUTOCOMPLETE_DEMO_MODE };
@@ -276,7 +252,7 @@ export function fetchAutocomplete(
 
   // 2. Recent searches that contain the query
   if (userId) {
-    const recents = recentStore.get(RECENT_KEY(userId)) ?? [];
+    const recents = await loadRecentSearchStrings(userId);
     for (const recent of recents) {
       const recentNorm = normalize(recent);
       if (!recentNorm) continue;
@@ -379,24 +355,18 @@ export function getSpellCorrection(
 }
 
 /**
- * Fetch the user's recent searches (demo mode: in-memory store).
+ * Fetch the user's recent searches from the unified AsyncStorage-backed store.
  */
-export function fetchRecentSearches(userId: string): string[] {
-  return [...(recentStore.get(RECENT_KEY(userId)) ?? [])];
+export async function fetchRecentSearches(userId: string): Promise<string[]> {
+  return loadRecentSearchStrings(userId);
 }
 
 /**
  * Record a search the user submitted so it can appear in future autocomplete
- * and recent-search surfaces. In demo mode this only updates the in-memory
- * store.
+ * and recent-search surfaces. Persists via the unified search history service.
  */
 export function recordSearch(query: string, userId: string): void {
-  const trimmed = query.trim();
-  if (!trimmed) return;
-  const key = RECENT_KEY(userId);
-  const current = recentStore.get(key) ?? [];
-  const next = [trimmed, ...current.filter((s) => s !== trimmed)].slice(0, RECENT_MAX);
-  recentStore.set(key, next);
+  void recordRecentSearch(query, userId).catch(() => undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -494,7 +464,7 @@ export async function fetchAutocompleteSuggestions(
     return { suggestions, query, isDemo: false };
   } catch (error) {
     // Graceful fallback to the heuristic client-side catalogue.
-    const fallback = fetchAutocomplete(query, userId);
+    const fallback = await fetchAutocomplete(query, userId);
     return {
       suggestions: fallback.suggestions,
       query,

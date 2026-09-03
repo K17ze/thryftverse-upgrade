@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
-import { AnimatedPressable } from '../AnimatedPressable';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AppButton } from '../ui/AppButton';
 import { haptics } from '../../utils/haptics';
 
@@ -51,7 +51,7 @@ const GUIDE_STEPS: GuideStep[] = [
     keyTakeaway: 'Only invest what you can afford to hold',
   },
   {
-    icon: 'shield-checkmark-outline',
+    icon: 'lock-closed-outline',
     title: 'Rights & custody',
     body: 'Read the instrument dossier for its recorded provenance, custody, insurance, valuation, transfer limits, and current rights version. If required rights remain incomplete, trading stays disabled.',
     keyTakeaway: 'Rights are instrument-specific and versioned',
@@ -59,8 +59,6 @@ const GUIDE_STEPS: GuideStep[] = [
 ];
 
 // ── Component ────────────────────────────────────────────────────────────────
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 export function CoOwnFirstTradeGuide({
   visible,
@@ -127,7 +125,7 @@ export function CoOwnFirstTradeGuide({
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <View style={[styles.headerIcon, { backgroundColor: `${colors.brand}15` }]}>
+              <View style={[styles.headerIcon, { backgroundColor: colors.brandSubtle }]}>
                 <Ionicons name="school-outline" size={18} color={colors.brand} />
               </View>
               <View>
@@ -169,7 +167,7 @@ export function CoOwnFirstTradeGuide({
             showsVerticalScrollIndicator={false}
           >
             <View style={[styles.stepCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={[styles.stepIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+              <View style={styles.stepIconWrap}>
                 <Ionicons name={step.icon} size={32} color={stepIconColor} />
               </View>
               <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>{step.title}</Text>
@@ -178,7 +176,7 @@ export function CoOwnFirstTradeGuide({
               </Text>
 
               {step.keyTakeaway && (
-                <View style={[styles.takeawayBox, { backgroundColor: `${colors.brand}08`, borderColor: `${colors.brand}25` }]}>
+                <View style={[styles.takeawayBox, { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder }]}>
                   <Ionicons name="bulb-outline" size={14} color={colors.brand} />
                   <Text style={[styles.takeawayText, { color: colors.textPrimary }]}>
                     {step.keyTakeaway}
@@ -188,7 +186,7 @@ export function CoOwnFirstTradeGuide({
 
               {/* Recap summary on the last step */}
               {isLastStep && (
-                <View style={[styles.recapBox, { backgroundColor: `${colors.brand}06`, borderColor: `${colors.brand}20` }]}>
+                <View style={[styles.recapBox, { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder }]}>
                   <Text style={[styles.recapTitle, { color: colors.textPrimary }]}>Quick recap</Text>
                   {GUIDE_STEPS.filter((s) => s.keyTakeaway).map((s, i) => (
                     <View key={i} style={styles.recapRow}>
@@ -210,12 +208,13 @@ export function CoOwnFirstTradeGuide({
 
           {/* Footer */}
           <View style={[styles.footer, { borderTopColor: colors.border }]}>
-            <AnimatedPressable
-              style={[styles.backBtn, { borderColor: colors.border }]}
+            <Pressable
+              style={({ pressed }) => [
+                styles.backBtn,
+                { borderColor: colors.border },
+                pressed && styles.backBtnPressed,
+              ]}
               onPress={handleBack}
-              activeOpacity={0.8}
-              scaleValue={0.97}
-              hapticFeedback="light"
               accessibilityRole="button"
               accessibilityLabel={currentStep === 0 ? 'Close guide' : 'Previous step'}
             >
@@ -223,7 +222,7 @@ export function CoOwnFirstTradeGuide({
               <Text style={[styles.backBtnText, { color: colors.textSecondary }]}>
                 {currentStep === 0 ? 'Close' : 'Back'}
               </Text>
-            </AnimatedPressable>
+            </Pressable>
 
             {isLastStep ? (
               <View style={styles.footerRight}>
@@ -308,19 +307,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     letterSpacing: -0.3,
     marginBottom: 2,
   },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     lineHeight: 17,
   },
   skipText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     marginTop: Space.xs,
   },
   progressRow: {
@@ -360,14 +359,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     letterSpacing: -0.3,
     textAlign: 'center',
   },
   stepBody: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     lineHeight: 22,
     textAlign: 'center',
   },
@@ -383,8 +382,8 @@ const styles = StyleSheet.create({
   },
   takeawayText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     lineHeight: 18,
   },
   recapBox: {
@@ -396,8 +395,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   recapTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginBottom: 2,
   },
   recapRow: {
@@ -407,13 +406,13 @@ const styles = StyleSheet.create({
   },
   recapItem: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     lineHeight: 16,
   },
   stepCounter: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     marginTop: Space.md,
     letterSpacing: 0.3,
@@ -436,9 +435,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: 44,
   },
+  backBtnPressed: {
+    opacity: 0.6,
+  },
   backBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   footerRight: {
     flexDirection: 'row',

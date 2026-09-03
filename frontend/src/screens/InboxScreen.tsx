@@ -1,10 +1,12 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { View, Text, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl } from 'react-native';
 import { CachedImage } from '../components/CachedImage';
-import { FlashList, type FlashListProps } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useScrollToTop } from '@react-navigation/native';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { ActionSheet } from '../components/sheets';
+import { FlashList, type FlashListProps, type FlashListRef } from '@shopify/flash-list';
+import { AppIcon } from '../components/common/AppIcon';
+import { useNavigation, useScrollToTop, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import NetInfo from '@react-native-community/netinfo';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -13,12 +15,13 @@ import { RootStackParamList } from '../navigation/types';
 import { SwipeableRow } from '../components/SwipeableRow';
 import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { EmptyState } from '../components/EmptyState';
+import { StateCopyView } from '../components/flagship';
 import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { RefreshIndicator } from '../components/RefreshIndicator';
 import { useBackendData } from '../context/BackendDataContext';
 import { fetchConversationsFromApi, deleteConversationOnApi } from '../services/chatApi';
-import { useInboxMessageEvent, realtimePayloadToMessage } from '../services/realtimeClient';
+import { useInboxMessageEvent, useInboxGroupIdentityEvent, realtimePayloadToMessage } from '../services/realtimeClient';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { useHaptic } from '../hooks/useHaptic';
 import { Caption } from '../components/ui/Text';
@@ -34,9 +37,13 @@ import { Space, Control, Stroke, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
+import { colorForId, initialsFromName } from '../utils/avatarColor';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
+type InboxRoute = RouteProp<RootStackParamList, 'Inbox'>;
 type ConvoItem = Conversation;
 type InboxSegment = MessagingSegment | 'unread' | 'archived' | 'groups';
+
+const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<FlashListProps<Conversation>>;
 
 function ListingContextThumbnail({ itemId }: { itemId: string }) {
   const { colors } = useAppTheme();
@@ -48,7 +55,7 @@ function ListingContextThumbnail({ itemId }: { itemId: string }) {
   if (!listing?.images?.[0]) {
     return (
       <View style={[styles.contextThumb, listingThemed.contextThumb]}>
-        <Ionicons name="pricetag-outline" size={14} color={colors.textMuted} />
+        <AppIcon name="pricetag" size={14} color={colors.textMuted} />
       </View>
     );
   }
@@ -66,6 +73,8 @@ export default function InboxScreen() {
   const { colors, isDark } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const navigation = useNavigation<NavT>();
+  const route = useRoute<InboxRoute>();
+  const filterItemId = route.params?.filterItemId;
   const { showSuccess, showInfo, showError } = useNotifications();
   const haptic = useHaptic();
   const { refreshListings, listings } = useBackendData();
@@ -96,6 +105,20 @@ export default function InboxScreen() {
   // Additional classifiers (Requests, Unread, Archived, Groups) are behind
   // a filter icon — expands on tap to show secondary scope chips.
   const [filterExpanded, setFilterExpanded] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
+  const [actionSheet, setActionSheet] = useState<{
+    visible: boolean;
+    conversationId: string;
+    isMuted: boolean;
+    isPinned: boolean;
+  }>({ visible: false, conversationId: '', isMuted: false, isPinned: false });
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
@@ -181,6 +204,26 @@ export default function InboxScreen() {
     ),
   );
 
+  // Realtime group identity updates — when an admin changes the group name,
+  // avatar, cover, or description, merge it into the inbox store so the row
+  // title and avatar stay current without a manual refetch.
+  useInboxGroupIdentityEvent(
+    useCallback(
+      (payload) => {
+        const existing = conversations.find((c) => c.id === payload.conversationId);
+        if (!existing) return;
+        upsertConversation({
+          ...existing,
+          title: payload.title ?? existing.title,
+          description: payload.description ?? existing.description,
+          avatar: payload.avatar !== undefined ? (payload.avatar ?? undefined) : existing.avatar,
+          coverPhoto: payload.coverPhoto !== undefined ? (payload.coverPhoto ?? undefined) : existing.coverPhoto,
+        });
+      },
+      [conversations, upsertConversation],
+    ),
+  );
+
   const handleRefresh = async () => {
     haptic.patterns.refresh();
     setRefreshing(true);
@@ -199,57 +242,37 @@ export default function InboxScreen() {
     }
     setRefreshing(false);
   };
-  const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<FlashListProps<Conversation>>;
-  const listRef = useRef<any>(null);
+  const listRef = useRef<FlashListRef<Conversation>>(null);
   useScrollToTop(listRef);
   const t = useMemo(() => ({
     screenRoot: { backgroundColor: colors.background },
     headerTitle: { color: colors.textPrimary },
-    headerSubtitle: { color: colors.textMuted },
     iconBtn: { backgroundColor: 'transparent' },
     newMessageBtn: { backgroundColor: colors.textPrimary },
     newMessageBtnText: { color: colors.textInverse },
     searchWrap: { backgroundColor: colors.surfaceAlt },
-    filterChip: { backgroundColor: 'transparent', borderColor: colors.border },
-    filterChipActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
-    filterChipText: { color: colors.textSecondary },
-    filterChipTextActive: { color: colors.textInverse },
     rowSeparator: { backgroundColor: colors.border },
     groupAvatar: { backgroundColor: colors.surfaceAlt },
     groupAvatarText: { color: colors.textPrimary },
     botIndicator: { backgroundColor: colors.surface, borderColor: colors.border },
     nameText: { color: colors.textPrimary },
-    memberCount: { color: colors.textMuted },
     snippet: { color: colors.textSecondary },
-    snippetUnread: { color: colors.textPrimary },
     unreadPill: { backgroundColor: colors.textPrimary },
     unreadPillText: { color: colors.textInverse },
-    contextThumb: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
-    draftBadge: { backgroundColor: `${colors.brand}1A` },
-    draftBadgeText: { color: colors.brand },
-    swipeDelete: { backgroundColor: `${colors.danger}1F` },
-    swipePin: { backgroundColor: `${colors.brand}14` },
-    swipeArchive: { backgroundColor: `${colors.brand}14` },
-    swipeMute: { backgroundColor: `${colors.textMuted}1F` },
-    requestRowSurface: { backgroundColor: colors.surface },
-    requestRowAccent: { borderLeftColor: colors.brand, backgroundColor: `${colors.brand}06` },
+    requestRowAccent: { borderLeftColor: colors.brand, backgroundColor: colors.brandSubtle },
     requestBtnDecline: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     requestBtnDeclineText: { color: colors.textPrimary },
     requestBtnAccept: { backgroundColor: colors.brand },
-    requestsAvatar: { backgroundColor: `${colors.brand}12` },
-    requestsBannerInner: { backgroundColor: colors.surface },
+    requestsAvatar: { backgroundColor: colors.brandSubtle },
     requestsBadge: { backgroundColor: colors.textPrimary },
     requestsBadgeText: { color: colors.textInverse },
-    requestsIconWrap: { backgroundColor: colors.surfaceAlt },
     requestsBannerText: { color: colors.textPrimary },
     requestsBannerSub: { color: colors.textMuted },
     requestBtnAcceptText: { color: colors.textInverse },
-    errorBanner: { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border },
+    errorBanner: { backgroundColor: colors.dangerSubtle, borderBottomColor: colors.border },
     errorBannerTitle: { color: colors.danger },
     errorBannerSub: { color: colors.textMuted },
     errorBannerRetry: { color: colors.brand },
-    needsActionChip: { backgroundColor: `${colors.brand}0F`, borderColor: `${colors.brand}30` },
-    needsActionText: { color: colors.brand },
     filterChipSecondary: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     filterChipSecondaryActive: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
     filterChipSecondaryText: { color: colors.textSecondary },
@@ -273,6 +296,9 @@ export default function InboxScreen() {
   const visibleConversations = useMemo(() => {
     const normalizedQuery = String(searchQuery ?? '').trim().toLowerCase();
     const scoped = conversations.filter((conversation) => {
+      // Listing-scoped view (from ManageListingScreen "View questions"):
+      // restrict to conversations about this listing only.
+      if (filterItemId && conversation.itemId !== filterItemId) return false;
       const isArchived = archivedIds.includes(conversation.id);
       const isRequest = messageRequests.includes(conversation.id);
       if (segment === 'unread' && !conversation.unread) return false;
@@ -306,7 +332,7 @@ export default function InboxScreen() {
       return b.lastMessageTime.localeCompare(a.lastMessageTime);
     });
     return ordered;
-  }, [conversations, searchQuery, segment, currentUser?.id, participantNameLookup, archivedIds, messageRequests]);
+  }, [conversations, searchQuery, segment, currentUser?.id, participantNameLookup, archivedIds, messageRequests, filterItemId]);
   const unreadCount = useMemo(() => visibleConversations.filter((c) => c.unread).length, [visibleConversations]);
   const buyingUnreadCount = useMemo(
     () => conversations.filter(
@@ -322,30 +348,27 @@ export default function InboxScreen() {
   );
   const handleDelete = useCallback((id: string) => {
     haptic.medium();
-    Alert.alert(
-      'Remove from inbox?',
-      'This conversation will be hidden from your inbox. The other participant keeps their copy.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            const previous = conversations.find((c) => c.id === id);
-            deleteConversation(id);
-            showError('Conversation removed', 'This conversation was removed from your inbox.');
-            try {
-              await deleteConversationOnApi(id, 'me');
-            } catch {
-              showError('Delete failed', 'Failed to delete on server. Restoring conversation.');
-              if (previous) {
-                upsertConversation(previous);
-              }
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove from inbox?',
+      message: 'This conversation will be hidden from your inbox. The other participant keeps their copy.',
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        const previous = conversations.find((c) => c.id === id);
+        deleteConversation(id);
+        showError('Conversation removed', 'This conversation was removed from your inbox.');
+        try {
+          await deleteConversationOnApi(id, 'me');
+        } catch {
+          showError('Delete failed', 'Failed to delete on server. Restoring conversation.');
+          if (previous) {
+            upsertConversation(previous);
+          }
+        }
+      },
+    });
   }, [conversations, deleteConversation, upsertConversation, showError, haptic]);
   const handleMute = useCallback((id: string) => {
     haptic.light();
@@ -402,35 +425,16 @@ export default function InboxScreen() {
     showInfo(willMarkUnread ? 'Marked unread' : 'Marked read', willMarkUnread ? 'Conversation marked as unread' : 'Conversation marked as read');
   }, [conversations, toggleConversationUnread, showInfo, haptic]);
 
-  // Long-press quick actions: a native alert sheet exposing mute, pin, and
+  // Long-press quick actions: an ActionSheet exposing mute, pin, and
   // delete. Preserves the capabilities previously surfaced via the old
   // multi-button swipe panels (AGENTS.md §8: preserve working functionality).
   const handleQuickActions = useCallback((id: string) => {
     const convo = conversations.find((c) => c.id === id);
     const isMuted = mutedIds.includes(id);
     const isPinned = !!convo?.isPinned;
-    Alert.alert(
-      'Conversation',
-      undefined,
-      [
-        {
-          text: isMuted ? 'Unmute' : 'Mute',
-          onPress: () => handleMute(id),
-        },
-        {
-          text: isPinned ? 'Unpin' : 'Pin',
-          onPress: () => handlePin(id),
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => handleDelete(id),
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-      { cancelable: true }
-    );
-  }, [conversations, mutedIds, handleMute, handlePin, handleDelete]);
+    haptic.medium();
+    setActionSheet({ visible: true, conversationId: id, isMuted, isPinned });
+  }, [conversations, mutedIds, haptic]);
 
   // FlashList v2 performance: memoized renderItem prevents full re-render of
   // all visible conversation rows on every parent state change.
@@ -448,13 +452,21 @@ export default function InboxScreen() {
       ? item.participantProfiles?.find((participant) => participant.id === counterpartyId)
       : undefined;
     const avatarEl = isGroup ? (
-      <View style={[styles.groupAvatar, t.groupAvatar]}>
-        <Text style={[styles.groupAvatarText, t.groupAvatarText]}>
-          {item.title?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() ?? 'G'}
-        </Text>
+      <View style={[styles.groupAvatar, t.groupAvatar, !item.avatar && { backgroundColor: colorForId(item.id) }]}>
+        {item.avatar ? (
+          <CachedImage
+            uri={item.avatar}
+            style={styles.groupAvatarImage}
+            contentFit="cover"
+          />
+        ) : (
+          <Text style={[styles.groupAvatarText, t.groupAvatarText, !item.avatar && { color: colors.textInverse }]}>
+            {initialsFromName(item.title)}
+          </Text>
+        )}
         {(item.botIds?.length ?? 0) > 0 && (
           <View style={[styles.botIndicator, t.botIndicator]}>
-            <Ionicons name="hardware-chip-outline" size={14} color={colors.brand} />
+            <AppIcon name="sparkles" size={14} color={colors.brand} />
           </View>
         )}
       </View>
@@ -528,6 +540,7 @@ export default function InboxScreen() {
           const listing = listings.find((l) => l.id === item.itemId);
           return listing?.images?.[0] ?? null;
         })() : undefined}
+        listingContextThumb={item.itemId ? <ListingContextThumbnail itemId={item.itemId} /> : undefined}
         avatarElement={avatarEl}
         onPress={() => {
           markConversationRead(item.id);
@@ -585,7 +598,7 @@ export default function InboxScreen() {
     handleArchive,
   ]);
   return (
-    <SafeAreaView edges={['top']} style={[styles.screenRoot, t.screenRoot]}>
+    <SafeAreaView testID="inbox-screen" edges={['top']} style={[styles.screenRoot, t.screenRoot]}>
       <View style={styles.compactHeader}>
         <Text style={[styles.headerTitle, t.headerTitle]}>Inbox</Text>
         <View style={styles.headerActions}>
@@ -603,8 +616,9 @@ export default function InboxScreen() {
             accessibilityHint="Opens the search bar to find conversations"
             accessibilityRole="button"
           >
-            <Ionicons
-              name={searchVisible ? 'search' : 'search-outline'}
+            <AppIcon
+              name="search"
+              focused={searchVisible}
               size={20}
               color={searchVisible ? colors.brand : colors.textSecondary}
             />
@@ -617,15 +631,16 @@ export default function InboxScreen() {
             hapticFeedback="light"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel="More filters"
-            accessibilityHint="Shows additional filters: requests, unread, archived, groups"
+            accessibilityHint="Shows additional filters: unread, archived, groups"
             accessibilityRole="button"
           >
-            <Ionicons
-              name={filterExpanded ? 'options' : 'options-outline'}
+            <AppIcon
+              name="options"
+              focused={filterExpanded}
               size={20}
-              color={filterExpanded || ['requests', 'unread', 'archived', 'groups'].includes(segment) ? colors.brand : colors.textSecondary}
+              color={filterExpanded || ['unread', 'archived', 'groups'].includes(segment) ? colors.brand : colors.textSecondary}
             />
-            {['requests', 'unread', 'archived', 'groups'].includes(segment) && !filterExpanded ? (
+            {['unread', 'archived', 'groups'].includes(segment) && !filterExpanded ? (
               <View style={[styles.filterDot, t.filterDot]} />
             ) : null}
           </AnimatedPressable>
@@ -640,7 +655,7 @@ export default function InboxScreen() {
             accessibilityHint="Opens privacy, automation, and quick reply settings"
             accessibilityRole="button"
           >
-            <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
+            <AppIcon name="settings" size={20} color={colors.textSecondary} />
           </AnimatedPressable>
           <AnimatedPressable
             style={[styles.newMessageBtn, t.newMessageBtn]}
@@ -651,7 +666,7 @@ export default function InboxScreen() {
             accessibilityLabel="New message"
             accessibilityRole="button"
           >
-            <Ionicons name="create-outline" size={18} color={colors.textInverse} />
+            <AppIcon name="edit" size={18} color={colors.textInverse} />
             <Text style={[styles.newMessageBtnText, t.newMessageBtnText]}>New</Text>
           </AnimatedPressable>
         </View>
@@ -671,7 +686,7 @@ export default function InboxScreen() {
           />
         )}
         <MessagingSegmentRail
-          active={segment === 'all' || segment === 'buying' || segment === 'selling' ? segment : 'all'}
+          active={segment === 'all' || segment === 'buying' || segment === 'selling' || segment === 'requests' ? segment : 'all'}
           onChange={(s) => setSegment(s)}
           requestCount={messageRequests.length}
           buyingCount={buyingUnreadCount}
@@ -680,10 +695,9 @@ export default function InboxScreen() {
         {filterExpanded && (
           <View style={styles.filterChips}>
             {([
-              { key: 'requests' as const, label: 'Requests', badge: messageRequests.length },
-              { key: 'unread' as const, label: 'Unread' },
-              { key: 'archived' as const, label: 'Archived' },
-              { key: 'groups' as const, label: 'Groups' },
+              { key: 'unread' as const, label: 'Unread', badge: unreadCount },
+              { key: 'archived' as const, label: 'Archived', badge: archivedIds.length },
+              { key: 'groups' as const, label: 'Groups', badge: conversations.filter(c => c.type === 'group').length },
             ]).map((chip) => {
               const isActive = segment === chip.key;
               return (
@@ -717,7 +731,7 @@ export default function InboxScreen() {
                     {chip.label}
                   </Text>
                   {(chip.badge ?? 0) > 1 ? (
-                    <View style={[styles.unreadPill, t.unreadPill, isActive && { backgroundColor: `${colors.textInverse}30` }]}>
+                    <View style={[styles.unreadPill, t.unreadPill, isActive && { backgroundColor: `${colors.textInverse}30` /* TODO: no textInverseSubtle token available */ }]}>
                       <Text style={[styles.unreadPillText, t.unreadPillText, isActive && { color: colors.textInverse }]}>
                         {chip.badge! > 99 ? '99+' : chip.badge}
                       </Text>
@@ -729,12 +743,31 @@ export default function InboxScreen() {
           </View>
         )}
       </View>
+      {filterItemId && (
+        <View style={[styles.itemFilterBanner, { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border }]}>
+          <AppIcon name="tag" size={14} color={colors.brand} />
+          <Text style={[styles.itemFilterBannerText, { color: colors.textSecondary }]} numberOfLines={1}>
+            Questions about this listing
+          </Text>
+          <AnimatedPressable
+            onPress={() => navigation.setParams({ filterItemId: undefined })}
+            activeOpacity={0.7}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear listing filter"
+          >
+            <Text style={[styles.itemFilterBannerClear, { color: colors.brand }]}>All</Text>
+          </AnimatedPressable>
+        </View>
+      )}
       {isOffline && (
         <OfflineBanner message="You are offline" />
       )}
       {!!syncError && (
         <View style={[styles.errorBanner, t.errorBanner]}>
-          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+          <AppIcon name="alert" size={16} color={colors.danger} />
           <View style={styles.errorBannerCopy}>
             <Text style={[styles.errorBannerTitle, t.errorBannerTitle]}>Couldn't sync messages</Text>
             <Text style={[styles.errorBannerSub, t.errorBannerSub]}>Check your connection or retry.</Text>
@@ -779,7 +812,7 @@ export default function InboxScreen() {
                   style={styles.requestsBannerTap}
                 >
                   <View style={[styles.requestsAvatar, t.requestsAvatar]}>
-                    <Ionicons name="mail-unread-outline" size={18} color={colors.brand} />
+                    <AppIcon name="mailUnread" size={18} color={colors.brand} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.requestsBannerText, t.requestsBannerText]}>Message Requests</Text>
@@ -790,12 +823,12 @@ export default function InboxScreen() {
                   <View style={[styles.requestsBadge, t.requestsBadge]}>
                     <Text style={[styles.requestsBadgeText, t.requestsBadgeText]}>{messageRequests.length}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                  <AppIcon name="forward" size={16} color={colors.textMuted} />
                 </AnimatedPressable>
               </View>
             )}
             <AnimatedFlashList
-              ref={listRef}
+              ref={listRef as unknown as React.Ref<React.Component<FlashListProps<Conversation>>>}
               data={visibleConversations}
               keyExtractor={(c: Conversation) => c.id}
               showsVerticalScrollIndicator={false}
@@ -816,12 +849,10 @@ export default function InboxScreen() {
                 (() => {
                   if (searchQuery.trim()) {
                     return (
-                      <EmptyState
-                        icon="search-outline"
-                        title="No matching conversations"
-                        subtitle="Try another keyword or filter."
-                        ctaLabel="Clear search"
-                        onCtaPress={() => setSearchQuery('')}
+                      <StateCopyView
+                        state="emptyFiltered"
+                        copyKey="conversations"
+                        onRetry={() => setSearchQuery('')}
                       />
                     );
                   }
@@ -879,21 +910,19 @@ export default function InboxScreen() {
                     case 'selling':
                       return (
                         <EmptyState
-                          icon="pricetag-outline"
+                          icon="chatbubbles-outline"
                           title="No selling conversations"
-                          subtitle="When buyers message you about your listings, they'll appear here."
                           ctaLabel="View all"
                           onCtaPress={() => setSegment('all')}
                         />
                       );
                     default:
                       return (
-                        <EmptyState
-                          icon="chatbubbles-outline"
-                          title="No conversations yet"
-                          subtitle="Start chatting with a seller to see your messages here."
-                          ctaLabel="Browse listings"
-                          onCtaPress={() => navigation.navigate('MainTabs')}
+                        <StateCopyView
+                          state="empty"
+                          copyKey="conversations"
+                          emptyCtaLabel="Browse listings"
+                          onEmptyCta={() => navigation.navigate('MainTabs')}
                         />
                       );
                   }
@@ -903,6 +932,104 @@ export default function InboxScreen() {
           </>
         )}
       </View>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
+      <ActionSheet
+        visible={actionSheet.visible}
+        onDismiss={() => setActionSheet((s) => ({ ...s, visible: false }))}
+        snapPoint={0.36}
+      >
+        <View style={styles.actionSheetBody}>
+          <Text style={[styles.actionSheetTitle, { color: colors.textPrimary }]}>
+            Conversation
+          </Text>
+          <View style={styles.actionSheetList}>
+            <AnimatedPressable
+              style={[styles.actionSheetRow, { backgroundColor: colors.surfaceAlt }]}
+              onPress={() => {
+                const id = actionSheet.conversationId;
+                setActionSheet((s) => ({ ...s, visible: false }));
+                handleMute(id);
+              }}
+              activeOpacity={0.7}
+              scaleValue={0.98}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={actionSheet.isMuted ? 'Unmute conversation' : 'Mute conversation'}
+            >
+              <AppIcon
+                name={actionSheet.isMuted ? 'notifications' : 'notificationsOff'}
+                size={22}
+                color={colors.brand}
+              />
+              <Text style={[styles.actionSheetRowLabel, { color: colors.textPrimary }]}>
+                {actionSheet.isMuted ? 'Unmute' : 'Mute'}
+              </Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.actionSheetRow, { backgroundColor: colors.surfaceAlt }]}
+              onPress={() => {
+                const id = actionSheet.conversationId;
+                setActionSheet((s) => ({ ...s, visible: false }));
+                handlePin(id);
+              }}
+              activeOpacity={0.7}
+              scaleValue={0.98}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={actionSheet.isPinned ? 'Unpin conversation' : 'Pin conversation'}
+            >
+              <AppIcon
+                name="pin"
+                focused={!actionSheet.isPinned}
+                size={22}
+                color={colors.brand}
+              />
+              <Text style={[styles.actionSheetRowLabel, { color: colors.textPrimary }]}>
+                {actionSheet.isPinned ? 'Unpin' : 'Pin'}
+              </Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.actionSheetRow, { backgroundColor: colors.surfaceAlt }]}
+              onPress={() => {
+                const id = actionSheet.conversationId;
+                setActionSheet((s) => ({ ...s, visible: false }));
+                handleDelete(id);
+              }}
+              activeOpacity={0.7}
+              scaleValue={0.98}
+              hapticFeedback="medium"
+              accessibilityRole="button"
+              accessibilityLabel="Delete conversation"
+            >
+              <AppIcon name="trash" size={22} color={colors.danger} />
+              <Text style={[styles.actionSheetRowLabel, { color: colors.danger }]}>
+                Delete
+              </Text>
+            </AnimatedPressable>
+          </View>
+          <AnimatedPressable
+            style={[styles.actionSheetCancelBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+            onPress={() => setActionSheet((s) => ({ ...s, visible: false }))}
+            activeOpacity={0.7}
+            scaleValue={0.98}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+          >
+            <Text style={[styles.actionSheetCancelText, { color: colors.textPrimary }]}>
+              Cancel
+            </Text>
+          </AnimatedPressable>
+        </View>
+      </ActionSheet>
     </SafeAreaView>
     );
 }
@@ -925,19 +1052,11 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     gap: Space.sm,
   },
-  headerTitleBlock: {
-    gap: Space.xs / 2,
-    marginBottom: Space.xs,
-  },
   headerTitle: {
     fontSize: TypographyV2.screenTitle.size,
     fontFamily: FontFamily.bold,
     letterSpacing: TypographyV2.screenTitle.letterSpacing,
     lineHeight: TypographyV2.screenTitle.lineHeight,
-  },
-  headerSubtitle: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.regular,
   },
   headerActions: {
     flexDirection: 'row',
@@ -988,13 +1107,8 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  filterChipActive: {
-  },
   filterChipText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
-  filterChipTextActive: {
     fontFamily: FontFamily.semibold,
   },
   listContent: {
@@ -1002,19 +1116,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingTop: Space.xs + 2,
   },
-  rowInner: {
-    flexDirection: 'row',
-    gap: Space.md - 4,
-    alignItems: 'flex-start',
-    paddingVertical: Space.md - 2,
-    paddingHorizontal: Space.md,
-  },
   rowSeparator: {
     height: StyleSheet.hairlineWidth,
     marginLeft: Space.md + 40 + Space.sm + 2,
     marginRight: Space.md,
   },
-  avatarWrap: { position: 'relative' },
   groupAvatar: {
     width: 40,
     height: 40,
@@ -1022,6 +1128,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    overflow: 'hidden',
+  },
+  groupAvatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: RadiusRoleValue.pillAvatar,
   },
   groupAvatarText: {
     fontSize: TypographyV2.sectionTitle.size,
@@ -1045,11 +1157,6 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
     alignItems: 'center',
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
   nameText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.semibold,
@@ -1058,26 +1165,11 @@ const styles = StyleSheet.create({
   nameUnread: {
     fontFamily: FontFamily.bold,
   },
-  pinIcon: {
-    marginLeft: Space.xs / 2,
-  },
-  snippetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  memberCount: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
   snippet: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
     lineHeight: TypographyV2.body.lineHeight,
     flex: 1,
-  },
-  snippetUnread: {
-    fontFamily: FontFamily.semibold,
   },
   unreadPill: {
     borderRadius: RadiusRoleValue.compactControl,
@@ -1088,18 +1180,6 @@ const styles = StyleSheet.create({
   unreadPillText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-  },
-  rowMeta: {
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: Space.xs,
-    minWidth: Space.xxl,
-    paddingLeft: Space.xs,
-  },
-  rowMetaBottom: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
   },
   contextThumb: {
     width: Space.lg + Space.xs,
@@ -1114,21 +1194,6 @@ const styles = StyleSheet.create({
     width: Space.lg + Space.xs,
     height: Space.lg + Space.xs,
   },
-  snippetWithBadge: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  draftBadge: {
-    paddingHorizontal: Space.sm - 2,
-    paddingVertical: Space.xs / 2,
-    borderRadius: RadiusRoleValue.compactControl,
-  },
-  draftBadgeText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
   requestListingContext: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1137,49 +1202,6 @@ const styles = StyleSheet.create({
   },
   requestListingText: {
     fontFamily: FontFamily.semibold,
-  },
-  swipeRightGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  swipeLeftGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  swipeDelete: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: Space.xxl + Space.lg,
-    borderRadius: RadiusRoleValue.compactControl,
-    flex: 1,
-  },
-  swipePin: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: Space.xxl + Space.lg,
-    borderRadius: RadiusRoleValue.compactControl,
-    flex: 1,
-  },
-  swipeArchive: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: Space.xxl + Space.lg,
-    borderRadius: RadiusRoleValue.compactControl,
-    flex: 1,
-  },
-  swipeMute: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: Space.xxl + Space.lg,
-    borderRadius: RadiusRoleValue.compactControl,
-    flex: 1,
-  },
-  requestRowSurface: {
-    borderRadius: RadiusRoleValue.sheetDialog,
-    marginHorizontal: Space.md,
-    marginVertical: Space.xs,
   },
   requestRowAccent: {
     borderLeftWidth: 3,
@@ -1231,23 +1253,12 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
   },
-  requestsAvatarStack: {
-    flexDirection: 'row',
-  },
   requestsAvatar: {
     width: Control.chrome,
     height: Control.chrome,
     borderRadius: RadiusRoleValue.pillAvatar,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  requestsBannerInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + Space.xs,
-    paddingHorizontal: Space.md,
-    borderRadius: RadiusRoleValue.sheetDialog,
   },
   requestsBadge: {
     width: Space.lg,
@@ -1259,13 +1270,6 @@ const styles = StyleSheet.create({
   requestsBadgeText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.bold,
-  },
-  requestsIconWrap: {
-    width: Space.xxl,
-    height: Space.xxl,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   requestsBannerText: {
     fontSize: TypographyV2.body.size,
@@ -1288,6 +1292,24 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  itemFilterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  itemFilterBannerText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    minWidth: 0,
+  },
+  itemFilterBannerClear: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
   },
   errorBannerCopy: {
     flex: 1,
@@ -1322,5 +1344,42 @@ const styles = StyleSheet.create({
   skeletonText: {
     flex: 1,
     gap: Space.xs + 2,
+  },
+  actionSheetBody: {
+    gap: Space.md,
+    paddingBottom: Space.lg,
+  },
+  actionSheetTitle: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.body.letterSpacing,
+  },
+  actionSheetList: {
+    gap: Space.sm,
+  },
+  actionSheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.smMd,
+    paddingVertical: Space.sm + 2,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: RadiusRoleValue.compactControl,
+  },
+  actionSheetRowLabel: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+  },
+  actionSheetCancelBtn: {
+    borderRadius: RadiusRoleValue.compactControl,
+    paddingVertical: Space.md,
+    alignItems: 'center',
+    marginTop: Space.xs,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  actionSheetCancelText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
   },
 });

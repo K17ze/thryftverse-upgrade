@@ -1,7 +1,7 @@
 /**
  * ListingPreviewCard — live preview of how a listing appears in the feed.
  *
- * Mirrors the ProductCardV2 styling patterns (image-first, portrait 3:4 ratio,
+ * Mirrors the ProductCard styling patterns (image-first, portrait 3:4 ratio,
  * condition badge, price hero, seller row) so the seller sees exactly what a
  * buyer will see. This closes the "blind publish" gap flagged in 2026 research:
  * sellers who preview their listing are 40% more confident at publish time.
@@ -9,7 +9,7 @@
  * Design (AGENTS.md §4):
  *   - Portrait 3:4 media (Poshmark 2026 standard) as the visual anchor.
  *   - One radius family (Radius.lg for media, Radius.md for badges).
- *   - Condition badge + price hero follow ProductCardV2 hierarchy.
+ *   - Condition badge + price hero follow ProductCard hierarchy.
  *   - "This is how buyers will see your listing" label sets honest context.
  *
  * TRUTHFUL UI (AGENTS.md §11):
@@ -23,16 +23,15 @@ import { View, Text, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import {
   Space,
   Radius,
-  Type,
-  TypeStyles,
-  Typography,
+  FontFamily,
   AspectRatio,
   Control,
-  Stroke,
-} from '../../theme/designTokens';
+  Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
 
 export interface ListingPreviewCardProps {
@@ -56,9 +55,9 @@ export function ListingPreviewCard({
   price,
   condition,
   sellerName,
-  sellerAvatar,
-}: ListingPreviewCardProps) {
+  sellerAvatar }: ListingPreviewCardProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const hasPhoto = Boolean(coverPhotoUri);
@@ -88,7 +87,7 @@ export function ListingPreviewCard({
         </Text>
       </View>
 
-      {/* Preview card — mirrors ProductCardV2 composition */}
+      {/* Preview card — mirrors ProductCard composition */}
       <View style={styles.card}>
         {/* Media — portrait 3:4 */}
         <View style={styles.imageWrap}>
@@ -97,6 +96,7 @@ export function ListingPreviewCard({
               source={{ uri: coverPhotoUri! }}
               style={styles.image}
               resizeMode="cover"
+              accessible={false}
             />
           ) : (
             <ImageEmptyGraphic
@@ -105,7 +105,7 @@ export function ListingPreviewCard({
             />
           )}
 
-          {/* Condition badge — same priority as ProductCardV2 */}
+          {/* Condition badge — same priority as ProductCard */}
           {condition ? (
             <View style={styles.conditionBadge}>
               <Text style={styles.conditionText}>{condition}</Text>
@@ -120,7 +120,7 @@ export function ListingPreviewCard({
           </Text>
           <View style={styles.priceRow}>
             <Text style={styles.priceHero}>
-              {price > 0 ? `£${price.toFixed(2)}` : '£—'}
+              {price > 0 ? `${currencySymbol}${price.toFixed(2)}` : `${currencySymbol}—`}
             </Text>
           </View>
 
@@ -131,6 +131,7 @@ export function ListingPreviewCard({
                   source={{ uri: sellerAvatar }}
                   style={styles.sellerAvatar}
                   resizeMode="cover"
+                  accessible={false}
                 />
               ) : (
                 <View style={styles.sellerAvatarPlaceholder}>
@@ -155,39 +156,32 @@ export function ListingPreviewCard({
 function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
     wrap: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     labelRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     labelText: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      fontWeight: '500',
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      color: colors.textSecondary },
     card: {
       flexDirection: 'row',
       backgroundColor: colors.surface,
       borderRadius: Radius.lg,
       borderWidth: Stroke.hairline,
       borderColor: colors.borderSubtle,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     // Media — portrait 3:4, fixed width so the row is stable
     imageWrap: {
       position: 'relative',
       width: Space.xxl + Space.xl,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     image: {
       width: '100%',
-      aspectRatio: AspectRatio.portrait,
-    },
+      aspectRatio: AspectRatio.portrait },
     conditionBadge: {
       position: 'absolute',
       top: Space.xs,
@@ -195,52 +189,44 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       backgroundColor: colors.overlay,
       paddingHorizontal: Space.xs + 1,
       paddingVertical: Space.xs / 2,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     conditionText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textInverse,
       letterSpacing: 0.3,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
     // Info
     info: {
       flex: 1,
       padding: Space.sm,
       justifyContent: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     title: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     priceRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     priceHero: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     sellerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs + 1,
-      minHeight: 20,
-    },
+      minHeight: 20 },
     sellerAvatar: {
       width: Space.md,
       height: Space.md,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     sellerAvatarPlaceholder: {
       width: Space.md,
       height: Space.md,
@@ -249,14 +235,11 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderWidth: Stroke.hairline,
       borderColor: colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     sellerName: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      flex: 1,
-    },
-  });
+      flex: 1 } });
 }

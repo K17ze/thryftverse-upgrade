@@ -7,10 +7,8 @@ import {
   RefreshControl,
   ScrollView,
   Share,
-  Alert,
-  Dimensions,
-  Pressable,
-} from 'react-native';
+  useWindowDimensions,
+  Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, {
   useSharedValue,
@@ -18,8 +16,7 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  FadeIn,
-} from 'react-native-reanimated';
+  FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -34,7 +31,6 @@ import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { RefreshIndicator } from '../components/RefreshIndicator';
-import { MasonryGrid } from '../components/ProductCardV2';
 import { ClosetMediaMosaic } from '../components/closet/ClosetMediaMosaic';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -44,8 +40,9 @@ import { MoodboardCollectionGrid } from '../components/profile/MoodboardCollecti
 import { BoardEmptyGraphic } from '../components/profile/BoardEmptyGraphic';
 import { OutfitCard } from '../components/outfit/OutfitCard';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Type, Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, Layout, AspectRatio } from '../theme/designTokens';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { Space, Radius, DockConstants, Typography, Stroke, LetterSpacing, AspectRatio } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 type TabKey = 'SAVED' | 'WISHLIST' | 'COLLECTIONS' | 'OUTFITS';
 type SortOption = 'Default' | 'Price: Low to High' | 'Price: High to Low' | 'Newest' | 'Recently saved';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -55,23 +52,23 @@ const SORT_OPTIONS: SortOption[] = ['Default', 'Recently saved', 'Price: Low to 
 // ── Mosaic geometry — matches ClosetMediaMosaic tile dimensions so the
 //    loading skeleton preserves the final 3:4 portrait silhouette and
 //    avoids layout shift when media decodes (AGENTS.md §14, §16). ──
-const { width: SCREEN_W } = Dimensions.get('window');
 const SKEL_COLUMNS = 3;
 const SKEL_GAP = Space.sm;
 const SKEL_PADDING = Space.md;
-const SKEL_TILE_W =
-  (SCREEN_W - SKEL_PADDING * 2 - SKEL_GAP * (SKEL_COLUMNS - 1)) / SKEL_COLUMNS;
-const SKEL_TILE_H = SKEL_TILE_W / AspectRatio.portrait;
 
 // ── Board card skeleton geometry — matches ClosetBoardCard 2-column grid ──
 const BOARD_COLS = 2;
 const BOARD_GAP = Space.sm;
-const BOARD_CARD_W = (SCREEN_W - Space.md * 2 - BOARD_GAP) / BOARD_COLS;
-const BOARD_CARD_H = BOARD_CARD_W / AspectRatio.portrait + 8;
 
 export default function ClosetScreen() {
   const { colors, isDark } = useAppTheme();
   const reducedMotion = useReducedMotion();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const SKEL_TILE_W =
+    (SCREEN_W - SKEL_PADDING * 2 - SKEL_GAP * (SKEL_COLUMNS - 1)) / SKEL_COLUMNS;
+  const SKEL_TILE_H = SKEL_TILE_W / AspectRatio.portrait;
+  const BOARD_CARD_W = (SCREEN_W - Space.md * 2 - BOARD_GAP) / BOARD_COLS;
+  const BOARD_CARD_H = BOARD_CARD_W / AspectRatio.portrait + 8;
 
   const t = StyleSheet.create({
     container: { backgroundColor: colors.background },
@@ -97,8 +94,7 @@ export default function ClosetScreen() {
     paddingBottom: Space.sm,
     marginBottom: Space.sm,
     borderBottomWidth: Stroke.hairline,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
     statDivider: { backgroundColor: colors.border },
     statValue: { color: colors.textPrimary },
     statLabel: { color: colors.textMuted },
@@ -109,12 +105,11 @@ export default function ClosetScreen() {
     brandChipText: { color: colors.textSecondary },
     brandChipTextActive: { color: colors.background },
     closetToolbarBadge: { backgroundColor: colors.textPrimary },
-    closetToolbarBadgeText: { color: colors.background },
-  });
+    closetToolbarBadgeText: { color: colors.background } });
 
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const [activeTab, setActiveTab] = useState<TabKey>('SAVED');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('Default');
@@ -128,6 +123,14 @@ export default function ClosetScreen() {
   const [manageMode, setManageMode] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const scrollY = useSharedValue(0);
   const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -286,8 +289,7 @@ export default function ClosetScreen() {
       totalItems: uniqueItems.length,
       totalValue,
       totalSavings,
-      collectionsCount: collections.length,
-    };
+      collectionsCount: collections.length };
   }, [savedItems, wishlistItems, collections]);
 
   // Brand filter — extract unique brands from the active tab's items
@@ -304,8 +306,7 @@ export default function ClosetScreen() {
     const username = currentUser?.username ?? 'on Thryftverse';
     try {
       await Share.share({
-        message: `Check out my closet @${username} on Thryftverse!`,
-      });
+        message: `Check out my closet @${username} on Thryftverse!` });
     } catch { /* user cancelled */ }
   }, [haptic, currentUser]);
 
@@ -344,25 +345,20 @@ export default function ClosetScreen() {
 
   const handleDeleteCollection = useCallback((id: string, name: string) => {
     haptic.medium();
-    Alert.alert(
-      'Delete Collection?',
-      `"${name}" will be permanently removed.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            haptic.medium();
-            void deleteCollectionOnApi(id).catch(() => {
-              // Fallback to local delete if API fails
-              deleteCollection(id);
-            });
-          },
-        },
-      ]
-    );
-  }, [haptic, deleteCollection, deleteCollectionOnApi]);
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete Collection?',
+      message: `"${name}" will be permanently removed.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: () => {
+        haptic.medium();
+        void deleteCollectionOnApi(id).catch(() => {
+          // Fallback to local delete if API fails
+          deleteCollection(id);
+        });
+      } });
+  }, [haptic, deleteCollection, deleteCollectionOnApi, setConfirmSheet]);
 
   const handleStartRename = useCallback((id: string, currentName: string) => {
     haptic.light();
@@ -399,20 +395,17 @@ export default function ClosetScreen() {
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
-    },
-  });
+    } });
 
   const headerBgStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [0, 40], [0, 1], Extrapolation.CLAMP),
-    borderBottomWidth: interpolate(scrollY.value, [0, 40], [0, 1], Extrapolation.CLAMP),
-  }));
+    borderBottomWidth: interpolate(scrollY.value, [0, 40], [0, 1], Extrapolation.CLAMP) }));
 
   const TAB_ICONS = {
     SAVED: 'bookmark-outline' as const,
     WISHLIST: 'heart-outline' as const,
     COLLECTIONS: 'folder-open-outline' as const,
-    OUTFITS: 'shirt-outline' as const,
-  };
+    OUTFITS: 'shirt-outline' as const };
 
   const renderLoadingSkeleton = () => (
     <View style={styles.skeletonWrap}>
@@ -528,8 +521,7 @@ export default function ClosetScreen() {
         itemCount: collection.itemIds?.length ?? 0,
         covers,
         updatedAt: collection.updatedAt,
-        isPrivate: collection.isPrivate === true,
-      };
+        isPrivate: collection.isPrivate === true };
     });
 
     return (
@@ -579,8 +571,7 @@ export default function ClosetScreen() {
         .map((l) => l.images[0]);
       return {
         ...outfit,
-        thumbs,
-      };
+        thumbs };
     });
 
     return (
@@ -595,23 +586,18 @@ export default function ClosetScreen() {
               backgroundColor={outfit.backgroundColor}
               onPress={() => navigation.navigate('OutfitBuilder')}
               onLongPress={() => {
-                Alert.alert(
-                  'Delete Outfit?',
-                  `"${outfit.name}" will be removed from your outfits.`,
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Delete',
-                      style: 'destructive',
-                      onPress: () => {
-                        haptic.medium();
-                        removeOutfit(outfit.id);
-                      },
-                    },
-                  ]
-                );
+                setConfirmSheet({
+                  visible: true,
+                  title: 'Delete Outfit?',
+                  message: `"${outfit.name}" will be removed from your outfits.`,
+                  confirmLabel: 'Delete',
+                  variant: 'danger',
+                  onConfirm: () => {
+                    haptic.medium();
+                    removeOutfit(outfit.id);
+                  } });
               }}
-              style={styles.outfitCard}
+              style={{ width: (SCREEN_W - Space.md * 2 - Space.sm) / 2 }}
             />
           ))}
         </View>
@@ -697,8 +683,7 @@ export default function ClosetScreen() {
                 SAVED: savedItems.length,
                 WISHLIST: wishlistItems.length,
                 COLLECTIONS: collections.length,
-                OUTFITS: outfits.length,
-              };
+                OUTFITS: outfits.length };
               const tabLabel = tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : tab === 'COLLECTIONS' ? 'Collections' : 'Outfits';
               return (
                 <AnimatedPressable
@@ -835,7 +820,7 @@ export default function ClosetScreen() {
               accessibilityState={{ selected: showPriceDropsOnly }}
               accessibilityLabel={`Filter price drops: ${priceDropCount} items on sale`}
             >
-              <Ionicons name="pricetag-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
+              <Ionicons name="cash-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
               <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]}>
                 Price drops ({priceDropCount})
               </Text>
@@ -857,7 +842,7 @@ export default function ClosetScreen() {
               </View>
               <View style={[styles.statDivider, t.statDivider]} />
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, DEFAULT_CURRENCY_CODE)}</Text>
+                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, currencyCode)}</Text>
                 <Text style={[styles.statLabel, t.statLabel]}>Total value</Text>
               </View>
               <View style={[styles.statDivider, t.statDivider]} />
@@ -870,7 +855,7 @@ export default function ClosetScreen() {
               <View style={[styles.savingsRow, t.savingsRow]}>
                 <Ionicons name="trending-down" size={12} color={colors.success} />
                 <Text style={[styles.savingsText, t.savingsText]}>
-                  {formatFromFiat(closetStats.totalSavings, DEFAULT_CURRENCY_CODE)} in price drops tracked
+                  {formatFromFiat(closetStats.totalSavings, currencyCode)} in price drops tracked
                 </Text>
               </View>
             ) : null}
@@ -900,51 +885,53 @@ export default function ClosetScreen() {
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   headerBorder: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: Space.xxl + Space.xl + Space.sm + 2,
-    zIndex: 1,
-  },
+    zIndex: 1 },
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   shareBtn: {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
     borderRadius: Radius.md,
     borderWidth: 0,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   tabBar: {
     flexDirection: 'row',
     gap: Space.lg,
-    borderBottomWidth: Stroke.hairline,
-  },
+    borderBottomWidth: Stroke.hairline },
   tabItem: {
     paddingVertical: Space.sm,
-    position: 'relative',
-  },
+    position: 'relative' },
   tabLabel: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   tabLabelActive: {
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   tabIndicator: {
     position: 'absolute',
     bottom: 0,
@@ -952,8 +939,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: Stroke.emphasis,
     borderTopLeftRadius: Radius.none + 1,
-    borderTopRightRadius: Radius.none + 1,
-  },
+    borderTopRightRadius: Radius.none + 1 },
   countPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -961,31 +947,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs,
     borderRadius: Radius.full,
-    borderWidth: 0,
-  },
+    borderWidth: 0 },
   countBadge: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   searchWrap: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   closetToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     gap: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   closetToolbarBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-  },
+    position: 'relative' },
   closetToolbarBadge: {
     position: 'absolute',
     top: 6,
@@ -995,50 +976,40 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
+    paddingHorizontal: 4 },
   closetToolbarBadgeText: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   tabsWrap: {
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   scrollContent: {
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   sortMenu: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     borderRadius: Radius.none,
     borderWidth: 0,
-    overflow: 'visible',
-  },
+    overflow: 'visible' },
   sortOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
-    borderBottomWidth: Stroke.hairline,
-  },
-  sortOptionActive: {
-  },
+    borderBottomWidth: Stroke.hairline },
+  sortOptionActive: {},
   sortOptionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   sortOptionTextActive: {
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   filterChipRow: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     marginBottom: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1047,108 +1018,80 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,
-    minHeight: Space.xl + Space.xs,
-  },
-  filterChipActive: {
-  },
+    minHeight: Space.xl + Space.xs },
+  filterChipActive: {},
   filterChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
-  filterChipTextActive: {
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
+  filterChipTextActive: {},
   collectionsList: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   createCollectionBtn: {
     marginTop: Space.lg,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   outfitsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
     gap: Space.sm,
-    paddingTop: Space.sm,
-  },
-  outfitCard: {
-    width: (Layout.screenWidth - Space.md * 2 - Space.sm) / 2,
-  },
+    paddingTop: Space.sm },
   skeletonWrap: {
     paddingHorizontal: SKEL_PADDING,
     gap: SKEL_GAP,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   skeletonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   boardSkeletonWrap: {
     paddingHorizontal: Space.md,
     gap: BOARD_GAP,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   boardSkeletonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   statItem: {
     flex: 1,
     alignItems: 'center',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   statDivider: {
     width: Stroke.standard,
-    height: Space.lg + 4,
-  },
+    height: Space.lg + 4 },
   statValue: {
-    fontSize: Type.sectionTitle.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: LetterSpacing.tight + LetterSpacing.wide },
   statLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + LetterSpacing.tight,
-  },
+    letterSpacing: LetterSpacing.caps + LetterSpacing.tight },
   savingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
     marginTop: Space.sm,
     paddingTop: Space.sm,
-    borderTopWidth: Stroke.hairline,
-  },
+    borderTopWidth: Stroke.hairline },
   savingsText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   brandChipScroll: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   brandChipContent: {
     paddingHorizontal: Space.md,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   brandChip: {
     paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs / 2 + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,
     minHeight: Space.xl + Space.xs,
-    justifyContent: 'center',
-  },
-  brandChipActive: {
-  },
+    justifyContent: 'center' },
+  brandChipActive: {},
   brandChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
-  brandChipTextActive: {
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
+  brandChipTextActive: {} });

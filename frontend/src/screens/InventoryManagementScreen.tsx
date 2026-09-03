@@ -11,31 +11,35 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Alert,
   type StyleProp,
   type ImageStyle,
-  type ViewStyle,
-} from 'react-native';
+  type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList, type FlashListProps } from '@shopify/flash-list';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
-import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { Space, Radius, Typography, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { FlagshipScreen, FlagshipHeader, FlagshipState, DenseListScreen } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { CachedImage } from '../components/CachedImage';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import {
   fetchUserListingsFromApi,
-  patchListingOnApi,
-  deleteListingOnApi,
-  type ListingApiItem,
-} from '../services/listingsApi';
+  type ListingApiItem } from '../services/listingsApi';
+import {
+  submitSellerHubBatchCommand,
+  type SellerHubBatchResult } from '../services/sellerHubApi';
 import { parseApiError } from '../lib/apiClient';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { createStableId } from '../utils/createStableId';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'InventoryManagement'>;
 
@@ -63,13 +67,19 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+const InventoryFlashList = FlashList as unknown as React.ComponentType<
+  FlashListProps<ListingApiItem> & { estimatedItemSize: number }
+>;
+
 export default function InventoryManagementScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
   const currentUser = useStore((state) => state.currentUser);
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -86,6 +96,16 @@ export default function InventoryManagementScreen({ navigation }: Props) {
 
   // Action-in-flight tracking (per-row optimistic status updates)
   const [pendingActionIds, setPendingActionIds] = useState<Set<string>>(new Set());
+
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>(() => ({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' as const }));
 
   const load = useCallback(async (silent = false) => {
     if (!currentUser?.id) {
@@ -132,8 +152,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
       sold: sold.length,
       paused: paused.length,
       draft: draft.length,
-      totalValue,
-    };
+      totalValue };
   }, [listings]);
 
   // ── Filtered + sorted list ──
@@ -194,15 +213,28 @@ export default function InventoryManagementScreen({ navigation }: Props) {
       prev.map((l) => (l.id === item.id ? { ...l, status: nextStatus } : l))
     );
     try {
-      await patchListingOnApi(item.id, { status: nextStatus as 'active' | 'paused' });
-      show(isPaused ? 'Listing resumed' : 'Listing paused', 'success');
-    } catch (err) {
-      // Revert on failure
-      setListings((prev) =>
-        prev.map((l) => (l.id === item.id ? { ...l, status: item.status } : l))
+      const response = await submitSellerHubBatchCommand(
+        isPaused ? 'resume' : 'pause',
+        [{ listingId: item.id }],
+        createStableId('listing-command'),
       );
-      const parsed = parseApiError(err);
-      show(parsed.message, 'error');
+      const result = response.results[0];
+      if (result?.state === 'applied') {
+        show(isPaused ? 'Listing resumed' : 'Listing paused', 'success');
+      } else if (result?.state === 'rejected') {
+        setListings((prev) =>
+          prev.map((l) => (l.id === item.id ? { ...l, status: result.currentStatus ?? item.status } : l))
+        );
+        show('This listing can no longer be changed from its current state.', 'error');
+      } else {
+        void load(true);
+        show('Checking the listing’s current status…', 'info');
+      }
+    } catch (err) {
+      // The request may have committed before the response was lost. Keep the
+      // optimistic row and reconcile instead of falsely rolling it back.
+      void load(true);
+      show('Connection interrupted. Checking the listing’s current status…', 'info');
     } finally {
       setPendingActionIds((prev) => {
         const next = new Set(prev);
@@ -210,7 +242,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
         return next;
       });
     }
-  }, [pendingActionIds, haptic, show]);
+  }, [pendingActionIds, haptic, show, load]);
 
   const handleRelist = useCallback((item: ListingApiItem) => {
     haptic.light();
@@ -219,46 +251,56 @@ export default function InventoryManagementScreen({ navigation }: Props) {
 
   const handleDelete = useCallback((item: ListingApiItem) => {
     haptic.heavy();
-    Alert.alert(
-      'Delete listing',
-      `Delete "${item.title}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (pendingActionIds.has(item.id)) return;
-            setPendingActionIds((prev) => new Set(prev).add(item.id));
-            setListings((prev) => prev.filter((l) => l.id !== item.id));
-            try {
-              await deleteListingOnApi(item.id);
-              show('Listing deleted', 'success');
-            } catch (err) {
-              // Re-fetch to restore on failure
-              void load(true);
-              const parsed = parseApiError(err);
-              show(parsed.message, 'error');
-            } finally {
-              setPendingActionIds((prev) => {
-                const next = new Set(prev);
-                next.delete(item.id);
-                return next;
-              });
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete listing',
+      message: `Delete "${item.title}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        if (pendingActionIds.has(item.id)) return;
+        setPendingActionIds((prev) => new Set(prev).add(item.id));
+        setListings((prev) => prev.filter((l) => l.id !== item.id));
+        try {
+          const response = await submitSellerHubBatchCommand(
+            'delete',
+            [{ listingId: item.id }],
+            createStableId('listing-command'),
+          );
+          const result = response.results[0];
+          if (result?.state === 'applied') {
+            show('Listing deleted', 'success');
+          } else if (result?.state === 'rejected') {
+            void load(true);
+            show('This listing cannot be deleted from its current state.', 'error');
+          } else {
+            void load(true);
+            show('Checking whether the listing was deleted…', 'info');
+          }
+        } catch (err) {
+          // Unknown transport outcome: the server receipt is authoritative.
+          void load(true);
+          show('Connection interrupted. Checking whether the listing was deleted…', 'info');
+        } finally {
+          setPendingActionIds((prev) => {
+            const next = new Set(prev);
+            next.delete(item.id);
+            return next;
+          });
+        }
+      } });
   }, [pendingActionIds, haptic, show, load]);
 
   // ── Bulk selection ──
   const enterSelectionMode = useCallback((itemId: string) => {
     haptic.medium();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (!reducedMotion) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     setSelectionMode(true);
     setSelectedIds(new Set([itemId]));
-  }, [haptic]);
+  }, [haptic, reducedMotion]);
 
   const toggleSelection = useCallback((itemId: string) => {
     haptic.selection();
@@ -272,14 +314,17 @@ export default function InventoryManagementScreen({ navigation }: Props) {
 
   const exitSelectionMode = useCallback(() => {
     haptic.light();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (!reducedMotion) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     setSelectionMode(false);
     setSelectedIds(new Set());
-  }, [haptic]);
+  }, [haptic, reducedMotion]);
 
   const handleBulkPause = useCallback(async (resume: boolean) => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
+    const command = resume ? 'resume' : 'pause';
     const nextStatus = resume ? 'active' : 'paused';
     haptic.medium();
     setPendingActionIds((prev) => {
@@ -288,24 +333,61 @@ export default function InventoryManagementScreen({ navigation }: Props) {
       return next;
     });
     const originalStatuses = new Map(ids.map((id) => [id, listings.find((l) => l.id === id)?.status ?? 'active']));
+    // Optimistic update — apply to all selected
     setListings((prev) =>
       prev.map((l) => (selectedIds.has(l.id) ? { ...l, status: nextStatus } : l))
     );
     try {
-      await Promise.all(
-        ids.map((id) => patchListingOnApi(id, { status: nextStatus as 'active' | 'paused' }))
+      const idempotencyKey = createStableId(`bulk-${command}`);
+      const response = await submitSellerHubBatchCommand(
+        command,
+        ids.map((id) => ({ listingId: id })),
+        idempotencyKey,
       );
-      show(`${ids.length} listing${ids.length === 1 ? '' : 's'} ${resume ? 'resumed' : 'paused'}`, 'success');
-      exitSelectionMode();
+      // Apply per-item receipts truthfully.
+      // Per Report 17 P0: partial failure is a firstclass result.
+      // The UI never restores a committed row because a sibling failed.
+      const applied: string[] = [];
+      const rejected: string[] = [];
+      const unknown: string[] = [];
+      for (const result of response.results) {
+        if (result.state === 'applied') applied.push(result.listingId);
+        else if (result.state === 'rejected') rejected.push(result.listingId);
+        else unknown.push(result.listingId);
+      }
+      // Revert only rejected and unknown items to their original status
+      if (rejected.length > 0 || unknown.length > 0) {
+        setListings((prev) =>
+          prev.map((l) => {
+            if (rejected.includes(l.id) || unknown.includes(l.id)) {
+              const orig = originalStatuses.get(l.id);
+              return orig ? { ...l, status: orig } : l;
+            }
+            return l;
+          })
+        );
+        // Re-fetch to reconcile unknown items with server truth
+        if (unknown.length > 0) {
+          void load(true);
+        }
+      }
+      // Build truthful toast message
+      if (response.state === 'complete') {
+        show(`${ids.length} listing${ids.length === 1 ? '' : 's'} ${resume ? 'resumed' : 'paused'}`, 'success');
+        exitSelectionMode();
+      } else {
+        const parts: string[] = [];
+        if (applied.length > 0) parts.push(`${applied.length} ${resume ? 'resumed' : 'paused'}`);
+        if (rejected.length > 0) parts.push(`${rejected.length} failed`);
+        if (unknown.length > 0) parts.push(`${unknown.length} checking`);
+        show(parts.join(' · '), applied.length > 0 ? 'success' : 'error');
+        if (applied.length === ids.length) exitSelectionMode();
+      }
     } catch (err) {
-      setListings((prev) =>
-        prev.map((l) => {
-          const orig = originalStatuses.get(l.id);
-          return orig ? { ...l, status: orig } : l;
-        })
-      );
-      const parsed = parseApiError(err);
-      show(parsed.message, 'error');
+      // Some items may already be committed. Reconcile the whole inventory;
+      // never roll back an authoritative sibling because the response was lost.
+      void load(true);
+      show('Connection interrupted. Checking updated listings…', 'info');
     } finally {
       setPendingActionIds((prev) => {
         const next = new Set(prev);
@@ -313,48 +395,79 @@ export default function InventoryManagementScreen({ navigation }: Props) {
         return next;
       });
     }
-  }, [selectedIds, listings, haptic, show, exitSelectionMode]);
+  }, [selectedIds, listings, haptic, show, exitSelectionMode, load]);
 
   const handleBulkDelete = useCallback(() => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     haptic.heavy();
-    Alert.alert(
-      `Delete ${ids.length} listing${ids.length === 1 ? '' : 's'}`,
-      'This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setPendingActionIds((prev) => {
-              const next = new Set(prev);
-              ids.forEach((id) => next.add(id));
-              return next;
-            });
-            const snapshot = [...listings];
-            setListings((prev) => prev.filter((l) => !selectedIds.has(l.id)));
-            try {
-              await Promise.all(ids.map((id) => deleteListingOnApi(id)));
-              show(`${ids.length} listing${ids.length === 1 ? '' : 's'} deleted`, 'success');
-              exitSelectionMode();
-            } catch (err) {
-              setListings(snapshot);
+    setConfirmSheet({
+      visible: true,
+      title: `Delete ${ids.length} listing${ids.length === 1 ? '' : 's'}`,
+      message: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        setPendingActionIds((prev) => {
+          const next = new Set(prev);
+          ids.forEach((id) => next.add(id));
+          return next;
+        });
+        const snapshot = [...listings];
+        // Optimistic: remove all selected from the list
+        setListings((prev) => prev.filter((l) => !selectedIds.has(l.id)));
+        try {
+          const idempotencyKey = createStableId('bulk-delete');
+          const response = await submitSellerHubBatchCommand(
+            'delete',
+            ids.map((id) => ({ listingId: id })),
+            idempotencyKey,
+          );
+          // Apply per-item receipts truthfully
+          const applied: string[] = [];
+          const rejected: string[] = [];
+          const unknown: string[] = [];
+          for (const result of response.results) {
+            if (result.state === 'applied') applied.push(result.listingId);
+            else if (result.state === 'rejected') rejected.push(result.listingId);
+            else unknown.push(result.listingId);
+          }
+          // Restore rejected items to the list
+          if (rejected.length > 0 || unknown.length > 0) {
+            const itemsToRestore = snapshot.filter(
+              (l) => rejected.includes(l.id) || unknown.includes(l.id),
+            );
+            setListings((prev) => [...prev, ...itemsToRestore]);
+            // Re-fetch to reconcile unknown items
+            if (unknown.length > 0) {
               void load(true);
-              const parsed = parseApiError(err);
-              show(parsed.message, 'error');
-            } finally {
-              setPendingActionIds((prev) => {
-                const next = new Set(prev);
-                ids.forEach((id) => next.delete(id));
-                return next;
-              });
             }
-          },
-        },
-      ]
-    );
+          }
+          if (response.state === 'complete') {
+            show(`${ids.length} listing${ids.length === 1 ? '' : 's'} deleted`, 'success');
+            exitSelectionMode();
+          } else {
+            const parts: string[] = [];
+            if (applied.length > 0) parts.push(`${applied.length} deleted`);
+            if (rejected.length > 0) parts.push(`${rejected.length} failed`);
+            if (unknown.length > 0) parts.push(`${unknown.length} checking`);
+            show(parts.join(' · '), applied.length > 0 ? 'success' : 'error');
+            if (applied.length === ids.length) exitSelectionMode();
+          }
+        } catch (err) {
+          // Unknown transport outcome: reload durable per-item truth instead of
+          // restoring rows that may already have been deleted.
+          void load(true);
+          show('Connection interrupted. Checking deleted listings…', 'info');
+        } finally {
+          setPendingActionIds((prev) => {
+            const next = new Set(prev);
+            ids.forEach((id) => next.delete(id));
+            return next;
+          });
+        }
+      } });
   }, [selectedIds, listings, haptic, show, exitSelectionMode, load]);
 
   // ── States ──
@@ -383,237 +496,253 @@ export default function InventoryManagementScreen({ navigation }: Props) {
   const showFilteredEmpty = listings.length > 0 && filteredListings.length === 0;
 
   return (
-    <FlagshipScreen
-      header={
-        <FlagshipHeader
-          title="Inventory"
-          onBack={() => navigation.goBack()}
-          rightAction={
-            <AnimatedPressable
-              style={styles.headerAction}
-              onPress={() => navigation.navigate('Sell')}
-              accessibilityRole="button"
-              accessibilityLabel="Create new listing"
-              hapticFeedback="light"
-            >
-              <Ionicons name="add-circle-outline" size={24} color={colors.textPrimary} />
-            </AnimatedPressable>
-          }
-        />
-      }
-      scrollEnabled={false}
-      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
-    >
-      <View style={styles.root}>
-        {/* ── Search bar ── */}
-        <View style={styles.searchWrap}>
-          <Ionicons name="search-outline" size={16} color={colors.textMuted} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by title or brand"
-            placeholderTextColor={colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            accessibilityLabel="Search inventory"
+    <>
+      <DenseListScreen
+        testID="inventory-management-screen"
+        header={
+          <FlagshipHeader
+            title="Inventory"
+            onBack={() => navigation.goBack()}
+            rightAction={
+              <AnimatedPressable
+                style={styles.headerAction}
+                onPress={() => navigation.navigate('Sell')}
+                accessibilityRole="button"
+                accessibilityLabel="Create new listing"
+                hapticFeedback="light"
+              >
+                <Ionicons name="add-circle-outline" size={24} color={colors.textPrimary} />
+              </AnimatedPressable>
+            }
           />
-          {searchQuery.length > 0 ? (
-            <Pressable
-              onPress={() => setSearchQuery('')}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-              hitSlop={8}
-            >
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-            </Pressable>
-          ) : null}
-        </View>
-
-        {/* ── Summary header — flat canvas, hairline separators ── */}
-        {listings.length > 0 ? (
-          <View style={styles.summaryRow}>
-            <SummaryCell label="Items" value={String(summary.total)} colors={colors} styles={styles} />
-            <SummaryCell label="Active" value={String(summary.active)} colors={colors} styles={styles} accent={colors.success} />
-            <SummaryCell label="Sold" value={String(summary.sold)} colors={colors} styles={styles} accent={colors.textMuted} />
-            <SummaryCell label="Paused" value={String(summary.paused)} colors={colors} styles={styles} accent={colors.warning} />
-            <SummaryCell label="Value" value={`£${summary.totalValue.toFixed(0)}`} colors={colors} styles={styles} accent={colors.brand} last />
-          </View>
-        ) : null}
-
-        {/* ── Filter tabs — underline indicator (InboxScreen segment rail pattern) ── */}
-        <View style={styles.filterRail}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRailContent}>
-            {FILTER_TABS.map((tab) => {
-              const isActive = tab.key === activeFilter;
-              return (
+        }
+        preList={
+          <>
+            {/* ── Search bar ── */}
+            <View style={styles.searchWrap}>
+              <Ionicons name="search-outline" size={16} color={colors.textMuted} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search by title or brand"
+                placeholderTextColor={colors.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                accessibilityLabel="Search inventory"
+              />
+              {searchQuery.length > 0 ? (
                 <Pressable
-                  key={tab.key}
-                  onPress={() => { haptic.selection(); setActiveFilter(tab.key); }}
-                  style={styles.filterTab}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: isActive }}
-                  accessibilityLabel={`${tab.label} filter`}
-                >
-                  <Text
-                    style={[
-                      styles.filterTabLabel,
-                      { color: isActive ? colors.textPrimary : colors.textMuted },
-                      isActive && { fontFamily: Typography.family.semibold },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {tab.label}
-                  </Text>
-                  <View style={[styles.filterIndicator, isActive && { backgroundColor: colors.textPrimary }]} />
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* ── Sort dropdown ── */}
-        <View style={styles.sortRow}>
-          <Pressable
-            onPress={() => setSortMenuOpen((v) => !v)}
-            style={styles.sortTrigger}
-            accessibilityRole="button"
-            accessibilityLabel={`Sort by ${SORT_OPTIONS.find((o) => o.key === sortOption)?.label}`}
-          >
-            <Ionicons name="swap-vertical-outline" size={14} color={colors.textMuted} />
-            <Text style={styles.sortTriggerText} numberOfLines={1}>
-              {SORT_OPTIONS.find((o) => o.key === sortOption)?.label ?? 'Sort'}
-            </Text>
-            <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textMuted} />
-          </Pressable>
-        </View>
-
-        {/* Sort menu — inline dropdown */}
-        {sortMenuOpen ? (
-          <View style={styles.sortMenu}>
-            {SORT_OPTIONS.map((opt) => {
-              const isActive = opt.key === sortOption;
-              return (
-                <Pressable
-                  key={opt.key}
-                  onPress={() => { haptic.selection(); setSortOption(opt.key); setSortMenuOpen(false); }}
-                  style={[styles.sortMenuItem, opt.key === SORT_OPTIONS[SORT_OPTIONS.length - 1].key && { borderBottomWidth: 0 }]}
+                  onPress={() => setSearchQuery('')}
                   accessibilityRole="button"
-                  accessibilityLabel={`Sort by ${opt.label}`}
+                  accessibilityLabel="Clear search"
+                  hitSlop={8}
                 >
-                  <Text
-                    style={[
-                      styles.sortMenuItemText,
-                      { color: isActive ? colors.brand : colors.textPrimary },
-                      isActive && { fontFamily: Typography.family.semibold },
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                  {isActive ? <Ionicons name="checkmark" size={16} color={colors.brand} /> : null}
+                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
                 </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
+              ) : null}
+            </View>
 
-        {/* ── Inventory list ── */}
-        {listings.length === 0 ? (
-          <ScrollView
-            contentContainerStyle={styles.emptyScroll}
-            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
-          >
-            <EmptyState
-              icon="cube-outline"
-              title="No listings yet"
-              subtitle="Create your first listing to start selling."
-              ctaLabel="Create listing"
-              onCtaPress={() => navigation.navigate('Sell')}
-            />
-          </ScrollView>
-        ) : showFilteredEmpty ? (
-          <View style={styles.filteredEmptyWrap}>
-            <EmptyState
-              icon="filter-outline"
-              title="No items match this filter"
-              subtitle={searchQuery ? `No results for "${searchQuery}" in ${activeFilter}.` : `No ${activeFilter} listings.`}
-              density="compact"
-            />
+            {/* ── Summary header — flat canvas, hairline separators ── */}
+            {listings.length > 0 ? (
+              <View style={styles.summaryRow}>
+                <SummaryCell label="Items" value={String(summary.total)} colors={colors} styles={styles} />
+                <SummaryCell label="Active" value={String(summary.active)} colors={colors} styles={styles} accent={colors.success} />
+                <SummaryCell label="Sold" value={String(summary.sold)} colors={colors} styles={styles} accent={colors.textMuted} />
+                <SummaryCell label="Paused" value={String(summary.paused)} colors={colors} styles={styles} accent={colors.warning} />
+                <SummaryCell label="Value" value={formatFromFiat(summary.totalValue, currencyCode, { displayMode: 'fiat' })} colors={colors} styles={styles} accent={colors.brand} last />
+              </View>
+            ) : null}
+          </>
+        }
+        segments={
+          /* ── Filter tabs — underline indicator ── */
+          <View style={styles.filterRail}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRailContent}>
+              {FILTER_TABS.map((tab) => {
+                const isActive = tab.key === activeFilter;
+                return (
+                  <Pressable
+                    key={tab.key}
+                    onPress={() => { haptic.selection(); setActiveFilter(tab.key); }}
+                    style={styles.filterTab}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: isActive }}
+                    accessibilityLabel={`${tab.label} filter`}
+                  >
+                    <Text
+                      style={[
+                        styles.filterTabLabel,
+                        { color: isActive ? colors.textPrimary : colors.textMuted },
+                        isActive && { fontFamily: Typography.family.semibold },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {tab.label}
+                    </Text>
+                    <View style={[styles.filterIndicator, isActive && { backgroundColor: colors.textPrimary }]} />
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
-        ) : (
-          <InventoryList
-            listings={filteredListings}
-            colors={colors}
-            styles={styles}
-            selectionMode={selectionMode}
-            selectedIds={selectedIds}
-            pendingActionIds={pendingActionIds}
-            onLongPress={enterSelectionMode}
-            onPressRow={(item) => {
-              if (selectionMode) {
-                toggleSelection(item.id);
-              } else {
-                navigation.navigate('ManageListing', { itemId: item.id });
-              }
-            }}
-            onEdit={handleEdit}
-            onTogglePause={handleTogglePause}
-            onRelist={handleRelist}
-            onDelete={handleDelete}
-            onToggleSelect={toggleSelection}
-            isRefreshing={isRefreshing}
-            onRefresh={onRefresh}
-            selectionBarHeight={selectionMode ? 80 : 0}
-          />
-        )}
-      </View>
+        }
+        filterRail={
+          <>
+            {/* ── Sort dropdown ── */}
+            <View style={styles.sortRow}>
+              <Pressable
+                onPress={() => setSortMenuOpen((v) => !v)}
+                style={styles.sortTrigger}
+                accessibilityRole="button"
+                accessibilityLabel={`Sort by ${SORT_OPTIONS.find((o) => o.key === sortOption)?.label}`}
+              >
+                <Ionicons name="swap-vertical-outline" size={14} color={colors.textMuted} />
+                <Text style={styles.sortTriggerText} numberOfLines={1}>
+                  {SORT_OPTIONS.find((o) => o.key === sortOption)?.label ?? 'Sort'}
+                </Text>
+                <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textMuted} />
+              </Pressable>
+            </View>
 
-      {/* ── Bulk actions bar ── */}
-      {selectionMode ? (
-        <View
-          style={[styles.bulkBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}
-        >
-          <View style={styles.bulkBarInfo}>
-            <Text style={styles.bulkBarCount}>{selectedIds.size} selected</Text>
-          </View>
-          <View style={styles.bulkBarActions}>
-            <Pressable
-              onPress={() => void handleBulkPause(false)}
-              style={styles.bulkActionBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Pause selected listings"
+            {/* Sort menu — inline dropdown */}
+            {sortMenuOpen ? (
+              <View style={styles.sortMenu}>
+                {SORT_OPTIONS.map((opt) => {
+                  const isActive = opt.key === sortOption;
+                  return (
+                    <Pressable
+                      key={opt.key}
+                      onPress={() => { haptic.selection(); setSortOption(opt.key); setSortMenuOpen(false); }}
+                      style={[styles.sortMenuItem, opt.key === SORT_OPTIONS[SORT_OPTIONS.length - 1].key && { borderBottomWidth: 0 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Sort by ${opt.label}`}
+                    >
+                      <Text
+                        style={[
+                          styles.sortMenuItemText,
+                          { color: isActive ? colors.brand : colors.textPrimary },
+                          isActive && { fontFamily: Typography.family.semibold },
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                      {isActive ? <Ionicons name="checkmark" size={16} color={colors.brand} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+          </>
+        }
+        list={
+          /* ── Inventory list ── */
+          listings.length === 0 ? (
+            <ScrollView
+              contentContainerStyle={styles.emptyScroll}
+              refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
             >
-              <Ionicons name="pause-outline" size={18} color={colors.textPrimary} />
-              <Text style={styles.bulkActionText}>Pause</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => void handleBulkPause(true)}
-              style={styles.bulkActionBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Resume selected listings"
-            >
-              <Ionicons name="play-outline" size={18} color={colors.textPrimary} />
-              <Text style={styles.bulkActionText}>Resume</Text>
-            </Pressable>
-            <Pressable
-              onPress={handleBulkDelete}
-              style={styles.bulkActionBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Delete selected listings"
-            >
-              <Ionicons name="trash-outline" size={18} color={colors.danger} />
-              <Text style={[styles.bulkActionText, { color: colors.danger }]}>Delete</Text>
-            </Pressable>
-            <Pressable
-              onPress={exitSelectionMode}
-              style={styles.bulkActionBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Cancel selection"
-            >
-              <Text style={styles.bulkCancelText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-    </FlagshipScreen>
+              <EmptyState
+                icon="bag-handle-outline"
+                title="No listings yet"
+                subtitle="Create your first listing to start selling."
+                ctaLabel="Create listing"
+                onCtaPress={() => navigation.navigate('Sell')}
+              />
+            </ScrollView>
+          ) : showFilteredEmpty ? (
+            <View style={styles.filteredEmptyWrap}>
+              <EmptyState
+                icon="filter-outline"
+                title="No items match this filter"
+                subtitle={searchQuery ? `No results for "${searchQuery}" in ${activeFilter}.` : `No ${activeFilter} listings.`}
+                density="compact"
+              />
+            </View>
+          ) : (
+            <InventoryList
+              listings={filteredListings}
+              colors={colors}
+              styles={styles}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              pendingActionIds={pendingActionIds}
+              onLongPress={enterSelectionMode}
+              onPressRow={(item) => {
+                if (selectionMode) {
+                  toggleSelection(item.id);
+                } else {
+                  navigation.navigate('ManageListing', { itemId: item.id });
+                }
+              }}
+              onEdit={handleEdit}
+              onTogglePause={handleTogglePause}
+              onRelist={handleRelist}
+              onDelete={handleDelete}
+              onToggleSelect={toggleSelection}
+              isRefreshing={isRefreshing}
+              onRefresh={onRefresh}
+              selectionBarHeight={selectionMode ? 80 : 0}
+            />
+          )
+        }
+        stickyFooter={
+          selectionMode ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={styles.bulkBarInfo}>
+                <Text style={styles.bulkBarCount}>{selectedIds.size} selected</Text>
+              </View>
+              <View style={styles.bulkBarActions}>
+                <Pressable
+                  onPress={() => void handleBulkPause(false)}
+                  style={styles.bulkActionBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Pause selected listings"
+                >
+                  <Ionicons name="pause-outline" size={18} color={colors.textPrimary} />
+                  <Text style={styles.bulkActionText}>Pause</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleBulkPause(true)}
+                  style={styles.bulkActionBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Resume selected listings"
+                >
+                  <Ionicons name="play-outline" size={18} color={colors.textPrimary} />
+                  <Text style={styles.bulkActionText}>Resume</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleBulkDelete}
+                  style={styles.bulkActionBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete selected listings"
+                >
+                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                  <Text style={[styles.bulkActionText, { color: colors.danger }]}>Delete</Text>
+                </Pressable>
+                <Pressable
+                  onPress={exitSelectionMode}
+                  style={styles.bulkActionBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel selection"
+                >
+                  <Text style={styles.bulkCancelText}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : undefined
+        }
+      />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
+      />
+    </>
   );
 }
 
@@ -624,8 +753,7 @@ function SummaryCell({
   colors,
   styles,
   accent,
-  last,
-}: {
+  last }: {
   label: string;
   value: string;
   colors: ThemeColors;
@@ -658,8 +786,7 @@ function InventoryList({
   onToggleSelect,
   isRefreshing,
   onRefresh,
-  selectionBarHeight,
-}: {
+  selectionBarHeight }: {
   listings: ListingApiItem[];
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -677,34 +804,36 @@ function InventoryList({
   onRefresh: () => void;
   selectionBarHeight: number;
 }) {
+  const renderItem = useCallback(({ item, index }: { item: ListingApiItem; index: number }) => (
+    <InventoryRow
+      item={item}
+      isLast={index === listings.length - 1}
+      colors={colors}
+      styles={styles}
+      selectionMode={selectionMode}
+      isSelected={selectedIds.has(item.id)}
+      isPendingAction={pendingActionIds.has(item.id)}
+      onLongPress={() => onLongPress(item.id)}
+      onPress={() => onPressRow(item)}
+      onEdit={() => onEdit(item)}
+      onTogglePause={() => onTogglePause(item)}
+      onRelist={() => onRelist(item)}
+      onDelete={() => onDelete(item)}
+      onToggleSelect={() => onToggleSelect(item.id)}
+    />
+  ), [listings, colors, styles, selectionMode, selectedIds, pendingActionIds, onLongPress, onPressRow, onEdit, onTogglePause, onRelist, onDelete, onToggleSelect]);
+
   return (
-    <ScrollView
-      style={styles.listScroll}
+    <InventoryFlashList
+      data={listings}
+      renderItem={renderItem}
+      estimatedItemSize={72}
+      keyExtractor={(item) => item.id}
       contentContainerStyle={styles.listContent}
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
-    >
-      {listings.map((item, index) => (
-        <InventoryRow
-          key={item.id}
-          item={item}
-          isLast={index === listings.length - 1}
-          colors={colors}
-          styles={styles}
-          selectionMode={selectionMode}
-          isSelected={selectedIds.has(item.id)}
-          isPendingAction={pendingActionIds.has(item.id)}
-          onLongPress={() => onLongPress(item.id)}
-          onPress={() => onPressRow(item)}
-          onEdit={() => onEdit(item)}
-          onTogglePause={() => onTogglePause(item)}
-          onRelist={() => onRelist(item)}
-          onDelete={() => onDelete(item)}
-          onToggleSelect={() => onToggleSelect(item.id)}
-        />
-      ))}
-      <View style={{ height: selectionBarHeight || Space.xl }} />
-    </ScrollView>
+      ListFooterComponent={<View style={{ height: selectionBarHeight || Space.xl }} />}
+    />
   );
 }
 
@@ -723,8 +852,7 @@ function InventoryRow({
   onTogglePause,
   onRelist,
   onDelete,
-  onToggleSelect,
-}: {
+  onToggleSelect }: {
   item: ListingApiItem;
   isLast: boolean;
   colors: ThemeColors;
@@ -740,6 +868,7 @@ function InventoryRow({
   onDelete: () => void;
   onToggleSelect: () => void;
 }) {
+  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
   const statusConfig = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.unknown;
   const statusColor =
     statusConfig.accent === 'success' ? colors.success
@@ -762,7 +891,7 @@ function InventoryRow({
         onLongPress={onLongPress}
         delayLongPress={400}
         activeOpacity={0.88}
-        accessibilityLabel={`${item.title}, £${item.priceGbp.toFixed(2)}, status: ${item.status}`}
+        accessibilityLabel={`${item.title}, ${currencySymbol}${item.priceGbp.toFixed(2)}, status: ${item.status}`}
         accessibilityRole="button"
         accessibilityHint={selectionMode ? 'Tap to toggle selection' : 'Tap to view listing details. Long-press to select.'}
       >
@@ -797,7 +926,7 @@ function InventoryRow({
         {/* Body */}
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.rowPrice}>£{item.priceGbp.toFixed(2)}</Text>
+          <Text style={styles.rowPrice}>{formatFromFiat(item.priceGbp, currencyCode, { displayMode: 'fiat' })}</Text>
           <View style={styles.rowMetaRow}>
             {/* Status badge */}
             <View style={styles.statusBadge}>
@@ -840,8 +969,7 @@ function Metric({
   icon,
   value,
   colors,
-  styles,
-}: {
+  styles }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   value: number;
   colors: ThemeColors;
@@ -859,8 +987,7 @@ function IconButton({
   icon,
   onPress,
   color,
-  label,
-}: {
+  label }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   onPress: () => void;
   color: string;
@@ -884,9 +1011,7 @@ const stylesShared = StyleSheet.create({
     width: Control.chrome,
     height: Control.chrome,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+    alignItems: 'center' } });
 
 // ── Status config ──
 const STATUS_CONFIG: Record<string, { label: string; accent: 'success' | 'muted' | 'warning' | 'brand' | 'default' }> = {
@@ -895,8 +1020,7 @@ const STATUS_CONFIG: Record<string, { label: string; accent: 'success' | 'muted'
   paused: { label: 'Paused', accent: 'warning' },
   draft: { label: 'Draft', accent: 'brand' },
   reserved: { label: 'Reserved', accent: 'warning' },
-  unknown: { label: 'Unknown', accent: 'default' },
-};
+  unknown: { label: 'Unknown', accent: 'default' } };
 
 // ── Theme-dependent styles ──
 function createStyles(colors: ThemeColors) {
@@ -906,8 +1030,7 @@ function createStyles(colors: ThemeColors) {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     searchWrap: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -917,63 +1040,52 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
       marginHorizontal: Space.md,
       marginTop: Space.sm,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     searchIcon: {
-      marginLeft: Space.xs,
-    },
+      marginLeft: Space.xs },
     searchInput: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       paddingVertical: Space.sm,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     summaryRow: {
       flexDirection: 'row',
       alignItems: 'stretch',
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     summaryCell: {
       flex: 1,
       alignItems: 'center',
       gap: Space.xs / 2,
       borderRightWidth: StyleSheet.hairlineWidth,
       borderRightColor: colors.border,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     summaryValue: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     summaryLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     filterRail: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     filterRailContent: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.md,
-      gap: Space.md,
-    },
+      gap: Space.md },
     filterTab: {
       paddingVertical: Space.sm,
-      position: 'relative',
-    },
+      position: 'relative' },
     filterTabLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     filterIndicator: {
       position: 'absolute',
       bottom: 0,
@@ -981,26 +1093,22 @@ function createStyles(colors: ThemeColors) {
       right: 0,
       height: Stroke.emphasis,
       borderRadius: Radius.none, // Hairline indicator — intentionally 1pt
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     sortRow: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     sortTrigger: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingVertical: Space.xs,
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
     sortTriggerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     sortMenu: {
       marginHorizontal: Space.md,
       marginBottom: Space.sm,
@@ -1008,8 +1116,7 @@ function createStyles(colors: ThemeColors) {
       overflow: 'hidden',
       backgroundColor: colors.surface,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     sortMenuItem: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1017,37 +1124,29 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     sortMenuItemText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     listScroll: {
-      flex: 1,
-    },
+      flex: 1 },
     listContent: {
-      flexGrow: 1,
-    },
+      flexGrow: 1 },
     emptyScroll: {
-      flex: 1,
-    },
+      flex: 1 },
     filteredEmptyWrap: {
       flex: 1,
       justifyContent: 'center',
-      paddingVertical: Space.xl,
-    },
+      paddingVertical: Space.xl },
     rowWrap: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm + 2,
-    },
+      paddingVertical: Space.sm + 2 },
     selectCheckbox: {
       // Intentional checkbox size
       width: Control.icon,
@@ -1056,85 +1155,69 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard,
       borderColor: colors.border,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     thumbnailWrap: {
       // Intentional thumbnail size
       width: Control.hit + Space.sm,
       height: Control.hit + Space.sm,
       borderRadius: Radius.md,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     thumbnail: {
       width: Control.hit + Space.sm,
-      height: Control.hit + Space.sm,
-    },
+      height: Control.hit + Space.sm },
     thumbnailFallback: {
       backgroundColor: colors.surfaceAlt,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     rowBody: {
       flex: 1,
       gap: Space.xs - 1,
-      minWidth: 0,
-    },
+      minWidth: 0 },
     rowTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      color: colors.textPrimary },
     rowPrice: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      color: colors.textPrimary },
     rowMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     statusBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     statusDot: {
       width: Space.xs + 2,
       height: Space.xs + 2,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     statusText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     metricsRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     metricItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs - 1,
-    },
+      gap: Space.xs - 1 },
     metricText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     quickActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     rowSpinner: {
-      marginRight: Space.sm,
-    },
+      marginRight: Space.sm },
     bulkBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1143,37 +1226,29 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
-      backgroundColor: colors.surface,
-    },
+      backgroundColor: colors.surface },
     bulkBarInfo: {
-      flex: 1,
-    },
+      flex: 1 },
     bulkBarCount: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     bulkBarActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     bulkActionBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingVertical: Space.sm - 2,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     bulkActionText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textPrimary },
     bulkCancelText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary } });
 }

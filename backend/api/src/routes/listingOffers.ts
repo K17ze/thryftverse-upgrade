@@ -11,6 +11,13 @@ type ListingOffersRouteDependencies = {
   calculatePlatformChargeGbp: (subtotalGbp: number) => number;
   authorizeInternalServiceRequest: (request: FastifyRequest) => boolean;
   enqueueOutboxDrain: () => Promise<void>;
+  /**
+   * Fire-and-forget Smart Sell evaluation trigger. Called after an offer is
+   * committed. If the listing has an active Smart Sell policy, the evaluation
+   * worker will decide whether to accept, counter, or escalate. This is
+   * non-blocking — the offer is already durable when this is called.
+   */
+  triggerSmartSellEvaluation?: (offerId: string) => void;
 };
 
 const MAX_OFFER_HOURS = 168; // 7 days
@@ -114,6 +121,7 @@ export const registerListingOfferRoutes = ({
   calculatePlatformChargeGbp,
   authorizeInternalServiceRequest,
   enqueueOutboxDrain,
+  triggerSmartSellEvaluation,
 }: ListingOffersRouteDependencies) => {
   app.post('/listings/:listingId/offers', async (request, reply) => {
     const actorUserId = resolveAuthenticatedUserId(request);
@@ -249,6 +257,16 @@ export const registerListingOfferRoutes = ({
       );
 
       await client.query('COMMIT');
+      // Fire-and-forget Smart Sell evaluation. If the listing has an active
+      // policy, the evaluation worker will decide whether to accept, counter,
+      // or escalate. This is non-blocking — the offer is already durable.
+      if (triggerSmartSellEvaluation) {
+        try {
+          triggerSmartSellEvaluation(result.rows[0].id);
+        } catch (error) {
+          app.log.error({ err: error, offerId: result.rows[0].id }, 'Failed to trigger Smart Sell evaluation');
+        }
+      }
       reply.code(201);
       return { ok: true, offer: mapRow(result.rows[0]) };
     } catch (error) {
@@ -517,6 +535,43 @@ export const registerListingOfferRoutes = ({
     );
 
     return { ok: true, offers: result.rows.map(mapRow) };
+  });
+
+  // ── Unknown-outcome reconciliation ────────────────────────────────
+  //
+  // GET /users/me/offers/lookup-by-key/:idempotencyKey
+  //
+  // When a client sends a POST /listing-offers but the response is lost
+  // (network timeout), the outcome is ambiguous — the offer may or may not
+  // have been created. This endpoint lets the client resolve the ambiguity
+  // by looking up the offer by its idempotency key. Returns:
+  //   - 200 { ok: true, status: 'acknowledged', offer } — the offer exists
+  //   - 404 { ok: false, status: 'safe_to_retry' } — no offer with this key
+  app.get('/users/me/offers/lookup-by-key/:idempotencyKey', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { idempotencyKey } = z.object({
+      idempotencyKey: z.string().min(2).max(200),
+    }).parse(request.params);
+
+    const result = await db.query<ListingOfferRow>(
+      `SELECT id, listing_id, buyer_id, seller_id,
+              offer_price_gbp::text, original_price_gbp::text,
+              counter_round, status, expires_at::text,
+              accepted_at::text, declined_at::text, expired_at::text, cancelled_at::text,
+              conversation_id, parent_offer_id, metadata, offered_by_user_id,
+              created_at::text, updated_at::text
+       FROM listing_offers
+       WHERE offered_by_user_id = $1 AND idempotency_key = $2
+       LIMIT 1`,
+      [actorUserId, idempotencyKey],
+    );
+
+    if (!result.rowCount) {
+      reply.code(404);
+      return { ok: false, status: 'safe_to_retry' as const };
+    }
+
+    return { ok: true as const, status: 'acknowledged' as const, offer: mapRow(result.rows[0]) };
   });
 
   app.post('/offers/:offerId/accept', async (request, reply) => {

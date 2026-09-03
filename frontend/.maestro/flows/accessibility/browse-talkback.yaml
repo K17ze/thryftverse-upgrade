@@ -1,0 +1,32 @@
+appId: com.thryftverse.app
+name: "Browse — TalkBack accessibility"
+tags:
+  - accessibility
+  - talkback
+---
+- launchApp:
+    clearState: true
+# Navigate to browse/explore tab
+- tapOn:
+    label: "Explore tab"
+# Verify search bar is accessible
+- assertVisible:
+    label: "Search bar"
+# Tap search
+- tapOn:
+    label: "Search bar"
+- inputText: "vintage jacket"
+# Verify results are announced
+- assertVisible:
+    text: ".*jacket.*"
+    label: "Search results"
+# Tap a result — verify it's accessible
+- tapOn:
+    text: ".*"
+    index: 0
+    label: "First search result"
+# Verify PDP loads with accessible elements
+- assertVisible:
+    label: "Product title"
+- assertVisible:
+    label: "Product price"

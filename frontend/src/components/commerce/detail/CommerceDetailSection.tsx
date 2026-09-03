@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../../theme/designTokens';
+import { Space } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import type { CommerceDetailSectionVariant } from './types';
 
 /**
@@ -41,8 +42,7 @@ export function CommerceDetailSection({
   children,
   divider = false,
   accessibilityLabel,
-  variant = 'standard',
-}: CommerceDetailSectionProps) {
+  variant = 'standard' }: CommerceDetailSectionProps) {
   const { colors } = useAppTheme();
 
   // Per spec 05 §2: variant-driven rhythm.
@@ -63,8 +63,7 @@ export function CommerceDetailSection({
       color:
         variant === 'editorial' || variant === 'discovery'
           ? colors.textPrimary
-          : colors.textSecondary,
-    },
+          : colors.textSecondary },
   ];
 
   // continuation: no heading or divider — children render directly.
@@ -99,70 +98,58 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   // editorial: stronger heading, more breathing room, no divider.
   // Uses Space.lg (24px) for a chapter break — enough to separate
   // sections visually without creating excessive white space.
   containerEditorial: {
     paddingTop: Space.lg,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   // compact: disclosure row with minimal vertical spacing.
   containerCompact: {
     paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   // continuation: no heading or divider — just children with page padding.
   containerContinuation: {
     paddingHorizontal: Space.md,
     paddingTop: 0,
-    paddingBottom: 0,
-  },
+    paddingBottom: 0 },
   // legal: subdued, collapsed-first.
   containerLegal: {
     paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   // discovery: visual heading and rail spacing.
   // Matches editorial rhythm (24px) so discovery sections don't
   // create a larger gap than editorial sections.
   containerDiscovery: {
     paddingTop: Space.lg,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   divider: {
     height: StyleSheet.hairlineWidth,
     marginHorizontal: -Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    marginBottom: Space.sm + Space.xs,
-  },
+    marginBottom: Space.sm + Space.xs },
   label: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    textTransform: 'none',
-  },
-  // editorial: stronger heading — slightly larger, tighter tracking.
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    textTransform: 'none' },
+  // editorial: stronger heading — section-title scale, tighter tracking.
   labelEditorial: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
-    textTransform: 'none',
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    textTransform: 'none' },
   // legal: subdued — muted weight, smaller.
   labelLegal: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.medium,
-    textTransform: 'none',
-  },
-});
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    textTransform: 'none' } });

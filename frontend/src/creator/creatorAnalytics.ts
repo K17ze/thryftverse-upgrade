@@ -12,6 +12,8 @@ type CreatorAnalyticsEvent =
   | 'creator_publish_start'
   | 'creator_publish_success'
   | 'creator_publish_error'
+  | 'creator_publish_unknown'
+  | 'creator_schedule_unknown'
   | 'creator_page_add'
   | 'creator_page_remove'
   | 'creator_capture_photo'
@@ -49,25 +51,12 @@ export function trackCreatorEvent(event: CreatorAnalyticsEvent, payload: Creator
       // silently fail — analytics must not crash the editor
     }
   }
-  // Forward publish events to the backend analytics endpoint.
-  // We import lazily to avoid a circular dependency at module load time
-  // and to keep the editor decoupled from the network layer.
-  if (event === 'creator_publish_success' && payload.publishedId && payload.documentType) {
-    const publishedId = payload.publishedId;
-    const documentType = payload.documentType;
-    import('../services/creatorAnalyticsApi')
-      .then(({ logCreatorEvent }) =>
-        logCreatorEvent({
-          contentType: documentType === 'look' ? 'look' : 'poster',
-          contentId: publishedId,
-          eventType: 'profile_visit', // reuse as a "publish" signal
-          metadata: { event },
-        }),
-      )
-      .catch(() => {
-        // analytics must not crash the editor
-      });
-  }
+  // NOTE: Publish events are no longer forwarded to the analytics event
+  // endpoint from the client. The previous implementation sent camelCase
+  // fields to a snake_case endpoint and misclassified the event as
+  // `profile_visit`, polluting that metric. Content publication is now
+  // recorded server-side through the domain outbox in the publish route,
+  // which is the canonical source of truth for content lifecycle events.
 }
 
 export const CreatorAnalytics = {
@@ -109,6 +98,12 @@ export const CreatorAnalytics = {
 
   publishError: (documentType: 'look' | 'poster', errorMessage: string) =>
     trackCreatorEvent('creator_publish_error', { documentType, errorMessage }),
+
+  scheduleUnknown: (documentType: 'look' | 'poster') =>
+    trackCreatorEvent('creator_schedule_unknown', { documentType }),
+
+  publishUnknown: (documentType: 'look' | 'poster') =>
+    trackCreatorEvent('creator_publish_unknown', { documentType }),
 
   pageAdd: (documentType: 'look' | 'poster', pageCount: number) =>
     trackCreatorEvent('creator_page_add', { documentType, pageCount }),

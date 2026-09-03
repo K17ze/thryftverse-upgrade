@@ -8,9 +8,16 @@
 # Prerequisites:
 #   - Test build is already past onboarding and auth (see README.md).
 #   - App has real or seeded data so screens render in populated state.
+#   - For assert mode: baselines must exist in the test-output-dir.
 #
 # Usage:
+#   # Capture mode (baseline seeding — takeScreenshot only)
 #   maestro test .maestro/golden-route-screenshots.yml --output .maestro/screenshots/golden-routes
+#
+#   # Assert mode (regression check — takeScreenshot + assertScreenshot)
+#   maestro test .maestro/golden-route-screenshots.yml \
+#     --env VISUAL_MODE=assert \
+#     --output .maestro/screenshots/golden-routes
 #
 # After capture, review screenshots and promote to baselines:
 #   cp -r .maestro/screenshots/golden-routes src/__tests__/__screenshots__/
@@ -48,6 +55,9 @@
 #   taps (tapOn point:). This makes flows resilient to layout changes.
 
 appId: ${MAESTRO_APP_ID}
+env:
+  VISUAL_MODE: "capture"
+  THRESHOLD: "98"
 ---
 # ── Core: Home ──
 - launchApp:
@@ -55,7 +65,18 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Home"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-home-populated
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-home-populated.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "home-feed-container"
 
 # ── Core: Search ──
 - tapOn:
@@ -63,9 +84,31 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-search-idle
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-search-idle.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "search-screen"
 - inputText: "vintage denim"
+- waitForAnimationToEnd:
+    timeout: 2000
 - takeScreenshot: golden-search-results
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-search-results.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "search-screen"
 - clearText
 - back
 
@@ -76,14 +119,37 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Explore"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-browse-populated
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-browse-populated.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "browse-screen"
 # Tap first visible product card to open ItemDetail
 - tapOn:
-    point: "50%, 40%"
+    id: "golden-browse-first-product"
+    optional: true
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-pdp-fixed
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-pdp-fixed.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "item-detail-screen"
 - back
 
 # ── Core: Sell ──
@@ -92,7 +158,18 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-sell-empty
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-sell-empty.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "sell-screen"
 - back
 
 # ── Core: Profile (self) ──
@@ -101,7 +178,18 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Profile"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-profile-self
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-profile-self.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "profile-screen"
 - takeScreenshot: golden-profile-shop
 
 # ── Core: Settings ──
@@ -111,7 +199,18 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-settings-root
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-settings-root.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "settings-screen"
 - back
 
 # ── Core: Inbox ──
@@ -120,16 +219,39 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Inbox"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-inbox-populated
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-inbox-populated.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "inbox-screen"
 
 # ── Core: Chat ──
 # Tap first conversation to open chat
 - tapOn:
-    point: "50%, 30%"
+    id: "golden-inbox-first-conversation"
+    optional: true
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-chat-populated
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-chat-populated.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "chat-screen"
 - back
 
 # ── Core: Checkout ──
@@ -141,10 +263,13 @@ appId: ${MAESTRO_APP_ID}
     timeout: 3000
 # Checkout is reached from PDP — tap an item, then buy
 - tapOn:
-    point: "50%, 40%"
+    id: "golden-browse-first-product"
+    optional: true
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-pdp-buy-action
 - back
 
@@ -155,14 +280,37 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Explore"
     timeout: 3000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-auction-home
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-auction-home.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "auction-screen"
 # Tap first auction to open detail
 - tapOn:
-    point: "50%, 50%"
+    id: "golden-auction-first-card"
+    optional: true
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-auction-detail
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-auction-detail.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "auction-detail-screen"
 - back
 
 # ── Seller Hub ──
@@ -172,12 +320,25 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Profile"
     timeout: 3000
+- waitForAnimationToEnd:
+    timeout: 2000
 - tapOn:
     text: "Seller Hub"
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-seller-hub-pending
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-seller-hub-pending.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "seller-hub-screen"
 - back
 
 # ── Co-Own Hub ──
@@ -187,14 +348,37 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Explore"
     timeout: 3000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-coown-hub
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-coown-hub.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "coown-screen"
 # Tap first asset to open detail
 - tapOn:
-    point: "50%, 40%"
+    id: "golden-coown-first-asset"
+    optional: true
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-coown-asset-detail
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-coown-asset-detail.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "asset-detail-screen"
 - back
 
 # ── Portfolio ──
@@ -203,12 +387,25 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     label: "Profile"
     timeout: 3000
+- waitForAnimationToEnd:
+    timeout: 2000
 - tapOn:
     text: "Portfolio"
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-coown-portfolio
+- runFlow:
+    when:
+      true: ${VISUAL_MODE === "assert"}
+    commands:
+      - assertScreenshot:
+          path: golden-coown-portfolio.png
+          thresholdPercentage: ${THRESHOLD}
+          cropOn:
+            id: "portfolio-screen"
 - back
 
 # ── Poster / Create ──
@@ -222,6 +419,8 @@ appId: ${MAESTRO_APP_ID}
 - assertVisible:
     text: ".*"
     timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: golden-poster-camera
 - back
 

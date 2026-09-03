@@ -5,7 +5,7 @@
  * re-scanning items they have already saved. The information hierarchy
  * differs from discovery: media dominates, price is a compact overlay,
  * and chrome recedes. This is a purpose-built tile (AGENTS.md §7) — the
- * shared ProductCardV2 carries full discovery metadata that would be
+ * shared ProductCard carries full discovery metadata that would be
  * cramped at 3-column width.
  *
  * Preserves all functionality of the previous MasonryGrid usage:
@@ -17,7 +17,7 @@
  *  - haptic feedback + reduced-motion fallback
  */
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, Dimensions, Text } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -30,24 +30,17 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import type { Listing } from '../../domain';
 import { filterImageUris } from '../../utils/media';
-import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 import {
   Space,
   Radius,
-  Type,
-  Typography,
   AspectRatio,
   PressScale,
-  Stroke,
-} from '../../theme/designTokens';
+  Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
-const { width: SCREEN_W } = Dimensions.get('window');
 const NUM_COLUMNS = 3;
 const GRID_GAP = Space.sm;
 const GRID_PADDING = Space.md;
-const TILE_W =
-  (SCREEN_W - GRID_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
-const TILE_H = TILE_W / AspectRatio.portrait;
 
 interface ClosetMediaMosaicProps {
   items: Listing[];
@@ -62,9 +55,12 @@ export function ClosetMediaMosaic({
   items,
   onPressItem,
   showSaveButton = false,
-  showWishlistButton = false,
-}: ClosetMediaMosaicProps) {
+  showWishlistButton = false }: ClosetMediaMosaicProps) {
   const { colors } = useAppTheme();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const tileW =
+    (SCREEN_W - GRID_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
+  const tileH = tileW / AspectRatio.portrait;
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Distribute items across columns using a shortest-height assignment so
@@ -85,8 +81,8 @@ export function ClosetMediaMosaic({
               key={item.id}
               item={item}
               index={colIdx + idx * NUM_COLUMNS}
-              tileWidth={TILE_W}
-              tileHeight={TILE_H}
+              tileWidth={tileW}
+              tileHeight={tileH}
               onPress={() => onPressItem(item)}
               showSaveButton={showSaveButton}
               showWishlistButton={showWishlistButton}
@@ -118,13 +114,12 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
   tileHeight,
   onPress,
   showSaveButton = false,
-  showWishlistButton = false,
-}: TileProps) {
+  showWishlistButton = false }: TileProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
 
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
@@ -174,7 +169,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
         scaleValue={PressScale.gentle}
         hapticFeedback="light"
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}${isSold ? ', Sold' : ''}`}
+        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}${isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
       >
         {/* Media — 3:4 portrait, full bleed */}
@@ -205,7 +200,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
         {/* Price-drop badge — compact, top-left, only when on sale & not sold */}
         {!isSold && hasPriceDrop ? (
           <View style={styles.priceDropBadge}>
-            <Ionicons name="pricetag" size={9} color="#fff" />
+            <Ionicons name="bag-handle-outline" size={9} color={colors.scrimTextPrimary} />
             <Text style={styles.priceDropText}>
               -{Math.round(((item.originalPrice! - item.price) / item.originalPrice!) * 100)}%
             </Text>
@@ -229,7 +224,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
                 <Ionicons
                   name={isFav ? 'heart' : 'heart-outline'}
                   size={18}
-                  color={isFav ? colors.danger : '#fff'}
+                  color={isFav ? colors.danger : colors.scrimTextPrimary}
                   style={styles.toggleGlyph}
                 />
               </AnimatedPressable>
@@ -247,7 +242,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
                 <Ionicons
                   name={isSaved ? 'bookmark' : 'bookmark-outline'}
                   size={18}
-                  color={isSaved ? colors.brand : '#fff'}
+                  color={isSaved ? colors.brand : colors.scrimTextPrimary}
                   style={styles.toggleGlyph}
                 />
               </AnimatedPressable>
@@ -270,7 +265,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
                 </Text>
               ) : null}
               <Text style={styles.priceText} numberOfLines={1}>
-                {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+                {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
               </Text>
             </View>
           </>
@@ -288,12 +283,10 @@ const createStyles = (colors: ThemeColors) =>
     grid: {
       flexDirection: 'row',
       paddingHorizontal: GRID_PADDING,
-      gap: GRID_GAP,
-    },
+      gap: GRID_GAP },
     column: {
       flex: 1,
-      gap: GRID_GAP,
-    },
+      gap: GRID_GAP },
     tileWrap: {
       // width is set inline per tile
     },
@@ -301,29 +294,25 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: Radius.lg,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
-      position: 'relative',
-    },
+      position: 'relative' },
     image: {
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     // Sold state
     soldScrim: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.45)',
+      backgroundColor: colors.overlay,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     soldLabel: {
       position: 'absolute',
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.bold,
-      color: '#fff',
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.scrimTextPrimary,
       letterSpacing: 1,
       textTransform: 'uppercase',
       top: '50%',
       marginTop: -8,
-      alignSelf: 'center',
-    },
+      alignSelf: 'center' },
     // Price-drop badge
     priceDropBadge: {
       position: 'absolute',
@@ -335,68 +324,58 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: Space.xs + 1,
       paddingVertical: 2,
       borderRadius: Radius.sm,
-      backgroundColor: colors.danger,
-    },
+      backgroundColor: colors.danger },
     priceDropText: {
-      fontSize: 9,
-      fontFamily: Typography.family.bold,
-      color: '#fff',
-      letterSpacing: 0.2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.scrimTextPrimary,
+      letterSpacing: 0.2 },
     // Toggle row
     toggleRow: {
       position: 'absolute',
       top: 0,
       right: 0,
       flexDirection: 'row',
-      gap: 0,
-    },
+      gap: 0 },
     toggleHit: {
       width: 36,
       height: 36,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     toggleGlyph: {
-      textShadowColor: 'rgba(0,0,0,0.55)',
+      textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 4,
-    },
+      textShadowRadius: 4 },
     // Bottom price overlay
     bottomScrim: {
       position: 'absolute',
       bottom: 0,
       left: 0,
       right: 0,
-      height: 48,
-    },
+      height: 48 },
     priceOverlay: {
       position: 'absolute',
       bottom: Space.xs,
       left: Space.xs + 1,
-      right: Space.xs + 1,
-    },
+      right: Space.xs + 1 },
     // Brand label — recognition cue above price. In a closet the user is
     // re-scanning known items; brand is the fastest recognition signal.
     brandText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: Typography.family.semibold,
-      color: '#fff',
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.scrimTextPrimary,
       letterSpacing: 0.1,
-      textShadowColor: 'rgba(0,0,0,0.5)',
+      textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
-      marginBottom: 1,
-    },
+      marginBottom: 1 },
     priceText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.bold,
-      color: '#fff',
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.scrimTextPrimary,
       letterSpacing: 0.1,
-      textShadowColor: 'rgba(0,0,0,0.5)',
+      textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 3,
-    },
-  });
+      textShadowRadius: 3 } });

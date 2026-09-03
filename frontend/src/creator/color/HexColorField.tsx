@@ -17,9 +17,9 @@ import {
   View,
   Text,
   TextStyle,
-  ViewStyle,
-} from 'react-native';
-import { Space, Radius, Type, Typography, Stroke } from '../../theme/designTokens';
+  ViewStyle } from 'react-native';
+import { Space, Radius, Typography, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { sanitizeHexInput, isValidHex, parseHexToColor, colorToHexDisplay } from './ColorParser';
 import type { CreatorColor } from './ColorTypes';
@@ -41,8 +41,7 @@ export function HexColorField({
   color,
   onCommit,
   style,
-  accessibilityLabel = 'Hex color value',
-}: HexColorFieldProps) {
+  accessibilityLabel = 'Hex color value' }: HexColorFieldProps) {
   const { colors } = useAppTheme();
   const styles = useHexFieldStyles(colors);
   const inputRef = useRef<TextInput>(null);
@@ -113,15 +112,12 @@ export function HexColorField({
         keyboardType="ascii-capable"
         accessibilityLabel={accessibilityLabel}
         accessibilityHint="Enter a hex color value like #RRGGBB or #RRGGBBAA"
+        accessibilityRole="text"
         accessibilityValue={{
-          text: displayValue,
-          min: 0,
-          max: 1,
-          now: isValid ? 1 : 0,
-        }}
+          text: displayValue }}
       />
       {!isValid && (
-        <Text style={styles.errorText}>Invalid hex</Text>
+        <Text style={styles.errorText} accessibilityLiveRegion="polite">Invalid hex</Text>
       )}
     </View>
   );
@@ -133,35 +129,29 @@ function useHexFieldStyles(colors: ThemeColors) {
     () =>
       StyleSheet.create({
         container: {
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         label: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.label.size,
-          letterSpacing: Type.label.letterSpacing,
+          fontSize: TypographyV2.label.size,
+          letterSpacing: TypographyV2.label.letterSpacing,
           color: colors.textSecondary,
-          textTransform: 'uppercase',
-        },
+          textTransform: 'uppercase' },
         input: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.bodyStrong.size,
+          fontSize: TypographyV2.bodyStrong.size,
           color: colors.textPrimary,
           borderWidth: Stroke.standard,
           borderColor: colors.border,
           borderRadius: Radius.md,
           paddingHorizontal: Space.sm,
           paddingVertical: Space.sm,
-          minHeight: 44,
-        },
+          minHeight: 44 },
         inputInvalid: {
-          borderColor: colors.danger,
-        },
+          borderColor: colors.danger },
         errorText: {
           fontFamily: Typography.family.regular,
-          fontSize: Type.caption.size,
-          color: colors.danger,
-        },
-      }),
+          fontSize: TypographyV2.meta.size,
+          color: colors.danger } }),
     [colors],
   );
 }

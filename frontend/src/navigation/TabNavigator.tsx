@@ -8,7 +8,8 @@ import { LiquidGlassBackdrop } from '../components/LiquidGlassBackdrop';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { TabParamList, RootStackParamList } from './types';
-import { Space, Radius, Typography, Type } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Elevation, IconSize } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -16,13 +17,14 @@ import { useStore } from '../store/useStore';
 import { useIsGuest } from '../store/useStore';
 import { useSignupWall } from '../hooks/useSignupWall';
 import { CachedImage } from '../components/CachedImage';
+import { AppIcon } from '../components/common/AppIcon';
+import { type SemanticIconName } from '../theme/iconTokens';
 import { getStoredCreateMode, type PersistedCreateMode } from '../preferences/createModePreferences';
 import { useTabScroll } from '../context/TabScrollContext';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
@@ -36,16 +38,14 @@ const CREATE_CONTROL_SIZE = 40;
 const AVATAR_SIZE = 27;
 
 interface TabIconProps {
-  name: keyof typeof Ionicons.glyphMap;
-  nameFocused?: keyof typeof Ionicons.glyphMap;
+  name: SemanticIconName | keyof typeof Ionicons.glyphMap;
   color: string;
   focused: boolean;
   badgeCount?: number;
 }
 
-const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps) => {
+const TabIcon = ({ name, color, focused, badgeCount }: TabIconProps) => {
   const { colors } = useAppTheme();
-  const iconName = focused && nameFocused ? nameFocused : name;
   const displayBadge = badgeCount !== undefined && badgeCount > 0;
   const badgeLabel = displayBadge
     ? badgeCount! > 99 ? '99+' : String(badgeCount)
@@ -53,7 +53,7 @@ const TabIcon = ({ name, nameFocused, color, focused, badgeCount }: TabIconProps
 
   return (
     <View style={tabStyles.tabIconWrap} accessible={false} importantForAccessibility="no-hide-descendants">
-      <Ionicons name={iconName} size={24} color={color} />
+      <AppIcon name={name} size={IconSize.lg} color={color} focused={focused} accessible={false} />
       {displayBadge && (
         <View
           style={[tabStyles.badge, { backgroundColor: colors.danger, borderColor: colors.surface }]}
@@ -96,10 +96,12 @@ const ProfileTabIcon = ({ color, focused }: ProfileTabIconProps) => {
         importantForAccessibility="no-hide-descendants"
         style={tabStyles.tabIconWrap}
       >
-        <Ionicons
-          name={focused ? 'person' : 'person-outline'}
-          size={24}
+        <AppIcon
+          name="profile"
+          size={IconSize.lg}
           color={color}
+          focused={focused}
+          accessible={false}
         />
       </View>
     );
@@ -149,14 +151,12 @@ const CreateTabButton = ({
   onLongPress,
   testID,
   brandColor,
-  surfaceColor,
-}: CreateTabButtonProps) => {
+  surfaceColor }: CreateTabButtonProps) => {
   const { spring } = useMotionConfig();
   const scale = useSharedValue(1);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+    transform: [{ scale: scale.value }] }));
 
   return (
     <AnimatedPressableRe
@@ -182,7 +182,7 @@ const CreateTabButton = ({
       testID={testID}
     >
       <View style={[tabStyles.createControl, { backgroundColor: brandColor }]}>
-        <Ionicons name="add" size={24} color={surfaceColor} />
+        <AppIcon name="plus" size={IconSize.lg} color={surfaceColor} accessible={false} />
       </View>
     </AnimatedPressableRe>
   );
@@ -207,8 +207,7 @@ function AnimatedTabBar(props: BottomTabBarProps) {
   const animatedStyle = useAnimatedStyle(() => {
     const targetY = tabBarVisible.value ? 0 : hideOffset;
     return {
-      transform: [{ translateY: withSpring(targetY, spring.glide) }],
-    };
+      transform: [{ translateY: withSpring(targetY, spring.glide) }] };
   });
 
   return (
@@ -265,8 +264,7 @@ export default function TabNavigator() {
     // an action, not a navigation destination, so the active tab is unchanged.
     navigation.navigate('CreatorStudio', {
       type: persistedCreateMode,
-      openEntry: true,
-    });
+      openEntry: true });
   }, [haptic, navigation, persistedCreateMode, requireAuth]);
 
   return (
@@ -282,11 +280,10 @@ export default function TabNavigator() {
           // Compact 10pt label below each icon. Active/inactive tint is
           // controlled by tabBarActiveTintColor / tabBarInactiveTintColor.
           tabBarLabelStyle: {
-            fontSize: Type.meta.size,
-            fontFamily: Typography.family.medium,
-            letterSpacing: Type.meta.letterSpacing,
-            marginTop: Space.xs,
-          },
+            fontSize: TypographyV2.meta.size,
+            fontFamily: TypographyV2.meta.fontFamily,
+            letterSpacing: TypographyV2.meta.letterSpacing,
+            marginTop: Space.xs },
           // Edge-to-edge transparent bar with frosted
           // glass blur background. Content scrolls behind the bar, and the
           // LiquidGlassBackdrop applies iOS 26 Liquid Glass on supported
@@ -298,9 +295,7 @@ export default function TabNavigator() {
             backgroundColor: 'transparent',
             height: NAV_HEIGHT + insets.bottom,
             paddingBottom: insets.bottom,
-            elevation: 0,
-            shadowOpacity: 0,
-          },
+            ...Elevation.none },
           tabBarBackground: () => (
             <LiquidGlassBackdrop
               intensity={isDark ? 70 : 90}
@@ -310,8 +305,7 @@ export default function TabNavigator() {
           ),
           tabBarItemStyle: tabStyles.tabBarItem,
           tabBarActiveTintColor: colors.textPrimary,
-          tabBarInactiveTintColor: colors.textMuted,
-        }}
+          tabBarInactiveTintColor: colors.textMuted }}
         screenListeners={{
           tabPress: (e: { target?: string; preventDefault?: () => void }) => {
             const currentTab = e.target?.split('-')[0] ?? '';
@@ -334,8 +328,7 @@ export default function TabNavigator() {
               haptic.patterns.tabSwitch();
               lastTabRef.current = currentTab;
             }
-          },
-        }}
+          } }}
       >
         <Tab.Screen
           name="Home"
@@ -344,10 +337,9 @@ export default function TabNavigator() {
             tabBarLabel: 'Home',
             freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} />
+              <TabIcon name="home" color={color} focused={focused} />
             ),
-            tabBarAccessibilityLabel: 'Home',
-          }}
+            tabBarAccessibilityLabel: 'Home' }}
         />
         <Tab.Screen
           name="Explore"
@@ -356,10 +348,9 @@ export default function TabNavigator() {
             tabBarLabel: 'Explore',
             freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon name={focused ? 'search' : 'search-outline'} color={color} focused={focused} />
+              <TabIcon name="explore" color={color} focused={focused} />
             ),
-            tabBarAccessibilityLabel: 'Explore',
-          }}
+            tabBarAccessibilityLabel: 'Explore' }}
         />
         <Tab.Screen
           name="Create"
@@ -373,8 +364,7 @@ export default function TabNavigator() {
                 brandColor={colors.brand}
                 surfaceColor={colors.surface}
               />
-            ),
-          }}
+            ) }}
           // P4-02: Prevent the tab navigator from ever navigating to the
           // Create "tab" — it is a placeholder slot for the central Create
           // action button, not a real destination. The custom tabBarButton
@@ -382,8 +372,7 @@ export default function TabNavigator() {
           listeners={{
             tabPress: (e) => {
               e.preventDefault();
-            },
-          }}
+            } }}
         />
         <Tab.Screen
           name="Inbox"
@@ -393,7 +382,7 @@ export default function TabNavigator() {
             freezeOnBlur: true,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
-                name={focused ? 'paper-plane' : 'paper-plane-outline'}
+                name="inbox"
                 color={color}
                 focused={focused}
                 badgeCount={inboxBadgeCount > 0 ? inboxBadgeCount : undefined}
@@ -401,8 +390,7 @@ export default function TabNavigator() {
             ),
             tabBarAccessibilityLabel: inboxBadgeCount > 0
               ? `Inbox, ${inboxBadgeCount > 99 ? '99+' : inboxBadgeCount} unread`
-              : 'Inbox',
-          }}
+              : 'Inbox' }}
           // Guest gating: messaging requires an account. Intercept the tab
           // press and show the soft signup wall instead of opening the inbox.
           listeners={
@@ -411,8 +399,7 @@ export default function TabNavigator() {
                   tabPress: (e) => {
                     e.preventDefault();
                     requireAuth('message_seller');
-                  },
-                }
+                  } }
               : undefined
           }
         />
@@ -430,8 +417,7 @@ export default function TabNavigator() {
               ? 'Sign in'
               : currentUser?.displayName
                 ? `Profile, ${currentUser.displayName}`
-                : 'Profile',
-          }}
+                : 'Profile' }}
           // Guest gating: tapping the Profile tab navigates directly to the
           // auth landing screen — a clear, self-explanatory sign-in entry
           // point rather than a gated wall.
@@ -442,8 +428,7 @@ export default function TabNavigator() {
                     e.preventDefault();
                     haptic.light();
                     navigation.navigate('AuthLanding');
-                  },
-                }
+                  } }
               : undefined
           }
         />
@@ -459,15 +444,13 @@ const tabStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 0,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   tabIconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
     width: 28,
-    height: 28,
-  },
+    height: 28 },
   badge: {
     position: 'absolute',
     top: -7,
@@ -478,51 +461,42 @@ const tabStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xs,
-    borderWidth: 1.5,
-  },
+    borderWidth: Stroke.standard },
   badgeText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
     includeFontPadding: false,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   createButton: {
     alignItems: 'center',
     justifyContent: 'center',
     width: CREATE_HIT_SIZE,
-    height: CREATE_HIT_SIZE,
-  },
+    height: CREATE_HIT_SIZE },
   createControl: {
     width: CREATE_CONTROL_SIZE,
     height: CREATE_CONTROL_SIZE,
     borderRadius: CREATE_CONTROL_SIZE / 2,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarWrap: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     overflow: 'hidden',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarImage: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-  },
+    borderRadius: AVATAR_SIZE / 2 },
   avatarFallback: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarFallbackText: {
-    fontSize: 10,
-    fontFamily: Typography.family.bold,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: Typography.family.bold } });
 
 // Dynamic sheet styles (theme-aware via colors parameter)

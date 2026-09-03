@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { RecommendationLook } from '../../platform/product';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -15,6 +16,10 @@ export interface SeenInLooksRailProps {
   /** Optional "See all" affordance — only render when a real destination exists. */
   onSeeAll?: () => void;
 }
+
+const RailItemSeparator = React.memo(function RailItemSeparator() {
+  return <View style={{ width: Space.sm }} />;
+});
 
 export function SeenInLooksRail({ items, onPressItem, onSeeAll }: SeenInLooksRailProps) {
   const { colors } = useAppTheme();
@@ -90,7 +95,7 @@ export function SeenInLooksRail({ items, onPressItem, onSeeAll }: SeenInLooksRai
         contentContainerStyle={styles.listContent}
         keyExtractor={(item) => item.id}
         renderItem={renderLookItem}
-        ItemSeparatorComponent={() => <View style={{ width: Space.sm }} />}
+        ItemSeparatorComponent={RailItemSeparator}
       />
     </View>
   );
@@ -99,79 +104,64 @@ export function SeenInLooksRail({ items, onPressItem, onSeeAll }: SeenInLooksRai
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   title: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    color: colors.textPrimary },
   seeAllRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   seeAll: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   subtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   listContent: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   lookCard: {
-    width: 160,
-  },
+    width: 160 },
   lookImageWrap: {
     width: 160,
     height: 200,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   lookImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   lookImageFallback: {
     width: '100%',
     height: '100%',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   lookTitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   lookCreator: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: Space.xs,
-  },
-  });
+    marginTop: Space.xs } });
 }

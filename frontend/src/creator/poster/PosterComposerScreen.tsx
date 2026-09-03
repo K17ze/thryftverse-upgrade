@@ -5,27 +5,28 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Alert,
   Keyboard,
   useWindowDimensions,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
+
+import type { VideoPlayer } from 'expo-video';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
-import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { Space, FontFamily, Radius, IconGrammar, EditorMaterial, EditorRadius, GlyphShadow, Scrim } from '../../theme/designTokens';
+import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, withDelay } from 'react-native-reanimated';
+import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
+import { Space, FontFamily, Radius, IconGrammar, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { Motion } from '../../theme/motionTokens';
 import { useToast } from '../../context/ToastContext';
 import { useCreator } from '../CreatorContext';
-import type { CreatorInitialMedia } from '../../navigation/types';
+import { type NativeStackNavigationProp, type RootStackParamList, type CreatorInitialMedia } from '../../navigation/types';
 import type { CreatorLayer, EffectNode } from '../composition';
-import { hasFullBleedMedia } from '../composition';
+import { layerTypeLabel } from '../shared/layerUtils';
 import { makeStableId } from '../../utils/createStableId';
 import { CreatorCanvas } from '../CreatorCanvas';
 import { CreatorLayersSheet } from '../CreatorLayersSheet';
@@ -34,6 +35,7 @@ import { CreatorSettingsSheet } from '../CreatorSettingsSheet';
 import { CreatorAssetPicker, type AssetPickerMode } from '../CreatorAssetPicker';
 import { CreatorCropSheet } from '../CreatorCropSheet';
 import { InlineTextEditor } from '../tools/text/InlineTextEditor';
+import { TEXT_STYLE_PRESETS } from '../tools/text/textStylePresets';
 import { CutoutPreviewSheet } from '../surfaces/CutoutPreviewSheet';
 import { AccessibilityMoveSheet } from '../surfaces/AccessibilityMoveSheet';
 import { AccessibilityZOrderSheet, type ZOrderLayer } from '../surfaces/AccessibilityZOrderSheet';
@@ -44,12 +46,14 @@ import { CreatorEntryScreen } from '../CreatorEntryScreen';
 import { CreatorEntryEditorCrossfade, type CreatorContentTransform } from '../CreatorEntryEditorCrossfade';
 import { PressScale } from '../CreatorAnimations';
 import { useHaptic } from '../../hooks/useHaptic';
+import { ConfirmationSheet } from '../../components/ConfirmationSheet';
 import type { CaptureViewport } from '../capture/CaptureViewport';
 import type { CreatorTemplate } from '../templates';
 import { FrameTray } from '../studio/FrameTray';
 import { PageMenu } from '../studio/PageMenu';
-import { OverflowItem } from './PosterComposerParts';
+import { OverflowItem } from '../studio/OverflowMenu';
 import { ContextToolRail } from '../surfaces/ContextToolRail';
+import { GlassSheet } from '../surfaces/GlassSheet';
 import { HelpShortcutsSheet } from '../surfaces/HelpShortcutsSheet';
 import { TrashZone } from '../surfaces/TrashZone';
 import {
@@ -73,16 +77,31 @@ import {
   computeTotalDuration,
   formatTimecode,
 } from './timeline';
+import {
+  trimClipStart,
+  trimClipEnd,
+  setClipSpeed,
+  splitClip,
+  duplicateClip,
+} from './timeline/TimelineOperations';
 import { TransitionPreviewRail } from './transitions/TransitionPreviewRail';
 import { TRANSITION_PRESETS } from './transitions/TransitionPresets';
 import { KeyframeEditor } from './keyframes/KeyframeEditor';
 import type { Keyframe } from './keyframes/KeyframeTypes';
 import { SpeedCurveEditor } from './speedcurves/SpeedCurveEditor';
+import {
+  CreatorColorPicker,
+  useCreatorColorHistory,
+  toHexString,
+  fromHexString,
+  type CreatorColor,
+} from '../color';
+import { useActiveSheet } from './useActiveSheet';
 import type { SpeedCurve } from './speedcurves/SpeedCurveTypes';
 import { DEFAULT_SPEED_CURVE } from './speedcurves/SpeedCurveTypes';
 import { ReverseToggle, FreezeFramePicker, AudioFadeControls } from './tools';
 // Playback pipeline — single clock + timeline projector (Z5 timeline engine)
-import { PlaybackClock, projectTimeline, findVisibleOverlays } from '../core/playback';
+import { PlaybackClock, projectTimeline, findVisibleOverlays, findActiveClip, computeSourceTime } from '../core/playback';
 import type { PlaybackState } from '../core/playback';
 // Performance monitoring — dev-only overlay + frame profiler hook
 import { PerformanceOverlay } from '../core/performance/PerformanceOverlay';
@@ -111,38 +130,16 @@ import { usePerformanceMonitor } from '../core/performance/usePerformanceMonitor
 // frame-native composer.
 // ───────────────────────────────────────────────────────────────────────────
 
-function layerTypeLabel(type: CreatorLayer['type']): string {
-  switch (type) {
-    case 'media': return 'Media';
-    case 'text': return 'Text';
-    case 'product': return 'Product';
-    case 'mention': return 'Mention';
-    case 'look': return 'Look';
-    case 'vote': return 'Vote';
-    case 'quiz': return 'Quiz';
-    case 'question': return 'Question';
-    case 'emojiSlider': return 'Slider';
-    case 'countdown': return 'Countdown';
-    case 'decorative': return 'Shape';
-    case 'draw': return 'Drawing';
-    case 'gif': return 'GIF';
-    case 'music': return 'Music';
-    case 'link': return 'Link';
-    case 'location': return 'Location';
-    case 'hashtag': return 'Hashtag';
-    case 'time': return 'Time';
-    case 'weather': return 'Weather';
-    default: return 'Layer';
-  }
-}
+const ZOOM_INDICATOR_HIDE_DELAY_MS = 700;
 
 function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'look' | 'poster') => void }) {
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'CreatorStudio'>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'CreatorStudio'>>();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const { show } = useToast();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   // ── Performance monitoring (dev-only) ──────────────────────────────
   // Starts the FrameProfiler on mount and renders the PerformanceOverlay
@@ -157,6 +154,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     selectLayer,
     canUndo,
     canRedo,
+    undoLabel,
+    redoLabel,
     undo,
     redo,
     isDirty,
@@ -173,6 +172,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     reorderPages,
     commitLayerTransform,
     isLoadingDraft,
+    draftError,
+    retryDraftLoad,
     setDocument,
     commitDocument,
     saveDraft,
@@ -183,8 +184,29 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   } = useCreator();
 
   // ── Sheet / overlay state ──────────────────────────────────────────
-  const [showLayers, setShowLayers] = useState(false);  const [showPublish, setShowPublish] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  // 13 mutually exclusive sheets consolidated into a single discriminated
+  // union via useActiveSheet. This replaces 13 independent useState(false)
+  // booleans with 1 useReducer, reducing re-renders and enforcing mutual
+  // exclusivity at the type level (audit item-29 §5.5).
+  const { activeSheet, open: openSheet, close: closeSheet } = useActiveSheet();
+  const showLayers = activeSheet === 'layers';
+  const showPublish = activeSheet === 'publish';
+  const showSettings = activeSheet === 'settings';
+  const showOverflow = activeSheet === 'overflow';
+  const showHelp = activeSheet === 'help';
+  const showA11yMove = activeSheet === 'a11yMove';
+  const showA11yZOrder = activeSheet === 'a11yZOrder';
+  const showTransitions = activeSheet === 'transitions';
+  const showKeyframes = activeSheet === 'keyframes';
+  const showSpeedCurve = activeSheet === 'speedCurve';
+  const showReverse = activeSheet === 'reverse';
+  const showFreezeFrame = activeSheet === 'freezeFrame';
+  const showAudioFade = activeSheet === 'audioFade';
+  // ── Text color picker sheet (local state — not in useActiveSheet) ──
+  // Opens a CreatorColorPicker sheet for the selected text layer's fill
+  // color. Replaces the former hardcoded palette cycling.
+  const [showTextColorPicker, setShowTextColorPicker] = useState(false);
+  const { recents: colorRecents, commitColor: commitRecentColor } = useCreatorColorHistory();
   const [pickerMode, setPickerMode] = useState<AssetPickerMode | null>(null);
   const [editingLayer, setEditingLayer] = useState<CreatorLayer | null>(null);
   // ── In-place text content editing (Snapchat/Instagram pattern) ──────
@@ -212,10 +234,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   const frameSwipeStartYSV = useSharedValue(0);
   const frameSwipeLockedDirSV = useSharedValue<'horizontal' | 'vertical' | null>(null);
   const [showTemplates, setShowTemplates] = useState(Boolean(route.params?.openTemplates));
-  const [showOverflow, setShowOverflow] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showSafeZone, setShowSafeZone] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
   const [entryComplete, setEntryComplete] = useState(Boolean(route.params?.startBlank));
   const [pageMenuIndex, setPageMenuIndex] = useState<number | null>(null);
   const [showFrameTray, setShowFrameTray] = useState(false);
@@ -231,14 +251,6 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // For single-photo posters the timeline is hidden by default; this flag
   // records the user's intent so the timeline stays open until dismissed.
   const [userRequestedTimeline, setUserRequestedTimeline] = useState(false);
-  const [showA11yMove, setShowA11yMove] = useState(false);
-  const [showA11yZOrder, setShowA11yZOrder] = useState(false);
-  const [showTransitions, setShowTransitions] = useState(false);
-  const [showKeyframes, setShowKeyframes] = useState(false);
-  const [showSpeedCurve, setShowSpeedCurve] = useState(false);
-  const [showReverse, setShowReverse] = useState(false);
-  const [showFreezeFrame, setShowFreezeFrame] = useState(false);
-  const [showAudioFade, setShowAudioFade] = useState(false);
   // ── True cutout (segmentation) state ───────────────────────────────
   // `cutoutPreviewTarget` holds the media layer being previewed in the
   // CutoutPreviewSheet (true segmentation). `cutoutSupported` is probed
@@ -258,6 +270,14 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // recognition-over-recall pattern: the user doesn't need to remember
   // what the original looked like; they hold to see it.
   const [compareOriginal, setCompareOriginal] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const page = document.pages[activePageIndex];
   const pageCount = document.pages.length;
@@ -266,39 +286,31 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // ── Edit-surface geometry ──────────────────────────────────────────
-  // The 9:16 aspect ratio is the EXPORT ratio, not the edit surface ratio.
-  // When a full-bleed media layer exists (width=1, height=1), the edit
-  // surface fills the entire screen — the media uses contentFit="cover"
-  // to fill it (cropping if needed), matching Snapchat/Instagram where the
-  // viewfinder fills the screen and edits float over it.
-  // For documents WITHOUT full-bleed media (blank canvas, text-only),
-  // keep the centered 9:16 canvas so the authoring surface matches export.
+  // The authored canvas is immutable: it ALWAYS uses the document's
+  // aspect ratio (9:16 for posters), never the physical screen height.
+  // This guarantees "what I edit is what is exported" — the same document
+  // produces the same canvas dimensions on every device, letterboxed
+  // within the viewport when the screen is taller than the canvas.
+  // Full-bleed media (width=1, height=1) describes how media fits INSIDE
+  // this authored canvas via contentFit="cover" (cropping as needed); it
+  // does not redefine the canvas geometry itself.
   const canvasWidth = screenWidth;
-  const pageHasFullBleedMedia = hasFullBleedMedia(page);
   const canvasHeight = useMemo(() => {
-    if (pageHasFullBleedMedia) return screenHeight;
     const h = Math.floor(screenWidth / document.canvas.aspectRatio);
     return Math.min(h, screenHeight);
-  }, [pageHasFullBleedMedia, screenWidth, document.canvas.aspectRatio, screenHeight]);
+  }, [screenWidth, document.canvas.aspectRatio, screenHeight]);
 
   const canvasVerticalOffset = useMemo(() => {
-    if (pageHasFullBleedMedia) return 0;
     if (canvasHeight >= screenHeight) return 0;
     return Math.floor((screenHeight - canvasHeight) / 2);
-  }, [pageHasFullBleedMedia, canvasHeight, screenHeight]);
+  }, [canvasHeight, screenHeight]);
 
-  // ── Auto-show frame tray on frame change (doc 04) ──────────────────
-  // "show a bottom frame tray that appears when frame change occurs or
-  // user adds another frame." Auto-collapses after 2.5s to restore
-  // full-screen canvas — the frame tray is a transient navigation aid,
-  // not permanent chrome.
-  useEffect(() => {
-    if (!hasMultipleFrames) return;
-    setShowFrameTray(true);
-    setVideoInfoFrameIndex(null);
-    const timer = setTimeout(() => setShowFrameTray(false), 2500);
-    return () => clearTimeout(timer);
-  }, [hasMultipleFrames, activePageIndex, pageCount]);
+  // ── Frame organizer is transient ───────────────────────────────────
+  // Per Design.md: page dots (the top progress segments) are the persistent
+  // location indicator. The FrameTray is a transient organizer for
+  // reorder/duplicate/delete only — opened explicitly from the overflow
+  // menu, never auto-shown on frame change. This removes the duplicate
+  // navigation surfaces that competed with the canvas.
 
   // ── Truthful back — Save Draft / Discard / Keep Editing ────────────
   const handleBack = useCallback(() => {
@@ -306,25 +318,28 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       navigation.goBack();
       return;
     }
-    Alert.alert(
-      'Save draft?',
-      'Your changes haven\'t been published yet.',
-      [
-        {
-          text: 'Save draft',
-          onPress: async () => {
-            try {
-              await saveDraft();
-              navigation.goBack();
-            } catch {
-              Alert.alert('Could not save draft', 'Try again.');
-            }
-          },
-        },
-        { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
-        { text: 'Keep editing', style: 'cancel' },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Save draft?',
+      message: 'Unpublished changes.',
+      confirmLabel: 'Save draft',
+      variant: 'default',
+      onConfirm: async () => {
+        try {
+          await saveDraft();
+          navigation.goBack();
+        } catch {
+          setConfirmSheet({
+            visible: true,
+            title: 'Could not save draft',
+            message: 'Try again.',
+            confirmLabel: 'OK',
+            variant: 'default',
+            onConfirm: () => {},
+          });
+        }
+      },
+    });
   }, [isDirty, navigation, saveDraft]);
 
   // ── Keyboard shortcuts (web/tablet only) ───────────────────────────
@@ -342,26 +357,15 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         if (canRedo) redo();
       } else if (e.key === 'Escape') {
         if (editingTextLayerId) setEditingTextLayerId(null);
-        else if (showHelp) setShowHelp(false);
-        else if (showA11yMove) setShowA11yMove(false);
-        else if (showA11yZOrder) setShowA11yZOrder(false);
+        else if (showTextColorPicker) setShowTextColorPicker(false);
+        else if (activeSheet) closeSheet();
         else if (bottomSurface === 'effects') setBottomSurface('tools');
         else if (bottomSurface === 'timeline') { setUserRequestedTimeline(false); setBottomSurface('tools'); }
-        else if (showTransitions) setShowTransitions(false);
-        else if (showKeyframes) setShowKeyframes(false);
-        else if (showSpeedCurve) setShowSpeedCurve(false);
-        else if (showReverse) setShowReverse(false);
-        else if (showFreezeFrame) setShowFreezeFrame(false);
-        else if (showAudioFade) setShowAudioFade(false);
         else if (cropMode) setCropMode(false);
         else if (cutoutPreviewTarget) setCutoutPreviewTarget(null);
         else if (pageMenuIndex !== null) setPageMenuIndex(null);
         else if (showPreview) setShowPreview(false);
-        else if (showOverflow) setShowOverflow(false);
-        else if (showPublish) setShowPublish(false);
         else if (showTemplates) setShowTemplates(false);
-        else if (showLayers) setShowLayers(false);
-        else if (showSettings) setShowSettings(false);
         else if (pickerMode) { setPickerMode(null); setEditingLayer(null); }
         else if (selectedLayerId) selectLayer(null);
         else handleBack();
@@ -372,40 +376,52 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [canUndo, canRedo, undo, redo, editingTextLayerId, showHelp, showA11yMove, showA11yZOrder, bottomSurface, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
+  }, [canUndo, canRedo, undo, redo, editingTextLayerId, showTextColorPicker, activeSheet, closeSheet, bottomSurface, cropMode, cutoutPreviewTarget, pageMenuIndex, showPreview, showTemplates, pickerMode, selectedLayerId, selectLayer, removeLayer, handleBack]);
 
   // ── Hardware back button — intercept to close sheets first ─────────
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
         if (editingTextLayerId) { setEditingTextLayerId(null); return true; }
-        if (showHelp) { setShowHelp(false); return true; }
-        if (showA11yMove) { setShowA11yMove(false); return true; }
-        if (showA11yZOrder) { setShowA11yZOrder(false); return true; }
+        if (showTextColorPicker) { setShowTextColorPicker(false); return true; }
+        if (activeSheet) { closeSheet(); return true; }
         if (bottomSurface === 'effects') { setBottomSurface('tools'); return true; }
         if (bottomSurface === 'timeline') { setUserRequestedTimeline(false); setBottomSurface('tools'); return true; }
-        if (showTransitions) { setShowTransitions(false); return true; }
-        if (showKeyframes) { setShowKeyframes(false); return true; }
-        if (showSpeedCurve) { setShowSpeedCurve(false); return true; }
-        if (showReverse) { setShowReverse(false); return true; }
-        if (showFreezeFrame) { setShowFreezeFrame(false); return true; }
-        if (showAudioFade) { setShowAudioFade(false); return true; }
         if (cropMode) { setCropMode(false); return true; }
         if (cutoutPreviewTarget) { setCutoutPreviewTarget(null); return true; }
         if (pageMenuIndex !== null) { setPageMenuIndex(null); return true; }
         if (showPreview) { setShowPreview(false); return true; }
-        if (showOverflow) { setShowOverflow(false); return true; }
-        if (showPublish) { setShowPublish(false); return true; }
         if (showTemplates) { setShowTemplates(false); return true; }
-        if (showLayers) { setShowLayers(false); return true; }
-        if (showSettings) { setShowSettings(false); return true; }
         if (pickerMode) { setPickerMode(null); setEditingLayer(null); return true; }
         if (selectedLayerId) { selectLayer(null); return true; }
         return false;
       };
       return onBackPress;
-    }, [editingTextLayerId, showHelp, showA11yMove, showA11yZOrder, bottomSurface, showTransitions, showKeyframes, showSpeedCurve, showReverse, showFreezeFrame, showAudioFade, cropMode, cutoutPreviewTarget, pageMenuIndex, showPreview, showOverflow, showPublish, showTemplates, showLayers, showSettings, pickerMode, selectedLayerId, selectLayer])
+    }, [editingTextLayerId, showTextColorPicker, activeSheet, closeSheet, bottomSurface, cropMode, cutoutPreviewTarget, pageMenuIndex, showPreview, showTemplates, pickerMode, selectedLayerId, selectLayer])
   );
+
+  // ── Memoized asset picker callbacks (audit item-29 §5.5) ───────────
+  // These were inline arrows in the JSX, creating new function references
+  // on every render and causing CreatorAssetPicker to re-render even when
+  // nothing relevant changed. Memoizing them keeps the picker stable.
+  const handlePickerClose = useCallback(() => {
+    setPickerMode(null);
+    setEditingLayer(null);
+  }, []);
+
+  const handlePickerAddLayer = useCallback((layer: CreatorLayer) => {
+    if (editingLayer) {
+      updateLayer(editingLayer.id, layer, 'Edit layer');
+    } else {
+      addLayer(layer);
+    }
+  }, [editingLayer, updateLayer, addLayer]);
+
+  // Shared "Done" handler for effects sheets — haptic + close (audit item-29)
+  const handleSheetDone = useCallback(() => {
+    haptic.light();
+    closeSheet();
+  }, [haptic, closeSheet]);
 
   const handleCanvasPress = useCallback(() => {
     Keyboard.dismiss();
@@ -448,14 +464,14 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   const showEntryScreen = !entryComplete && !hasContent && !isLoadingDraft;
 
   // ── Chrome fade during manipulation ───────────────────────────────
-  // Top bar and tool dock fade to ~0.15 opacity when the user is actively
+  // Top bar and tool dock fade to ~0.05 opacity when the user is actively
   // dragging/pinching/rotating a layer, then spring back on release.
   // The canvas itself stays at full opacity — the chrome recedes, not the
   // content. This is the Snapchat/Instagram "infinite canvas" pattern.
   const chromeFadeStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(manipulationActiveSV.value === 1 ? 0.15 : 1, {
-      duration: 200,
-      easing: Easing.out(Easing.cubic),
+    opacity: withTiming(manipulationActiveSV.value === 1 ? 0.05 : 1, {
+      duration: Motion.duration.railSwap,
+      easing: Motion.easing.entrance,
     }),
   }));
 
@@ -490,6 +506,41 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       ),
     [document.pages],
   );
+
+  // ── Audio URI for waveform extraction ─────────────────────────────
+  // Derive a single audio URI to feed the WaveformTrack. We prefer an
+  // explicit music layer's previewUrl (the dedicated audio asset) and fall
+  // back to the first video clip's mediaUri (video carries its own audio
+  // track). When neither is present, audioUri stays undefined and the
+  // WaveformTrack renders its honest flat-line empty state (AGENTS.md §11).
+  const audioUri = useMemo(() => {
+    for (const p of document.pages) {
+      for (const l of p.layers) {
+        if (l.type === 'music' && l.payload.previewUrl) {
+          return l.payload.previewUrl;
+        }
+      }
+    }
+    for (const p of document.pages) {
+      for (const l of p.layers) {
+        if (l.type === 'media' && l.payload.mediaType === 'video') {
+          return l.payload.mediaUri;
+        }
+      }
+    }
+    return undefined;
+  }, [document.pages]);
+
+  // ── Video player ref ──────────────────────────────────────────────
+  // CreatorCanvas populates this ref with the active video layer's
+  // expo-video player instance. The PlaybackClock video adapter uses it
+  // to issue imperative seek / play / pause / rate commands so that
+  // scrubbing the timeline playhead actually seeks the video source —
+  // not just the temporal-visibility/keyframe evaluation driven by the
+  // currentTimeMs prop. The ref is set by whichever video layer is on
+  // the currently rendered page (a poster page has at most one media
+  // layer, so there is no ambiguity).
+  const videoPlayerRef = useRef<VideoPlayer | null>(null);
 
   // ── Playback clock — the single source of truth for timeline time ──
   // Per AGENTS.md §11 and the Zero-Gap audit, one playback clock drives:
@@ -536,41 +587,65 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   );
 
   // Register a video adapter so the clock can control video playback.
-  // The CreatorCanvas already reads `playbackClock.isPlaying` to drive the
-  // Video component's `shouldPlay` prop, and `currentTimeMs` drives temporal
-  // visibility + keyframe evaluation. The adapter handles play/pause/seek
-  // commands from the clock — for image-only posters these are no-ops
-  // (backward compatible). The onSeek callback is coalesced by the clock
-  // (max once per ~100ms) to avoid excessive native bridge traffic.
+  // CreatorCanvas reads `playbackClock.isPlaying` to drive the Video
+  // component's `shouldPlay` prop (declarative play/pause), and
+  // `currentTimeMs` drives temporal visibility + keyframe evaluation.
+  // This adapter issues the *imperative* commands the declarative prop
+  // path cannot cover:
+  //   - onSeek: scrubs the native video player to the source-time position
+  //     matching the timeline playhead, so scrubbing actually seeks the
+  //     video (not just overlay visibility). The seek target is mapped
+  //     from absolute timeline ms → source ms via the projected timeline
+  //     (trim + speed aware). The clock coalesces this to max once per
+  //     ~100ms to avoid excessive native bridge traffic.
+  //   - onPlay/onPause: redundant with the shouldPlay prop flow, but issued
+  //     explicitly so the player is in the correct state immediately
+  //     (the prop-driven effect runs on the next render).
+  //   - onRateChange: sets the native player's playbackRate.
+  // For image-only posters the player ref is null, so all callbacks are
+  // no-ops (backward compatible).
   useEffect(() => {
     playbackClock.registerVideoAdapter({
       onPlay: () => {
-        // Video shouldPlay is driven by playbackClock.isPlaying in CreatorCanvas.
-        // This callback is for any additional play-side effects (e.g. audio).
+        const player = videoPlayerRef.current;
+        if (player) {
+          try { player.play(); } catch { /* player may be released */ }
+        }
       },
       onPause: () => {
-        // Video shouldPlay is driven by playbackClock.isPlaying in CreatorCanvas.
-        // This callback is for any additional pause-side effects (e.g. audio).
+        const player = videoPlayerRef.current;
+        if (player) {
+          try { player.pause(); } catch { /* player may be released */ }
+        }
       },
-      onSeek: (_ms: number) => {
-        // The seek target (ms) is the absolute timeline position. The
-        // CreatorCanvas receives currentTimeMs as a prop and uses it for
-        // temporal visibility and keyframe evaluation. The actual video
-        // source-time seek is handled by the Video component's internal
-        // playback, which follows the clock's isPlaying state. For future
-        // precise frame-seeking, the Video component would need a ref-based
-        // seek API exposed through CreatorCanvas.
+      onSeek: (ms: number) => {
+        const player = videoPlayerRef.current;
+        if (!player) return;
+        // Map absolute timeline position → source-media time using the
+        // projected timeline (handles trim + speed). Falls back to the
+        // raw timeline position when no active clip is found (e.g. gaps).
+        const activeClip = findActiveClip(projectedTimeline, ms);
+        const sourceMs = activeClip
+          ? (computeSourceTime(activeClip, ms) ?? ms)
+          : ms;
+        try {
+          // expo-video's player.currentTime is settable in seconds.
+          player.currentTime = sourceMs / 1000;
+        } catch {
+          // Player may be released or not yet ready — ignore.
+        }
       },
-      onRateChange: (_rate: number) => {
-        // Playback rate changes are handled by the clock's playbackRate.
-        // The Video component's rate would be set via a ref in a future
-        // enhancement.
+      onRateChange: (rate: number) => {
+        const player = videoPlayerRef.current;
+        if (player) {
+          try { player.playbackRate = rate; } catch { /* not supported / released */ }
+        }
       },
     });
     return () => {
       playbackClock.unregisterVideoAdapter();
     };
-  }, [playbackClock]);
+  }, [playbackClock, projectedTimeline]);
 
   // Dispose the clock on unmount to stop any running RAF/interval loops.
   useEffect(() => {
@@ -710,6 +785,179 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // mutually exclusive, not layered.
   const shouldShowTimeline = bottomSurface === 'timeline' && timelineClips.length > 0;
 
+  // ── Timeline pinch-to-zoom (CapCut parity) ─────────────────────────
+  // A two-finger pinch scales the timeline's pixels-per-ms so every track
+  // (clip, ruler, overlay, waveform, playhead) expands/contracts together.
+  // The live scale lives in a Reanimated shared value so the visual
+  // transform runs on the UI thread — no React re-render per frame. The
+  // scale is committed to React state only when the gesture ends, which
+  // updates the ScrollView content width and the trackWidth props so the
+  // real layout matches the preview. Clamped to 0.5x–4x.
+  //
+  // Source-of-truth: all tracks already derive their geometry from the
+  // track width they receive or measure, so scaling the content width at
+  // the parent scales every child uniformly — no per-child scale prop
+  // needed (that would double-scale and break the playhead/trim math).
+  const [timelineZoomScale, setTimelineZoomScale] = useState(1);
+  const timelineScaleSV = useSharedValue(1);
+  const pinchBaseScaleSV = useSharedValue(1);
+  const zoomIndicatorOpacitySV = useSharedValue(0);
+  const timelineBaseTrackWidth = screenWidth - Space.md * 2;
+  const scaledTrackWidth = timelineBaseTrackWidth * timelineZoomScale;
+
+  // ── Session-state persistence & restoration ───────────────────────
+  // On re-entry after backgrounding or crash recovery, the active page
+  // index, selected layer, and timeline zoom level were lost — the user
+  // returned to page 0 with no selection. These effects persist those
+  // values to AsyncStorage (debounced 500ms) and restore them on mount
+  // or when a different document is loaded. AsyncStorage failures are
+  // non-fatal: every read/write is wrapped so a corrupt or unavailable
+  // store never crashes the composer.
+  const SESSION_KEY_PREFIX = '@poster_session_';
+  const sessionKey = document.id ? `${SESSION_KEY_PREFIX}${document.id}` : null;
+  const prevDocIdRef = useRef<string | null>(null);
+  const hasAttemptedRestoreRef = useRef(false);
+
+  // Debounced persistence — writes whenever any tracked value changes.
+  // Skipped until the first restoration attempt completes so default
+  // values (page 0 / no selection / 1x zoom) never clobber a saved
+  // session before it has been read back.
+  useEffect(() => {
+    if (!sessionKey || !hasAttemptedRestoreRef.current) return;
+    const timer = setTimeout(() => {
+      AsyncStorage.setItem(
+        sessionKey,
+        JSON.stringify({
+          activePageIndex,
+          selectedLayerId,
+          timelineZoomScale,
+        }),
+      ).catch(() => {
+        // AsyncStorage write failure — silently continue.
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [sessionKey, activePageIndex, selectedLayerId, timelineZoomScale]);
+
+  // Restoration on mount + when a different document is loaded. Runs
+  // only when the document identity changes, not on every page/layer/
+  // zoom change (those are handled by the persistence effect above).
+  useEffect(() => {
+    if (!sessionKey) return;
+    const currentDocId = document.id;
+    const prevDocId = prevDocIdRef.current;
+    // On a genuine document change (not the initial mount), clear the
+    // previous document's session so stale state never leaks across
+    // projects.
+    if (prevDocId != null && prevDocId !== currentDocId) {
+      AsyncStorage.removeItem(`${SESSION_KEY_PREFIX}${prevDocId}`).catch(() => {
+        // Clear failure — silently continue.
+      });
+      // A different document means a fresh session: reset the guard so
+      // persistence waits for the new document's restoration.
+      hasAttemptedRestoreRef.current = false;
+    }
+    prevDocIdRef.current = currentDocId;
+    let cancelled = false;
+    (async () => {
+      hasAttemptedRestoreRef.current = true;
+      try {
+        const raw = await AsyncStorage.getItem(sessionKey);
+        if (cancelled || !raw) return;
+        const saved = JSON.parse(raw) as {
+          activePageIndex?: number;
+          selectedLayerId?: string | null;
+          timelineZoomScale?: number;
+        };
+        // Validate page index is within current document bounds.
+        if (
+          typeof saved.activePageIndex === 'number' &&
+          Number.isFinite(saved.activePageIndex) &&
+          saved.activePageIndex >= 0 &&
+          saved.activePageIndex < document.pages.length
+        ) {
+          setActivePageIndex(saved.activePageIndex);
+        }
+        // Validate the layer still exists somewhere in the document.
+        if (saved.selectedLayerId) {
+          const exists = document.pages.some((p) =>
+            p.layers.some((l) => l.id === saved.selectedLayerId),
+          );
+          if (exists) selectLayer(saved.selectedLayerId);
+        }
+        // Restore zoom (defensive: must be a finite number).
+        if (
+          typeof saved.timelineZoomScale === 'number' &&
+          Number.isFinite(saved.timelineZoomScale)
+        ) {
+          setTimelineZoomScale(saved.timelineZoomScale);
+        }
+      } catch {
+        // Corrupt or unreadable session — silently continue.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally only re-run when the document identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionKey]);
+
+  const showZoomIndicator = useCallback(() => {
+    zoomIndicatorOpacitySV.value = withTiming(1, {
+      duration: Motion.duration.fast,
+      easing: Motion.easing.entrance,
+    });
+  }, [zoomIndicatorOpacitySV]);
+
+  const fadeZoomIndicator = useCallback(() => {
+    zoomIndicatorOpacitySV.value = withDelay(
+      ZOOM_INDICATOR_HIDE_DELAY_MS,
+      withTiming(0, { duration: Motion.duration.slower, easing: Motion.easing.entrance }),
+    );
+  }, [zoomIndicatorOpacitySV]);
+
+  // Pinch activates instantly by default (two fingers down → gesture
+  // begins) and coexists with the ScrollView's one-finger horizontal pan —
+  // pinch is a distinct two-finger gesture so the two never compete.
+  const timelinePinchGesture = useMemo(
+    () =>
+      Gesture.Pinch()
+        .onBegin(() => {
+          'worklet';
+          pinchBaseScaleSV.value = timelineScaleSV.value;
+          runOnJS(showZoomIndicator)();
+        })
+        .onChange((e) => {
+          'worklet';
+          const next = pinchBaseScaleSV.value * e.scale;
+          timelineScaleSV.value = Math.max(0.5, Math.min(4, next));
+        })
+        .onEnd(() => {
+          'worklet';
+          runOnJS(setTimelineZoomScale)(timelineScaleSV.value);
+          runOnJS(fadeZoomIndicator)();
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showZoomIndicator, fadeZoomIndicator],
+  );
+
+  // Live preview: during the pinch the content is visually scaled from the
+  // committed scale to the shared-value scale, anchored at the left edge
+  // (transformOrigin top-left) so the timeline grows from its start. On
+  // commit the real layout takes over and the transform resets to 1x — no
+  // jump, because the committed width then equals the previewed width.
+  const timelineContentAnimStyle = useAnimatedStyle(
+    () => ({
+      transform: [{ scaleX: timelineScaleSV.value / timelineZoomScale }],
+    }),
+    [timelineZoomScale],
+  );
+
+  const zoomIndicatorAnimStyle = useAnimatedStyle(() => ({
+    opacity: zoomIndicatorOpacitySV.value,
+  }));
+
   // ── Auto-expand timeline when video or second clip is added ──────
   // When the composition transitions from single-photo to video or
   // multi-clip, the timeline auto-expands without requiring a user tap.
@@ -762,15 +1010,58 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             .flatMap((p) => p.layers)
             .find((l) => l.id === op.clipId);
           if (!layer || layer.type !== 'media') return;
-          const newTrimStart = op.edge === 'start'
+          // Magnetic snapping: snap trim edges to the playhead position
+          // and to adjacent clip boundaries when within 150ms.
+          const SNAP_MS = 150;
+          const playheadMs = playbackState.currentTimeMs;
+          let newTrimStart = op.edge === 'start'
             ? Math.max(0, clip.trimStartMs + op.deltaMs)
             : clip.trimStartMs;
-          const newTrimEnd = op.edge === 'end'
+          let newTrimEnd = op.edge === 'end'
             ? Math.max(newTrimStart + 100, clip.trimEndMs + op.deltaMs)
             : clip.trimEndMs;
+          // Snap to playhead
+          if (op.edge === 'start' && Math.abs(newTrimStart - playheadMs) < SNAP_MS) {
+            newTrimStart = playheadMs;
+          }
+          if (op.edge === 'end' && Math.abs(newTrimEnd - playheadMs) < SNAP_MS) {
+            newTrimEnd = playheadMs;
+          }
+          // Snap to adjacent clip boundaries
+          const clipIdx = timelineClips.findIndex((c) => c.id === op.clipId);
+          if (op.edge === 'start' && clipIdx > 0) {
+            const prevClip = timelineClips[clipIdx - 1];
+            const prevEnd = prevClip.trimEndMs ?? 0;
+            if (Math.abs(newTrimStart - prevEnd) < SNAP_MS) {
+              newTrimStart = prevEnd;
+            }
+          }
+          if (op.edge === 'end' && clipIdx < timelineClips.length - 1) {
+            const nextClip = timelineClips[clipIdx + 1];
+            const nextStart = nextClip.trimStartMs ?? 0;
+            if (Math.abs(newTrimEnd - nextStart) < SNAP_MS) {
+              newTrimEnd = nextStart;
+            }
+          }
+          // Route the snapped value through the pure timeline operation so
+          // bounds are validated (MIN_TRIM floor, no negative duration) and
+          // durationMs is recomputed consistently. The snapped target is
+          // converted to a delta — the pure function clamps and validates.
+          const snappedDelta = op.edge === 'start'
+            ? newTrimStart - clip.trimStartMs
+            : newTrimEnd - clip.trimEndMs;
+          const trimmedClips = op.edge === 'start'
+            ? trimClipStart(timelineClips, op.clipId, snappedDelta)
+            : trimClipEnd(timelineClips, op.clipId, snappedDelta);
+          const trimmedClip = trimmedClips.find((c) => c.id === op.clipId);
+          if (!trimmedClip) break;
           updateLayer(op.clipId, {
             type: 'media',
-            payload: { ...layer.payload, trimStartMs: newTrimStart, trimEndMs: newTrimEnd },
+            payload: {
+              ...layer.payload,
+              trimStartMs: trimmedClip.trimStartMs,
+              trimEndMs: trimmedClip.trimEndMs,
+            },
           }, 'Trim clip');
           break;
         }
@@ -779,9 +1070,20 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             .flatMap((p) => p.layers)
             .find((l) => l.id === op.clipId);
           if (!layer || layer.type !== 'media') return;
+          // Route through the pure timeline operation so the speed is
+          // clamped to 0.25x–4x and durationMs is recomputed consistently.
+          // setClipSpeed also clears any existing speed curve — the clip
+          // becomes a constant-speed clip.
+          const speedClips = setClipSpeed(timelineClips, op.clipId, op.speed);
+          const speedClip = speedClips.find((c) => c.id === op.clipId);
+          if (!speedClip) break;
           updateLayer(op.clipId, {
             type: 'media',
-            payload: { ...layer.payload, speed: op.speed },
+            payload: {
+              ...layer.payload,
+              speed: speedClip.speed,
+              speedCurve: undefined,
+            },
           }, 'Change speed');
           haptic.light();
           break;
@@ -822,8 +1124,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           const minSplit = clip.trimStartMs + 100; // min 100ms on each side
           const maxSplit = clip.trimEndMs - 100;
           if (splitPoint <= minSplit || splitPoint >= maxSplit) {
-            haptic.light();
-            show('Move the playhead within the clip to split', 'info');
+            haptic.error();
+            show("Can't split here", 'info');
             break;
           }
 
@@ -833,21 +1135,39 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             .find((l) => l.id === op.clipId);
           if (!layer || layer.type !== 'media') return;
 
-          // 1. Update the original clip's trim end to the split point
+          // Route through the pure timeline operation for bounds validation
+          // and consistent duration recomputation. splitClip returns a new
+          // clips array with the original clip trimmed to the split point and
+          // a new clip inserted immediately after with a fresh id.
+          const splitClips = splitClip(timelineClips, op.clipId, splitPoint);
+          if (splitClips === timelineClips) {
+            // No-op — the pure function rejected the split point.
+            haptic.error();
+            show("Can't split here", 'info');
+            break;
+          }
+          const firstClip = splitClips.find((c) => c.id === op.clipId);
+          // The new clip is the one not present in the original array.
+          const originalIds = new Set(timelineClips.map((c) => c.id));
+          const secondClip = splitClips.find((c) => !originalIds.has(c.id));
+          if (!firstClip || !secondClip) break;
+
+          // 1. Update the original clip's trim end to the validated split point
           updateLayer(op.clipId, {
             type: 'media',
-            payload: { ...layer.payload, trimEndMs: Math.round(splitPoint) },
+            payload: { ...layer.payload, trimEndMs: firstClip.trimEndMs },
           }, 'Split clip (first half)');
 
-          // 2. Create a new media layer for the second half
+          // 2. Create a new media layer for the second half, using the pure
+          // function's generated id so the timeline clip and layer stay in sync.
           const newLayer: CreatorLayer = {
             ...layer,
-            id: makeStableId('media'),
+            id: secondClip.id,
             zIndex: layer.zIndex + 1,
             payload: {
               ...layer.payload,
-              trimStartMs: Math.round(splitPoint),
-              trimEndMs: clip.trimEndMs,
+              trimStartMs: secondClip.trimStartMs,
+              trimEndMs: secondClip.trimEndMs,
             },
           };
           addLayer(newLayer);
@@ -855,9 +1175,16 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           haptic.medium();
           break;
         }
-        case 'duplicate':
-          if (op.clipId) duplicateLayer(op.clipId);
+        case 'duplicate': {
+          if (!op.clipId) break;
+          // Route through the pure timeline operation for validation —
+          // duplicateClip confirms the clip exists in the timeline model
+          // before the document-level duplication proceeds.
+          const duplicatedClips = duplicateClip(timelineClips, op.clipId);
+          if (duplicatedClips === timelineClips) break; // clip not found
+          duplicateLayer(op.clipId);
           break;
+        }
         case 'delete':
           if (op.clipId) removeLayer(op.clipId);
           setSelectedClipId(null);
@@ -1051,7 +1378,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       hidden: false,
       opacity: 1,
       payload: {
-        text: 'Tap to edit',
+        text: '',
         textStyle: 'clean',
         fill: { space: 'srgb', r: 1, g: 1, b: 1, a: 1 },
         textColor: '#ffffff',
@@ -1093,13 +1420,23 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // For video posters the timeline auto-expands — this toggle still
   // allows the user to collapse it if desired.
   const handleTimelineToggle = useCallback(() => {
+    if (timelineClips.length === 0) {
+      if (!hasContent) {
+        show("Add a video to use the timeline", 'info');
+        return;
+      }
+      haptic.light();
+      setUserRequestedTimeline(true);
+      setBottomSurface('timeline');
+      return;
+    }
     haptic.light();
     setUserRequestedTimeline((prev) => {
       const next = !prev;
       setBottomSurface(next ? 'timeline' : 'tools');
       return next;
     });
-  }, [haptic]);
+  }, [haptic, timelineClips.length, hasContent, show]);
 
   // ── Timeline Done — collapses the timeline, returns to canvas tools ──
   // Per spec: "Done returns to canvas tools." This is the exit from the
@@ -1151,8 +1488,6 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   // `committedFilterIdRef` captures the filter id that lives in the history
   // stack the moment the sheet opens — before any preview mutation — so we
   // can restore it on close.
-  const [previewFilterId, setPreviewFilterId] = useState<string | null>(null);
-  const previewFilterIdRef = useRef<string | null>(null);
   const committedFilterIdRef = useRef<string | null>(null);
 
   // Capture the committed filter id when the effects sheet opens; revert any
@@ -1162,53 +1497,26 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       // No preview has mutated the layer yet, so selectedFilterId is the
       // committed (history) value.
       committedFilterIdRef.current = selectedFilterId;
-      previewFilterIdRef.current = null;
-      setPreviewFilterId(null);
     } else {
-      // Sheet closed — if a preview is active and differs from the committed
-      // filter, restore the committed filter on the layer (no history entry).
-      const activePreview = previewFilterIdRef.current;
-      if (activePreview !== null && selectedMediaLayer) {
-        const committedId = committedFilterIdRef.current;
-        if (activePreview !== committedId) {
-          const revertedEffects: EffectNode[] = [
-            ...currentEffects.filter((n) => n.type !== 'filter'),
-            ...(committedId
-              ? [{ type: 'filter' as const, id: committedId, amount: 1 }]
-              : []),
-          ];
-          updateLayerLive(selectedMediaLayer.id, {
-            type: 'media',
-            payload: { ...selectedMediaLayer.payload, effects: revertedEffects },
-          });
-        }
+      // Sheet closed — restore the committed filter on the layer (no history
+      // entry) if a different filter was applied during the session.
+      const committedId = committedFilterIdRef.current;
+      if (committedId !== null && committedId !== selectedFilterId && selectedMediaLayer) {
+        const revertedEffects: EffectNode[] = [
+          ...currentEffects.filter((n) => n.type !== 'filter'),
+          ...(committedId
+            ? [{ type: 'filter' as const, id: committedId, amount: 1 }]
+            : []),
+        ];
+        updateLayerLive(selectedMediaLayer.id, {
+          type: 'media',
+          payload: { ...selectedMediaLayer.payload, effects: revertedEffects },
+        });
       }
-      previewFilterIdRef.current = null;
       committedFilterIdRef.current = null;
-      setPreviewFilterId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bottomSurface]);
-
-  // Apply a transient (no-history) preview of the given filter to the full
-  // canvas. Called by EffectPreviewRail as the user scrolls.
-  const handleEffectPreview = useCallback(
-    (id: string | null) => {
-      if (!selectedMediaLayer) return;
-      previewFilterIdRef.current = id;
-      setPreviewFilterId(id);
-      if (id === null) return;
-      const previewEffects: EffectNode[] = [
-        ...currentEffects.filter((n) => n.type !== 'filter'),
-        { type: 'filter', id, amount: 1 },
-      ];
-      updateLayerLive(selectedMediaLayer.id, {
-        type: 'media',
-        payload: { ...selectedMediaLayer.payload, effects: previewEffects },
-      });
-    },
-    [selectedMediaLayer, currentEffects, updateLayerLive],
-  );
 
   const currentAdjustments = useMemo<Partial<Omit<AdjustNode, 'type'>>>(() => {
     const adjustNode = currentEffects.find((n) => n.type === 'adjust');
@@ -1227,10 +1535,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       type: 'media',
       payload: { ...selectedMediaLayer.payload, effects: newEffects },
     }, 'Apply filter');
-    // Commit ends the preview: clear preview state and record the new
-    // committed filter so a subsequent panel close does not revert it.
-    previewFilterIdRef.current = null;
-    setPreviewFilterId(null);
+    // Record the new committed filter so a subsequent panel close does not
+    // revert it.
     committedFilterIdRef.current = presetId;
   }, [selectedMediaLayer, currentEffects, updateLayer]);
 
@@ -1364,9 +1670,9 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         selectLayer(null);
         setActivePageIndex(srcPageIdx);
       }
-      setShowTransitions(true);
+      openSheet('transitions');
     },
-    [clipPageIndices, activePageIndex, selectLayer, setActivePageIndex],
+    [clipPageIndices, activePageIndex, selectLayer, setActivePageIndex, openSheet],
   );
 
   // ── Keyframe handlers ──────────────────────────────────────────────
@@ -1424,7 +1730,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   }, [selectedLayer, updateLayer]);
 
   // ── Tool groups for ContextToolRail ────────────────────────────────
-  // Each context maps to a ToolGroup with up to 6 primary tools + overflow.
+  // Each context maps to a ToolGroup with up to 4 primary tools + overflow.
   // All onPress handlers wire to EXISTING handlers — no new actions.
   const toolGroups = useMemo<ToolGroup[]>(() => {
     const mk = (
@@ -1452,13 +1758,13 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     // Overflow tools shared across contexts (Layers, Preview, Safe Zone,
     // Templates, Drafts, Settings, Add Frame)
     const sharedOverflow: ToolDefinition[] = [
-      mk('transitions', 'Transitions', 'swap-horizontal-outline', () => { haptic.light(); setShowTransitions(true); }, 'Transitions', 'Opens the transition picker for the current frame'),
-      mk('layers', 'Layers', 'layers-outline', () => { setShowLayers(true); }, 'Layers', 'Opens the layers panel', 'layers'),
+      mk('transitions', 'Transitions', 'swap-horizontal-outline', () => { haptic.light(); openSheet('transitions'); }, 'Transitions', 'Opens the transition picker for the current frame'),
+      mk('layers', 'Layers', 'layers-outline', () => { openSheet('layers'); }, 'Layers', 'Opens the layers panel', 'layers'),
       mk('preview', 'Preview', 'eye-outline', () => { setShowPreview(true); }, 'Preview', 'Previews the story'),
       mk('safe-zone', 'Safe Zone', 'scan-outline', () => { setShowSafeZone((p) => !p); }, 'Safe Zone', 'Toggles the safe zone overlay', 'safe-zone', showSafeZone),
       mk('templates', 'Templates', 'grid-outline', () => { setShowTemplates(true); }, 'Templates', 'Opens the template browser'),
       mk('drafts', 'Drafts', 'document-text-outline', () => { navigation.navigate('CreatorDraftList'); }, 'Drafts', 'Opens saved drafts'),
-      mk('settings', 'Settings', 'settings-outline', () => { setShowSettings(true); }, 'Settings', 'Opens composer settings'),
+      mk('settings', 'Settings', 'settings-outline', () => { openSheet('settings'); }, 'Settings', 'Opens composer settings'),
     ];
 
     const addFrameOverflow: ToolDefinition[] = pageCount < 10
@@ -1466,7 +1772,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       : [];
 
     const productOverflow: ToolDefinition[] = [
-      mk('product', 'Product', 'pricetag-outline', handleAddProduct, 'Add product', 'Opens the product picker', 'product-tag', undefined, 'stickerProduct'),
+      mk('product', 'Product', 'bag-handle-outline', handleAddProduct, 'Add product', 'Opens the product picker', 'product-tag', undefined, 'stickerProduct'),
     ];
 
     // ── poster-photo-default: Text, Stickers, Product, Draw ──
@@ -1551,23 +1857,25 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       overflow: [
         ...(!isVideoMedia ? [
           mk('auto', 'Auto', 'bulb-outline', handleAutoAdjust, 'Auto', 'Applies one-tap color correction', 'enhance'),
-          mk('cutout', cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'cut-outline' : 'crop-outline', handleCutoutAction, cutoutSupported ? 'Cutout' : 'Crop', cutoutSupported ? 'Removes the photo background using on-device subject segmentation' : 'Crops the selected photo', cutoutSupported ? 'cutout' : 'crop'),
-          mk('animation', 'Animation', 'analytics-outline', () => { haptic.light(); setShowKeyframes(true); }, 'Animation', 'Opens the keyframe editor for the selected layer', 'keyframe'),
+          ...(cutoutSupported ? [mk('cutout', 'Cutout', 'cut-outline', handleCutoutAction, 'Cutout', 'Removes the photo background using on-device subject segmentation', 'cutout')] : []),
+          mk('animation', 'Animation', 'analytics-outline', () => { haptic.light(); openSheet('keyframes'); }, 'Animation', 'Opens the keyframe editor for the selected layer', 'keyframe'),
         ] : [
           // ── Video-specific advanced tools (time context) ──
           // Per report §7.4: Split, Trim, Speed, Volume appear only when
           // a video clip is selected (via Edit Clip → timeline toolbar).
           // These advanced tools extend that set — they are grouped under
           // Edit in the overflow, not flat-dumped.
-          mk('speed-curve', 'Speed Curve', 'analytics-outline', () => { haptic.light(); setShowSpeedCurve(true); }, 'Speed curve', 'Opens the variable speed ramping editor'),
-          mk('reverse', 'Reverse', 'play-skip-back-outline', () => { haptic.light(); setShowReverse(true); }, 'Reverse', 'Reverses the video clip playback'),
-          mk('freeze-frame', 'Freeze Frame', 'pause-outline', () => { haptic.light(); setShowFreezeFrame(true); }, 'Freeze frame', 'Adds a freeze frame at a specific point'),
-          mk('audio-fade', 'Audio Fade', 'volume-mute-outline', () => { haptic.light(); setShowAudioFade(true); }, 'Audio fade', 'Sets audio fade in and out durations'),
+          mk('speed-curve', 'Speed Curve', 'analytics-outline', () => { haptic.light(); openSheet('speedCurve'); }, 'Speed curve', 'Opens the variable speed ramping editor'),
+          mk('reverse', 'Reverse', 'play-skip-back-outline', () => { haptic.light(); openSheet('reverse'); }, 'Reverse', 'Reverses the video clip playback'),
+          mk('freeze-frame', 'Freeze Frame', 'pause-outline', () => { haptic.light(); openSheet('freezeFrame'); }, 'Freeze frame', 'Adds a freeze frame at a specific point'),
+          mk('audio-fade', 'Audio Fade', 'volume-mute-outline', () => { haptic.light(); openSheet('audioFade'); }, 'Audio fade', 'Sets audio fade in and out durations'),
         ]),
         mk('front', 'Front', 'arrow-up', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'forward'); }, 'Bring forward', 'Brings the layer forward'),
         mk('back', 'Back', 'arrow-down', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'backward'); }, 'Send backward', 'Sends the layer backward'),
-        mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
-        mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
+        ...(!isVideoMedia ? [
+          mk('duplicate', 'Duplicate', 'copy-outline', () => { if (selectedLayer) handleDuplicateLayer(selectedLayer.id); }, 'Duplicate', 'Duplicates the layer'),
+          mk('delete', 'Delete', 'trash-outline', () => { if (selectedLayer) handleDeleteLayer(selectedLayer.id); }, 'Delete', 'Deletes the layer'),
+        ] : []),
         ...sharedOverflow,
       ],
     };
@@ -1591,27 +1899,18 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           if (!selectedLayer || selectedLayer.type !== 'text') return;
           haptic.light();
           // Cycle through font presets (matches InlineTextToolbar behavior)
-          const presets = ['clean', 'headline', 'editorial', 'handwritten', 'bubble', 'deco', 'poster', 'squeeze', 'signature', 'compact'] as const;
-          const currentIdx = presets.indexOf(selectedLayer.payload.textStyle ?? 'clean');
-          const nextStyle = presets[(currentIdx + 1) % presets.length];
+          const currentIdx = TEXT_STYLE_PRESETS.findIndex(p => p.id === (selectedLayer.payload.textStyle ?? 'clean'));
+          const nextPreset = TEXT_STYLE_PRESETS[(currentIdx + 1) % TEXT_STYLE_PRESETS.length];
           updateLayer(selectedLayer.id, {
             type: 'text',
-            payload: { ...selectedLayer.payload, textStyle: nextStyle },
+            payload: { ...selectedLayer.payload, textStyle: nextPreset.id as typeof selectedLayer.payload.textStyle },
           }, 'Change font style');
         }, 'Font', 'Cycles through font styles'),
         mk('color', 'Color', 'color-palette-outline', () => {
           if (!selectedLayer || selectedLayer.type !== 'text') return;
           haptic.light();
-          // Cycle through curated colors (matches InlineTextToolbar behavior)
-          const colors = ['#ffffff', '#000000', '#FF6B6B', '#4ECDC4', '#FFE66D', '#A78BFA', '#34D399', '#F59E0B'];
-          const currentColor = selectedLayer.payload.textColor ?? '#ffffff';
-          const currentIdx = colors.indexOf(currentColor);
-          const nextColor = colors[(currentIdx + 1) % colors.length];
-          updateLayer(selectedLayer.id, {
-            type: 'text',
-            payload: { ...selectedLayer.payload, textColor: nextColor },
-          }, 'Change text color');
-        }, 'Color', 'Cycles through text colors'),
+          setShowTextColorPicker(true);
+        }, 'Color', 'Opens the color picker'),
         mk('align', 'Align', 'text', () => {
           if (!selectedLayer || selectedLayer.type !== 'text') return;
           haptic.light();
@@ -1652,8 +1951,17 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     const productSelected: ToolGroup = {
       context: 'poster-product-selected',
       primary: [
-        mk('item', 'Item', 'pricetag-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Edit item', 'Edits the product item'),
-        mk('price', 'Price', 'logo-usd', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Edit price', 'Edits the product price'),
+        mk('item', 'Item', 'bag-handle-outline', () => { if (selectedLayer) handleEditLayer(selectedLayer); }, 'Edit item', 'Links a different listing'),
+        mk('price', 'Price', 'logo-usd', () => {
+          if (!selectedLayer || selectedLayer.type !== 'product') return;
+          haptic.light();
+          const price = selectedLayer.payload.snapshotPriceGbp;
+          if (price != null) {
+            show(`£${price.toFixed(2)}`);
+          } else {
+            show('No price set');
+          }
+        }, 'Price', 'Shows the linked listing price'),
       ],
       overflow: [
         mk('front', 'Front', 'arrow-up', () => { if (selectedLayer) handleReorderLayer(selectedLayer.id, 'forward'); }, 'Bring forward', 'Brings the layer forward'),
@@ -1677,7 +1985,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     handleAddFrame, handleTimelineToggle, handleEditLayer, handleReorderLayer, handleDuplicateLayer,
     handleDeleteLayer, handleCropAction, handleCutoutAction, handleAdjustAction, handleAutoAdjust,
     selectedLayer, updateLayer, haptic, show, navigation,
-    pageCount, cutoutSupported, showSafeZone, bottomSurface,
+    pageCount, cutoutSupported, showSafeZone, bottomSurface, openSheet,
   ]);
 
   // ── Active context resolution ──────────────────────────────────────
@@ -1714,20 +2022,38 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     [activeToolContext, toolGroups],
   );
 
+  const overflowDestructive = useMemo(
+    () => activeOverflowTools.filter((tool) => tool.id === 'delete'),
+    [activeOverflowTools],
+  );
+
   const overflowSections = useMemo(() => {
     const sectionFor = (id: string): 'Create' | 'Edit' | 'Arrange' | 'Project' => {
       if (['draw', 'stickers', 'product', 'add-frame', 'music'].includes(id)) return 'Create';
-      if (['front', 'back', 'duplicate', 'delete', 'layers'].includes(id)) return 'Arrange';
-      if (['preview', 'safe-zone', 'templates', 'drafts', 'settings'].includes(id)) return 'Project';
+      if (['front', 'back', 'duplicate', 'layers'].includes(id)) return 'Arrange';
+      if (['preview', 'safe-zone', 'templates', 'drafts', 'settings', 'manage-frames'].includes(id)) return 'Project';
       return 'Edit';
     };
+    const tools: ToolDefinition[] = hasMultipleFrames
+      ? [
+          ...activeOverflowTools.filter((tool) => tool.id !== 'delete'),
+          {
+            id: 'manage-frames',
+            label: 'Manage frames',
+            icon: 'albums-outline',
+            onPress: () => { setShowFrameTray(true); },
+            accessibilityLabel: 'Manage frames',
+            accessibilityHint: 'Opens the frame organizer',
+          },
+        ]
+      : activeOverflowTools.filter((tool) => tool.id !== 'delete');
     return (['Create', 'Edit', 'Arrange', 'Project'] as const)
       .map((title) => ({
         title,
-        tools: activeOverflowTools.filter((tool) => sectionFor(tool.id) === title),
+        tools: tools.filter((tool) => sectionFor(tool.id) === title),
       }))
       .filter((section) => section.tools.length > 0);
-  }, [activeOverflowTools]);
+  }, [activeOverflowTools, hasMultipleFrames]);
 
   // ── Camera → Editor crossfade ─────────────────────────────────────
   // Per the human-flow reconstruction spec, the captured/selected media
@@ -1753,16 +2079,16 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     <View style={styles.container}>
       {/* ── Crash recovery banner ────────────────────────────────────── */}
       {hasPendingRecovery && (
-        <View style={[styles.recoveryBanner, { borderLeftColor: colors.antiqueGold }]}>
+        <View style={[styles.recoveryBanner, { borderLeftColor: colors.brand }]}>
           <Ionicons name="alert-circle-outline" size={IconGrammar.standard} color={colors.textPrimary} />
-          <Text style={[styles.recoveryText, { color: colors.scrimTextPrimary }]}>Recover your last unsaved project?</Text>
+          <Text style={[styles.recoveryText, { color: colors.scrimTextPrimary }]}>Recover unsaved project?</Text>
           <PressScale
             onPress={() => { void recoverCrashedProject(); }}
             style={styles.recoveryBtn}
             accessibilityLabel="Recover project"
             accessibilityRole="button"
           >
-            <Text style={[styles.recoveryBtnText, { color: colors.antiqueGold }]}>Recover</Text>
+            <Text style={[styles.recoveryBtnText, { color: colors.brand }]}>Recover</Text>
           </PressScale>
           <PressScale
             onPress={dismissRecovery}
@@ -1800,7 +2126,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               }}
               onLayerLongPress={(layerId) => {
                 selectLayer(layerId);
-                setShowLayers(true);
+                openSheet('layers');
               }}
               onLayerDelete={removeLayer}
               onTrashZoneEnter={() => {
@@ -1810,6 +2136,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               }}
               playbackClock={playbackClock}
               currentTimeMs={playbackState.currentTimeMs}
+              videoPlayerRef={videoPlayerRef}
               manipulationActiveSV={manipulationActiveSV}
               onManipulationChange={setIsManipulating}
               isInTrashZoneSV={isInTrashZoneSV}
@@ -1859,38 +2186,58 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           {/* Canvas loading overlay */}
           {isLoadingDraft && (
             <View style={styles.canvasLoadingOverlay} pointerEvents="none">
-              <View style={styles.canvasLoadingPill}>
-                <BlurView intensity={EditorMaterial.plate.blurIntensity} tint={EditorMaterial.plate.tint} style={StyleSheet.absoluteFill} />
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.plate.overlay }]} />
-                <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
-                <Text style={[styles.canvasLoadingText, { color: colors.scrimTextPrimary }]}>Loading…</Text>
+              <View style={[styles.canvasLoadingPill, { backgroundColor: colors.surfaceElevated }]}>
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+                <Text style={[styles.canvasLoadingText, { color: colors.textPrimary }]}>Loading…</Text>
               </View>
             </View>
           )}
 
-          {/* Empty frame hint */}
-          {!hasContent && !isLoadingDraft && entryComplete && !selectedLayer && (
+          {/* Empty frame hint — authored two-line empty state */}
+          {!hasContent && !isLoadingDraft && !draftError && entryComplete && !selectedLayer && (
             <View style={styles.canvasEmptyHint} pointerEvents="none">
-              <Text style={styles.canvasEmptyHintTitle}>Add content to start</Text>
+              <Text style={[styles.canvasEmptyHintTitle, { color: colors.textSecondary }]}>
+                Add media
+              </Text>
+              <Text style={styles.canvasEmptyHintSubtitle}>
+                Add clips or capture video to start editing
+              </Text>
+            </View>
+          )}
+
+          {/* Draft load error overlay — visible when loading failed */}
+          {!isLoadingDraft && draftError && (
+            <View style={styles.canvasErrorOverlay}>
+              <Ionicons name="alert-circle-outline" size={28} color={colors.danger} />
+              <Text style={[styles.canvasErrorTitle, { color: colors.textPrimary }]}>
+                Couldn't load draft
+              </Text>
+              <Text style={[styles.canvasErrorSubtitle, { color: colors.textSecondary }]}>
+                Saved locally
+              </Text>
+              <Pressable
+                onPress={() => {
+                  const id = route.params?.draftId ?? route.params?.sourceDocumentId;
+                  if (id) retryDraftLoad(id);
+                }}
+                style={styles.canvasErrorRetry}
+                hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}
+                accessibilityLabel="Retry loading draft"
+                accessibilityRole="button"
+              >
+                <Text style={[styles.canvasErrorRetryText, { color: colors.brand }]}>
+                  Retry
+                </Text>
+              </Pressable>
             </View>
           )}
 
           {/* Safe zone overlay (advanced — behind More) */}
           {showSafeZone && (
             <View style={styles.safeZoneOverlay} pointerEvents="none">
-              <View style={[styles.safeZoneTop, { top: 0, height: insets.top + 56 }]}>
-                <View style={styles.safeZoneLabel}>
-                  <Ionicons name="scan-outline" size={IconGrammar.badge} color={colors.antiqueGold} />
-                  <Text style={[styles.safeZoneLabelText, { color: colors.antiqueGold }]}>Top chrome</Text>
-                </View>
-              </View>
-              <View style={[styles.safeZoneBottom, { bottom: 0, height: insets.bottom + 120 }]}>
-                <View style={styles.safeZoneLabel}>
-                  <Ionicons name="scan-outline" size={IconGrammar.badge} color={colors.antiqueGold} />
-                  <Text style={[styles.safeZoneLabelText, { color: colors.antiqueGold }]}>Tool dock</Text>
-                </View>
-              </View>
-              <View style={[styles.safeZoneContent, { top: insets.top + 56, bottom: insets.bottom + 120 }]} />
+              <View style={[styles.safeZoneTop, { top: 0, height: insets.top + 52 }]} />
+              <View style={[styles.safeZoneBottom, { bottom: 0, height: insets.bottom + 120 }]} />
+              <View style={[styles.safeZoneContent, { top: insets.top + 52, bottom: insets.bottom + 120 }]} />
             </View>
           )}
         </View>
@@ -1904,21 +2251,15 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           intercept canvas gestures except on its own toggle button. */}
       {__DEV__ && <PerformanceOverlay />}
 
-      {/* ── Top bar — BlurView + gradient scrim (Stories pattern) ────── */}
+      {/* ── Top bar ─────────────────────────────────────────────────── */}
       {/* Wrapped in Reanimated.View with chromeFadeStyle so the top bar
           recedes (fades to 0.15 opacity) during active layer manipulation,
           making the canvas feel infinite (Snapchat/Instagram pattern). */}
       <Reanimated.View style={[styles.topBarContainer, { paddingTop: insets.top }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
-        <BlurView intensity={40} tint="dark" style={styles.topBarScrim} />
-        <LinearGradient
-          colors={Scrim.top.colors}
-          locations={Scrim.top.locations}
-          style={styles.topBarScrimOverlay}
-        />
-        <View style={[styles.topBar, { backgroundColor: 'transparent' }]}>
+        <View style={styles.topBar}>
           <View style={styles.topBarRow}>
             {selectedLayer ? (
-              /* During selection: Done · object name · More */
+              /* During selection: Done · More */
               <>
                 <PressScale
                   onPress={() => { haptic.light(); selectLayer(null); }}
@@ -1930,21 +2271,17 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                   <Text style={styles.doneText}>Done</Text>
                 </PressScale>
 
-                <View style={styles.topCenter}>
-                  <Text style={styles.titleText} numberOfLines={1}>
-                    {layerTypeLabel(selectedLayer.type)}
-                  </Text>
-                </View>
+                <View style={styles.topCenter} />
 
                 <View style={styles.topRight}>
                   <PressScale
-                    onPress={() => { haptic.light(); setShowOverflow(true); }}
+                    onPress={() => { haptic.light(); openSheet('overflow'); }}
                     style={styles.topBtn}
                     accessibilityLabel="More options"
                     accessibilityHint="Opens the overflow menu with undo, redo, preview and more"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="ellipsis-horizontal" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
+                    <Ionicons name="ellipsis-horizontal" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
                 </View>
               </>
@@ -1959,9 +2296,9 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     accessibilityHint="Closes the composer, offers to save draft if there are unsaved changes"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="close" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
+                    <Ionicons name="close" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
-                  {isDirty && <View style={[styles.unsavedDot, { backgroundColor: colors.antiqueGold }]} />}
+                  {isDirty && <View style={[styles.unsavedDot, { backgroundColor: colors.brand }]} />}
                 </View>
 
                 <View style={styles.topCenterGroup}>
@@ -1970,30 +2307,30 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     disabled={!canUndo}
                     style={[styles.topBtn, { opacity: canUndo ? 1 : 0.3 }]}
                     accessibilityLabel="Undo"
-                    accessibilityHint="Reverts the last edit"
+                    accessibilityHint={undoLabel ? `Undo ${undoLabel}` : 'Reverts the last edit'}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canUndo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-undo" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
+                    <Ionicons name="arrow-undo" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
                   <PressScale
                     onPress={handleRedo}
                     disabled={!canRedo}
                     style={[styles.topBtn, { opacity: canRedo ? 1 : 0.3 }]}
                     accessibilityLabel="Redo"
-                    accessibilityHint="Reapplies the last undone edit"
+                    accessibilityHint={redoLabel ? `Redo ${redoLabel}` : 'Reapplies the last undone edit'}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canRedo }}
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <Ionicons name="arrow-redo" size={IconGrammar.standard} color={colors.scrimTextPrimary} />
+                    <Ionicons name="arrow-redo" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
                 </View>
 
                 <View style={styles.topRightGroup}>
                   <PressScale
-                    onPress={() => { haptic.medium(); setShowPublish(true); }}
+                    onPress={() => { haptic.medium(); openSheet('publish'); }}
                     style={[styles.publishBtn, { backgroundColor: colors.brand }]}
                     accessibilityLabel="Next"
                     accessibilityHint="Opens the publish sheet to review and publish your story"
@@ -2036,24 +2373,14 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                       styles.pageSegmentFill,
                       {
                         flex: i === activePageIndex ? 1 : 0,
-                        backgroundColor: i <= activePageIndex ? colors.scrimTextPrimary : 'rgba(255,255,255,0.2)',
+                        backgroundColor: i <= activePageIndex ? colors.textSecondary : colors.border,
                       },
                     ]}
                   />
                 </View>
               </Pressable>
             ))}
-            {/* Frame tray toggle */}
-            <PressScale
-              onPress={() => { haptic.light(); setShowFrameTray((p) => !p); setVideoInfoFrameIndex(null); }}
-              style={styles.pageSegmentToggle}
-              accessibilityLabel="Toggle frame tray"
-              accessibilityHint="Shows or hides the bottom frame thumbnail tray"
-              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-            >
-              <Ionicons name="film-outline" size={IconGrammar.metadata} color={showFrameTray ? colors.scrimTextPrimary : colors.scrimTextSecondary} />
-            </PressScale>
-            {/* Add frame */}
+            {/* Add frame — sits at the end of the page dots row */}
             {pageCount < 10 && (
               <PressScale
                 onPress={handleAddFrame}
@@ -2062,24 +2389,10 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 accessibilityHint="Adds a new frame to the story"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Ionicons name="add" size={IconGrammar.metadata} color={colors.scrimTextPrimary} />
+                <Ionicons name="add" size={IconGrammar.metadata} color={colors.textSecondary} />
               </PressScale>
             )}
           </View>
-        </View>
-      )}
-
-      {/* ── Bottom gradient scrim ────────────────────────────────────── */}
-      {/* Only rendered when the tool rail is the active bottom surface.
-          The timeline has its own glass material; the effects sheet has
-          its own backdrop. No scrim when no bottom surface is visible. */}
-      {bottomSurface === 'tools' && (
-        <View style={styles.bottomScrimContainer} pointerEvents="none">
-          <LinearGradient
-            colors={Scrim.bottom.colors}
-            locations={Scrim.bottom.locations}
-            style={styles.bottomScrim}
-          />
         </View>
       )}
 
@@ -2095,10 +2408,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             { bottom: insets.bottom },
           ]}
         >
-          {/* Glass rail material — translucent blur + overlay + hairline edge */}
-          <BlurView intensity={EditorMaterial.rail.blurIntensity} tint={EditorMaterial.rail.tint} style={StyleSheet.absoluteFill} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.rail.overlay }]} />
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: EditorRadius.rail, borderWidth: StyleSheet.hairlineWidth, borderColor: EditorMaterial.rail.hairline }} />
+          {/* Solid surface material + top hairline */}
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]} />
           {/* ── Playback bar ── */}
           <View style={styles.timelinePlaybackBar}>
             <PressScale
@@ -2130,7 +2441,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               disabled={!canUndo}
               style={[styles.timelineUndoRedoBtn, { opacity: canUndo ? 1 : 0.3 }]}
               accessibilityLabel="Undo"
-              accessibilityHint="Reverts the last edit"
+              accessibilityHint={undoLabel ? `Undo ${undoLabel}` : 'Reverts the last edit'}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canUndo }}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -2142,7 +2453,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               disabled={!canRedo}
               style={[styles.timelineUndoRedoBtn, { opacity: canRedo ? 1 : 0.3 }]}
               accessibilityLabel="Redo"
-              accessibilityHint="Reapplies the last undone edit"
+              accessibilityHint={redoLabel ? `Redo ${redoLabel}` : 'Reapplies the last undone edit'}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canRedo }}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -2158,60 +2469,95 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               accessibilityHint="Collapses the timeline and returns to canvas tools"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={[styles.timelineDoneText, { color: colors.antiqueGold }]}>Done</Text>
+              <Text style={[styles.timelineDoneText, { color: colors.brand }]}>Done</Text>
             </PressScale>
           </View>
 
-          {/* ── Time ruler (above the clip track) ── */}
-          <TimelineRuler
-            totalDurationMs={timelineTotalDurationMs}
-            trackWidth={screenWidth - Space.md * 2}
-          />
+          {/* ── Pinch-to-zoom + horizontally scrollable tracks ──────────
+              A GestureDetector (Pinch) wraps a horizontal ScrollView. All
+              tracks share the same scaledTrackWidth so clip, ruler, overlay,
+              waveform and playhead scale together. During the pinch an
+              animated scaleX (left-anchored via transformOrigin) previews
+              the zoom on the UI thread; on gesture end the scale commits to
+              state and the real layout takes over. Pinch (2 fingers) and
+              horizontal scroll (1 finger) coexist naturally. */}
+          <GestureDetector gesture={timelinePinchGesture}>
+            <View style={styles.timelineScrollWrap}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                scrollEnabled={timelineZoomScale > 1}
+                contentContainerStyle={{ width: scaledTrackWidth }}
+                style={styles.timelineScroll}
+              >
+                <Reanimated.View
+                  style={[
+                    styles.timelineContent,
+                    { width: scaledTrackWidth, transformOrigin: '0% 0%' },
+                    timelineContentAnimStyle,
+                  ]}
+                >
+                  {/* ── Time ruler (above the clip track) ── */}
+                  <TimelineRuler
+                    totalDurationMs={timelineTotalDurationMs}
+                    trackWidth={scaledTrackWidth}
+                  />
 
-          {/* ── Clip track ── */}
-          <TimelineTrack
-            clips={timelineClips}
-            selectedClipId={selectedClipId}
-            playheadMs={playbackState.currentTimeMs}
-            totalDurationMs={timelineTotalDurationMs}
-            onSelectClip={(id) => { setSelectedClipId(id); setSelectedOverlayId(null); }}
-            onSeek={(ms) => handleTimelineOperation({ type: 'seek', ms })}
-            onTrimClip={(clipId, edge, deltaMs) =>
-              handleTimelineOperation({ type: 'trim', clipId, edge, deltaMs })
-            }
-            transitionIds={clipTransitionIds}
-            onSelectTransition={handleTimelineTransitionTap}
-          />
+                  {/* ── Clip track ── */}
+                  <TimelineTrack
+                    clips={timelineClips}
+                    selectedClipId={selectedClipId}
+                    playheadMs={playbackState.currentTimeMs}
+                    totalDurationMs={timelineTotalDurationMs}
+                    onSelectClip={(id) => { setSelectedClipId(id); setSelectedOverlayId(null); }}
+                    onSeek={(ms) => handleTimelineOperation({ type: 'seek', ms })}
+                    onTrimClip={(clipId, edge, deltaMs) =>
+                      handleTimelineOperation({ type: 'trim', clipId, edge, deltaMs })
+                    }
+                    transitionIds={clipTransitionIds}
+                    onSelectTransition={handleTimelineTransitionTap}
+                  />
 
-          {/* ── Overlay track (if overlays exist) ── */}
-          {timelineOverlays.length > 0 && (
-            <View style={styles.timelineOverlayWrap}>
-              <OverlayTrack
-                overlays={timelineOverlays}
-                totalDurationMs={timelineTotalDurationMs}
-                trackWidth={screenWidth - Space.md * 2}
-                selectedId={selectedOverlayId}
-                onSelect={(id) => { setSelectedOverlayId(id); setSelectedClipId(null); }}
-                onMove={(id, timeRange) =>
-                  handleTimelineOperation({ type: 'moveOverlay', overlayId: id, timeRange })
-                }
-              />
+                  {/* ── Overlay track (if overlays exist) ── */}
+                  {timelineOverlays.length > 0 && (
+                    <View style={styles.timelineOverlayWrap}>
+                      <OverlayTrack
+                        overlays={timelineOverlays}
+                        totalDurationMs={timelineTotalDurationMs}
+                        trackWidth={scaledTrackWidth}
+                        selectedId={selectedOverlayId}
+                        onSelect={(id) => { setSelectedOverlayId(id); setSelectedClipId(null); }}
+                        onMove={(id, timeRange) =>
+                          handleTimelineOperation({ type: 'moveOverlay', overlayId: id, timeRange })
+                        }
+                      />
+                    </View>
+                  )}
+
+                  {/* ── Waveform track (audio present) ── */}
+                  {hasAudioContent && (
+                    <View style={styles.timelineWaveformWrap}>
+                      <WaveformTrack
+                        trackWidth={scaledTrackWidth}
+                        color={colors.brand}
+                        audioUri={audioUri}
+                      />
+                    </View>
+                  )}
+                </Reanimated.View>
+              </ScrollView>
+
+              {/* ── Zoom indicator — fades in on pinch, out after release ── */}
+              <Reanimated.View
+                style={[styles.timelineZoomIndicatorWrap, zoomIndicatorAnimStyle]}
+                pointerEvents="none"
+              >
+                <Text style={[styles.timelineZoomIndicator, { color: colors.textMuted }]}>
+                  {`${timelineZoomScale.toFixed(1)}x`}
+                </Text>
+              </Reanimated.View>
             </View>
-          )}
-
-          {/* ── Waveform track (audio present) ── */}
-          {/* Rendered below the overlay track when audio content exists
-              (music layer or video with audio). Per AGENTS.md §11 we
-              never fake waveform data — the WaveformTrack shows an
-              honest flat line until real samples are provided. */}
-          {hasAudioContent && (
-            <View style={styles.timelineWaveformWrap}>
-              <WaveformTrack
-                trackWidth={screenWidth - Space.md * 2}
-                color={colors.antiqueGold}
-              />
-            </View>
-          )}
+          </GestureDetector>
 
           {/* ── Timeline toolbar (clip selected) ── */}
           {selectedClip && (
@@ -2233,10 +2579,28 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         </View>
       )}
 
+      {bottomSurface === 'timeline' && timelineClips.length === 0 && hasContent && (
+        <View style={[styles.timelineContainer, { bottom: insets.bottom }]}>
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]} />
+          <View style={styles.timelineEmptyRow}>
+            <Text style={styles.timelineEmptyText}>Add your first clip</Text>
+            <Pressable
+              onPress={() => { haptic.light(); setPickerMode('media'); }}
+              style={styles.timelineEmptyCta}
+              accessibilityLabel="Add media"
+              accessibilityHint="Opens the library to add your first clip"
+              accessibilityRole="button"
+            >
+              <Text style={[styles.timelineEmptyCtaText, { color: colors.brand }]}>Add</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
       {/* ── Bottom tool rail — ContextToolRail (context-sensitive) ────── */}
       {/* The ContextToolRail is the single bottom surface for both default
           and selection states. It adapts its visible tool set based on the
-          active ToolContext (editor mode + selection state). Up to 6
+          active ToolContext (editor mode + selection state). Up to 4
           primary actions are always visible; additional tools (including
           Edit Clip for video, z-order, duplicate, delete, opacity) are
           revealed under the trailing "More" button. The legacy context
@@ -2254,27 +2618,14 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           button to return here; the effects sheet has its own Done button. */}
       {bottomSurface === 'tools' && (
         <Reanimated.View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
-          <LinearGradient
-            colors={Scrim.bottom.colors}
-            locations={Scrim.bottom.locations}
-            style={styles.bottomRailScrim}
-            pointerEvents="none"
-          />
           <View style={styles.bottomRailContent}>
-            {/* Frame count — tappable to open frame tray */}
+            {/* Frame position label — non-interactive; page dots at top
+                handle navigation. The frame organizer is in the More menu. */}
             {hasMultipleFrames && !selectedLayer && (
               <>
-                <PressScale
-                  onPress={() => { haptic.light(); setShowFrameTray((p) => !p); setVideoInfoFrameIndex(null); }}
-                  style={styles.frameCountBtn}
-                  accessibilityLabel={`Frame ${activePageIndex + 1} of ${pageCount}`}
-                  accessibilityHint="Opens the frame tray to reorder, delete, or add frames"
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                >
-                  <Text style={styles.frameCountText}>
-                    {activePageIndex + 1}/{pageCount}
-                  </Text>
-                </PressScale>
+                <Text style={styles.frameCountText}>
+                  {activePageIndex + 1}/{pageCount}
+                </Text>
                 <View style={styles.railDivider} />
               </>
             )}
@@ -2282,16 +2633,18 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             <ContextToolRail
               context={activeToolContext}
               groups={toolGroups}
-              onOverflowPress={() => setShowOverflow(true)}
+              onOverflowPress={() => openSheet('overflow')}
               style={styles.contextRail}
             />
           </View>
         </Reanimated.View>
       )}
 
-      {/* ── Frame tray (collapsible filmstrip) ───────────────────────── */}
-      {/* Per doc 04: appears when frame change occurs or user adds another
-          frame. Auto-collapses after 2.5s. Sits above the tool rail. */}
+      {/* ── Frame organizer (transient) ──────────────────────────────── */}
+      {/* Per Design.md: the frame organizer is a transient surface for
+          reorder/duplicate/delete. It opens from the overflow menu or
+          long-press on page dots, not as a persistent navigation aid.
+          Page dots at the top are the persistent position indicator. */}
       {hasMultipleFrames && showFrameTray && (
         <FrameTray
           pages={document.pages}
@@ -2319,7 +2672,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         <View style={styles.overflowContainer}>
           <Pressable
             style={styles.overflowBackdrop}
-            onPress={() => setShowOverflow(false)}
+            onPress={closeSheet}
             accessibilityLabel="Close tools"
             accessibilityRole="button"
           />
@@ -2330,14 +2683,11 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             ]}
             accessibilityViewIsModal
           >
-            {/* Glass material — translucent blur + overlay + hairline edge */}
-            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceElevated, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl }]} />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
             <View style={styles.overflowHeader}>
-              <Text style={styles.overflowTitle}>Tools</Text>
               <Pressable
-                onPress={() => setShowOverflow(false)}
+                onPress={closeSheet}
                 style={({ pressed }) => [styles.overflowClose, pressed && styles.overflowClosePressed]}
                 accessibilityRole="button"
                 accessibilityLabel="Close tools"
@@ -2350,40 +2700,56 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               contentContainerStyle={styles.overflowScrollContent}
               keyboardShouldPersistTaps="handled"
             >
+              {/* Groups separated by Space.md; items within each group by Space.sm.
+                  No section labels — the items are self-evident. */}
               {overflowSections.map((section, sectionIndex) => (
-                <View key={section.title}>
-                  {sectionIndex > 0 && <View style={styles.overflowDivider} />}
-                  <Text style={styles.overflowSectionLabel}>{section.title}</Text>
+                <View
+                  key={section.title}
+                  style={[styles.overflowGroup, sectionIndex > 0 && styles.overflowGroupGap]}
+                >
                   {section.tools.map((tool) => (
                     <OverflowItem
                       key={tool.id}
                       icon={tool.icon}
                       glyph={tool.glyph}
                       label={tool.label}
-                      danger={tool.id === 'delete'}
                       selected={tool.active}
-                      onPress={() => { tool.onPress(); setShowOverflow(false); }}
+                      onPress={() => { tool.onPress(); closeSheet(); }}
                     />
                   ))}
                 </View>
               ))}
-              <View style={styles.overflowDivider} />
-              <Text style={styles.overflowSectionLabel}>Access</Text>
-              <OverflowItem
-                icon="accessibility-outline"
-                label="Move precisely"
-                onPress={() => { setShowA11yMove(true); setShowOverflow(false); }}
-              />
-              <OverflowItem
-                icon="swap-vertical-outline"
-                label="Arrange precisely"
-                onPress={() => { setShowA11yZOrder(true); setShowOverflow(false); }}
-              />
-              <OverflowItem
-                icon="help-circle-outline"
-                label="Help & shortcuts"
-                onPress={() => { setShowHelp(true); setShowOverflow(false); }}
-              />
+              <View style={[styles.overflowGroup, styles.overflowGroupGap]}>
+                <OverflowItem
+                  icon="accessibility-outline"
+                  label="Move precisely"
+                  onPress={() => { openSheet('a11yMove'); closeSheet(); }}
+                />
+                <OverflowItem
+                  icon="swap-vertical-outline"
+                  label="Arrange precisely"
+                  onPress={() => { openSheet('a11yZOrder'); closeSheet(); }}
+                />
+                <OverflowItem
+                  icon="help-circle-outline"
+                  label="Help & shortcuts"
+                  onPress={() => { openSheet('help'); closeSheet(); }}
+                />
+              </View>
+              {overflowDestructive.length > 0 && (
+                <View style={[styles.overflowGroup, styles.overflowGroupGap]}>
+                  {overflowDestructive.map((tool) => (
+                    <OverflowItem
+                      key={tool.id}
+                      icon={tool.icon}
+                      glyph={tool.glyph}
+                      label={tool.label}
+                      danger
+                      onPress={() => { tool.onPress(); closeSheet(); }}
+                    />
+                  ))}
+                </View>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -2395,13 +2761,13 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         onClose={() => setShowPreview(false)}
         onPublish={() => {
           setShowPreview(false);
-          setShowPublish(true);
+          openSheet('publish');
         }}
       />
-      <CreatorLayersSheet visible={showLayers} onClose={() => setShowLayers(false)} />
-      <CreatorPublishSheet visible={showPublish} onClose={() => setShowPublish(false)} />
-      <CreatorSettingsSheet visible={showSettings} onClose={() => setShowSettings(false)} />
-      <HelpShortcutsSheet visible={showHelp} onClose={() => setShowHelp(false)} />
+      <CreatorLayersSheet visible={showLayers} onClose={closeSheet} />
+      <CreatorPublishSheet visible={showPublish} onClose={closeSheet} />
+      <CreatorSettingsSheet visible={showSettings} onClose={closeSheet} />
+      <HelpShortcutsSheet visible={showHelp} onClose={closeSheet} />
 
       {/* ── Accessibility sheets (drag alternatives) ─────────────────── */}
       {/* Per spec 09: keyboard/button-based alternatives for users who
@@ -2411,7 +2777,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         visible={showA11yMove}
         layerId={selectedLayerId}
         position={selectedLayer ? { x: selectedLayer.x, y: selectedLayer.y } : null}
-        onClose={() => setShowA11yMove(false)}
+        onClose={closeSheet}
         onMove={(x, y) => {
           if (selectedLayerId) updateLayer(selectedLayerId, { x, y }, 'Move layer');
         }}
@@ -2424,7 +2790,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           zIndex: l.zIndex,
         })) as ZOrderLayer[]}
         selectedLayerId={selectedLayerId}
-        onClose={() => setShowA11yZOrder(false)}
+        onClose={closeSheet}
         onReorder={(layerId, direction) => reorderLayer(layerId, direction)}
       />
 
@@ -2433,39 +2799,24 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           a preset stores the transitionId on the page, which the renderer
           uses to animate the transition to the next page. */}
       {showTransitions && (
-        <View style={styles.effectsSheetBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowTransitions(false)} />
-          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
-            {/* Glass material — translucent blur + overlay + hairline edge */}
-            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
-            <View style={styles.effectsSheetHeader}>
-              <Text style={styles.effectsSheetTitle}>Transitions</Text>
-              <PressScale
-                onPress={() => { haptic.light(); setShowTransitions(false); }}
-                style={styles.effectsSheetDone}
-                accessibilityLabel="Done"
-                accessibilityHint="Closes the transitions panel"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
-              </PressScale>
-            </View>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={styles.effectsSheetScroll}
-            >
-              <Text style={styles.effectsSectionLabel}>Transition to next frame</Text>
-              <TransitionPreviewRail
-                presets={TRANSITION_PRESETS}
-                selectedId={currentTransitionId}
-                onSelect={handleTransitionSelect}
-              />
-              <View style={{ height: Space.md }} />
-            </ScrollView>
-          </View>
-        </View>
+        <GlassSheet
+          title="Transitions"
+          onClose={closeSheet}
+          doneHint="Closes the transitions panel"
+          paddingBottom={insets.bottom + Space.sm}
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={styles.effectsSheetScroll}
+          >
+            <TransitionPreviewRail
+              presets={TRANSITION_PRESETS}
+              selectedId={currentTransitionId}
+              onSelect={handleTransitionSelect}
+            />
+            <View style={{ height: Space.md }} />
+          </ScrollView>
+        </GlassSheet>
       )}
 
       {/* ── Keyframe editor sheet (Phase 9) ─────────────────────────── */}
@@ -2473,35 +2824,22 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           stored on the layer's `keyframes` array and interpolated by the
           renderer over the layer's timeline. */}
       {showKeyframes && selectedLayer && (
-        <View style={styles.effectsSheetBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowKeyframes(false)} />
-          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
-            {/* Glass material — translucent blur + overlay + hairline edge */}
-            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
-            <View style={styles.effectsSheetHeader}>
-              <Text style={styles.effectsSheetTitle}>Animation</Text>
-              <PressScale
-                onPress={() => { haptic.light(); setShowKeyframes(false); }}
-                style={styles.effectsSheetDone}
-                accessibilityLabel="Done"
-                accessibilityHint="Closes the keyframe editor"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
-              </PressScale>
-            </View>
-            <KeyframeEditor
-              layerId={selectedLayer.id}
-              totalDurationMs={page?.durationMs ?? 5000}
-              keyframes={selectedLayerKeyframes}
-              onAddKeyframe={handleAddKeyframe}
-              onUpdateKeyframe={handleUpdateKeyframe}
-              onRemoveKeyframe={handleRemoveKeyframe}
-            />
-          </View>
-        </View>
+        <GlassSheet
+          title="Animation"
+          onClose={closeSheet}
+          doneHint="Closes the keyframe editor"
+          paddingBottom={insets.bottom + Space.sm}
+        >
+          <KeyframeEditor
+            layerId={selectedLayer.id}
+            totalDurationMs={page?.durationMs ?? 5000}
+            keyframes={selectedLayerKeyframes}
+            layerDefaults={{ x: selectedLayer.x, rotation: selectedLayer.rotation }}
+            onAddKeyframe={handleAddKeyframe}
+            onUpdateKeyframe={handleUpdateKeyframe}
+            onRemoveKeyframe={handleRemoveKeyframe}
+          />
+        </GlassSheet>
       )}
 
       {/* ── Speed curve editor sheet ─────────────────────────────────── */}
@@ -2510,151 +2848,136 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           enabling precise, dynamic speed ramping along a customizable curve
           (Instagram Edits parity, August 2026). */}
       {showSpeedCurve && selectedLayer && selectedLayer.type === 'media' && (
-        <View style={styles.effectsSheetBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowSpeedCurve(false)} />
-          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
-            {/* Glass material — translucent blur + overlay + hairline edge */}
-            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
-            <View style={styles.effectsSheetHeader}>
-              <Text style={styles.effectsSheetTitle}>Speed Curve</Text>
-              <PressScale
-                onPress={() => { haptic.light(); setShowSpeedCurve(false); }}
-                style={styles.effectsSheetDone}
-                accessibilityLabel="Done"
-                accessibilityHint="Closes the speed curve editor"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
-              </PressScale>
-            </View>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={styles.effectsSheetScroll}
-            >
-              <Text style={styles.effectsSectionLabel}>Variable speed ramping</Text>
-              <SpeedCurveEditor
-                curve={selectedMediaSpeedCurve ?? DEFAULT_SPEED_CURVE}
-                onChange={handleSpeedCurveChange}
-              />
-              <View style={{ height: Space.md }} />
-            </ScrollView>
-          </View>
-        </View>
+        <GlassSheet
+          title="Speed Curve"
+          onClose={closeSheet}
+          doneHint="Closes the speed curve editor"
+          paddingBottom={insets.bottom + Space.sm}
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={styles.effectsSheetScroll}
+          >
+            <SpeedCurveEditor
+              curve={selectedMediaSpeedCurve ?? DEFAULT_SPEED_CURVE}
+              onChange={handleSpeedCurveChange}
+            />
+            <View style={{ height: Space.md }} />
+          </ScrollView>
+        </GlassSheet>
       )}
       {/* ── Reverse toggle sheet ────────────────────────────────────── */}
       {showReverse && selectedLayer && selectedLayer.type === 'media' && (
-        <View style={styles.effectsSheetBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowReverse(false)} />
-          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
-            {/* Glass material — translucent blur + overlay + hairline edge */}
-            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
-            <View style={styles.effectsSheetHeader}>
-              <Text style={styles.effectsSheetTitle}>Reverse Clip</Text>
-              <PressScale
-                onPress={() => { haptic.light(); setShowReverse(false); }}
-                style={styles.effectsSheetDone}
-                accessibilityLabel="Done"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
-              </PressScale>
-            </View>
-            <View style={{ padding: Space.md, alignItems: 'center' }}>
-              <ReverseToggle
-                reversed={selectedLayer.payload.reversed ?? false}
-                onToggle={(reversed) => {
-                  updateLayer(selectedLayer.id, {
-                    type: 'media',
-                    payload: { ...selectedLayer.payload, reversed },
-                  }, reversed ? 'Reverse clip' : 'Unreverse clip');
-                  haptic.medium();
-                }}
-              />
-            </View>
+        <GlassSheet
+          title="Reverse Clip"
+          onClose={closeSheet}
+          doneHint="Closes the reverse panel"
+          paddingBottom={insets.bottom + Space.sm}
+        >
+          <View style={{ padding: Space.md, alignItems: 'center' }}>
+            <ReverseToggle
+              reversed={selectedLayer.payload.reversed ?? false}
+              onToggle={(reversed) => {
+                updateLayer(selectedLayer.id, {
+                  type: 'media',
+                  payload: { ...selectedLayer.payload, reversed },
+                }, reversed ? 'Reverse clip' : 'Unreverse clip');
+                haptic.medium();
+              }}
+            />
           </View>
-        </View>
+        </GlassSheet>
       )}
       {/* ── Freeze frame picker sheet ───────────────────────────────── */}
       {showFreezeFrame && selectedLayer && selectedLayer.type === 'media' && (
-        <View style={styles.effectsSheetBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowFreezeFrame(false)} />
-          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
-            {/* Glass material — translucent blur + overlay + hairline edge */}
-            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
-            <View style={styles.effectsSheetHeader}>
-              <Text style={styles.effectsSheetTitle}>Freeze Frame</Text>
-              <PressScale
-                onPress={() => { haptic.light(); setShowFreezeFrame(false); }}
-                style={styles.effectsSheetDone}
-                accessibilityLabel="Done"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
-              </PressScale>
-            </View>
-            <FreezeFramePicker
-              clipDurationMs={selectedLayer.payload.videoDurationMs ?? 5000}
-              freezeFrameMs={selectedLayer.payload.freezeFrameMs}
-              freezeDurationMs={selectedLayer.payload.freezeDurationMs}
-              onSetFreezeFrame={(freezeMs, freezeDurMs) => {
-                updateLayer(selectedLayer.id, {
-                  type: 'media',
-                  payload: {
-                    ...selectedLayer.payload,
-                    freezeFrameMs: freezeMs,
-                    freezeDurationMs: freezeDurMs,
-                  },
-                }, freezeMs ? 'Set freeze frame' : 'Clear freeze frame');
-                haptic.medium();
-              }}
-            />
-          </View>
-        </View>
+        <GlassSheet
+          title="Freeze Frame"
+          onClose={closeSheet}
+          doneHint="Closes the freeze frame panel"
+          paddingBottom={insets.bottom + Space.sm}
+        >
+          <FreezeFramePicker
+            clipDurationMs={selectedLayer.payload.videoDurationMs ?? 5000}
+            freezeFrameMs={selectedLayer.payload.freezeFrameMs}
+            freezeDurationMs={selectedLayer.payload.freezeDurationMs}
+            onSetFreezeFrame={(freezeMs, freezeDurMs) => {
+              updateLayer(selectedLayer.id, {
+                type: 'media',
+                payload: {
+                  ...selectedLayer.payload,
+                  freezeFrameMs: freezeMs,
+                  freezeDurationMs: freezeDurMs,
+                },
+              }, freezeMs ? 'Set freeze frame' : 'Clear freeze frame');
+              haptic.medium();
+            }}
+          />
+        </GlassSheet>
       )}
       {/* ── Audio fade controls sheet ───────────────────────────────── */}
       {showAudioFade && selectedLayer && selectedLayer.type === 'media' && (
-        <View style={styles.effectsSheetBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAudioFade(false)} />
-          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
-            {/* Glass material — translucent blur + overlay + hairline edge */}
-            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
-            <View style={styles.effectsSheetHeader}>
-              <Text style={styles.effectsSheetTitle}>Audio Fade</Text>
-              <PressScale
-                onPress={() => { haptic.light(); setShowAudioFade(false); }}
-                style={styles.effectsSheetDone}
-                accessibilityLabel="Done"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
-              </PressScale>
-            </View>
-            <AudioFadeControls
-              fadeInMs={selectedLayer.payload.fadeInMs ?? 0}
-              fadeOutMs={selectedLayer.payload.fadeOutMs ?? 0}
-              onChange={(fadeInMs, fadeOutMs) => {
-                updateLayer(selectedLayer.id, {
-                  type: 'media',
-                  payload: {
-                    ...selectedLayer.payload,
-                    volume: selectedLayer.payload.volume ?? 1,
-                    fadeInMs,
-                    fadeOutMs,
-                  },
-                }, 'Set audio fade');
-                haptic.medium();
-              }}
-            />
-          </View>
-        </View>
+        <GlassSheet
+          title="Audio Fade"
+          onClose={closeSheet}
+          doneHint="Closes the audio fade panel"
+          paddingBottom={insets.bottom + Space.sm}
+        >
+          <AudioFadeControls
+            fadeInMs={selectedLayer.payload.fadeInMs ?? 0}
+            fadeOutMs={selectedLayer.payload.fadeOutMs ?? 0}
+            onChange={(fadeInMs, fadeOutMs) => {
+              updateLayer(selectedLayer.id, {
+                type: 'media',
+                payload: {
+                  ...selectedLayer.payload,
+                  volume: selectedLayer.payload.volume ?? 1,
+                  fadeInMs,
+                  fadeOutMs,
+                },
+              }, 'Set audio fade');
+              haptic.medium();
+            }}
+          />
+        </GlassSheet>
+      )}
+      {/* ── Text color picker sheet ──────────────────────────────────── */}
+      {showTextColorPicker && selectedLayer && selectedLayer.type === 'text' && (
+        <GlassSheet
+          title="Text Color"
+          onClose={() => setShowTextColorPicker(false)}
+          doneHint="Closes the color picker"
+          paddingBottom={insets.bottom + Space.sm}
+        >
+          <CreatorColorPicker
+            color={selectedLayer.payload.fill ?? fromHexString(selectedLayer.payload.textColor ?? '#ffffff') ?? { space: 'srgb', r: 1, g: 1, b: 1, a: 1 }}
+            onChange={(c: CreatorColor) => {
+              updateLayer(selectedLayer.id, {
+                type: 'text',
+                payload: {
+                  ...selectedLayer.payload,
+                  fill: c,
+                  textColor: toHexString(c),
+                },
+              }, 'Change text color');
+            }}
+            onCommit={(c: CreatorColor) => {
+              updateLayer(selectedLayer.id, {
+                type: 'text',
+                payload: {
+                  ...selectedLayer.payload,
+                  fill: c,
+                  textColor: toHexString(c),
+                },
+              }, 'Change text color');
+              commitRecentColor(c);
+              haptic.light();
+            }}
+            mode="expanded"
+            recents={colorRecents}
+            onCommitRecent={commitRecentColor}
+            accessibilityLabel="Text color picker"
+          />
+        </GlassSheet>
       )}
       {/* Pixel crop. The resulting local asset deliberately clears prior
           upload evidence so publish must upload/finalize the edited bytes. */}
@@ -2662,6 +2985,18 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         <CreatorCropSheet
           visible={cropMode}
           imageUri={selectedLayer.payload.mediaUri}
+          focalPoint={selectedLayer.payload.focalPoint}
+          onFocalPointChange={(point) => {
+            if (selectedLayer && selectedLayer.type === 'media') {
+              updateLayer(selectedLayer.id, {
+                type: 'media',
+                payload: {
+                  ...selectedLayer.payload,
+                  focalPoint: point,
+                },
+              }, 'Set focal point');
+            }
+          }}
           onClose={() => setCropMode(false)}
           onCropComplete={(newUri) => {
             if (selectedLayer && selectedLayer.type === 'media') {
@@ -2721,14 +3056,8 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         mode={pickerMode ?? 'media'}
         editingLayer={editingLayer}
         backgroundUri={backgroundMediaUri}
-        onClose={() => { setPickerMode(null); setEditingLayer(null); }}
-        onAddLayer={(layer) => {
-          if (editingLayer) {
-            updateLayer(editingLayer.id, layer, 'Edit layer');
-          } else {
-            addLayer(layer);
-          }
-        }}
+        onClose={handlePickerClose}
+        onAddLayer={handlePickerAddLayer}
       />
       {/* Frame options sheet (duration + duplicate + reorder + delete) */}
       {pageMenuIndex !== null && (
@@ -2751,61 +3080,54 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           adjustment changes commit to the layer's non-destructive
           `effects` array (EffectNode[]) via updateLayer. */}
       {bottomSurface === 'effects' && selectedMediaLayer && (
-        <View style={styles.effectsSheetBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setBottomSurface('tools')} />
-          <View style={[styles.effectsSheet, { paddingBottom: insets.bottom + Space.sm }]}>
-            {/* Glass material — translucent blur + overlay + hairline edge */}
-            <BlurView intensity={EditorMaterial.sheet.blurIntensity} tint={EditorMaterial.sheet.tint} style={[StyleSheet.absoluteFill, { borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: EditorMaterial.sheet.overlay, borderTopLeftRadius: EditorRadius.sheet, borderTopRightRadius: EditorRadius.sheet }]} />
-            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: EditorMaterial.sheet.hairline }} />
-            <View style={styles.effectsSheetHeader}>
-              <Text style={styles.effectsSheetTitle}>Effects</Text>
-              <PressScale
-                onPress={() => { haptic.light(); setBottomSurface('tools'); }}
-                style={styles.effectsSheetDone}
-                accessibilityLabel="Done"
-                accessibilityHint="Closes the effects panel"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <Text style={[styles.effectsSheetDoneText, { color: colors.antiqueGold }]}>Done</Text>
-              </PressScale>
-            </View>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={styles.effectsSheetScroll}
-            >
-              <Text style={styles.effectsSectionLabel}>Filters</Text>
-              <EffectPreviewRail
-                sourceUri={effectsSourceUri}
-                presets={FILTER_PRESETS}
-                selectedId={previewFilterId ?? selectedFilterId}
-                onSelect={handleEffectFilterSelect}
-                onPreview={handleEffectPreview}
-              />
-              <View style={styles.effectsAdjustWrap}>
-                <View style={styles.effectsAutoRow}>
-                  <AutoAdjustButton
-                    isActive={autoAdjustActive}
-                    onApply={handleAutoAdjust}
-                  />
-                </View>
-                <AdjustPanel
-                  values={currentAdjustments}
-                  onChange={handleEffectAdjustChange}
-                  onReset={handleEffectReset}
-                  onDragStateChange={(dragging) => {
-                    // Lightroom flagship pattern: fade top-bar chrome while
-                    // dragging an adjust slider so the user focuses on the
-                    // image, not the controls. The effects sheet itself
-                    // stays visible — only the top bar recedes.
-                    manipulationActiveSV.value = dragging ? 1 : 0;
-                  }}
+        <GlassSheet
+          title="Effects"
+          onClose={() => { haptic.light(); setBottomSurface('tools'); }}
+          doneHint="Closes the effects panel"
+          paddingBottom={insets.bottom + Space.sm}
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            style={styles.effectsSheetScroll}
+          >
+            <EffectPreviewRail
+              sourceUri={effectsSourceUri}
+              presets={FILTER_PRESETS}
+              selectedId={selectedFilterId}
+              onSelect={handleEffectFilterSelect}
+            />
+            <View style={styles.effectsAdjustWrap}>
+              <View style={styles.effectsAutoRow}>
+                <AutoAdjustButton
+                  isActive={autoAdjustActive}
+                  onApply={handleAutoAdjust}
                 />
               </View>
-            </ScrollView>
-          </View>
-        </View>
+              <AdjustPanel
+                values={currentAdjustments}
+                onChange={handleEffectAdjustChange}
+                onReset={handleEffectReset}
+                onDragStateChange={(dragging) => {
+                  // Lightroom flagship pattern: fade top-bar chrome while
+                  // dragging an adjust slider so the user focuses on the
+                  // image, not the controls. The effects sheet itself
+                  // stays visible — only the top bar recedes.
+                  manipulationActiveSV.value = dragging ? 1 : 0;
+                }}
+              />
+            </View>
+          </ScrollView>
+        </GlassSheet>
       )}
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
     </View>
   );
 
@@ -2880,14 +3202,15 @@ function PosterComposerScreenWithProvider(props: {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
   },
-  // ── Crash recovery banner (inline notification, not a card) ──
-  // Calm but noticeable: soft tinted background + left accent bar gives the
-  // banner proper visual hierarchy (accent → text → action) without heavy chrome.
+  // ── Crash recovery banner (inline utility notification, not a card) ──
+  // Calm utility: surfaceAlt background + brand left accent. Reads as a
+  // quiet system notice, not a premium accent.
   recoveryBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2895,23 +3218,27 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingTop: 50,
     zIndex: 100,
-    backgroundColor: 'rgba(201, 164, 106, 0.08)',
-    borderLeftWidth: 3,
+    backgroundColor: colors.surfaceAlt,
+    opacity: 0.8,
+    borderLeftWidth: 2,
   },
   recoveryText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    color: colors.textPrimary,
     marginLeft: 8,
   },
   recoveryBtn: {
-    backgroundColor: 'rgba(201, 164, 106, 0.15)',
+    backgroundColor: colors.surface,
     borderRadius: Radius.sm,
     paddingHorizontal: 14,
     paddingVertical: 6,
   },
   recoveryBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+    color: colors.textPrimary,
   },
   recoveryDismiss: {
     padding: 8,
@@ -2921,7 +3248,7 @@ const styles = StyleSheet.create({
   canvasStage: {
     ...StyleSheet.absoluteFill,
   },
-  // ── Top bar (BlurView + gradient scrim) ──
+  // ── Top bar ──
   topBarContainer: {
     position: 'absolute',
     top: 0,
@@ -2929,26 +3256,9 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 100,
   },
-  topBarScrim: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 140,
-    zIndex: -1,
-  },
-  topBarScrimOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 140,
-    zIndex: -1,
-  },
   topBar: {
-    height: 56,
+    height: 52,
     paddingHorizontal: Space.sm,
-    borderBottomWidth: 0,
   },
   topBarRow: {
     flexDirection: 'row',
@@ -2969,17 +3279,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  titleText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.bodyStrong.size,
-    color: '#fff',
-    ...GlyphShadow.title,
-  },
   doneText: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.bodyStrong.size,
-    color: '#fff',
-    ...GlyphShadow.glyph,
+    color: colors.textPrimary,
   },
   topRight: {
     flexDirection: 'row',
@@ -3004,15 +3307,15 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   publishBtn: {
+    height: 36,
     borderRadius: RadiusRoleValue.pillAvatar,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm,
+    paddingHorizontal: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
   publishBtnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size,
+    fontSize: TypographyV2.bodyStrong.size,
   },
   unsavedDot: {
     width: 7,
@@ -3041,7 +3344,7 @@ const styles = StyleSheet.create({
   pageSegmentTrack: {
     height: 2,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: colors.border,
     overflow: 'hidden',
     flexDirection: 'row',
   },
@@ -3053,13 +3356,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pageSegmentToggle: {
-    width: 22,
-    height: 22,
+    backgroundColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3076,25 +3373,62 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
-    borderRadius: EditorRadius.plate,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   canvasLoadingText: {
     fontFamily: FontFamily.medium,
     fontSize: TypographyV2.body.size,
   },
-  // ── Empty canvas hint ──
+  // ── Empty canvas hint — authored two-line empty state ──
   canvasEmptyHint: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 40,
-    gap: Space.xs,
+    gap: Space.sm,
   },
   canvasEmptyHintTitle: {
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.bodyStrong.size,
-    color: 'rgba(255,255,255,0.45)',
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    color: colors.textSecondary,
+  },
+  canvasEmptyHintSubtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    color: colors.textMuted,
+  },
+  // ── Draft load error overlay ──
+  canvasErrorOverlay: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 55,
+    gap: Space.xs,
+    paddingHorizontal: Space.lg,
+  },
+  canvasErrorTitle: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    marginTop: Space.sm,
+  },
+  canvasErrorSubtitle: {
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    textAlign: 'center',
+  },
+  canvasErrorRetry: {
+    marginTop: Space.sm,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.md,
+  },
+  canvasErrorRetryText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.body.size,
   },
   // ── Safe zone overlay ──
   safeZoneOverlay: {
@@ -3105,9 +3439,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(201,164,106,0.06)',
+    backgroundColor: colors.brandSubtle,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(201,164,106,0.4)',
+    borderBottomColor: colors.brand,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'flex-end',
@@ -3117,9 +3451,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(201,164,106,0.06)',
+    backgroundColor: colors.brandSubtle,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(201,164,106,0.4)',
+    borderTopColor: colors.brand,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'flex-start',
@@ -3129,35 +3463,23 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    borderWidth: 1,
-    borderColor: 'rgba(201,164,106,0.25)',
+    borderWidth: Stroke.standard,
+    borderColor: colors.brand,
     borderStyle: 'dashed',
   },
   safeZoneLabel: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.mediaOverlayScrim,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: RadiusRoleValue.pillAvatar,
   },
   safeZoneLabelText: {
     fontFamily: FontFamily.medium,
-    fontSize: 9,
+    fontSize: TypographyV2.meta.size,
     letterSpacing: 0.3,
-  },
-  // ── Bottom gradient scrim ──
-  bottomScrimContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 180,
-    zIndex: 95,
-  },
-  bottomScrim: {
-    flex: 1,
   },
   // ── Bottom tool rail (default mode) ──
   bottomRailContainer: {
@@ -3167,37 +3489,25 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 100,
   },
-  bottomRailScrim: {
-    position: 'absolute',
-    top: -80,
-    left: 0,
-    right: 0,
-    height: 80,
-    zIndex: -1,
-  },
   bottomRailContent: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     gap: Space.md,
     paddingVertical: Space.xs,
-  },
-  frameCountBtn: {
-    minWidth: 48,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   frameCountText: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.body.size,
-    color: '#fff',
-    ...GlyphShadow.glyph,
+    color: colors.scrimTextPrimary,
   },
   railDivider: {
     width: 1,
     height: 28,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.scrimTextTertiary,
   },
   railMoreBtn: {
     width: 44,
@@ -3212,8 +3522,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   overflowMenu: {
-    borderTopLeftRadius: EditorRadius.sheet,
-    borderTopRightRadius: EditorRadius.sheet,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
     overflow: 'hidden',
   },
   overflowHeader: {
@@ -3222,14 +3532,9 @@ const styles = StyleSheet.create({
     paddingRight: Space.xs,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.12)',
-  },
-  overflowTitle: {
-    flex: 1,
-    color: '#fff',
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size,
+    borderBottomColor: colors.scrimTextTertiary,
   },
   overflowClose: {
     width: 48,
@@ -3244,24 +3549,16 @@ const styles = StyleSheet.create({
     paddingTop: Space.xs,
     paddingBottom: Space.sm,
   },
-  overflowSectionLabel: {
-    color: 'rgba(255,255,255,0.5)',
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.meta.size,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs,
+  // ── Overflow groups — spacing-only separation, no labels ──
+  overflowGroup: {
+    gap: Space.sm,
   },
-  overflowDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    marginVertical: Space.xs,
+  overflowGroupGap: {
+    marginTop: Space.md,
   },
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.48)',
+    backgroundColor: colors.mediaOverlayScrim,
   },
   // ── ContextToolRail inline ──
   contextRail: {
@@ -3273,7 +3570,7 @@ const styles = StyleSheet.create({
     left: Space.md,
     right: Space.md,
     zIndex: 96,
-    borderRadius: EditorRadius.rail,
+    borderRadius: Radius.lg,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     gap: Space.xs,
@@ -3289,14 +3586,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.scrimTextTertiary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   timelineTimecode: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.meta.size,
-    color: 'rgba(255,255,255,0.85)',
+    color: colors.scrimTextPrimary,
     fontVariant: ['tabular-nums'],
   },
   timelinePlaybackSpacer: {
@@ -3326,58 +3623,60 @@ const styles = StyleSheet.create({
   timelineWaveformWrap: {
     marginTop: Space.xxs,
   },
-  // ── Effects sheet ──
-  effectsSheetBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'transparent',
-    zIndex: 200,
-    justifyContent: 'flex-end',
+  // ── Pinch-to-zoom scroll region ──
+  timelineScrollWrap: {
+    position: 'relative',
   },
-  effectsSheet: {
-    borderTopLeftRadius: EditorRadius.sheet,
-    borderTopRightRadius: EditorRadius.sheet,
-    maxHeight: '50%',
-    overflow: 'hidden',
+  timelineScroll: {
+    width: '100%',
   },
-  effectsSheetHeader: {
+  timelineContent: {
+    // Width is set inline (scaledTrackWidth). Tracks stack vertically
+    // (default flexDirection: column) and each fills the content width.
+  },
+  timelineZoomIndicatorWrap: {
+    position: 'absolute',
+    top: 2,
+    right: Space.xs,
+  },
+  timelineZoomIndicator: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontVariant: ['tabular-nums'],
+  },
+  timelineEmptyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.12)',
+    minHeight: 52,
   },
-  effectsSheetTitle: {
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.bodyStrong.size,
-    color: '#fff',
+  timelineEmptyText: {
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    color: colors.textSecondary,
+    flexShrink: 1,
   },
-  effectsSheetDone: {
+  timelineEmptyCta: {
     minWidth: 44,
     minHeight: 44,
     justifyContent: 'center',
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: Space.sm,
   },
-  effectsSheetDoneText: {
+  timelineEmptyCtaText: {
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.body.size,
   },
+  // ── Effects sheet ──
   effectsSheetScroll: {
     paddingVertical: Space.sm,
-  },
-  effectsSectionLabel: {
-    fontFamily: FontFamily.medium,
-    fontSize: TypographyV2.meta.size,
-    color: 'rgba(255,255,255,0.5)',
-    paddingHorizontal: Space.md,
-    marginBottom: Space.xs,
-    marginTop: Space.xs,
   },
   effectsAdjustWrap: {
     marginTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: colors.scrimTextTertiary,
     paddingTop: Space.xs,
   },
   effectsAutoRow: {
@@ -3385,3 +3684,4 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
 });
+}

@@ -6,16 +6,14 @@ import Reanimated, {
   withRepeat,
   withTiming,
   Easing,
-  cancelAnimation,
-} from 'react-native-reanimated';
+  cancelAnimation } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
   Space,
   Radius,
-  Type,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface Props {
   phase: string;
@@ -40,8 +38,7 @@ const TERMINAL_PHASES = new Set(['completed', 'cancelled']);
 export function ImportReadinessBar({
   phase,
   discoveredCount,
-  readyCount,
-}: Props) {
+  readyCount }: Props) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -62,8 +59,7 @@ export function ImportReadinessBar({
     translate.value = withRepeat(
       withTiming(100, {
         duration: INDETERMINATE_DURATION_MS,
-        easing: Easing.inOut(Easing.ease),
-      }),
+        easing: Easing.inOut(Easing.ease) }),
       -1, // infinite
       false // no reverse — reset to start each cycle
     );
@@ -75,8 +71,7 @@ export function ImportReadinessBar({
   const indeterminateFillStyle = useAnimatedStyle(() => {
     'worklet';
     return {
-      transform: [{ translateX: `${translate.value}%` }],
-    };
+      transform: [{ translateX: `${translate.value}%` }] };
   });
 
   const determinatePct = isDeterminate
@@ -128,33 +123,27 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
   StyleSheet.create({
     container: {
       width: '100%',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     track: {
       width: '100%',
       height: BAR_HEIGHT,
       borderRadius: Radius.full,
       backgroundColor: colors.brandSubtle,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     fill: {
       height: '100%',
       borderRadius: Radius.full,
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     indeterminateFill: {
       position: 'absolute',
       top: 0,
       bottom: 0,
       width: `${INDETERMINATE_FILL_WIDTH}%`,
       borderRadius: Radius.full,
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     caption: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.captionElevated.size,
-      lineHeight: Type.captionElevated.lineHeight,
-      letterSpacing: Type.captionElevated.letterSpacing,
-      color: colors.textSecondary,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textSecondary } });

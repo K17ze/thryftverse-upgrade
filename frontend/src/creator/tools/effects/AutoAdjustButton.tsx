@@ -1,39 +1,27 @@
 /**
- * AutoAdjustButton — a one-tap enhancement button.
- *
- * When real image analysis is available (via `computeAutoAdjust`), this
- * button is labeled "Auto" and shows a loading spinner while analyzing
- * pixel data. When the analysis pipeline falls back to a curated preset,
- * the button honestly labels itself "Enhance" — never "Auto" or
- * "intelligent" for static constants (AGENTS.md §11, spec 07 §6).
- *
- * Tapping applies the auto/enhance adjustment (via `onApply`). When an
- * auto-adjust is already active, tapping removes it (toggle behavior) —
- * the parent owns that logic and reflects state through `isActive`.
- *
- * After a successful apply, the button briefly shows a checkmark +
- * "Applied" confirmation for 1.5s before returning to the active state.
- *
- * Per AGENTS.md §4: visible containment only for the active/selected
- * state — a subtle brand-tinted pill. Resting state is a transparent
- * 44pt touch target with no chrome.
- * Per AGENTS.md §13/§18: medium haptic on apply, suppressed under reduced
- * motion, accessibility label and state.
+ * AutoAdjustButton — one-tap enhancement button.
+ * Labeled "Auto" with real analysis, "Enhance" with curated presets.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
+import { useReducedMotion } from 'react-native-reanimated';
 import {
   Space,
-  FontSize,
   FontFamily,
   Radius,
-  Stroke,
   Control,
 } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
-import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 
 export interface AutoAdjustButtonProps {
   /** Called when the button is tapped — toggles the auto-adjust effect. */
@@ -52,6 +40,9 @@ export interface AutoAdjustButtonProps {
 
 /** How long the "Applied" confirmation state remains visible. */
 const APPLIED_CONFIRMATION_MS = 1500;
+const PRESS_SCALE = 0.97;
+const PRESS_DURATION_MS = 100;
+const ICON_SIZE = 16;
 
 export function AutoAdjustButton({
   onApply,
@@ -64,6 +55,7 @@ export function AutoAdjustButton({
   const reducedMotion = useReducedMotion();
   const [justApplied, setJustApplied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scaleSV = useSharedValue(1);
 
   // Clear any pending confirmation timer on unmount.
   useEffect(() => {
@@ -84,16 +76,22 @@ export function AutoAdjustButton({
     }
   }, [reducedMotion, haptic, onApply, isActive, isLoading]);
 
+  const handlePressIn = useCallback(() => {
+    scaleSV.value = reducedMotion
+      ? PRESS_SCALE
+      : withTiming(PRESS_SCALE, { duration: PRESS_DURATION_MS });
+  }, [reducedMotion, scaleSV]);
+
+  const handlePressOut = useCallback(() => {
+    scaleSV.value = reducedMotion
+      ? 1
+      : withTiming(1, { duration: PRESS_DURATION_MS });
+  }, [reducedMotion, scaleSV]);
+
   const showingApplied = justApplied;
   const active = isActive || showingApplied;
 
   // Icon + label swap based on state.
-  // Loading: spinner + "Analyzing…"
-  // Applied: checkmark + "Applied"
-  // Active (real analysis): wand + "Auto"
-  // Active (fallback): wand + "Enhance"
-  // Resting (real analysis): wand + "Auto"
-  // Resting (fallback): wand + "Enhance"
   const label = isLoading
     ? 'Analyzing…'
     : showingApplied
@@ -103,88 +101,95 @@ export function AutoAdjustButton({
         : 'Enhance';
 
   const accentColor = active ? colors.brand : colors.textSecondary;
-  const labelColor = active ? colors.brand : colors.textMuted;
 
   const accessibilityLabel = isRealAnalysis
     ? 'Auto color correction'
     : 'Enhance — curated preset';
 
   const accessibilityHint = isLoading
-    ? 'Analyzing image, please wait'
+    ? 'Analyzing image…'
     : active
       ? isRealAnalysis
-        ? 'Removes the auto color correction from the selected media'
-        : 'Removes the enhance preset from the selected media'
+        ? 'Remove auto color correction'
+        : 'Remove enhance preset'
       : isRealAnalysis
-        ? 'Analyzes the image and applies one-tap color correction'
-        : 'Applies a curated enhance preset to the selected media';
+        ? 'Apply one-tap color correction'
+        : 'Apply enhance preset';
+
+  const chipStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleSV.value }],
+  }));
 
   return (
     <Pressable
       onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       disabled={isLoading}
+      hitSlop={Space.xs}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ selected: isActive, disabled: isLoading }}
-      style={({ pressed }) => [
-        styles.touch,
-        { opacity: pressed && !isLoading ? 0.7 : isLoading ? 0.6 : 1 },
-      ]}
+      style={styles.touch}
     >
-      <View
+      <Animated.View
         style={[
           styles.chip,
+          chipStyle,
           {
-            backgroundColor: active ? colors.brandSubtle : 'transparent',
-            borderColor: active ? colors.brand : 'transparent',
-            borderWidth: active ? Stroke.standard : 0,
+            backgroundColor: active ? colors.brandSubtle : colors.surfaceAlt,
+            opacity: isLoading ? 0.6 : 1,
           },
         ]}
       >
         {isLoading ? (
           <ActivityIndicator size="small" color={accentColor} style={styles.spinner} />
         ) : (
-          <Ionicons
-            name={showingApplied ? 'checkmark-circle' : 'bulb-outline'}
-            size={Control.icon}
-            color={accentColor}
+          <AppIcon
+            name={showingApplied ? 'check' : 'sparkles'}
+            size={IconSize.sm}
+            color={active ? 'brand' : 'textSecondary'}
+            focused={showingApplied}
+            opticalCenter={true}
+            accessible={false}
           />
         )}
         <Text
           style={[
             styles.label,
-            { color: labelColor, fontFamily: FontFamily.medium },
+            { color: active ? colors.brand : colors.textSecondary, fontFamily: FontFamily.medium },
           ]}
           numberOfLines={1}
         >
           {label}
         </Text>
-      </View>
+      </Animated.View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   touch: {
-    minWidth: Control.hit,
+    alignSelf: 'flex-end',
     minHeight: Control.hit,
-    alignItems: 'flex-start',
+    minWidth: Control.hit,
+    alignItems: 'flex-end',
     justifyContent: 'center',
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingVertical: Space.xs,
-    paddingHorizontal: Space.sm,
+    height: 36,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.full,
   },
   spinner: {
-    width: Control.icon,
-    height: Control.icon,
+    width: ICON_SIZE,
+    height: ICON_SIZE,
   },
   label: {
-    fontSize: FontSize.caption,
+    fontSize: TypographyV2.captionElevated.size,
   },
 });

@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { type ReserveStatus } from '../../utils/auctionDetailLogic';
 
 interface Props {
@@ -14,10 +15,10 @@ interface Props {
 
 export function ReserveStatusBadge({ status, compact, showExplanation }: Props) {
   const { colors } = useAppTheme();
-  if (status === 'none') return null;
+  if (status === 'hidden') return null;
 
   const isMet = status === 'met';
-  const iconName = isMet ? 'shield-checkmark-outline' : 'shield-half-outline';
+  const iconName = isMet ? 'checkmark-circle-outline' : 'alert-circle-outline';
   const color = isMet ? colors.success : colors.warning;
   const label = isMet ? 'Reserve met' : 'Reserve not met';
   const explanation = isMet
@@ -40,11 +41,10 @@ export function ReserveStatusBadge({ status, compact, showExplanation }: Props) 
         style={[
           styles.pill,
           {
-            backgroundColor: `${color}15`,
-            borderColor: `${color}40`,
+            backgroundColor: `${color}15` /* TODO: replace with subtle token once color is resolved */,
+            borderColor: `${color}40` /* TODO: replace with subtle token once color is resolved */,
             paddingHorizontal: pillPaddingH,
-            paddingVertical: pillPaddingV,
-          },
+            paddingVertical: pillPaddingV },
         ]}
       >
         <Ionicons name={iconName} size={iconSize} color={color} />
@@ -64,23 +64,18 @@ export function ReserveStatusBadge({ status, compact, showExplanation }: Props) 
 const styles = StyleSheet.create({
   wrapper: {
     gap: 4,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   label: {
     fontFamily: Typography.family.medium,
-    letterSpacing: -0.1,
-  },
+    letterSpacing: -0.1 },
   explanation: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: 15,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: 15 } });

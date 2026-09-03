@@ -1,7 +1,7 @@
 /**
  * SuggestedRepliesBar — horizontal scroll of pill-shaped AI-suggested replies
  * shown above the chat input. Each pill has an icon based on the reply type.
- * The bar uses a neutral visual identity (no sparkles) per AGENTS.md §4.
+ * The bar uses a neutral visual identity (no decorative glyphs) per AGENTS.md §4.
  */
 import React, { useMemo } from 'react';
 import {
@@ -9,12 +9,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import type { SuggestedReply, SuggestedReplyType } from '../../services/chatAgentsApi';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface SuggestedRepliesBarProps {
   suggestions: SuggestedReply[];
@@ -28,16 +29,15 @@ interface SuggestedRepliesBarProps {
 const ICON_BY_TYPE: Record<SuggestedReplyType, keyof typeof Ionicons.glyphMap> = {
   question: 'help-circle-outline',
   answer: 'chatbubble-ellipses-outline',
-  offer: 'pricetags-outline',
-  info: 'information-circle-outline',
-};
+  offer: 'cash-outline',
+  info: 'information-circle-outline' };
 
 export function SuggestedRepliesBar({
   suggestions,
   onSelect,
-  agentName,
-}: SuggestedRepliesBarProps) {
+  agentName }: SuggestedRepliesBarProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   if (suggestions.length === 0) return null;
@@ -49,7 +49,7 @@ export function SuggestedRepliesBar({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         accessibilityLabel={
-          agentName ? `Suggested replies from ${agentName}` : 'Suggested replies'
+          agentName ? t('suggestedReplies.titleFrom', { agentName }) : t('suggestedReplies.title')
         }
       >
         {suggestions.map((reply, index) => {
@@ -65,8 +65,8 @@ export function SuggestedRepliesBar({
               onPress={() => onSelect(reply)}
               hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
               accessibilityRole="button"
-              accessibilityLabel={`Use suggested reply: ${reply.text}`}
-              accessibilityHint="Fills the message input with this reply"
+              accessibilityLabel={t('suggestedReplies.use', { reply: reply.text })}
+              accessibilityHint={t('suggestedReplies.fill')}
             >
               <Ionicons name={iconName} size={13} color={colors.textMuted} />
               <Text style={[styles.pillText, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -85,13 +85,11 @@ const createStyles = (colors: ThemeColors) =>
     root: {
       paddingTop: Space.sm - 1,
       paddingBottom: Space.xs + 1,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     scrollContent: {
       paddingHorizontal: Space.md,
       gap: Space.sm - 1,
-      paddingVertical: 2,
-    },
+      paddingVertical: 2 },
     pill: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -100,12 +98,9 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
       borderWidth: StyleSheet.hairlineWidth,
-      minHeight: 24,
-    },
+      minHeight: 24 },
     pillText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      maxWidth: 220,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      maxWidth: 220 } });

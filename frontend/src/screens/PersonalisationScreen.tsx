@@ -1,19 +1,24 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, LetterSpacing, Control } from '../theme/designTokens';
+import { Space, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
 import { AudiencePreferenceGrid } from '../components/personalisation/AudiencePreferenceGrid';
-import { DiscoveryPreferenceRow } from '../components/personalisation/DiscoveryPreferenceRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
 import { AppButton } from '../components/ui/AppButton';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { RootStackParamList } from '../navigation/types';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 
 type PreferencePickerMode = 'categories' | 'brands' | 'members' | null;
 
@@ -39,6 +44,14 @@ export default function PersonalisationScreen() {
   const brandsPref = personalisationPreferences.brandsPref;
   const membersPref = personalisationPreferences.membersPref;
   const [pickerMode, setPickerMode] = useState<PreferencePickerMode>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const { show } = useToast();
   const haptic = useHaptic();
   const fromOnboarding = route.params?.fromOnboarding === true;
@@ -125,26 +138,20 @@ export default function PersonalisationScreen() {
   };
 
   const handleReset = () => {
-    Alert.alert(
-      'Reset preferences',
-      'Reset all preferences to their default values?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          onPress: () => {
-            haptic.medium();
-            updatePersonalisationPreferences({
-              genderFilter: DEFAULT_GENDER_FILTER,
-              categoriesAndSizesPref: DEFAULT_CATEGORIES_PREF,
-              brandsPref: DEFAULT_BRANDS_PREF,
-              membersPref: DEFAULT_MEMBERS_PREF,
-            });
-            show('Preferences reset to defaults.', 'success');
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Reset preferences',
+      message: 'Reset all preferences to their default values?',
+      confirmLabel: 'Reset',
+      onConfirm: () => {
+        haptic.medium();
+        updatePersonalisationPreferences({
+          genderFilter: DEFAULT_GENDER_FILTER,
+          categoriesAndSizesPref: DEFAULT_CATEGORIES_PREF,
+          brandsPref: DEFAULT_BRANDS_PREF,
+          membersPref: DEFAULT_MEMBERS_PREF });
+        show('Preferences reset to defaults.', 'success');
+      } });
   };
 
   return (
@@ -165,64 +172,42 @@ export default function PersonalisationScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero summary — personalisation status */}
-        <View>
-          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.heroRow}>
-              <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                <Ionicons name="options-outline" size={18} color={colors.textInverse} />
-              </View>
-              <View style={styles.heroText}>
-                <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                  {genderFilter.includes('All') ? 'All categories' : `${genderFilter.join(', ')} selected`}
-                </Text>
-                <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                  {brandsPref === 'Any' && membersPref === 'Everyone' ? 'Default discovery' : 'Custom discovery'}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
         {/* Visual shopping-audience selection */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Shop for</Text>
+        <SettingsSection title="Shop for">
           <AudiencePreferenceGrid
             selectedGenders={genderFilter}
             onSelect={handleSelectGender}
           />
-        </View>
+        </SettingsSection>
 
-        {/* Discovery preference rows */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Discovery preferences</Text>
-          <View style={styles.discoveryGroup}>
-            <DiscoveryPreferenceRow
-              icon="grid-outline"
-              title="Categories and sizes"
-              explanation="Keep a preferred size mix."
-              value={categoriesAndSizesPref}
-              onPress={() => { haptic.light(); setPickerMode('categories'); }}
-            />
-            <DiscoveryPreferenceRow
-              icon="barcode-outline"
-              title="Brands"
-              explanation="Choose a general brand direction."
-              value={brandsPref}
-              onPress={() => { haptic.light(); setPickerMode('brands'); }}
-            />
-            <DiscoveryPreferenceRow
-              icon="people-outline"
-              title="Members"
-              explanation="Choose whose listings you prefer to browse."
-              value={membersPref}
-              onPress={() => { haptic.light(); setPickerMode('members'); }}
-              isLast
-            />
-          </View>
-        </View>
+        {/* Discovery preference rows — flat, hairline-separated */}
+        <SettingsSection title="Discovery preferences">
+          <SettingsRow
+            icon="grid"
+            title="Categories and sizes"
+            subtitle="Keep a preferred size mix."
+            value={categoriesAndSizesPref}
+            onPress={() => { haptic.light(); setPickerMode('categories'); }}
+            isFirst
+          />
+          <SettingsRow
+            icon="bag-handle-outline"
+            title="Brands"
+            subtitle="Choose a general brand direction."
+            value={brandsPref}
+            onPress={() => { haptic.light(); setPickerMode('brands'); }}
+          />
+          <SettingsRow
+            icon="people"
+            title="Members"
+            subtitle="Choose whose listings you prefer to browse."
+            value={membersPref}
+            onPress={() => { haptic.light(); setPickerMode('members'); }}
+            isLast
+          />
+        </SettingsSection>
 
-        {/* Optional reset action */}
+        {/* Optional reset action — flat, no card wrapper */}
         <View>
           <Pressable
             style={styles.resetBtn}
@@ -231,7 +216,7 @@ export default function PersonalisationScreen() {
             accessibilityRole="button"
             accessibilityLabel="Reset preferences to defaults"
           >
-            <Ionicons name="refresh-outline" size={16} color={colors.textMuted} />
+            <AppIcon name="refresh" size={IconSize.sm} color="textMuted" accessible={false} />
             <Text style={[styles.resetBtnText, { color: colors.textMuted }]}>Reset preferences</Text>
           </Pressable>
         </View>
@@ -267,6 +252,16 @@ export default function PersonalisationScreen() {
         selectedValue={selectedPickerValue}
         onSelect={handleSelectPreference}
       />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }
@@ -275,57 +270,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     // Scroll
     scrollContent: {
-      paddingHorizontal: Space.md,
-    },
-
-    // Hero summary card
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginTop: Space.sm,
-      marginBottom: Space.lg,
-    },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xxl - Space.sm,
-      height: Space.xxl - Space.sm,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-    },
-
-    // Section
-    section: {
-      marginBottom: Space.lg,
-    },
-    sectionTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      textTransform: 'uppercase',
-      letterSpacing: LetterSpacing.caps,
-      marginBottom: Space.sm,
-    },
-
-    // Discovery group
-    discoveryGroup: {
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.md },
 
     // Reset
     resetBtn: {
@@ -335,12 +280,10 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
       paddingVertical: Space.md,
       marginTop: Space.sm,
-      minHeight: Space.xxl,
-    },
+      minHeight: Space.xxl },
     resetBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
 
     // Onboarding footer
     onboardingFooter: {
@@ -350,15 +293,11 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.lg,
       paddingTop: Space.md,
       paddingBottom: Space.md,
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
+      borderTopWidth: StyleSheet.hairlineWidth },
     skipText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     continueBtn: {
       flex: 1,
-      marginLeft: Space.md,
-    },
-  });
+      marginLeft: Space.md } });
 }

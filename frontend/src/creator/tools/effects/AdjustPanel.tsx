@@ -1,24 +1,6 @@
 /**
- * AdjustPanel — a panel of sliders for fine-tuning image adjustments.
- *
- * One slider per parameter from ADJUST_PARAMETERS. Each row shows the
- * parameter name (left), the current value (right), and a full-width
- * CreatorSlider. A reset button sits at the top. The panel is transparent —
- * no card surface — so it composes cleanly into any host sheet.
- *
- * Uses CreatorSlider (RNGH + Reanimated) for smooth 60fps slider dragging.
- * Features:
- * - drag to adjust
- * - tap to jump
- * - haptic at neutral (0)
- * - one history commit on release (onCommit)
- * - numeric label
- * - reset button per slider
- *
- * Per AGENTS.md §4: authored composition, clear hierarchy, restraint.
- * Per AGENTS.md §13: 44pt touch targets for reset buttons.
- * Per AGENTS.md §17: spring/timing respects reduced motion.
- * Per AGENTS.md §18: accessibility role adjustable, value announced.
+ * AdjustPanel — slider panel for fine-tuning image adjustments.
+ * Uses CreatorSlider (RNGH + Reanimated) for 60fps dragging.
  */
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
@@ -26,14 +8,12 @@ import {
   Space,
   FontSize,
   FontFamily,
-  Radius,
   Control,
 } from '../../../theme/designTokens';
-import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
-import { CreatorSlider, CreatorGlyph } from '../../controls';
+import { CreatorSlider } from '../../controls';
 import { ADJUST_PARAMETERS } from './EffectPresets';
 import type { AdjustNode } from './EffectTypes';
 
@@ -52,8 +32,7 @@ export interface AdjustPanelProps {
 
 /**
  * Render one slider row per adjustment parameter.
- */
-export function AdjustPanel({ values, onChange, onCommit, onReset, onDragStateChange }: AdjustPanelProps) {
+ */export function AdjustPanel({ values, onChange, onCommit, onReset, onDragStateChange }: AdjustPanelProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -66,24 +45,11 @@ export function AdjustPanel({ values, onChange, onCommit, onReset, onDragStateCh
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <CreatorGlyph
-            name="adjust"
-            size={IconGrammar.standard}
-            color={colors.textPrimary}
-            accessibilityLabel="Adjust"
-          />
-          <Text
-            style={[styles.headerTitle, { color: colors.textPrimary, fontFamily: FontFamily.semibold }]}
-          >
-            Adjust
-          </Text>
-        </View>
         <Pressable
           onPress={handleReset}
           hitSlop={Space.sm}
           accessibilityRole="button"
-          accessibilityLabel="Reset all adjustments"
+          accessibilityLabel="Reset adjustments"
           style={({ pressed }) => [
             styles.resetButton,
             { opacity: pressed ? 0.6 : 1, minHeight: Control.hit, minWidth: Control.hit },
@@ -100,20 +66,20 @@ export function AdjustPanel({ values, onChange, onCommit, onReset, onDragStateCh
       {ADJUST_PARAMETERS.map((param) => {
         const raw = values?.[param.id as keyof Omit<AdjustNode, 'type'>];
         const value = raw ?? param.default;
+        const isBidirectional = param.min < 0 && param.max > 0;
         return (
           <AdjustSliderRow
             key={param.id}
-            paramId={param.id}
             label={param.name}
             min={param.min}
             max={param.max}
             value={value}
-            labelColor={colors.textPrimary}
+            labelColor={colors.textSecondary}
             valueColor={colors.textMuted}
-            resetColor={colors.textMuted}
             onChange={(v) => onChange(param.id, v)}
             onCommit={onCommit ? (v) => onCommit(param.id, v) : undefined}
             onDragStateChange={onDragStateChange}
+            isBidirectional={isBidirectional}
           />
         );
       })}
@@ -124,45 +90,32 @@ export function AdjustPanel({ values, onChange, onCommit, onReset, onDragStateCh
 // ── Internal slider row ────────────────────────────────────────────────
 
 interface AdjustSliderRowProps {
-  paramId: string;
   label: string;
   min: number;
   max: number;
   value: number;
   labelColor: string;
   valueColor: string;
-  resetColor: string;
   onChange: (value: number) => void;
   onCommit?: (value: number) => void;
   onDragStateChange?: (dragging: boolean) => void;
+  isBidirectional: boolean;
 }
 
 function AdjustSliderRow({
-  paramId,
   label,
   min,
   max,
   value,
   labelColor,
   valueColor,
-  resetColor,
   onChange,
   onCommit,
   onDragStateChange,
+  isBidirectional,
 }: AdjustSliderRowProps) {
-  const haptic = useHaptic();
-  const reducedMotion = useReducedMotion();
-
-  // ── Reset per slider ─────────────────────────────────────────────────
-  const handleReset = useCallback(() => {
-    haptic.light();
-    onChange(0);
-    if (onCommit) onCommit(0);
-  }, [haptic, onChange, onCommit]);
-
   const clamped = Math.min(max, Math.max(min, value));
   const displayValue = formatValue(clamped);
-  const isNonZero = Math.abs(clamped) > 0.001;
 
   return (
     <View style={styles.row}>
@@ -170,38 +123,22 @@ function AdjustSliderRow({
         <Text style={[styles.rowLabel, { color: labelColor, fontFamily: FontFamily.regular }]}>
           {label}
         </Text>
-        <View style={styles.rowRight}>
-          {isNonZero && (
-            <Pressable
-              onPress={handleReset}
-              hitSlop={Space.xs}
-              accessibilityRole="button"
-              accessibilityLabel={`Reset ${label}`}
-              style={({ pressed }) => [
-                styles.rowReset,
-                { opacity: pressed ? 0.5 : 1, minHeight: Control.hit, minWidth: Control.hit },
-              ]}
-            >
-              <Text style={[styles.rowResetText, { color: resetColor }]}>
-                Reset
-              </Text>
-            </Pressable>
-          )}
-          <Text style={[styles.rowValue, { color: valueColor, fontFamily: FontFamily.medium }]}>
-            {displayValue}
-          </Text>
-        </View>
+        <Text style={[styles.rowValue, { color: valueColor, fontFamily: FontFamily.medium }]}>
+          {displayValue}
+        </Text>
       </View>
       <CreatorSlider
         value={value}
         min={min}
         max={max}
         step={0.001}
+        neutral={isBidirectional ? 0 : min}
         onValueChange={onChange}
         onCommit={onCommit}
         onDragStateChange={onDragStateChange}
         accessibilityLabel={label}
-        hapticAtNeutral={min < 0 && max > 0}
+        hapticAtNeutral={isBidirectional}
+        showNeutralTick={isBidirectional}
       />
     </View>
   );
@@ -222,18 +159,10 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
+    paddingTop: Space.xs,
     paddingBottom: Space.xs,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  headerTitle: {
-    fontSize: FontSize.body,
   },
   resetButton: {
     alignItems: 'center',
@@ -241,11 +170,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
   },
   resetLabel: {
-    fontSize: FontSize.caption,
+    fontSize: FontSize.caption + 1,
   },
   row: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
+    paddingVertical: Space.smMd / 2,
   },
   rowHeader: {
     flexDirection: 'row',
@@ -253,27 +182,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: Space.xs,
   },
-  rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
   rowLabel: {
-    fontSize: FontSize.caption,
+    fontSize: FontSize.caption + 1,
   },
   rowValue: {
     fontSize: FontSize.caption,
     fontVariant: ['tabular-nums'],
     minWidth: 32,
     textAlign: 'right',
-  },
-  rowReset: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.xs,
-  },
-  rowResetText: {
-    fontSize: FontSize.micro,
-    fontFamily: FontFamily.regular,
   },
 });

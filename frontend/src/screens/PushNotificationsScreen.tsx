@@ -19,16 +19,12 @@ import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { haptics } from '../utils/haptics';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { formatHour } from '../utils/timeFormat';
 type Props = NativeStackScreenProps<RootStackParamList, 'PushNotifications'>;
 
 const NOTIFICATIONS = PUSH_NOTIFICATION_DEFINITIONS;
-
-function formatHour(hour: number): string {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-  return `${displayHour}:00 ${period}`;
-}
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
@@ -43,13 +39,13 @@ export default function PushNotificationsScreen({ navigation }: Props) {
     setPushNotificationToggle,
     setAllPushNotificationToggles,
     quietHours,
-    setQuietHours,
-  } = useSettingsPreferences();
+    setQuietHours } = useSettingsPreferences();
   const [isSyncingDevice, setIsSyncingDevice] = React.useState(false);
-  const [registeredToken, setRegisteredToken] = React.useState<string | null>(null);
+  const [registeredDeviceId, setRegisteredDeviceId] = React.useState<number | null>(null);
   const [isDeviceRegistered, setIsDeviceRegistered] = React.useState(false);
   const [pushPermissionStatus, setPushPermissionStatus] = React.useState<Notifications.NotificationPermissionsStatus | null>(null);
   const [editingQuietTime, setEditingQuietTime] = React.useState<'start' | 'end' | null>(null);
+  const [syncingKeys, setSyncingKeys] = React.useState<Set<string>>(new Set());
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -75,7 +71,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         const devices = await listNotificationDevices();
         const activeDevice = devices.find((d) => d.isActive);
         if (activeDevice) {
-          setRegisteredToken(activeDevice.token);
+          setRegisteredDeviceId(activeDevice.id);
           setIsDeviceRegistered(true);
         }
       } catch {
@@ -120,9 +116,10 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         token,
         platform: resolvePushPlatform(),
         appVersion: (Constants.expoConfig as { version?: string } | null)?.version,
-        metadata: { enabledNotificationTypes: enabledCount },
-      });
-      setRegisteredToken(token);
+        metadata: { enabledNotificationTypes: enabledCount } });
+      // The server returns a redacted device — we use the id for management.
+      // The raw token is never stored in client state.
+      setRegisteredDeviceId(null); // Will be set on next device list fetch
       setIsDeviceRegistered(true);
       show('This device is now registered for push delivery.', 'success');
     } catch (error) {
@@ -134,16 +131,30 @@ export default function PushNotificationsScreen({ navigation }: Props) {
   }, [enabledCount, resolveProjectId, resolvePushPlatform, show]);
 
   const disableDeviceRegistration = React.useCallback(async () => {
-    if (!registeredToken) {
+    // If we don't have the device id, try to fetch it first
+    let deviceId = registeredDeviceId;
+    if (!deviceId) {
+      try {
+        const devices = await listNotificationDevices();
+        const activeDevice = devices.find((d) => d.isActive);
+        if (activeDevice) {
+          deviceId = activeDevice.id;
+          setRegisteredDeviceId(activeDevice.id);
+        }
+      } catch {
+        // best-effort
+      }
+    }
+    if (!deviceId) {
       setIsDeviceRegistered(false);
       show('This device is already not registered for push delivery.', 'info');
       return;
     }
     setIsSyncingDevice(true);
     try {
-      await deactivateNotificationDevice(registeredToken);
+      await deactivateNotificationDevice(deviceId);
       setIsDeviceRegistered(false);
-      setRegisteredToken(null);
+      setRegisteredDeviceId(null);
       show('Push delivery paused for this device.', 'info');
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to pause push delivery for this device.');
@@ -151,17 +162,24 @@ export default function PushNotificationsScreen({ navigation }: Props) {
     } finally {
       setIsSyncingDevice(false);
     }
-  }, [registeredToken, show]);
+  }, [registeredDeviceId, show]);
 
   const toggle = async (key: string) => {
     const nextEnabled = !toggles[key];
     setPushNotificationToggle(key, nextEnabled);
+    setSyncingKeys((prev) => new Set(prev).add(key));
     try {
       await updateNotificationPreferences({ [key]: nextEnabled });
     } catch {
       setPushNotificationToggle(key, !nextEnabled);
       show('Failed to update push preference. Try again.', 'error');
       return;
+    } finally {
+      setSyncingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
     }
     const nextCount = nextEnabled ? enabledCount + 1 : enabledCount - 1;
     if (nextCount === 1 && nextEnabled && !isDeviceRegistered) {
@@ -251,36 +269,15 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         </View>
       )}
 
-      {/* Hero summary — notification posture with progress */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: enabledCount > 0 ? colors.brand : colors.surfaceAlt }]}>
-              <Ionicons name="notifications" size={20} color={enabledCount > 0 ? colors.textInverse : colors.textMuted} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                {enabledCount === 0 ? 'All notifications off' : `${enabledCount} of ${pushTotalCount} categories on`}
-              </Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {enabledCount === pushTotalCount ? 'All alerts enabled' : enabledCount === 0 ? 'You won\'t receive any alerts' : 'Some alerts are paused'}
-              </Text>
-            </View>
-          </View>
-          {/* Progress bar */}
-          <View style={styles.progressRow}>
-            <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${(enabledCount / Math.max(pushTotalCount, 1)) * 100}%`, backgroundColor: colors.brand },
-                ]}
-              />
-            </View>
-            <Text style={[styles.progressLabel, { color: colors.textMuted }]}>
-              {enabledCount}/{pushTotalCount}
-            </Text>
-          </View>
-        </View>
+      {/* Posture summary — flat canvas, no card chrome */}
+      <View style={styles.postureSummary}>
+        <Text style={[styles.postureTitle, { color: colors.textPrimary }]}>
+          {enabledCount === 0 ? 'All notifications off' : 'Push notifications on'}
+        </Text>
+        <Text style={[styles.postureSubtitle, { color: colors.textSecondary }]}>
+          {enabledCount === 0 ? 'You won\'t receive any push alerts' : isDeviceRegistered ? 'This device is registered for delivery' : 'Register this device to receive alerts'}
+        </Text>
+      </View>
 
       {PUSH_NOTIFICATION_GROUPS.map((group) => {
         const groupItems = NOTIFICATIONS.filter((n) => n.group === group.key);
@@ -298,6 +295,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
                   iconColor={groupIconColor}
                   toggleValue={toggles[item.key]}
                   onToggle={() => void toggle(item.key)}
+                  syncing={syncingKeys.has(item.key)}
                   isFirst={idx === 0}
                   isLast={idx === groupItems.length - 1}
                 />
@@ -385,7 +383,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         {quietHours.enabled ? (
           <SettingsInfoBanner
             icon="moon-outline"
-            text={`Urgent alerts (order updates, security) still arrive during quiet hours. Non-urgent notifications are held until ${formatHour(quietHours.endHour)}.`}
+            text={`Urgent alerts (order updates, security) still arrive during quiet hours. Non-urgent push notifications are silenced on this device between ${formatHour(quietHours.startHour)} and ${formatHour(quietHours.endHour)}. This setting applies to this device only.`}
           />
         ) : null}
       </SettingsSection>
@@ -407,43 +405,15 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       alignItems: 'center',
       borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
-    progressRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      marginTop: Space.md,
-    },
-    progressTrack: {
-      flex: 1,
-      height: Space.xs + 2,
-      borderRadius: Radius.sm,
-      backgroundColor: colors.border,
-      overflow: 'hidden',
-    },
-    progressFill: {
-      height: '100%',
-      borderRadius: Radius.sm,
-      backgroundColor: colors.brand,
-    },
-    progressLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-      letterSpacing: Type.caption.letterSpacing,
-      minWidth: Space.xxl + Space.sm + Space.xs,
-      textAlign: 'right',
-    },
+      borderColor: colors.border },
     footerNote: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      lineHeight: Type.caption.lineHeight,
+      lineHeight: TypographyV2.meta.lineHeight,
       marginTop: Space.sm,
       marginHorizontal: Space.md,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     permissionBanner: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -452,56 +422,35 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     permissionBannerText: {
       flex: 1,
       color: colors.textSecondary,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     permissionBannerAction: {
       color: colors.brand,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.md,
-    },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Control.chrome + Space.xs,
-      height: Control.chrome + Space.xs,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
+    postureSummary: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.md,
+      paddingBottom: Space.sm },
+    postureTitle: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
+    postureSubtitle: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginTop: Space.xs / 2 },
     quietHoursRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     quietTimePicker: {
       flex: 1,
       flexDirection: 'row',
@@ -511,38 +460,31 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
-      minHeight: Space.xxl,
-    },
+      minHeight: Space.xxl },
     quietTimePickerPressed: {
       opacity: 0.7,
-      transform: [{ scale: 0.98 }],
-    },
+      transform: [{ scale: 0.98 }] },
     quietTimeLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     quietTimeValue: {
       flex: 1,
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     quietHoursPickerSheet: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     quietHoursPickerTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     quietHoursPickerGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.xs + 2,
-    },
+      gap: Space.xs + 2 },
     quietHourCell: {
       paddingHorizontal: Space.md - Space.xs,
       paddingVertical: Space.sm + 2,
@@ -550,23 +492,17 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
       minHeight: Control.chrome + Space.xs,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     quietHourCellActive: {
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     quietHourCellPressed: {
       opacity: 0.7,
-      transform: [{ scale: 0.96 }],
-    },
+      transform: [{ scale: 0.96 }] },
     quietHourCellText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textPrimary },
     quietHourCellTextActive: {
       color: colors.textInverse,
-      fontFamily: Typography.family.bold,
-    },
-  });
+      fontFamily: Typography.family.bold } });
 }

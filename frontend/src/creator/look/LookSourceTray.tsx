@@ -7,9 +7,7 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
-  Image,
-  Alert,
-} from 'react-native';
+  Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -18,17 +16,20 @@ import Reanimated, {
   withSpring,
   withTiming,
   runOnJS,
-  type SharedValue,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Elevation } from '../../theme/designTokens';
+  type SharedValue } from 'react-native-reanimated';
+import { Space, Radius, Typography, Elevation, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useStore } from '../../store/useStore';
 import { useBackendData } from '../../context/BackendDataContext';
 import { searchListingsFromApi, type Listing, type ListingSearchResult } from '../../services/listingsApi';
+import { ConfirmationSheet } from '../../components/ConfirmationSheet';
 
 // ───────────────────────────────────────────────────────────────────────────
 // Look Source Tray — commerce peek drawer for the Look Composer.
@@ -138,8 +139,8 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
   previewVisible,
   trayYSV,
   colors,
-  onCanvas,
-}: DraggableProductCardProps) {
+  onCanvas }: DraggableProductCardProps) {
+  const { currencySymbol } = useFormattedPrice();
   const tapGesture = useMemo(
     () =>
       Gesture.Tap().onEnd(() => {
@@ -156,7 +157,7 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
           'worklet';
           previewX.value = e.absoluteX;
           previewY.value = e.absoluteY;
-          previewVisible.value = withTiming(1, { duration: 100 });
+          previewVisible.value = withTiming(1, { duration: Motion.duration.fast });
           runOnJS(onDragStart)(item);
         })
         .onUpdate((e) => {
@@ -166,7 +167,7 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
         })
         .onEnd((e) => {
           'worklet';
-          previewVisible.value = withTiming(0, { duration: 120 });
+          previewVisible.value = withTiming(0, { duration: Motion.duration.fast });
           const isOverCanvas = e.absoluteY < trayYSV.value;
           runOnJS(onDragEnd)(item, e.absoluteX, e.absoluteY, isOverCanvas);
         }),
@@ -202,14 +203,14 @@ const DraggableProductCard = React.memo(function DraggableProductCard({
           <View style={[styles.onCanvasDot, { backgroundColor: colors.brand }]} />
         )}
         <Text
-          style={[styles.itemTitle, { color: onCanvas ? colors.textMuted : colors.textPrimary }]}
+          style={[styles.itemTitle, { color: onCanvas ? colors.textMuted : colors.textSecondary }]}
           numberOfLines={1}
         >
           {item.title}
         </Text>
         {item.priceGbp !== undefined && (
-          <Text style={[styles.itemPrice, { color: onCanvas ? colors.textMuted : colors.brand }]}>
-            £{item.priceGbp.toFixed(0)}
+          <Text style={[styles.itemPrice, { color: onCanvas ? colors.textMuted : colors.textPrimary }]}>
+            {currencySymbol}{item.priceGbp.toFixed(0)}
           </Text>
         )}
       </View>
@@ -226,9 +227,9 @@ export function LookSourceTray({
   expanded,
   onToggle,
   onDropProduct,
-  onCanvasListingIds,
-}: LookSourceTrayProps) {
+  onCanvasListingIds }: LookSourceTrayProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const haptic = useHaptic();
   const motionConfig = useMotionConfig();
   const currentUser = useStore((state) => state.currentUser);
@@ -240,6 +241,14 @@ export function LookSourceTray({
   const [searchResults, setSearchResults] = useState<ListingSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [draggingItem, setDraggingItem] = useState<TrayItem | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   // ── Discover: a curated selection of recent listings from all sellers,
   //    sorted by recency (most recent first). Acts as a generic discovery
@@ -253,8 +262,7 @@ export function LookSourceTray({
         title: l.title ?? 'Untitled',
         imageUrl: l.images?.[0] ?? null,
         priceGbp: l.price ?? undefined,
-        brand: l.brand,
-      }));
+        brand: l.brand }));
   }, [listings]);
 
   // ── Closet items: saved products filtered against available listings ──
@@ -267,8 +275,7 @@ export function LookSourceTray({
         title: l.title ?? 'Untitled',
         imageUrl: l.images?.[0] ?? null,
         priceGbp: l.price ?? undefined,
-        brand: l.brand,
-      }));
+        brand: l.brand }));
   }, [listings, savedProductIds]);
 
   // ── Listings: the user's own active listings ──
@@ -282,8 +289,7 @@ export function LookSourceTray({
         title: l.title ?? 'Untitled',
         imageUrl: l.images?.[0] ?? null,
         priceGbp: l.price ?? undefined,
-        brand: l.brand,
-      }));
+        brand: l.brand }));
   }, [listings, currentUser?.id]);
 
   // ── Search: debounced query against the API ──
@@ -314,8 +320,7 @@ export function LookSourceTray({
       title: r.title,
       imageUrl: r.imageUrl,
       priceGbp: r.priceGbp,
-      brand: r.brand,
-    }));
+      brand: r.brand }));
   }, [searchResults]);
 
   // ── Refs for reading latest expanded state in callbacks ──
@@ -380,26 +385,21 @@ export function LookSourceTray({
     const isDuplicate = onCanvasListingIds?.has(item.id) ?? false;
     if (isDuplicate) {
       haptic.light();
-      Alert.alert(
-        'Already on canvas',
-        `"${item.title}" is already in your look. Add it again?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Add Again',
-            onPress: () => {
-              haptic.selection();
-              onAddItem({
-                listingId: item.id,
-                snapshotTitle: item.title,
-                snapshotImageUrl: item.imageUrl ?? undefined,
-                snapshotPriceGbp: item.priceGbp,
-              });
-              if (expandedRef.current) onToggle();
-            },
-          },
-        ],
-      );
+      setConfirmSheet({
+        visible: true,
+        title: 'Already on canvas',
+        message: `"${item.title}" is already in your look. Add it again?`,
+        confirmLabel: 'Add Again',
+        variant: 'default',
+        onConfirm: () => {
+          haptic.selection();
+          onAddItem({
+            listingId: item.id,
+            snapshotTitle: item.title,
+            snapshotImageUrl: item.imageUrl ?? undefined,
+            snapshotPriceGbp: item.priceGbp });
+          if (expandedRef.current) onToggle();
+        } });
       return;
     }
     haptic.selection();
@@ -407,8 +407,7 @@ export function LookSourceTray({
       listingId: item.id,
       snapshotTitle: item.title,
       snapshotImageUrl: item.imageUrl ?? undefined,
-      snapshotPriceGbp: item.priceGbp,
-    });
+      snapshotPriceGbp: item.priceGbp });
     // Auto-collapse after adding so the canvas remains dominant
     if (expandedRef.current) {
       onToggle();
@@ -430,8 +429,7 @@ export function LookSourceTray({
         listingId: item.id,
         snapshotTitle: item.title,
         snapshotImageUrl: item.imageUrl ?? undefined,
-        snapshotPriceGbp: item.priceGbp,
-      };
+        snapshotPriceGbp: item.priceGbp };
       if (onDropProduct) {
         onDropProduct(itemPayload, { x, y });
       } else {
@@ -462,37 +460,32 @@ export function LookSourceTray({
   const isEmpty = currentItems.length === 0 && !isSearching;
 
   const tabs: { key: TabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { key: 'foryou', label: 'Discover', icon: 'compass-outline' },
+    { key: 'foryou', label: 'Discover', icon: 'search-outline' },
     { key: 'closet', label: 'Closet', icon: 'heart-outline' },
-    { key: 'listings', label: 'Listings', icon: 'pricetag-outline' },
+    { key: 'listings', label: 'Listings', icon: 'bag-handle-outline' },
     { key: 'search', label: 'Search', icon: 'search-outline' },
   ];
 
   // ── Animated styles ──
   const containerAnimStyle = useAnimatedStyle(() => ({
-    height: heightSV.value,
-  }));
+    height: heightSV.value }));
 
   const contentAnimStyle = useAnimatedStyle(() => ({
     opacity: contentOpacitySV.value,
-    transform: [{ translateY: (1 - contentOpacitySV.value) * 16 }],
-  }));
+    transform: [{ translateY: (1 - contentOpacitySV.value) * 16 }] }));
 
   const chevronAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${chevronSV.value * 180}deg` }],
-  }));
+    transform: [{ rotate: `${chevronSV.value * 180}deg` }] }));
 
   const sheetBgAnimStyle = useAnimatedStyle(() => ({
-    opacity: sheetBgSV.value,
-  }));
+    opacity: sheetBgSV.value }));
 
   const previewAnimStyle = useAnimatedStyle(() => ({
     opacity: previewVisible.value,
     transform: [
       { translateX: previewX.value - trayXSV.value - PREVIEW_SIZE / 2 },
       { translateY: previewY.value - trayYSV.value - PREVIEW_SIZE / 2 },
-    ],
-  }));
+    ] }));
 
   return (
     <View onLayout={measureTray} ref={trayRef} style={styles.wrapper}>
@@ -503,9 +496,7 @@ export function LookSourceTray({
             StyleSheet.absoluteFill,
             styles.scrim,
             {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.borderSubtle,
-            },
+              backgroundColor: colors.surface },
           ]}
           pointerEvents="none"
         />
@@ -516,9 +507,7 @@ export function LookSourceTray({
             StyleSheet.absoluteFill,
             styles.sheetBg,
             {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
-            },
+              backgroundColor: colors.surface },
             sheetBgAnimStyle,
           ]}
           pointerEvents="none"
@@ -532,12 +521,12 @@ export function LookSourceTray({
           accessibilityHint="Toggles the source tray visibility"
           accessibilityRole="button"
         >
-          <Ionicons name="bag-outline" size={IconGrammar.standard} color={colors.textSecondary} />
+          <Ionicons name="bag-outline" size={24} color={colors.textSecondary} />
           <Text style={[styles.peekLabel, { color: colors.textPrimary }]}>
             Items
           </Text>
           <Reanimated.View style={chevronAnimStyle}>
-            <Ionicons name="chevron-up" size={IconGrammar.standard} color={colors.textSecondary} />
+            <Ionicons name="chevron-up" size={24} color={colors.textSecondary} />
           </Reanimated.View>
         </Pressable>
 
@@ -566,7 +555,7 @@ export function LookSourceTray({
                 >
                   <Ionicons
                     name={tab.icon}
-                    size={IconGrammar.metadata}
+                    size={24}
                     color={isActive ? colors.brand : colors.textSecondary}
                   />
                   <Text
@@ -693,10 +682,19 @@ export function LookSourceTray({
         </Text>
         {draggingItem?.priceGbp !== undefined && (
           <Text style={[styles.previewPrice, { color: colors.brand }]}>
-            £{draggingItem.priceGbp.toFixed(0)}
+            {currencySymbol}{draggingItem.priceGbp.toFixed(0)}
           </Text>
         )}
       </Reanimated.View>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
     </View>
   );
 }
@@ -715,72 +713,55 @@ const styles = StyleSheet.create({
   container: {
     overflow: 'hidden',
     borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-  },
+    borderTopRightRadius: Radius.xl },
   // ── Scrim — always visible, subtle so peek bar is readable ──
   scrim: {
-    opacity: 0.5,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-  },
+    opacity: 0.5 },
   // ── Sheet background — fades in when expanded ──
   sheetBg: {
-    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    ...Elevation.floating,
-  },
+    borderTopRightRadius: Radius.xl },
   // ── Peek bar (48pt — always visible) ──
   peekBar: {
     height: PEEK_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   peekBarPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   peekLabel: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size },
   // ── Expanded content ──
   content: {
-    height: CONTENT_HEIGHT,
-  },
+    height: CONTENT_HEIGHT },
   // ── Tab bar ──
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Space.sm,
+    paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    height: 44,
-  },
+    height: 44 },
   tabBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: Space.sm,
     height: 44,
-    position: 'relative',
-  },
+    position: 'relative' },
   tabBtnPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   tabLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   tabIndicator: {
     position: 'absolute',
     bottom: 0,
     left: Space.sm,
     right: Space.sm,
     height: 2,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   // ── Search row ──
   searchRow: {
     flexDirection: 'row',
@@ -788,14 +769,12 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   searchInput: {
     flex: 1,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    paddingVertical: 4,
-  },
+    fontSize: TypographyV2.body.size,
+    paddingVertical: 4 },
   // ── State container (loading/empty) ──
   stateContainer: {
     flexDirection: 'row',
@@ -803,32 +782,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.sm,
     paddingVertical: Space.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   stateText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Item scroll ──
   itemScroll: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
     alignItems: 'center',
-    paddingVertical: Space.sm,
-  },
-  // ── Item card — flat, no card-on-card. Image + title + price. ──
-  // 44pt touch target via the GestureDetector wrapper.
+    paddingVertical: Space.sm },
+  // ── Item card — media-first gallery, no card background or border ──
+  // Image is the dominant element; name + price sit below as flat text.
   itemCard: {
-    width: 76,
+    width: 88,
     alignItems: 'center',
-    gap: 2,
-  },
+    gap: Space.xs },
   itemImage: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
+    width: 88,
+    height: 88,
+    borderRadius: Radius.md },
   // ── Dedup indicator — subtle dot on items already on canvas ──
   onCanvasDot: {
     position: 'absolute',
@@ -837,70 +810,63 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: Radius.full,
-    borderWidth: 1.5,
-    borderColor: '#fff',
-  },
+    borderWidth: Stroke.standard,
+    borderColor: '#fff' },
   itemImagePlaceholder: {
-    width: 72,
-    height: 72,
+    width: 88,
+    height: 88,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemTitle: {
-    fontFamily: Typography.family.medium,
-    fontSize: 10.5,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontWeight: TypographyV2.meta.weight as any,
     marginTop: 2,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   itemPrice: {
-    fontFamily: Typography.family.semibold,
-    fontSize: 10.5,
-  },
+    fontFamily: TypographyV2.numericMeta.fontFamily,
+    fontSize: TypographyV2.numericMeta.size,
+    lineHeight: TypographyV2.numericMeta.lineHeight,
+    fontWeight: TypographyV2.numericMeta.weight as any,
+    fontVariant: ['tabular-nums'] },
   // ── Floating drag preview ──
   dragPreview: {
     position: 'absolute',
     width: PREVIEW_SIZE,
     alignItems: 'center',
     gap: 2,
-    zIndex: 1000,
-  },
+    zIndex: 1000 },
   previewImage: {
     width: PREVIEW_SIZE,
     height: PREVIEW_SIZE,
     borderRadius: Radius.md,
     backgroundColor: 'rgba(0,0,0,0.05)',
-    ...Elevation.floating,
-  },
+    ...Elevation.floating },
   previewTitle: {
     fontFamily: Typography.family.medium,
-    fontSize: 10.5,
+    fontSize: TypographyV2.meta.size,
     marginTop: 2,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   previewPrice: {
     fontFamily: Typography.family.semibold,
-    fontSize: 10.5,
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Source tray peek strip ──
   peekStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   peekThumb: {
     width: 32,
     height: 32,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
+    backgroundColor: 'rgba(0,0,0,0.05)' },
   peekMore: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-  },
-});
+    fontSize: TypographyV2.meta.size } });
 
 // ───────────────────────────────────────────────────────────────────────────
 // SourceTrayPeek — a thin strip of item thumbnails that sits above the

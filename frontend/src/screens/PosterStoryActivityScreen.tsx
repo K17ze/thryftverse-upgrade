@@ -6,20 +6,19 @@ import {
   StatusBar,
   RefreshControl,
   LayoutChangeEvent,
-  AccessibilityInfo,
-} from 'react-native';
+  AccessibilityInfo } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  type SharedValue,
-} from 'react-native-reanimated';
+  type SharedValue } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Radius, Type, Typography, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, Control, Stroke, LetterSpacing, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -40,8 +39,7 @@ const REACTION_EMOJI: Record<string, string> = {
   style: '✨',
   want: '🛍️',
   wow: '😮',
-  laugh: '😂',
-};
+  laugh: '😂' };
 
 const REACTION_LABELS: Record<string, string> = {
   love: 'Love',
@@ -49,8 +47,7 @@ const REACTION_LABELS: Record<string, string> = {
   style: 'Style',
   want: 'Want',
   wow: 'Wow',
-  laugh: 'Laugh',
-};
+  laugh: 'Laugh' };
 
 type ActivityItem = ActivityData['viewers'][0] | ActivityData['reactions'][0] | ActivityData['replies'][0] | ActivityData['styleVotes'][0];
 
@@ -79,8 +76,7 @@ function PeakTimeBar({
   isPeak,
   color,
   peakColor,
-  progress,
-}: {
+  progress }: {
   targetHeight: number;
   isPeak: boolean;
   color: string;
@@ -88,8 +84,7 @@ function PeakTimeBar({
   progress: SharedValue<number>;
 }) {
   const animatedStyle = useAnimatedStyle(() => ({
-    height: progress.value * targetHeight,
-  }));
+    height: progress.value * targetHeight }));
 
   return (
     <Reanimated.View
@@ -108,8 +103,7 @@ function PeakTimeBar({
 function PeakTimeChart({
   data,
   colors,
-  styles,
-}: {
+  styles }: {
   data: HourlyActivity[];
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
@@ -131,7 +125,7 @@ function PeakTimeChart({
     .map((d) => d.hour);
   const peakHour = peakHours[0];
 
-  const barColor = `${colors.brand}66`; // 40% opacity
+  const barColor = colors.brandSubtle; // 40% opacity
   const peakColor = colors.antiqueGold;
 
   return (
@@ -180,7 +174,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   const { show } = useToast();
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
-  const storyId = route.params.storyId;
+  const storyId = route.params?.storyId;
 
   const [activity, setActivity] = useState<ActivityData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -196,14 +190,12 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
 
   const animatedIndicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tabIndicatorX.value }],
-    width: tabIndicatorW.value,
-  }));
+    width: tabIndicatorW.value }));
 
   const handleTabLayout = useCallback((key: string, e: LayoutChangeEvent) => {
     tabLayoutsRef.current[key] = {
       x: e.nativeEvent.layout.x,
-      width: e.nativeEvent.layout.width,
-    };
+      width: e.nativeEvent.layout.width };
     if (key === activeTab) {
       tabIndicatorX.value = withSpring(e.nativeEvent.layout.x, spring.entrance);
       tabIndicatorW.value = withSpring(e.nativeEvent.layout.width, spring.entrance);
@@ -464,8 +456,8 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
           {[0, 1, 2, 3].map((i) => (
             <React.Fragment key={i}>
               <View style={styles.summaryMetric}>
-                <SkeletonLoader width={32} height={Type.title.size} borderRadius={Radius.sm} />
-                <SkeletonLoader width={48} height={Type.caption.size} borderRadius={Radius.sm} style={{ marginTop: Space.xs - 2 }} />
+                <SkeletonLoader width={32} height={TypographyV2.screenTitle.size} borderRadius={Radius.sm} />
+                <SkeletonLoader width={48} height={TypographyV2.meta.size} borderRadius={Radius.sm} style={{ marginTop: Space.xs - 2 }} />
               </View>
               {i < 3 && <View style={styles.summaryDivider} />}
             </React.Fragment>
@@ -475,7 +467,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
         <View style={styles.tabBar}>
           {tabs.map((tab) => (
             <View key={tab.key} style={styles.tab}>
-              <SkeletonLoader width={48} height={Type.body.size} borderRadius={Radius.sm} />
+              <SkeletonLoader width={48} height={TypographyV2.body.size} borderRadius={Radius.sm} />
             </View>
           ))}
         </View>
@@ -485,10 +477,10 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
             <View key={i} style={styles.row}>
               <SkeletonLoader width={AVATAR_SIZE} height={AVATAR_SIZE} borderRadius={AVATAR_SIZE / 2} />
               <View style={styles.rowContent}>
-                <SkeletonLoader width="50%" height={Type.body.size} borderRadius={Radius.sm} />
-                <SkeletonLoader width="70%" height={Type.caption.size} borderRadius={Radius.sm} style={{ marginTop: Space.xs - 2 }} />
+                <SkeletonLoader width="50%" height={TypographyV2.body.size} borderRadius={Radius.sm} />
+                <SkeletonLoader width="70%" height={TypographyV2.meta.size} borderRadius={Radius.sm} style={{ marginTop: Space.xs - 2 }} />
               </View>
-              <SkeletonLoader width={28} height={Type.caption.size} borderRadius={Radius.sm} />
+              <SkeletonLoader width={28} height={TypographyV2.meta.size} borderRadius={Radius.sm} />
             </View>
           ))}
         </View>
@@ -679,8 +671,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
                   frameId,
                   total: counts.reactions + counts.replies,
                   reactions: counts.reactions,
-                  replies: counts.replies,
-                }))
+                  replies: counts.replies }))
                 .sort((a, b) => b.total - a.total)
                 .slice(0, 5)
                 .map((entry, i) => (
@@ -691,8 +682,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
                         style={[
                           styles.frameBreakdownBarFill,
                           {
-                            width: `${Math.min(100, (entry.total / Math.max(summary.totalEngagement, 1)) * 100)}%`,
-                          },
+                            width: `${Math.min(100, (entry.total / Math.max(summary.totalEngagement, 1)) * 100)}%` },
                         ]}
                       />
                     </View>
@@ -734,33 +724,28 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.sm,
-      paddingVertical: Space.sm + 2,
-    },
+      paddingVertical: Space.sm + 2 },
     topTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     iconBtn: {
       width: Control.hit,
       height: Control.hit,
       borderRadius: Radius.full,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     loadingBody: {
       flex: 1,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     // ── Summary header card ────────────────────────────────────────────
     summaryCard: {
       flexDirection: 'row',
@@ -770,34 +755,25 @@ function createStyles(colors: ThemeColors) {
       padding: Space.md,
       borderRadius: Radius.lg,
       backgroundColor: colors.surfaceElevated,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 2,
-    },
+      ...Elevation.card },
     summaryMetric: {
       flex: 1,
       alignItems: 'center',
-      gap: Space.xs - 2,
-    },
+      gap: Space.xs - 2 },
     summaryMetricValue: {
-      fontSize: Type.title.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.screenTitle.size,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
       color: colors.textPrimary,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     summaryMetricLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: 0.5,
-    },
+      letterSpacing: 0.5 },
     summaryDivider: {
       width: StyleSheet.hairlineWidth,
       height: Space.xl,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     // ── Peak time chart ──────────────────────────────────────────────────
     // Flat canvas — no card, just padding. Bars sit directly on the screen
     // background (AGENTS.md §4: no card-on-card, flat canvas default).
@@ -805,79 +781,66 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
       paddingBottom: Space.md,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     peakTimeLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       textTransform: 'uppercase',
       letterSpacing: LetterSpacing.caps + 0.38,
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     peakTimeBars: {
       flexDirection: 'row',
       alignItems: 'flex-end',
       height: BAR_MAX_HEIGHT,
-      gap: BAR_GAP,
-    },
+      gap: BAR_GAP },
     peakTimeHourLabels: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
-    },
+      justifyContent: 'space-between' },
     peakTimeHourText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     peakTimeCaption: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     // ── Per-frame breakdown ─────────────────────────────────────────────
     frameBreakdown: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     frameBreakdownTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
+      letterSpacing: 0.5 },
     frameBreakdownRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     frameBreakdownLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      width: 60,
-    },
+      width: 60 },
     frameBreakdownBar: {
       flex: 1,
       height: 6,
       borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     frameBreakdownBarFill: {
       height: '100%',
       borderRadius: Radius.sm,
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     frameBreakdownCount: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
       minWidth: 24,
-      textAlign: 'right',
-    },
+      textAlign: 'right' },
     // ── Tabs ───────────────────────────────────────────────────────────
     // Flat underline tabs — no card-on-card. Active tab gets a brand-colored
     // underline indicator; inactive tabs are plain text on the screen background.
@@ -887,58 +850,47 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: 0,
       gap: Space.lg,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     tab: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingVertical: Space.sm + 2,
       borderBottomWidth: Stroke.standard,
-      borderBottomColor: 'transparent',
-    },
+      borderBottomColor: 'transparent' },
     tabActive: {
-      borderBottomColor: colors.brand,
-    },
+      borderBottomColor: colors.brand },
     tabIndicator: {
       position: 'absolute',
       bottom: 0,
       left: 0,
       height: 3,
       backgroundColor: colors.brand,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     tabText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textSecondary },
     tabTextActive: {
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     tabBadge: {
       backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.md,
       paddingHorizontal: Space.xs + 2,
       paddingVertical: Space.xs - 3,
       minWidth: Space.md,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     tabBadgeActive: {
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     tabBadgeText: {
       color: colors.textSecondary,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.bold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     tabBadgeTextActive: {
-      color: '#fff',
-    },
+      color: '#fff' },
     // ── List ───────────────────────────────────────────────────────────
     listContent: {
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -946,57 +898,46 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     avatar: {
       width: AVATAR_SIZE,
       height: AVATAR_SIZE,
       borderRadius: AVATAR_SIZE / 2,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     avatarPlaceholder: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     voteAvatar: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     avatarText: {
       color: colors.textSecondary,
       fontFamily: Typography.family.bold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     rowContent: {
       flex: 1,
-      gap: Space.xs - 2,
-    },
+      gap: Space.xs - 2 },
     rowTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     rowSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     rowTime: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     reactionEmoji: {
-      fontSize: 20,
-      lineHeight: 24,
-    },
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: 24 },
     // ── Empty state ────────────────────────────────────────────────────
     emptyBody: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       marginTop: Space.xxl,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emptyIconWrap: {
       width: Space.xxl + Space.sm,
       height: Space.xxl + Space.sm,
@@ -1004,28 +945,24 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     emptyTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textSecondary },
     emptyHint: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted,
       textAlign: 'center',
-      paddingHorizontal: Space.xl,
-    },
+      paddingHorizontal: Space.xl },
     // ── Error state ────────────────────────────────────────────────────
     errorBody: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.sm,
-      paddingHorizontal: Space.xl,
-    },
+      paddingHorizontal: Space.xl },
     errorIconWrap: {
       width: Space.xxl + Space.sm,
       height: Space.xxl + Space.sm,
@@ -1033,19 +970,16 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     errorTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     errorHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     retryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1054,12 +988,9 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     retryBtnText: {
       color: colors.textInverse,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
-  });
+      fontSize: TypographyV2.body.size } });
 }

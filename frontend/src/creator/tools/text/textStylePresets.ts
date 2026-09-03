@@ -13,7 +13,8 @@
  *     without explicit loading; on Android they fall back to the platform
  *     default, so the curated set below prefers the loaded Google fonts.
  */
-import { Typography, Type } from '../../../theme/designTokens';
+import { Typography } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 
 // ── Categories ────────────────────────────────────────────────────────
 export type TextStyleCategory =
@@ -54,8 +55,7 @@ export const TEXT_STYLE_PRESETS: TextStylePreset[] = [
     fontWeight: '500',
     sample: 'Aa',
     category: 'neutral-sans',
-    lineHeightMultiplier: 1.3,
-  },
+    lineHeightMultiplier: 1.3 },
   {
     id: 'headline',
     name: 'Headline',
@@ -63,8 +63,7 @@ export const TEXT_STYLE_PRESETS: TextStylePreset[] = [
     fontWeight: '700',
     sample: 'Aa',
     category: 'high-impact',
-    lineHeightMultiplier: 1.15,
-  },
+    lineHeightMultiplier: 1.15 },
   {
     id: 'editorial',
     name: 'Editorial',
@@ -72,8 +71,7 @@ export const TEXT_STYLE_PRESETS: TextStylePreset[] = [
     fontWeight: '700',
     sample: 'Aa',
     category: 'elegant-serif',
-    lineHeightMultiplier: 1.2,
-  },
+    lineHeightMultiplier: 1.2 },
   {
     id: 'compact',
     name: 'Compact',
@@ -81,8 +79,7 @@ export const TEXT_STYLE_PRESETS: TextStylePreset[] = [
     fontWeight: '500',
     sample: 'Aa',
     category: 'neutral-sans',
-    lineHeightMultiplier: 1.3,
-  },
+    lineHeightMultiplier: 1.3 },
   {
     id: 'handwritten',
     name: 'Handwritten',
@@ -90,8 +87,7 @@ export const TEXT_STYLE_PRESETS: TextStylePreset[] = [
     fontWeight: '400',
     sample: 'Aa',
     category: 'handwritten',
-    lineHeightMultiplier: 1.35,
-  },
+    lineHeightMultiplier: 1.35 },
   {
     id: 'signature',
     name: 'Signature',
@@ -99,8 +95,7 @@ export const TEXT_STYLE_PRESETS: TextStylePreset[] = [
     fontWeight: '600',
     sample: 'Aa',
     category: 'handwritten',
-    lineHeightMultiplier: 1.4,
-  },
+    lineHeightMultiplier: 1.4 },
   {
     id: 'bubble',
     name: 'Bubble',
@@ -108,8 +103,7 @@ export const TEXT_STYLE_PRESETS: TextStylePreset[] = [
     fontWeight: '400',
     sample: 'Aa',
     category: 'rounded-bubble',
-    lineHeightMultiplier: 1.2,
-  },
+    lineHeightMultiplier: 1.2 },
   {
     id: 'deco',
     name: 'Deco',
@@ -117,8 +111,7 @@ export const TEXT_STYLE_PRESETS: TextStylePreset[] = [
     fontWeight: '400',
     sample: 'Aa',
     category: 'geometric',
-    lineHeightMultiplier: 1.3,
-  },
+    lineHeightMultiplier: 1.3 },
   {
     id: 'poster',
     name: 'Poster',
@@ -126,8 +119,7 @@ export const TEXT_STYLE_PRESETS: TextStylePreset[] = [
     fontWeight: '400',
     sample: 'Aa',
     category: 'condensed-display',
-    lineHeightMultiplier: 1.1,
-  },
+    lineHeightMultiplier: 1.1 },
   {
     id: 'squeeze',
     name: 'Squeeze',
@@ -135,8 +127,7 @@ export const TEXT_STYLE_PRESETS: TextStylePreset[] = [
     fontWeight: '400',
     sample: 'Aa',
     category: 'condensed-display',
-    lineHeightMultiplier: 1.1,
-  },
+    lineHeightMultiplier: 1.1 },
 ];
 
 // ── TextStyleConfig ───────────────────────────────────────────────────
@@ -179,6 +170,11 @@ export interface TextStyleConfig {
   };
   alignment: 'left' | 'center' | 'right' | 'justify';
   opacity: number;
+  // Typography controls (Instagram Stories parity)
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
   // Legacy effect (backward compat) — migrated to stroke/shadow on load
   textEffect: 'none' | 'shadow' | 'neon' | 'outline' | 'glow';
   textAnimation: 'none' | 'typewriter' | 'bounce' | 'fade' | 'slide';
@@ -196,8 +192,7 @@ export const DEFAULT_TEXT_STYLE: TextStyleConfig = {
   alignment: 'center',
   opacity: 1,
   textEffect: 'none',
-  textAnimation: 'none',
-};
+  textAnimation: 'none' };
 
 // ── Preset lookup helpers ─────────────────────────────────────────────
 const PRESET_BY_ID: Record<string, TextStylePreset> = TEXT_STYLE_PRESETS.reduce(
@@ -219,13 +214,12 @@ export function getPresetById(id: string): TextStylePreset | undefined {
  */
 export function resolvePreviewStyle(
   presetId: string,
-  baseSize: number = Type.bodyStrong.size,
+  baseSize: number = TypographyV2.bodyStrong.size,
 ): { fontFamily: string; fontSize: number; lineHeight: number } {
   const preset = PRESET_BY_ID[presetId] ?? PRESET_BY_ID.clean;
   const multiplier = preset?.lineHeightMultiplier ?? 1.25;
   return {
     fontFamily: preset?.fontFamily ?? Typography.family.medium,
     fontSize: baseSize,
-    lineHeight: Math.round(baseSize * multiplier),
-  };
+    lineHeight: Math.round(baseSize * multiplier) };
 }

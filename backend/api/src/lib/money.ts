@@ -66,7 +66,7 @@ export interface Money {
 export interface AssetAmount {
   asset: '1ZE';
   baseUnitAmount: string;
-  baseUnit: 'mg';
+  baseUnit: 'units';
   scale: 3;
 }
 
@@ -348,7 +348,7 @@ export function assetAmountFromBaseUnits(baseUnitAmount: string | bigint): Asset
   return {
     asset: '1ZE',
     baseUnitAmount: parsed.toString(),
-    baseUnit: 'mg',
+    baseUnit: 'units',
     scale: 3,
   };
 }
@@ -356,7 +356,7 @@ export function assetAmountFromBaseUnits(baseUnitAmount: string | bigint): Asset
 export function assetAmountFromOneze(majorAmount: string): AssetAmount {
   const match = /^(\d+)(?:\.(\d+))?$/.exec(majorAmount.trim());
   if (!match || (match[2] ?? '').length > 3) {
-    throw new MoneyValidationError('MONEY_PRECISION_INVALID', '1ZE allows at most three decimal places (mg base units)');
+    throw new MoneyValidationError('MONEY_PRECISION_INVALID', '1ZE allows at most three decimal places (minor units)');
   }
   const fraction = (match[2] ?? '').padEnd(3, '0');
   return assetAmountFromBaseUnits(BigInt(match[1]) * ONEZE_BASE_UNIT_SCALE + BigInt(fraction || '0'));

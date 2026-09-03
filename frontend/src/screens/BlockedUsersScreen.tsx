@@ -6,17 +6,19 @@ import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Typography, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import {
   fetchPublicProfile,
   unblockUser,
-  type PublicProfileUser,
-} from '../services/profileApi';
+  type PublicProfileUser } from '../services/profileApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BlockedUsers'>;
 
@@ -107,7 +109,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
           />
         ) : (
           <View style={[styles.avatarFallback, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="person-outline" size={18} color={colors.textMuted} />
+            <AppIcon name="profile" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
           </View>
         )}
 
@@ -130,8 +132,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
           accessibilityRole="button"
           accessibilityState={{
             busy: pendingId === userId,
-            disabled: pendingId !== null,
-          }}
+            disabled: pendingId !== null }}
         >
           {pendingId === userId ? (
             <ActivityIndicator size="small" color={colors.textPrimary} />
@@ -155,7 +156,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
     >
       {blockedIds.length === 0 ? (
         <EmptyState
-          icon="shield-checkmark-outline"
+          icon="lock"
           title="You haven't blocked anyone"
           subtitle="Blocked accounts appear here."
         />
@@ -163,7 +164,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
         <>
           {showSearch && (
             <View style={styles.searchRow}>
-              <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+              <AppIcon name="search" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
               <TextInput
                 style={styles.searchInput}
                 value={query}
@@ -181,7 +182,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
                   accessibilityRole="button"
                   style={styles.clearBtn}
                 >
-                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                  <AppIcon name="close" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                 </AnimatedPressable>
               )}
             </View>
@@ -191,7 +192,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
             <SettingsListSkeleton count={Math.min(blockedIds.length, 4)} />
           ) : filteredIds.length === 0 ? (
             <EmptyState
-              icon="search-outline"
+              icon="search"
               title="No matches"
               subtitle="No blocked accounts match your search."
               density="compact"
@@ -221,58 +222,48 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border,
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs + 2,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     searchInput: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
       minHeight: Control.chrome,
-      paddingVertical: 0,
-    },
+      paddingVertical: 0 },
     clearBtn: {
       width: Control.chromeCompact,
       height: Control.chromeCompact,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     list: {
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     userRow: {
       minHeight: Control.hit + Space.lg,
       marginLeft: Space.md,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm + Space.xs,
-    },
+      gap: Space.sm + Space.xs },
     avatar: {
       width: Space.xxl - 2,
       height: Space.xxl - 2,
-      borderRadius: Radius.xxl,
-    },
+      borderRadius: Radius.xxl },
     avatarFallback: {
       width: Space.xxl - 2,
       height: Space.xxl - 2,
       borderRadius: Radius.xxl,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     userText: {
       minWidth: 0,
-      flex: 1,
-    },
+      flex: 1 },
     userName: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     userMeta: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-      marginTop: Space.xs - 1,
-    },
+      fontSize: TypographyV2.meta.size,
+      marginTop: Space.xs - 1 },
     unblockTarget: {
       minWidth: 76,
       minHeight: Control.chrome,
@@ -280,11 +271,8 @@ function createStyles(colors: ThemeColors) {
       marginRight: Space.md,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     unblockText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.caption.size,
-    },
-  });
+      fontSize: TypographyV2.meta.size } });
 }

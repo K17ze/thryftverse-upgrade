@@ -5,12 +5,15 @@ import {
   StyleSheet,
   ViewStyle,
   StyleProp,
-  TextInputProps,
-} from 'react-native';
+  TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type , Typography, Control, Stroke  } from '../../theme/designTokens';
+import { Space, Radius, Control, Stroke  } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
+
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 interface AppSearchBarProps {
   placeholder?: string;
@@ -30,8 +33,7 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
     onClear,
     containerStyle,
     inputProps,
-    rightNode,
-  },
+    rightNode },
   ref
 ) {
   const { colors } = useAppTheme();
@@ -45,7 +47,12 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
 
   return (
     <View style={[styles.container, isFocused && styles.containerFocused, containerStyle]}>
-      <Ionicons name="search-outline" size={18} color={isFocused ? colors.textSecondary : colors.textMuted} />
+      <AppIcon
+        name="search"
+        size={IconSize.md}
+        color={isFocused ? colors.textSecondary : colors.textMuted}
+        accessible={false}
+      />
       <TextInput
         ref={ref}
         {...inputProps}
@@ -69,7 +76,13 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
           accessibilityLabel="Clear search"
           accessibilityRole="button"
         >
-          <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          <AppIcon
+            name="closeCircle"
+            size={IconSize.md}
+            color={colors.textMuted}
+            focused={true}
+            accessible={false}
+          />
         </AnimatedPressable>
       ) : rightNode ? (
         rightNode
@@ -89,18 +102,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     gap: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   containerFocused: {
     borderWidth: Stroke.standard,
-    borderColor: colors.textSecondary,
-  },
+    borderColor: colors.textSecondary },
   input: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    paddingVertical: 0,
-  },
-});
+    letterSpacing: TypographyV2.body.letterSpacing,
+    paddingVertical: 0 } });

@@ -5,7 +5,7 @@ import {
   View,
   ViewStyle,
   StyleProp,
-  Dimensions,
+  useWindowDimensions,
   type AccessibilityRole,
 } from 'react-native';
 import Reanimated, {
@@ -49,7 +49,6 @@ interface MeasuredRect {
 }
 
 const ARROW_SIZE = 8;
-const SCREEN = Dimensions.get('window');
 
 /**
  * AppPopover — a positioned popover with arbitrary content. The anchor is
@@ -71,6 +70,7 @@ export function AppPopover({
   style,
 }: AppPopoverProps) {
   const { colors } = useAppTheme();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { spring } = useMotionConfig();
   const reducedMotion = useReducedMotion();
   const anchorRef = React.useRef<View>(null);
@@ -94,11 +94,11 @@ export function AppPopover({
   const show = React.useCallback(() => {
     anchorRef.current?.measureInWindow((x, y, width, height) => {
       setRect({ x, y, width, height });
-      const resolved = resolvePlacement(placement, y, height);
+      const resolved = resolvePlacement(placement, y, height, screenHeight);
       setComputedPlacement(resolved);
       setVisible(true);
     });
-  }, [placement]);
+  }, [placement, screenHeight]);
 
   React.useEffect(() => {
     if (visible) {
@@ -115,8 +115,8 @@ export function AppPopover({
   }));
 
   const popoverLayout = React.useMemo(
-    () => (rect ? computePopoverLayout(rect, computedPlacement, maxWidth) : null),
-    [rect, computedPlacement, maxWidth],
+    () => (rect ? computePopoverLayout(rect, computedPlacement, maxWidth, screenWidth, screenHeight) : null),
+    [rect, computedPlacement, maxWidth, screenWidth, screenHeight],
   );
 
   const triggerProps = React.useMemo(() => {
@@ -157,10 +157,11 @@ function resolvePlacement(
   placement: AppPopoverPlacement,
   y: number,
   height: number,
+  screenHeight: number,
 ): Exclude<AppPopoverPlacement, 'auto'> {
   if (placement !== 'auto') return placement;
   const spaceAbove = y;
-  const spaceBelow = SCREEN.height - (y + height);
+  const spaceBelow = screenHeight - (y + height);
   return spaceAbove > spaceBelow ? 'top' : 'bottom';
 }
 
@@ -173,6 +174,8 @@ function computePopoverLayout(
   rect: MeasuredRect,
   placement: Exclude<AppPopoverPlacement, 'auto'>,
   maxWidth: number,
+  screenWidth: number,
+  screenHeight: number,
 ): PopoverLayout {
   const centerX = rect.x + rect.width / 2;
   const centerY = rect.y + rect.height / 2;
@@ -182,23 +185,23 @@ function computePopoverLayout(
   switch (placement) {
     case 'top':
       return {
-        left: clamp(centerX - estimatedWidth / 2, 8, SCREEN.width - estimatedWidth - 8),
+        left: clamp(centerX - estimatedWidth / 2, 8, screenWidth - estimatedWidth - 8),
         top: rect.y - estimatedHeight - ARROW_SIZE - Space.xxs,
       };
     case 'bottom':
       return {
-        left: clamp(centerX - estimatedWidth / 2, 8, SCREEN.width - estimatedWidth - 8),
+        left: clamp(centerX - estimatedWidth / 2, 8, screenWidth - estimatedWidth - 8),
         top: rect.y + rect.height + ARROW_SIZE + Space.xxs,
       };
     case 'left':
       return {
         left: rect.x - estimatedWidth - ARROW_SIZE - Space.xxs,
-        top: clamp(centerY - estimatedHeight / 2, 8, SCREEN.height - estimatedHeight - 8),
+        top: clamp(centerY - estimatedHeight / 2, 8, screenHeight - estimatedHeight - 8),
       };
     case 'right':
       return {
         left: rect.x + rect.width + ARROW_SIZE + Space.xxs,
-        top: clamp(centerY - estimatedHeight / 2, 8, SCREEN.height - estimatedHeight - 8),
+        top: clamp(centerY - estimatedHeight / 2, 8, screenHeight - estimatedHeight - 8),
       };
   }
 }

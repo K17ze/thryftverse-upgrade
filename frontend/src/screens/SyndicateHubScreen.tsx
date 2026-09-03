@@ -17,7 +17,8 @@ import { fetchCoOwnHoldings, listCoOwnAssets } from '../services/marketApi';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { useBackendData } from '../context/BackendDataContext';
-import { Radius, Space, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Radius, Space, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { haptics } from '../utils/haptics';
 import { getCategoryFocalPoint } from '../utils/media';
 import { AppInput } from '../components/ui/AppInput';
@@ -29,7 +30,6 @@ import {
   CoOwnInstrumentCard,
   CoOwnMarketHighlightsCarousel,
   CoOwnOfflineBanner,
-  CoOwnReconciliationBanner,
   CoOwnStateCanvas,
   COOWN_POSITION_CARD_WIDTH,
   type CoOwnAssetStatus,
@@ -38,7 +38,6 @@ import {
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type SortOption = 'progress' | 'closing' | 'roi';
@@ -56,7 +55,7 @@ interface HubAsset {
   availableUnits: number;
   unitPriceGBP: number;
   unitPriceStable: number;
-  settlementMode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+  settlementMode: 'ONEZE';
   issuerJurisdiction?: string;
   holders: number;
   yourUnits: number;
@@ -123,7 +122,7 @@ export default function CoOwnHubScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { show } = useToast();
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -366,7 +365,7 @@ export default function CoOwnHubScreen() {
   );
 
   const formatLocal = React.useCallback((valueGbp: number) => (
-    formatFromFiat(valueGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat', fiatFractionDigits: 2 })
+    formatFromFiat(valueGbp, currencyCode, { displayMode: 'fiat', fiatFractionDigits: 2 })
   ), [formatFromFiat]);
 
   const highlightAssets = React.useMemo(() => {
@@ -518,9 +517,6 @@ export default function CoOwnHubScreen() {
     if (item.kind === 'highlights') {
       return (
         <View style={styles.highlightsSection}>
-          <View style={styles.highlightsHeading}>
-            <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>MARKET HIGHLIGHTS</Text>
-          </View>
           <CoOwnMarketHighlightsCarousel items={highlights} onPressItem={handleHighlightPress} />
         </View>
       );
@@ -533,7 +529,6 @@ export default function CoOwnHubScreen() {
         <View style={styles.majorSection}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeadingGroup}>
-              <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>YOUR PORTFOLIO</Text>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.2}>Positions</Text>
             </View>
             <AnimatedPressable
@@ -598,7 +593,6 @@ export default function CoOwnHubScreen() {
         <View style={styles.instrumentsHeader} accessibilityLabel="Market search and sorting">
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeadingGroup}>
-              <Text style={[styles.sectionEyebrow, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>MARKETPLACE</Text>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.2}>{SECTION_TITLES[activeSegment]}</Text>
             </View>
             <Text style={[styles.resultCount, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>{filteredAssets.length} {filteredAssets.length === 1 ? 'market' : 'markets'}</Text>
@@ -810,19 +804,6 @@ export default function CoOwnHubScreen() {
           onLearnMore={() => navigation.navigate('CoOwnOnboarding')}
           learnMoreLabel="Read full guide"
         />
-        <AnimatedPressable
-          onPress={() => {
-            haptics.tap();
-            navigation.navigate('MarketLedger');
-          }}
-          style={styles.ledgerLink}
-          accessibilityRole="button"
-          accessibilityLabel="View market ledger"
-        >
-          <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
-          <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>Market ledger</Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-        </AnimatedPressable>
       </View>
     );
   }, [
@@ -896,7 +877,6 @@ export default function CoOwnHubScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
-      <CoOwnReconciliationBanner isActive={false} />
       <FlashList
         data={hubRows}
         renderItem={renderRow}
@@ -940,24 +920,17 @@ const styles = StyleSheet.create({
     height: 17,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.xs,
-    borderWidth: 1.5,
+    borderWidth: Stroke.standard,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerBadgeText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.bold,
   },
   highlightsSection: {
     paddingTop: Space.sm,
     paddingBottom: Space.md,
-  },
-  highlightsHeading: {
-    minHeight: Space.xl - Space.xs,
-    paddingHorizontal: Space.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
   },
   tabsSurface: {
     minHeight: Control.hit + 6,
@@ -981,8 +954,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tabText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     letterSpacing: LetterSpacing.normal - 0.1,
     textAlign: 'center',
   },
@@ -1010,17 +983,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: Space.xs / 2,
   },
-  sectionEyebrow: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: LetterSpacing.caps,
-    textTransform: 'uppercase',
-  },
   sectionTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     letterSpacing: LetterSpacing.tight,
   },
   sectionAction: {
@@ -1032,9 +998,9 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   sectionActionText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   positionsContent: {
     paddingHorizontal: Space.md,
@@ -1063,14 +1029,14 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   inlineStateTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   inlineStateText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   inlineRetry: {
     minWidth: Space.xxl + Space.xl + Space.xs,
@@ -1081,18 +1047,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   inlineRetryText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   instrumentsHeader: {
     paddingTop: Space.sm,
     paddingBottom: Space.md,
   },
   resultCount: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
     paddingBottom: Space.xs,
   },
@@ -1127,9 +1093,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   controlText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   sortOptions: {
     paddingHorizontal: Space.md,
@@ -1146,9 +1112,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sortOptionText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   // ── Funding status filter chips ──
   // Flat chip row below sort controls. Uses brandSubtle for selected state
@@ -1166,8 +1132,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   fundingFilterText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     letterSpacing: LetterSpacing.normal - 0.1,
   },
   instrumentRow: {
@@ -1211,25 +1177,13 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   creatorTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   creatorText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
-  ledgerLink: {
-    minHeight: Control.hit,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  ledgerLinkText: {
-    flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
 });

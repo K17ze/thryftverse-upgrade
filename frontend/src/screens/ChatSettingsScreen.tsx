@@ -1,6 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
+import { View } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -9,16 +8,11 @@ import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
-import { useAppTheme } from '../theme/ThemeContext';
-import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ChatSettings'>;
 
 export default function ChatSettingsScreen({ navigation }: Props) {
   const { show } = useToast();
-  const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
   const mutedIds = useStore((s) => s.mutedConversationIds);
   const archivedIds = useStore((s) => s.archivedConversationIds);
   const readReceipts = useStore((s) => s.readReceiptsEnabled);
@@ -55,39 +49,9 @@ export default function ChatSettingsScreen({ navigation }: Props) {
   return (
     <View style={{ flex: 1 }}>
     <FlagshipScreen header={<FlagshipHeader title="Chat settings" onBack={() => navigation.goBack()} />}>
-      {/* Hero summary */}
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-              <Ionicons name="chatbubble-ellipses" size={20} color={colors.textInverse} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Messaging</Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {allowLabel[allowFrom]} can message you
-              </Text>
-            </View>
-          </View>
-          <View style={styles.heroStats}>
-            <View style={styles.heroStat}>
-              <Text style={[styles.heroStatValue, { color: colors.textPrimary }]}>{mutedCount}</Text>
-              <Text style={[styles.heroStatLabel, { color: colors.textMuted }]}>Muted</Text>
-            </View>
-            <View style={[styles.heroStatDivider, { backgroundColor: colors.borderSubtle }]} />
-            <View style={styles.heroStat}>
-              <Text style={[styles.heroStatValue, { color: colors.textPrimary }]}>{archivedCount}</Text>
-              <Text style={[styles.heroStatLabel, { color: colors.textMuted }]}>Archived</Text>
-            </View>
-            <View style={[styles.heroStatDivider, { backgroundColor: colors.borderSubtle }]} />
-            <View style={styles.heroStat}>
-              <Text style={[styles.heroStatValue, { color: colors.textPrimary }]}>{blockedCount}</Text>
-              <Text style={[styles.heroStatLabel, { color: colors.textMuted }]}>Blocked</Text>
-            </View>
-          </View>
-        </View>
-
-      <SettingsSection title="Who can reach you" noCard>
+      <SettingsSection title="Messaging">
         <SettingsRow
+          icon="chatbubble-outline"
           title="Who can message me"
           value={allowLabel[allowFrom]}
           onPress={() => setShowAllowSheet(true)}
@@ -100,24 +64,22 @@ export default function ChatSettingsScreen({ navigation }: Props) {
           onToggle={setReadReceipts}
         />
         <SettingsRow
-          title="Blocked users"
-          subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None blocked'}
-          onPress={() => navigation.navigate('BlockedUsers')}
-          isLast
-        />
-      </SettingsSection>
-
-      <SettingsSection title="Conversations" noCard>
-        <SettingsRow
-          title="Muted conversations"
-          subtitle={mutedCount > 0 ? `${mutedCount} muted` : 'None muted'}
+          icon="notifications-off-outline"
+          title="Muted"
+          value={mutedCount === 0 ? 'None' : String(mutedCount)}
           onPress={() => navigation.navigate('MutedConversations')}
-          isFirst
         />
         <SettingsRow
-          title="Archived conversations"
-          subtitle={archivedCount > 0 ? `${archivedCount} archived` : 'None archived'}
+          icon="archive-outline"
+          title="Archived"
+          value={archivedCount === 0 ? 'None' : String(archivedCount)}
           onPress={() => navigation.navigate('ArchivedConversations')}
+        />
+        <SettingsRow
+          icon="ban-outline"
+          title="Blocked"
+          value={blockedCount === 0 ? 'None' : String(blockedCount)}
+          onPress={() => navigation.navigate('BlockedUsers')}
           isLast
         />
       </SettingsSection>
@@ -210,58 +172,4 @@ export default function ChatSettingsScreen({ navigation }: Props) {
       />
     </View>
   );
-}
-
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.md,
-      gap: Space.md,
-    },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xl + Space.sm,
-      height: Space.xl + Space.sm,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-    },
-    heroStats: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    heroStat: { flex: 1, alignItems: 'center' },
-    heroStatValue: {
-      fontSize: Type.priceList.size,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
-    heroStatLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-    },
-    heroStatDivider: {
-      width: Stroke.standard,
-      height: Space.lg + Space.xs,
-    },
-  });
 }

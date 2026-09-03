@@ -7,6 +7,11 @@ export interface ListingImpactResponse {
   co2eEolAvoidedKg: number;
   co2eShippingKg: number;
   co2ePackagingKg: number;
+  waterSavedL: number;
+  displacementRate: number;
+  reboundEffect: number;
+  distanceKm: number;
+  carrierMode: string;
   methodologyVersion: string;
   factorSources: string[];
 }
@@ -62,4 +67,27 @@ export async function materialiseOrderImpact(
     `/orders/${encodeURIComponent(orderId)}/impact`,
     { method: 'POST' },
   );
+}
+
+export interface SustainabilityPreferences {
+  carbonTargetKg: number | null;
+  ratioTargetPct: number | null;
+  plasticFreePackaging: boolean;
+  showBadges: boolean;
+  trackImpact: boolean;
+  localFirst: boolean;
+}
+
+export async function fetchSustainabilityPreferences(): Promise<SustainabilityPreferences> {
+  return fetchJson<SustainabilityPreferences>('/users/me/sustainability-preferences');
+}
+
+export async function updateSustainabilityPreferences(
+  prefs: Partial<SustainabilityPreferences>,
+): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>('/users/me/sustainability-preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(prefs),
+  });
 }

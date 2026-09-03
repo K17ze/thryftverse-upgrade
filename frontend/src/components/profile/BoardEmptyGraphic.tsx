@@ -3,7 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface BoardEmptyGraphicProps {
   title: string;
@@ -16,20 +17,17 @@ export function BoardEmptyGraphic({
   title,
   subtitle,
   icon = 'folder-open-outline',
-  size = 120,
-}: BoardEmptyGraphicProps) {
-  const { colors, isDark } = useAppTheme();
+  size = 120 }: BoardEmptyGraphicProps) {
+  const { colors } = useAppTheme();
 
-  const bg: [string, string] = isDark
-    ? [colors.surfaceAlt, colors.surface]
-    : [colors.surfaceAlt, colors.surface];
+  const bg: [string, string] = [colors.surfaceAlt, colors.surface];
 
-  const iconColor = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)';
-  const dotColor = isDark ? '#fff' : '#000';
-  const iconRingBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
-  const iconRingBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-  const titleColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
-  const subtitleColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
+  const iconColor = colors.textMuted;
+  const dotColor = colors.textPrimary;
+  const iconRingBg = colors.surfaceAlt;
+  const iconRingBorder = colors.borderSubtle;
+  const titleColor = colors.textSecondary;
+  const subtitleColor = colors.textMuted;
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
@@ -51,8 +49,7 @@ export function BoardEmptyGraphic({
                 left: `${(i % 4) * 25 + 10}%`,
                 top: `${Math.floor(i / 4) * 30 + 15}%`,
                 opacity: 0.04 + (i % 3) * 0.02,
-                backgroundColor: dotColor,
-              },
+                backgroundColor: dotColor },
             ]}
           />
         ))}
@@ -74,40 +71,32 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     overflow: 'hidden',
     position: 'relative',
-    alignSelf: 'center',
-  },
+    alignSelf: 'center' },
   dots: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   dot: {
     position: 'absolute',
     width: 4,
     height: 4,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.smMd,
-    padding: Space.md,
-  },
+    padding: Space.md },
   iconRing: {
     width: 56,
     height: 56,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-  },
+    borderWidth: Stroke.standard },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    textAlign: 'center' },
   subtitle: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    textAlign: 'center',
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    textAlign: 'center' } });

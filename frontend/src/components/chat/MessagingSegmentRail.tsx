@@ -2,7 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 import { Pressable } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Type, TypeStyles, Typography, Radius, Stroke } from '../../theme/designTokens';
+import { Space, TypeStyles, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 export type MessagingSegment = 'all' | 'buying' | 'selling' | 'requests';
 
@@ -19,18 +21,19 @@ export function MessagingSegmentRail({
   onChange,
   requestCount = 0,
   buyingCount = 0,
-  sellingCount = 0,
-}: MessagingSegmentRailProps) {
+  sellingCount = 0 }: MessagingSegmentRailProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  // Only 3 scopes are visible in the first viewport (Primary, Buying,
-  // Selling). Additional classifiers (Requests, Unread, Archived, Groups)
-  // are surfaced behind a filter icon in the InboxScreen header.
+  // Primary scopes visible in the first viewport: Primary, Buying, Selling,
+  // and Requests. Additional classifiers (Unread, Archived, Groups) are
+  // surfaced behind a filter icon in the InboxScreen header.
   const segments: { key: MessagingSegment; label: string; badge?: number }[] = [
-    { key: 'all', label: 'Primary' },
-    { key: 'buying', label: 'Buying', badge: buyingCount > 0 ? buyingCount : undefined },
-    { key: 'selling', label: 'Selling', badge: sellingCount > 0 ? sellingCount : undefined },
+    { key: 'all', label: t('inbox.primary') },
+    { key: 'buying', label: t('inbox.buying'), badge: buyingCount > 0 ? buyingCount : undefined },
+    { key: 'selling', label: t('inbox.selling'), badge: sellingCount > 0 ? sellingCount : undefined },
+    { key: 'requests', label: t('inbox.requests'), badge: requestCount > 0 ? requestCount : undefined },
   ];
 
   return (
@@ -84,14 +87,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     paddingHorizontal: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -99,44 +100,35 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm,
     paddingHorizontal: Space.xs,
     position: 'relative',
-    minHeight: 44,
-  },
+    minHeight: 44 },
   tabActive: {},
   tabPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   label: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypeStyles.body.fontFamily,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   labelActive: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   labelInactive: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   badge: {
     minWidth: 18,
     height: 18,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.brand}1F`,
+    backgroundColor: colors.brandSubtle,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.xs + 1,
-  },
+    paddingHorizontal: Space.xs + 1 },
   badgeActive: {
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   badgeText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: colors.brand,
-  },
+    color: colors.brand },
   badgeTextActive: {
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
   indicator: {
     position: 'absolute',
     bottom: 0,
@@ -144,10 +136,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: Space.xs,
     height: 2,
     borderRadius: Radius.full,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   indicatorActive: {
     backgroundColor: colors.textPrimary,
-    height: 2.5,
-  },
-});
+    height: 2.5 } });

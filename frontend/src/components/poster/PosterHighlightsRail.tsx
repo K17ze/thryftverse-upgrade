@@ -8,10 +8,10 @@ import Reanimated, {
   withSpring,
   withDelay,
   useAnimatedReaction,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -60,8 +60,7 @@ function HighlightTile({
   springConfig,
   staggerDelay,
   onOpen,
-  onLongPress,
-}: {
+  onLongPress }: {
   highlight: PosterHighlight;
   index: number;
   coverUrl: string | null;
@@ -95,8 +94,7 @@ function HighlightTile({
 
   const entranceStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: entranceY.value }],
-    opacity: entranceOpacity.value,
-  }));
+    opacity: entranceOpacity.value }));
 
   return (
     <Reanimated.View style={entranceStyle}>
@@ -153,8 +151,7 @@ export function PosterHighlightsRail({
   onCreateHighlight,
   isOwner,
   onHighlightLongPress,
-  activeHighlightId,
-}: PosterHighlightsRailProps) {
+  activeHighlightId }: PosterHighlightsRailProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -250,8 +247,7 @@ function NewHighlightTile({
   reducedMotion,
   springConfig,
   staggerDelay,
-  onCreate,
-}: {
+  onCreate }: {
   index: number;
   reducedMotion: boolean;
   springConfig: SpringConfig;
@@ -279,8 +275,7 @@ function NewHighlightTile({
 
   const entranceStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: entranceY.value }],
-    opacity: entranceOpacity.value,
-  }));
+    opacity: entranceOpacity.value }));
 
   return (
     <Reanimated.View style={entranceStyle}>
@@ -334,20 +329,17 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       paddingHorizontal: Space.sm,
       paddingVertical: Space.sm,
-      gap: Space.md,
-    },
+      gap: Space.md },
     tile: {
       alignItems: 'center',
-      width: HIGHLIGHT_SIZE + Space.sm,
-    },
+      width: HIGHLIGHT_SIZE + Space.sm },
     // Instagram-style gradient ring — wraps the avatar with a 2px gradient border
     ringGradient: {
       width: HIGHLIGHT_SIZE + RING_WIDTH * 2,
       height: HIGHLIGHT_SIZE + RING_WIDTH * 2,
       borderRadius: Radius.full,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     // Active highlight — thicker ring (4px) for clear selection signal
     ringGradientActive: {
       width: HIGHLIGHT_SIZE + RING_WIDTH * 4,
@@ -356,8 +348,7 @@ function createStyles(colors: ThemeColors) {
       shadowOpacity: 0.3,
       shadowRadius: 8,
       shadowOffset: { width: 0, height: 0 },
-      elevation: 4,
-    },
+      elevation: 4 },
     ringInner: {
       width: HIGHLIGHT_SIZE,
       height: HIGHLIGHT_SIZE,
@@ -365,17 +356,14 @@ function createStyles(colors: ThemeColors) {
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
       borderWidth: Stroke.standard,
-      borderColor: colors.background,
-    },
+      borderColor: colors.background },
     cover: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     coverPlaceholder: {
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     // Frame count badge — small dark pill anchored to the bottom-right of the
     // highlight circle. Adds useful information density without clutter.
     frameBadge: {
@@ -388,27 +376,23 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       backgroundColor: colors.overlay,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     frameBadgeText: {
       color: '#fff',
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      lineHeight: FRAME_BADGE_SIZE,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: FRAME_BADGE_SIZE },
     label: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       marginTop: Space.xs,
       maxWidth: HIGHLIGHT_SIZE + Space.xs,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     // Active label — bold + primary color for clear selection
     labelActive: {
       fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     // "New" tile — clean thin solid border with a plus icon (Instagram-style)
     newRing: {
       width: HIGHLIGHT_SIZE + RING_WIDTH * 2,
@@ -418,7 +402,5 @@ function createStyles(colors: ThemeColors) {
       borderColor: colors.border,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: colors.background,
-    },
-  });
+      backgroundColor: colors.background } });
 }

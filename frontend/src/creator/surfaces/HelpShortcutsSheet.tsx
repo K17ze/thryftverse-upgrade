@@ -13,7 +13,8 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
-import { Space, Radius, FontFamily, Type, Stroke, IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, IconGrammar } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 
@@ -43,16 +44,14 @@ const CATEGORIES: ShortcutCategory[] = [
     icon: 'navigate-outline',
     entries: [
       { keys: 'Esc', label: 'Close sheet · deselect · back' },
-    ],
-  },
+    ] },
   {
     title: 'Editing',
     icon: 'create-outline',
     entries: [
       { keys: 'Delete', label: 'Delete selected layer' },
       { keys: '⌫', label: 'Backspace also deletes selection' },
-    ],
-  },
+    ] },
   {
     title: 'Tools',
     icon: 'construct-outline',
@@ -60,16 +59,14 @@ const CATEGORIES: ShortcutCategory[] = [
       // No tool-switching keyboard shortcuts exist yet — the tool rail
       // is the primary input. Documented honestly per AGENTS.md §11.
       { keys: '—', label: 'Use the tool rail to switch tools' },
-    ],
-  },
+    ] },
   {
     title: 'History',
     icon: 'time-outline',
     entries: [
       { keys: '⌘Z', label: 'Undo' },
       { keys: '⌘⇧Z', label: 'Redo' },
-    ],
-  },
+    ] },
 ];
 
 export function HelpShortcutsSheet({ visible, onClose }: HelpShortcutsSheetProps) {
@@ -153,86 +150,68 @@ export function HelpShortcutsSheet({ visible, onClose }: HelpShortcutsSheetProps
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   header: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   headerText: {
-    flex: 1,
-  },
+    flex: 1 },
   title: {
     fontFamily: FontFamily.bold,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   subtitle: {
     fontFamily: FontFamily.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    marginTop: 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    marginTop: 2 },
   scroll: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   scrollContent: {
-    paddingBottom: Space.lg,
-  },
+    paddingBottom: Space.lg },
   category: {
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   categoryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     marginBottom: Space.xs,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   categoryTitle: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase' },
   entryList: {
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   entryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm,
     paddingHorizontal: Space.xs,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   entryLabel: {
     flex: 1,
     fontFamily: FontFamily.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   keyText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    letterSpacing: 0.2,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    letterSpacing: 0.2 },
   footer: {
     paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   gotItBtn: {
     height: 50,
     borderRadius: Radius.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   gotItText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    letterSpacing: 0.12,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    letterSpacing: 0.12 } });

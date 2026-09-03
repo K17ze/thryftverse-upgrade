@@ -21,7 +21,8 @@ import { getListingCoverUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Type, Typography, DockConstants, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, DockConstants, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useBackendData } from '../context/BackendDataContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
@@ -30,7 +31,6 @@ import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
   CoOwnIssueStudioStep,
   CoOwnStickyActionDock,
@@ -54,7 +54,7 @@ export default function CreateCoOwnScreen() {
   const { colors } = useAppTheme();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, fxRates } = useCurrencyContext();
   const haptic = useHaptic();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -149,10 +149,10 @@ export default function CreateCoOwnScreen() {
   const fromDisplayToGbp = React.useCallback(
     (amountDisplay: number) => {
       if (currencyCode === 'GBP') return amountDisplay;
-      const amountIze = toIze(amountDisplay, currencyCode, goldRates);
-      return toFiat(amountIze, 'GBP', goldRates);
+      const amountIze = toIze(amountDisplay, currencyCode, fxRates);
+      return toFiat(amountIze, 'GBP', fxRates);
     },
-    [currencyCode, goldRates]
+    [currencyCode, fxRates]
   );
 
   React.useEffect(() => {
@@ -189,7 +189,7 @@ export default function CreateCoOwnScreen() {
       return;
     }
 
-    const unitPriceStable = toIze(unitPriceGBP, 'GBP', goldRates);
+    const unitPriceStable = toIze(unitPriceGBP, 'GBP', fxRates);
     if (!Number.isFinite(unitPriceStable) || unitPriceStable <= 0) {
       show('Unable to derive a valid stablecoin value from this price', 'error');
       return;
@@ -268,15 +268,15 @@ export default function CreateCoOwnScreen() {
   }, [fromDisplayToGbp, totalUnitsInput, unitPriceInput]);
 
   const estimatedValueIze = React.useMemo(
-    () => (estimatedValue > 0 ? toIze(estimatedValue, 'GBP', goldRates) : 0),
-    [estimatedValue, goldRates]
+    () => (estimatedValue > 0 ? toIze(estimatedValue, 'GBP', fxRates) : 0),
+    [estimatedValue, fxRates]
   );
 
   const unitPriceStablePreview = React.useMemo(() => {
     const unitPriceGBP = fromDisplayToGbp(Number(unitPriceInput));
     if (!Number.isFinite(unitPriceGBP) || unitPriceGBP <= 0) return 0;
-    return toIze(unitPriceGBP, 'GBP', goldRates);
-  }, [fromDisplayToGbp, goldRates, unitPriceInput]);
+    return toIze(unitPriceGBP, 'GBP', fxRates);
+  }, [fromDisplayToGbp, fxRates, unitPriceInput]);
 
   const previewImage = selectedListing
     ? getListingCoverUri(selectedListing.images, selectedListing.imageUrl ?? '')
@@ -343,7 +343,7 @@ export default function CreateCoOwnScreen() {
         <View style={styles.listingMeta}>
           <Text style={[styles.listingTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
           <Text style={[styles.listingPrice, { color: colors.textSecondary }]}>
-            {formatFromFiat(item.priceGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+            {formatFromFiat(item.priceGbp, currencyCode, { displayMode: 'fiat' })}
           </Text>
         </View>
         {selected && (
@@ -463,7 +463,7 @@ export default function CreateCoOwnScreen() {
                       {selectedListing.title}
                     </Text>
                     <Text style={[styles.previewPrice, { color: colors.textSecondary }]}>
-                      {formatFromFiat(selectedListing.priceGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+                      {formatFromFiat(selectedListing.priceGbp, currencyCode, { displayMode: 'fiat' })}
                     </Text>
                   </View>
                 </View>
@@ -487,7 +487,7 @@ export default function CreateCoOwnScreen() {
                 <View style={styles.contextInfo}>
                   <Text style={[styles.contextTitle, { color: colors.textPrimary }]} numberOfLines={1}>{selectedListing?.title}</Text>
                   <Text style={[styles.contextPrice, { color: colors.textSecondary }]}>
-                    {selectedListing ? formatFromFiat(selectedListing.priceGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : '—'}
+                    {selectedListing ? formatFromFiat(selectedListing.priceGbp, currencyCode, { displayMode: 'fiat' }) : '—'}
                   </Text>
                 </View>
               </View>
@@ -648,7 +648,7 @@ export default function CreateCoOwnScreen() {
                 <View style={styles.estimatedRow}>
                   <View>
                     <Text style={[styles.estimatedValue, { color: colors.textPrimary }]}>
-                      {estimatedValue > 0 ? formatFromFiat(estimatedValue, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : '—'}
+                      {estimatedValue > 0 ? formatFromFiat(estimatedValue, currencyCode, { displayMode: 'fiat' }) : '—'}
                     </Text>
                     <Text style={[styles.estimatedSub, { color: colors.textMuted }]}>
                       {estimatedValueIze > 0 ? `${formatIzeAmount(estimatedValueIze)} stablecoin` : ''}
@@ -721,7 +721,7 @@ export default function CreateCoOwnScreen() {
                 <View style={[styles.totalRow, { borderColor: colors.border }]}>
                   <Text style={[styles.totalKey, { color: colors.textPrimary }]} numberOfLines={1}>Total value</Text>
                   <Text style={[styles.totalValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {estimatedValue > 0 ? formatFromFiat(estimatedValue, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : '—'}
+                    {estimatedValue > 0 ? formatFromFiat(estimatedValue, currencyCode, { displayMode: 'fiat' }) : '—'}
                   </Text>
                 </View>
               </View>
@@ -751,7 +751,7 @@ export default function CreateCoOwnScreen() {
                     </Text>
                     <Text style={[styles.recourseLiabilityValue, { color: colors.textPrimary }]}>
                       {estimatedValue > 0
-                        ? formatFromFiat(estimatedValue, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
+                        ? formatFromFiat(estimatedValue, currencyCode, { displayMode: 'fiat' })
                         : '—'}
                     </Text>
                   </View>
@@ -778,7 +778,7 @@ export default function CreateCoOwnScreen() {
                   Your obligations
                 </Text>
                 {([
-                  { icon: 'cube-outline', text: 'Safeguard the physical asset in the condition stated' },
+                  { icon: 'lock-closed-outline', text: 'Safeguard the physical asset in the condition stated' },
                   { icon: 'search-outline', text: 'Prove authenticity when requested by a unit holder' },
                   { icon: 'hand-right-outline', text: 'Produce the physical item on demand within 14 days' },
                   { icon: 'cash-outline', text: 'Repay the total traded value if you fail any obligation' },
@@ -897,13 +897,13 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   listingTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   listingPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   selectedTick: {
     position: 'absolute',
@@ -937,13 +937,13 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   previewTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   previewPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   contextCard: {
     flexDirection: 'row',
@@ -963,13 +963,13 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   contextTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   contextPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   formCard: {
     paddingVertical: Space.md,
@@ -981,14 +981,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   formLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   formHint: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   unitPresets: {
     flexDirection: 'row',
@@ -1002,8 +1002,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   unitPresetText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   vehicleTypeRow: {
     flexDirection: 'row',
@@ -1019,8 +1019,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   vehicleTypeText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   kycGateCard: {
     flexDirection: 'row',
@@ -1036,12 +1036,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   kycGateTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   kycGateText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
   },
   insuranceRow: {
     flexDirection: 'row',
@@ -1059,8 +1059,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   insuranceToggleText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   estimateCard: {
     paddingVertical: Space.md,
@@ -1073,13 +1073,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   estimatedValue: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
   },
   estimatedSub: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs / 2,
   },
   stablePreview: {
@@ -1087,12 +1087,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   stableLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   stableValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   reviewAssetCard: {
     flexDirection: 'row',
@@ -1112,13 +1112,13 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   reviewAssetTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   reviewAssetSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   summaryCard: {
     paddingVertical: Space.md,
@@ -1126,8 +1126,8 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   summaryLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide + 0.18,
     textTransform: 'uppercase',
     marginBottom: Space.sm,
@@ -1141,13 +1141,13 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   summaryKey: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     flexShrink: 0,
   },
   summaryValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     flex: 1,
     minWidth: 0,
     textAlign: 'right',
@@ -1163,15 +1163,15 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   totalKey: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     flexShrink: 1,
     minWidth: 0,
   },
   totalValue: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
     flexShrink: 0,
   },
   // ── Recourse agreement stage ──
@@ -1191,31 +1191,31 @@ const styles = StyleSheet.create({
     gap: Space.xs / 2,
   },
   recourseLiabilityLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide + 0.08,
     textTransform: 'uppercase',
   },
   recourseLiabilityValue: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    letterSpacing: TypographyV2.priceList.letterSpacing,
   },
   recourseLiabilityBullets: {
     gap: Space.xs,
   },
   recourseBulletText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.size + 6,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.size + 6,
   },
   recourseObligationsList: {
     gap: 0,
     marginTop: Space.md,
   },
   recourseObligationsTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide + 0.18,
     textTransform: 'uppercase',
     marginBottom: Space.sm,
@@ -1229,9 +1229,9 @@ const styles = StyleSheet.create({
   },
   recourseObligationText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight - 1,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight - 1,
   },
   recourseAcceptRow: {
     flexDirection: 'row',
@@ -1253,8 +1253,8 @@ const styles = StyleSheet.create({
   },
   recourseAcceptText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.body.lineHeight - 1,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight - 1,
   },
 });

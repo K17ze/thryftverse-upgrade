@@ -3,38 +3,34 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  Dimensions,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+  ScrollView } from 'react-native';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Type, Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
-import { useToast } from '../../context/ToastContext';
 import { useBackendData } from '../../context/BackendDataContext';
 import { fetchTrendingListings, type TrendingListing } from '../../services/marketApi';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { HorizontalRail } from '../HorizontalRail';
-
-const { width: SCREEN_W } = Dimensions.get('window');
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 /* ── Sub-components ── */
 function TrendingRailItem({ item, onPress, styles }: { item: { id: string; title: string; brand: string | null; price: number; image: string }; onPress: () => void; styles: ReturnType<typeof createStyles> }) {
+  const { formatFromFiat } = useFormattedPrice();
   return (
     <AnimatedPressable style={styles.trendingItem} onPress={onPress} activeOpacity={0.92}>
       <CachedImage uri={item.image} style={styles.trendingImage} containerStyle={{ borderRadius: Radius.md }} contentFit="cover" />
       <Text style={styles.trendingBrand} numberOfLines={1}>{item.brand}</Text>
       <Text style={styles.trendingTitle} numberOfLines={1}>{item.title}</Text>
-      <Text style={styles.trendingPrice}>£{item.price}</Text>
+      <Text style={styles.trendingPrice}>{formatFromFiat(item.price)}</Text>
     </AnimatedPressable>
   );
 }
@@ -45,20 +41,16 @@ export default function EditTab() {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const { show } = useToast();
   const { listings } = useBackendData();
 
   const [trending, setTrending] = React.useState<TrendingListing[]>([]);
-  const [trendingLoading, setTrendingLoading] = React.useState(true);
   const [trendingWindow, setTrendingWindow] = React.useState<'24h' | '7d' | '30d'>('24h');
 
   React.useEffect(() => {
     let cancelled = false;
-    setTrendingLoading(true);
     fetchTrendingListings({ window: trendingWindow, limit: 20 })
       .then((items) => { if (!cancelled) setTrending(items); })
-      .catch(() => { if (!cancelled) setTrending([]); })
-      .finally(() => { if (!cancelled) setTrendingLoading(false); });
+      .catch(() => { if (!cancelled) setTrending([]); });
     return () => { cancelled = true; };
   }, [trendingWindow]);
 
@@ -67,8 +59,7 @@ export default function EditTab() {
     title: l.title,
     brand: l.brand,
     price: l.price,
-    image: l.images[0] ?? '',
-  });
+    image: l.images[0] ?? '' });
 
   const trendingListings = React.useMemo(() => {
     if (trending.length > 0) {
@@ -77,8 +68,7 @@ export default function EditTab() {
         title: t.title,
         brand: t.brand ?? '',
         price: t.priceGbp,
-        image: t.images[0] ?? t.imageUrl ?? '',
-      }));
+        image: t.images[0] ?? t.imageUrl ?? '' }));
     }
     // Fallback to client-side sorting when backend returns no data
     return [...listings]
@@ -198,30 +188,6 @@ export default function EditTab() {
         </View>
       )}
 
-      {/* Style Quiz */}
-      <View style={{ marginTop: Space.lg }}>
-        <DiscoverySectionHeader
-          kicker="Personalise"
-          title="Find Your Aesthetic"
-        />
-        <AnimatedPressable style={styles.quizCard} onPress={() => navigation.navigate('StyleQuiz')} activeOpacity={0.92}>
-          <View style={styles.quizContent}>
-            <Text style={styles.quizTitle}>Discover your style</Text>
-            <Text style={styles.quizSub}>Take a short quiz to tailor your Explore feed to your preferences.</Text>
-            <View style={styles.quizPills}>
-              {['Minimal', 'Streetwear', 'Vintage', 'Gorpcore'].map((pill) => (
-                <View key={pill} style={styles.quizPill}>
-                  <Text style={styles.quizPillText}>{pill}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-          <View style={styles.quizIconWrap}>
-            <Ionicons name="color-palette-outline" size={28} color={colors.brand} />
-          </View>
-        </AnimatedPressable>
-      </View>
-
       <View style={{ height: 100 }} />
     </ScrollView>
   );
@@ -231,129 +197,55 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   scrollContent: {
     paddingTop: Space.sm,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
 
   /* Trending Rail */
   trendingScroll: {
     paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   trendingItem: {
     width: 140,
-    gap: 4,
-  },
+    gap: 4 },
   trendingImage: {
     width: 140,
     height: 180,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   trendingBrand: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-    marginTop: Space.xs,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs },
   trendingTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   trendingPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.brand,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* Window Tabs */
   windowTabs: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
     gap: Space.xs,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   windowTab: {
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm + 2,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   windowTabActive: {
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   windowTabText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   windowTabTextActive: {
-    color: colors.textInverse,
-  },
-
-  /* Quiz Card */
-  quizCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginHorizontal: Space.md,
-    padding: Space.md,
-    gap: Space.sm,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  quizContent: {
-    flex: 1,
-    gap: 4,
-  },
-  quizTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-  quizSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: 18,
-  },
-  quizPills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: Space.xs,
-  },
-  quizPill: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: Space.xs,
-  },
-  quizPillText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-  quizIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  });
+    color: colors.textInverse } });
 }

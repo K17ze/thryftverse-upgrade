@@ -273,6 +273,7 @@ export function registerComplianceRoutes({
     const payload = requestDeletionBodySchema.parse(request.body ?? {});
 
     const client = await db.connect();
+    let erasureSideEffects: { listingIds: string[] } = { listingIds: [] };
     try {
       await client.query('BEGIN');
 
@@ -297,11 +298,24 @@ export function registerComplianceRoutes({
         };
       }
 
-      await performUserErasure(client, userId, 'ccpa');
+      erasureSideEffects = await performUserErasure(client, userId, 'ccpa');
 
       await client.query('COMMIT');
 
-      await propagateUserDeletion(userId, [
+      // Remove the user's listings from the search index (post-commit).
+      // The import is deferred to avoid a circular dependency at module load.
+      const { removeListingFromIndex } = await import('../lib/searchSync.js');
+      for (const listingId of erasureSideEffects.listingIds) {
+        void removeListingFromIndex(listingId).catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          logger.error(
+            { listingId, err: message },
+            'compliance.ccpa.searchIndexRemovalFailed',
+          );
+        });
+      }
+
+      const vendorResults = await propagateUserDeletion(userId, [
         moderationProvider,
         aiProvider,
         pushProvider,
@@ -312,7 +326,24 @@ export function registerComplianceRoutes({
           { userId, err: message },
           'compliance.ccpa.vendorDeletionFailed',
         );
+        return [];
       });
+
+      // Redact PII from the compliance audit log (same as GDPR flow).
+      try {
+        await db.query(`SELECT redact_audit_log_for_user($1)`, [userId]);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.error(
+          { userId, err: message },
+          'compliance.ccpa.auditLogRedactionFailed',
+        );
+      }
+
+      logger.info(
+        { userId, vendorResults },
+        'compliance.ccpa.vendorDeletionComplete',
+      );
 
       return {
         ok: true,

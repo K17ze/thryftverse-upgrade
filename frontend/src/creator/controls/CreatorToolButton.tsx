@@ -26,7 +26,6 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
@@ -36,6 +35,8 @@ import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -149,7 +150,7 @@ export function CreatorToolButton({
     return {
       opacity: withTiming(target, {
         duration: Motion.duration.fast,
-        easing: Easing.out(Easing.cubic),
+        easing: Motion.easing.entrance,
       }),
     };
   });
@@ -163,7 +164,7 @@ export function CreatorToolButton({
     return {
       opacity: withTiming(target, {
         duration: Motion.duration.fast,
-        easing: Easing.out(Easing.cubic),
+        easing: Motion.easing.entrance,
       }),
     };
   });
@@ -204,6 +205,7 @@ export function CreatorToolButton({
           {
             width: BACKPLATE_SIZE,
             height: BACKPLATE_SIZE,
+            top: (targetSize - BACKPLATE_SIZE) / 2,
             borderRadius: EditorRadius.plate,
             backgroundColor: colors.brand,
           },
@@ -228,15 +230,17 @@ export function CreatorToolButton({
         {loading ? null : glyph ? (
           <CreatorGlyph
             name={glyph}
-            size={GLYPH_SIZE}
+            size={IconSize.lg}
             color={glyphColor}
-            selected={active && selectedStyle === 'fill'}
+            selected={active}
           />
         ) : icon ? (
-          <Ionicons
-            name={icon as React.ComponentProps<typeof Ionicons>['name']}
-            size={GLYPH_SIZE}
+          <AppIcon
+            name={icon}
+            size={IconSize.lg}
             color={glyphColor}
+            opticalCenter={true}
+            accessible={false}
           />
         ) : null}
 
@@ -271,7 +275,6 @@ export function CreatorToolButton({
 const styles = StyleSheet.create({
   backplate: {
     position: 'absolute',
-    top: 0,
     alignSelf: 'center',
   },
   pin: {

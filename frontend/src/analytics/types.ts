@@ -143,7 +143,11 @@ export type EventName =
   | 'collection_created'
   | 'review_written'
   | 'report_submitted'
-  | 'screenshot_taken';
+  | 'screenshot_taken'
+  | 'coown_trade_started'
+  | 'coown_order_placed'
+  | 'coown_order_filled'
+  | 'coown_buyout_offered';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Event properties — mapped type linking event names to property shapes.
@@ -383,6 +387,30 @@ export interface ReportSubmittedProperties {
   reason: string;
 }
 
+export interface CoOwnTradeStartedProperties {
+  asset_id: string;
+  side: 'buy' | 'sell';
+}
+
+export interface CoOwnOrderPlacedProperties {
+  asset_id: string;
+  side: 'buy' | 'sell';
+  units: number;
+  price_gbp: number;
+}
+
+export interface CoOwnOrderFilledProperties {
+  asset_id: string;
+  order_id: string;
+  units: number;
+  price_gbp: number;
+}
+
+export interface CoOwnBuyoutOfferedProperties {
+  asset_id: string;
+  offer_gbp: number;
+}
+
 /**
  * Maps each `EventName` to the properties type that should accompany it.
  *
@@ -461,6 +489,10 @@ export type EventProperties = {
   review_written: ReviewWrittenProperties;
   report_submitted: ReportSubmittedProperties;
   screenshot_taken: ScreenshotTakenProperties;
+  coown_trade_started: CoOwnTradeStartedProperties;
+  coown_order_placed: CoOwnOrderPlacedProperties;
+  coown_order_filled: CoOwnOrderFilledProperties;
+  coown_buyout_offered: CoOwnBuyoutOfferedProperties;
 };
 
 // ──────────────────────────────────────────────────────────────────────────

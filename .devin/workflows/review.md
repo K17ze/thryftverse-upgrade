@@ -37,10 +37,18 @@ Do not review the entire repository because the worktree is dirty.
 
 For UI changes, inspect hierarchy, state coverage, truthfulness, touch targets,
 screen-reader order, reduced motion, media crop, keyboard behavior, and native
-evidence. For backend changes, inspect authorization, validation, atomicity,
-idempotency, privacy projection, observability, migration compatibility, and
-rollback. For CI/release changes, inspect least privilege, immutable action pins,
-secret exposure, environment protection, artifact identity, and failure behavior.
+evidence. Apply the last-mile visual acceptance checklist (AGENTS.md §30): silhouette
+at 25% scale, first viewport usefulness, rhythm, corner continuity, icon consistency,
+media crop/focal point, typography hierarchy, press states, skeleton-to-final
+geometry, theme parity, and device matrix. For backend changes, inspect authorization,
+validation, atomicity, idempotency, privacy projection, observability, migration
+compatibility, and rollback. For changes touching data, endpoints, mutations, or trust
+signals, verify the live-signs definition of done (AGENTS.md §37.10): real data from a
+live endpoint, mutation propagation, honest state matrix including unknown-outcome,
+fail-closed trust signals, transactional idempotency on money/creation, auth + privacy
+projections, and no timer/subscription leak. For CI/release changes, inspect least
+privilege, immutable action pins, secret exposure, environment protection, artifact
+identity, and failure behavior.
 
 ## Severity and evidence
 

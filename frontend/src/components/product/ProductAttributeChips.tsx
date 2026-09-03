@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface ProductAttributeChipsProps {
   size?: string;
@@ -20,8 +21,7 @@ export function ProductAttributeChips({
   category,
   colour,
   material,
-  onSizePress,
-}: ProductAttributeChipsProps) {
+  onSizePress }: ProductAttributeChipsProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const chips: { label: string; value: string; onPress?: () => void }[] = [];
@@ -80,47 +80,38 @@ function createStyles(colors: ThemeColors) {
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   chip: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     backgroundColor: colors.surface,
     borderRadius: Radius.md,
     minWidth: 80,
-    minHeight: 48,
-  },
+    minHeight: 48 },
   chipTappable: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.brand}30`,
-  },
+    borderColor: colors.borderSubtle },
   chipPressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: 0.97 }] },
   chipLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   chipLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   chipGuideIcon: {
     width: 18,
     height: 18,
     borderRadius: Radius.lg,
-    backgroundColor: `${colors.brand}12`,
+    backgroundColor: colors.brandSubtle,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   chipValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary } });
 }

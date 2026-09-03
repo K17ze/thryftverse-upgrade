@@ -31,6 +31,7 @@ import {
 } from '@shopify/react-native-skia';
 
 import { Typography, Stroke, Space } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { AnimatedPressable } from '../../AnimatedPressable';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
 import {
@@ -254,7 +255,7 @@ const thumbnailStyles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
   },
   filterLabel: {
-    fontSize: 11,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.medium,
     color: 'rgba(255,255,255,0.65)',
   },

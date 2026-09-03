@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Control } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { AppStatusPill } from '../ui/AppStatusPill';
@@ -122,15 +122,10 @@ export function OrderHistoryRow({
       accessibilityRole="button"
       accessibilityLabel={`${side} ${quantity} units of ${assetTitle}`}
     >
-      <View
-        style={[
-          styles.iconWrap,
-          { borderColor: resolveSideColor(side, colors) + '40', backgroundColor: resolveSideColor(side, colors) + '12' },
-        ]}
-      >
+      <View style={styles.iconWrap}>
         <Ionicons
           name={resolveSideIcon(side)}
-          size={16}
+          size={20}
           color={resolveSideColor(side, colors)}
         />
       </View>
@@ -220,14 +215,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomColor: colors.border,
   },
   iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.standard,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Space.sm,
-    marginTop: 2,
+    marginRight: Space.xs,
+    marginTop: Space.xxs,
   },
   body: {
     flex: 1,
@@ -237,7 +230,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: Space.xxs,
     gap: Space.sm,
   },
   title: {
@@ -277,7 +270,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   cancelAction: {
     alignSelf: 'flex-start',
-    minHeight: 44,
+    minHeight: Control.hit,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,

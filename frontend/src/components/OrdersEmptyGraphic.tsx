@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, ActiveTheme } from '../constants/colors';
-import { Typography, Space, Radius, Type } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Typography, Space, Radius, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 interface Props {
   title?: string;
@@ -11,15 +12,17 @@ interface Props {
 
 export function OrdersEmptyGraphic({
   title = 'No orders yet',
-  subtitle = 'When you buy or sell, your orders will appear here',
-}: Props) {
+  subtitle = 'When you buy or sell, your orders will appear here' }: Props) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       <View style={styles.iconRing}>
         <Ionicons
           name="receipt-outline"
           size={28}
-          color={ActiveTheme === 'light' ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.25)'}
+          color={colors.textMuted}
         />
       </View>
       <Text style={styles.title}>{title}</Text>
@@ -28,36 +31,31 @@ export function OrdersEmptyGraphic({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    gap: 12,
-  },
-  iconRing: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor:
-      ActiveTheme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor:
-      ActiveTheme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
-  },
-  title: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    color: Colors.textPrimary,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    maxWidth: 240,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 60,
+      gap: 12 },
+    iconRing: {
+      width: 72,
+      height: 72,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: Stroke.standard,
+      borderColor: colors.borderSubtle },
+    title: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.textPrimary,
+      textAlign: 'center' },
+    subtitle: {
+      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      color: colors.textMuted,
+      textAlign: 'center',
+      maxWidth: 240 } });
+}

@@ -6,8 +6,7 @@ import {
   useWindowDimensions,
   StatusBar,
   ActivityIndicator,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -17,11 +16,10 @@ import Reanimated, {
   withSpring,
   withTiming,
   runOnJS,
-  useReducedMotion,
-  Easing,
-} from 'react-native-reanimated';
+  useReducedMotion } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useCreator } from './CreatorContext';
 import { CreatorCanvas } from './CreatorCanvas';
@@ -29,6 +27,7 @@ import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { Motion } from '../theme/motionTokens';
 
 
 export interface CreatorPreviewOverlayProps {
@@ -44,7 +43,7 @@ export interface CreatorPreviewOverlayProps {
  * user sees here is what gets published.
  *
  * For Poster (multi-page), the user can swipe horizontally to navigate
- * between pages with spring transitions. Pinch to zoom into the preview,
+ * between pages with timing transitions. Pinch to zoom into the preview,
  * double-tap to reset zoom. Page position is communicated by a minimal
  * "1 / 3" indicator in the top bar — no dots, no chevrons; swipe is the
  * native navigation gesture, matching Instagram Stories.
@@ -168,26 +167,28 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
       const next = i < pageCount - 1 ? i + 1 : 0;
       if (!reduceMotion) {
         pageOpacity.value = 0;
-        pageTranslateX.value = withSpring(0, spring.entrance);
-        pageOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+        // Per §5.14: viewer entrance uses timing, not spring.
+        pageTranslateX.value = withTiming(0, { duration: Motion.duration.slow, easing: Motion.easing.entrance });
+        pageOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
       }
       haptic.light();
       return next;
     });
-  }, [pageCount, haptic, reduceMotion, spring.entrance, pageOpacity, pageTranslateX]);
+  }, [pageCount, haptic, reduceMotion, pageOpacity, pageTranslateX]);
 
   const goPrevPage = useCallback(() => {
     setPageIndex((i) => {
       const prev = i > 0 ? i - 1 : pageCount - 1;
       if (!reduceMotion) {
         pageOpacity.value = 0;
-        pageTranslateX.value = withSpring(0, spring.entrance);
-        pageOpacity.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) });
+        // Per §5.14: viewer entrance uses timing, not spring.
+        pageTranslateX.value = withTiming(0, { duration: Motion.duration.slow, easing: Motion.easing.entrance });
+        pageOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
       }
       haptic.light();
       return prev;
     });
-  }, [pageCount, haptic, reduceMotion, spring.entrance, pageOpacity, pageTranslateX]);
+  }, [pageCount, haptic, reduceMotion, pageOpacity, pageTranslateX]);
 
   // ── Horizontal swipe gesture for page navigation ──
   const swipeGesture = React.useRef(
@@ -226,12 +227,14 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
   ).current;
 
   // ── Double-tap to reset zoom ──
+  // Per §5.14: double-tap is a tap gesture, not direct manipulation (pinch).
+  // Use timing transition instead of spring.
   const doubleTapGesture = React.useRef(
     Gesture.Tap()
       .numberOfTaps(2)
       .onEnd(() => {
         if (zoomScale.value > 1.1) {
-          zoomScale.value = withSpring(1, spring.entrance);
+          zoomScale.value = withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance });
           runOnJS(haptic.medium)();
         }
       })
@@ -246,13 +249,11 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
   // Animated style for page transition (slide + fade)
   const pageTransitionStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: pageTranslateX.value }],
-    opacity: pageOpacity.value,
-  }));
+    opacity: pageOpacity.value }));
 
   // Animated style for zoom
   const zoomStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: zoomScale.value }],
-  }));
+    transform: [{ scale: zoomScale.value }] }));
 
   if (!visible) return null;
 
@@ -317,7 +318,6 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
         </PressScale>
 
         <View style={styles.topCenter}>
-          <Text style={[styles.topLabel, { color: colors.scrimTextPrimary }]}>Preview</Text>
           {pageCount > 1 && (
             <Text style={[styles.pageIndicator, { color: colors.scrimTextSecondary }]}>
               {pageIndex + 1} / {pageCount}
@@ -370,13 +370,11 @@ export function CreatorPreviewOverlay({ visible, onClose, onPublish }: CreatorPr
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    zIndex: 9999,
-  },
+    zIndex: 9999 },
   canvasWrap: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   // ── Floating top bar ──
   topBar: {
     position: 'absolute',
@@ -387,68 +385,51 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   topBtn: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   topCenter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
-  topLabel: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    color: '#fff',
-  },
+    gap: Space.sm },
   pageIndicator: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: 'rgba(255,255,255,0.7)',
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Publish floating action button ──
   publishBtnWrap: {
     paddingHorizontal: Space.md + 4,
     height: 36,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   publishBtnDisabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   publishBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   // ── State surfaces (loading / error) ──
   stateWrap: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   stateTitle: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    textAlign: 'center' },
   stateAction: {
     paddingHorizontal: Space.lg,
     height: 44,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   stateActionText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   // ── Empty composition hint ──
   emptyHint: {
     position: 'absolute',
@@ -457,13 +438,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   emptyHintText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    textAlign: 'center' },
   // ── Offline banner ──
   offlineBanner: {
     position: 'absolute',
@@ -474,11 +453,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   offlineText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    flexShrink: 1,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    flexShrink: 1 } });

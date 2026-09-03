@@ -5,22 +5,20 @@ import { AnimatedPressable } from "../components/AnimatedPressable";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
-  Alert,
   Pressable,
   Dimensions,
   type NativeSyntheticEvent,
-  type NativeScrollEvent,
-} from "react-native";
+  type NativeScrollEvent } from "react-native";
 
 import { FlashList } from "@shopify/flash-list";
 
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon } from "../components/common/AppIcon";
 
 import {
   useSafeAreaInsets,
-  SafeAreaView,
-} from "react-native-safe-area-context";
+  SafeAreaView } from "react-native-safe-area-context";
 
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -34,28 +32,26 @@ import { useFormattedPrice } from "../hooks/useFormattedPrice";
 import { useBackendData } from "../context/BackendDataContext";
 
 import { getListingCoverUri } from "../utils/media";
-import { makeStableId } from "../utils/createStableId";
 
 import { useStore } from "../store/useStore";
 
+import { track } from "../analytics";
+
 import {
   clearComposerStateOnApi,
-  reportConversationOnApi,
-} from "../services/chatApi";
+  reportConversationOnApi } from "../services/chatApi";
 import { fetchPublicProfile, PublicProfileUser } from "../services/profileApi";
-import { acceptListingOfferOnApi, declineListingOfferOnApi } from "../services/listingOffersApi";
 
 import { useToast } from "../context/ToastContext";
 
 import { useHaptic } from "../hooks/useHaptic";
+import { useA11yAudit } from "../hooks/useA11yAudit";
 
 import { KeyboardStickyView } from "../platform/keyboard/KeyboardProvider";
 
 import { ChatComposerBar } from "../components/chat/ChatComposerBar";
 
-import { MessageBubble } from "../components/chat/MessageBubble";
-
-import { MarketplaceChatCard } from "../components/chat/MarketplaceChatCard";
+import { ChatMessageRow, InlineMessageEditor, type InlineEditStyles } from "../components/chat/ChatMessageRow";
 
 import { ChatTopBar } from "../components/chat/ChatTopBar";
 
@@ -63,24 +59,20 @@ import { ChatListingContextBar } from "../components/chat/ChatListingContextBar"
 import { ChatTransactionStrip } from "../components/chat/ChatTransactionStrip";
 
 import {
-  ChatActionSheet,
-} from "../components/chat/ChatActionSheet";
+  ChatActionSheet } from "../components/chat/ChatActionSheet";
 
 import { AttachmentReviewSheet } from "../components/chat/AttachmentReviewSheet";
+import { DocumentReviewSheet } from "../components/chat/DocumentReviewSheet";
 
 import { MessageContextMenu } from "../components/chat/MessageContextMenu";
+
+import { ConfirmationSheet } from "../components/ConfirmationSheet";
 
 import { EmojiReactionsBar } from "../components/chat/EmojiReactionsBar";
 
 import { ReplyQuote } from "../components/chat/ReplyQuote";
 
 import { ScrollToBottomFAB } from "../components/chat/ScrollToBottomFAB";
-
-import {
-  LinkPreviewCard,
-  extractFirstUrl,
-} from "../components/chat/LinkPreviewCard";
-import { PaymentWarningCard } from "../components/chat/PaymentWarningCard";
 
 import { SkeletonChatLoader } from "../components/chat/SkeletonChatLoader";
 
@@ -91,147 +83,73 @@ import { ChatAgentPicker } from "../components/chat/ChatAgentPicker";
 import { SuggestedRepliesBar } from "../components/chat/SuggestedRepliesBar";
 import { OfflineBanner } from "../components/OfflineBanner";
 import {
-  deployAgent as deployChatAgent,
-  removeAgent as removeChatAgent,
-  getDeployedAgents as getDeployedChatAgents,
   getAgentSuggestions as getChatAgentSuggestions,
-  getAgentResponse as getChatAgentResponse,
-  type ChatAgent,
-  type SuggestedReply,
-} from "../services/chatAgentsApi";
+  getAgentResponse as getChatAgentResponse } from "../services/chatAgentsApi";
 
 import * as Clipboard from "expo-clipboard";
 
 import { Caption } from "../components/ui/Text";
 
-import {
-  isFirstInCluster as isFirstInClusterHelper,
-  isLastInCluster as isLastInClusterHelper,
-} from "../utils/messageGrouping";
-
-import { detectChatSafetyWarning, detectComposerSafetyWarning, containsOffPlatformPaymentPattern } from "../utils/chatSafetyWarnings";
+import { detectChatSafetyWarning, containsOffPlatformPaymentPattern } from "../utils/chatSafetyWarnings";
 import {
   resolveComposerStack,
   isSlotVisible,
-  type ComposerStackSlotState,
-} from "../utils/chatComposerStack";
+  type ComposerStackSlotState } from "../utils/chatComposerStack";
+
+import {
+  resolveContextualStack,
+  type ContextualStackSlot,
+  type ContextualSlotState,
+  MESSAGE_LIST_MIN_HEIGHT_RATIO } from "../utils/chatContextualStack";
+
+import {
+  isFirstInCluster as isFirstInClusterHelper,
+  isLastInCluster as isLastInClusterHelper } from "../utils/messageGrouping";
 
 import {
   isTrustedSystemMessage,
-  resolveSystemMessageProvenance,
-} from "../utils/systemMessageProvenance";
+  resolveSystemMessageProvenance } from "../utils/systemMessageProvenance";
+
+import { MarketplaceChatCard } from "../components/chat/MarketplaceChatCard";
+import { MessageBubble } from "../components/chat/MessageBubble";
+import { LinkPreviewCard, extractFirstUrl } from "../components/chat/LinkPreviewCard";
+import { PaymentWarningCard } from "../components/chat/PaymentWarningCard";
 
 import { t } from "../i18n";
 
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 import { useVisuallyComplete } from "../performance/visuallyComplete";
 
 import {
   useConversationMessages,
   useConversationComposer,
+  useConversationCommerce,
+  useConversationAgents,
+  useConversationSafety,
+  useMessageSelection,
   type Message,
-  formatDateSeparator,
-  formatMessageTime,
   DEFAULT_SELLER_QUICK_REPLIES,
   DEFAULT_BUYER_QUICK_REPLIES,
+  formatDateSeparator,
+  formatMessageTime,
 } from "../hooks/chat";
-import { useTypingIndicator } from "../services/realtimeClient";
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { createStableId } from "../utils/createStableId";
+import { sendConversationMessageOnApi } from "../services/chatApi";
+import { useTypingIndicator, useChatGroupIdentityEvent } from "../services/realtimeClient";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
-// ─── Composer-stack contextual resolver ───────────────────────────────
-// The audit defines a strict priority for the contextual elements that
-// compete for vertical space around the message list. Only the
-// highest-priority contextual elements that fit the height budget are
-// shown, so the message list is never squeezed below ~40% of screen
-// height. Persistent elements (top bar, message list, composer) are
-// always visible and not part of this resolver.
-//
-// Priority order (highest first):
-//   1. safetyWarning       — user safety, always wins
-//   2. listingTransaction  — active commerce state only
-//   3. agentRow            — only when an agent is deployed/active
-//   4. suggestedReplies    — only when useful and not dismissed
-type ContextualStackSlot =
-  | "safetyWarning"
-  | "listingTransaction"
-  | "agentRow"
-  | "suggestedReplies";
-
-const CONTEXTUAL_SLOT_PRIORITY: Record<ContextualStackSlot, number> = {
-  safetyWarning: 1,
-  listingTransaction: 2,
-  agentRow: 3,
-  suggestedReplies: 4,
-};
-
-interface ContextualSlotState {
-  slot: ContextualStackSlot;
-  visible: boolean;
-  /** Estimated rendered height in pixels, including margins. */
-  estimatedHeight: number;
-}
-
-interface ContextualStackResolution {
-  /** Slots that should remain visible, in priority order. */
-  visible: Set<ContextualStackSlot>;
-  /** Slots suppressed to fit the height budget. */
-  suppressed: ContextualStackSlot[];
-  /** Total estimated height of the visible contextual stack. */
-  totalHeight: number;
-}
-
-/**
- * Resolve which contextual stack slots should be visible given a pixel
- * budget. Slots are kept in priority order until the cumulative height
- * would exceed the budget; lower-priority slots are suppressed rather
- * than overflowing. The highest-priority active slot is always admitted
- * even if it alone exceeds the budget (e.g. a safety warning must never
- * be hidden by the budget).
- */
-function resolveContextualStack(
-  slots: ContextualSlotState[],
-  budgetPixels: number,
-): ContextualStackResolution {
-  const active = slots
-    .filter((s) => s.visible && s.estimatedHeight > 0)
-    .sort(
-      (a, b) =>
-        CONTEXTUAL_SLOT_PRIORITY[a.slot] - CONTEXTUAL_SLOT_PRIORITY[b.slot],
-    );
-
-  const visible = new Set<ContextualStackSlot>();
-  const suppressed: ContextualStackSlot[] = [];
-  let totalHeight = 0;
-
-  for (const slot of active) {
-    if (
-      visible.size === 0 ||
-      totalHeight + slot.estimatedHeight <= budgetPixels
-    ) {
-      visible.add(slot.slot);
-      totalHeight += slot.estimatedHeight;
-    } else {
-      suppressed.push(slot.slot);
-    }
-  }
-
-  return { visible, suppressed, totalHeight };
-}
-
-/** Minimum share of screen height reserved for the message list. */
-const MESSAGE_LIST_MIN_HEIGHT_RATIO = 0.4;
-
 export default function ChatScreen({ navigation, route }: Props) {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'ChatScreen');
   const { colors, isDark } = useAppTheme();
   useVisuallyComplete('Chat');
 
   const styles = useMemo(() => StyleSheet.create({
     screenRoot: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
 
     selectionToolbar: {
       flexDirection: "row",
@@ -241,74 +159,62 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingVertical: Space.sm - 1,
       backgroundColor: colors.surfaceAlt,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
 
     emptyStateWrap: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
       paddingHorizontal: Space.xl,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
 
     messageList: {
       paddingTop: Space.sm,
-      paddingBottom: Space.md,
-    },
+      paddingBottom: Space.md },
 
     dateWrap: {
       alignItems: "center",
       marginVertical: Space.md,
       paddingVertical: 0,
       paddingHorizontal: 0,
-      alignSelf: "center",
-    },
+      alignSelf: "center" },
 
     dateText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       letterSpacing: 0.4,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
 
     statusWrap: {
       marginVertical: Space.xs,
       paddingHorizontal: Space.md,
-      alignItems: "center",
-    },
+      alignItems: "center" },
 
     msgRow: {
       flexDirection: "column",
       width: "100%",
       gap: Space.xs,
-      paddingHorizontal: 0,
-    },
+      paddingHorizontal: 0 },
 
     msgRowRight: {
-      alignItems: "stretch",
-    },
+      alignItems: "stretch" },
 
     linkPreviewWrap: {
       maxWidth: "78%",
       alignSelf: "flex-start",
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
 
     linkPreviewWrapRight: {
-      alignSelf: "flex-end",
-    },
+      alignSelf: "flex-end" },
 
     selectionRow: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
 
     selectionRowRight: {
-      flexDirection: "row-reverse",
-    },
+      flexDirection: "row-reverse" },
 
     checkbox: {
       width: Control.icon,
@@ -319,13 +225,11 @@ export default function ChatScreen({ navigation, route }: Props) {
       backgroundColor: colors.surfaceAlt,
       alignItems: "center",
       justifyContent: "center",
-      marginHorizontal: Space.sm,
-    },
+      marginHorizontal: Space.sm },
 
     checkboxActive: {
       backgroundColor: colors.brand,
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
 
     composerWrap: {
       paddingHorizontal: 0,
@@ -333,8 +237,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingTop: 0,
       backgroundColor: colors.background,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
 
     undoBanner: {
       flexDirection: "row",
@@ -347,20 +250,17 @@ export default function ChatScreen({ navigation, route }: Props) {
       marginTop: 0,
       marginBottom: 0,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm - 1,
-    },
+      paddingVertical: Space.sm - 1 },
 
     undoBannerText: {
       color: colors.textSecondary,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
 
     undoBannerAction: {
       color: colors.brand,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
 
     agentRow: {
       flexDirection: 'row',
@@ -368,8 +268,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
       gap: Space.xs + 1,
-      flexWrap: 'wrap',
-    },
+      flexWrap: 'wrap' },
 
     agentChip: {
       flexDirection: 'row',
@@ -378,49 +277,42 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs + 1,
       borderRadius: Radius.full,
-      backgroundColor: `${colors.brand}0D`,
+      backgroundColor: colors.brandSubtle,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: `${colors.brand}26`,
-    },
+      borderColor: colors.brandBorder },
 
     agentChipPressed: {
-      backgroundColor: `${colors.brand}14`,
-    },
+      backgroundColor: colors.brandSubtle },
 
     agentChipText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textPrimary,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
 
     unreadDividerWrap: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       marginVertical: Space.sm,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
 
     unreadDividerLine: {
       flex: 1,
       height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
 
     unreadDividerBadge: {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
-      backgroundColor: `${colors.brand}14`,
-    },
+      backgroundColor: colors.brandSubtle },
 
     unreadDividerText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.brand,
       letterSpacing: 0.3,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
 
     // Conversation-level safety banner — rendered above the message list
     // as the highest-priority contextual element. Uses semantic tokens
@@ -433,21 +325,18 @@ export default function ChatScreen({ navigation, route }: Props) {
       paddingVertical: Space.sm - 1,
       backgroundColor: colors.surfaceAlt,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
 
     safetyBannerText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily },
 
     // Suggested-replies wrapper — adds a dismiss control so the bar can
     // be dismissed for the current conversation session.
     suggestedRepliesWrap: {
-      position: 'relative',
-    },
+      position: 'relative' },
 
     suggestedRepliesClose: {
       position: 'absolute',
@@ -457,8 +346,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       height: Control.icon - 6,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
 
     // Message list container — flexes to fill remaining space but is
     // never squeezed below ~40% of screen height (audit requirement).
@@ -466,11 +354,55 @@ export default function ChatScreen({ navigation, route }: Props) {
       flex: 1,
       minHeight: Math.floor(
         Dimensions.get('window').height * MESSAGE_LIST_MIN_HEIGHT_RATIO,
-      ),
-    },
-  }), [colors]);
+      ) },
 
-  const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params;
+    // P2-03: Inline message editing — "Edited" label + editor styles.
+    editedLabel: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
+      marginTop: 2 },
+
+    editedLabelRight: {
+      alignSelf: 'flex-end',
+      marginRight: 4 },
+
+    editContainer: {
+      maxWidth: '80%',
+      borderRadius: Radius.lg,
+      borderWidth: Stroke.emphasis,
+      borderColor: colors.brand,
+      backgroundColor: colors.surfaceAlt,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      gap: Space.xs },
+
+    editInput: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary,
+      minHeight: 40,
+      paddingVertical: 0,
+      paddingHorizontal: 0 },
+
+    editActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      gap: Space.sm },
+
+    editActionBtn: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.md },
+
+    editSaveBtn: {
+      backgroundColor: colors.brand },
+
+    editActionLabel: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily } }), [colors]);
+
+  const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params ?? {};
 
   const currentUser = useStore((state) => state.currentUser);
 
@@ -538,6 +470,13 @@ export default function ChatScreen({ navigation, route }: Props) {
     return map;
   }, [conversation?.participantProfiles, currentUser?.id, currentUser?.username]);
 
+  // Linked listing context for rich product negotiation cards
+  const linkedListing = useMemo(() => {
+    const itemId = routeItemId ?? conversation?.itemId;
+    if (!itemId) return null;
+    return listings.find((l) => l.id === itemId) ?? null;
+  }, [routeItemId, conversation?.itemId, listings]);
+
   const profileMediaOverrides = useStore(
     (state) => state.profileMediaOverrides,
   );
@@ -563,97 +502,182 @@ export default function ChatScreen({ navigation, route }: Props) {
       if (entry.offerPrice !== undefined && entry.originalPrice !== undefined) {
         return {
           id: entry.id,
-
           type: "offer",
-
           sender,
-
           senderId: resolvedSenderId,
-
           senderLabel,
-
           offer: {
             price: entry.offerPrice,
-
             originalPrice: entry.originalPrice,
-
-            status: entry.offerStatus as "pending" | "declined" | "countered" | "accepted" | "expired" | "cancelled" | undefined,
+            status: (entry.offer?.status ?? entry.offerStatus) as
+              | "pending"
+              | "declined"
+              | "countered"
+              | "accepted"
+              | "expired"
+              | "cancelled"
+              | undefined,
+            expiresAt: entry.offer?.expiresAt,
+            counterRound: entry.offer?.counterRound,
+            itemId: linkedListing?.id,
+            itemTitle: linkedListing?.title,
+            itemImage: linkedListing?.images?.[0],
+            itemBrand: linkedListing?.brand ?? undefined,
+            itemSize: linkedListing?.size ?? undefined,
           },
-
           text: entry.text,
+          date: entry.timestamp,
+        };
+      }
+
+      if (entry.type === "listing_share") {
+        return {
+          id: entry.id,
+          type: "listing_share",
+          sender,
+          senderId: resolvedSenderId,
+          senderLabel,
+          listing: entry.listing ?? (linkedListing ? {
+            id: linkedListing.id,
+            title: linkedListing.title,
+            price: linkedListing.price,
+            originalPrice: linkedListing.originalPrice,
+            image: linkedListing.images[0],
+            brand: linkedListing.brand ?? undefined,
+            size: linkedListing.size ?? undefined,
+            condition: linkedListing.condition ?? undefined,
+            sellerUsername: conversation?.participantProfiles?.[0]?.username,
+            sellerRating: 4.8,
+            isSold: linkedListing.isSold,
+          } : undefined),
+          date: entry.timestamp,
         };
       }
 
       return {
         id: entry.id,
-
         type:
           entry.isSystem || entry.type === "system"
             ? "system"
             : entry.mediaUri
               ? "media"
               : "text",
-
         sender,
-
         senderId: resolvedSenderId,
-
         senderLabel,
-
         text: entry.text ?? entry.systemTitle ?? "",
-
         isSystem: entry.isSystem,
-
         systemTitle: entry.systemTitle,
-
         date: entry.timestamp,
-
         reactions: entry.reactions?.map((r) => ({
           emoji: r.emoji,
-
           count: r.userIds.length,
-
           reactedByMe: r.userIds.includes(currentUser?.id ?? "me"),
         })),
-
         mediaUri: entry.mediaUri,
-
         mediaType: entry.mediaType,
-
         uploadStatus: entry.uploadStatus,
+        documentUri: entry.documentUri,
+        documentName: entry.documentName,
+        documentMimeType: entry.documentMimeType,
       };
     });
-  }, [botLookup, conversation?.messages, currentUser?.id, userLookup]);
+  }, [botLookup, conversation?.messages, conversation?.participantProfiles, currentUser?.id, linkedListing, userLookup, t]);
 
-  const [dangerWarningDismissed, setDangerWarningDismissed] = useState(false);
-  const [cautionWarningDismissed, setCautionWarningDismissed] = useState(false);
+  // Early ref for composer hydration — updated after useConversationMessages
+  // returns. useConversationComposer only reads this inside effects, so an
+  // empty initial value is safe; by the time any effect runs the ref will
+  // hold the latest messages.
+  const messagesRef = useRef<Message[]>([]);
 
-  // AI chat agents (demo-mode service) — deployable assistants that surface
-  // suggested replies and an optional agent response after the user sends.
-  const [chatAgentPickerVisible, setChatAgentPickerVisible] = useState(false);
-  const [deployedChatAgents, setDeployedChatAgents] = useState<ChatAgent[]>([]);
-  const [chatAgentSuggestions, setChatAgentSuggestions] = useState<SuggestedReply[]>([]);
+  // ─── Controller hook: composer state, attachments, search, reply ───
+  // useConversationComposer owns text input, reply context, attachment picker,
+  // pending attachment, voice recording toggle, reaction picker, search state,
+  // and cross-device composer state hydration/persistence.
+  const {
+    input,
+    setInput,
+    setTypingInput,
+    notifyStoppedTyping,
+    replyTo,
+    setReplyTo,
+    attachmentPickerVisible,
+    setAttachmentPickerVisible,
+    isVoiceRecording,
+    setIsVoiceRecording,
+    pendingAttachment,
+    setPendingAttachment,
+    pendingDocument,
+    setPendingDocument,
+    reactingToMessage,
+    setReactingToMessage,
+    searchQuery,
+    setSearchQuery,
+    searchMatchIndex,
+    setSearchMatchIndex,
+    isSearchActive,
+    setIsSearchActive,
+    handleAttachmentSelect } = useConversationComposer({
+    conversationId,
+    initialSearchQuery: route.params?.focusQuery,
+    messagesRef,
+    show,
+    haptic,
+    setConversationDraft });
+
+  // ─── Controller hook: AI chat agents (demo-mode service) ───
+  // useConversationAgents owns deployed agents, agent picker visibility,
+  // agent suggested replies, deploy/remove/suggest handlers, and agent
+  // quick replies from connected custom bots.
+  const {
+    chatAgentPickerVisible,
+    setChatAgentPickerVisible,
+    deployedChatAgents,
+    chatAgentSuggestions,
+    setChatAgentSuggestions,
+    handleDeployChatAgent,
+    handleRemoveChatAgent,
+    handleSelectChatAgentSuggestion,
+    agentQuickReplies } = useConversationAgents({
+    conversationId,
+    show,
+    haptic,
+    setInput });
+
+  // ─── Controller hook: safety warnings ───
+  // useConversationSafety owns composer-level safety detection, danger/
+  // caution dismissal state, and per-message dismissed warning IDs.
+  const {
+    composerDangerWarning,
+    composerCautionWarning,
+    dismissedWarningIds,
+    setDangerWarningDismissed,
+    setCautionWarningDismissed,
+    dismissMessageWarning } = useConversationSafety({ input });
 
   // Suggested replies are dismissible for the current conversation session.
   // Once dismissed they do not reappear until the conversation changes.
   const [suggestedRepliesDismissed, setSuggestedRepliesDismissed] = useState(false);
 
-  const [contextMenuVisible, setContextMenuVisible] = useState(false);
-
-  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-
-  // Messages where the off-platform payment warning has been dismissed
-  const [dismissedWarningIds, setDismissedWarningIds] = useState<Set<string>>(new Set());
-
-  const [selectionMode, setSelectionMode] = useState(false);
-
-  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
-    new Set(),
-  );
-
   const isTyping = useTypingIndicator(conversationId);
 
-  const { formatFromFiat } = useFormattedPrice();
+  // Real-time group identity updates — when an admin changes the group name,
+  // avatar, cover, or description, merge it into the local store immediately
+  // so the chat header and info screen stay current without a refetch.
+  const upsertConversation = useStore((state) => state.upsertConversation);
+  useChatGroupIdentityEvent(conversationId, (payload) => {
+    if (!conversation) return;
+    upsertConversation({
+      ...conversation,
+      id: payload.conversationId,
+      title: payload.title ?? conversation.title,
+      description: payload.description ?? conversation.description,
+      avatar: payload.avatar !== undefined ? (payload.avatar ?? undefined) : conversation.avatar,
+      coverPhoto: payload.coverPhoto !== undefined ? (payload.coverPhoto ?? undefined) : conversation.coverPhoto,
+    });
+  });
+
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
 
   // ─── Controller hook: message list state, sync, send, retry, delete ───
   // useConversationMessages owns the message list, API sync, sending, retry,
@@ -679,18 +703,27 @@ export default function ChatScreen({ navigation, route }: Props) {
     retryAgentDraft,
     sendMessage: hookSendMessage,
     sendMediaMessage,
+    sendVoiceMessage,
+    handleSendVoice,
+    createVoiceMessage,
     handleRetryUpload,
     handleRetrySendMessage,
     createMediaMessage,
     handleSendPendingAttachment: hookSendPendingAttachment,
+    handleSendPendingDocument: hookSendPendingDocument,
     handleUndoDelete,
     handleBulkDelete: hookBulkDelete,
     handleDeleteMessage,
+    editingMessageId,
+    startEdit,
+    cancelEdit,
+    saveEdit,
+    confirmation: conversationConfirmation,
+    clearConfirmation: clearConversationConfirmation,
     dateSeparatorIndices,
     unreadDividerIndex,
     handleMessageListScroll: hookHandleMessageListScroll,
-    syncMessagesFromApi,
-  } = useConversationMessages({
+    syncMessagesFromApi } = useConversationMessages({
     conversationId,
     routeOfferPayload,
     currentUser,
@@ -709,14 +742,11 @@ export default function ChatScreen({ navigation, route }: Props) {
     conversationUnread: conversation?.unread,
     markConversationRead,
     appendConversationMessage,
-    replaceConversationMessages,
-  });
+    replaceConversationMessages });
 
-  // ─── Controller hook: composer state, attachments, search, reply ───
-  // useConversationComposer owns text input, reply context, attachment picker,
-  // pending attachment, voice recording toggle, reaction picker, search state,
-  // and cross-device composer state hydration/persistence.
-  const messagesRef = useRef(messages);
+  // Update composer hydration ref with the latest messages (the ref was
+  // created before useConversationComposer so the hook has a stable object;
+  // effects inside the hook read .current after render, so this is safe).
   messagesRef.current = messages;
 
   // Track which message IDs have already been rendered so only genuinely
@@ -740,64 +770,44 @@ export default function ChatScreen({ navigation, route }: Props) {
     [],
   );
 
+  // ─── Controller hook: commerce (offers, commerce events) ───
+  // useConversationCommerce owns accept/decline/counter/expire offer
+  // handlers with optimistic updates and API-failure revert.
   const {
-    input,
-    setInput,
-    setTypingInput,
-    notifyStoppedTyping,
-    replyTo,
-    setReplyTo,
-    attachmentPickerVisible,
-    setAttachmentPickerVisible,
-    isVoiceRecording,
-    setIsVoiceRecording,
-    pendingAttachment,
-    setPendingAttachment,
-    reactingToMessage,
-    setReactingToMessage,
-    searchQuery,
-    setSearchQuery,
-    searchMatchIndex,
-    setSearchMatchIndex,
-    isSearchActive,
-    setIsSearchActive,
-    handleAttachmentSelect,
-  } = useConversationComposer({
-    conversationId,
-    initialSearchQuery: route.params?.focusQuery,
-    messagesRef,
+    handleAcceptOffer,
+    handleDeclineOffer,
+    handleCounterOffer,
+    handleOfferExpired } = useConversationCommerce({
+    messages,
+    setMessages,
+    routeItemId,
+    conversationItemId: conversation?.itemId,
     show,
     haptic,
-    setConversationDraft,
-  });
+    navigation });
 
-  // Real-time composer safety detection — re-evaluates as the user types
-  const composerSafetyWarning = React.useMemo(() => {
-    if (dangerWarningDismissed && cautionWarningDismissed) return null;
-    const detected = detectComposerSafetyWarning(input);
-    if (!detected) return null;
-    if (detected.level === 'danger' && dangerWarningDismissed) return null;
-    if (detected.level === 'caution' && cautionWarningDismissed) return null;
-    return detected;
-  }, [input, dangerWarningDismissed, cautionWarningDismissed]);
-
-  const composerDangerWarning = composerSafetyWarning?.level === 'danger' ? composerSafetyWarning : null;
-  const composerCautionWarning = composerSafetyWarning?.level === 'caution' ? composerSafetyWarning : null;
-
-  // Reset dismissal when the text changes enough to clear the pattern
-  React.useEffect(() => {
-    const detected = detectComposerSafetyWarning(input);
-    if (!detected) {
-      if (dangerWarningDismissed) setDangerWarningDismissed(false);
-      if (cautionWarningDismissed) setCautionWarningDismissed(false);
-    }
-  }, [input, dangerWarningDismissed, cautionWarningDismissed]);
+  // ─── Controller hook: message selection ───
+  // useMessageSelection owns selection mode, selected IDs, context menu
+  // visibility, and enter/exit/toggle selection handlers.
+  const {
+    selectionMode,
+    selectedMessageIds,
+    contextMenuVisible,
+    setContextMenuVisible,
+    selectedMessage,
+    setSelectedMessage,
+    toggleMessageSelection,
+    enterSelectionMode,
+    exitSelectionMode } = useMessageSelection({ selectionMode: false });
 
   // Adapter: bind composer state to hookSendMessage's (input, replyTo, setInput, setReplyTo) signature
   const handleSend = useCallback(() => {
     notifyStoppedTyping();
     hookSendMessage(input, replyTo, setInput, setReplyTo);
-  }, [hookSendMessage, input, replyTo, setInput, setReplyTo, notifyStoppedTyping]);
+    if (conversationId) {
+      track('message_sent', { conversation_id: conversationId, message_type: 'text' });
+    }
+  }, [hookSendMessage, input, replyTo, setInput, setReplyTo, notifyStoppedTyping, conversationId]);
 
   // Adapter: wrap hookHandleMessageListScroll for FlashList's NativeSyntheticEvent type
   const handleMessageListScroll = useCallback(
@@ -857,38 +867,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     };
   }, [resolvedPartnerId]);
 
-  const deployedBotIds = conversation?.botIds ?? [];
-  const connectedAgents = useMemo(
-    () =>
-      customBots.filter(
-        (bot) => deployedBotIds.includes(bot.id) && bot.runtimeMode === "ai",
-      ),
-    [customBots, deployedBotIds],
-  );
-  const agentQuickReplies = useMemo(
-    () =>
-      connectedAgents.slice(0, 3).map((agent) => {
-        const starter = agent.agentConfig?.starterPrompts[0] ?? "";
-        const invocation =
-          agent.agentConfig?.triggerMode === "always"
-            ? starter
-            : agent.agentConfig?.triggerMode === "command"
-              ? `${agent.commandHint}${starter ? ` ${starter}` : ""}`
-              : `@${agent.slug}${starter ? ` ${starter}` : ""}`;
-        return {
-          label: starter || `Ask ${agent.name}`,
-          onPress: () => setInput(invocation),
-        };
-      }),
-    [connectedAgents],
-  );
-
-  // Sync demo AI chat agents from the chatAgentsApi service for this conversation.
-  useEffect(() => {
-    if (!conversationId) return;
-    setDeployedChatAgents(getDeployedChatAgents(conversationId));
-  }, [conversationId]);
-
   // Per spec 16: "Do not stack quick replies + agent suggestions." When agent
   // suggestions are active (agent deployed, suggestions available, no input),
   // suppress quick replies so only one suggestion area is visible.
@@ -896,39 +874,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     deployedChatAgents.length > 0 &&
     chatAgentSuggestions.length > 0 &&
     input.trim().length === 0;
-
-  const handleDeployChatAgent = useCallback(
-    (agent: ChatAgent) => {
-      if (!conversationId) return;
-      haptic.success();
-      deployChatAgent(conversationId, agent.type);
-      setDeployedChatAgents(getDeployedChatAgents(conversationId));
-      setChatAgentPickerVisible(false);
-      show(`${agent.name} connected`, "success");
-      setChatAgentSuggestions(getChatAgentSuggestions(conversationId, ""));
-    },
-    [conversationId, haptic, show],
-  );
-
-  const handleRemoveChatAgent = useCallback(
-    (agentId: string) => {
-      if (!conversationId) return;
-      haptic.medium();
-      removeChatAgent(conversationId, agentId);
-      setDeployedChatAgents(getDeployedChatAgents(conversationId));
-      setChatAgentSuggestions([]);
-      show("Agent removed", "info");
-    },
-    [conversationId, haptic, show],
-  );
-
-  const handleSelectChatAgentSuggestion = useCallback(
-    (reply: SuggestedReply) => {
-      haptic.selection();
-      setInput(reply.text);
-    },
-    [haptic],
-  );
 
   const partnerSummary = resolvedPartnerId
     ? conversation?.participantProfiles?.find((participant) => participant.id === resolvedPartnerId)
@@ -966,121 +911,12 @@ export default function ChatScreen({ navigation, route }: Props) {
         listRef.current.scrollToIndex({
           index: targetIndex,
           animated: true,
-          viewPosition: 0.5,
-        });
+          viewPosition: 0.5 });
       } catch {
         // FlashList may not have rendered the item yet
       }
     }
   }, [searchMatchIndex, searchMatches]);
-
-  const handleAcceptOffer = async (msgId: string) => {
-    const msg = messages.find((m) => m.id === msgId);
-    const offerId = msg?.offer?.offerId;
-    if (!offerId) {
-      show("Cannot accept this offer — missing offer reference.", "error");
-      return;
-    }
-
-    haptic.medium();
-
-    // Optimistic update — revert on API failure so UI tells the truth (§11).
-    const prevStatus = msg?.offer?.status;
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === msgId && m.offer
-          ? { ...m, offer: { ...m.offer, status: "accepted" as const } }
-          : m,
-      ),
-    );
-
-    try {
-      await acceptListingOfferOnApi(offerId);
-      const linkedItemId = routeItemId || conversation?.itemId;
-      if (linkedItemId) {
-        navigation.navigate("Checkout", { itemId: linkedItemId });
-      } else {
-        show("Offer accepted. Checkout requires a linked listing.", "info");
-      }
-    } catch {
-      // Revert optimistic state — the offer was NOT accepted server-side.
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === msgId && m.offer
-            ? { ...m, offer: { ...m.offer, status: prevStatus ?? "pending" } }
-            : m,
-        ),
-      );
-      show("Could not accept offer. Try again.", "error");
-    }
-  };
-
-  const handleDeclineOffer = async (msgId: string) => {
-    const msg = messages.find((m) => m.id === msgId);
-    const offerId = msg?.offer?.offerId;
-    if (!offerId) {
-      show("Cannot decline this offer — missing offer reference.", "error");
-      return;
-    }
-
-    haptic.light();
-
-    // Optimistic update — revert on API failure so UI tells the truth (§11).
-    const prevStatus = msg?.offer?.status;
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === msgId && m.offer
-          ? { ...m, offer: { ...m.offer, status: "declined" as const } }
-          : m,
-      ),
-    );
-
-    try {
-      await declineListingOfferOnApi(offerId);
-    } catch {
-      // Revert optimistic state — the offer was NOT declined server-side.
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === msgId && m.offer
-            ? { ...m, offer: { ...m.offer, status: prevStatus ?? "pending" } }
-            : m,
-        ),
-      );
-      show("Could not decline offer. Try again.", "error");
-    }
-  };
-
-  const handleCounterOffer = (msgId: string, offerPrice?: number, originalPrice?: number) => {
-    haptic.medium();
-    const linkedItemId = routeItemId || conversation?.itemId;
-    if (!linkedItemId) {
-      show("Cannot counter without a linked listing.", "info");
-      return;
-    }
-    // Find the current offer to pass the counter round
-    const currentMsg = messages.find((m) => m.id === msgId);
-    const currentRound = currentMsg?.offer?.counterRound ?? 0;
-    // Navigate to MakeOfferScreen with counter-offer context
-    navigation.navigate("MakeOffer", {
-      itemId: linkedItemId,
-      price: originalPrice ?? 0,
-      title: "Item",
-      counterOffer: true,
-      previousOffer: offerPrice ?? 0,
-      counterRound: currentRound + 1,
-      parentOfferId: currentMsg?.offer?.offerId,
-    });
-  };
-
-  const handleOfferExpired = (msgId: string) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === msgId && m.offer && m.offer.status === "pending"
-          ? { ...m, offer: { ...m.offer, status: "expired" as const } }
-          : m,
-      ),
-    );
-  };
 
   const handleMessageLongPress = (msg: Message) => {
     if (selectionMode) {
@@ -1096,31 +932,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     haptic.medium();
   };
 
-  const toggleMessageSelection = (msgId: string) => {
-    setSelectedMessageIds((prev) => {
-      const next = new Set(prev);
-
-      if (next.has(msgId)) next.delete(msgId);
-      else next.add(msgId);
-
-      if (next.size === 0) setSelectionMode(false);
-
-      return next;
-    });
-  };
-
-  const enterSelectionMode = (msgId: string) => {
-    setSelectionMode(true);
-
-    setSelectedMessageIds(new Set([msgId]));
-  };
-
-  const exitSelectionMode = () => {
-    setSelectionMode(false);
-
-    setSelectedMessageIds(new Set());
-  };
-
   // Adapter: bind selection state to hookBulkDelete's (selectedMessageIds, exitSelectionMode) signature
   const handleBulkDelete = useCallback(() => {
     hookBulkDelete(selectedMessageIds, exitSelectionMode);
@@ -1130,8 +941,19 @@ export default function ChatScreen({ navigation, route }: Props) {
   const handleSendPendingAttachment = useCallback(
     (caption: string) => {
       hookSendPendingAttachment(caption, pendingAttachment, setPendingAttachment);
+      if (pendingAttachment && conversationId) {
+        track('message_sent', { conversation_id: conversationId, message_type: pendingAttachment.mediaType });
+      }
     },
-    [hookSendPendingAttachment, pendingAttachment, setPendingAttachment],
+    [hookSendPendingAttachment, pendingAttachment, setPendingAttachment, conversationId],
+  );
+
+  // Adapter: bind pending document state to hookSendPendingDocument's signature
+  const handleSendPendingDocument = useCallback(
+    (caption: string) => {
+      hookSendPendingDocument(caption, pendingDocument, setPendingDocument);
+    },
+    [hookSendPendingDocument, pendingDocument, setPendingDocument],
   );
 
   const mediaTypeLabel = (t: "image" | "video") =>
@@ -1228,8 +1050,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               itemTitle: msg.commerceState.itemTitle,
               itemImage: msg.commerceState.itemImage,
               trackingNumber: msg.commerceState.trackingNumber,
-              carrier: msg.commerceState.carrier,
-            }}
+              carrier: msg.commerceState.carrier }}
             onViewOrder={() => {
               navigation.navigate("OrderDetail", { orderId: msg.commerceState!.orderId });
             }}
@@ -1257,8 +1078,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         type: msg.type === "system" ? "system" : undefined,
         systemTitle: msg.systemTitle,
         text: msg.text,
-        timestamp: msg.date ?? "",
-      })
+        timestamp: msg.date ?? "" })
     ) {
       const provenance = resolveSystemMessageProvenance({
         id: msg.id,
@@ -1267,8 +1087,7 @@ export default function ChatScreen({ navigation, route }: Props) {
         type: msg.type === "system" ? "system" : undefined,
         systemTitle: msg.systemTitle,
         text: msg.text,
-        timestamp: msg.date ?? "",
-      });
+        timestamp: msg.date ?? "" });
       const content = (
         <View key={msg.id} style={styles.statusWrap}>
           <MarketplaceChatCard
@@ -1307,17 +1126,75 @@ export default function ChatScreen({ navigation, route }: Props) {
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
             offer={msg.offer}
-            formattedPrice={formatFromFiat(msg.offer!.price, DEFAULT_CURRENCY_CODE, {
-              displayMode: "fiat",
-            })}
+            formattedPrice={formatFromFiat(msg.offer!.price, currencyCode, {
+              displayMode: "fiat" })}
             formattedOriginalPrice={formatFromFiat(
-              msg.offer!.originalPrice, DEFAULT_CURRENCY_CODE,
+              msg.offer!.originalPrice, currencyCode,
               { displayMode: "fiat" },
             )}
             onAccept={() => handleAcceptOffer(msg.id)}
             onDecline={() => handleDeclineOffer(msg.id)}
             onCounter={() => handleCounterOffer(msg.id, msg.offer?.price, msg.offer?.originalPrice)}
             onExpire={() => handleOfferExpired(msg.id)}
+            onViewListing={() => {
+              if (msg.offer?.itemId) {
+                navigation.navigate("ItemDetail", { itemId: msg.offer.itemId });
+              }
+            }}
+            onViewOrder={() => {
+              if (msg.offer?.offerId) {
+                navigation.navigate("OrderDetail", { orderId: msg.offer.offerId });
+              }
+            }}
+          />
+        </View>
+      );
+      return dateSeparator ? (
+        <View key={msg.id + "_group"}>
+          {dateSeparator}
+          {content}
+        </View>
+      ) : (
+        content
+      );
+    }
+
+    // Product / listing share message — Pinterest & Instagram Direct standard
+    if (msg.type === "listing_share" && msg.listing) {
+      const isMe = msg.sender === "me";
+      const content = (
+        <View
+          key={msg.id}
+          style={[
+            styles.msgRow,
+            isMe && styles.msgRowRight,
+            { marginTop: spacingTop, marginBottom },
+          ]}
+        >
+          <MarketplaceChatCard
+            type="listing_share"
+            isMe={isMe}
+            listing={msg.listing}
+            formattedPrice={formatFromFiat(msg.listing.price, currencyCode, {
+              displayMode: "fiat",
+            })}
+            formattedOriginalPrice={
+              msg.listing.originalPrice
+                ? formatFromFiat(msg.listing.originalPrice, currencyCode, {
+                    displayMode: "fiat",
+                  })
+                : undefined
+            }
+            onViewListing={() => {
+              navigation.navigate("ItemDetail", { itemId: msg.listing!.id });
+            }}
+            onMakeOffer={() => {
+              navigation.navigate("MakeOffer", {
+                itemId: msg.listing!.id,
+                price: msg.listing!.price,
+                title: msg.listing!.title,
+              });
+            }}
           />
         </View>
       );
@@ -1335,6 +1212,8 @@ export default function ChatScreen({ navigation, route }: Props) {
     const isMedia = msg.type === "media" && msg.mediaUri;
     const isVoice = msg.type === "voice" && msg.voiceUri;
     if (!msg.text && !isMedia && !isVoice) return null;
+
+    const isEditing = editingMessageId === msg.id && !isMedia && !isVoice;
 
     const bubble = (
       <View style={[styles.selectionRow, isMe && styles.selectionRowRight]}>
@@ -1357,7 +1236,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             accessibilityState={{ selected: selectedMessageIds.has(msg.id) }}
           >
             {selectedMessageIds.has(msg.id) ? (
-              <Ionicons name="checkmark" size={14} color={colors.textInverse} />
+              <AppIcon name="check" size={14} color={colors.textInverse} />
             ) : null}
           </AnimatedPressable>
         ) : null}
@@ -1369,7 +1248,20 @@ export default function ChatScreen({ navigation, route }: Props) {
             { marginTop: spacingTop, marginBottom },
           ]}
         >
-          <MessageBubble
+        {isEditing ? (
+          <InlineMessageEditor
+            initialText={msg.text ?? ""}
+            isMe={isMe}
+            colors={colors}
+            styles={styles as unknown as InlineEditStyles}
+            onSave={(text) => saveEdit(msg.id, text)}
+            onCancel={() => cancelEdit()}
+          />
+        ) : (
+          <>
+        <MessageBubble
+            id={msg.id}
+            conversationId={conversationId ?? ''}
             text={msg.text ?? ""}
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
@@ -1414,8 +1306,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                       mediaType: msg.mediaType ?? "image",
                       senderLabel: msg.senderLabel,
                       timestamp: msg.date,
-                      messageId: msg.id,
-                    });
+                      messageId: msg.id });
                   }
                 : undefined
             }
@@ -1428,8 +1319,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     return parent
                       ? {
                           senderName: parent.senderLabel ?? t('chat.fallbackUserName'),
-                          text: parent.text ?? "",
-                        }
+                          text: parent.text ?? "" }
                       : null;
                   })()
                 : null
@@ -1443,8 +1333,14 @@ export default function ChatScreen({ navigation, route }: Props) {
             mediaUri={msg.mediaUri}
             mediaType={msg.mediaType}
             uploadStatus={msg.uploadStatus}
+            documentUri={msg.documentUri}
+            documentName={msg.documentName}
+            documentMimeType={msg.documentMimeType}
             voiceDurationMs={msg.voiceDurationMs}
             voiceWaveform={msg.voiceWaveform}
+            voiceContainer={msg.voiceContainer}
+            voiceCodec={msg.voiceCodec}
+            voiceModerationState={msg.voiceModerationState}
             onRetry={
               msg.uploadStatus === "failed"
                 ? () => handleRetryUpload(msg.id)
@@ -1457,6 +1353,17 @@ export default function ChatScreen({ navigation, route }: Props) {
             showAvatar={!isMe && isFirstInCluster}
             isNew={isNewMessage(msg.id)}
           />
+          {msg.isEdited && !isMedia && !isVoice && (
+            <Text
+              style={[
+                styles.editedLabel,
+                isMe && styles.editedLabelRight,
+              ]}
+              accessibilityLabel="Edited"
+            >
+              {'Edited'}
+            </Text>
+          )}
           {!isMedia && !isVoice &&
             (() => {
               const url = extractFirstUrl(msg.text ?? "");
@@ -1477,22 +1384,19 @@ export default function ChatScreen({ navigation, route }: Props) {
               <PaymentWarningCard
                 dismissed={dismissedWarningIds.has(msg.id)}
                 onDismiss={() => {
-                  setDismissedWarningIds((prev) => {
-                    const next = new Set(prev);
-                    next.add(msg.id);
-                    return next;
-                  });
+                  dismissMessageWarning(msg.id);
                 }}
                 onReport={() => {
                   navigation.navigate("Report", {
                     type: "user",
-                    targetId: msg.senderId,
-                  });
+                    targetId: msg.senderId });
                 }}
                 isMe={isMe}
               />
             </View>
           )}
+          </>
+        )}
         </View>
       </View>
     );
@@ -1534,12 +1438,6 @@ export default function ChatScreen({ navigation, route }: Props) {
         .slice(0, 2)
         .toUpperCase() ?? "G")
     : sellerHandle.slice(0, 2).toUpperCase();
-
-  const linkedListing = useMemo(() => {
-    const itemId = routeItemId ?? conversation?.itemId;
-    if (!itemId) return null;
-    return listings.find((l) => l.id === itemId) ?? null;
-  }, [routeItemId, conversation?.itemId, listings]);
 
   // Conversation-level safety warning (triggered by conversation state,
   // e.g. off-platform payment requests in messages). This is distinct
@@ -1587,25 +1485,21 @@ export default function ChatScreen({ navigation, route }: Props) {
       {
         slot: "safetyWarning",
         visible: !!conversationSafetyWarning,
-        estimatedHeight: 52,
-      },
+        estimatedHeight: 52 },
       {
         slot: "listingTransaction",
         visible:
           !isGroup && !!linkedListing && !!linkedListing.isSold,
-        estimatedHeight: 48,
-      },
+        estimatedHeight: 48 },
       {
         slot: "agentRow",
         visible: deployedChatAgents.length > 0,
-        estimatedHeight: 36,
-      },
+        estimatedHeight: 36 },
       {
         slot: "suggestedReplies",
         visible:
           agentSuggestionsActive && !suggestedRepliesDismissed,
-        estimatedHeight: 52,
-      },
+        estimatedHeight: 52 },
     ];
 
     return resolveContextualStack(slots, budget);
@@ -1643,13 +1537,14 @@ export default function ChatScreen({ navigation, route }: Props) {
   );
 
   return (
-    <SafeAreaView edges={["bottom"]} style={styles.screenRoot}>
+    <SafeAreaView ref={a11yRef} testID="chat-screen" edges={["bottom"]} style={styles.screenRoot}>
       <View style={styles.screenRoot}>
         <ChatTopBar
           title={topBarTitle}
           subtitle={topBarSubtitle}
           avatarUrl={avatarUri}
           initials={topBarInitials}
+          groupId={isGroup ? conversation?.id : undefined}
           variant={isGroup ? "group" : "dm"}
           isVerified={!isGroup && (partnerProfile?.identityVerified === true || partnerSummary?.identityVerified === true)}
           onBack={() => navigation.goBack()}
@@ -1672,14 +1567,12 @@ export default function ChatScreen({ navigation, route }: Props) {
             if (!conversation) return;
             if (isGroup) {
               navigation.navigate("GroupChatInfo", {
-                conversationId: conversation.id,
-              });
+                conversationId: conversation.id });
             } else if (resolvedPartnerId) {
               openProfile(navigation, resolvedPartnerId, currentUser?.id);
             } else {
               navigation.navigate("ConversationInfo", {
-                conversationId: conversation.id,
-              });
+                conversationId: conversation.id });
             }
           }}
           isSearchActive={isSearchActive}
@@ -1717,14 +1610,15 @@ export default function ChatScreen({ navigation, route }: Props) {
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >
-            <Ionicons
+            <AppIcon
               name={
                 conversationSafetyWarning.level === "danger"
                   ? "warning"
                   : conversationSafetyWarning.level === "caution"
-                    ? "alert-circle-outline"
-                    : "shield-outline"
+                    ? "alert"
+                    : "lock"
               }
+              focused={conversationSafetyWarning.level === "danger"}
               size={14}
               color={
                 conversationSafetyWarning.level === "danger"
@@ -1743,8 +1637,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                       ? colors.danger
                       : conversationSafetyWarning.level === "caution"
                         ? colors.warning
-                        : colors.textSecondary,
-                },
+                        : colors.textSecondary },
               ]}
               numberOfLines={2}
             >
@@ -1757,9 +1650,8 @@ export default function ChatScreen({ navigation, route }: Props) {
           <ChatListingContextBar
             thumbnailUri={getListingCoverUri(linkedListing.images, "")}
             title={linkedListing.title}
-            price={formatFromFiat(linkedListing.price, DEFAULT_CURRENCY_CODE, {
-              displayMode: "fiat",
-            })}
+            price={formatFromFiat(linkedListing.price, currencyCode, {
+              displayMode: "fiat" })}
             availability={linkedListing.isSold ? "Sold" : "Available"}
             primaryActionLabel={
               linkedListing.isSold
@@ -1779,17 +1671,14 @@ export default function ChatScreen({ navigation, route }: Props) {
               linkedListing.isSold
                 ? () =>
                     navigation.navigate("ItemDetail", {
-                      itemId: linkedListing.id,
-                    })
+                      itemId: linkedListing.id })
                 : linkedListing.sellerId === currentUser?.id
                   ? () =>
                       navigation.navigate("ManageListing", {
-                        itemId: linkedListing.id,
-                      })
+                        itemId: linkedListing.id })
                   : () =>
                       navigation.navigate("Checkout", {
-                        itemId: linkedListing.id,
-                      })
+                        itemId: linkedListing.id })
             }
             secondaryActionLabel={
               linkedListing.isSold ? undefined : "View item"
@@ -1800,8 +1689,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 ? undefined
                 : () =>
                     navigation.navigate("ItemDetail", {
-                      itemId: linkedListing.id,
-                    })
+                      itemId: linkedListing.id })
             }
             onTitlePress={() =>
               navigation.navigate("ItemDetail", { itemId: linkedListing.id })
@@ -1833,7 +1721,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               accessibilityLabel="Exit selection mode"
               accessibilityHint="Closes the message selection toolbar"
             >
-              <Ionicons
+              <AppIcon
                 name="close-outline"
                 size={24}
                 color={colors.textPrimary}
@@ -1855,7 +1743,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityHint="Permanently removes the selected messages from this conversation"
             >
-              <Ionicons name="trash-outline" size={Control.icon} color={colors.danger} />
+              <AppIcon name="trash" size={Control.icon} color={colors.danger} />
             </AnimatedPressable>
           </View>
         ) : null}
@@ -1919,8 +1807,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               // prepended via cursor pagination. This keeps the user's
               // current viewing position stable instead of jumping to top.
               maintainVisibleContentPosition={{
-                autoscrollToTopThreshold: 0,
-              }}
+                autoscrollToTopThreshold: 0 }}
             />
           ) : (
             <View style={styles.emptyStateWrap}>
@@ -2034,7 +1921,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityHint="Hides suggested replies for this conversation"
               >
-                <Ionicons name="close" size={15} color={colors.textMuted} />
+                <AppIcon name="close" size={15} color={colors.textMuted} />
               </Pressable>
             </View>
           )}
@@ -2062,8 +1949,8 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityHint="Open agent management"
               >
-                <Ionicons
-                  name={(deployedChatAgents[0]?.avatar as keyof typeof Ionicons.glyphMap) || 'cube-outline'}
+                <AppIcon
+                  name={(deployedChatAgents[0]?.avatar as string) || 'pricetag'}
                   size={13}
                   color={colors.brand}
                 />
@@ -2082,6 +1969,9 @@ export default function ChatScreen({ navigation, route }: Props) {
             onSend={handleSend}
             onAttachmentPress={() => setAttachmentPickerVisible(true)}
             onCameraPress={() => handleAttachmentSelect("camera")}
+            onVoiceRecord={handleSendVoice}
+            isVoiceRecording={isVoiceRecording}
+            onVoiceRecordingChange={setIsVoiceRecording}
             placeholder="Message..."
             isSending={composerSending}
             quickReplies={
@@ -2098,37 +1988,29 @@ export default function ChatScreen({ navigation, route }: Props) {
                       ...(sellerQuickReplies.length > 0
                         ? sellerQuickReplies.slice(0, 4).map((reply) => ({
                             label: reply.title,
-                            onPress: () => setInput(reply.message),
-                          }))
+                            onPress: () => setInput(reply.message) }))
                         : DEFAULT_SELLER_QUICK_REPLIES.map((text) => ({
                             label: text,
-                            onPress: () => setInput(text),
-                          }))),
+                            onPress: () => setInput(text) }))),
                       {
                         label: "Manage replies",
                         onPress: () =>
                           navigation.navigate("ManageQuickReplies", {
-                            role: "seller",
-                          }),
-                      },
+                            role: "seller" }) },
                     ]
                   : [
                       ...(buyerQuickReplies.length > 0
                         ? buyerQuickReplies.slice(0, 4).map((reply) => ({
                             label: reply.title,
-                            onPress: () => setInput(reply.message),
-                          }))
+                            onPress: () => setInput(reply.message) }))
                         : DEFAULT_BUYER_QUICK_REPLIES.map((text) => ({
                             label: text,
-                            onPress: () => setInput(text),
-                          }))),
+                            onPress: () => setInput(text) }))),
                       {
                         label: "Manage replies",
                         onPress: () =>
                           navigation.navigate("ManageQuickReplies", {
-                            role: "buyer",
-                          }),
-                      },
+                            role: "buyer" }) },
                     ]
                 : undefined
             }
@@ -2149,7 +2031,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           visible={attachmentPickerVisible && !composerSending}
           onClose={() => setAttachmentPickerVisible(false)}
           onSelect={(action) => {
-            if (action === "gallery" || action === "camera") {
+            if (action === "gallery" || action === "camera" || action === "document" || action === "location") {
               handleAttachmentSelect(action);
             } else if (action === "agent") {
               setChatAgentPickerVisible(true);
@@ -2167,6 +2049,16 @@ export default function ChatScreen({ navigation, route }: Props) {
           />
         )}
 
+        {pendingDocument && !composerSending && (
+          <DocumentReviewSheet
+            visible={!!pendingDocument}
+            fileName={pendingDocument.name}
+            mimeType={pendingDocument.mimeType}
+            onClose={() => setPendingDocument(null)}
+            onSend={handleSendPendingDocument}
+          />
+        )}
+
         {/* AI Chat Agent Picker — deploy AI assistants into the conversation.
             Demo mode per AGENTS.md §11 — agents use keyword-based suggestions,
             not real LLM inference. */}
@@ -2175,6 +2067,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           onClose={() => setChatAgentPickerVisible(false)}
           onDeploy={handleDeployChatAgent}
           deployedAgentIds={deployedChatAgents.map((a) => a.id)}
+          conversationId={conversationId}
         />
 
         <ScrollToBottomFAB
@@ -2196,6 +2089,9 @@ export default function ChatScreen({ navigation, route }: Props) {
               }
               case "reply":
                 setReplyTo(selectedMessage);
+                break;
+              case "edit":
+                startEdit(selectedMessage);
                 break;
               case "react":
                 setReactingToMessage(selectedMessage);
@@ -2246,6 +2142,36 @@ export default function ChatScreen({ navigation, route }: Props) {
             selectedMessage?.status === "failed" ||
             selectedMessage?.uploadStatus === "failed"
           }
+          canEdit={
+            selectedMessage?.sender === "me" &&
+            !!selectedMessage?.text &&
+            !!selectedMessage.date &&
+            Date.now() - new Date(selectedMessage.date).getTime() < 15 * 60 * 1000
+          }
+        />
+
+        <ConfirmationSheet
+          visible={!!conversationConfirmation}
+          onDismiss={clearConversationConfirmation}
+          title={conversationConfirmation?.title ?? ""}
+          message={conversationConfirmation?.message}
+          confirmLabel={conversationConfirmation?.confirmLabel}
+          cancelLabel={conversationConfirmation?.cancelLabel}
+          onConfirm={() => {
+            const req = conversationConfirmation;
+            clearConversationConfirmation();
+            if (req) Promise.resolve(req.onConfirm()).catch(() => undefined);
+          }}
+          onCancel={
+            conversationConfirmation?.onCancel
+              ? () => {
+                  const req = conversationConfirmation;
+                  clearConversationConfirmation();
+                  if (req?.onCancel) Promise.resolve(req.onCancel()).catch(() => undefined);
+                }
+              : undefined
+          }
+          variant={conversationConfirmation?.variant ?? "danger"}
         />
       </View>
     </SafeAreaView>

@@ -1,11 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, ActiveTheme } from '../constants/colors';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
-
-const { width: SCREEN_W } = Dimensions.get('window');
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Typography, Radius, Space, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 interface Props {
   label?: string;
@@ -19,19 +18,19 @@ interface Props {
   accessibilityElementsHidden?: boolean;
 }
 
-const GRADIENT_PAIRS: [string, string][] = ActiveTheme === 'light'
-  ? [
-    ['#F5F0EB', '#EDE8E1'],
-    ['#EAE5DE', '#E2DDD6'],
-    ['#F0EBE6', '#E8E3DC'],
-    ['#EDE8E1', '#E5E0D9'],
-  ]
-  : [
-    ['#1A1A1A', '#141414'],
-    ['#1F1F1F', '#181818'],
-    ['#1C1C1C', '#161616'],
-    ['#222222', '#1B1B1B'],
-  ];
+const GRADIENT_PAIRS_LIGHT: [string, string][] = [
+  ['#F5F0EB', '#EDE8E1'],
+  ['#EAE5DE', '#E2DDD6'],
+  ['#F0EBE6', '#E8E3DC'],
+  ['#EDE8E1', '#E5E0D9'],
+];
+
+const GRADIENT_PAIRS_DARK: [string, string][] = [
+  ['#1A1A1A', '#141414'],
+  ['#1F1F1F', '#181818'],
+  ['#1C1C1C', '#161616'],
+  ['#222222', '#1B1B1B'],
+];
 
 export function ImageEmptyGraphic({
   label,
@@ -40,10 +39,13 @@ export function ImageEmptyGraphic({
   height: h,
   style,
   children,
-  accessibilityElementsHidden,
-}: Props) {
-  const pairIndex = (label?.length ?? 0) % GRADIENT_PAIRS.length;
-  const [gradStart, gradEnd] = GRADIENT_PAIRS[pairIndex];
+  accessibilityElementsHidden }: Props) {
+  const { colors, isDark } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  const gradientPairs = isDark ? GRADIENT_PAIRS_DARK : GRADIENT_PAIRS_LIGHT;
+  const pairIndex = (label?.length ?? 0) % gradientPairs.length;
+  const [gradStart, gradEnd] = gradientPairs[pairIndex];
 
   return (
     <View
@@ -71,11 +73,7 @@ export function ImageEmptyGraphic({
               styles.stripe,
               {
                 left: `${i * 22}%`,
-                backgroundColor:
-                  ActiveTheme === 'light'
-                    ? 'rgba(0,0,0,0.03)'
-                    : 'rgba(255,255,255,0.025)',
-              },
+                backgroundColor: colors.borderSubtle },
             ]}
           />
         ))}
@@ -87,7 +85,7 @@ export function ImageEmptyGraphic({
           <Ionicons
             name={icon}
             size={22}
-            color={ActiveTheme === 'light' ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.2)'}
+            color={colors.textMuted}
           />
         </View>
         {label ? (
@@ -101,53 +99,44 @@ export function ImageEmptyGraphic({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    overflow: 'hidden',
-    borderRadius: Radius.none,
-    position: 'relative',
-  },
-  texture: {
-    ...StyleSheet.absoluteFill,
-    overflow: 'hidden',
-  },
-  stripe: {
-    position: 'absolute',
-    width: 2,
-    height: '200%',
-    transform: [{ rotate: '35deg' }],
-    top: '-50%',
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  iconRing: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor:
-      ActiveTheme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)',
-    borderWidth: 1,
-    borderColor:
-      ActiveTheme === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)',
-  },
-  labelWrap: {
-    paddingHorizontal: 10,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-    backgroundColor:
-      ActiveTheme === 'light' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)',
-  },
-  label: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-    color: ActiveTheme === 'light' ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      overflow: 'hidden',
+      borderRadius: Radius.none,
+      position: 'relative' },
+    texture: {
+      ...StyleSheet.absoluteFill,
+      overflow: 'hidden' },
+    stripe: {
+      position: 'absolute',
+      width: 2,
+      height: '200%',
+      transform: [{ rotate: '35deg' }],
+      top: '-50%' },
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10 },
+    iconRing: {
+      width: 48,
+      height: 48,
+      borderRadius: Radius.xxl,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: Stroke.standard,
+      borderColor: colors.borderSubtle },
+    labelWrap: {
+      paddingHorizontal: 10,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.sm,
+      backgroundColor: colors.surfaceAlt },
+    label: {
+      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      color: colors.textMuted,
+      letterSpacing: 0.3,
+      textTransform: 'uppercase' } });
+}

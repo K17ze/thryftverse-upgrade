@@ -3,10 +3,10 @@ import { View, Text, StyleSheet, Pressable, LayoutChangeEvent } from 'react-nati
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Type, Radius } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -29,8 +29,7 @@ export function OrdersTabRail({
   buyingCount,
   sellingCount,
   completedCount = 0,
-  onChange,
-}: OrdersTabRailProps) {
+  onChange }: OrdersTabRailProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -82,8 +81,7 @@ export function OrdersTabRail({
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorTranslateX.value }],
-    width: indicatorWidth.value,
-  }));
+    width: indicatorWidth.value }));
 
   return (
     <View style={styles.container}>
@@ -127,22 +125,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: 2,
-    gap: Space.md + Space.xs,
-  },
+    gap: Space.md + Space.xs },
   tab: {
     paddingVertical: Space.sm,
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   tabText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textMuted },
   tabTextActive: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   // Shared underline — positioned at the bottom of the rail, left-aligned
   // with the first tab. The animated style drives translateX + width so it
   // slides under whichever tab is active.
@@ -152,6 +146,4 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     left: Space.md,
     height: 2,
     backgroundColor: colors.textPrimary,
-    borderRadius: Radius.full,
-  },
-});
+    borderRadius: Radius.full } });

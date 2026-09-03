@@ -3,17 +3,16 @@ import {
   View,
   StyleSheet,
   Pressable,
-  Dimensions,
   Modal,
   Text,
   ScrollView,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { LayoutType } from './LayoutPicker';
 import { useToast } from '../../context/ToastContext';
-import { Radius, Space, Type, Typography, Stroke } from '../../theme/designTokens';
+import { Radius, Space, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -26,12 +25,7 @@ import Reanimated, {
   withDelay,
   withTiming,
   interpolate,
-  Extrapolation,
-  runOnJS,
-} from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-
-const { width: SCREEN_W } = Dimensions.get('window');
+  Extrapolation } from 'react-native-reanimated';
 
 const ReanimatedImage = Reanimated.createAnimatedComponent(
   require('expo-image').Image as typeof import('expo-image').Image,
@@ -61,8 +55,7 @@ function CellActionSheet({
   visible,
   onClose,
   onAction,
-  slotIndex,
-}: {
+  slotIndex }: {
   visible: boolean;
   onClose: () => void;
   onAction: (action: CellAction['id'], slotIndex: number) => void;
@@ -114,43 +107,36 @@ function createActionSheetStyles(colors: ThemeColors) {
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   sheet: {
     backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: Radius.xxl,
     borderTopRightRadius: Radius.xxl,
     paddingBottom: 40,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   handle: {
     width: 36,
     height: 4,
     borderRadius: Radius.sm,
     backgroundColor: colors.borderSubtle,
     alignSelf: 'center',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textInverse,
     textAlign: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.md,
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   actionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textInverse,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textInverse } });
 }
 
 // ── Memoized cell component ──────────────────────────────────────────
@@ -160,15 +146,10 @@ interface CollageCellProps {
   cellStyle: ViewStyle;
   cellRadius: number;
   selectedIndex: number | null;
-  isDragging: boolean;
-  dragSlotIndex: number | null;
   reducedMotion: boolean;
   onPickPhoto: (slotIndex: number) => void;
   onLongPressCell: (slotIndex: number) => void;
   onPressCell: (slotIndex: number) => void;
-  onDragStart: (slotIndex: number) => void;
-  onDragEnd: (slotIndex: number) => void;
-  onDragTo: (slotIndex: number) => void;
   springEntrance: { damping: number; stiffness: number; mass: number };
   springTap: { damping: number; stiffness: number; mass: number };
   springPress: { damping: number; stiffness: number; mass: number };
@@ -183,19 +164,13 @@ const CollageCell = memo(function CollageCell({
   cellStyle,
   cellRadius,
   selectedIndex,
-  isDragging,
-  dragSlotIndex,
   reducedMotion,
   onPickPhoto,
   onLongPressCell,
   onPressCell,
-  onDragStart,
-  onDragEnd,
-  onDragTo,
   springEntrance,
   springTap,
-  springPress,
-}: CollageCellProps) {
+  springPress }: CollageCellProps) {
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createCollageStyles(colors), [colors]);
@@ -238,8 +213,7 @@ const CollageCell = memo(function CollageCell({
     );
     return {
       transform: [{ scale: scale * pressScale.value }],
-      opacity,
-    };
+      opacity };
   });
 
   // Selection border style
@@ -248,24 +222,8 @@ const CollageCell = memo(function CollageCell({
     return {
       opacity: selectionScale.value,
       borderColor: colors.commerceTrust,
-      borderWidth: Stroke.emphasis,
-    };
+      borderWidth: Stroke.emphasis };
   });
-
-  // Drag gesture for reordering
-  const dragGesture = React.useMemo(() => {
-    if (!uri) return null;
-    return Gesture.LongPress()
-      .onStart((e) => {
-        'worklet';
-        runOnJS(haptic.medium)();
-        runOnJS(onDragStart)(slotIndex);
-      })
-      .onEnd(() => {
-        'worklet';
-        runOnJS(onDragEnd)(slotIndex);
-      });
-  }, [uri, slotIndex, haptic, onDragStart, onDragEnd]);
 
   const handlePress = useCallback(() => {
     if (uri) {
@@ -286,8 +244,7 @@ const CollageCell = memo(function CollageCell({
 
   const cellContainer: ViewStyle = {
     ...cellStyle,
-    borderRadius: cellRadius,
-  };
+    borderRadius: cellRadius };
 
   const content = (
     <Reanimated.View
@@ -328,22 +285,6 @@ const CollageCell = memo(function CollageCell({
     </Reanimated.View>
   );
 
-  if (dragGesture && uri) {
-    return (
-      <GestureDetector gesture={dragGesture}>
-        <Pressable
-          onPress={handlePress}
-          onLongPress={handleLongPress}
-          delayLongPress={400}
-          accessibilityLabel={`Photo in slot ${slotIndex + 1}. Long press for options.`}
-          accessibilityRole="button"
-        >
-          {content}
-        </Pressable>
-      </GestureDetector>
-    );
-  }
-
   return (
     <Pressable
       onPress={handlePress}
@@ -362,8 +303,7 @@ export default function MultiPhotoCollage({
   layout,
   photos,
   onPhotosChange,
-  canvasSize,
-}: MultiPhotoCollageProps) {
+  canvasSize }: MultiPhotoCollageProps) {
   const { show } = useToast();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -372,7 +312,6 @@ export default function MultiPhotoCollage({
 
   const [actionSheetSlot, setActionSheetSlot] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [dragSlotIndex, setDragSlotIndex] = useState<number | null>(null);
 
   const handlePickPhoto = useCallback(
     async (slotIndex: number) => {
@@ -386,8 +325,7 @@ export default function MultiPhotoCollage({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.92,
-      });
+        quality: 0.92 });
 
       if (!result.canceled && result.assets?.[0]?.uri) {
         const newPhotos = [...photos];
@@ -402,10 +340,6 @@ export default function MultiPhotoCollage({
   const handleCellAction = useCallback(
     (action: CellAction['id'], slotIndex: number) => {
       if (action === 'remove') {
-        const newPhotos = [...photos];
-        newPhotos[slotIndex] = '';
-        onPhotosChange(newPhotos.filter((_, i) => i !== slotIndex).length ? newPhotos : newPhotos);
-        // Actually just clear the slot
         const cleared = [...photos];
         cleared[slotIndex] = '';
         onPhotosChange(cleared);
@@ -431,36 +365,6 @@ export default function MultiPhotoCollage({
     [],
   );
 
-  const handleDragStart = useCallback(
-    (slotIndex: number) => {
-      haptic.medium();
-      setDragSlotIndex(slotIndex);
-    },
-    [haptic],
-  );
-
-  const handleDragEnd = useCallback(
-    (slotIndex: number) => {
-      haptic.light();
-      setDragSlotIndex(null);
-    },
-    [haptic],
-  );
-
-  const handleDragTo = useCallback(
-    (targetSlot: number) => {
-      if (dragSlotIndex === null || dragSlotIndex === targetSlot) return;
-      const newPhotos = [...photos];
-      const temp = newPhotos[dragSlotIndex];
-      newPhotos[dragSlotIndex] = newPhotos[targetSlot];
-      newPhotos[targetSlot] = temp;
-      onPhotosChange(newPhotos);
-      haptic.selection();
-      setDragSlotIndex(targetSlot);
-    },
-    [dragSlotIndex, photos, onPhotosChange, haptic],
-  );
-
   const renderSlot = useCallback(
     (slotIndex: number, slotStyle: ViewStyle, cellRadius: number = Radius.sm) => {
       const uri = photos[slotIndex];
@@ -472,15 +376,10 @@ export default function MultiPhotoCollage({
           cellStyle={slotStyle}
           cellRadius={cellRadius}
           selectedIndex={selectedIndex}
-          isDragging={dragSlotIndex === slotIndex}
-          dragSlotIndex={dragSlotIndex}
           reducedMotion={reducedMotion}
           onPickPhoto={handlePickPhoto}
           onLongPressCell={handleLongPressCell}
           onPressCell={handlePressCell}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragTo={handleDragTo}
           springEntrance={spring.entrance}
           springTap={spring.tap}
           springPress={spring.press}
@@ -490,14 +389,10 @@ export default function MultiPhotoCollage({
     [
       photos,
       selectedIndex,
-      dragSlotIndex,
       reducedMotion,
       handlePickPhoto,
       handleLongPressCell,
       handlePressCell,
-      handleDragStart,
-      handleDragEnd,
-      handleDragTo,
       spring.entrance,
       spring.tap,
       spring.press,
@@ -579,17 +474,14 @@ function createCollageStyles(colors: ThemeColors) {
   return StyleSheet.create({
   slot: {
     overflow: 'hidden',
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   slotEmpty: {
     borderWidth: Stroke.standard,
-    borderColor: colors.borderSubtle,
-  },
+    borderColor: colors.borderSubtle },
   addBtn: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   addCircle: {
     width: 38,
     height: 38,
@@ -597,7 +489,5 @@ function createCollageStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  });
+    justifyContent: 'center' } });
 }

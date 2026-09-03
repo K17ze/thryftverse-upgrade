@@ -10,6 +10,7 @@ import {
   getActiveNotifications,
   type InAppNotification,
 } from '../../services/inAppNotificationsApi';
+import { getAppNavigationRef } from '../../platform/monitoring/appNavigation';
 
 /**
  * Global notification container — renders active banners as a stacked overlay
@@ -36,13 +37,22 @@ export function InAppNotificationCenter() {
     dismissNotification(id);
   }, []);
 
-  // Action handling is delegated to the host screen via navigation. The
-  // InAppNotificationCenter itself does not navigate — it only dismisses after
-  // the action is invoked. Concrete navigation wiring lives in the caller that
-  // triggered the notification (preserves existing navigation ownership).
-  const handleAction = useCallback((_notification: InAppNotification) => {
-    // No-op here — action targets are resolved by the triggering screen.
-    // The banner auto-dismisses after onAction fires.
+  const handleAction = useCallback((notification: InAppNotification) => {
+    if (!notification.actionTarget) return;
+    const ref = getAppNavigationRef();
+    if (!ref || !ref.isReady()) return;
+    // actionTarget format: "screenName" or "screenName:{jsonParams}"
+    const target = notification.actionTarget;
+    const colonIdx = target.indexOf(':');
+    const screen = colonIdx >= 0 ? target.slice(0, colonIdx) : target;
+    const paramsJson = colonIdx >= 0 ? target.slice(colonIdx + 1) : undefined;
+    let params: unknown;
+    if (paramsJson) {
+      try { params = JSON.parse(paramsJson); } catch { return; }
+    }
+    const nav = ref as { navigate: (screen: string, params?: unknown) => void };
+    nav.navigate(screen, params);
+    dismissNotification(notification.id);
   }, []);
 
   if (notifications.length === 0) return null;

@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { Meta, Caption } from './ui/Text';
 
 interface FinancialDisclosureProps {
@@ -21,8 +22,7 @@ const DEFAULT_ITEMS = [
 export function FinancialDisclosure({
   title = 'Risk disclosure',
   items = DEFAULT_ITEMS,
-  style,
-}: FinancialDisclosureProps) {
+  style }: FinancialDisclosureProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -51,34 +51,27 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       padding: Space.md,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     headerTitle: {
       fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     itemRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.sm,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     bullet: {
       width: 4,
       height: 4,
       borderRadius: Radius.sm,
       backgroundColor: colors.textMuted,
-      marginTop: 6,
-    },
+      marginTop: 6 },
     itemText: {
       flex: 1,
-      lineHeight: Type.caption.lineHeight + 2,
-    },
-  });
+      lineHeight: TypographyV2.meta.lineHeight + 2 } });
 }

@@ -26,7 +26,7 @@ function stripeClient(): Stripe {
     throw new Error('KYC_PROVIDER_NOT_CONFIGURED');
   }
   stripeIdentityClient ??= new Stripe(config.stripeSecretKey, {
-    apiVersion: '2024-06-20',
+    apiVersion: '2026-08-26.dahlia',
   });
   return stripeIdentityClient;
 }

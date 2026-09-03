@@ -28,8 +28,9 @@ import {
   Group,
 } from '@shopify/react-native-skia';
 import { Typography, Radius, Space, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
@@ -890,7 +891,7 @@ export default function DrawingCanvas({ strokes, onStrokesChange, canvasSize, is
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles
 // ─────────────────────────────────────────────────────────────────────────────
-function createStyles(colors: any) {
+function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   drawTopBar: {
     position: 'absolute',
@@ -992,7 +993,7 @@ function createStyles(colors: any) {
   },
   doneDrawText: {
     color: colors.textInverse,
-    fontSize: 14,
+    fontSize: TypographyV2.body.size,
     fontFamily: Typography.family.bold,
   },
   // ── Clear confirmation ActionSheet ──
@@ -1021,12 +1022,12 @@ function createStyles(colors: any) {
     alignSelf: 'center',
   },
   confirmTitle: {
-    fontSize: 17,
+    fontSize: TypographyV2.sectionTitle.size,
     fontFamily: Typography.family.bold,
     textAlign: 'center',
   },
   confirmSubtitle: {
-    fontSize: 14,
+    fontSize: TypographyV2.body.size,
     fontFamily: Typography.family.regular,
     textAlign: 'center',
     paddingHorizontal: Space.md,
@@ -1043,7 +1044,7 @@ function createStyles(colors: any) {
     alignItems: 'center',
   },
   confirmCancelText: {
-    fontSize: 15,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: Typography.family.semibold,
   },
   confirmClearBtn: {
@@ -1053,8 +1054,8 @@ function createStyles(colors: any) {
     alignItems: 'center',
   },
   confirmClearText: {
-    color: '#fff',
-    fontSize: 15,
+    color: colors.textInverse,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: Typography.family.bold,
   },
 });

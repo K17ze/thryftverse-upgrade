@@ -5,17 +5,17 @@ import {
   StyleSheet,
   StatusBar,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   AccessibilityInfo,
-  BackHandler,
-} from 'react-native';
+  BackHandler } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { Space, Radius, Typography, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { CachedImage } from '../components/CachedImage';
@@ -24,32 +24,28 @@ import { PosterProgressSegments } from '../components/poster/PosterProgressSegme
 import { fetchPosterHighlightById, type PosterHighlight } from '../services/postersApi';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { isVideoUrl } from '../utils/posterPhysics';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Reanimated, {
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'PosterHighlightViewer'>;
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const TICK_MS = 50;
 const DEFAULT_DURATION = 5000;
 const ERROR_ICON_SIZE = 40;
 const PAUSE_ICON_SIZE = 20;
 const SWIPE_THRESHOLD = 40;
 
-function isVideoUrl(url: string): boolean {
-  return /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url);
-}
-
 export default function PosterHighlightViewerScreen({ route, navigation }: Props) {
   const { colors, isDark } = useAppTheme();
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  const { highlightId } = route.params;
+  const { highlightId } = route.params ?? {};
 
   const [highlight, setHighlight] = React.useState<PosterHighlight | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -493,23 +489,19 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   );
 }
 
-function createStyles(colors: any) {
+function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: '#000',
-    },
+      backgroundColor: colors.background },
     mediaLayer: {
-      ...StyleSheet.absoluteFill,
-    },
+      ...StyleSheet.absoluteFill },
     mediaFull: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     overlay: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.25)',
-    },
+      backgroundColor: colors.overlay },
     // Top gradient scrim — ensures chrome legibility over any media content
     topScrim: {
       position: 'absolute',
@@ -517,8 +509,7 @@ function createStyles(colors: any) {
       left: 0,
       right: 0,
       height: 140,
-      zIndex: 5,
-    },
+      zIndex: 5 },
     // Bottom gradient scrim — ensures caption/counter legibility over any media
     bottomScrim: {
       position: 'absolute',
@@ -526,137 +517,115 @@ function createStyles(colors: any) {
       right: 0,
       bottom: 0,
       height: 180,
-      zIndex: 5,
-    },
+      zIndex: 5 },
     loadingBody: {
       flex: 1,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     errorBody: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      gap: Space.md,
-    },
+      gap: Space.md },
     errorText: {
-      color: 'rgba(255,255,255,0.8)',
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-    },
+      color: colors.scrimTextSecondary,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     errorBtnRow: {
       flexDirection: 'row',
       gap: Space.sm,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     errorBtn: {
       paddingHorizontal: Space.lg,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.15)',
-    },
+      backgroundColor: colors.glassBorder },
     errorBtnText: {
-      color: '#fff',
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-    },
+      color: colors.scrimTextPrimary,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.sm,
-      zIndex: 10,
-    },
+      zIndex: 10 },
     iconBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(0,0,0,0.25)',
-    },
+      backgroundColor: colors.overlay },
     topTitle: {
       flex: 1,
       textAlign: 'center',
-      color: '#fff',
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
+      color: colors.scrimTextPrimary,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     progressWrap: {
       position: 'absolute',
       left: 0,
       right: 0,
-      zIndex: 10,
-    },
+      zIndex: 10 },
     tapLayer: {
       position: 'absolute',
       left: 0,
       right: 0,
       flexDirection: 'row',
-      zIndex: 5,
-    },
+      zIndex: 5 },
     tapLeft: {
-      flex: 1,
-    },
+      flex: 1 },
     tapRight: {
-      flex: 1,
-    },
+      flex: 1 },
     captionWrap: {
       position: 'absolute',
       left: Space.md,
-      right: Space.md,
-    },
+      right: Space.md },
     captionText: {
-      color: '#fff',
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight + 2,
-      fontFamily: Typography.family.regular,
-      textShadowColor: 'rgba(0,0,0,0.7)',
+      color: colors.scrimTextPrimary,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight + 2,
+      fontFamily: TypographyV2.body.fontFamily,
+      textShadowColor: colors.overlay,
       textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 8,
-    },
+      textShadowRadius: 8 },
     captionMore: {
-      color: 'rgba(255,255,255,0.7)',
+      color: colors.scrimTextSecondary,
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     textFrameCaption: {
-      color: '#fff',
-      fontSize: Type.title.size,
-      fontFamily: Typography.family.bold,
+      color: colors.scrimTextPrimary,
+      fontSize: TypographyV2.screenTitle.size,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
       textAlign: 'center',
-      padding: Space.lg,
-    },
+      padding: Space.lg },
     frameCounter: {
       position: 'absolute',
       left: 0,
       right: 0,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     frameCounterText: {
-      color: 'rgba(255,255,255,0.7)',
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      backgroundColor: 'rgba(0,0,0,0.35)',
+      color: colors.scrimTextSecondary,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      backgroundColor: colors.overlay,
       paddingHorizontal: Space.smMd,
       paddingVertical: Space.xs - 1,
       borderRadius: Radius.full,
-      letterSpacing: 0.3,
-    },
+      letterSpacing: 0.3 },
     mediaErrorOverlay: {
       ...StyleSheet.absoluteFill,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: 'rgba(0,0,0,0.7)',
+      backgroundColor: colors.overlay,
       gap: Space.smMd,
-      zIndex: 25,
-    },
+      zIndex: 25 },
     mediaErrorText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-      color: '#fff',
-    },
+      fontSize: TypographyV2.body.size,
+      color: colors.scrimTextPrimary },
     retryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -664,13 +633,11 @@ function createStyles(colors: any) {
       paddingHorizontal: Space.md + 4,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.18)',
-    },
+      backgroundColor: colors.glassBorder },
     retryBtnText: {
-      color: '#fff',
+      color: colors.scrimTextPrimary,
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     pauseIndicator: {
       position: 'absolute',
       top: '50%',
@@ -680,42 +647,36 @@ function createStyles(colors: any) {
       width: Control.hit,
       height: Control.hit,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(0,0,0,0.4)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center',
-      zIndex: 15,
-    },
+      zIndex: 15 },
     muteBtn: {
       position: 'absolute',
       width: Control.hit,
       height: Control.hit,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(0,0,0,0.28)',
+      backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center',
-      zIndex: 12,
-    },
+      zIndex: 12 },
     scrubberWrap: {
       position: 'absolute',
       left: Space.lg,
       right: Space.lg,
-      zIndex: 11,
-    },
+      zIndex: 11 },
     scrubberBar: {
       height: Control.hit,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     scrubberTrack: {
       height: 3,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.25)',
-      overflow: 'visible',
-    },
+      backgroundColor: colors.glassBorder,
+      overflow: 'visible' },
     scrubberFill: {
       height: 3,
       borderRadius: Radius.full,
-      backgroundColor: 'rgba(255,255,255,0.9)',
-    },
+      backgroundColor: colors.scrimTextPrimary },
     scrubberHandle: {
       position: 'absolute',
       top: -4,
@@ -723,7 +684,5 @@ function createStyles(colors: any) {
       height: 11,
       marginLeft: -5.5,
       borderRadius: Radius.full,
-      backgroundColor: '#fff',
-    },
-  });
+      backgroundColor: colors.scrimTextPrimary } });
 }

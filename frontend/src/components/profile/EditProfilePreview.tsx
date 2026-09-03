@@ -5,12 +5,12 @@ import {
   StyleSheet,
   useWindowDimensions,
   ActivityIndicator,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 
 const COVER_H = 120;
@@ -41,8 +41,7 @@ export function EditProfilePreview({
   onEditCover,
   onEditAvatar,
   isUploadingCover,
-  isUploadingAvatar,
-}: EditProfilePreviewProps) {
+  isUploadingAvatar }: EditProfilePreviewProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: SCREEN_W } = useWindowDimensions();
@@ -152,38 +151,31 @@ export function EditProfilePreview({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   coverWrap: {
     height: COVER_H,
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   coverImage: {
-    height: COVER_H,
-  },
+    height: COVER_H },
   coverFallback: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverFallbackInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   coverFallbackText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   coverGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 50,
-  },
+    height: 50 },
   editCoverBtn: {
     position: 'absolute',
     right: Space.md,
@@ -194,18 +186,15 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
+    borderWidth: Stroke.standard,
+    borderColor: 'rgba(255,255,255,0.2)' },
   editCoverBtnEmpty: {
     backgroundColor: colors.surface,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   avatarRow: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    marginTop: -(AVATAR_SIZE / 2),
-  },
+    marginTop: -(AVATAR_SIZE / 2) },
   avatarWrap: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
@@ -214,18 +203,15 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.background,
     backgroundColor: colors.surface,
     overflow: 'visible',
-    position: 'relative',
-  },
+    position: 'relative' },
   avatarImage: {
     width: AVATAR_SIZE - 6,
     height: AVATAR_SIZE - 6,
-    borderRadius: (AVATAR_SIZE - 6) / 2,
-  },
+    borderRadius: (AVATAR_SIZE - 6) / 2 },
   avatarFallback: {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   editAvatarBtn: {
     position: 'absolute',
     right: -2,
@@ -237,36 +223,29 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: colors.background,
-  },
+    borderColor: colors.background },
   identityCol: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   displayName: {
-    fontSize: 19,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
     letterSpacing: -0.3,
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   username: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   bio: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.body.lineHeight,
-    marginBottom: Space.xs,
-  },
+    lineHeight: TypographyV2.body.lineHeight,
+    marginBottom: Space.xs },
   contextText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted } });
 }

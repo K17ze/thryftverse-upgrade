@@ -5,13 +5,13 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { AppButton } from '../components/ui/AppButton';
@@ -24,8 +24,7 @@ import {
   fetchCoOwnRecourseStatus,
   respondToVerificationDemand,
   type CoOwnVerificationDemand,
-  type CoOwnRecourseStatus,
-} from '../services/marketApi';
+  type CoOwnRecourseStatus } from '../services/marketApi';
 import { uploadMedia } from '../services/mediaUpload';
 import { parseApiError } from '../lib/apiClient';
 import { RootStackParamList } from '../navigation/types';
@@ -36,8 +35,7 @@ const DEMAND_TYPE_LABELS: Record<string, string> = {
   authenticity: 'Authenticity proof',
   possession: 'Possession proof',
   condition: 'Condition report',
-  inspection: 'In-person inspection',
-};
+  inspection: 'In-person inspection' };
 
 const DEMAND_TYPE_GUIDANCE: Record<string, string> = {
   authenticity:
@@ -47,8 +45,7 @@ const DEMAND_TYPE_GUIDANCE: Record<string, string> = {
   condition:
     'Provide detailed photos of the item from multiple angles, showing the current condition including any wear, tags, labels, and packaging.',
   inspection:
-    'The buyer has requested an in-person inspection. Provide proposed dates/times for inspection, or photos/videos if remote inspection is acceptable.',
-};
+    'The buyer has requested an in-person inspection. Provide proposed dates/times for inspection, or photos/videos if remote inspection is acceptable.' };
 
 export default function VerificationResponseScreen() {
   const navigation = useNavigation<any>();
@@ -110,8 +107,7 @@ export default function VerificationResponseScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.85,
-        selectionLimit: 6 - evidencePhotos.length,
-      });
+        selectionLimit: 6 - evidencePhotos.length });
       if (result.canceled || !result.assets?.length) return;
       setIsUploading(true);
       const uploaded: string[] = [];
@@ -143,8 +139,7 @@ export default function VerificationResponseScreen() {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
-        quality: 0.85,
-      });
+        quality: 0.85 });
       if (result.canceled || !result.assets?.length) return;
       setIsUploading(true);
       const asset = result.assets[0];
@@ -261,8 +256,7 @@ export default function VerificationResponseScreen() {
                     ? new Date(demand.respondedAt).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'short',
-                        year: 'numeric',
-                      })
+                        year: 'numeric' })
                     : ''}
                 </Text>
               </View>
@@ -344,16 +338,14 @@ export default function VerificationResponseScreen() {
 
             {/* Deadline badge */}
             <View style={[styles.deadlineBadge, {
-              backgroundColor: isOverdue ? colors.dangerSubtle : colors.surfaceAlt,
-            }]}>
+              backgroundColor: isOverdue ? colors.dangerSubtle : colors.surfaceAlt }]}>
               <Ionicons
                 name={isOverdue ? 'warning-outline' : 'time-outline'}
                 size={14}
                 color={isOverdue ? colors.danger : colors.textMuted}
               />
               <Text style={[styles.deadlineBadgeText, {
-                color: isOverdue ? colors.danger : colors.textSecondary,
-              }]}>
+                color: isOverdue ? colors.danger : colors.textSecondary }]}>
                 {isOverdue
                   ? 'Deadline passed — respond immediately'
                   : daysLeft <= 0
@@ -470,7 +462,7 @@ export default function VerificationResponseScreen() {
         {/* Liability warning */}
         <View>
           <View style={[styles.warningBox, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
-            <Ionicons name="shield-outline" size={18} color={colors.warning} />
+            <Ionicons name="lock-closed-outline" size={18} color={colors.warning} />
             <Text style={[styles.warningText, { color: colors.textSecondary }]}>
               Your personal liability guarantee is active. Failure to provide satisfactory evidence may trigger recourse proceedings.
             </Text>
@@ -499,37 +491,32 @@ function createStyles(colors: ThemeColors) {
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     respondedContainer: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.xxl,
-      paddingHorizontal: Space.lg,
-    },
+      paddingHorizontal: Space.lg },
     respondedIcon: {
       width: Space.xxl + Space.xl,
       height: Space.xxl + Space.xl,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     respondedTitle: {
-      fontSize: Type.title.size,
-      fontFamily: Typography.family.bold,
-      lineHeight: Type.title.lineHeight,
-      letterSpacing: Type.title.letterSpacing,
+      fontSize: TypographyV2.screenTitle.size,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
       textAlign: 'center',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     respondedSub: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight,
       textAlign: 'center',
-      maxWidth: Space.xxl * 6 - Space.sm,
-    },
+      maxWidth: Space.xxl * 6 - Space.sm },
     evidencePreview: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -537,62 +524,51 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.lg,
       padding: Space.md,
       borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-    },
+      borderWidth: StyleSheet.hairlineWidth },
     evidenceThumb: {
       width: Space.xxl + Space.sm,
       height: Space.xxl + Space.sm,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     evidenceInfo: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     evidenceLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: LetterSpacing.wide + 0.18,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
     evidenceDate: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     demandCard: {
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
       padding: Space.md,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     demandTypeRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     demandTypeIcon: {
       width: Control.chrome + Space.xs,
       height: Control.chrome + Space.xs,
       borderRadius: Radius.md,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     demandTypeInfo: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     demandTypeLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: LetterSpacing.wide + 0.18,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
     demandTypeTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     deadlineBadge: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -601,54 +577,44 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.md,
       marginBottom: Space.sm,
-      alignSelf: 'flex-start',
-    },
+      alignSelf: 'flex-start' },
     deadlineBadgeText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     guidanceText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight },
     sectionLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: LetterSpacing.wide + 0.18,
       textTransform: 'uppercase',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     sectionHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-      marginBottom: Space.sm,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginBottom: Space.sm },
     photoGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.sm,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     photoTileWrap: {
-      position: 'relative',
-    },
+      position: 'relative' },
     photoTile: {
       width: Space.xxl * 2 + Space.xs,
       height: Space.xxl * 2 + Space.xs,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     photoRemoveBtn: {
       position: 'absolute',
       top: -6,
       right: -6,
-      zIndex: 1,
-    },
+      zIndex: 1 },
     uploadRow: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     uploadBtn: {
       flex: 1,
       flexDirection: 'row',
@@ -657,37 +623,31 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
       paddingVertical: Space.smMd,
       borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-    },
+      borderWidth: StyleSheet.hairlineWidth },
     uploadBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     photoCount: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       marginTop: Space.xs,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     inputCard: {
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
       padding: Space.md,
-      minHeight: Space.lg * 5,
-    },
+      minHeight: Space.lg * 5 },
     input: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight,
       minHeight: Space.xxl + Space.xl,
-      padding: 0,
-    },
+      padding: 0 },
     charCount: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       textAlign: 'right',
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     warningBox: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -695,16 +655,12 @@ function createStyles(colors: ThemeColors) {
       padding: Space.md,
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     warningText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight + 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight + 2 },
     footer: {
-      marginTop: Space.lg,
-    },
-  });
+      marginTop: Space.lg } });
 }

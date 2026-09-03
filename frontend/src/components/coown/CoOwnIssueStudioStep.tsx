@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { StyleProp } from 'react-native';
 
 export interface CoOwnIssueStudioStepProps {
@@ -19,8 +20,7 @@ export function CoOwnIssueStudioStep({
   title,
   description,
   children,
-  style,
-}: CoOwnIssueStudioStepProps) {
+  style }: CoOwnIssueStudioStepProps) {
   const { colors } = useAppTheme();
 
   return (
@@ -64,47 +64,37 @@ const styles = StyleSheet.create({
   stageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   stageDotWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-  },
+    flex: 1 },
   stageDot: {
     width: 10,
     height: 10,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   stageConnector: {
     flex: 1,
     height: 2,
     marginHorizontal: Space.xs,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   stageLabelRow: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   stageLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   title: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     letterSpacing: -0.5,
-    lineHeight: Type.title.lineHeight,
-    marginBottom: Space.xs,
-  },
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    marginBottom: Space.xs },
   description: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     lineHeight: 20,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   contentWrap: {
-    gap: Space.md,
-  },
-});
+    gap: Space.md } });

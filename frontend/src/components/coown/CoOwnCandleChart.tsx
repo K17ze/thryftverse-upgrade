@@ -19,7 +19,8 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ViewStyle, useWindowDimensions } from 'react-native';
 import { Canvas, Rect, Line } from '@shopify/react-native-skia';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { DIRECTION_COLORS } from '../../constants/colors';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { haptics } from '../../utils/haptics';
@@ -288,7 +289,7 @@ function RangeChips({
             style={[
               styles.rangeChip,
               { borderColor: colors.border },
-              isActive && { backgroundColor: `${colors.brand}12`, borderColor: colors.brand },
+              isActive && { backgroundColor: colors.brandSubtle, borderColor: colors.brand },
             ]}
             onPress={() => onRangeChange(r)}
             activeOpacity={0.8}
@@ -354,8 +355,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rangeChipText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
   },
   chartWrap: {
@@ -369,12 +370,12 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   emptyText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   emptySubtext: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   crosshairInfo: {
     flexDirection: 'row',
@@ -386,14 +387,14 @@ const styles = StyleSheet.create({
   },
   crosshairLabel: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.1,
     fontVariant: ['tabular-nums'],
   },
   crosshairVol: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.1,
     fontVariant: ['tabular-nums'],
   },
@@ -403,20 +404,20 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   lastPriceLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
     textTransform: 'uppercase',
   },
   lastPriceValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   lastPriceAge: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.1,
   },
 });

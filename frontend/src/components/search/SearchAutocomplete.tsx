@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -15,15 +14,13 @@ import { useConnectivity } from '../../hooks/useConnectivity';
 import { OfflineBanner } from '../../components/OfflineBanner';
 import {
   Space,
-  Typography,
-  Type,
-} from '../../theme/designTokens';
+  Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   AUTOCOMPLETE_DEMO_MODE,
   fetchAutocompleteSuggestions,
   type AutocompleteSuggestion,
-  type AutocompleteSuggestionType,
-} from '../../services/searchAutocompleteApi';
+  type AutocompleteSuggestionType } from '../../services/searchAutocompleteApi';
 
 // ---------------------------------------------------------------------------
 // Icon mapping per suggestion type
@@ -31,12 +28,11 @@ import {
 
 const TYPE_ICON: Record<AutocompleteSuggestionType, keyof typeof Ionicons.glyphMap> = {
   category: 'grid-outline',
-  brand: 'pricetag-outline',
+  brand: 'bag-handle-outline',
   style: 'shirt-outline',
   size: 'resize-outline',
   color: 'color-palette-outline',
-  recent: 'time-outline',
-};
+  recent: 'time-outline' };
 
 // ---------------------------------------------------------------------------
 // Debounced backend autocomplete hook
@@ -92,6 +88,11 @@ function useAutocompleteSuggestions(
         setIsDemo(result.isDemo);
         setError(result.error ?? null);
         setIsLoading(false);
+      }).catch(() => {
+        if (cancelled) return;
+        setSuggestions([]);
+        setIsLoading(false);
+        setError('Failed to load suggestions');
       });
     }, AUTOCOMPLETE_DEBOUNCE_MS);
 
@@ -150,8 +151,7 @@ export function SearchAutocomplete({
   visible,
   onSelect,
   onClearRecent,
-  userId,
-}: SearchAutocompleteProps) {
+  userId }: SearchAutocompleteProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
@@ -234,14 +234,13 @@ export function SearchAutocomplete({
                 query: item.term,
                 type: 'trending',
                 confidence: 0.8,
-                source: 'trending',
-              })
+                source: 'trending' })
             }
             accessibilityRole="button"
             accessibilityLabel={`Search trending: ${item.term}`}
             accessibilityHint="Fills the search box and searches"
           >
-            <Ionicons name="trending-up" size={18} color={colors.danger} style={styles.rowIcon} />
+            <Ionicons name="trending-up" size={18} color={colors.success} style={styles.rowIcon} />
             <Text style={styles.rowText} numberOfLines={1}>
               {item.term}
             </Text>
@@ -256,8 +255,7 @@ export function SearchAutocomplete({
                 query: item.term,
                 type: 'recent',
                 confidence: 0.6,
-                source: 'recent',
-              })
+                source: 'recent' })
             }
             accessibilityRole="button"
             accessibilityLabel={`Search recent: ${item.term}`}
@@ -370,8 +368,7 @@ const SuggestionRow = React.memo(function SuggestionRow({
   query,
   colors,
   styles,
-  onPress,
-}: SuggestionRowProps) {
+  onPress }: SuggestionRowProps) {
   const iconName = TYPE_ICON[suggestion.type] ?? 'search-outline';
   const { before, match, after } = splitMatch(suggestion.query, query);
 
@@ -409,8 +406,7 @@ function splitMatch(term: string, query: string): {
   return {
     before: term.slice(0, idx),
     match: term.slice(idx, idx + query.length),
-    after: term.slice(idx + query.length),
-  };
+    after: term.slice(idx + query.length) };
 }
 
 // ---------------------------------------------------------------------------
@@ -421,58 +417,48 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       backgroundColor: 'transparent',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     listContent: {
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     sectionHeader: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       minHeight: 44,
       paddingHorizontal: Space.md,
       paddingVertical: 10,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     rowIcon: {
-      marginRight: 2,
-    },
+      marginRight: 2 },
     rowText: {
       flex: 1,
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     rowTextBase: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     rowTextMatch: {
       fontFamily: Typography.family.semibold,
-      color: colors.brand,
-    },
+      color: colors.brand },
     clearRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.md,
       paddingVertical: 8,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     clearText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: 0.15,
-    },
+      letterSpacing: 0.15 },
     demoRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -481,29 +467,23 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.borderSubtle,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     demoIcon: {
-      marginRight: 2,
-    },
+      marginRight: 2 },
     demoText: {
       flex: 1,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: 0.15,
-    },
+      letterSpacing: 0.15 },
     loadingRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     loadingText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textMuted } });
 }

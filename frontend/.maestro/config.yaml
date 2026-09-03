@@ -1,0 +1,4 @@
+# Maestro global configuration for ThryftVerse.
+# These values are inherited by every flow under .maestro/ unless a flow
+# overrides them in its own config document.
+appId: com.thryftverse.app

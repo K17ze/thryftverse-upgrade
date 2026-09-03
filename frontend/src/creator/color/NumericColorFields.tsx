@@ -16,16 +16,15 @@ import {
   View,
   Text,
   Pressable,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography, Stroke, IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke, IconGrammar } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   rgbToHsv,
   rgbToHsl,
-  normalize,
-} from './ColorMath';
+  normalize } from './ColorMath';
 import type { CreatorColor, HSV, HSL } from './ColorTypes';
 
 // ── Props ────────────────────────────────────────────────────────────
@@ -51,8 +50,7 @@ function NumericInput({
   min,
   max,
   onCommit,
-  colors,
-}: NumericInputProps) {
+  colors }: NumericInputProps) {
   const styles = useNumericStyles(colors);
   const inputRef = useRef<TextInput>(null);
   const [displayValue, setDisplayValue] = useState(String(value));
@@ -99,7 +97,11 @@ function NumericInput({
         keyboardType="number-pad"
         maxLength={3}
         accessibilityLabel={`${label} value, ${value} of ${max}`}
-        accessibilityRole="adjustable"
+        accessibilityValue={{
+          min: 0,
+          max,
+          now: value,
+          text: `${label} ${value} of ${max}` }}
       />
     </View>
   );
@@ -109,8 +111,7 @@ function NumericInput({
 export function NumericColorFields({
   color,
   onCommit,
-  style,
-}: NumericColorFieldsProps) {
+  style }: NumericColorFieldsProps) {
   const { colors } = useAppTheme();
   const styles = useNumericStyles(colors);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -297,26 +298,22 @@ function useNumericStyles(colors: ThemeColors) {
     () =>
       StyleSheet.create({
         container: {
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         row: {
           flexDirection: 'row',
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         inputContainer: {
           flex: 1,
-          gap: Space.xxs,
-        },
+          gap: Space.xxs },
         inputLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.label.size,
-          letterSpacing: Type.label.letterSpacing,
+          fontSize: TypographyV2.label.size,
+          letterSpacing: TypographyV2.label.letterSpacing,
           color: colors.textSecondary,
-          textTransform: 'uppercase',
-        },
+          textTransform: 'uppercase' },
         input: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.body.size,
+          fontSize: TypographyV2.body.size,
           color: colors.textPrimary,
           borderWidth: Stroke.standard,
           borderColor: colors.border,
@@ -324,31 +321,25 @@ function useNumericStyles(colors: ThemeColors) {
           paddingHorizontal: Space.sm,
           paddingVertical: Space.sm,
           minHeight: 44,
-          textAlign: 'center',
-        },
+          textAlign: 'center' },
         advancedToggle: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
           paddingVertical: Space.xs,
-          minHeight: 36,
-        },
+          minHeight: 36 },
         advancedLabel: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.caption.size,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          color: colors.textSecondary },
         advancedSection: {
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         sectionLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.label.size,
-          letterSpacing: Type.label.letterSpacing,
+          fontSize: TypographyV2.label.size,
+          letterSpacing: TypographyV2.label.letterSpacing,
           color: colors.textMuted,
-          textTransform: 'uppercase',
-        },
-      }),
+          textTransform: 'uppercase' } }),
     [colors],
   );
 }

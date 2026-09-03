@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type, Control } from '../../theme/designTokens';
+import { Space, Radius, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 export type ListingMode = 'sell_now' | 'co_own' | 'auction';
 
@@ -12,8 +14,8 @@ interface ListingModeSelectorProps {
   onChange: (mode: ListingMode) => void;
 }
 
-const MODES: { key: ListingMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name']; description: string }[] = [
-  { key: 'sell_now', label: 'Sell now', icon: 'pricetag-outline', description: 'List at a fixed price for immediate purchase.' },
+const MODES: { key: ListingMode; label: string; icon: string; description: string }[] = [
+  { key: 'sell_now', label: 'Sell now', icon: 'cash-outline', description: 'List at a fixed price for immediate purchase.' },
   { key: 'auction', label: 'Auction', icon: 'hammer-outline', description: 'Let buyers bid over a set duration.' },
   { key: 'co_own', label: 'Co-Own', icon: 'people-outline', description: 'Offer fractional shares to investors.' },
 ];
@@ -49,8 +51,8 @@ export function getListingModeDescription(mode: ListingMode): string {
 /**
  * Returns the icon name for a listing mode.
  */
-export function getListingModeIcon(mode: ListingMode): React.ComponentProps<typeof Ionicons>['name'] {
-  return MODES.find((m) => m.key === mode)?.icon ?? 'pricetag-outline';
+export function getListingModeIcon(mode: ListingMode): string {
+  return MODES.find((m) => m.key === mode)?.icon ?? 'cash-outline';
 }
 
 /**
@@ -81,10 +83,12 @@ export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps
         accessibilityHint="Opens format options"
       >
         <View style={styles.formatRowLeft}>
-          <Ionicons
-            name={activeMode?.icon ?? 'pricetag-outline'}
-            size={18}
-            color={colors.textSecondary}
+          <AppIcon
+            name={activeMode?.icon ?? 'cash-outline'}
+            size={IconSize.md}
+            color="textSecondary"
+            opticalCenter
+            accessible={false}
             style={styles.formatIcon}
           />
           <View style={styles.formatTextWrap}>
@@ -96,7 +100,7 @@ export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps
         </View>
         <View style={styles.formatRowRight}>
           <Text style={styles.formatChange}>Change</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         </View>
       </Pressable>
       {description ? (
@@ -109,8 +113,7 @@ export function ListingModeSelector({ mode, onChange }: ListingModeSelectorProps
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     // ── Compact format row ──
     // Per audit 04: progressive disclosure, not three equal tabs.
     // Flat inline row — no surface fill, no border (per §4 surface budget).
@@ -120,52 +123,42 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
-      minHeight: Control.hit + Space.sm,
-    },
+      minHeight: Control.hit + Space.sm },
     formatRowLeft: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm + 2,
-      flexShrink: 1,
-    },
+      flexShrink: 1 },
     formatIcon: {
-      flexShrink: 0,
-    },
+      flexShrink: 0 },
     formatTextWrap: {
       flexShrink: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     formatLabel: {
-      fontSize: Type.label.size,
-      lineHeight: Type.label.lineHeight,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight,
+      fontFamily: TypographyV2.label.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.label.letterSpacing,
-    },
+      letterSpacing: TypographyV2.label.letterSpacing },
     formatValue: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     formatRowRight: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      flexShrink: 0,
-    },
+      flexShrink: 0 },
     formatChange: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.brand },
     modeDescription: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       marginTop: Space.xs,
-      paddingHorizontal: Space.xs,
-    },
-  });
+      paddingHorizontal: Space.xs } });
 }

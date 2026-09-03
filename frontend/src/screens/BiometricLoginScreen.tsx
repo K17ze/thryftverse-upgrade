@@ -8,7 +8,8 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
 import { AppButton } from '../components/ui/AppButton';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Type, Space, Radius, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { restoreAuthSession } from '../services/authApi';
 import { track } from '../analytics';
 
@@ -84,8 +85,7 @@ export default function BiometricLoginScreen() {
         promptMessage: `Welcome back${currentUser?.username ? ', ' + currentUser.username : ''}`,
         fallbackLabel: 'Use password',
         disableDeviceFallback: false,
-        cancelLabel: 'Cancel',
-      });
+        cancelLabel: 'Cancel' });
       if (result.success) {
         // Refresh the live session in the background — the restored snapshot
         // is already in the store, so the user sees the app immediately.
@@ -136,9 +136,7 @@ export default function BiometricLoginScreen() {
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <View style={styles.content}>
-        <View style={styles.iconWrap}>
-          <Ionicons name="finger-print-outline" size={56} color={colors.brand} />
-        </View>
+        <Ionicons name="finger-print-outline" size={56} color={colors.brand} style={styles.biometricIcon} />
 
         <Text style={styles.title} maxFontSizeMultiplier={1.3}>
           Welcome back
@@ -190,59 +188,48 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     container: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     content: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.xl,
-    },
-    iconWrap: {
-      marginBottom: Space.lg,
-    },
+      paddingHorizontal: Space.xl },
+    biometricIcon: {
+      marginBottom: Space.lg },
     title: {
-      fontSize: Type.display.size,
-      lineHeight: Type.display.lineHeight,
-      fontWeight: Type.display.weight as any,
-      letterSpacing: Type.display.letterSpacing,
+      fontSize: TypographyV2.display.size,
+      lineHeight: TypographyV2.display.lineHeight,
+      fontWeight: TypographyV2.display.weight as any,
+      letterSpacing: TypographyV2.display.letterSpacing,
       color: colors.textPrimary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     subtitle: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textSecondary,
       textAlign: 'center',
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     errorText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.danger,
       textAlign: 'center',
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     authButton: {
       marginTop: Space.xxl,
-      minWidth: 220,
-    },
+      minWidth: 220 },
     fallbackBtn: {
       marginTop: Space.lg,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       minHeight: 44,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     fallbackText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textSecondary,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textSecondary } });
 }

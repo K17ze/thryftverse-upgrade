@@ -32,8 +32,7 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Reanimated, {
@@ -42,8 +41,7 @@ import Reanimated, {
   withTiming,
   withSpring,
   interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -53,8 +51,6 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppInput } from '../components/ui/AppInput';
 import { CachedImage } from '../components/CachedImage';
-import { AITrustBadge, type AIConfidence } from '../components/ai/AITrustBadge';
-import { AITrustSignal } from '../components/ai/AITrustSignal';
 
 import {
   AlgorithmTransparencyProfile,
@@ -66,10 +62,11 @@ import {
   fetchAlgorithmProfile,
   updateTopicWeight,
   removeTopic,
-  addTopic,
-} from '../services/algorithmTransparencyApi';
+  addTopic } from '../services/algorithmTransparencyApi';
 
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'YourAlgorithm'>;
 
@@ -85,32 +82,23 @@ const TOPIC_CATEGORIES = [
 ] as const;
 
 // ─── Weight metadata ─────────────────────────────────────────────────────────
-const WEIGHT_META: Record<TopicWeight, { label: string; dotCount: number }> = {
-  low: { label: 'Low', dotCount: 1 },
-  medium: { label: 'Medium', dotCount: 2 },
-  high: { label: 'High', dotCount: 3 },
-};
+const WEIGHT_META: Record<TopicWeight, { dotCount: number }> = {
+  low: { dotCount: 1 },
+  medium: { dotCount: 2 },
+  high: { dotCount: 3 } };
 
 const WEIGHT_ORDER: TopicWeight[] = ['low', 'medium', 'high'];
 
-/** Map a topic's influence weight to an AI confidence level. */
-const WEIGHT_TO_CONFIDENCE: Record<TopicWeight, AIConfidence> = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
+const WEIGHT_LABEL_FN: Record<TopicWeight, (t: (key: string) => string) => string> = {
+  low: (t) => t('weight.low'),
+  medium: (t) => t('weight.medium'),
+  high: (t) => t('weight.high'),
 };
 
-/** Map a signal's relative weight (0–1) to an AI confidence level. */
-function signalWeightToConfidence(weight: number): AIConfidence {
-  if (weight >= 0.66) return 'high';
-  if (weight >= 0.33) return 'medium';
-  return 'low';
-}
-
-const SOURCE_LABEL: Record<SignalSource, string> = {
-  explicit: 'Explicit',
-  implicit: 'Implicit',
-  inferred: 'Inferred',
+const SOURCE_LABEL_FN: Record<SignalSource, (t: (key: string) => string) => string> = {
+  explicit: (t) => t('source.explicit'),
+  implicit: (t) => t('source.implicit'),
+  inferred: (t) => t('source.inferred'),
 };
 
 // ─── Screen status ───────────────────────────────────────────────────────────
@@ -121,6 +109,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
+  const { t } = useAppTranslation('algorithm');
 
   const [profile, setProfile] = useState<AlgorithmTransparencyProfile | null>(null);
   const [status, setStatus] = useState<ScreenStatus>('loading');
@@ -176,8 +165,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
         if (updated && profile) {
           setProfile({
             ...profile,
-            topics: profile.topics.map((t) => (t.id === topicId ? updated : t)),
-          });
+            topics: profile.topics.map((t) => (t.id === topicId ? updated : t)) });
         }
       } finally {
         setUpdatingTopicId(null);
@@ -220,8 +208,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           signals: [],
           recentInfluences: [],
           lastUpdated: new Date().toISOString(),
-          isDemo: ALGORITHM_DEMO_MODE,
-        });
+          isDemo: ALGORITHM_DEMO_MODE });
       }
       setNewTopicLabel('');
       setStatus('populated');
@@ -244,14 +231,14 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
       const now = new Date();
       const diffMs = now.getTime() - d.getTime();
       const diffH = Math.floor(diffMs / 3_600_000);
-      if (diffH < 1) return 'Just now';
-      if (diffH < 24) return `${diffH}h ago`;
+      if (diffH < 1) return t('time.justNow');
+      if (diffH < 24) return t('time.hoursAgo', { count: diffH });
       const diffD = Math.floor(diffH / 24);
-      return `${diffD}d ago`;
+      return t('time.daysAgo', { count: diffD });
     } catch {
       return '—';
     }
-  }, [profile?.lastUpdated]);
+  }, [profile?.lastUpdated, t]);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -260,8 +247,8 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Your Algorithm"
-          subtitle="The signals that shape your feed"
+          title={t('header.title')}
+          subtitle={t('header.subtitle')}
           onBack={() => navigation.goBack()}
         />
       }
@@ -275,7 +262,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
         >
           <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
           <Text style={styles.demoBannerText}>
-            Algorithm data is illustrative in demo mode.
+            {t('demo.banner')}
           </Text>
         </View>
       )}
@@ -289,7 +276,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
         >
           <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} />
           <Text style={styles.offlineBannerText}>
-            You are offline. Showing the last saved profile.
+            {t('offline.banner')}
           </Text>
         </View>
       )}
@@ -299,7 +286,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
 
       {/* ── Error state ── */}
       {status === 'error' && (
-        <ErrorState styles={styles} colors={colors} onRetry={handleRetry} />
+        <ErrorState styles={styles} colors={colors} onRetry={handleRetry} t={t} />
       )}
 
       {/* ── Populated / Empty / Offline-with-data ── */}
@@ -309,21 +296,21 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           <View style={styles.summaryStrip}>
             <SummaryStat
               value={String(topicCount)}
-              label="Active topics"
+              label={t('summary.activeTopics')}
               colors={colors}
               styles={styles}
             />
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
             <SummaryStat
               value={String(signalCount)}
-              label="Signals"
+              label={t('summary.signals')}
               colors={colors}
               styles={styles}
             />
             <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
             <SummaryStat
               value={lastUpdatedLabel}
-              label="Last updated"
+              label={t('summary.lastUpdated')}
               colors={colors}
               styles={styles}
             />
@@ -340,6 +327,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
             styles={styles}
             reducedMotion={reducedMotion}
             spring={spring}
+            t={t}
           />
 
           {/* ── Empty state ── */}
@@ -349,10 +337,10 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                 <Ionicons name="git-network-outline" size={28} color={colors.textMuted} />
               </View>
               <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-                No topics yet
+                {t('empty.title')}
               </Text>
               <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                Your feed is based on general popularity. Add a topic below to start shaping your recommendations.
+                {t('empty.subtitle')}
               </Text>
             </View>
           )}
@@ -361,10 +349,10 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           {status !== 'empty' && profile.topics.length > 0 && (
             <View style={styles.sectionWrap}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Topics that influence your feed
+                {t('topics.title')}
               </Text>
               <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-                Tap a topic to adjust its weight or remove it.
+                {t('topics.caption')}
               </Text>
 
               <View style={styles.topicList}>
@@ -384,6 +372,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                     reducedMotion={reducedMotion}
                     spring={spring}
                     haptic={haptic}
+                    t={t}
                   />
                 ))}
               </View>
@@ -394,10 +383,10 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           {profile.recentInfluences.length > 0 && (
             <View style={styles.sectionWrap}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Recent signals
+                {t('signals.title')}
               </Text>
               <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-                The latest actions that shaped your feed.
+                {t('signals.caption')}
               </Text>
               <View style={styles.signalList}>
                 {profile.recentInfluences.map((signal, index) => (
@@ -407,6 +396,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                     isLast={index === profile.recentInfluences.length - 1}
                     colors={colors}
                     styles={styles}
+                    t={t}
                   />
                 ))}
               </View>
@@ -416,16 +406,16 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           {/* ── Add a topic section ── */}
           <View style={styles.sectionWrap}>
             <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-              Add a topic
+              {t('addTopic.title')}
             </Text>
             <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-              Tell us what you're interested in.
-              {ALGORITHM_DEMO_MODE ? ' Added topics are illustrative in demo mode.' : ''}
+              {t('addTopic.caption')}
+              {ALGORITHM_DEMO_MODE ? ' ' + t('addTopic.demoSuffix') : ''}
             </Text>
 
             <View style={styles.addTopicRow}>
               <AppInput
-                placeholder="e.g. Vintage watches"
+                placeholder={t('addTopic.placeholder')}
                 value={newTopicLabel}
                 onChangeText={setNewTopicLabel}
                 accessibilityLabel="Topic label input"
@@ -473,8 +463,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                         styles.categoryOption,
                         i < TOPIC_CATEGORIES.length - 1 && {
                           borderBottomColor: colors.borderSubtle,
-                          borderBottomWidth: StyleSheet.hairlineWidth,
-                        },
+                          borderBottomWidth: StyleSheet.hairlineWidth },
                       ]}
                       onPress={() => {
                         haptic.selection();
@@ -511,8 +500,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
               style={[
                 styles.addBtn,
                 {
-                  backgroundColor: !newTopicLabel.trim() || isAdding ? colors.surfaceAlt : colors.brand,
-                },
+                  backgroundColor: !newTopicLabel.trim() || isAdding ? colors.surfaceAlt : colors.brand },
               ]}
               accessibilityRole="button"
               accessibilityLabel="Add topic"
@@ -528,7 +516,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
                     { color: !newTopicLabel.trim() ? colors.textMuted : colors.textInverse },
                   ]}
                 >
-                  Add topic
+                  {t('addTopic.addBtn')}
                 </Text>
               )}
             </AnimatedPressable>
@@ -544,8 +532,7 @@ function SummaryStat({
   value,
   label,
   colors,
-  styles,
-}: {
+  styles }: {
   value: string;
   label: string;
   colors: ReturnType<typeof useAppTheme>['colors'];
@@ -571,13 +558,14 @@ function HowItWorks({
   styles,
   reducedMotion,
   spring,
-}: {
+  t }: {
   expanded: boolean;
   onToggle: () => void;
   colors: ReturnType<typeof useAppTheme>['colors'];
   styles: ReturnType<typeof createStyles>;
   reducedMotion: boolean;
   spring: ReturnType<typeof useMotionConfig>['spring'];
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const contentHeight = useSharedValue(0);
   const animatedHeight = useSharedValue(0);
@@ -595,12 +583,10 @@ function HowItWorks({
 
   const heightStyle = useAnimatedStyle(() => ({
     height: animatedHeight.value,
-    opacity: interpolate(animatedHeight.value, [0, 10], [0, 1], Extrapolation.CLAMP),
-  }));
+    opacity: interpolate(animatedHeight.value, [0, 10], [0, 1], Extrapolation.CLAMP) }));
 
   const chevronStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${interpolate(rotate.value, [0, 1], [0, 180])}deg` }],
-  }));
+    transform: [{ rotate: `${interpolate(rotate.value, [0, 1], [0, 180])}deg` }] }));
 
   return (
     <View style={styles.howItWorksWrap}>
@@ -613,7 +599,7 @@ function HowItWorks({
         accessibilityState={{ expanded }}
       >
         <Text style={[styles.howItWorksTitle, { color: colors.textPrimary }]}>
-          How this works
+          {t('howItWorks.title')}
         </Text>
         <Reanimated.View style={chevronStyle}>
           <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
@@ -629,14 +615,14 @@ function HowItWorks({
           style={styles.howItWorksContent}
         >
           <Text style={[styles.howItWorksBody, { color: colors.textSecondary }]}>
-            Your feed is shaped by topics and signals. Topics are the interests we've learned from your activity — some you told us explicitly, others we inferred from your behaviour. Signals are the individual actions (saves, searches, follows) that feed into those topics.
+            {t('howItWorks.body1')}
           </Text>
           <Text style={[styles.howItWorksBody, { color: colors.textSecondary }]}>
-            Adjust how strongly each topic influences your feed, remove topics you no longer want, or add new ones. Topics derived from purchase or browse history cannot be removed because they reflect your real activity.
+            {t('howItWorks.body2')}
           </Text>
           {ALGORITHM_DEMO_MODE && (
             <Text style={[styles.howItWorksDemo, { color: colors.textMuted }]}>
-              In demo mode, changes update your session profile but do not affect a live feed.
+              {t('howItWorks.demoNote')}
             </Text>
           )}
         </View>
@@ -660,7 +646,7 @@ function TopicRow({
   reducedMotion,
   spring,
   haptic,
-}: {
+  t }: {
   topic: AlgorithmTopic;
   isExpanded: boolean;
   onToggle: () => void;
@@ -674,6 +660,7 @@ function TopicRow({
   reducedMotion: boolean;
   spring: ReturnType<typeof useMotionConfig>['spring'];
   haptic: ReturnType<typeof useHaptic>;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
   const contentHeight = useSharedValue(0);
   const animatedHeight = useSharedValue(0);
@@ -691,14 +678,14 @@ function TopicRow({
 
   const heightStyle = useAnimatedStyle(() => ({
     height: animatedHeight.value,
-    opacity: interpolate(animatedHeight.value, [0, 10], [0, 1], Extrapolation.CLAMP),
-  }));
+    opacity: interpolate(animatedHeight.value, [0, 10], [0, 1], Extrapolation.CLAMP) }));
 
   const chevronStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${interpolate(rotate.value, [0, 1], [0, 180])}deg` }],
-  }));
+    transform: [{ rotate: `${interpolate(rotate.value, [0, 1], [0, 180])}deg` }] }));
 
   const weightMeta = WEIGHT_META[topic.weight];
+  const weightLabel = WEIGHT_LABEL_FN[topic.weight](t);
+  const sourceLabel = SOURCE_LABEL_FN[topic.source](t);
 
   return (
     <View>
@@ -706,7 +693,7 @@ function TopicRow({
         style={[styles.topicRow, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
         onPress={onToggle}
         accessibilityRole="button"
-        accessibilityLabel={`${topic.label}, ${topic.category}, weight ${weightMeta.label}, source ${SOURCE_LABEL[topic.source]}`}
+        accessibilityLabel={`${topic.label}, ${topic.category}, ${t('topics.influenceWeight')} ${weightLabel}, ${sourceLabel}`}
         accessibilityHint={isExpanded ? 'Collapses topic controls' : 'Expands to show weight and remove controls'}
         accessibilityState={{ expanded: isExpanded }}
       >
@@ -727,20 +714,14 @@ function TopicRow({
                   style={[
                     styles.weightDot,
                     {
-                      backgroundColor: n <= weightMeta.dotCount ? colors.textPrimary : colors.border,
-                    },
+                      backgroundColor: n <= weightMeta.dotCount ? colors.textPrimary : colors.border },
                   ]}
                 />
               ))}
             </View>
             <Text style={[styles.topicSource, { color: colors.textMuted }]}>
-              {SOURCE_LABEL[topic.source]}
+              {SOURCE_LABEL_FN[topic.source](t)}
             </Text>
-            <AITrustBadge
-              confidence={WEIGHT_TO_CONFIDENCE[topic.weight]}
-              isDemo={ALGORITHM_DEMO_MODE}
-              style={styles.topicConfidenceBadge}
-            />
           </View>
         </View>
 
@@ -750,7 +731,7 @@ function TopicRow({
               name="lock-closed"
               size={16}
               color={colors.textMuted}
-              accessibilityLabel="Cannot be removed"
+              accessibilityLabel="Kept for trust, influence can be paused"
             />
           )}
           <Reanimated.View style={chevronStyle}>
@@ -785,13 +766,12 @@ function TopicRow({
                     styles.weightOption,
                     {
                       backgroundColor: selected ? colors.brand : 'transparent',
-                      borderColor: selected ? colors.brand : colors.border,
-                    },
+                      borderColor: selected ? colors.brand : colors.border },
                   ]}
                   onPress={() => onWeightChange(w)}
                   disabled={isUpdating}
                   accessibilityRole="radio"
-                  accessibilityLabel={`${WEIGHT_META[w].label} weight`}
+                  accessibilityLabel={`${WEIGHT_LABEL_FN[w](t)} weight`}
                   accessibilityState={{ selected, disabled: isUpdating }}
                 >
                   <Text
@@ -800,7 +780,7 @@ function TopicRow({
                       { color: selected ? colors.textInverse : colors.textPrimary },
                     ]}
                   >
-                    {WEIGHT_META[w].label}
+                    {WEIGHT_LABEL_FN[w](t)}
                   </Text>
                 </Pressable>
               );
@@ -834,7 +814,7 @@ function TopicRow({
             <View style={styles.lockHint}>
               <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
               <Text style={[styles.lockHintText, { color: colors.textMuted }]}>
-                Cannot be removed — derived from your activity history.
+                Kept for trust and accounting. You can pause its influence on your feed.
               </Text>
             </View>
           )}
@@ -850,11 +830,12 @@ function SignalRow({
   isLast,
   colors,
   styles,
-}: {
+  t }: {
   signal: AlgorithmSignal;
   isLast: boolean;
   colors: ReturnType<typeof useAppTheme>['colors'];
   styles: ReturnType<typeof createStyles>;
+  t: (key: string) => string;
 }) {
   const timeLabel = useMemo(() => {
     try {
@@ -875,14 +856,14 @@ function SignalRow({
     <View
       style={[styles.signalRow, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
       accessibilityRole="text"
-      accessibilityLabel={`${signal.label}, ${SOURCE_LABEL[signal.type]}, ${timeLabel}`}
+      accessibilityLabel={`${signal.label}, ${SOURCE_LABEL_FN[signal.type](t)}, ${timeLabel}`}
     >
       <View style={styles.signalMain}>
         <Text style={[styles.signalLabel, { color: colors.textPrimary }]} numberOfLines={2}>
           {signal.label}
         </Text>
         <Text style={[styles.signalMeta, { color: colors.textMuted }]}>
-          {SOURCE_LABEL[signal.type]} · {timeLabel}
+          {SOURCE_LABEL_FN[signal.type](t)} · {timeLabel}
         </Text>
       </View>
       {/* Weight bar — relative influence, not a percentage */}
@@ -894,14 +875,6 @@ function SignalRow({
           ]}
         />
       </View>
-      {/* AI trust signal — confidence + source provenance for this signal */}
-      <AITrustSignal
-        confidence={signalWeightToConfidence(signal.weight)}
-        source={`${SOURCE_LABEL[signal.type]} signal — ${signal.label}`}
-        context={`Relative influence: ${Math.round(signal.weight * 100)}%`}
-        isDemo={ALGORITHM_DEMO_MODE}
-        style={styles.signalTrust}
-      />
     </View>
   );
 }
@@ -909,8 +882,7 @@ function SignalRow({
 // ─── Loading skeleton ────────────────────────────────────────────────────────
 function LoadingSkeleton({
   styles,
-  colors,
-}: {
+  colors }: {
   styles: ReturnType<typeof createStyles>;
   colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
@@ -959,10 +931,11 @@ function ErrorState({
   styles,
   colors,
   onRetry,
-}: {
+  t }: {
   styles: ReturnType<typeof createStyles>;
   colors: ReturnType<typeof useAppTheme>['colors'];
   onRetry: () => void;
+  t: (key: string) => string;
 }) {
   return (
     <View style={styles.errorWrap}>
@@ -1001,16 +974,14 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     demoBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textSecondary,
-      flex: 1,
-    },
+      flex: 1 },
 
     // Offline banner
     offlineBanner: {
@@ -1020,186 +991,153 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     offlineBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textSecondary,
-      flex: 1,
-    },
+      flex: 1 },
 
     // Summary strip — flat, hairline-separated
     summaryStrip: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.md,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     summaryStat: {
       flex: 1,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     summaryValue: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight },
     summaryLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs / 2 },
     summaryDivider: {
       width: StyleSheet.hairlineWidth,
-      height: Space.xl,
-    },
+      height: Space.xl },
 
     // How it works
     howItWorksWrap: {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     howItWorksHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.md,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     howItWorksTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight },
     howItWorksContent: {
       paddingBottom: Space.md,
       position: 'absolute',
       left: 0,
       right: 0,
-      top: 0,
-    },
+      top: 0 },
     howItWorksBody: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-      marginBottom: Space.sm,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
+      marginBottom: Space.sm },
     howItWorksDemo: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: Space.xs,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs },
 
     // Sections
     sectionWrap: {
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     sectionTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
-      marginBottom: Space.xs,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      marginBottom: Space.xs },
     sectionCaption: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginBottom: Space.md,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginBottom: Space.md },
 
     // Topic list — the dominant panel (flat with hairlines)
     topicList: {
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     topicRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.md,
       minHeight: Control.hit + Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     topicMain: {
       flex: 1,
-      minWidth: 0,
-    },
+      minWidth: 0 },
     topicLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight },
     topicMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     topicCategory: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight },
     topicMetaGap: {
-      width: Space.sm,
-    },
+      width: Space.sm },
     weightDots: {
       flexDirection: 'row',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     weightDot: {
       width: Space.xs + 2,
       height: Space.xs + 2,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     topicSource: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginLeft: Space.sm,
-    },
-    topicConfidenceBadge: {
-      marginLeft: Space.sm,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginLeft: Space.sm },
     topicRight: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     topicExpandedContent: {
       paddingBottom: Space.md,
       position: 'absolute',
       left: 0,
       right: 0,
-      top: 0,
-    },
+      top: 0 },
     controlLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       textTransform: 'uppercase',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     weightSelector: {
       flexDirection: 'row',
       gap: Space.sm,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     weightOption: {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
@@ -1207,98 +1145,79 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderWidth: Stroke.standard,
       minHeight: Control.hit - Space.sm,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     weightOptionText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     weightUpdating: {
-      marginLeft: Space.xs,
-    },
+      marginLeft: Space.xs },
     removeBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingVertical: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     removeBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     lockHint: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     lockHintText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textMuted,
-      flex: 1,
-    },
+      flex: 1 },
 
     // Signal list
     signalList: {
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     signalRow: {
       paddingVertical: Space.md,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     signalMain: {
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     signalLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight },
     signalMeta: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs / 2 },
     signalWeightBar: {
       height: Space.xs - 1,
       borderRadius: Radius.sm,
       backgroundColor: colors.border,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     signalWeightFill: {
       height: '100%',
-      borderRadius: Radius.sm,
-    },
-    signalTrust: {
-      marginTop: Space.sm,
-    },
+      borderRadius: Radius.sm },
 
     // Add topic
     addTopicRow: {
       flexDirection: 'row',
       gap: Space.sm,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     topicInput: {
       flex: 1,
       height: Control.hit + Space.sm,
       borderRadius: Radius.lg,
       borderWidth: Stroke.standard,
       paddingHorizontal: Space.md,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     categoryPicker: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1307,132 +1226,110 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderRadius: Radius.lg,
       borderWidth: Stroke.standard,
       paddingHorizontal: Space.md,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     categoryPickerLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      flex: 1,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      flex: 1 },
     categoryList: {
       borderRadius: Radius.lg,
       borderWidth: Stroke.standard,
       maxHeight: 240,
       marginBottom: Space.sm,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     categoryOption: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.md,
       paddingHorizontal: Space.md,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     categoryOptionText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     addBtn: {
       height: Control.hit + Space.sm,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     addBtnText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
 
     // Empty state
     emptyStateWrap: {
       alignItems: 'center',
       paddingVertical: Space.xl,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     emptyIconCircle: {
       width: Space.xl * 2,
       height: Space.xl * 2,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     emptyTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
-      marginBottom: Space.xs,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      marginBottom: Space.xs },
     emptySubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-      textAlign: 'center',
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
+      textAlign: 'center' },
 
     // Error state
     errorWrap: {
       alignItems: 'center',
       paddingVertical: Space.xl,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     errorIconCircle: {
       width: Space.xl * 2,
       height: Space.xl * 2,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     errorTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
-      marginBottom: Space.xs,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      marginBottom: Space.xs },
     errorSubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
       textAlign: 'center',
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     retryBtn: {
       paddingHorizontal: Space.lg,
       paddingVertical: Space.smMd,
       borderRadius: Radius.full,
-      borderWidth: Stroke.standard,
-    },
+      borderWidth: Stroke.standard },
     retryBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
 
     // Skeleton
     skeletonLine: {
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     skeletonSummaryItem: {
       flex: 1,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     skeletonValue: {
       width: Space.xxl,
-      height: Space.md + Space.xs,
-    },
+      height: Space.md + Space.xs },
     skeletonLabel: {
       width: Space.xl * 2,
       height: Space.md - Space.xs,
-      marginTop: Space.xs,
-    },
-  });
+      marginTop: Space.xs } });
 }

@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, RefreshControl, Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { TypeStyles, Space, Radius, Type, Typography } from '../theme/designTokens';
+import { TypeStyles, Space, Radius, Typography, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
-import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState, DenseListScreen } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadges';
 import { useStore } from '../store/useStore';
@@ -19,6 +19,9 @@ import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsAp
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { t } from '../i18n';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize, type SemanticIconName, type IoniconsGlyphName } from '../theme/iconTokens';
 
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -30,21 +33,22 @@ type FilterTab = 'all' | 'active' | 'draft' | 'sold' | 'paused';
 interface TabConfig {
   key: FilterTab;
   label: string;
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: SemanticIconName | IoniconsGlyphName;
 }
 
 const TABS: TabConfig[] = [
-  { key: 'all', label: 'All', icon: 'list-outline' },
-  { key: 'active', label: 'Active', icon: 'pricetag-outline' },
-  { key: 'draft', label: 'Draft', icon: 'document-text-outline' },
-  { key: 'sold', label: 'Sold', icon: 'checkmark-done' },
-  { key: 'paused', label: 'Paused', icon: 'pause-outline' },
+  { key: 'all', label: t('myListings.tabAll'), icon: 'list' },
+  { key: 'active', label: t('myListings.tabActive'), icon: 'bag-handle-outline' },
+  { key: 'draft', label: t('myListings.tabDraft'), icon: 'document' },
+  { key: 'sold', label: t('myListings.tabSold'), icon: 'verified' },
+  { key: 'paused', label: t('myListings.tabPaused'), icon: 'pause' },
 ];
 
 // ── Listing row with views count and improved hierarchy ──
 function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => void }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
 
   const statusColor =
     item.status === 'active' ? colors.success
@@ -62,7 +66,7 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
       style={styles.row}
       onPress={onPress}
       activeOpacity={0.85}
-      accessibilityLabel={`${item.title}, £${item.priceGbp.toFixed(2)}, status: ${item.status}${views > 0 ? `, ${views} views` : ''}`}
+      accessibilityLabel={`${item.title}, ${currencySymbol}${item.priceGbp.toFixed(2)}, status: ${item.status}${views > 0 ? `, ${views} views` : ''}`}
       accessibilityRole="button"
       accessibilityHint="Tap to view listing details"
     >
@@ -70,12 +74,12 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
         <CachedImage uri={item.images[0]} style={styles.rowImage} containerStyle={styles.rowImageWrap} contentFit="cover" />
       ) : (
         <View style={[styles.rowImageWrap, styles.rowImageFallback]}>
-          <Ionicons name="bag-handle-outline" size={20} color={colors.textMuted} />
+          <AppIcon name="cart" size={IconSize.md} color="textMuted" opticalCenter accessible={false} />
         </View>
       )}
       <View style={styles.rowBody}>
         <Text style={styles.rowTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.rowPrice}>£{item.priceGbp.toFixed(2)}</Text>
+        <Text style={styles.rowPrice}>{formatFromFiat(item.priceGbp, currencyCode, { displayMode: 'fiat' })}</Text>
         <View style={styles.rowMeta}>
           {/* Status pill — only visible containment on this row (status boundary) */}
           <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '40' }]}>
@@ -88,13 +92,13 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
           <View style={styles.engagementRow}>
             {views > 0 && (
               <View style={styles.engagementItem}>
-                <Ionicons name="eye-outline" size={12} color={colors.textMuted} />
+                <AppIcon name="eye" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                 <Text style={styles.engagementText}>{views > 999 ? `${(views / 1000).toFixed(1)}k` : views}</Text>
               </View>
             )}
             {likes > 0 && (
               <View style={styles.engagementItem}>
-                <Ionicons name="heart-outline" size={12} color={colors.textMuted} />
+                <AppIcon name="heart" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                 <Text style={styles.engagementText}>{likes > 999 ? `${(likes / 1000).toFixed(1)}k` : likes}</Text>
               </View>
             )}
@@ -103,25 +107,31 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
         {/* Missing details warning — only for active listings with incomplete data */}
         {item.status === 'active' && hasMissingDetails && (
           <View style={styles.missingDetailsRow}>
-            <Ionicons name="alert-circle-outline" size={11} color={colors.warning} />
-            <Text style={styles.missingDetailsText}>Missing details</Text>
+            <AppIcon name="warning" size={IconSize.micro} color="warning" opticalCenter accessible={false} />
+            <Text style={styles.missingDetailsText}>{t('myListings.missingDetails')}</Text>
           </View>
         )}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
     </AnimatedPressable>
   );
 }
 
-function StatCard({ icon, label, value, tone }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
+// Flat metric row — label left, value right, hairline separator below.
+// Replaces the 2x2 StatCard grid (generic dashboard silhouette) with an
+// inline list that passes the thumbnail test: the eye reads a labelled
+// ledger, not four identical grey tiles.
+function FlagshipMetricLine({ icon, label, value, tone }: { icon: SemanticIconName | IoniconsGlyphName; label: string; value: string; tone?: 'default' | 'success' | 'brand' }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const color = tone === 'success' ? colors.success : tone === 'brand' ? colors.brand : colors.textPrimary;
+  const valueColor = tone === 'success' ? colors.success : tone === 'brand' ? colors.brand : colors.textPrimary;
   return (
-    <View style={styles.statTile}>
-      <Ionicons name={icon} size={18} color={color} />
-      <Text style={styles.statTileValue} numberOfLines={1}>{value}</Text>
-      <Text style={styles.statTileLabel} numberOfLines={1}>{label}</Text>
+    <View style={styles.metricRow}>
+      <View style={styles.metricLabel}>
+        <AppIcon name={icon} size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
+        <Text style={styles.metricLabelText} numberOfLines={1}>{label}</Text>
+      </View>
+      <Text style={[styles.metricValue, { color: valueColor }]} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
@@ -135,6 +145,7 @@ export default function MyListingsScreen() {
   const currentUser = useStore((s) => s.currentUser);
   const filterType = route.params?.type;
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -142,11 +153,11 @@ export default function MyListingsScreen() {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   const headerTitle =
-    filterType === 'coown' ? 'My Co-Own Listings' : 'My Listings';
+    filterType === 'coown' ? t('myListings.titleCoOwn') : t('myListings.title');
   const emptySubtitle =
     filterType === 'coown'
-      ? 'Co-own offerings you create will appear here.'
-      : 'Items you list for sale will appear here.';
+      ? t('myListings.emptyCoOwn')
+      : t('myListings.empty');
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -154,7 +165,7 @@ export default function MyListingsScreen() {
       const res = await fetchUserListingsFromApi(currentUser.id, { limit: 100 });
       setListings(res.items);
     } catch (e) {
-      show('Could not load listings', 'error');
+      show(t('myListings.couldNotLoad'), 'error');
     }
   }, [currentUser?.id, show]);
 
@@ -192,8 +203,7 @@ export default function MyListingsScreen() {
       totalActiveValue,
       totalSoldValue,
       avgActivePrice,
-      avgSoldPrice,
-    };
+      avgSoldPrice };
   }, [listings]);
 
   // ── Tab counts for filter badges ──
@@ -202,8 +212,7 @@ export default function MyListingsScreen() {
     active: analytics.activeCount,
     draft: analytics.draftCount,
     sold: analytics.soldCount,
-    paused: analytics.pausedCount,
-  }), [listings, analytics]);
+    paused: analytics.pausedCount }), [listings, analytics]);
 
   // ── Filtered listings based on active tab ──
   const filteredListings = useMemo(() => {
@@ -235,29 +244,29 @@ export default function MyListingsScreen() {
     if (listings.length === 0) return null;
     return (
       <View style={styles.headerSection}>
-        {/* Analytics summary */}
-        <View style={styles.statsGrid}>
-          <StatCard
-            icon="pricetag-outline"
-            label="Active"
+        {/* Analytics summary — flat metric ledger, no card chrome */}
+        <View style={styles.metricList}>
+          <FlagshipMetricLine
+            icon="bag-handle-outline"
+            label={t('myListings.statActive')}
             value={String(analytics.activeCount)}
             tone="success"
           />
-          <StatCard
-            icon="checkmark-done"
-            label="Sold"
+          <FlagshipMetricLine
+            icon="verified"
+            label={t('myListings.statSold')}
             value={String(analytics.soldCount)}
             tone="brand"
           />
-          <StatCard
-            icon="cash-outline"
-            label="Avg price"
-            value={`£${analytics.avgActivePrice.toFixed(0)}`}
+          <FlagshipMetricLine
+            icon="wallet"
+            label={t('myListings.statAvgPrice')}
+            value={formatFromFiat(analytics.avgActivePrice, currencyCode, { displayMode: 'fiat' })}
           />
-          <StatCard
-            icon="trending-up-outline"
-            label="Active value"
-            value={`£${analytics.totalActiveValue.toFixed(0)}`}
+          <FlagshipMetricLine
+            icon="trending"
+            label={t('myListings.statActiveValue')}
+            value={formatFromFiat(analytics.totalActiveValue, currencyCode, { displayMode: 'fiat' })}
           />
         </View>
 
@@ -275,38 +284,38 @@ export default function MyListingsScreen() {
             accessibilityLabel="Create new listing"
             accessibilityRole="button"
           >
-            <Ionicons name="add-circle-outline" size={18} color={colors.brand} />
-            <Text style={styles.quickActionText}>New listing</Text>
+            <AppIcon name="plus" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+            <Text style={styles.quickActionText}>{t('myListings.newListing')}</Text>
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.quickActionBtn}
             onPress={() => { haptics.tap(); navigation.navigate('SellerAnalytics'); }}
             activeOpacity={0.85}
-            accessibilityLabel="View seller analytics"
+            accessibilityLabel={t('myListings.analytics')}
             accessibilityRole="button"
           >
-            <Ionicons name="bar-chart-outline" size={18} color={colors.brand} />
-            <Text style={styles.quickActionText}>Analytics</Text>
+            <AppIcon name="analytics" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+            <Text style={styles.quickActionText}>{t('myListings.analytics')}</Text>
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.quickActionBtn}
             onPress={() => { haptics.tap(); navigation.navigate('SellerAuctionCentre'); }}
             activeOpacity={0.85}
-            accessibilityLabel="Manage auctions"
+            accessibilityLabel={t('myListings.auctions')}
             accessibilityRole="button"
           >
-            <Ionicons name="trophy-outline" size={18} color={colors.brand} />
-            <Text style={styles.quickActionText}>Auctions</Text>
+            <AppIcon name="hammer" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+            <Text style={styles.quickActionText}>{t('myListings.auctions')}</Text>
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.quickActionBtn}
             onPress={() => { haptics.tap(); navigation.navigate('Wallet'); }}
             activeOpacity={0.85}
-            accessibilityLabel="View payout account"
+            accessibilityLabel={t('myListings.payouts')}
             accessibilityRole="button"
           >
-            <Ionicons name="wallet-outline" size={18} color={colors.brand} />
-            <Text style={styles.quickActionText}>Payouts</Text>
+            <AppIcon name="wallet" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+            <Text style={styles.quickActionText}>{t('myListings.payouts')}</Text>
           </AnimatedPressable>
         </View>
       </View>
@@ -329,7 +338,7 @@ export default function MyListingsScreen() {
           return (
             <Pressable
               key={tab.key}
-              style={styles.filterTab}
+              style={({ pressed }) => [styles.filterTab, pressed && { opacity: 0.85 }]}
               onPress={() => { haptics.tap(); setActiveTab(tab.key); }}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
@@ -364,18 +373,19 @@ export default function MyListingsScreen() {
     const tabLabel = TABS.find(t => t.key === activeTab)?.label ?? '';
     return (
       <View style={styles.filteredEmpty}>
-        <Ionicons name="filter-outline" size={32} color={colors.textMuted} />
+        <AppIcon name="filter" size={IconSize.hero} color="textMuted" opticalCenter accessible={false} />
         <Text style={[styles.filteredEmptyTitle, { color: colors.textSecondary }]}>
-          No {tabLabel.toLowerCase()} listings
+          {t('myListings.noTabListings', { tab: tabLabel.toLowerCase() })}
         </Text>
         <Pressable
           onPress={() => { haptics.tap(); setActiveTab('all'); }}
           hitSlop={8}
+          style={({ pressed }) => pressed && { opacity: 0.85 }}
           accessibilityRole="button"
-          accessibilityLabel="Show all listings"
+          accessibilityLabel={t('myListings.showAll')}
         >
           <Text style={[styles.filteredEmptyAction, { color: colors.brand }]}>
-            Show all
+            {t('myListings.showAll')}
           </Text>
         </Pressable>
       </View>
@@ -383,48 +393,48 @@ export default function MyListingsScreen() {
   };
 
   return (
-    <FlagshipScreen
+    <DenseListScreen
+      testID="my-listings-screen"
       header={<FlagshipHeader title={headerTitle} onBack={() => navigation.goBack()} />}
-      scrollEnabled={false}
-      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
-    >
-      <OfflineBanner onRetry={() => void onRefresh()} />
-      {listings.length === 0 ? (
-        <View style={styles.body}>
-          <EmptyState
-            icon="pricetags-outline"
-            title="No listings yet"
-            subtitle={emptySubtitle}
-            ctaLabel="Start selling"
-            onCtaPress={() => navigation.navigate('Sell')}
-          />
-        </View>
-      ) : (
-        <FlashList
-          data={filteredListings}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
-          ListHeaderComponent={
-            <View>
-              {renderHeader()}
-              {renderFilterBar()}
-              {/* Listing count for current filter */}
-              <View style={styles.listingsHeaderRow}>
-                <Text style={styles.listingsHeaderText}>
-                  {filteredListings.length} {filteredListings.length === 1 ? 'listing' : 'listings'}
-                  {activeTab !== 'all' ? ` · ${TABS.find(t => t.key === activeTab)?.label}` : ''}
-                </Text>
+      banner={<OfflineBanner onRetry={() => void onRefresh()} />}
+      list={
+        listings.length === 0 ? (
+          <View style={styles.body}>
+            <EmptyState
+              icon="bag-handle-outline"
+              title={t('myListings.noListings')}
+              subtitle={emptySubtitle}
+              ctaLabel={t('myListings.startSelling')}
+              onCtaPress={() => navigation.navigate('Sell')}
+            />
+          </View>
+        ) : (
+          <FlashList
+            data={filteredListings}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.list}
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
+            ListHeaderComponent={
+              <View>
+                {renderHeader()}
+                {renderFilterBar()}
+                {/* Listing count for current filter */}
+                <View style={styles.listingsHeaderRow}>
+                  <Text style={styles.listingsHeaderText}>
+                    {t('myListings.listingCount', { count: filteredListings.length, word: filteredListings.length === 1 ? t('myListings.listingWord') : t('myListings.listingWordPlural') })}
+                    {activeTab !== 'all' ? ` · ${TABS.find(t2 => t2.key === activeTab)?.label}` : ''}
+                  </Text>
+                </View>
               </View>
-            </View>
-          }
-          ListEmptyComponent={renderFilteredEmpty()}
-          renderItem={renderListingItem}
-          // Performance: long seller lists; FlashList v2 handles recycling
-          // automatically.
-        />
-      )}
-    </FlagshipScreen>
+            }
+            ListEmptyComponent={renderFilteredEmpty()}
+            renderItem={renderListingItem}
+            // Performance: long seller lists; FlashList v2 handles recycling
+            // automatically.
+          />
+        )
+      }
+    />
   );
 }
 
@@ -432,71 +442,64 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   body: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   list: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     gap: Space.sm,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   headerSection: {
     gap: Space.sm,
-    marginBottom: Space.sm,
-  },
-  statsGrid: {
+    marginBottom: Space.sm },
+  metricList: {
+    // Flat ledger — no fill, no shadow, no card chrome.
+    // Hairline separators between rows provide the only visible structure.
+    marginBottom: Space.xs },
+  metricRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
-  },
-  statTile: {
-    width: '48%',
-    flexGrow: 1,
-    gap: 2,
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: Space.sm,
-  },
-  statTileValue: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
-  statTileLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    borderBottomWidth: Stroke.hairline,
+    borderBottomColor: colors.border },
+  metricLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    flexShrink: 1 },
+  metricLabelText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
+  metricValue: {
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   quickActionsRow: {
     flexDirection: 'row',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   quickActionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs + 2,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   quickActionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
 
   /* ── Filter tab bar ── */
   filterBar: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingVertical: Space.xs,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   filterTab: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -504,57 +507,47 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs + 2,
     paddingHorizontal: Space.xs,
     borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
+    borderBottomColor: 'transparent' },
   filterTabText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   filterTabTextActive: {
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   filterTabCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   filterTabIndicator: {
     position: 'absolute',
     bottom: 0,
     left: Space.xs,
     right: Space.xs,
     height: 2,
-    borderRadius: 1,
-  },
+    borderRadius: 1 },
 
   /* ── Filtered empty state ── */
   filteredEmpty: {
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xxl,
-  },
+    paddingVertical: Space.xxl },
   filteredEmptyTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   filteredEmptyAction: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
 
   listingsHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: Space.xs,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   listingsHeaderText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: Type.label.letterSpacing,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing },
 
   /* ── Listing row ── */
   row: {
@@ -563,89 +556,72 @@ function createStyles(colors: ThemeColors) {
     gap: Space.md,
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   rowImageWrap: {
     width: Space.xxl + Space.md,
     height: Space.xxl + Space.md,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   rowImage: {
     width: Space.xxl + Space.md,
-    height: Space.xxl + Space.md,
-  },
+    height: Space.xxl + Space.md },
   rowImageFallback: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   rowBody: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   rowTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   rowPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   rowMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   statusBadge: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2,
     borderRadius: Radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   statusText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    textTransform: 'capitalize',
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textTransform: 'capitalize' },
   rowCategory: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
 
   /* ── Engagement metrics in row ── */
   engagementRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   engagementItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   engagementText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
 
   /* ── Missing details warning ── */
   missingDetailsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xxs,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   missingDetailsText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.warning,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.warning } });
 }

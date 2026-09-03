@@ -2,7 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
@@ -30,8 +31,7 @@ export function ReviewPromptSheet({
   sellerName,
   onClose,
   onWriteReview,
-  onDefer,
-}: ReviewPromptSheetProps) {
+  onDefer }: ReviewPromptSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [selectedRating, setSelectedRating] = useState(0);
@@ -162,14 +162,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   sheet: {
     backgroundColor: colors.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   handle: {
     width: 36,
     height: 4,
@@ -177,37 +175,32 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.border,
     alignSelf: 'center',
     marginTop: Space.sm,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   header: {
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   headerIcon: {
     width: 40,
     height: 40,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.brand}15`,
+    backgroundColor: colors.brandSubtle,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   title: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
     letterSpacing: -0.3,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   subtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -216,52 +209,42 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: Space.md,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
-    padding: Space.sm + 2,
-  },
+    padding: Space.sm + 2 },
   itemImage: {
     width: 48,
     height: 48,
     borderRadius: Radius.md,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   itemImageFallback: {
     backgroundColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemTitle: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    lineHeight: 18,
-  },
+    lineHeight: 18 },
   starsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: Space.sm + 2,
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   ratingLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.brand,
     textAlign: 'center',
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   actions: {
     alignItems: 'center',
     gap: Space.md,
     marginTop: Space.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   writeBtn: {
-    width: '100%',
-  },
+    width: '100%' },
   skipText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
-    paddingVertical: Space.xs,
-  },
-});
+    paddingVertical: Space.xs } });

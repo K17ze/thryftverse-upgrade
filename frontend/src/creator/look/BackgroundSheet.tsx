@@ -26,18 +26,13 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
-  LayoutChangeEvent,
-  GestureResponderEvent,
-  PanResponder,
-  PanResponderGestureState,
-  Alert,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Typography, FontFamily, Stroke, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../CreatorAnimations';
@@ -50,15 +45,14 @@ import {
   useCreatorColorHistory,
   toHexString,
   fromHexString,
-  normalize,
-} from '../color/';
+  normalize } from '../color/';
 import type { CreatorColor, GradientDefinition, GradientStop } from '../color/';
 import { makeStableId } from '../../utils/createStableId';
+import { ConfirmationSheet } from '../../components/ConfirmationSheet';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
 import { Motion } from '../../theme/motionTokens';
 import type { CreatorBackground, CreatorLayer } from '../composition';
 
@@ -114,9 +108,7 @@ function backgroundToGradient(bg: CreatorBackground): GradientDefinition {
       stops: bg.gradientStops.map((s) => ({
         id: makeStableId('stop'),
         position: s.position,
-        color: fromHexString(s.color) ?? { space: 'srgb', r: 0, g: 0, b: 0, a: 1 },
-      })),
-    };
+        color: fromHexString(s.color) ?? { space: 'srgb', r: 0, g: 0, b: 0, a: 1 } })) };
   }
   // Default: two stops from value/secondaryValue.
   const startColor = fromHexString(bg.value) ?? { space: 'srgb' as const, r: 0.1, g: 0.1, b: 0.1, a: 1 };
@@ -127,8 +119,7 @@ function backgroundToGradient(bg: CreatorBackground): GradientDefinition {
     stops: [
       { id: makeStableId('stop'), position: 0, color: startColor },
       { id: makeStableId('stop'), position: 1, color: endColor },
-    ],
-  };
+    ] };
 }
 
 // ── Component ─────────────────────────────────────────────────────────
@@ -138,8 +129,7 @@ export function BackgroundSheet({
   currentBackground,
   mediaLayers,
   onConfirm,
-  onClose,
-}: BackgroundSheetProps) {
+  onClose }: BackgroundSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -158,8 +148,7 @@ export function BackgroundSheet({
   const [gradientDef, setGradientDef] = useState<GradientDefinition>(() => ({
     type: 'linear',
     angle: 180,
-    stops: [],
-  }));
+    stops: [] }));
 
   // ── Type tab underline indicator (spring-animated, brand color) ──
   const typeTabLayouts = useRef<Map<BgType, { x: number; width: number }>>(new Map());
@@ -260,8 +249,7 @@ export function BackgroundSheet({
       stops: [
         { id: makeStableId('stop'), position: 0, color: stop0Color },
         { id: makeStableId('stop'), position: 1, color: stop1Color },
-      ],
-    };
+      ] };
     setGradientDef(newGradient);
     // Clear custom gradientStops — using preset (value/secondaryValue).
     setDraft((prev) => ({
@@ -270,8 +258,7 @@ export function BackgroundSheet({
       value,
       secondaryValue,
       gradientStops: undefined,
-      gradientAngle: undefined,
-    }));
+      gradientAngle: undefined }));
   }, [haptic]);
 
   // ── Gradient editor (custom) ───────────────────────────────────────
@@ -284,8 +271,7 @@ export function BackgroundSheet({
       value: toHexString(g.stops[0]?.color ?? { space: 'srgb', r: 0, g: 0, b: 0, a: 1 }),
       secondaryValue: toHexString(g.stops[g.stops.length - 1]?.color ?? { space: 'srgb', r: 1, g: 1, b: 1, a: 1 }),
       gradientStops: g.stops.map((s) => ({ position: s.position, color: toHexString(s.color) })),
-      gradientAngle: g.angle,
-    }));
+      gradientAngle: g.angle }));
   }, []);
 
   const handleGradientCommit = useCallback((g: GradientDefinition) => {
@@ -305,6 +291,14 @@ export function BackgroundSheet({
   // uri }. Permission is requested first; if denied, an alert guides the
   // user to settings (AGENTS.md §11 — truthful, no fake success).
   const [isPickingImage, setIsPickingImage] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const handlePickImage = useCallback(async () => {
     if (isPickingImage) return;
@@ -312,32 +306,35 @@ export function BackgroundSheet({
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert(
-          'Photo access needed',
-          'Allow photo library access to pick a background image.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => { void ImagePicker.requestMediaLibraryPermissionsAsync(); } },
-          ],
-        );
+        setConfirmSheet({
+          visible: true,
+          title: 'Photo access needed',
+          message: 'Allow photo library access to pick a background image.',
+          confirmLabel: 'Open Settings',
+          variant: 'default',
+          onConfirm: () => { void ImagePicker.requestMediaLibraryPermissionsAsync(); } });
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
-        quality: 0.92,
-      });
+        quality: 0.92 });
       if (!result.canceled && result.assets?.[0]?.uri) {
         haptic.medium();
         setDraft((prev) => ({
           ...prev,
           type: 'image',
           value: result.assets[0].uri,
-          imageBlur: prev.imageBlur ?? 0,
-        }));
+          imageBlur: prev.imageBlur ?? 0 }));
       }
     } catch {
-      Alert.alert('Could not open photo library', 'Please try again.');
+      setConfirmSheet({
+        visible: true,
+        title: 'Could not open photo library',
+        message: 'Please try again.',
+        confirmLabel: 'OK',
+        variant: 'default',
+        onConfirm: () => {} });
     } finally {
       setIsPickingImage(false);
     }
@@ -363,8 +360,7 @@ export function BackgroundSheet({
   // Type tab underline animated style.
   const typeUnderlineStyle = useAnimatedStyle(() => ({
     left: typeUnderlineXSV.value,
-    width: typeUnderlineWSV.value,
-  }));
+    width: typeUnderlineWSV.value }));
 
   // ── Derived: is a solid swatch active? ─────────────────────────────
   const activeSolidValue = draft.type === 'color' ? draft.value : null;
@@ -383,7 +379,7 @@ export function BackgroundSheet({
           accessibilityLabel="Close background picker"
           accessibilityHint="Discards changes and closes the background picker"
         >
-          <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+          <Ionicons name="close" size={IconGrammar.standard} color={colors.textPrimary} />
         </PressScale>
       </View>
 
@@ -398,8 +394,7 @@ export function BackgroundSheet({
               onLayout={(e) => {
                 typeTabLayouts.current.set(chip.id, {
                   x: e.nativeEvent.layout.x,
-                  width: e.nativeEvent.layout.width,
-                });
+                  width: e.nativeEvent.layout.width });
                 if (draft.type === chip.id) {
                   typeUnderlineXSV.value = e.nativeEvent.layout.x;
                   typeUnderlineWSV.value = e.nativeEvent.layout.width;
@@ -437,7 +432,6 @@ export function BackgroundSheet({
         {/* ── Solid ── */}
         {draft.type === 'color' && (
           <View>
-            <Text style={styles.sectionLabel}>Neutral colours</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -456,29 +450,11 @@ export function BackgroundSheet({
                     <View
                       style={[
                         styles.swatch,
-                        { borderColor: isActive ? colors.brand : colors.border },
+                        isActive && styles.swatchActive,
                       ]}
                     >
                       <View style={[styles.swatchFill, { backgroundColor: sw.value }]} />
-                      {isActive && (
-                        <View style={styles.swatchCheck}>
-                          <Ionicons
-                            name="checkmark"
-                            size={IconGrammar.badge}
-                            color={sw.value === '#ffffff' || sw.value === '#f5f5f5' || sw.value === '#e8e8e8' ? '#000' : '#fff'}
-                          />
-                        </View>
-                      )}
                     </View>
-                    <Text
-                      style={[
-                        styles.swatchLabel,
-                        { color: isActive ? colors.brand : colors.textSecondary },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {sw.label}
-                    </Text>
                   </Pressable>
                 );
               })}
@@ -502,7 +478,6 @@ export function BackgroundSheet({
         {/* ── Gradient ── */}
         {draft.type === 'gradient' && (
           <View>
-            <Text style={styles.sectionLabel}>Presets</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -524,7 +499,7 @@ export function BackgroundSheet({
                     <View
                       style={[
                         styles.swatch,
-                        { borderColor: isActive ? colors.brand : colors.border },
+                        isActive && styles.swatchActive,
                       ]}
                     >
                       <LinearGradient
@@ -533,27 +508,12 @@ export function BackgroundSheet({
                         start={{ x: 0, y: 0 }}
                         end={{ x: 0, y: 1 }}
                       />
-                      {isActive && (
-                        <View style={styles.swatchCheck}>
-                          <Ionicons name="checkmark" size={IconGrammar.badge} color="#fff" />
-                        </View>
-                      )}
                     </View>
-                    <Text
-                      style={[
-                        styles.swatchLabel,
-                        { color: isActive ? colors.brand : colors.textSecondary },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {g.label}
-                    </Text>
                   </Pressable>
                 );
               })}
             </ScrollView>
 
-            <Text style={styles.sectionLabel}>Custom</Text>
             <GradientEditor
               gradient={gradientDef}
               onChange={handleGradientChange}
@@ -595,14 +555,14 @@ export function BackgroundSheet({
                   {blurRadius}
                 </Text>
               </View>
-              <BlurSlider
+              <CreatorSlider
                 value={blurRadius}
                 min={0}
                 max={50}
-                trackColor={colors.border}
-                fillColor={colors.brand}
-                thumbColor={colors.textInverse}
-                onChange={handleBlurRadiusChange}
+                step={1}
+                onValueChange={handleBlurRadiusChange}
+                onCommit={handleBlurRadiusChange}
+                accessibilityLabel="Background blur intensity"
               />
             </View>
           </View>
@@ -690,100 +650,18 @@ export function BackgroundSheet({
           </Text>
         </PressScale>
       </View>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
     </SheetContainer>
   );
 }
-
-// ── Blur slider (PanResponder-based, no external dependency) ──────────
-
-interface BlurSliderProps {
-  value: number;
-  min: number;
-  max: number;
-  trackColor: string;
-  fillColor: string;
-  thumbColor: string;
-  onChange: (value: number) => void;
-}
-
-function BlurSlider({ value, min, max, trackColor, fillColor, thumbColor, onChange }: BlurSliderProps) {
-  const trackWidthRef = useRef(0);
-  const [trackWidth, setTrackWidth] = useState(0);
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    trackWidthRef.current = e.nativeEvent.layout.width;
-    setTrackWidth(e.nativeEvent.layout.width);
-  }, []);
-
-  const range = max - min;
-  const clamped = Math.min(max, Math.max(min, value));
-  const ratio = range === 0 ? 0 : (clamped - min) / range;
-  const trackLayoutWidth = trackWidth > 0 ? trackWidth : 1;
-  const thumbPosition = ratio * trackLayoutWidth;
-
-  const valueToPosition = useCallback(
-    (x: number) => {
-      const r = Math.min(1, Math.max(0, x / trackLayoutWidth));
-      return min + r * range;
-    },
-    [trackLayoutWidth, min, range],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (_e: GestureResponderEvent) => {},
-        onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-          const next = valueToPosition(thumbPosition + g.dx);
-          onChange(Math.round(next));
-        },
-        onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false,
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [thumbPosition, valueToPosition, onChange],
-  );
-
-  return (
-    <View style={sliderStyles.trackWrap} onLayout={handleLayout} {...panResponder.panHandlers}>
-      <View style={[sliderStyles.track, { backgroundColor: trackColor }]} />
-      <View style={[sliderStyles.fill, { width: thumbPosition, backgroundColor: fillColor }]} />
-      <View style={[sliderStyles.thumb, { left: thumbPosition, backgroundColor: thumbColor }]} />
-    </View>
-  );
-}
-
-const sliderStyles = StyleSheet.create({
-  trackWrap: {
-    height: Control.hit,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  track: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 3,
-    borderRadius: Radius.full,
-  },
-  fill: {
-    position: 'absolute',
-    left: 0,
-    height: 3,
-    borderRadius: Radius.full,
-  },
-  thumb: {
-    position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: Radius.full,
-    marginLeft: -8,
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(0,0,0,0)',
-  },
-});
 
 // ── Styles ────────────────────────────────────────────────────────────
 
@@ -793,134 +671,97 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      height: 44,
+      paddingHorizontal: Space.md },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     closeBtn: {
-      width: 36,
-      height: 36,
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     // ── Type tabs — text-only with spring underline ──
     typeTabRow: {
       flexDirection: 'row',
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
-      position: 'relative',
-    },
+      position: 'relative' },
     typeTab: {
       flex: 1,
       alignItems: 'center',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     typeTabLabel: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     typeUnderline: {
       position: 'absolute',
       bottom: 0,
       height: Stroke.emphasis,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     // ── Body ──
     body: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     bodyContent: {
       paddingBottom: Space.lg,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     sectionLabel: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       color: colors.textSecondary,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
       marginTop: Space.sm,
-      marginBottom: Space.xs,
-    },
-    // ── Swatches ──
+      marginBottom: Space.xs },
+    // ── Swatches — larger, no labels, brand ring on selected ──
     swatchRow: {
       gap: Space.sm,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.sm },
     swatchWrap: {
-      alignItems: 'center',
-      gap: 6,
-    },
+      alignItems: 'center' },
     swatch: {
-      width: 64,
-      height: 80,
-      borderRadius: Radius.lg,
-      borderWidth: 2,
-      overflow: 'hidden',
-    },
+      width: 56,
+      height: 56,
+      borderRadius: Radius.md,
+      overflow: 'hidden' },
+    swatchActive: {
+      borderWidth: Stroke.emphasis,
+      borderColor: colors.brand },
     swatchFill: {
       width: '100%',
-      height: '100%',
-    },
-    swatchCheck: {
-      position: 'absolute',
-      bottom: 6,
-      right: 6,
-      width: 20,
-      height: 20,
-      borderRadius: Radius.full,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    swatchLabel: {
-      fontFamily: Typography.family.medium,
-      fontSize: Type.meta.size,
-      letterSpacing: 0.1,
-    },
+      height: '100%' },
     // ── Custom color picker section ──
     colorPickerSection: {
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     // ── Blurred ──
     blurPreviewWrap: {
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     blurPreview: {
       width: '100%',
       height: 160,
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     blurHint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-      textAlign: 'center',
-    },
+      fontSize: TypographyV2.meta.size,
+      textAlign: 'center' },
     blurEmpty: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.xl,
       borderWidth: StyleSheet.hairlineWidth,
       borderRadius: Radius.lg,
-      borderStyle: 'dashed',
-    },
+      borderStyle: 'dashed' },
     blurEmptyText: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     // ── Image ──
     imagePreviewWrap: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     imagePreview: {
       width: '100%',
       height: 180,
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     imageChangeBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -929,12 +770,10 @@ function createStyles(colors: ThemeColors) {
       minHeight: 44,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      borderWidth: 1,
-    },
+      borderWidth: Stroke.standard },
     imageChangeBtnText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     imagePickerEmpty: {
       alignItems: 'center',
       justifyContent: 'center',
@@ -943,64 +782,51 @@ function createStyles(colors: ThemeColors) {
       borderWidth: StyleSheet.hairlineWidth,
       borderRadius: Radius.lg,
       borderStyle: 'dashed',
-      minHeight: 44,
-    },
+      minHeight: 44 },
     imagePickerEmptyTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-      marginTop: Space.xs,
-    },
+      fontSize: TypographyV2.body.size,
+      marginTop: Space.xs },
     imagePickerEmptyHint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     // ── Slider ──
     sliderRow: {
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     sliderHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     sliderLabel: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     sliderValue: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.caption.size,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontVariant: ['tabular-nums'] },
     // ── Footer ──
     footer: {
       flexDirection: 'row',
       gap: Space.sm,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
+      borderTopWidth: StyleSheet.hairlineWidth },
     footerBtn: {
       flex: 1,
       height: 50,
       borderRadius: Radius.lg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     footerCancel: {
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     footerCancelText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     footerConfirm: {
       // backgroundColor set inline
     },
     footerConfirmText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size } });
 }

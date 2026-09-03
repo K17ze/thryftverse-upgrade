@@ -1,32 +1,10 @@
 /**
  * CutoutPreviewSheet — brush-based cutout mask editor with real-time
- * Skia preview.
- *
- * Per §8.3, the cutout workflow is:
- *   1. Create a brush mask (fully opaque — everything kept)
- *   2. Real-time Skia preview over a checkerboard  ← this sheet
- *   3. Brush refinement (Erase background / Keep subject / Restore)
- *   4. Edge feather + optional invert
- *   5. Export mask as PNG, build MaskRef with dimensions + checksum
- *   6. The original image is NEVER replaced — the mask is applied
- *      non-destructively at render time.
- *
- * This sheet uses the CutoutService brush API (Skia-based) for real
- * pixel-level mask rasterization, and the MaskedPreview component for
- * 60fps GPU compositing preview. The cutout never blocks the whole
- * canvas — it's a sheet that leaves the top of the canvas visible.
- *
- * Per AGENTS.md §11: brush refinement is honestly represented — the
- * Skia MaskedPreview shows the actual alpha-masked result, not a fake
- * overlay. When Skia is unavailable, an honest message is shown.
- *
- * Per §8.3: mask dimensions, source checksum, model/version, and
- * manual refinements are persisted in the MaskRef.
- *
- * Uses the shared SheetContainer from CreatorAnimations for consistent
- * motion and chrome.
+ * Skia preview. Uses the CutoutService brush API for pixel-level mask
+ * rasterization and MaskedPreview for GPU compositing. The cutout is
+ * a sheet that leaves the top of the canvas visible.
  */
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -34,12 +12,7 @@ import {
   useWindowDimensions,
   Image as RNImage,
   Pressable,
-  PanResponder,
-  type LayoutChangeEvent,
-  type GestureResponderEvent,
-  type PanResponderGestureState,
-  type DimensionValue,
-} from 'react-native';
+  type DimensionValue } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,20 +23,22 @@ import Reanimated, {
   withSpring,
   withTiming,
   runOnJS,
-  useReducedMotion,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, FontFamily, Stroke, IconGrammar } from '../../theme/designTokens';
+  useReducedMotion } from 'react-native-reanimated';
+import { Space, Radius, Typography, FontFamily, Stroke, IconGrammar, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
 import { PressScale, SheetContainer } from '../CreatorAnimations';
+import { CreatorSlider } from '../controls/CreatorSlider';
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import {
   cutoutService,
   sourceChecksum,
   type CutoutResult,
   type CutoutMask,
-  type CutoutCapability,
-} from '../core/cutout/CutoutService';
+  type CutoutCapability } from '../core/cutout/CutoutService';
 import { MaskedPreview } from '../core/cutout/MaskCompositor';
 import type { MaskStroke } from '../core/cutout/MaskRenderer';
 
@@ -86,7 +61,7 @@ const CHECKER_SIZE = 16;
 const CHECKER_LIGHT = '#E8E8E8';
 const CHECKER_DARK = '#C8C8C8';
 
-// ── SkeletonBlock — one-time shimmer sweep (AGENTS.md §14, §17) ──────
+// ── SkeletonBlock — one-time shimmer sweep ──────
 function SkeletonBlock({ width, height, radius }: { width: DimensionValue; height: number; radius?: number }) {
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
@@ -100,8 +75,7 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
 
   const style = useAnimatedStyle(() => ({
     backgroundColor: colors.surfaceAlt,
-    opacity: 0.5 + 0.3 * shimmerSV.value,
-  }));
+    opacity: 0.5 + 0.3 * shimmerSV.value }));
 
   return (
     <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
@@ -114,11 +88,11 @@ function CutoutPreviewSkeleton({ width, height }: { width: number; height: numbe
   return (
     <View style={{ alignItems: 'center', paddingVertical: Space.sm }}>
       <SkeletonBlock width={width} height={height} radius={Radius.md} />
-      <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textPrimary, marginTop: Space.md }}>
+      <Text style={{ fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.textPrimary, marginTop: Space.md }}>
         Removing background…
       </Text>
-      <Text style={{ fontFamily: Typography.family.regular, fontSize: Type.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs }}>
-        Detecting the subject and generating an alpha mask.
+      <Text style={{ fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs }}>
+        Generating alpha mask.
       </Text>
     </View>
   );
@@ -140,8 +114,7 @@ function Checkerboard({ size }: { size: { width: number; height: number } }) {
             top: r * CHECKER_SIZE,
             width: CHECKER_SIZE,
             height: CHECKER_SIZE,
-            backgroundColor: isLight ? CHECKER_LIGHT : CHECKER_DARK,
-          }}
+            backgroundColor: isLight ? CHECKER_LIGHT : CHECKER_DARK }}
         />,
       );
     }
@@ -176,8 +149,7 @@ export function CutoutPreviewSheet({
   visible,
   imageUri,
   onClose,
-  onConfirm,
-}: CutoutPreviewSheetProps) {
+  onConfirm }: CutoutPreviewSheetProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -356,15 +328,13 @@ export function CutoutPreviewSheet({
         const stroke: MaskStroke = {
           mode,
           points: curr,
-          brushSize: BRUSH_RADIUS * 2,
-        };
+          brushSize: BRUSH_RADIUS * 2 };
         setStrokes((prev) => [...prev, stroke]);
         // Rasterize into the CutoutService mask surface for export.
         if (mask) {
           const scaledPoints = curr.map((p) => ({
             x: (p.x / displaySize.width) * mask.width,
-            y: (p.y / displaySize.height) * mask.height,
-          }));
+            y: (p.y / displaySize.height) * mask.height }));
           if (mode === 'erase') {
             cutoutService.eraseStroke(mask, scaledPoints, BRUSH_RADIUS * 2 * (mask.width / displaySize.width));
           } else {
@@ -407,8 +377,7 @@ export function CutoutPreviewSheet({
           strokes.slice(0, -1).forEach((s) => {
             const scaledPoints = s.points.map((p) => ({
               x: (p.x / displaySize.width) * newMask.width,
-              y: (p.y / displaySize.height) * newMask.height,
-            }));
+              y: (p.y / displaySize.height) * newMask.height }));
             const scaledBrush = s.brushSize * (newMask.width / displaySize.width);
             if (s.mode === 'erase') {
               cutoutService.eraseStroke(newMask, scaledPoints, scaledBrush);
@@ -480,15 +449,13 @@ export function CutoutPreviewSheet({
       const maskUri = await cutoutService.exportMask(mask);
       const maskRef = cutoutService.buildMaskRef(mask, featherPx, invert, {
         sourceChecksum: sourceChecksum(imageUri),
-        strokeCount: strokes.length,
-      });
+        strokeCount: strokes.length });
       const result: CutoutResult = {
         uri: imageUri, // original image — NOT replaced
         maskUri,
         maskRef,
         featherPx,
-        invert,
-      };
+        invert };
       onConfirm(result);
     } catch (err) {
       setError(
@@ -508,7 +475,7 @@ export function CutoutPreviewSheet({
   // ── Mode button config ────────────────────────────────────────────
   const modeButtons: { id: ModeId; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
     { id: 'keep-person', label: 'Keep Person', icon: 'person-outline' },
-    { id: 'keep-object', label: 'Keep Object', icon: 'cube-outline' },
+    { id: 'keep-object', label: 'Keep Object', icon: 'image-outline' },
     { id: 'erase', label: 'Erase', icon: 'remove-circle-outline' },
     { id: 'restore', label: 'Restore', icon: 'return-up-back-outline' },
   ];
@@ -519,37 +486,35 @@ export function CutoutPreviewSheet({
   const modeUnderlineStyle = useAnimatedStyle(() => ({
     left: modeUnderlineXSV.value,
     width: modeUnderlineWSV.value,
-    opacity: modeUnderlineOpacitySV.value,
-  }));
+    opacity: modeUnderlineOpacitySV.value }));
 
   return (
     <SheetContainer visible={visible} onClose={onClose} maxHeight={0.8}>
       <View style={{ paddingBottom: Math.max(insets.bottom, Space.md) }}>
         {/* ── Header ── */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Cutout
-          </Text>
           <PressScale
             onPress={onClose}
             style={styles.closeBtn}
             accessibilityLabel="Close cutout"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textPrimary" opticalCenter={true} accessible={false} />
           </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            Cutout
+          </Text>
+          <View style={styles.closeBtn} />
         </View>
 
         {/* ── Body ── */}
         {capability && !capability.brushRefinement && (
           <View style={styles.messageContainer}>
             <Text style={[styles.messageTitle, { color: colors.textPrimary }]}>
-              Cutout is not available on this device
+              Cutout unavailable
             </Text>
             <Text style={[styles.messageBody, { color: colors.textSecondary }]}>
-              Brush-based cutout requires the Skia rendering engine, which
-              is not linked in this build. You can still crop your photo
-              manually.
+              Brush cutout requires Skia, which isn&rsquo;t linked in this build.
             </Text>
           </View>
         )}
@@ -612,8 +577,7 @@ export function CutoutPreviewSheet({
                           {
                             width: previewSize.width,
                             height: previewSize.height,
-                            borderColor: brushMode ? currentBrushColor : colors.border,
-                          },
+                            borderColor: brushMode ? currentBrushColor : colors.border },
                         ]}
                       >
                         <Checkerboard size={{ width: previewSize.width, height: previewSize.height }} />
@@ -646,17 +610,18 @@ export function CutoutPreviewSheet({
                   {
                     backgroundColor: 'transparent',
                     borderColor: colors.border,
-                    opacity: canRefine && strokes.length > 0 ? 1 : 0.4,
-                  },
+                    opacity: canRefine && strokes.length > 0 ? 1 : 0.4 },
                 ]}
                 accessibilityLabel="Reset mask"
                 accessibilityHint="Clears all brush strokes and starts over"
                 accessibilityRole="button"
               >
-                <Ionicons
-                  name="refresh-outline"
-                  size={IconGrammar.metadata}
-                  color={colors.textSecondary}
+                <AppIcon
+                  name="refresh"
+                  size={IconSize.sm}
+                  color="textSecondary"
+                  opticalCenter={true}
+                  accessible={false}
                 />
                 <Text
                   style={[
@@ -679,13 +644,12 @@ export function CutoutPreviewSheet({
                   {
                     backgroundColor: pressed ? colors.surfaceAlt : 'transparent',
                     borderColor: colors.border,
-                    opacity: canRefine ? 1 : 0.4,
-                  },
+                    opacity: canRefine ? 1 : 0.4 },
                 ]}
                 accessibilityLabel="Hold to compare original"
                 accessibilityRole="button"
               >
-                <Ionicons name="eye-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
+                <AppIcon name="eye" size={IconSize.sm} color="textSecondary" opticalCenter={true} accessible={false} />
                 <Text style={[styles.controlBtnLabel, { color: colors.textSecondary }]}>
                   Compare
                 </Text>
@@ -700,17 +664,18 @@ export function CutoutPreviewSheet({
                   {
                     backgroundColor: invert ? colors.brand : 'transparent',
                     borderColor: invert ? colors.brand : colors.border,
-                    opacity: canRefine ? 1 : 0.4,
-                  },
+                    opacity: canRefine ? 1 : 0.4 },
                 ]}
                 accessibilityLabel="Invert mask"
                 accessibilityRole="button"
                 accessibilityState={{ selected: invert }}
               >
-                <Ionicons
+                <AppIcon
                   name="swap-horizontal-outline"
-                  size={IconGrammar.metadata}
-                  color={invert ? colors.textInverse : colors.textSecondary}
+                  size={IconSize.sm}
+                  color={invert ? 'textInverse' : 'textSecondary'}
+                  opticalCenter={true}
+                  accessible={false}
                 />
                 <Text
                   style={[
@@ -736,8 +701,7 @@ export function CutoutPreviewSheet({
                     onLayout={!isRestore ? (e) => {
                       modeTabLayouts.current.set(btn.id as BrushMode, {
                         x: e.nativeEvent.layout.x,
-                        width: e.nativeEvent.layout.width,
-                      });
+                        width: e.nativeEvent.layout.width });
                       if (brushMode === btn.id) {
                         modeUnderlineXSV.value = e.nativeEvent.layout.x;
                         modeUnderlineWSV.value = e.nativeEvent.layout.width;
@@ -754,8 +718,7 @@ export function CutoutPreviewSheet({
                         styles.modeTabText,
                         {
                           color: selected ? colors.brand : colors.textSecondary,
-                          opacity: !canRefine ? 0.4 : 1,
-                        },
+                          opacity: !canRefine ? 0.4 : 1 },
                       ]}
                       numberOfLines={1}
                     >
@@ -781,22 +744,22 @@ export function CutoutPreviewSheet({
                   {featherPx}px
                 </Text>
               </View>
-              <FeatherSlider
+              <CreatorSlider
                 value={featherPx}
                 min={0}
                 max={10}
-                onChange={setFeatherPx}
-                trackColor={colors.border}
-                fillColor={colors.brand}
-                thumbColor={colors.textPrimary}
+                step={1}
+                onValueChange={setFeatherPx}
+                onCommit={setFeatherPx}
+                accessibilityLabel="Edge softness"
               />
             </View>
 
             {/* ── Hint ── */}
             <Text style={[styles.hint, { color: colors.textMuted }]}>
               {brushMode
-                ? `Draw to ${brushMode === 'erase' ? 'erase' : 'keep'} — strokes refine the mask in real time.`
-                : 'Select a brush mode, then draw to erase the background. Hold Compare to see the original.'}
+                ? `Draw to ${brushMode === 'erase' ? 'erase' : 'keep'}.`
+                : 'Select a brush mode, then draw.'}
             </Text>
           </View>
         )}
@@ -806,7 +769,7 @@ export function CutoutPreviewSheet({
           <View style={styles.previewContainer}>
             <CutoutPreviewSkeleton width={previewSize.width} height={previewSize.height} />
             <Text style={[styles.messageBody, { color: colors.textSecondary, textAlign: 'center', marginTop: Space.md }]}>
-              Checking device capabilities…
+              Checking capabilities…
             </Text>
           </View>
         )}
@@ -831,8 +794,7 @@ export function CutoutPreviewSheet({
               styles.footerConfirm,
               {
                 backgroundColor: colors.brand,
-                opacity: !mask || processing ? 0.4 : 1,
-              },
+                opacity: !mask || processing ? 0.4 : 1 },
             ]}
             accessibilityLabel="Apply cutout"
             accessibilityRole="button"
@@ -847,117 +809,37 @@ export function CutoutPreviewSheet({
   );
 }
 
-// ── Edge Softness slider ─────────────────────────────────────────────
-// A minimal PanResponder-based slider (no new dependencies — the
-// codebase has no slider library). Follows the AdjustPanel pattern.
-interface FeatherSliderProps {
-  value: number;
-  min: number;
-  max: number;
-  onChange: (v: number) => void;
-  trackColor: string;
-  fillColor: string;
-  thumbColor: string;
-}
-
-function FeatherSlider({
-  value,
-  min,
-  max,
-  onChange,
-  trackColor,
-  fillColor,
-  thumbColor,
-}: FeatherSliderProps) {
-  const [width, setWidth] = useState(0);
-  const range = max - min;
-  const clamped = Math.min(max, Math.max(min, value));
-  const ratio = range === 0 ? 0 : (clamped - min) / range;
-  const trackWidth = width > 0 ? width : 1;
-  const thumbPosition = ratio * trackWidth;
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    setWidth(e.nativeEvent.layout.width);
-  }, []);
-
-  const valueFromX = useCallback(
-    (x: number) => {
-      const r = Math.min(1, Math.max(0, x / trackWidth));
-      return Math.round(min + r * range);
-    },
-    [trackWidth, min, range],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (e: GestureResponderEvent) => {
-          onChange(valueFromX(e.nativeEvent.locationX));
-        },
-        onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-          // Use dx relative to grant point combined with current thumb pos.
-          onChange(valueFromX(thumbPosition + g.dx));
-        },
-        onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false,
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [thumbPosition, valueFromX, onChange],
-  );
-
-  return (
-    <View style={styles.sliderTrackWrap} onLayout={handleLayout} {...panResponder.panHandlers}>
-      <View style={[styles.sliderTrack, { backgroundColor: trackColor }]} />
-      <View style={[styles.sliderFill, { width: thumbPosition, backgroundColor: fillColor }]} />
-      <View
-        style={[
-          styles.sliderThumb,
-          { left: thumbPosition, backgroundColor: thumbColor },
-        ]}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    height: 44 },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    textAlign: 'center' },
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    alignItems: 'center' },
   // ── Message / state container ──
   messageContainer: {
     alignItems: 'center',
     paddingHorizontal: Space.lg,
     paddingVertical: Space.xl,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   messageTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    textAlign: 'center' },
   messageBody: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     textAlign: 'center',
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   retryBtn: {
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
@@ -965,51 +847,42 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     minHeight: 44,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   retryBtnText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   // ── Preview ──
   previewContainer: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   previewRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   previewCell: {
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   previewFrame: {
     borderRadius: Radius.md,
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
   gestureRoot: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   hint: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     textAlign: 'center',
     marginTop: Space.md,
-    lineHeight: Type.meta.lineHeight,
-    paddingHorizontal: Space.sm,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    paddingHorizontal: Space.sm },
   // ── Control row (Refine / Hold to Compare / Invert) ──
   controlRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: Space.sm,
     marginTop: Space.md,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   controlBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -1020,108 +893,66 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   controlBtnLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Mode selector row — text-only tabs with underline ──
   modeRow: {
     flexDirection: 'row',
     marginTop: Space.sm,
     paddingHorizontal: Space.xs,
-    position: 'relative',
-  },
+    position: 'relative' },
   modeTab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.sm,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   modeTabText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   modeUnderline: {
     position: 'absolute',
     bottom: 0,
     height: Stroke.emphasis,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   // ── Edge Softness slider ──
   sliderRow: {
     marginTop: Space.md,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   sliderHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   sliderLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   sliderValue: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-  },
-  sliderTrackWrap: {
-    height: 28,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  sliderTrack: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 3,
-    borderRadius: Radius.none,
-  },
-  sliderFill: {
-    position: 'absolute',
-    left: 0,
-    height: 3,
-    borderRadius: Radius.none,
-  },
-  sliderThumb: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    marginLeft: -10,
-    borderRadius: Radius.full,
-    top: 4,
-  },
+    fontSize: TypographyV2.meta.size },
   // ── Footer — premium Cancel / Apply buttons ──
   footer: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   footerBtn: {
     flex: 1,
     height: 50,
     borderRadius: Radius.lg,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   footerCancel: {
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   footerCancelText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   footerConfirm: {
     // backgroundColor set inline
   },
   footerConfirmText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size } });

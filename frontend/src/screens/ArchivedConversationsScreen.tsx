@@ -1,18 +1,23 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Type, Typography, Space } from '../theme/designTokens';
+import { Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { ConversationListSkeleton } from '../components/SkeletonLoader';
 import { ConversationManagementRow } from '../components/chat/ConversationManagementRow';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import type { Conversation } from '../domain';
 import { deleteConversationOnApi, unarchiveConversationOnApi } from '../services/chatApi';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -20,6 +25,7 @@ export default function ArchivedConversationsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const conversations = useStore((s) => s.conversations);
   const conversationsLoaded = useStore((s) => s.conversationsLoaded);
   const archivedIds = useStore((s) => s.archivedConversationIds);
@@ -29,6 +35,15 @@ export default function ArchivedConversationsScreen() {
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
+
   const archivedConversations = useMemo(() => {
     return conversations.filter((c) => archivedIds.includes(c.id));
   }, [conversations, archivedIds]);
@@ -37,74 +52,100 @@ export default function ArchivedConversationsScreen() {
     try {
       await unarchiveConversationOnApi(id);
       toggleArchived(id);
-      show('Conversation restored to inbox', 'success');
+      show(t('archived.restored'), 'success');
     } catch {
-      show('Could not restore this conversation. Check your connection and try again.', 'error');
+      show(t('archived.restoreError'), 'error');
     }
   };
 
   const handleDelete = (id: string, title: string) => {
-    Alert.alert(
-      'Remove from inbox?',
-      `"${title}" will be removed from your archived conversations.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteConversationOnApi(id, 'me');
-              deleteConversation(id);
-              show('Conversation removed', 'info');
-            } catch {
-              show('Could not delete this conversation. Check your connection and try again.', 'error');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: t('archived.removeConfirmationTitle'),
+      message: t('archived.removeConfirmationMessage', { title }),
+      confirmLabel: t('common.remove'),
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        try {
+          await deleteConversationOnApi(id, 'me');
+          deleteConversation(id);
+          show(t('archived.removed'), 'info');
+        } catch {
+          show(t('archived.removeError'), 'error');
+        }
+      } });
   };
 
   const handleClearAll = () => {
     if (archivedConversations.length === 0) return;
-    Alert.alert(
-      'Clear all archived?',
-      'All archived conversations will be permanently deleted.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear all',
-          style: 'destructive',
-          onPress: async () => {
-            let failedCount = 0;
-            await Promise.all(
-              archivedConversations.map(async (c) => {
-                try {
-                  await deleteConversationOnApi(c.id, 'me');
-                  deleteConversation(c.id);
-                } catch {
-                  failedCount++;
-                }
-              })
-            );
-            if (failedCount > 0) {
-              show(`${archivedConversations.length - failedCount} deleted · ${failedCount} failed`, 'error');
-            } else {
-              show('Archive cleared', 'info');
+    setConfirmSheet({
+      visible: true,
+      title: t('archived.clearAllConfirmationTitle'),
+      message: t('archived.clearAllConfirmationMessage'),
+      confirmLabel: t('common.clearAll'),
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        let failedCount = 0;
+        await Promise.all(
+          archivedConversations.map(async (c) => {
+            try {
+              await deleteConversationOnApi(c.id, 'me');
+              deleteConversation(c.id);
+            } catch {
+              failedCount++;
             }
-          },
-        },
-      ]
-    );
+          })
+        );
+        if (failedCount > 0) {
+          show(t('archived.clearError', { deleted: archivedConversations.length - failedCount, failed: failedCount }), 'error');
+        } else {
+          show(t('archived.cleared'), 'info');
+        }
+      } });
   };
+
+  const renderItem = useCallback(
+    ({ item: convo, index }: { item: Conversation; index: number }) => {
+      return (
+        <ConversationManagementRow
+          conversation={convo}
+          currentUserId={currentUser?.id}
+          onOpen={() => navigation.navigate('Chat', { conversationId: convo.id })}
+          actionIcon="arrow-undo-outline"
+          actionLabel={t('common.restore')}
+          onAction={() => handleRestore(convo.id)}
+          secondaryActionIcon="trash-outline"
+          secondaryActionLabel="Delete"
+          onSecondaryAction={() =>
+            handleDelete(
+              convo.id,
+              convo.type === 'group'
+                ? convo.title || 'Group conversation'
+                : convo.participantProfiles?.find(
+                    (profile) => profile.id !== currentUser?.id && profile.id !== 'me'
+                  )?.displayName ||
+                  convo.participantProfiles?.find(
+                    (profile) => profile.id !== currentUser?.id && profile.id !== 'me'
+                  )?.username ||
+                  'Conversation'
+            )
+          }
+          secondaryDestructive
+          isLast={index === archivedConversations.length - 1}
+        />
+      );
+    },
+    [navigation, currentUser, handleRestore, handleDelete, archivedConversations]
+  );
 
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Archived conversations"
-          subtitle="Restored conversations return to your inbox"
+          title={t('archived.title')}
+          subtitle={t('archived.subtitle')}
           onBack={() => navigation.goBack()}
           rightAction={
             archivedConversations.length > 0 ? (
@@ -112,10 +153,10 @@ export default function ArchivedConversationsScreen() {
                 onPress={handleClearAll}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 hapticFeedback="medium"
-                accessibilityLabel="Clear all archived conversations"
+                accessibilityLabel={t('archived.clearAllConversations')}
                 accessibilityRole="button"
               >
-                <Text style={styles.clearAllBtn}>Clear all</Text>
+                <Text style={styles.clearAllBtn}>{t('common.clearAll')}</Text>
               </AnimatedPressable>
             ) : undefined
           }
@@ -129,46 +170,29 @@ export default function ArchivedConversationsScreen() {
       ) : archivedConversations.length === 0 ? (
         <EmptyState
           icon="archive-outline"
-          title="No archived conversations"
-          subtitle="Conversations you archive stay out of your inbox without being deleted."
+          title={t('archived.noArchived')}
+          subtitle={t('archived.noArchivedSubtitle')}
           ctaLabel="Browse conversations"
           onCtaPress={() => navigation.goBack()}
         />
       ) : (
-        <View style={styles.list}>
-          {archivedConversations.map((convo, index) => {
-            return (
-              <ConversationManagementRow
-                key={convo.id}
-                conversation={convo}
-                currentUserId={currentUser?.id}
-                onOpen={() => navigation.navigate('Chat', { conversationId: convo.id })}
-                actionIcon="arrow-undo-outline"
-                actionLabel="Restore"
-                onAction={() => handleRestore(convo.id)}
-                secondaryActionIcon="trash-outline"
-                secondaryActionLabel="Delete"
-                onSecondaryAction={() =>
-                  handleDelete(
-                    convo.id,
-                    convo.type === 'group'
-                      ? convo.title || 'Group conversation'
-                      : convo.participantProfiles?.find(
-                          (profile) => profile.id !== currentUser?.id && profile.id !== 'me'
-                        )?.displayName ||
-                        convo.participantProfiles?.find(
-                          (profile) => profile.id !== currentUser?.id && profile.id !== 'me'
-                        )?.username ||
-                        'Conversation'
-                  )
-                }
-                secondaryDestructive
-                isLast={index === archivedConversations.length - 1}
-              />
-            );
-          })}
-        </View>
+        <FlashList
+          data={archivedConversations}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
       )}
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }
@@ -176,18 +200,14 @@ export default function ArchivedConversationsScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     skeletonWrap: {
-      paddingTop: Space.sm,
-    },
-    list: {
+      paddingTop: Space.sm },
+    listContent: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     clearAllBtn: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.danger,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-  });
+      letterSpacing: TypographyV2.meta.letterSpacing } });
 }

@@ -1,3 +1,5 @@
+import type { ListingCondition } from '../contracts/taxonomy';
+
 export interface ListingSeller {
   id: string;
   username: string | null;
@@ -13,7 +15,7 @@ export interface Listing {
   title: string;
   brand: string | null;
   size: string | null;
-  condition: 'New with tags' | 'Very good' | 'Good' | 'Satisfactory';
+  condition: ListingCondition;
   price: number;
   originalPrice?: number;
   priceWithProtection?: number;
@@ -41,4 +43,10 @@ export interface Listing {
   shippingPayer?: string | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */
   featured?: boolean | null;
+  /** Backend-computed sustainability grade (A/B/C/D). Null when no impact data available (fail-closed). */
+  sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
+  /** Material composition (e.g. "cotton") — drives impact calculations when present. */
+  materialComposition?: string | null;
+  /** Item weight in kg — drives impact calculations when present. */
+  weightKg?: number | null;
 }

@@ -5,9 +5,9 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  cancelAnimation,
   Easing,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -21,9 +21,8 @@ import {
   LetterSpacing,
   Elevation,
   Stroke,
-  Control,
-  Type,
-} from '../../theme/designTokens';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { triggerHaptic, HapticType } from '../../utils/haptics';
 import type { InAppNotification, NotificationType } from '../../services/inAppNotificationsApi';
@@ -51,11 +50,10 @@ const TYPE_CONFIG: Record<NotificationType, TypeConfig> = {
   warning: { icon: 'warning', accentKey: 'warning' },
   error: { icon: 'alert-circle', accentKey: 'danger' },
   info: { icon: 'information-circle', accentKey: 'brand' },
-  offer: { icon: 'pricetag', accentKey: 'discovery' },
+  offer: { icon: 'cash-outline', accentKey: 'discovery' },
   message: { icon: 'chatbubble', accentKey: 'social' },
-  listing: { icon: 'cube', accentKey: 'commerceTrust' },
-  order: { icon: 'cube', accentKey: 'commerceTrust' },
-};
+  listing: { icon: 'bag-handle-outline', accentKey: 'commerceTrust' },
+  order: { icon: 'car-outline', accentKey: 'commerceTrust' } };
 
 // ---------------------------------------------------------------------------
 // Props
@@ -77,8 +75,7 @@ export function InAppNotificationBanner({
   notification,
   onDismiss,
   onAction,
-  index = 0,
-}: InAppNotificationBannerProps) {
+  index = 0 }: InAppNotificationBannerProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -93,6 +90,17 @@ export function InAppNotificationBanner({
   const progress = useSharedValue(0);
 
   const isSticky = notification.duration <= 0;
+
+  // Cancel all in-flight animations on unmount. Without this, Reanimated
+  // can try to update props on an unmounted banner view, causing
+  // RetryableMountingLayerException on Android Fabric.
+  React.useEffect(() => {
+    return () => {
+      cancelAnimation(translateY);
+      cancelAnimation(opacity);
+      cancelAnimation(progress);
+    };
+  }, [translateY, opacity, progress]);
 
   const handleDismiss = React.useCallback(() => {
     if (reducedMotion) {
@@ -109,6 +117,10 @@ export function InAppNotificationBanner({
     opacity.value = withTiming(0, { duration: Motion.duration.fast });
   }, [notification.id, onDismiss, opacity, reducedMotion, translateY]);
 
+  const handleAction = React.useCallback(() => {
+    if (onAction) onAction(notification);
+  }, [notification, onAction]);
+
   // Entrance — slide in from top (or instant when reduced motion).
   useEffect(() => {
     if (reducedMotion) {
@@ -117,8 +129,7 @@ export function InAppNotificationBanner({
     } else {
       translateY.value = withTiming(0, {
         duration: Motion.duration.slow,
-        easing: Easing.out(Easing.quad),
-      });
+        easing: Easing.out(Easing.quad) });
       opacity.value = withTiming(1, { duration: Motion.duration.normal });
     }
 
@@ -162,22 +173,14 @@ export function InAppNotificationBanner({
 
   const bannerStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
-    opacity: opacity.value,
-  }));
+    opacity: opacity.value }));
 
   const progressStyle = useAnimatedStyle(() => ({
     // Width shrinks from 100% → 0% as time elapses.
-    transform: [{ scaleX: Math.max(0, 1 - progress.value) }],
-  }));
+    transform: [{ scaleX: Math.max(0, 1 - progress.value) }] }));
 
   const handleTapDismiss = () => {
     triggerHaptic(HapticType.LIGHT);
-    handleDismiss();
-  };
-
-  const handleActionPress = () => {
-    triggerHaptic(HapticType.LIGHT);
-    onAction?.(notification);
     handleDismiss();
   };
 
@@ -189,8 +192,7 @@ export function InAppNotificationBanner({
           {
             backgroundColor: colors.surfaceElevated,
             borderColor: colors.borderSubtle,
-            marginTop: index === 0 ? insets.top + Space.sm : 0,
-          },
+            marginTop: index === 0 ? insets.top + Space.sm : 0 },
           Elevation.floating,
           bannerStyle,
         ]}
@@ -205,14 +207,13 @@ export function InAppNotificationBanner({
             app icon. The type icon sits inside with the accent colour.
             This replaces the custom-toast accent stripe. */}
         <View style={styles.content}>
-          <View style={[styles.iconContainer, { backgroundColor: `${accentColor}18` }]}>
-            <Ionicons
-              name={config.icon}
-              size={Control.iconCompact}
-              color={accentColor}
-              accessibilityLabel={undefined}
-            />
-          </View>
+          <Ionicons
+            name={config.icon}
+            size={Control.iconCompact}
+            color={accentColor}
+            style={styles.typeIcon}
+            accessibilityLabel={undefined}
+          />
 
           <View style={styles.textColumn}>
             <Text
@@ -232,16 +233,16 @@ export function InAppNotificationBanner({
           </View>
 
           <View style={styles.actionsColumn}>
-            {notification.actionLabel ? (
+            {notification.actionLabel && onAction ? (
               <AnimatedPressable
-                onPress={handleActionPress}
-                style={[styles.actionButton, { borderColor: accentColor }]}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                onPress={handleAction}
+                style={styles.actionBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel={notification.actionLabel}
-                accessibilityHint={`Performs the action: ${notification.actionLabel}`}
+                accessibilityHint={`Opens ${notification.actionLabel}`}
               >
-                <Text style={[styles.actionLabel, { color: accentColor }]}>
+                <Text style={[styles.actionText, { color: accentColor }]} numberOfLines={1}>
                   {notification.actionLabel}
                 </Text>
               </AnimatedPressable>
@@ -285,71 +286,55 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: Stroke.hairline,
     overflow: 'hidden',
-    marginHorizontal: Space.md,
-  },
+    marginHorizontal: Space.md },
   content: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingHorizontal: Space.sm + 2,
     paddingTop: Space.sm + 2,
     paddingBottom: Space.sm,
-    gap: Space.sm,
-  },
-  iconContainer: {
-    width: Control.chromeCompact,
-    height: Control.chromeCompact,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-  },
+    gap: Space.sm },
+  typeIcon: {
+    marginTop: 1 },
   textColumn: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   title: {
     flexShrink: 1,
     fontFamily: FontFamily.semibold,
     fontSize: FontSize.body,
     letterSpacing: LetterSpacing.normal,
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   body: {
     fontFamily: FontFamily.regular,
     fontSize: FontSize.caption,
     letterSpacing: LetterSpacing.normal,
-    lineHeight: Type.caption.lineHeight,
-    opacity: 0.8,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    opacity: 0.8 },
   actionsColumn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingTop: Space.xs,
-  },
-  actionButton: {
+    paddingTop: Space.xs },
+  dismissBtn: {
+    padding: Space.xs },
+  actionBtn: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-    borderWidth: Stroke.standard,
+    minHeight: Control.hit,
+    justifyContent: 'center',
   },
-  actionLabel: {
+  actionText: {
     fontFamily: FontFamily.semibold,
     fontSize: FontSize.caption,
-    letterSpacing: LetterSpacing.wide,
-  },
-  dismissBtn: {
-    padding: Space.xs,
+    letterSpacing: LetterSpacing.normal,
   },
   progressTrack: {
     height: 1.5,
     backgroundColor: 'transparent',
-    width: '100%',
-  },
+    width: '100%' },
   progressFill: {
     height: '100%',
     width: '100%',
     transformOrigin: 'left',
-    opacity: 0.5,
-  },
-});
+    opacity: 0.5 } });

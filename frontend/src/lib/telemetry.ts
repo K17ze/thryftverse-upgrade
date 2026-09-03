@@ -1,4 +1,5 @@
 import { fetchJson } from './apiClient';
+import { sanitizeValue } from '../analytics/piiSanitizer';
 
 export type TelemetryPayload = Record<string, unknown>;
 export type TelemetryHandler = (eventName: string, payload: TelemetryPayload) => void;
@@ -183,13 +184,18 @@ export function trackTelemetryEvent(eventName: string, payload: TelemetryPayload
 
   const safePayload = scrubPII(payload);
 
+  // Value-based PII sanitization — catches PII that leaks into arbitrary
+  // string values (e.g. a user typing their email into a search box that
+  // gets tracked as `query`). Complements the key-based scrubbing above.
+  const sanitizedPayload = sanitizeValue(safePayload) as TelemetryPayload;
+
   // Dedup: drop duplicate events within a 500ms window.
-  if (isDuplicate(eventName, safePayload)) {
+  if (isDuplicate(eventName, sanitizedPayload)) {
     return;
   }
 
   const enrichedPayload: TelemetryPayload = {
-    ...safePayload,
+    ...sanitizedPayload,
     session_id: sessionId,
     timestamp: new Date().toISOString(),
   };
@@ -212,7 +218,7 @@ export function trackTelemetryEvent(eventName: string, payload: TelemetryPayload
     event: eventName,
     session_id: sessionId,
     timestamp: new Date().toISOString(),
-    payload: safePayload,
+    payload: sanitizedPayload,
   });
 
   ensureFlushTimer();

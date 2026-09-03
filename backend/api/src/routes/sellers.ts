@@ -40,6 +40,7 @@ const appealBodySchema = z.object({
  *   GET  /sellers/:sellerId/reviews                    — review summary + list
  *   GET  /sellers/:sellerId/analytics                  — seller performance dashboard
  *   GET  /sellers/:sellerId/analytics/top-performers   — top performing listings
+ *   GET  /sellers/:sellerId/analytics/daily            — real per-day engagement breakdown
  *   GET  /sellers/:sellerId/standards                  — inspect operational metrics & tier defects (gate 12)
  *   POST /sellers/:sellerId/standards/appeal           — appeal an operational defect (gate 12)
  */
@@ -48,14 +49,20 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     const { sellerId } = sellerIdParamsSchema.parse(request.params);
     const viewerUserId = request.authUser?.userId ?? null;
 
+    // Fetch user row with holiday_mode and away_message for authoritative away state.
     const userResult = await readDb.query<{
       id: string;
       username: string;
+      display_name: string | null;
       avatar: string | null;
       location: string | null;
       created_at: string;
+      holiday_mode: boolean;
+      away_message: string | null;
     }>(
-      `SELECT id, username, avatar, location, created_at FROM users WHERE id = $1 LIMIT 1`,
+      `SELECT id, username, display_name, avatar, location, created_at,
+              holiday_mode, away_message
+       FROM users WHERE id = $1 LIMIT 1`,
       [sellerId]
     );
 
@@ -92,6 +99,66 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       isFollowing = (followResult.rowCount ?? 0) > 0;
     }
 
+    // ── Trust evidence (fail-closed) ─────────────────────────────────
+    // Only active, non-expired evidence rows produce badges/verification.
+    // No evidence → no badge. This is the authoritative source for all
+    // public trust claims — the client never derives eligibility.
+    const evidenceResult = await readDb.query<{ code: string; tier: string | null }>(
+      `SELECT code, tier FROM seller_trust_evidence
+       WHERE seller_id = $1 AND state = 'active'
+         AND (expires_at IS NULL OR expires_at > NOW())`,
+      [sellerId]
+    );
+    const evidenceCodes = new Set<string>();
+    let verificationTier: 'email' | 'id' | 'seller' | null = null;
+    for (const row of evidenceResult.rows) {
+      evidenceCodes.add(row.code);
+      if (row.code === 'identity_checked') verificationTier = 'id';
+      if (row.code === 'trader_verified' || row.code === 'top_rated') {
+        verificationTier = 'seller';
+      }
+    }
+
+    // Map evidence codes to badge types for the frontend.
+    // Only evidence-backed badges are emitted — no client-side derivation.
+    const badges: string[] = [];
+    if (evidenceCodes.has('top_rated')) badges.push('topSeller');
+    if (evidenceCodes.has('fast_dispatch')) badges.push('fastShipper');
+    if (evidenceCodes.has('responsive_seller')) badges.push('responsive');
+
+    // ── Seller trust projection (response rate, dispatch time) ───────
+    // From seller_trust table (migration 166), recomputed from authoritative
+    // order/carrier facts. Null when no data exists — never fabricated.
+    const trustResult = await readDb.query<{
+      response_rate: string | number | null;
+      ship_within_days: number | null;
+      total_sales: string | number | null;
+      positive_rating_pct: string | number | null;
+    }>(
+      `SELECT response_rate, ship_within_days, total_sales, positive_rating_pct
+       FROM seller_trust WHERE user_id = $1 LIMIT 1`,
+      [sellerId]
+    );
+    const trustRow = trustResult.rows[0] ?? {};
+
+    // Derive human-readable labels from authoritative data.
+    // Null when no data — the frontend renders nothing for null labels.
+    const dispatchTimeLabel = trustRow.ship_within_days != null
+      ? trustRow.ship_within_days <= 1
+        ? 'Dispatches same day'
+        : `Dispatches in ${trustRow.ship_within_days} days`
+      : null;
+
+    // Response time label — derived from response_rate percentage.
+    // This is a simplified mapping; a full implementation would compute
+    // actual response time from message events.
+    const responseRate = trustRow.response_rate != null ? Number(trustRow.response_rate) : null;
+    const responseTimeLabel = responseRate != null && responseRate >= 90
+      ? 'in 1h'
+      : responseRate != null && responseRate >= 50
+      ? 'in 3h'
+      : null;
+
     const avgRating = reviewStats.rows[0]?.avg_rating ? Number(reviewStats.rows[0].avg_rating) : null;
     const reviewCount = reviewStats.rows[0]?.review_count ? Number(reviewStats.rows[0].review_count) : 0;
     const completedSales = salesResult.rows[0]?.completed_sales ? Number(salesResult.rows[0].completed_sales) : 0;
@@ -102,6 +169,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       seller: {
         id: user.id,
         username: user.username,
+        displayName: user.display_name,
         avatar: user.avatar,
         location: user.location,
         rating: avgRating,
@@ -110,10 +178,26 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         activeListingCount,
         memberSince: user.created_at,
         isFollowing,
+        // Verification tier — evidence-backed, fail-closed.
+        // 'email' is never used here (email verification is not a trust claim).
+        verificationTier,
+        verified: verificationTier === 'seller',
+        // Operational trust signals from seller_trust (authoritative).
+        responseRate: trustRow.response_rate != null ? Number(trustRow.response_rate) : null,
+        responseTimeLabel,
+        dispatchTimeLabel,
+        // Evidence-backed badges — no client-side derivation.
+        badges,
+        // Authoritative away state.
+        holidayMode: user.holiday_mode === true,
+        awayMessage: user.away_message ?? null,
       },
     };
   });
 
+  // ── Idempotent follow (POST) — creates follow only if absent ────────
+  // Replaces the unsafe toggle mutation. A lost response followed by retry
+  // no longer reverses the user's intent.
   app.post('/sellers/:sellerId/follow', async (request, reply) => {
     if (!request.authUser) {
       reply.code(401);
@@ -128,26 +212,43 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       return { ok: false, error: 'Cannot follow yourself' };
     }
 
-    const existing = await readDb.query<{ id: string }>(
-      `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
-      [userId, sellerId]
+    // Check block state — cannot follow if blocked by target
+    const blockedByTarget = await readDb.query<{ id: string }>(
+      `SELECT id FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2 LIMIT 1`,
+      [sellerId, userId]
     );
-
-    if ((existing.rowCount ?? 0) > 0) {
-      await db.query(
-        `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
-        [userId, sellerId]
-      );
-      return { ok: true, isFollowing: false };
+    if ((blockedByTarget.rowCount ?? 0) > 0) {
+      reply.code(403);
+      return { ok: false, error: 'Cannot follow this user', code: 'BLOCKED_BY_TARGET' };
     }
 
     const followId = `follow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     await db.query(
-      `INSERT INTO user_follows (id, follower_id, following_id, created_at) VALUES ($1, $2, $3, NOW())`,
+      `INSERT INTO user_follows (id, follower_id, following_id, created_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (follower_id, following_id) DO NOTHING`,
       [followId, userId, sellerId]
     );
 
     return { ok: true, isFollowing: true };
+  });
+
+  // ── Idempotent unfollow (DELETE) — removes follow only if present ───
+  app.delete('/sellers/:sellerId/follow', async (request, reply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const { sellerId } = sellerIdParamsSchema.parse(request.params);
+    const userId = request.authUser.userId;
+
+    await db.query(
+      `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
+      [userId, sellerId]
+    );
+
+    return { ok: true, isFollowing: false };
   });
 
   // ── Seller reviews: summary + paginated list ─────────────────────────
@@ -348,74 +449,176 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
 
     const querySchema = z.object({
       period: z.enum(['7d', '30d', '90d']).default('30d'),
+      // Offset the window back in time by N days to fetch a prior period
+      // for period-over-period comparison. 0 = current period (default).
+      offsetDays: z.coerce.number().int().min(0).max(365).default(0),
     });
-    const { period } = querySchema.parse(request.query);
+    const { period, offsetDays } = querySchema.parse(request.query);
 
-    const intervalMap: Record<string, string> = {
-      '7d': "INTERVAL '7 days'",
-      '30d': "INTERVAL '30 days'",
-      '90d': "INTERVAL '90 days'",
-    };
-    const interval = intervalMap[period];
+    const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 };
+    const days = daysMap[period];
+    // Bounded window: [NOW() - (days+offset), NOW() - offset).
+    // When offsetDays === 0 this collapses to the original half-open bound
+    // (>= NOW() - days), preserving backward compatibility.
+    const startBound = `NOW() - INTERVAL '${days + offsetDays} days'`;
+    const endBound = offsetDays > 0 ? `NOW() - INTERVAL '${offsetDays} days'` : null;
+    // Build a column-specific range predicate. The values are derived from
+    // validated integers, so interpolation here is safe (no user strings).
+    const inPeriod = (col: string) =>
+      endBound
+        ? `${col} >= ${startBound} AND ${col} < ${endBound}`
+        : `${col} >= ${startBound}`;
 
-    const listingsResult = await db.query<{
-      total_listings: string | number;
-      total_views: string | number;
-      total_likes: string | number;
-      total_saves: string | number;
-      items_sold: string | number;
-      revenue_gbp_minor: string | number;
-    }>(
-      `
-        SELECT
-          COUNT(DISTINCT l.id) AS total_listings,
-          COALESCE(SUM(l.views_count), 0) AS total_views,
-          COALESCE(SUM(l.likes_count), 0) AS total_likes,
-          COALESCE(SUM(l.saved_count), 0) AS total_saves,
-          COUNT(CASE WHEN l.sold_at IS NOT NULL AND l.sold_at > NOW() - ${interval} THEN 1 END) AS items_sold,
-          COALESCE(SUM(CASE WHEN l.sold_at IS NOT NULL AND l.sold_at > NOW() - ${interval} THEN l.price_gbp_minor ELSE 0 END), 0) AS revenue_gbp_minor
-        FROM listings l
-        WHERE l.seller_id = $1
-      `,
-      [sellerId]
+    // ── Parallel query block ──────────────────────────────────────────
+    // All four queries are independent — run them concurrently to eliminate
+    // the sequential waterfall (was 5–7 round-trips, now 1 round-trip batch).
+    //
+    // Engagement metrics come from the `interactions` table (migration 001 +
+    // vocabulary expansion in 143), NOT from non-existent denormalized counter
+    // columns. Views = action IN ('view', 'qualified_detail_view'); likes =
+    // action = 'wishlist'; saves = action = 'save'. All are period-scoped
+    // via interactions.created_at.
+    const [engagementResult, ordersResult, reviewsResult, trustResult] =
+      await Promise.all([
+        // 1. Listing inventory count + period-scoped engagement from interactions
+        readDb.query<{
+          total_listings: string | number;
+          active_listings: string | number;
+          total_views: string | number;
+          total_likes: string | number;
+          total_saves: string | number;
+        }>(
+          `
+            SELECT
+              COUNT(DISTINCT l.id) AS total_listings,
+              COUNT(DISTINCT l.id) FILTER (WHERE l.status = 'active') AS active_listings,
+              COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS total_views,
+              COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS total_likes,
+              COUNT(i.id) FILTER (WHERE i.action = 'save') AS total_saves
+            FROM listings l
+            LEFT JOIN interactions i ON i.listing_id = l.id
+              AND ${inPeriod('i.created_at')}
+            WHERE l.seller_id = $1
+          `,
+          [sellerId]
+        ),
+        // 2. Revenue and items sold from settled order facts (migration 076).
+        //    paid_at is the authoritative sale timestamp.
+        readDb.query<{
+          items_sold: string | number;
+          revenue_gbp_minor: string | number;
+        }>(
+          `
+            SELECT
+              COUNT(*) AS items_sold,
+              COALESCE(SUM(subtotal_gbp) * 100, 0)::bigint AS revenue_gbp_minor
+            FROM orders
+            WHERE seller_id = $1
+              AND status IN ('paid', 'shipped', 'delivered')
+              AND paid_at IS NOT NULL
+              AND ${inPeriod('paid_at')}
+          `,
+          [sellerId]
+        ),
+        // 3. Reviews for the period
+        readDb.query<{
+          avg_rating: string | number | null;
+          review_count: string | number;
+        }>(
+          `
+            SELECT AVG(r.rating) AS avg_rating, COUNT(r.id) AS review_count
+            FROM order_reviews r
+            WHERE r.seller_id = $1 AND ${inPeriod('r.created_at')}
+          `,
+          [sellerId]
+        ),
+        // 4. Trust projection (response rate, dispatch time)
+        readDb.query<{
+          response_rate: string | number | null;
+          ship_within_days: number | null;
+          total_sales: string | number | null;
+          positive_rating_pct: string | number | null;
+        }>(
+          `SELECT response_rate, ship_within_days, total_sales, positive_rating_pct
+           FROM seller_trust WHERE user_id = $1 LIMIT 1`,
+          [sellerId]
+        ),
+      ]);
+
+    // 5. Ledger refunds/fees — dependent on a schema check, so runs after
+    //    the parallel batch. When ledger tables are absent, completeness is
+    //    'partial' and these remain null.
+    let refundsGbpMinor: number | null = null;
+    let feesGbpMinor: number | null = null;
+    let completeness: 'complete' | 'partial' = 'partial';
+    const ledgerCheck = await readDb.query<{ exists: boolean }>(
+      `SELECT to_regclass('public.ledger_accounts') IS NOT NULL
+        AND to_regclass('public.ledger_entries') IS NOT NULL AS exists`
     );
+    if (ledgerCheck.rows[0]?.exists) {
+      completeness = 'complete';
+      const [refundsResult, feesResult] = await Promise.all([
+        readDb.query<{ refunds: string | null }>(
+          `
+            SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS refunds
+            FROM ledger_entries
+            WHERE account_id = (
+              SELECT id FROM ledger_accounts
+              WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+              LIMIT 1
+            )
+            AND source_type = 'refund'
+            AND direction = 'debit'
+            AND ${inPeriod('created_at')}
+          `,
+          [sellerId]
+        ),
+        readDb.query<{ fees: string | null }>(
+          `
+            SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS fees
+            FROM ledger_entries
+            WHERE account_id = (
+              SELECT id FROM ledger_accounts
+              WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+              LIMIT 1
+            )
+            AND source_type = 'order_payment'
+            AND direction = 'debit'
+            AND line_type = 'platform_fee'
+            AND ${inPeriod('created_at')}
+          `,
+          [sellerId]
+        ),
+      ]);
+      refundsGbpMinor = Number(refundsResult.rows[0]?.refunds ?? 0);
+      feesGbpMinor = Number(feesResult.rows[0]?.fees ?? 0);
+    }
 
-    const reviewsResult = await db.query<{
-      avg_rating: string | number | null;
-      review_count: string | number;
-    }>(
-      `
-        SELECT AVG(r.rating) AS avg_rating, COUNT(r.id) AS review_count
-        FROM order_reviews r
-        WHERE r.seller_id = $1 AND r.created_at > NOW() - ${interval}
-      `,
-      [sellerId]
-    );
-
-    const trustResult = await db.query<{
-      response_rate: string | number | null;
-      ship_within_days: number | null;
-      total_sales: string | number | null;
-      positive_rating_pct: string | number | null;
-    }>(
-      `SELECT response_rate, ship_within_days, total_sales, positive_rating_pct
-       FROM seller_trust WHERE user_id = $1 LIMIT 1`,
-      [sellerId]
-    );
-
-    const row = listingsResult.rows[0] ?? {};
+    const row = engagementResult.rows[0] ?? {};
+    const orders = ordersResult.rows[0] ?? {};
     const reviews = reviewsResult.rows[0] ?? {};
     const trust = trustResult.rows[0] ?? {};
+
+    const revenueGbpMinor = Number(orders.revenue_gbp_minor ?? 0);
+    const netSalesGbpMinor =
+      refundsGbpMinor !== null && feesGbpMinor !== null
+        ? revenueGbpMinor - refundsGbpMinor - feesGbpMinor
+        : null;
 
     return {
       ok: true,
       analytics: {
         totalListings: Number(row.total_listings ?? 0),
+        activeListings: Number(row.active_listings ?? 0),
         totalViews: Number(row.total_views ?? 0),
         totalLikes: Number(row.total_likes ?? 0),
         totalSaves: Number(row.total_saves ?? 0),
-        itemsSold: Number(row.items_sold ?? 0),
-        revenueGbpMinor: Number(row.revenue_gbp_minor ?? 0),
+        itemsSold: Number(orders.items_sold ?? 0),
+        revenueGbpMinor,
+        refundsGbpMinor,
+        feesGbpMinor,
+        netSalesGbpMinor,
+        completeness,
         avgRating: reviews.avg_rating ? Number(reviews.avg_rating) : null,
         reviewCount: Number(reviews.review_count ?? 0),
         responseRate: trust.response_rate ? Number(trust.response_rate) : null,
@@ -446,21 +649,36 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     });
     const { limit } = querySchema.parse(request.query);
 
-    const result = await db.query<{
+    // ── Top performers from real interaction counts ──────────────────
+    // Aggregates views (view + qualified_detail_view), likes (wishlist),
+    // and saves (save) from the interactions table, joined to the seller's
+    // listings. The engagement score weights saves > likes > views to
+    // reflect intent strength. No non-existent denormalized columns.
+    const result = await readDb.query<{
       id: string;
       title: string;
       price_gbp_minor: number | string;
-      views_count: number;
-      likes_count: number;
-      saved_count: number;
+      views_count: string | number;
+      likes_count: string | number;
+      saved_count: string | number;
       status: string;
       created_at: string;
     }>(
       `
-        SELECT id, title, price_gbp_minor, views_count, likes_count, saved_count, status, created_at
-        FROM listings
-        WHERE seller_id = $1
-        ORDER BY (views_count + likes_count * 3 + saved_count * 5) DESC
+        SELECT
+          l.id, l.title, l.price_gbp_minor, l.status, l.created_at,
+          COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views_count,
+          COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS likes_count,
+          COUNT(i.id) FILTER (WHERE i.action = 'save') AS saved_count
+        FROM listings l
+        LEFT JOIN interactions i ON i.listing_id = l.id
+        WHERE l.seller_id = $1
+        GROUP BY l.id, l.title, l.price_gbp_minor, l.status, l.created_at
+        ORDER BY (
+          COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view'))
+          + COUNT(i.id) FILTER (WHERE i.action = 'wishlist') * 3
+          + COUNT(i.id) FILTER (WHERE i.action = 'save') * 5
+        ) DESC
         LIMIT $2
       `,
       [sellerId, limit]
@@ -468,16 +686,114 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
 
     return {
       ok: true,
-      items: result.rows.map((row) => ({
-        id: row.id,
-        title: row.title,
-        priceGbpMinor: Number(row.price_gbp_minor),
-        viewsCount: row.views_count,
-        likesCount: row.likes_count,
-        savedCount: row.saved_count,
-        status: row.status,
-        createdAt: row.created_at,
-        engagementScore: row.views_count + row.likes_count * 3 + row.saved_count * 5,
+      items: result.rows.map((row) => {
+        const views = Number(row.views_count ?? 0);
+        const likes = Number(row.likes_count ?? 0);
+        const saves = Number(row.saved_count ?? 0);
+        return {
+          id: row.id,
+          title: row.title,
+          priceGbpMinor: Number(row.price_gbp_minor),
+          viewsCount: views,
+          likesCount: likes,
+          savedCount: saves,
+          status: row.status,
+          createdAt: row.created_at,
+          engagementScore: views + likes * 3 + saves * 5,
+        };
+      }),
+    };
+  });
+
+  // GET /sellers/:sellerId/analytics/daily — real per-day engagement breakdown
+  // Returns one row per day in the period with views, likes, saves, and sales
+  // counted from the interactions and orders tables. This replaces the
+  // client-side fabricated chart shape (Math.sin distribution) with real data.
+  app.get('/sellers/:sellerId/analytics/daily', async (request, reply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const { sellerId } = sellerIdParamsSchema.parse(request.params);
+
+    if (request.authUser.userId !== sellerId) {
+      reply.code(403);
+      return { ok: false, error: 'You can only view your own analytics' };
+    }
+
+    const dailyQuerySchema = z.object({
+      period: z.enum(['7d', '30d', '90d']).default('30d'),
+    });
+    const { period } = dailyQuerySchema.parse(request.query);
+    const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 };
+    const days = daysMap[period];
+
+    // Generate the full date series so every day is represented even when
+    // there are zero interactions (a gap in the series is not "no data" —
+    // it's zero activity). We use generate_series to produce the spine,
+    // then left-join interactions and orders onto it.
+    const result = await readDb.query<{
+      day: string;
+      views: string | number;
+      likes: string | number;
+      saves: string | number;
+      sales: string | number;
+    }>(
+      `
+        WITH day_spine AS (
+          SELECT generate_series(
+            (CURRENT_DATE - (${days} - 1) * INTERVAL '1 day')::date,
+            CURRENT_DATE::date,
+            INTERVAL '1 day'
+          )::date AS day
+        ),
+        engagement AS (
+          SELECT
+            i.created_at::date AS day,
+            COUNT(*) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views,
+            COUNT(*) FILTER (WHERE i.action = 'wishlist') AS likes,
+            COUNT(*) FILTER (WHERE i.action = 'save') AS saves
+          FROM interactions i
+          JOIN listings l ON l.id = i.listing_id
+          WHERE l.seller_id = $1
+            AND i.created_at >= CURRENT_DATE - (${days} - 1) * INTERVAL '1 day'
+          GROUP BY i.created_at::date
+        ),
+        sales AS (
+          SELECT
+            paid_at::date AS day,
+            COUNT(*) AS sales
+          FROM orders
+          WHERE seller_id = $1
+            AND status IN ('paid', 'shipped', 'delivered')
+            AND paid_at IS NOT NULL
+            AND paid_at >= CURRENT_DATE - (${days} - 1) * INTERVAL '1 day'
+          GROUP BY paid_at::date
+        )
+        SELECT
+          ds.day::text AS day,
+          COALESCE(e.views, 0)::bigint AS views,
+          COALESCE(e.likes, 0)::bigint AS likes,
+          COALESCE(e.saves, 0)::bigint AS saves,
+          COALESCE(s.sales, 0)::bigint AS sales
+        FROM day_spine ds
+        LEFT JOIN engagement e ON e.day = ds.day
+        LEFT JOIN sales s ON s.day = ds.day
+        ORDER BY ds.day ASC
+      `,
+      [sellerId]
+    );
+
+    return {
+      ok: true,
+      period,
+      days: result.rows.map((row) => ({
+        date: row.day,
+        views: Number(row.views),
+        likes: Number(row.likes),
+        saves: Number(row.saves),
+        sales: Number(row.sales),
       })),
     };
   });

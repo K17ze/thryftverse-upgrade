@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, LayoutAnimation, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, TypeStyles, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 export interface ChatListingContextBarProps {
   thumbnailUri: string | null;
@@ -33,14 +36,15 @@ export function ChatListingContextBar({
   secondaryActionIcon,
   onSecondaryAction,
   onTitlePress,
-  defaultCollapsed = false,
-}: ChatListingContextBarProps) {
+  defaultCollapsed = false }: ChatListingContextBarProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
+  const reducedMotion = useReducedMotion();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const toggleCollapsed = () => {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === 'ios' && !reducedMotion) {
       LayoutAnimation.configureNext(
         LayoutAnimation.create(200, 'easeInEaseOut', 'opacity'),
       );
@@ -58,8 +62,8 @@ export function ChatListingContextBar({
           hapticFeedback="light"
           disabled={!onTitlePress}
           accessibilityRole={onTitlePress ? 'button' : undefined}
-          accessibilityLabel={`Linked listing: ${title}, ${price}, ${availability}`}
-          accessibilityHint="Opens the listing detail page"
+          accessibilityLabel={t('inbox.linkedListing', { title, price, availability })}
+          accessibilityHint={t('inbox.listingHint')}
           style={styles.row}
         >
           {thumbnailUri ? (
@@ -139,79 +143,65 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderBottomColor: colors.border,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   rowContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 1,
-    flex: 1,
-  },
+    flex: 1 },
   collapseBtn: {
     width: 36,
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   thumb: {
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   thumbFallback: {
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   thumbFallbackText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: 0.8,
-  },
+    letterSpacing: 0.8 },
   info: {
     flex: 1,
-    gap: 3,
-  },
+    gap: 3 },
   title: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1,
-  },
+    gap: Space.xs + 1 },
   price: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   availabilityDot: {
     width: 3,
     height: 3,
     borderRadius: Radius.full,
-    backgroundColor: colors.textMuted,
-  },
+    backgroundColor: colors.textMuted },
   availability: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   actionsRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   primaryBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -220,13 +210,11 @@ const createStyles = (colors: any) => StyleSheet.create({
     gap: Space.xs + 1,
     minHeight: 44,
     borderRadius: Radius.md,
-    backgroundColor: colors.textPrimary,
-  },
+    backgroundColor: colors.textPrimary },
   primaryBtnText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
   secondaryBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -237,11 +225,8 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   secondaryBtnText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: colors.textPrimary,
-  },
-});
+    color: colors.textPrimary } });

@@ -1,13 +1,13 @@
 import React from 'react';
-import { View, ScrollView, StyleSheet, Dimensions } from 'react-native';
+import { View, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Stroke} from '../theme/designTokens';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
-import { PremiumTextField } from '../components/ui/PremiumTextField';
-import { PremiumSelectRow } from '../components/ui/PremiumSelectRow';
-import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
+import { AppInput } from '../components/ui/AppInput';
+import { AppSelectRow } from '../components/ui/AppSelectRow';
+import { AppStatusPill } from '../components/ui/AppStatusPill';
 import { EmptyState } from '../components/EmptyState';
 import { Headline, Body, Meta } from '../components/ui/Text';
 import {
@@ -19,8 +19,6 @@ import {
   FlagshipHeroSection,
   FlagshipActionCluster,
 } from '../components/flagship';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 export default function DesignReviewScreen() {
   const { colors } = useAppTheme();
@@ -159,22 +157,22 @@ export default function DesignReviewScreen() {
 
         <SectionTitle>Inputs</SectionTitle>
         <View style={styles.card}>
-          <PremiumTextField label="Name" value="" onChangeText={() => {}} placeholder="Enter name" />
-          <PremiumTextField label="Website" value="" onChangeText={() => {}} placeholder="https://" />
+          <AppInput variant="section" label="Name" value="" onChangeText={() => {}} placeholder="Enter name" />
+          <AppInput variant="section" label="Website" value="" onChangeText={() => {}} placeholder="https://" />
         </View>
 
         <SectionTitle>Status Pills</SectionTitle>
         <View style={styles.rowWrap}>
-          <PremiumStatusPill tone="delivered" label="Delivered" />
-          <PremiumStatusPill tone="pending" label="Pending" />
-          <PremiumStatusPill tone="error" label="Cancelled" />
-          <PremiumStatusPill tone="shipped" label="Shipped" />
+          <AppStatusPill variant="block" tone="delivered" label="Delivered" />
+          <AppStatusPill variant="block" tone="pending" label="Pending" />
+          <AppStatusPill variant="block" tone="error" label="Cancelled" />
+          <AppStatusPill variant="block" tone="shipped" label="Shipped" />
         </View>
 
         <SectionTitle>Empty States</SectionTitle>
         <View style={[styles.card, { minHeight: 200 }]}>
           <EmptyState
-            icon="cube-outline"
+            icon="image-outline"
             title="No orders yet"
             subtitle="Your orders will appear here."
           />
@@ -210,7 +208,7 @@ function createStyles(colors: ThemeColors) {
     card: {
       backgroundColor: colors.surface,
       borderRadius: Radius.lg,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       padding: Space.md,
       marginBottom: Space.sm,
@@ -220,7 +218,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       padding: Space.md,
       marginBottom: Space.sm,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
     },
     productRow: {

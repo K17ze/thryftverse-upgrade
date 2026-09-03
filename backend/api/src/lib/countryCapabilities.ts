@@ -18,9 +18,10 @@ export type CapabilityPaymentGatewayId =
   | 'tap_gulf'
   // Wise has no active payment/refund adapter branch. Do not expose until a certified adapter is implemented.
   | 'wise_global'
+  | 'oneze_internal'
   | 'mock_fiat_gbp';
 
-export type CapabilityPaymentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal';
+export type CapabilityPaymentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal' | 'oneze_wallet';
 export type CapabilityPaymentMethodType = 'card' | 'bank_account' | 'wallet';
 
 export interface CapabilityCarrier {
@@ -82,6 +83,39 @@ export type CapabilityShippingZone =
   | 'middle_east'
   | 'global';
 
+// ── Regional policy infrastructure ───────────────────────────────────
+// Complements the existing CapabilityTaxRule / CapabilityShippingZone
+// fields with database-backed regional policy data (tax_rules,
+// category_restrictions, shipping_zones, jurisdiction_age_rules tables).
+// Grouped under a single additive `regionalPolicy` block so the existing
+// public `tax` and `shippingZones` contracts remain unchanged.
+
+export type CapabilityRegionalTaxType = 'vat' | 'sales_tax' | 'gst';
+
+export interface CapabilityRegionalTax {
+  defaultRateBps: number;
+  inclusive: boolean;
+  taxType: CapabilityRegionalTaxType;
+}
+
+export interface CapabilityRegionalMinAge {
+  commerce: number;
+  coown: number;
+}
+
+export interface CapabilityRetentionPolicy {
+  days: number;
+  jurisdiction: string;
+}
+
+export interface CapabilityRegionalPolicy {
+  tax: CapabilityRegionalTax;
+  restrictedCategories: string[];
+  minAge: CapabilityRegionalMinAge;
+  shippingZones: string[];
+  retentionPolicy: CapabilityRetentionPolicy;
+}
+
 interface CapabilityTemplate {
   defaultCurrency: string;
   supportedCurrencies: string[];
@@ -96,6 +130,7 @@ interface CapabilityTemplate {
   restrictedItems: CapabilityRestrictedItem[];
   ageRestrictions: CapabilityAgeRestriction[];
   shippingZones: CapabilityShippingZone[];
+  regionalPolicy: CapabilityRegionalPolicy;
 }
 
 type GatewayFallbackContext = {
@@ -132,6 +167,7 @@ export interface UserCountryCapabilities {
   restrictedItems: CapabilityRestrictedItem[];
   ageRestrictions: CapabilityAgeRestriction[];
   shippingZones: CapabilityShippingZone[];
+  regionalPolicy: CapabilityRegionalPolicy;
 }
 
 export interface ResolveCountryCapabilitiesInput {
@@ -169,10 +205,11 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: true,
     paymentMethodTypes: ['card', 'bank_account', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['razorpay_in', 'stripe_americas'],
+      commerce: ['oneze_internal', 'razorpay_in', 'stripe_americas'],
       'co-own': ['razorpay_in', 'stripe_americas'],
       wallet_topup: ['razorpay_in', 'stripe_americas'],
       wallet_withdrawal: ['razorpay_in'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'INR',
     payoutSupportedCurrencies: ['INR', 'USD'],
@@ -202,6 +239,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'asia_pacific', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 1800, inclusive: true, taxType: 'gst' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: [],
+      retentionPolicy: { days: 1825, jurisdiction: 'IN' },
+    },
   },
   US: {
     defaultCurrency: 'USD',
@@ -209,10 +253,11 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: true,
     paymentMethodTypes: ['card', 'bank_account', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['stripe_americas'],
+      commerce: ['oneze_internal', 'stripe_americas'],
       'co-own': ['stripe_americas'],
       wallet_topup: ['stripe_americas'],
       wallet_withdrawal: ['stripe_americas'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'USD',
     payoutSupportedCurrencies: ['USD'],
@@ -244,6 +289,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'north_america', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 0, inclusive: false, taxType: 'sales_tax' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: ['US_ZONE'],
+      retentionPolicy: { days: 2555, jurisdiction: 'US' },
+    },
   },
   UK: {
     defaultCurrency: 'GBP',
@@ -251,10 +303,11 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: true,
     paymentMethodTypes: ['card', 'bank_account', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['stripe_americas', 'mollie_eu'],
+      commerce: ['oneze_internal', 'stripe_americas', 'mollie_eu'],
       'co-own': ['stripe_americas', 'mollie_eu'],
       wallet_topup: ['stripe_americas', 'mollie_eu'],
       wallet_withdrawal: ['stripe_americas', 'mollie_eu'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'GBP',
     payoutSupportedCurrencies: ['GBP', 'EUR', 'USD'],
@@ -285,6 +338,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'europe', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 2000, inclusive: true, taxType: 'vat' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: ['UK_ZONE'],
+      retentionPolicy: { days: 2555, jurisdiction: 'UK-GDPR' },
+    },
   },
   EUROPE: {
     defaultCurrency: 'EUR',
@@ -292,10 +352,11 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: true,
     paymentMethodTypes: ['card', 'bank_account', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['mollie_eu', 'stripe_americas'],
+      commerce: ['oneze_internal', 'mollie_eu', 'stripe_americas'],
       'co-own': ['mollie_eu', 'stripe_americas'],
       wallet_topup: ['mollie_eu', 'stripe_americas'],
       wallet_withdrawal: ['mollie_eu', 'stripe_americas'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'EUR',
     payoutSupportedCurrencies: ['EUR', 'GBP', 'USD'],
@@ -326,6 +387,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'europe', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 2100, inclusive: true, taxType: 'vat' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: ['EU_ZONE'],
+      retentionPolicy: { days: 2190, jurisdiction: 'EU' },
+    },
   },
   MIDDLE_EAST: {
     defaultCurrency: 'AED',
@@ -333,10 +401,11 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: true,
     paymentMethodTypes: ['card', 'bank_account', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['tap_gulf', 'stripe_americas'],
+      commerce: ['oneze_internal', 'tap_gulf', 'stripe_americas'],
       'co-own': ['tap_gulf', 'stripe_americas'],
       wallet_topup: ['tap_gulf', 'stripe_americas'],
       wallet_withdrawal: ['tap_gulf', 'stripe_americas'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'AED',
     payoutSupportedCurrencies: ['AED', 'USD'],
@@ -369,6 +438,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'middle_east', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 500, inclusive: true, taxType: 'vat' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: [],
+      retentionPolicy: { days: 1825, jurisdiction: 'ME' },
+    },
   },
   CHINA_NEARBY: {
     defaultCurrency: 'USD',
@@ -376,10 +452,11 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: false,
     paymentMethodTypes: ['card', 'wallet'],
     gatewaysByChannel: {
-      commerce: ['stripe_americas'],
+      commerce: ['oneze_internal', 'stripe_americas'],
       'co-own': ['stripe_americas'],
       wallet_topup: ['stripe_americas'],
       wallet_withdrawal: ['stripe_americas'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'USD',
     payoutSupportedCurrencies: ['USD'],
@@ -411,6 +488,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['domestic', 'asia_pacific', 'global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 1300, inclusive: true, taxType: 'vat' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: [],
+      retentionPolicy: { days: 1825, jurisdiction: 'CN' },
+    },
   },
   GLOBAL: {
     defaultCurrency: 'USD',
@@ -418,10 +502,11 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
     stableCoinEnabled: false,
     paymentMethodTypes: ['card'],
     gatewaysByChannel: {
-      commerce: ['stripe_americas'],
+      commerce: ['oneze_internal', 'stripe_americas'],
       'co-own': ['stripe_americas'],
       wallet_topup: ['stripe_americas'],
       wallet_withdrawal: ['stripe_americas'],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: 'USD',
     payoutSupportedCurrencies: ['USD', 'GBP', 'EUR'],
@@ -448,6 +533,13 @@ const CAPABILITY_TEMPLATES: Record<CapabilityCountryCluster, CapabilityTemplate>
       { minimumAge: 16, categories: ['general'], verificationRequired: false },
     ],
     shippingZones: ['global'],
+    regionalPolicy: {
+      tax: { defaultRateBps: 0, inclusive: false, taxType: 'sales_tax' },
+      restrictedCategories: [],
+      minAge: { commerce: 18, coown: 18 },
+      shippingZones: [],
+      retentionPolicy: { days: 1825, jurisdiction: 'GLOBAL' },
+    },
   },
 };
 
@@ -479,6 +571,7 @@ function cloneTemplate(template: CapabilityTemplate): CapabilityTemplate {
       'co-own': [...template.gatewaysByChannel['co-own']],
       wallet_topup: [...template.gatewaysByChannel.wallet_topup],
       wallet_withdrawal: [...template.gatewaysByChannel.wallet_withdrawal],
+      oneze_wallet: ['oneze_internal'],
     },
     payoutDefaultCurrency: template.payoutDefaultCurrency,
     payoutSupportedCurrencies: [...template.payoutSupportedCurrencies],
@@ -488,6 +581,13 @@ function cloneTemplate(template: CapabilityTemplate): CapabilityTemplate {
     restrictedItems: template.restrictedItems.map((item) => ({ ...item })),
     ageRestrictions: template.ageRestrictions.map((ar) => ({ ...ar, categories: [...ar.categories] })),
     shippingZones: [...template.shippingZones],
+    regionalPolicy: {
+      tax: { ...template.regionalPolicy.tax },
+      restrictedCategories: [...template.regionalPolicy.restrictedCategories],
+      minAge: { ...template.regionalPolicy.minAge },
+      shippingZones: [...template.regionalPolicy.shippingZones],
+      retentionPolicy: { ...template.regionalPolicy.retentionPolicy },
+    },
   };
 }
 
@@ -541,6 +641,9 @@ export function isGatewayConfigured(gatewayId: string): boolean {
       // adapter is implemented. This prevents users from selecting a
       // gateway that cannot process payments.
       return false;
+    case 'oneze_internal':
+      // Internal gateway — no external API keys required. Always configured.
+      return true;
     case 'mock_fiat_gbp':
     case 'mock_tvusd':
       return !isProduction;
@@ -663,6 +766,10 @@ export function resolveCountryCapabilities(input: ResolveCountryCapabilitiesInpu
       cluster: countryCluster,
       channel: 'wallet_withdrawal',
     }),
+    oneze_wallet: filterToConfiguredGateways(template.gatewaysByChannel.oneze_wallet ?? ['oneze_internal'], {
+      cluster: countryCluster,
+      channel: 'oneze_wallet',
+    }),
   };
 
   const filteredPayoutGatewayPriority = template.payoutGatewayPriority.filter((gatewayId) =>
@@ -698,5 +805,6 @@ export function resolveCountryCapabilities(input: ResolveCountryCapabilitiesInpu
     restrictedItems: template.restrictedItems,
     ageRestrictions: template.ageRestrictions,
     shippingZones: template.shippingZones,
+    regionalPolicy: template.regionalPolicy,
   };
 }

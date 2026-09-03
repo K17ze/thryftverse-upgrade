@@ -4,21 +4,22 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  Pressable,
-  Dimensions,
-  Alert,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Typography, DockConstants, Type, Radius, Stroke, Control } from '../theme/designTokens';
+import { Space, Typography, DockConstants, Radius, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { CURRENCIES } from '../constants/currencies';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
@@ -28,14 +29,18 @@ import { haptics } from '../utils/haptics';
 import { useStore } from '../store/useStore';
 
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
+import { BottomSheet } from '../components/BottomSheet';
+import { AppButton } from '../components/ui/AppButton';
 import { fetchListingByIdFromApi, patchListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { EditListingFooter } from '../components/listing/EditListingFooter';
-import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SkeletonLoader } from '../components/SkeletonLoader';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useBackendData } from '../context/BackendDataContext';
+import { useTaxonomy } from '../context/TaxonomyContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
 import { useSoldComps } from '../hooks/useSoldComps';
@@ -44,20 +49,43 @@ import {
 
   evaluateListingCompleteness,
   type ListingFieldValues,
-  type ListingFieldKey,
-} from '../contracts/listingCategoryPolicy';
+  type ListingFieldKey } from '../contracts/listingCategoryPolicy';
 import { t } from '../i18n';
-
-const { width: SCREEN_W } = Dimensions.get('window');
-
-const CONDITIONS = ['New with tags', 'Very good', 'Good', 'Satisfactory'];
-const SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'One size'];
-const BRANDS = ['Nike', 'Adidas', 'Zara', 'H&M', 'Ralph Lauren', 'Off-White', 'Stone Island', 'Stussy', 'Other'];
-const CATEGORY_OPTIONS = ['Women', 'Men', 'Designer', 'Kids', 'Home', 'Electronics', 'Entertainment', 'Hobbies & collectables', 'Sports'];
 
 type PickerMode = 'Category' | 'Brand' | 'Size' | 'Condition' | null;
 type RouteT = RouteProp<RootStackParamList, 'EditListing'>;
 type SaveStage = 'idle' | 'uploading_media' | 'updating_listing' | 'completed' | 'failed_recoverable';
+type SectionFocus = 'price' | 'shipping' | 'format';
+
+interface EditListingRouteParams {
+  itemId: string;
+  focus?: SectionFocus;
+}
+
+/* ── Autosave draft ──
+   Persisted to AsyncStorage so a seller doesn't lose work after a crash,
+   force-quit, or accidental navigation. Best-effort: write failures are
+   swallowed and never block the user. */
+interface EditListingDraft {
+  title: string;
+  description: string;
+  price: string;
+  originalPrice: string;
+  category: string;
+  brand: string;
+  size: string;
+  condition: string;
+  shippingMethod: 'standard' | 'express' | null;
+  shippingPayer: 'buyer' | 'seller' | null;
+  /** Epoch ms when the draft was last written. */
+  savedAt: number;
+  /** Server `updatedAt` captured when the draft was started — used to
+      decide whether the draft is newer than the server copy. */
+  baseUpdatedAt: string | null;
+}
+
+const draftKey = (itemId: string) => `editListingDraft:${itemId}`;
+const AUTOSAVE_DEBOUNCE_MS = 2000;
 
 export default function EditListingScreen() {
   const insets = useSafeAreaInsets();
@@ -107,16 +135,25 @@ export default function EditListingScreen() {
     qualityTipsText: { color: colors.textSecondary },
     qualityTipsLabel: { color: colors.brand },
     soldCompsText: { color: colors.textMuted },
-    soldCompsAction: { color: colors.brand },
-  }), [colors]);
+    soldCompsAction: { color: colors.brand } }), [colors]);
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { itemId } = route.params;
+  const { itemId, focus } = (route.params as EditListingRouteParams) ?? {};
   const { show: showToast } = useToast();
   const { currencyCode } = useCurrencyPref();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
+  const { isOffline } = useConnectivity();
+
+  const { categories, conditions, sizes, brands } = useTaxonomy();
+  const categoryOptions = useMemo(
+    () => categories.filter((n) => n.parentId === null).map((n) => n.name),
+    [categories],
+  );
+  const conditionOptions = useMemo(() => conditions.map((n) => n.name), [conditions]);
+  const sizeOptions = useMemo(() => sizes.map((n) => n.name), [sizes]);
+  const brandOptions = useMemo(() => brands.map((n) => n.name), [brands]);
 
   const [listing, setListing] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -140,6 +177,39 @@ export default function EditListingScreen() {
   const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(false);
   const [qualityTipsExpanded, setQualityTipsExpanded] = useState(false);
 
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
+
+  /* ── autosave / conflict state ── */
+  // The server `updatedAt` captured when the listing was first loaded.
+  // Compared against a fresh fetch before saving to detect concurrent
+  // edits from another device/session.
+  const mountUpdatedAtRef = useRef<string | null>(null);
+  // True while a debounced autosave is writing the draft to storage.
+  const [isAutosaving, setIsAutosaving] = useState(false);
+  // True once the form has been clean-and-saved at least once since the
+  // last edit — drives the green "Saved" resting state.
+  const [isCleanSaved, setIsCleanSaved] = useState(false);
+  // Conflict-resolution sheet state.
+  const [conflictSheet, setConflictSheet] = useState<{
+    visible: boolean;
+    serverUpdatedAt: string;
+    onKeepMine: () => void;
+    onUseTheirs: () => void;
+  } | null>(null);
+  // Restore-draft prompt state.
+  const [restoreSheet, setRestoreSheet] = useState<{
+    visible: boolean;
+    draft: EditListingDraft;
+  } | null>(null);
+
   // Media state — stable-ID based
   const [mediaItems, setMediaItems] = useState<ListingMediaDraftItem[]>([]);
 
@@ -158,27 +228,72 @@ export default function EditListingScreen() {
     return () => { unsub(); };
   }, []);
 
+  /* ── focus scroll (ManageListing deep-links: price / shipping / format) ── */
+  const scrollRef = useRef<KeyboardAwareScrollViewRef | null>(null);
+  const sectionYRef = useRef<Partial<Record<SectionFocus, number>>>({});
+  const trackSectionY = useCallback((key: SectionFocus) => (e: { nativeEvent: { layout: { y: number } } }) => {
+    sectionYRef.current[key] = e.nativeEvent.layout.y;
+  }, []);
+  useEffect(() => {
+    if (!focus || isLoading || loadError) return;
+    // Wait one frame so the restored form content has laid out.
+    const timer = setTimeout(() => {
+      const y = sectionYRef.current[focus];
+      if (y != null) {
+        scrollRef.current?.scrollTo({ y: Math.max(0, y - Space.lg), animated: true });
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [focus, isLoading, loadError]);
+
   /* ── fetch listing on mount ── */
   useEffect(() => {
     let mounted = true;
     setIsLoading(true);
     setLoadError(false);
     fetchListingByIdFromApi(itemId)
-      .then((res) => {
+      .then(async (res) => {
         if (!mounted) return;
         if (res.ok && res.listing) {
           const l = res.listing;
+          const serverUpdatedAt = l.updatedAt ?? l.createdAt ?? null;
+          mountUpdatedAtRef.current = serverUpdatedAt;
           setListing(l);
-          setTitle(l.title ?? '');
-          setDescription(l.description ?? '');
-          setPrice(String(l.priceGbp ?? ''));
-          setOriginalPrice(l.originalPriceGbp ? String(l.originalPriceGbp) : '');
-          setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
-          setBrand(l.brand ?? '');
-          setSize(l.size ?? '');
-          setCondition(l.condition ?? '');
-          setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
-          setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
+
+          // Check for a persisted draft. Only offer to restore when the
+          // draft is newer than the server copy (i.e. the user made
+          // changes that never made it to the server).
+          let appliedDraft = false;
+          try {
+            const raw = await AsyncStorage.getItem(draftKey(itemId));
+            if (raw) {
+              const draft = JSON.parse(raw) as EditListingDraft;
+              const serverMs = serverUpdatedAt ? Date.parse(serverUpdatedAt) : 0;
+              const draftMs = draft.savedAt ?? 0;
+              if (draftMs > serverMs) {
+                setRestoreSheet({ visible: true, draft });
+                appliedDraft = true;
+              } else {
+                // Stale draft — clear it so it doesn't resurface.
+                void AsyncStorage.removeItem(draftKey(itemId));
+              }
+            }
+          } catch {
+            // Best-effort: ignore storage read errors.
+          }
+
+          if (!appliedDraft) {
+            setTitle(l.title ?? '');
+            setDescription(l.description ?? '');
+            setPrice(String(l.priceGbp ?? ''));
+            setOriginalPrice(l.originalPriceGbp ? String(l.originalPriceGbp) : '');
+            setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
+            setBrand(l.brand ?? '');
+            setSize(l.size ?? '');
+            setCondition(l.condition ?? '');
+            setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
+            setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
+          }
           const initialPhotos = l.images ?? (l.imageUrl ? [l.imageUrl] : []);
           const items: ListingMediaDraftItem[] = initialPhotos.map((uri: string, i: number) => ({
             id: `remote_${itemId}_${i}`,
@@ -186,18 +301,17 @@ export default function EditListingScreen() {
             kind: 'image' as const,
             source: 'remote' as const,
             status: 'uploaded' as const,
-            publicUrl: uri,
-          }));
+            publicUrl: uri }));
           setMediaItems(items);
         } else {
           setLoadError(true);
-          showToast('Could not load listing', 'error');
+          showToast(t('listing.edit.couldNotLoad'), 'error');
         }
       })
       .catch(() => {
         if (mounted) {
           setLoadError(true);
-          showToast('Could not load listing', 'error');
+          showToast(t('listing.edit.couldNotLoad'), 'error');
         }
       })
       .finally(() => { if (mounted) setIsLoading(false); });
@@ -229,6 +343,66 @@ export default function EditListingScreen() {
     );
   }, [listing, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, mediaItems]);
 
+  /* ── debounced autosave draft ──
+     Writes the text-field form state to AsyncStorage 2s after the user
+     stops editing. Media is intentionally excluded — local asset URIs are
+     transient and can't be re-attached reliably across sessions. The
+     autosave is best-effort: failures are swallowed so they never block
+     the user. Layered ON TOP of the manual save; it does not replace it. */
+  useEffect(() => {
+    if (!listing) return;
+    if (!hasChanges) return;
+    // Mark dirty as soon as the user edits so the resting "Saved" state
+    // doesn't persist after a new edit.
+    setIsCleanSaved(false);
+    const timer = setTimeout(() => {
+      const draft: EditListingDraft = {
+        title,
+        description,
+        price,
+        originalPrice,
+        category,
+        brand,
+        size,
+        condition,
+        shippingMethod,
+        shippingPayer,
+        savedAt: Date.now(),
+        baseUpdatedAt: mountUpdatedAtRef.current,
+      };
+      setIsAutosaving(true);
+      AsyncStorage.setItem(draftKey(itemId), JSON.stringify(draft))
+        .catch(() => { /* best-effort */ })
+        .finally(() => setIsAutosaving(false));
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [listing, hasChanges, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, itemId]);
+
+  /* ── restore-draft handler ── */
+  const handleRestoreDraft = useCallback(() => {
+    const sheet = restoreSheet;
+    setRestoreSheet((s) => s ? { ...s, visible: false } : null);
+    if (!sheet) return;
+    const d = sheet.draft;
+    setTitle(d.title);
+    setDescription(d.description);
+    setPrice(d.price);
+    setOriginalPrice(d.originalPrice);
+    setCategory(d.category);
+    setBrand(d.brand);
+    setSize(d.size);
+    setCondition(d.condition);
+    setShippingMethod(d.shippingMethod);
+    setShippingPayer(d.shippingPayer);
+    haptics.tap();
+  }, [restoreSheet]);
+
+  const handleDiscardDraft = useCallback(() => {
+    setRestoreSheet((s) => s ? { ...s, visible: false } : null);
+    void AsyncStorage.removeItem(draftKey(itemId)).catch(() => {});
+    haptics.tap();
+  }, [itemId]);
+
   /* ── media handling ── */
   const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
     setMediaItems((prev) => {
@@ -244,8 +418,7 @@ export default function EditListingScreen() {
         width: asset.width,
         height: asset.height,
         durationMs: asset.durationMs,
-        status: 'draft',
-      };
+        status: 'draft' };
       return [...prev, draftItem].slice(0, 10);
     });
   }, []);
@@ -254,15 +427,14 @@ export default function EditListingScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        setErrorMsg('Allow gallery access to upload media.');
+        setErrorMsg(t('listing.edit.allowGallery'));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsMultipleSelection: true,
         allowsEditing: false,
-        quality: 0.9,
-      });
+        quality: 0.9 });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const assets = result.assets.map(convertPickerAsset);
         const existing = mediaItems.map((m) => ({
@@ -274,8 +446,7 @@ export default function EditListingScreen() {
           fileSize: m.fileSize,
           width: m.width,
           height: m.height,
-          durationMs: m.durationMs,
-        }));
+          durationMs: m.durationMs }));
         const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
 
         if (validation.errors.length > 0) {
@@ -291,7 +462,7 @@ export default function EditListingScreen() {
         }
       }
     } catch {
-      setErrorMsg('Could not open photo library. Try again.');
+      setErrorMsg(t('listing.edit.couldNotOpenLibrary'));
     }
   }, [appendPhotoAsset, mediaItems]);
 
@@ -299,13 +470,12 @@ export default function EditListingScreen() {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        setErrorMsg('Allow camera access to capture listing media.');
+        setErrorMsg(t('listing.edit.allowCamera'));
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.All,
-        quality: 0.9,
-      });
+        quality: 0.9 });
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = convertPickerAsset(result.assets[0]);
         const existing = mediaItems.map((m) => ({
@@ -317,8 +487,7 @@ export default function EditListingScreen() {
           fileSize: m.fileSize,
           width: m.width,
           height: m.height,
-          durationMs: m.durationMs,
-        }));
+          durationMs: m.durationMs }));
         const validation = validateMediaAssets([asset], existing, { maxTotalCount: 10 });
         if (validation.errors.length > 0) {
           setErrorMsg(validation.errors.map((e) => e.message).join('. '));
@@ -331,7 +500,7 @@ export default function EditListingScreen() {
         }
       }
     } catch {
-      setErrorMsg('Could not open camera. Try again.');
+      setErrorMsg(t('listing.edit.couldNotOpenCamera'));
     }
   }, [appendPhotoAsset, mediaItems]);
 
@@ -389,8 +558,7 @@ export default function EditListingScreen() {
       condition: condition || null,
       images: mediaItems.length > 0 ? mediaItems.map((m) => m.publicUrl || m.uri) : null,
       shippingMethod: shippingMethod || null,
-      shippingPayer: shippingPayer || null,
-    };
+      shippingPayer: shippingPayer || null };
     return evaluateListingCompleteness(values);
   }, [title, description, price, category, brand, size, condition, mediaItems, shippingMethod, shippingPayer]);
 
@@ -405,16 +573,17 @@ export default function EditListingScreen() {
     condition: 'condition',
     images: 'photos',
     shippingMethod: 'shipping method',
-    shippingPayer: 'shipping payer',
-  };
+    shippingPayer: 'shipping payer' };
 
-  const editCompletenessLabel = editCompleteness.canActivate
+  const editCompletenessLabel = useMemo(() => editCompleteness.canActivate
     ? 'Ready to publish'
-    : `Missing: ${editCompleteness.missingRequired.map((f) => editFieldLabelMap[f]).join(', ')}`;
+    : `Missing: ${editCompleteness.missingRequired.map((f) => editFieldLabelMap[f]).join(', ')}`,
+    [editCompleteness.canActivate, editCompleteness.missingRequired, editFieldLabelMap]);
 
-  const editRecommendedLabel = editCompleteness.missingRecommended.length > 0
+  const editRecommendedLabel = useMemo(() => editCompleteness.missingRecommended.length > 0
     ? `Suggested: ${editCompleteness.missingRecommended.map((f) => editFieldLabelMap[f]).join(', ')}`
-    : null;
+    : null,
+    [editCompleteness.missingRecommended, editFieldLabelMap]);
 
   const validate = useCallback(() => {
     const trimmedTitle = title.trim();
@@ -425,17 +594,17 @@ export default function EditListingScreen() {
     // brand/size requirements.
     for (const field of editCompleteness.missingRequired) {
       switch (field) {
-        case 'title': if (!trimmedTitle) return 'Add a title.'; break;
-        case 'category': if (!category) return 'Select a category.'; break;
-        case 'brand': if (!brand) return 'Select a brand.'; break;
-        case 'size': if (!size) return 'Select a size.'; break;
-        case 'condition': if (!condition) return 'Select a condition.'; break;
-        case 'images': if (mediaItems.length === 0) return 'Add at least one photo.'; break;
+        case 'title': if (!trimmedTitle) return t('listing.create.errorAddTitle'); break;
+        case 'category': if (!category) return t('listing.create.errorSelectCategoryField'); break;
+        case 'brand': if (!brand) return t('listing.create.errorSelectBrandField'); break;
+        case 'size': if (!size) return t('listing.create.errorSelectSizeField'); break;
+        case 'condition': if (!condition) return t('listing.create.errorSelectConditionField'); break;
+        case 'images': if (mediaItems.length === 0) return t('listing.create.errorAddPhoto'); break;
         case 'description':
-          if (!trimmedDesc || trimmedDesc.length < 10) return 'Add a description with at least 10 characters.';
+          if (!trimmedDesc || trimmedDesc.length < 10) return t('listing.create.errorAddDescription');
           break;
         case 'price':
-          if (!Number.isFinite(numericPrice) || numericPrice <= 0) return 'Enter a valid price greater than 0.';
+          if (!Number.isFinite(numericPrice) || numericPrice <= 0) return t('listing.create.errorValidPrice');
           break;
         default: break;
       }
@@ -443,17 +612,15 @@ export default function EditListingScreen() {
     return '';
   }, [title, category, brand, size, condition, description, price, mediaItems, editCompleteness]);
 
-  /* ── save handler ── */
-  const handleSave = useCallback(async () => {
-    const error = validate();
-    if (error) {
-      setErrorMsg(error);
-      setSaveStage('failed_recoverable');
-      haptics.error();
-      return;
-    }
+  /* ── save handler ──
+     The manual save flow is preserved exactly. Autosave/conflict logic is
+     layered on top: before applying the save we re-fetch the listing and
+     compare its `updatedAt` to the value captured at mount. If they
+     differ, the listing was edited on another device and we surface a
+     conflict-resolution sheet instead of silently overwriting it. */
+  const performSave = useCallback(async () => {
     if (!isOwner) {
-      setErrorMsg('You do not have permission to edit this listing.');
+      setErrorMsg(t('listing.edit.noPermission'));
       setSaveStage('failed_recoverable');
       return;
     }
@@ -478,8 +645,7 @@ export default function EditListingScreen() {
           fileSize: m.fileSize,
           width: m.width,
           height: m.height,
-          durationMs: m.durationMs,
-        }));
+          durationMs: m.durationMs }));
         queue.addAssets(assets);
         await queue.run();
         const queueItems = queue.getItems();
@@ -491,15 +657,14 @@ export default function EditListingScreen() {
               ...m,
               status: qi.state === 'uploaded' ? 'uploaded' : qi.state === 'failed' ? 'failed' : m.status,
               publicUrl: qi.publicUrl || m.publicUrl,
-              error: qi.error || m.error,
-            };
+              error: qi.error || m.error };
           })
         );
 
         const failedItems = queueItems.filter((q) => q.state === 'failed');
         if (failedItems.length > 0) {
           setSaveStage('failed_recoverable');
-          setErrorMsg('Some media failed to upload. Retry before saving.');
+          setErrorMsg(t('listing.edit.mediaFailedRetry'));
           haptics.error();
           return;
         }
@@ -522,8 +687,7 @@ export default function EditListingScreen() {
             sortOrder: existingRemotePhotos.length + i,
             mediaWidth: qi.asset.width,
             mediaHeight: qi.asset.height,
-            finalizationId: qi.finalizationId!,
-          });
+            finalizationId: qi.finalizationId! });
         }
       }
 
@@ -542,12 +706,14 @@ export default function EditListingScreen() {
         shippingMethod: shippingMethod || undefined,
         shippingPayer: shippingPayer || undefined,
         imageUrl: coverUri,
-        coverFinalizationId,
-      });
+        coverFinalizationId });
 
       setSaveStage('completed');
+      setIsCleanSaved(true);
       haptics.success();
-      showToast('Listing updated successfully.', 'success');
+      showToast(t('listing.edit.updated'), 'success');
+      // Clear the persisted draft — the server now holds the latest copy.
+      void AsyncStorage.removeItem(draftKey(itemId)).catch(() => {});
       // Refresh feed + invalidate cached detail so the edit propagates
       // immediately when the user returns to the feed or profile.
       void refreshListings();
@@ -555,12 +721,98 @@ export default function EditListingScreen() {
       navigation.goBack();
     } catch (e) {
       setSaveStage('failed_recoverable');
-      setErrorMsg('Failed to update listing. Try again.');
-      showToast('Failed to update listing. Try again.', 'error');
+      setErrorMsg(t('listing.edit.updateFailed'));
+      showToast(t('listing.edit.updateFailed'), 'error');
     } finally {
       setIsSaving(false);
     }
-  }, [validate, isOwner, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, showToast, navigation]);
+  }, [isOwner, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, showToast, navigation, refreshListings, queryClient]);
+
+  /* ── reload listing from server (conflict: "Use their changes") ── */
+  const reloadFromServer = useCallback(async () => {
+    setConflictSheet(null);
+    setIsSaving(true);
+    try {
+      const res = await fetchListingByIdFromApi(itemId);
+      if (res.ok && res.listing) {
+        const l = res.listing;
+        mountUpdatedAtRef.current = l.updatedAt ?? l.createdAt ?? null;
+        setListing(l);
+        setTitle(l.title ?? '');
+        setDescription(l.description ?? '');
+        setPrice(String(l.priceGbp ?? ''));
+        setOriginalPrice(l.originalPriceGbp ? String(l.originalPriceGbp) : '');
+        setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
+        setBrand(l.brand ?? '');
+        setSize(l.size ?? '');
+        setCondition(l.condition ?? '');
+        setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
+        setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
+        const initialPhotos = l.images ?? (l.imageUrl ? [l.imageUrl] : []);
+        const items: ListingMediaDraftItem[] = initialPhotos.map((uri: string, i: number) => ({
+          id: `remote_${itemId}_${i}`,
+          uri,
+          kind: 'image' as const,
+          source: 'remote' as const,
+          status: 'uploaded' as const,
+          publicUrl: uri }));
+        setMediaItems(items);
+        setIsCleanSaved(true);
+        void AsyncStorage.removeItem(draftKey(itemId)).catch(() => {});
+        showToast(t('listing.edit.updated'), 'success');
+      } else {
+        showToast(t('listing.edit.couldNotLoad'), 'error');
+      }
+    } catch {
+      showToast(t('listing.edit.couldNotLoad'), 'error');
+    } finally {
+      setIsSaving(false);
+      setSaveStage('idle');
+    }
+  }, [itemId, showToast]);
+
+  const handleSave = useCallback(async () => {
+    const error = validate();
+    if (error) {
+      setErrorMsg(error);
+      setSaveStage('failed_recoverable');
+      haptics.error();
+      return;
+    }
+
+    // Conflict detection: re-fetch the listing and compare its updatedAt
+    // to the value captured at mount. Skip the check when offline (the
+    // fetch would fail anyway) or when we have no baseline timestamp.
+    if (!isOffline && mountUpdatedAtRef.current) {
+      try {
+        const fresh = await fetchListingByIdFromApi(itemId);
+        if (fresh.ok && fresh.listing) {
+          const serverUpdatedAt = fresh.listing.updatedAt ?? fresh.listing.createdAt ?? null;
+          if (serverUpdatedAt && serverUpdatedAt !== mountUpdatedAtRef.current) {
+            // The listing was edited elsewhere since this screen opened.
+            setConflictSheet({
+              visible: true,
+              serverUpdatedAt,
+              onKeepMine: () => {
+                setConflictSheet(null);
+                // Force save — update the baseline so a subsequent save
+                // doesn't re-trigger the conflict prompt.
+                mountUpdatedAtRef.current = serverUpdatedAt;
+                void performSave();
+              },
+              onUseTheirs: reloadFromServer,
+            });
+            return;
+          }
+        }
+      } catch {
+        // Network hiccup during the pre-save check — proceed with the
+        // save; the server will reject it if there's a real conflict.
+      }
+    }
+
+    void performSave();
+  }, [validate, isOffline, itemId, performSave, reloadFromServer]);
 
   /* ── preview handler ── */
   const handlePreview = useCallback(() => {
@@ -578,23 +830,21 @@ export default function EditListingScreen() {
         description: description.trim() || undefined,
         photos,
         shippingMethod: shippingMethod || undefined,
-        shippingPayer: shippingPayer || undefined,
-      },
-      origin: 'edit',
-    });
+        shippingPayer: shippingPayer || undefined },
+      origin: 'edit' });
   }, [title, price, originalPrice, brand, condition, category, size, description, shippingMethod, shippingPayer, mediaItems, navigation]);
 
   /* ── discard confirmation ── */
   const handleCancel = useCallback(() => {
     if (hasChanges) {
-      Alert.alert(
-        'Discard changes?',
-        'You have unsaved changes that will be lost.',
-        [
-          { text: 'Keep editing', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
-        ]
-      );
+      setConfirmSheet({
+        visible: true,
+        title: t('listing.edit.discardTitle'),
+        message: t('listing.edit.discardMessage'),
+        confirmLabel: t('listing.edit.discard'),
+        cancelLabel: t('listing.edit.keepEditing'),
+        variant: 'danger',
+        onConfirm: () => navigation.goBack() });
     } else {
       navigation.goBack();
     }
@@ -603,13 +853,13 @@ export default function EditListingScreen() {
   /* ── picker helpers ── */
   const getPickerOptions = useCallback(() => {
     switch (pickerMode) {
-      case 'Category': return CATEGORY_OPTIONS;
-      case 'Brand': return BRANDS;
-      case 'Size': return SIZES;
-      case 'Condition': return CONDITIONS;
+      case 'Category': return categoryOptions;
+      case 'Brand': return brandOptions;
+      case 'Size': return sizeOptions;
+      case 'Condition': return conditionOptions;
       default: return [];
     }
-  }, [pickerMode]);
+  }, [pickerMode, categoryOptions, brandOptions, sizeOptions, conditionOptions]);
 
   const getPickerSelected = useCallback(() => {
     switch (pickerMode) {
@@ -646,6 +896,14 @@ export default function EditListingScreen() {
 
   const saveDisabled = !hasChanges || isSaving;
 
+  /* ── coarse save state for the footer button ── */
+  const saveState: 'saved' | 'saving' | 'offline' | 'dirty' = useMemo(() => {
+    if (isSaving || isAutosaving) return 'saving';
+    if (isOffline && hasChanges) return 'offline';
+    if (!hasChanges && isCleanSaved) return 'saved';
+    return 'dirty';
+  }, [isSaving, isAutosaving, isOffline, hasChanges, isCleanSaved]);
+
   /* ── sold comparables for pricing guidance ── */
   const { listings: backendListings } = useBackendData();
   const soldComps = useSoldComps(backendListings, category || undefined, brand || undefined);
@@ -659,6 +917,9 @@ export default function EditListingScreen() {
   }, [soldComps, hasValidPrice, numericPrice]);
 
   /* ── listing quality ── */
+  // The listings API does not expose a sales-format field (auctions are
+  // separate rows joined by listing id), so the meter scores the editable
+  // fixed-price record fields — always listingMode 'sell_now'.
   const qualityResult = useMemo(() => calculateListingQuality({
     photos: mediaItems.map((m) => m.publicUrl || m.uri),
     title,
@@ -672,18 +933,17 @@ export default function EditListingScreen() {
     tags: [],
     shippingMethod,
     shippingPayer,
-    listingMode: 'sell_now',
-  }), [mediaItems, title, brand, category, size, condition, description, price, originalPrice, shippingMethod, shippingPayer]);
+    listingMode: 'sell_now' }), [mediaItems, title, brand, category, size, condition, description, price, originalPrice, shippingMethod, shippingPayer]);
 
   /* ── listing status label ── */
   const listingStatusLabel = useMemo(() => {
     if (!listing) return null;
     const status = listing.status;
     switch (status) {
-      case 'active': return 'Active listing';
-      case 'draft': return 'Draft listing';
-      case 'sold': return 'Sold listing';
-      case 'paused': return 'Paused listing';
+      case 'active': return t('listing.edit.statusActive');
+      case 'draft': return t('listing.edit.statusDraft');
+      case 'sold': return t('listing.edit.statusSold');
+      case 'paused': return t('listing.edit.statusPaused');
       default: return null;
     }
   }, [listing]);
@@ -693,7 +953,7 @@ export default function EditListingScreen() {
   /* ── loading state ── */
   if (isLoading) {
     return (
-      <FlagshipScreen header={<FlagshipHeader title="Edit listing" onBack={() => navigation.goBack()} />}>
+      <FlagshipScreen header={<FlagshipHeader title={t('listing.create.editTitle')} onBack={() => navigation.goBack()} />}>
         <View style={styles.loadingContainer}>
           <SkeletonLoader width="100%" height={200} borderRadius={Radius.lg} />
           <View style={styles.skeletonFormGap}>
@@ -709,12 +969,12 @@ export default function EditListingScreen() {
 
   if (loadError) {
     return (
-      <FlagshipScreen header={<FlagshipHeader title="Edit listing" onBack={() => navigation.goBack()} />}>
+      <FlagshipScreen header={<FlagshipHeader title={t('listing.create.editTitle')} onBack={() => navigation.goBack()} />}>
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} aria-hidden={true} />
-          <Text style={[styles.errorTitle, themed.errorTitle]}>Could not load listing</Text>
+          <AppIcon name="cloud-offline-outline" size={IconSize.xl} color="textMuted" opticalCenter accessible={false} />
+          <Text style={[styles.errorTitle, themed.errorTitle]}>{t('listing.edit.couldNotLoad')}</Text>
           <Pressable
-            style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && { opacity: 0.85 }]}
             onPress={() => {
               setLoadError(false);
               setIsLoading(true);
@@ -740,8 +1000,7 @@ export default function EditListingScreen() {
                       kind: 'image' as const,
                       source: 'remote' as const,
                       status: 'uploaded' as const,
-                      publicUrl: uri,
-                    }));
+                      publicUrl: uri }));
                     setMediaItems(items);
                   } else {
                     setLoadError(true);
@@ -751,9 +1010,9 @@ export default function EditListingScreen() {
                 .finally(() => setIsLoading(false));
             }}
             accessibilityRole="button"
-            accessibilityLabel="Retry loading listing"
+            accessibilityLabel={t('listing.edit.retryLoad')}
           >
-            <Text style={[styles.retryBtnText, themed.retryBtnText]}>Retry</Text>
+            <Text style={[styles.retryBtnText, themed.retryBtnText]}>{t('listing.edit.retry')}</Text>
           </Pressable>
         </View>
       </FlagshipScreen>
@@ -764,12 +1023,12 @@ export default function EditListingScreen() {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Edit listing"
+          title={t('listing.create.editTitle')}
           onBack={handleCancel}
           backIcon="close"
           rightAction={
             <Text style={[styles.navStatusText, themed.navStatusText, hasChanges && styles.navStatusUnsaved, hasChanges && themed.navStatusUnsaved]}>
-              {hasChanges ? 'Unsaved' : 'Saved'}
+              {hasChanges ? t('listing.edit.unsaved') : t('listing.create.saved')}
             </Text>
           }
         />
@@ -778,6 +1037,7 @@ export default function EditListingScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
         <KeyboardAwareScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -797,8 +1057,8 @@ export default function EditListingScreen() {
               onRetryItem={handleRetryItem}
               canRemoveItem={canRemoveItem}
               reorderEnabled={true}
-              lockedNote="Existing listing photos cannot be removed yet."
-              removeLabel="Remove"
+              lockedNote={t('listing.edit.lockedPhotos')}
+              removeLabel={t('listing.edit.remove')}
             />
           ) : (
             <ListingMediaStudio
@@ -812,22 +1072,22 @@ export default function EditListingScreen() {
               onPickFromCamera={handlePickFromCamera}
               reorderEnabled={true}
               canRemoveItem={() => false}
-              lockedNote="You do not have permission to edit this listing."
+              lockedNote={t('listing.edit.noPermission')}
             />
           )}
 
           {/* ── 2a. PHOTO UPLOAD GUIDANCE ── */}
           <View style={[styles.photoGuideCard, themed.photoGuideCard]}>
             <Pressable
-              style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.85 }]}
               onPress={() => setPhotoGuideCollapsed((v) => !v)}
               accessibilityRole="button"
-              accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
+              accessibilityLabel={photoGuideCollapsed ? t('listing.edit.expandPhotoTips') : t('listing.edit.collapsePhotoTips')}
             >
-              <Ionicons name="camera-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
-              <Text style={[styles.photoGuideTitle, themed.photoGuideTitle]}>Photo tips</Text>
-              <Text style={[styles.photoGuideMin, themed.photoGuideMin]}>Min 3 photos recommended</Text>
-              <Ionicons name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="camera-outline" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
+              <Text style={[styles.photoGuideTitle, themed.photoGuideTitle]}>{t('listing.create.photoTips')}</Text>
+              <Text style={[styles.photoGuideMin, themed.photoGuideMin]}>{t('listing.create.photoTipsMin')}</Text>
+              <AppIcon name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             {!photoGuideCollapsed && (
               <Reanimated.View
@@ -836,16 +1096,16 @@ export default function EditListingScreen() {
                 style={styles.photoGuideTips}
               >
                 <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="sunny-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>Good lighting</Text>
+                  <AppIcon name="sunny-outline" size={12} color="textMuted" opticalCenter accessible={false} />
+                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipLighting')}</Text>
                 </View>
                 <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="cube-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>Show all angles</Text>
+                  <AppIcon name="camera-reverse-outline" size={12} color="textMuted" opticalCenter accessible={false} />
+                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipAngles')}</Text>
                 </View>
                 <View style={styles.photoGuideTipRow}>
-                  <Ionicons name="leaf-outline" size={12} color={colors.textMuted} aria-hidden={true} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>Natural background</Text>
+                  <AppIcon name="leaf-outline" size={12} color="textMuted" opticalCenter accessible={false} />
+                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipBackground')}</Text>
                 </View>
               </Reanimated.View>
             )}
@@ -861,29 +1121,52 @@ export default function EditListingScreen() {
 
           {isEditingRestricted && (
             <View style={styles.restrictedRow}>
-              <Ionicons name="lock-closed" size={16} color={colors.textMuted} aria-hidden={true} />
-              <Text style={[styles.restrictedText, themed.restrictedText]}>Editing is limited for this listing status.</Text>
+              <AppIcon name="lock-closed" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
+              <Text style={[styles.restrictedText, themed.restrictedText]}>{t('listing.edit.restricted')}</Text>
             </View>
           )}
 
           {/* ── 4. DETAILS ── */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Details</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.details')}</Text>
+
+            {/* ── Format (read-only) ──
+                The listing format is chosen when a listing is created and the
+                update API accepts no format field, so this row is deliberately
+                read-only. It gives the ManageListing "Format" deep-link an
+                honest destination instead of a dead control. */}
+            <View onLayout={trackSectionY('format')}>
+              <View style={styles.pickerRow}>
+                <View style={styles.pickerRowInner}>
+                  <View style={styles.fieldLabelRow}>
+                    <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.edit.format')}</Text>
+                  </View>
+                  <Text style={[styles.pickerValue, themed.pickerValue]}>
+                    {t('listing.edit.formatFixedPrice')}
+                  </Text>
+                </View>
+                <AppIcon name="lock-closed-outline" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
+              </View>
+              <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>
+                {t('listing.edit.formatHelper')}
+              </Text>
+            </View>
+            <View style={[styles.hairline, themed.hairline]} />
 
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Title</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.listingTitle')}</Text>
                 {title.trim().length > 0 ? (
-                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                  <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
               </View>
               <TextInput
                 style={[styles.fieldInput, themed.fieldInput, isEditingRestricted && styles.fieldInputDisabled]}
                 value={title}
                 onChangeText={(t) => { setTitle(t); setErrorMsg(''); }}
-                placeholder="e.g. Vintage Levi's 501 Denim Jacket"
+                placeholder={t('listing.edit.titlePlaceholder')}
                 placeholderTextColor={colors.textMuted}
                 returnKeyType="next"
                 editable={!isEditingRestricted}
@@ -892,112 +1175,112 @@ export default function EditListingScreen() {
             </View>
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setPickerMode('Category')}
               accessibilityRole="button"
-              accessibilityLabel="Select category"
+              accessibilityLabel={t('listing.edit.selectCategory')}
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Category</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.category')}</Text>
                   {category ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
                 <Text style={[styles.pickerValue, themed.pickerValue, !category && styles.pickerPlaceholder, !category && themed.pickerPlaceholder]}>
-                  {category || 'Select category'}
+                  {category || t('listing.edit.selectCategory')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setPickerMode('Brand')}
               accessibilityRole="button"
-              accessibilityLabel="Select brand"
+              accessibilityLabel={t('listing.edit.selectBrand')}
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Brand</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.brand')}</Text>
                   {brand ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                   ) : editCompleteness.policy.brandlessValid ? (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Optional</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
                 <Text style={[styles.pickerValue, themed.pickerValue, !brand && styles.pickerPlaceholder, !brand && themed.pickerPlaceholder]}>
-                  {brand || 'Select brand'}
+                  {brand || t('listing.edit.selectBrand')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setPickerMode('Size')}
               accessibilityRole="button"
-              accessibilityLabel="Select size"
+              accessibilityLabel={t('listing.edit.selectSize')}
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Size</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.size')}</Text>
                   {size ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                   ) : editCompleteness.policy.sizelessValid ? (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Optional</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.optional')}</Text>
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
                 <Text style={[styles.pickerValue, themed.pickerValue, !size && styles.pickerPlaceholder, !size && themed.pickerPlaceholder]}>
-                  {size || 'Select size'}
+                  {size || t('listing.edit.selectSize')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setPickerMode('Condition')}
               accessibilityRole="button"
-              accessibilityLabel="Select condition"
+              accessibilityLabel={t('listing.edit.selectCondition')}
             >
               <View style={styles.pickerRowInner}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>Condition</Text>
+                  <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.condition')}</Text>
                   {condition ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                    <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                   ) : (
-                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                    <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                   )}
                 </View>
                 <Text style={[styles.pickerValue, themed.pickerValue, !condition && styles.pickerPlaceholder, !condition && themed.pickerPlaceholder]}>
-                  {condition || 'Select condition'}
+                  {condition || t('listing.edit.selectCondition')}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="chevron-forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
           </View>
 
           {/* ── 5. PRICING ── */}
-          <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Pricing</Text>
+          <View style={styles.sectionGroup} onLayout={trackSectionY('price')}>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.edit.pricing')}</Text>
 
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Price</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.price')}</Text>
                 {hasValidPrice ? (
-                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                  <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
               </View>
               <View style={styles.priceRow}>
@@ -1013,55 +1296,54 @@ export default function EditListingScreen() {
                 />
               </View>
               {hasDiscount && (
-                <Text style={[styles.discountPreview, themed.discountPreview]}>−{discountPercent}% off original</Text>
+                <Text style={[styles.discountPreview, themed.discountPreview]}>{t('listing.create.discountOffOriginal', { percent: discountPercent })}</Text>
               )}
               {soldComps.hasComps && soldComps.minPrice != null && soldComps.maxPrice != null ? (
                 <View style={styles.priceSuggestionBlock}>
                   <View style={styles.soldCompsHint}>
-                    <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                    <AppIcon name="cash-outline" size={12} color="textMuted" opticalCenter accessible={false} />
                     <Text style={[styles.soldCompsText, themed.soldCompsText]}>
-                      Similar items sold for {currencySymbol}{soldComps.minPrice.toFixed(0)}–{currencySymbol}{soldComps.maxPrice.toFixed(0)}
-                      {' '}({soldComps.sampleSize} sold)
+                      {t('listing.create.soldCompsRange', { min: `${currencySymbol}${soldComps.minPrice.toFixed(0)}`, max: `${currencySymbol}${soldComps.maxPrice.toFixed(0)}`, count: soldComps.sampleSize })}
                     </Text>
                   </View>
                   {soldComps.medianPrice != null && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="bulb-outline" size={12} color={colors.brand} aria-hidden={true} />
+                      <AppIcon name="bulb-outline" size={12} color="brand" opticalCenter accessible={false} />
                       <Text style={[styles.soldCompsText, themed.priceSuggestion]}>
-                        Suggested price: {currencySymbol}{soldComps.medianPrice.toFixed(0)}
+                        {t('listing.create.suggestedPrice', { amount: `${currencySymbol}${soldComps.medianPrice.toFixed(0)}` })}
                       </Text>
                     </View>
                   )}
                   {priceVsMarket === 'above' && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="trending-up-outline" size={12} color={colors.warning} aria-hidden={true} />
+                      <AppIcon name="trending-up-outline" size={12} color="warning" opticalCenter accessible={false} />
                       <Text style={[styles.soldCompsText, themed.priceMarketHigh]}>
-                        Priced above recent sold range
+                        {t('listing.create.pricedAboveRange')}
                       </Text>
                     </View>
                   )}
                   {priceVsMarket === 'below' && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="trending-down-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                      <AppIcon name="trending-down-outline" size={12} color="textMuted" opticalCenter accessible={false} />
                       <Text style={[styles.soldCompsText, themed.priceMarketLow]}>
-                        Priced below recent sold range
+                        {t('listing.create.pricedBelowRange')}
                       </Text>
                     </View>
                   )}
                   {priceVsMarket === 'in_range' && (
                     <View style={styles.soldCompsHint}>
-                      <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                      <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                       <Text style={[styles.soldCompsText, themed.priceMarketGood]}>
-                        Within recent sold range
+                        {t('listing.create.pricedInRange')}
                       </Text>
                     </View>
                   )}
                 </View>
               ) : (
                 <View style={styles.soldCompsHint}>
-                  <Ionicons name="information-circle-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+                  <AppIcon name="information-circle-outline" size={12} color="textMuted" opticalCenter accessible={false} />
                   <Text style={[styles.soldCompsText, themed.priceNoCompsHint]}>
-                    Price competitively for faster sales
+                    {t('listing.create.priceCompetitively')}
                   </Text>
                 </View>
               )}
@@ -1069,7 +1351,7 @@ export default function EditListingScreen() {
             </View>
 
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, themed.fieldLabel]}>Original price</Text>
+              <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.originalPrice')}</Text>
               <View style={styles.priceRow}>
                 <Text style={[styles.currencySymbol, themed.currencySymbol]}>{currencySymbol}</Text>
                 <TextInput
@@ -1087,21 +1369,21 @@ export default function EditListingScreen() {
 
           {/* ── 6. DESCRIPTION ── */}
           <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Description</Text>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.description')}</Text>
             <View style={styles.fieldGroup}>
               <View style={styles.fieldLabelRow}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Description</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.create.description')}</Text>
                 {description.trim().length >= 10 ? (
-                  <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+                  <AppIcon name="checkmark-circle" size={12} color="success" opticalCenter accessible={false} />
                 ) : (
-                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>Required</Text>
+                  <Text style={[styles.fieldRequiredHint, themed.fieldRequiredHint]}>{t('listing.create.required')}</Text>
                 )}
               </View>
               <TextInput
                 style={[styles.descInput, themed.descInput, isEditingRestricted && styles.fieldInputDisabled]}
                 value={description}
                 onChangeText={(t) => { setDescription(t); setErrorMsg(''); }}
-                placeholder="Describe the item, condition, and any notable details…"
+                placeholder={t('listing.edit.descriptionPlaceholder')}
                 placeholderTextColor={colors.textMuted}
                 multiline
                 numberOfLines={4}
@@ -1109,51 +1391,51 @@ export default function EditListingScreen() {
                 editable={!isEditingRestricted}
               />
               <Text style={[styles.charCount, description.trim().length < 10 ? themed.charCountWarn : themed.charCount]}>
-                {description.trim().length} characters{description.trim().length < 10 ? ' · min 10' : description.length < 60 ? ' · add more detail' : ''}
+                {description.trim().length < 10 ? t('listing.create.charCountMin', { count: description.trim().length }) : description.length < 60 ? t('listing.create.charCountMore', { count: description.length }) : t('listing.create.charCount', { count: description.length })}
               </Text>
             </View>
           </View>
 
           {/* ── 7. SHIPPING ── */}
-          <View style={styles.sectionGroup}>
-            <Text style={[styles.sectionHeading, themed.sectionHeading]}>Shipping</Text>
+          <View style={styles.sectionGroup} onLayout={trackSectionY('shipping')}>
+            <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.edit.shipping')}</Text>
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setShippingMethod(shippingMethod === 'standard' ? 'express' : 'standard')}
               accessibilityRole="button"
-              accessibilityLabel="Toggle shipping method"
+              accessibilityLabel={t('listing.edit.toggleShippingMethod')}
             >
               <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Shipping method</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.edit.shippingMethod')}</Text>
                 <Text style={[styles.pickerValue, themed.pickerValue, !shippingMethod && styles.pickerPlaceholder, !shippingMethod && themed.pickerPlaceholder]}>
-                  {shippingMethod === 'standard' ? 'Standard' : shippingMethod === 'express' ? 'Express' : 'Select method'}
+                  {shippingMethod === 'standard' ? t('listing.edit.shippingStandard') : shippingMethod === 'express' ? t('listing.edit.shippingExpress') : t('listing.edit.selectMethod')}
                 </Text>
               </View>
-              <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="swap-horizontal" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             <View style={[styles.hairline, themed.hairline]} />
 
             <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.6 }]}
+              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
               onPress={() => !isEditingRestricted && setShippingPayer(shippingPayer === 'buyer' ? 'seller' : 'buyer')}
               accessibilityRole="button"
-              accessibilityLabel="Toggle who pays shipping"
+              accessibilityLabel={t('listing.edit.toggleShippingPayer')}
             >
               <View style={styles.pickerRowInner}>
-                <Text style={[styles.fieldLabel, themed.fieldLabel]}>Who pays</Text>
+                <Text style={[styles.fieldLabel, themed.fieldLabel]}>{t('listing.edit.whoPays')}</Text>
                 <Text style={[styles.pickerValue, themed.pickerValue, !shippingPayer && styles.pickerPlaceholder, !shippingPayer && themed.pickerPlaceholder]}>
-                  {shippingPayer === 'buyer' ? 'Buyer pays' : shippingPayer === 'seller' ? 'I pay' : 'Select payer'}
+                  {shippingPayer === 'buyer' ? t('listing.edit.payerBuyer') : shippingPayer === 'seller' ? t('listing.edit.payerSeller') : t('listing.edit.selectPayer')}
                 </Text>
               </View>
-              <Ionicons name="swap-horizontal" size={16} color={colors.textMuted} aria-hidden={true} />
+              <AppIcon name="swap-horizontal" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
           </View>
 
           {/* ── 8. SAVE/UPDATE FEEDBACK ── */}
           {errorMsg && saveStage !== 'idle' && (
             <View style={styles.inlineErrorRow}>
-              <Ionicons name="alert-circle" size={16} color={colors.danger} aria-hidden={true} />
+              <AppIcon name="alert-circle" size={16} color="danger" opticalCenter accessible={false} />
               <Text style={[styles.inlineErrorText, themed.inlineErrorText]}>{errorMsg}</Text>
             </View>
           )}
@@ -1162,11 +1444,12 @@ export default function EditListingScreen() {
               Per Phase 5 WP7: truthful completeness based on the category
               policy. Flat inline — no card chrome (§4 surface budget). */}
           <View style={styles.completenessRow}>
-            <Ionicons
+            <AppIcon
               name={editCompleteness.canActivate ? 'checkmark-circle' : 'alert-circle-outline'}
-              size={16}
-              color={editCompleteness.canActivate ? colors.success : colors.warning}
-              aria-hidden={true}
+              size={IconSize.sm}
+              color={editCompleteness.canActivate ? 'success' : 'warning'}
+              opticalCenter
+              accessible={false}
             />
             <View style={styles.completenessTextWrap}>
               <Text style={[styles.completenessLabel, { color: editCompleteness.canActivate ? colors.success : colors.textSecondary }]}>
@@ -1188,13 +1471,14 @@ export default function EditListingScreen() {
         <View style={[styles.qualityBar, themed.qualityBar]}>
           <View style={styles.qualityBarRow}>
             <View style={styles.qualityBarLeft}>
-              <Ionicons
+              <AppIcon
                 name={qualityResult.tier === 'excellent' ? 'star' : qualityResult.tier === 'good' ? 'star-half-outline' : 'ellipse-outline'}
-                size={16}
-                color={colors.textSecondary}
-                aria-hidden={true}
+                size={IconSize.sm}
+                color="textSecondary"
+                opticalCenter
+                accessible={false}
               />
-              <Text style={[styles.qualityBarLabel, themed.qualityBarLabel]}>Listing quality</Text>
+              <Text style={[styles.qualityBarLabel, themed.qualityBarLabel]}>{t('listing.edit.listingQuality')}</Text>
             </View>
             <View style={styles.qualityBarRight}>
               <Text style={[styles.qualityBarScore, themed.qualityBarScore]}>{qualityResult.score}%</Text>
@@ -1202,12 +1486,12 @@ export default function EditListingScreen() {
               <Pressable
                 hitSlop={8}
                 onPress={() => setQualityTipsExpanded((v) => !v)}
-                style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.85 }]}
                 accessibilityRole="button"
-                accessibilityLabel={qualityTipsExpanded ? 'Hide tips to improve' : 'Show tips to improve'}
+                accessibilityLabel={qualityTipsExpanded ? t('listing.edit.hideTips') : t('listing.edit.showTips')}
               >
-                <Text style={[styles.qualityTipsLabel, themed.qualityTipsLabel]}>Tips to improve</Text>
-                <Ionicons name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color={colors.brand} aria-hidden={true} />
+                <Text style={[styles.qualityTipsLabel, themed.qualityTipsLabel]}>{t('listing.edit.tipsToImprove')}</Text>
+                <AppIcon name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color="brand" opticalCenter accessible={false} />
               </Pressable>
             </View>
           </View>
@@ -1222,7 +1506,7 @@ export default function EditListingScreen() {
             >
               {qualityResult.missingItems.slice(0, 6).map((item) => (
                 <View key={item.key} style={styles.qualityTipChip}>
-                  <Ionicons name={item.icon as keyof typeof Ionicons.glyphMap} size={12} color={colors.textMuted} aria-hidden={true} />
+                  <AppIcon name={item.icon} size={12} color="textMuted" opticalCenter accessible={false} />
                   <Text style={[styles.qualityTipsText, themed.qualityTipsText]}>{item.label}</Text>
                 </View>
               ))}
@@ -1255,183 +1539,222 @@ export default function EditListingScreen() {
           onPreview={handlePreview}
           onSave={handleSave}
           bottomInset={insets.bottom}
+          saveState={saveState}
         />
       )}
 
       <BottomSheetPicker
         visible={pickerMode !== null}
         onClose={() => setPickerMode(null)}
-        title={pickerMode ?? 'Select'}
+        title={pickerMode ?? t('listing.edit.select')}
         options={getPickerOptions()}
         selectedValue={getPickerSelected()}
         onSelect={handlePickerSelect}
         searchable={pickerMode === 'Brand'}
       />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
+      />
+
+      {/* ── Restore unsaved draft prompt ── */}
+      {restoreSheet && (
+        <ConfirmationSheet
+          visible={restoreSheet.visible}
+          onDismiss={handleDiscardDraft}
+          title={t('listing.edit.draftFound')}
+          message={t('listing.edit.draftRestore', { date: new Date(restoreSheet.draft.savedAt).toLocaleString() })}
+          confirmLabel={t('listing.edit.draftRestoreAction')}
+          cancelLabel={t('listing.edit.draftDiscard')}
+          onConfirm={handleRestoreDraft}
+          onCancel={handleDiscardDraft}
+        />
+      )}
+
+      {/* ── Conflict resolution sheet ──
+          Three options: keep my changes (force save), use their changes
+          (reload), or compare. Compare re-fetches and reloads so the user
+          can see the server version before deciding whether to re-apply. */}
+      {conflictSheet && (
+        <BottomSheet
+          visible={conflictSheet.visible}
+          onDismiss={() => setConflictSheet(null)}
+          variant="transaction"
+          snapPoint={0.46}
+        >
+          <View style={styles.conflictContainer} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+            <Text style={[styles.conflictTitle, { color: colors.textPrimary }]} accessibilityRole="header">
+              {t('listing.edit.conflictTitle')}
+            </Text>
+            <Text style={[styles.conflictMessage, { color: colors.textSecondary }]}>
+              {t('listing.edit.conflictMessage')}
+            </Text>
+            <View style={styles.conflictActions}>
+              <AppButton
+                title={t('listing.edit.conflictKeepMine')}
+                onPress={conflictSheet.onKeepMine}
+                variant="primary"
+                size="lg"
+                style={styles.conflictBtn}
+                accessibilityLabel={t('listing.edit.conflictKeepMine')}
+              />
+              <AppButton
+                title={t('listing.edit.conflictUseTheirs')}
+                onPress={conflictSheet.onUseTheirs}
+                variant="ghost"
+                size="md"
+                accessibilityLabel={t('listing.edit.conflictUseTheirs')}
+              />
+              <AppButton
+                title={t('listing.edit.conflictCompare')}
+                onPress={conflictSheet.onUseTheirs}
+                variant="ghost"
+                size="md"
+                accessibilityLabel={t('listing.edit.conflictCompare')}
+              />
+            </View>
+          </View>
+        </BottomSheet>
+      )}
     </FlagshipScreen>
   );
 }
 
 const styles = StyleSheet.create({
   navStatusText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   navStatusUnsaved: {
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   scroll: {
-    flex: 1,
-  },
+    flex: 1 },
   scrollContent: {
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   loadingContainer: {
     flex: 1,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    gap: Space.md,
-  },
+    gap: Space.md },
   skeletonFormGap: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.md,
-    paddingHorizontal: Space.xl,
-  },
+    paddingHorizontal: Space.xl },
   errorTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   retryBtn: {
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
-    borderRadius: Radius.xxl,
-  },
+    borderRadius: Radius.xxl },
   retryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   statusDot: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   statusDotActive: {},
   statusText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   restrictedRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   restrictedText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   sectionGroup: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   sectionHeading: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   fieldGroup: {
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   fieldLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginBottom: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginBottom: Space.xs },
   fieldInput: {
     fontSize: Typography.size.bodyLarge,
     fontFamily: Typography.family.regular,
     paddingVertical: Space.sm,
-    minHeight: Control.hit + Space.sm,
-  },
+    minHeight: Control.hit + Space.sm },
   fieldInputDisabled: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   hairline: {
     height: Stroke.hairline,
-    marginVertical: Space.xs,
-  },
+    marginVertical: Space.xs },
   pickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
-    minHeight: Control.hit + Space.sm,
-  },
+    minHeight: Control.hit + Space.sm },
   pickerRowInner: {
-    flex: 1,
-  },
+    flex: 1 },
   pickerValue: {
     fontSize: Typography.size.bodyLarge,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: Typography.family.regular },
   pickerPlaceholder: {},
   priceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   currencySymbol: {
     fontSize: Typography.size.bodyLarge,
     fontFamily: Typography.family.bold,
-    marginRight: Space.xs + 2,
-  },
+    marginRight: Space.xs + 2 },
   priceInput: {
     flex: 1,
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily },
   discountPreview: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    marginTop: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs },
   descInput: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     minHeight: Space.xxl + Space.xxl + Space.sm,
     paddingVertical: Space.sm,
-    lineHeight: Type.bodyStrong.lineHeight + 1,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight + 1 },
   charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    textAlign: 'right',
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textAlign: 'right' },
   inlineErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   inlineErrorText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   /* -- photo guidance card -- */
   photoGuideCard: {
@@ -1440,71 +1763,58 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   photoGuideHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   photoGuideTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   photoGuideMin: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   photoGuideTips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm + 2,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   photoGuideTipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   photoGuideTip: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   /* -- price suggestion block -- */
   priceSuggestionBlock: {
     marginTop: Space.xs,
-    gap: 0,
-  },
+    gap: 0 },
   soldCompsHint: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     marginTop: Space.xs,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   soldCompsText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    flex: 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    flex: 1 },
   soldCompsAction: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   /* -- field validation -- */
   fieldLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   fieldRequiredHint: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   /* -- category-aware completeness indicator (flat inline) -- */
   completenessRow: {
@@ -1512,20 +1822,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   completenessTextWrap: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   completenessLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   completenessHint: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   /* -- compact quality bar (fixed above footer) -- */
   qualityBar: {
@@ -1533,54 +1839,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xs,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   qualityBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   qualityBarLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   qualityBarLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   qualityBarRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   qualityBarScore: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   qualityBarTier: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   qualityTipsToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   qualityTipsLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   qualityBarTrack: {
     height: Stroke.emphasis,
     borderRadius: Radius.sm,
     backgroundColor: 'transparent',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   qualityBarFill: {
     height: '100%',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   qualityTipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1588,30 +1883,46 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
     paddingHorizontal: Space.sm,
     borderRadius: Radius.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   qualityTipChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs / 2 + 1,
-  },
+    gap: Space.xs / 2 + 1 },
   qualityTipsList: {
     gap: Space.xs - 1,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   qualityTipBulletRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   qualityTipBullet: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   qualityTipsText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight - 1,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight - 1 },
+
+  /* -- conflict resolution sheet -- */
+  conflictContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: Space.lg },
+  conflictTitle: {
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    marginBottom: Space.sm },
+  conflictMessage: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    marginBottom: Space.lg },
+  conflictActions: {
+    gap: Space.sm },
+  conflictBtn: {
+    borderRadius: Radius.lg,
+    marginBottom: Space.xs } });

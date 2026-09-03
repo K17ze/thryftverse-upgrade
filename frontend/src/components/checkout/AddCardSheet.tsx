@@ -6,8 +6,7 @@ import {
   CollectionMode,
   initPaymentSheet,
   PaymentSheetError,
-  presentPaymentSheet,
-} from '@stripe/stripe-react-native';
+  presentPaymentSheet } from '@stripe/stripe-react-native';
 import { BottomSheet } from '../BottomSheet';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useStore } from '../../store/useStore';
@@ -15,19 +14,17 @@ import { useToast } from '../../context/ToastContext';
 import { createStripeSetupSheet } from '../../services/commerceApi';
 import {
   getUserCountryCapabilities,
-  type UserCountryCapabilities,
-} from '../../services/capabilitiesApi';
+  type UserCountryCapabilities } from '../../services/capabilitiesApi';
 import {
   formatCountryPolicyScope,
-  isPaymentMethodAllowed,
-} from '../../utils/capabilityPolicy';
+  isPaymentMethodAllowed } from '../../utils/capabilityPolicy';
 import { parseApiError } from '../../lib/apiClient';
 import { createStableId } from '../../utils/createStableId';
 import {
   configureStripeMobile,
-  getStripeReturnUrl,
-} from '../../platform/payments/stripeMobile';
-import { Radius, Space, Typography, Type } from '../../theme/designTokens';
+  getStripeReturnUrl } from '../../platform/payments/stripeMobile';
+import { Radius, Space, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 
@@ -55,8 +52,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
     surface: colors.surface,
     surfaceAlt: colors.surfaceAlt,
     success: colors.success,
-    textInverse: colors.textInverse,
-  };
+    textInverse: colors.textInverse };
   const styles = useMemo(() => createStyles(themed), [themed]);
 
   useEffect(() => {
@@ -120,9 +116,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
         allowsDelayedPaymentMethods: false,
         billingDetailsCollectionConfiguration: {
           address: AddressCollectionMode.AUTOMATIC,
-          name: CollectionMode.AUTOMATIC,
-        },
-      });
+          name: CollectionMode.AUTOMATIC } });
       if (initializationError) {
         throw new Error(initializationError.message);
       }
@@ -225,8 +219,7 @@ export function AddCardSheet({ visible, onDismiss, onSuccess }: Props) {
         accessibilityLabel="Add a card"
         accessibilityState={{
           disabled: !cardAllowed || isOpeningProvider,
-          busy: isOpeningProvider,
-        }}
+          busy: isOpeningProvider }}
       >
         {isOpeningProvider ? (
           <ActivityIndicator size="small" color={themed.textInverse} />
@@ -253,8 +246,7 @@ const createStyles = (themed: {
   header: {
     alignItems: 'center',
     paddingHorizontal: Space.sm,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   providerMark: {
     width: 48,
     height: 48,
@@ -262,83 +254,70 @@ const createStyles = (themed: {
     backgroundColor: themed.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   title: {
     color: themed.textPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: 22,
+    fontSize: TypographyV2.screenTitle.size,
     letterSpacing: -0.35,
     marginBottom: Space.sm,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   subtitle: {
     color: themed.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     lineHeight: 21,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   boundary: {
     borderColor: themed.border,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     marginBottom: Space.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   boundaryRow: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: Space.md,
     minHeight: 68,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   boundaryCopy: {
-    flex: 1,
-  },
+    flex: 1 },
   boundaryTitle: {
     color: themed.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    marginBottom: 2,
-  },
+    fontSize: TypographyV2.body.size,
+    marginBottom: 2 },
   boundaryText: {
     color: themed.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: 17,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: 17 },
   separator: {
     backgroundColor: themed.border,
     height: StyleSheet.hairlineWidth,
-    marginLeft: 54,
-  },
+    marginLeft: 54 },
   blocked: {
     backgroundColor: themed.surfaceAlt,
     borderRadius: Radius.md,
     marginBottom: Space.md,
-    padding: Space.md,
-  },
+    padding: Space.md },
   blockedTitle: {
     color: themed.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    marginBottom: 3,
-  },
+    fontSize: TypographyV2.body.size,
+    marginBottom: 3 },
   blockedText: {
     color: themed.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: 18,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: 18 },
   policy: {
     color: themed.textMuted,
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     marginBottom: Space.md,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   primaryAction: {
     alignItems: 'center',
     backgroundColor: themed.brand,
@@ -347,14 +326,10 @@ const createStyles = (themed: {
     gap: Space.sm,
     justifyContent: 'center',
     minHeight: 54,
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   primaryActionDisabled: {
-    opacity: 0.45,
-  },
+    opacity: 0.45 },
   primaryActionText: {
     color: themed.textInverse,
     fontFamily: Typography.family.bold,
-    fontSize: Type.body.size,
-  },
-});
+    fontSize: TypographyV2.body.size } });

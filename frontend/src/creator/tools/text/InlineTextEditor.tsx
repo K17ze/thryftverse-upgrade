@@ -21,15 +21,16 @@ import { TextInput } from 'react-native-gesture-handler';
 import Reanimated, {
   useAnimatedStyle,
   withTiming,
-  Easing,
-  useReducedMotion,
-} from 'react-native-reanimated';
+  useReducedMotion } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import { Type, Typography } from '../../../theme/designTokens';
+import { Typography } from '../../../theme/designTokens';
+import { Motion } from '../../../theme/motionTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
+import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { getPresetById } from './textStylePresets';
 import { toHexString } from '../../color/ColorMath';
-import type { CreatorColor } from '../../color/ColorTypes';
+
 import type { CreatorLayer } from '../../composition';
 
 type TextLayer = Extract<CreatorLayer, { type: 'text' }>;
@@ -54,36 +55,32 @@ const STYLE_METRICS: Record<
   string,
   { fontSize: number; lineHeight: number; letterSpacing?: number; textTransform?: 'uppercase' }
 > = {
-  headline: { fontSize: Type.title.size + 4, lineHeight: (Type.title.size + 4) * 1.15 },
-  editorial: { fontSize: Type.title.size + 1, lineHeight: (Type.title.size + 1) * 1.2 },
-  clean: { fontSize: Type.body.size + 1, lineHeight: (Type.body.size + 1) * 1.35 },
+  headline: { fontSize: TypographyV2.screenTitle.size + 4, lineHeight: (TypographyV2.screenTitle.size + 4) * 1.15 },
+  editorial: { fontSize: TypographyV2.screenTitle.size + 1, lineHeight: (TypographyV2.screenTitle.size + 1) * 1.2 },
+  clean: { fontSize: TypographyV2.body.size + 1, lineHeight: (TypographyV2.body.size + 1) * 1.35 },
   compact: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.size * 1.3,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.size * 1.3,
     letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  handwritten: { fontSize: Type.body.size + 2, lineHeight: (Type.body.size + 2) * 1.3 },
+    textTransform: 'uppercase' },
+  handwritten: { fontSize: TypographyV2.body.size + 2, lineHeight: (TypographyV2.body.size + 2) * 1.3 },
   bubble: {
-    fontSize: Type.bodyStrong.size + 6,
-    lineHeight: (Type.bodyStrong.size + 6) * 1.2,
-    letterSpacing: 0.5,
-  },
+    fontSize: TypographyV2.bodyStrong.size + 6,
+    lineHeight: (TypographyV2.bodyStrong.size + 6) * 1.2,
+    letterSpacing: 0.5 },
   deco: {
-    fontSize: Type.bodyStrong.size + 2,
-    lineHeight: (Type.bodyStrong.size + 2) * 1.3,
-    letterSpacing: 1.5,
-  },
-  poster: { fontSize: Type.title.size - 2, lineHeight: (Type.title.size - 2) * 1.1, letterSpacing: -0.5 },
-  squeeze: { fontSize: Type.body.size, lineHeight: Type.body.size * 1.1, letterSpacing: -0.3 },
-  signature: { fontSize: Type.bodyStrong.size + 2, lineHeight: (Type.bodyStrong.size + 2) * 1.4 },
-};
+    fontSize: TypographyV2.bodyStrong.size + 2,
+    lineHeight: (TypographyV2.bodyStrong.size + 2) * 1.3,
+    letterSpacing: 1.5 },
+  poster: { fontSize: TypographyV2.screenTitle.size - 2, lineHeight: (TypographyV2.screenTitle.size - 2) * 1.1, letterSpacing: -0.5 },
+  squeeze: { fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.size * 1.1, letterSpacing: -0.3 },
+  signature: { fontSize: TypographyV2.bodyStrong.size + 2, lineHeight: (TypographyV2.bodyStrong.size + 2) * 1.4 } };
 
-function resolveColor(layer: TextLayer): string {
+function resolveColor(layer: TextLayer, fallback: string): string {
   const { payload } = layer;
   if (payload.textColor) return payload.textColor;
-  if (payload.fill) return toHexString(payload.fill as CreatorColor);
-  return '#ffffff';
+  if (payload.fill) return toHexString(payload.fill);
+  return fallback;
 }
 
 export function InlineTextEditor({
@@ -94,9 +91,9 @@ export function InlineTextEditor({
   screenWidth,
   screenHeight,
   onCommit,
-  onDismiss,
-}: InlineTextEditorProps) {
+  onDismiss }: InlineTextEditorProps) {
   const { payload } = layer;
+  const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const inputRef = useRef<TextInput>(null);
@@ -134,7 +131,7 @@ export function InlineTextEditor({
 
   const preset = getPresetById(payload.textStyle ?? 'clean');
   const metrics = STYLE_METRICS[payload.textStyle ?? 'clean'] ?? STYLE_METRICS.clean;
-  const color = resolveColor(layer);
+  const color = resolveColor(layer, colors.scrimTextPrimary);
 
   const alignment = payload.alignment ?? 'center';
   const textAlign: TextStyle['textAlign'] = alignment === 'justify' ? 'left' : alignment;
@@ -153,10 +150,8 @@ export function InlineTextEditor({
         {
           translateY: reducedMotion
             ? -shift
-            : withTiming(-shift, { duration: 200, easing: Easing.out(Easing.cubic) }),
-        },
-      ],
-    };
+            : withTiming(-shift, { duration: Motion.duration.normal, easing: Motion.easing.entrance }) },
+      ] };
   });
 
   return (
@@ -168,8 +163,7 @@ export function InlineTextEditor({
           top,
           width: w,
           height: h,
-          transform: [{ rotate: `${layer.rotation}deg` }],
-        },
+          transform: [{ rotate: `${layer.rotation}deg` }] },
       ]}
       pointerEvents="box-none"
     >
@@ -191,12 +185,14 @@ export function InlineTextEditor({
             {
               color,
               fontFamily: preset?.fontFamily ?? Typography.family.medium,
-              fontSize: metrics.fontSize,
+              fontSize: payload.fontSize ?? metrics.fontSize,
               lineHeight: metrics.lineHeight,
               letterSpacing: metrics.letterSpacing,
               textTransform: metrics.textTransform,
-              textAlign,
-            },
+              fontWeight: payload.bold ? 'bold' : 'normal',
+              fontStyle: payload.italic ? 'italic' : 'normal',
+              textDecorationLine: payload.underline ? 'underline' : 'none',
+              textAlign },
           ]}
           accessibilityLabel="Edit text content"
           accessibilityHint="Type to edit the text. Done or tap away to save."
@@ -211,8 +207,7 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     justifyContent: 'center',
-    alignItems: 'center',
-  } as ViewStyle,
+    alignItems: 'center' } as ViewStyle,
   input: {
     flex: 1,
     width: '100%',
@@ -220,6 +215,4 @@ const styles = StyleSheet.create({
     margin: 0,
     backgroundColor: 'transparent',
     borderWidth: 0,
-    flexWrap: 'wrap',
-  } as TextStyle,
-});
+    flexWrap: 'wrap' } as TextStyle });

@@ -4,12 +4,13 @@ import {
   getSuggestedBidDisplayAmount,
   sanitizeDecimalInput,
 } from './currencyAuthoringFlows';
-import type { SupportedCurrencyCode } from '../constants/currencies';
-import type { GoldRates } from './currency';
+import { CURRENCIES, type SupportedCurrencyCode } from '../constants/currencies';
+import type { FxRates } from './currency';
+import type { AuctionEffectiveState } from '../hooks/useServerClock';
 
 // ── Types ──
 
-export type BidSheetStage = 'entry' | 'review' | 'submitting' | 'success' | 'recoverable_conflict' | 'error';
+export type BidSheetStage = 'entry' | 'review' | 'submitting' | 'success' | 'recoverable_conflict' | 'error' | 'unknown_outcome';
 
 export interface BidSheetState {
   stage: BidSheetStage;
@@ -54,7 +55,7 @@ export interface TransactionError {
 export interface BidValidationContext {
   minimumNextBidGbp: number;
   isSeller: boolean;
-  effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+  effectiveState: AuctionEffectiveState;
   isSubmitting: boolean;
 }
 
@@ -67,7 +68,7 @@ export interface BidValidationResult {
 export function validateBidEntry(
   rawInput: string,
   currencyCode: SupportedCurrencyCode,
-  goldRates: Partial<GoldRates>,
+  fxRates: Partial<FxRates>,
   ctx: BidValidationContext,
 ): BidValidationResult {
   if (ctx.isSubmitting) {
@@ -159,7 +160,7 @@ export function validateBidEntry(
     };
   }
 
-  const gbpAmount = convertDisplayToGbpAmount(amount, currencyCode, goldRates);
+  const gbpAmount = convertDisplayToGbpAmount(amount, currencyCode, fxRates);
   if (!Number.isFinite(gbpAmount) || gbpAmount <= 0) {
     return {
       valid: false,
@@ -175,12 +176,13 @@ export function validateBidEntry(
   }
 
   if (gbpAmount < ctx.minimumNextBidGbp) {
+    const minimumDisplay = convertGbpToDisplayAmount(ctx.minimumNextBidGbp, currencyCode, fxRates);
     return {
       valid: false,
       gbpAmount: null,
       error: {
         kind: 'below_minimum',
-        message: `Bid must be at least £${ctx.minimumNextBidGbp.toFixed(2)}.`,
+        message: `Bid must be at least ${CURRENCIES[currencyCode].symbol}${minimumDisplay.toFixed(2)}.`,
         canRetry: true,
         transactionPossible: true,
         isAmbiguous: false,
@@ -202,7 +204,7 @@ export function applyQuickIncrement(
   pct: number,
   fallbackMinimumGbp: number,
   currencyCode: SupportedCurrencyCode = 'GBP',
-  goldRates: Partial<GoldRates> = {},
+  fxRates: Partial<FxRates> = {},
 ): string {
   const base = Number(currentInput);
   if (Number.isFinite(base) && base > 0) {
@@ -211,7 +213,7 @@ export function applyQuickIncrement(
   }
   // Empty/invalid input — convert fallback minimum from GBP to display currency, then apply increment
   // Do NOT use getSuggestedBidDisplayAmount which adds its own 3% step
-  const displayBase = convertGbpToDisplayAmount(fallbackMinimumGbp, currencyCode, goldRates);
+  const displayBase = convertGbpToDisplayAmount(fallbackMinimumGbp, currencyCode, fxRates);
   const nextValue = Number((displayBase * (1 + pct)).toFixed(2));
   return nextValue.toFixed(2);
 }
@@ -232,6 +234,8 @@ export function mapApiErrorToTransactionError(
   parsedMessage: string,
   isNetworkError: boolean,
   structuredDetails?: AuctionErrorDetails | null,
+  currencyCode: SupportedCurrencyCode = 'GBP',
+  fxRates: Partial<FxRates> = {},
 ): TransactionError {
   // Network/timeout — ambiguous: commit status unknown
   if (isNetworkError) {
@@ -292,10 +296,13 @@ export function mapApiErrorToTransactionError(
     if (parsedMessage.toLowerCase().includes('minimum') || parsedMessage.toLowerCase().includes('at least')) {
       const updatedMin = structuredDetails?.minimumNextBidGbp
         ?? (parsedMessage.match(/£?([\d.]+)/)?.[1] ? Number(parsedMessage.match(/£?([\d.]+)/)![1]) : undefined);
+      const minimumDisplay = updatedMin != null
+        ? convertGbpToDisplayAmount(updatedMin, currencyCode, fxRates)
+        : undefined;
       return {
         kind: 'minimum_changed',
-        message: updatedMin
-          ? `The minimum bid is now £${updatedMin.toFixed(2)}. Review your amount and try again.`
+        message: minimumDisplay != null
+          ? `The minimum bid is now ${CURRENCIES[currencyCode].symbol}${minimumDisplay.toFixed(2)}. Review your amount and try again.`
           : 'The minimum bid has changed. Review your amount and try again.',
         updatedMinimumGbp: updatedMin,
         canRetry: true,
@@ -435,7 +442,7 @@ export function mapApiErrorToTransactionError(
 export interface BuyNowValidationContext {
   buyNowPriceGbp: number | null;
   isSeller: boolean;
-  effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+  effectiveState: AuctionEffectiveState;
   isSubmitting: boolean;
 }
 
@@ -463,18 +470,20 @@ export function formatGbpEquivalent(
 export function getSuggestedBid(
   minimumNextBidGbp: number,
   currencyCode: SupportedCurrencyCode,
-  goldRates: Partial<GoldRates>,
+  fxRates: Partial<FxRates>,
 ): string {
-  const suggested = getSuggestedBidDisplayAmount(minimumNextBidGbp, currencyCode, goldRates);
+  const suggested = getSuggestedBidDisplayAmount(minimumNextBidGbp, currencyCode, fxRates);
   return suggested.toFixed(2);
 }
 
 // ── Lifecycle guard for open sheet ──
 
 export function shouldCloseSheetDueToLifecycle(
-  effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled',
+  effectiveState: AuctionEffectiveState,
 ): boolean {
-  return effectiveState === 'ended' || effectiveState === 'cancelled' || effectiveState === 'settled';
+  return effectiveState === 'ended' || effectiveState === 'cancelled' || effectiveState === 'settled'
+    || effectiveState === 'reserve_not_met' || effectiveState === 'awaiting_payment'
+    || effectiveState === 'payment_expired' || effectiveState === 'second_chance_offered';
 }
 
 // ── Stale state check ──

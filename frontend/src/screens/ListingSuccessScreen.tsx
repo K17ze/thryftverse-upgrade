@@ -7,26 +7,24 @@ import {
   ScrollView,
   Share,
   Platform,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Confetti } from '../components/Confetti';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { CachedImage } from '../components/CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Type, Radius, FontSize, Stroke, Control } from '../theme/designTokens';
+import { Typography, Space, Radius, FontSize, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
-import { PremiumStatusPill } from '../components/ui/PremiumStatusPill';
+import { AppStatusPill } from '../components/ui/AppStatusPill';
 import { fetchListingByIdFromApi } from '../services/listingsApi';
 import { useBackendData } from '../context/BackendDataContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { t } from '../i18n';
 
 
@@ -35,7 +33,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ListingSuccess'>;
 export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
 
@@ -80,7 +78,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
   const listingTitle = backendListing?.title || routeTitle || 'your listing';
   const listingPriceRaw = backendListing?.priceGbp ?? routePrice;
-  const listingPrice = listingPriceRaw != null ? formatFromFiat(listingPriceRaw, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' }) : null;
+  const listingPrice = listingPriceRaw != null ? formatFromFiat(listingPriceRaw, currencyCode, { displayMode: 'fiat' }) : null;
   const listingCategory = backendListing?.category || routeCategory;
   const listingPhoto = backendListing?.imageUrl || routePhoto;
 
@@ -101,8 +99,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
           message:
             Platform.OS === 'android'
               ? `Check out "${listingTitle}" on Thryftverse\n${url}`
-              : `Check out "${listingTitle}" on Thryftverse`,
-        },
+              : `Check out "${listingTitle}" on Thryftverse` },
         { dialogTitle: 'Share listing' }
       );
     } catch {
@@ -132,7 +129,6 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={colors.background}
       />
-      <Confetti />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -140,9 +136,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
       >
         {/* Celebration Header */}
         <View style={styles.heroSection}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="checkmark" size={28} color={colors.brand} aria-hidden={true} />
-          </View>
+          <Ionicons name="checkmark" size={28} color={colors.brand} style={styles.heroIcon} aria-hidden={true} />
           <Text style={styles.heroBigText}>Published</Text>
           <Text style={styles.heroSubText}>
             {isActive ? 'Your item is now live on Thryftverse.' : isPaused ? 'Your listing is paused and hidden from buyers.' : isSold ? 'Your item has been marked as sold.' : 'Your listing has been created.'}
@@ -154,7 +148,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
         {/* Published status */}
         <View style={styles.statusRow}>
-          <PremiumStatusPill tone={statusTone} label={statusLabel} icon="checkmark-circle" />
+          <AppStatusPill variant="block" tone={statusTone} label={statusLabel} icon="checkmark-circle" />
           {listingId ? (
             <Text style={styles.idText} numberOfLines={1}>
               {listingId}
@@ -350,7 +344,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
             <Text style={styles.tipText}>Add clear, well-lit photos from multiple angles</Text>
           </View>
           <View style={styles.tipRow}>
-            <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+            <Ionicons name="cash-outline" size={12} color={colors.textMuted} aria-hidden={true} />
             <Text style={styles.tipText}>Price competitively — check similar sold items</Text>
           </View>
           <View style={styles.tipRow}>
@@ -394,47 +388,35 @@ function createStyles(colors: ThemeColors) {
 
   heroSection: {
     alignItems: 'center',
-    marginBottom: Space.xl,
-  },
-  iconCircle: {
-    width: Space.xxl + Space.xxl + Space.xs,
-    height: Space.xxl + Space.xxl + Space.xs,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.xl },
+  heroIcon: {
+    marginBottom: Space.md },
   heroBigText: {
     fontSize: FontSize.hero,
     lineHeight: FontSize.hero + 4,
     fontFamily: Typography.family.bold,
     color: colors.textPrimary,
     letterSpacing: -2.2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   heroSubText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight },
   heroMicroCopy: {
     marginTop: Space.sm,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight },
 
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Space.lg,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -444,24 +426,21 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.successBorder,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   statusText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.success,
     textTransform: 'uppercase',
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   idText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     flexShrink: 1,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   summaryCard: {
     flexDirection: 'row',
@@ -469,8 +448,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xl,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
-    marginBottom: Space.xl,
-  },
+    marginBottom: Space.xl },
   summaryImageWrap: {
     width: Space.xxl + Space.xxl,
     height: Space.xxl + Space.xxl + Space.sm,
@@ -480,42 +458,35 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   summaryImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   summaryImageFallback: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   summaryBody: {
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   summaryLabel: {
     color: colors.textMuted,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
-    letterSpacing: Type.meta.letterSpacing,
-    lineHeight: Type.meta.lineHeight,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   summaryTitle: {
     marginTop: Space.xs,
     color: colors.textPrimary,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily },
   summaryMeta: {
     marginTop: Space.xs,
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   actionRowBtn: {
     flexDirection: 'row',
@@ -524,84 +495,71 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.md,
     borderBottomWidth: Stroke.standard,
     borderBottomColor: colors.border,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   actionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   actionIconBox: {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   actionText: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
 
   tipsCard: {
     marginBottom: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    backgroundColor: `${colors.brand}08`,
+    backgroundColor: colors.brandSubtle,
     borderRadius: Radius.md,
     borderWidth: Stroke.hairline,
-    borderColor: `${colors.brand}20`,
-    gap: Space.sm,
-  },
+    borderColor: colors.brandBorder,
+    gap: Space.sm },
   tipsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   tipsTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   tipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   tipText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.lineHeight + Space.xs / 2,
-  },
+    lineHeight: TypographyV2.meta.lineHeight + Space.xs / 2 },
 
   smartSellBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
     marginBottom: Space.md,
-    padding: Space.md,
-  },
+    padding: Space.md },
   smartSellBannerBody: {
-    flex: 1,
-  },
+    flex: 1 },
   smartSellBannerTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    marginBottom: Space.xs / 2,
-  },
+    marginBottom: Space.xs / 2 },
   smartSellBannerText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
 
   supportLink: {
     marginTop: Space.lg,
@@ -609,14 +567,11 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   supportLinkText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
-  });
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing } });
 }

@@ -7,15 +7,15 @@ import {
   NativeScrollEvent,
   ScrollView,
   Pressable,
-  Text,
-} from 'react-native';
+  Text } from 'react-native';
 import {
-  useSharedValue,
-} from 'react-native-reanimated';
+  useSharedValue } from 'react-native-reanimated';
 import { useNavigation, useScrollToTop } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily } from '../../theme/designTokens';
+import { useTaxonomy } from '../../context/TaxonomyContext';
+import { Space, Radius, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { RefreshIndicator } from '../../components/RefreshIndicator';
 import { EmptyState } from '../../components/EmptyState';
 import { OfflineBanner } from '../../components/OfflineBanner';
@@ -29,55 +29,25 @@ import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
 import { fetchPosterStories, type PosterStory } from '../../services/postersApi';
 import { fetchPublicMoodboards, type Moodboard } from '../../services/moodboardApi';
 import type { RootStackParamList } from '../../navigation/types';
+import { useReadiness } from '../../performance/visuallyComplete';
+import { useA11yAudit } from '../../hooks/useA11yAudit';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const DISCOVER_NUM_COLUMNS = 2;
 type DiscoverNavigation = NativeStackNavigationProp<RootStackParamList>;
-
-/**
- * Category pill bar categories. Selecting a pill filters the feed client-side
- * by matching the listing's `category` / `subcategory` against a keyword.
- * "All" is the default active category and shows every listing.
- */
-const DISCOVER_CATEGORIES = [
-  'All',
-  'Clothing',
-  'Shoes',
-  'Bags',
-  'Accessories',
-  'Jewelry',
-  'Home',
-  'Art',
-] as const;
-
-/**
- * Maps a discover category pill to a predicate that tests whether a listing
- * belongs to that category. The listing's `subcategory` ID (e.g.
- * `women-clothing`, `men-shoes`, `designer-jewellery`, `hob-arts`) carries
- * the granular type; `category` is the top-level ID (`home`, `women`, …).
- *
- * Matching is keyword-based on the subcategory so that items across all
- * top-level groups (Women, Men, Designer, Kids) are included — e.g. tapping
- * "Clothing" surfaces `women-clothing`, `men-clothing`, `designer-clothing`,
- * and `kids-clothing` alike.
- */
-const CATEGORY_FILTERS: Record<string, (listing: Listing) => boolean> = {
-  Clothing: (l) => !!l.subcategory && l.subcategory.includes('clothing'),
-  Shoes: (l) => !!l.subcategory && l.subcategory.includes('shoes'),
-  Bags: (l) => !!l.subcategory && l.subcategory.includes('bags'),
-  Accessories: (l) => !!l.subcategory && l.subcategory.includes('accessories'),
-  // "jewel" catches both the British "jewellery" and American "jewelry" spellings.
-  Jewelry: (l) => !!l.subcategory && l.subcategory.includes('jewel'),
-  Home: (l) => l.category === 'home',
-  // "arts" matches the `hob-arts` (Arts & crafts) subcategory.
-  Art: (l) => !!l.subcategory && l.subcategory.includes('arts'),
-};
 
 // ============================================================================
 // CATEGORY BAR — horizontal scrollable pill bar (filters the feed)
 // ============================================================================
 
+interface DiscoverCategoryOption {
+  id: string;
+  name: string;
+}
+
 interface DiscoverCategoryBarProps {
   activeCategory: string;
+  categories: DiscoverCategoryOption[];
   onSelect: (category: string) => void;
 }
 
@@ -88,11 +58,11 @@ interface DiscoverCategoryBarProps {
  * are transparent with muted text. A hairline bottom border separates the bar
  * from the masonry grid.
  *
- * Selecting a pill filters the feed client-side (see CATEGORY_FILTERS). "All"
- * is the default and shows every listing. The pills are Pressables with
- * accessibility labels and roles.
+ * Selecting a pill filters the feed client-side (see getFilterFn in
+ * DiscoverScene). "All" is the default and shows every listing. The pills
+ * are Pressables with accessibility labels and roles.
  */
-function DiscoverCategoryBar({ activeCategory, onSelect }: DiscoverCategoryBarProps) {
+function DiscoverCategoryBar({ activeCategory, categories, onSelect }: DiscoverCategoryBarProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createCategoryBarStyles(colors), [colors]);
 
@@ -105,19 +75,19 @@ function DiscoverCategoryBar({ activeCategory, onSelect }: DiscoverCategoryBarPr
         accessibilityRole="tablist"
         accessibilityLabel="Discovery categories"
       >
-        {DISCOVER_CATEGORIES.map((category) => {
-          const isActive = category === activeCategory;
+        {categories.map((category, idx) => {
+          const isActive = category.id === activeCategory;
           return (
             <Pressable
-              key={category}
+              key={`cat-${idx}-${category.id}`}
               style={[styles.pill, isActive && styles.pillActive]}
-              onPress={() => onSelect(category)}
+              onPress={() => onSelect(category.id)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
-              accessibilityLabel={`${category} category`}
+              accessibilityLabel={`${category.name} category`}
             >
               <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
-                {category}
+                {category.name}
               </Text>
             </Pressable>
           );
@@ -131,35 +101,34 @@ function createCategoryBarStyles(colors: ThemeColors) {
   return StyleSheet.create({
     bar: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       gap: Space.xs,
       alignItems: 'center',
-    },
+      // Ensure the touch target around the ScrollView row is at least 44pt
+      // (Design.md: 44pt interaction band with 32–36pt visible chrome).
+      minHeight: 44 },
     pill: {
-      paddingVertical: Space.xs + 2,
+      // 36pt visible chrome inside a 44pt interaction band (Design.md).
+      // paddingVertical: Space.sm (8pt) + text line-height yields ~36pt.
+      minHeight: 36,
+      paddingVertical: Space.sm,
       paddingHorizontal: Space.smMd,
       borderRadius: Radius.md,
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     pillActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     pillText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     pillTextActive: {
       fontFamily: FontFamily.bold,
-      color: colors.textPrimary,
-    },
-  });
+      color: colors.textPrimary } });
 }
 
 export interface DiscoverSceneProps {
@@ -209,16 +178,21 @@ export function DiscoverScene({
   onPressItem,
   onBrowseCategories,
   onToggleSave,
-  isSavedListing,
-}: DiscoverSceneProps) {
+  isSavedListing }: DiscoverSceneProps) {
   const { colors } = useAppTheme();
   const { isOffline } = useConnectivity();
+  const { categories: taxonomyCategories } = useTaxonomy();
   const navigation = useNavigation<DiscoverNavigation>();
+  const reducedMotion = useReducedMotion();
   const scrollY = useSharedValue(0);
+  const staticScrollY = useSharedValue(0);
   const scrollRef = useRef<any>(null);
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'DiscoverScene');
+  const reportReady = useReadiness('Discover');
 
   // Active category for the pill bar. Drives client-side filtering of the
-  // feed via CATEGORY_FILTERS. "All" is the default and shows every listing.
+  // feed via getFilterFn. "All" is the default and shows every listing.
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [posters, setPosters] = useState<PosterStory[]>([]);
@@ -262,7 +236,8 @@ export function DiscoverScene({
       && moodboardsResult.status === 'rejected',
     );
     setIsSupplementalLoading(false);
-  }, []);
+    reportReady('data-ready');
+  }, [reportReady]);
 
   useEffect(() => {
     void loadSupplementalContent();
@@ -272,9 +247,58 @@ export function DiscoverScene({
     () =>
       StyleSheet.create({
         container: { flex: 1, backgroundColor: colors.background },
-        stateWrap: { flex: 1 },
-      }),
+        stateWrap: { flex: 1 } }),
     [colors],
+  );
+
+  // Category bar options built from taxonomy root categories, keyed by their
+  // stable taxonomy ID (not display name) so filtering is decoupled from
+  // localization/renaming. "All" is a synthetic option that shows everything.
+  const discoverCategories = useMemo<DiscoverCategoryOption[]>(
+    () => [
+      { id: 'All', name: 'All' },
+      ...taxonomyCategories
+        .filter((c) => c.parentId === null)
+        .map((c) => ({ id: c.id, name: c.name })),
+    ],
+    [taxonomyCategories],
+  );
+
+  // Map each root/ancestor category ID to the set of all descendant IDs, so
+  // the filter can match listings whose `category` is the selected root or
+  // any node beneath it in the taxonomy parent chain.
+  const descendantMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const cat of taxonomyCategories) {
+      let parentId = cat.parentId;
+      while (parentId) {
+        if (!map.has(parentId)) map.set(parentId, new Set());
+        map.get(parentId)!.add(cat.id);
+        const parent = taxonomyCategories.find((c) => c.id === parentId);
+        parentId = parent?.parentId ?? null;
+      }
+    }
+    return map;
+  }, [taxonomyCategories]);
+
+  // Build a filter predicate from a taxonomy category ID. Returns null for
+  // "All" (no filtering). Matches listings whose `category` equals the
+  // selected root ID or is a descendant of it; also falls back to matching
+  // the listing's `subcategory` string against descendant IDs for listings
+  // that carry subcategory text instead of a taxonomy category ID.
+  const getFilterFn = useCallback(
+    (categoryId: string): ((listing: Listing) => boolean) | null => {
+      if (categoryId === 'All') return null;
+      const descendants = descendantMap.get(categoryId);
+      const descendantList = descendants ? [...descendants] : [];
+      return (l: Listing) => {
+        if (l.category === categoryId) return true;
+        if (descendants && descendants.has(l.category)) return true;
+        if (l.subcategory && descendantList.some((d) => l.subcategory!.includes(d))) return true;
+        return false;
+      };
+    },
+    [descendantMap],
   );
 
   // Personalised listings: use the For You feed when it has results and the
@@ -288,14 +312,14 @@ export function DiscoverScene({
   }, [listings, activeCategory, forYouFeed.listings]);
 
   // Filter listings by the active category pill. "All" passes everything
-  // through; any other pill applies the matching predicate from
-  // CATEGORY_FILTERS. The filtered set is then assembled into heterogeneous
+  // through; any other pill applies the predicate built from the taxonomy
+  // via getFilterFn. The filtered set is then assembled into heterogeneous
   // feed units so the grid stays a pure function of DiscoveryFeedUnit[].
   const filteredListings = useMemo(() => {
     if (activeCategory === 'All') return personalisedListings;
-    const filterFn = CATEGORY_FILTERS[activeCategory];
+    const filterFn = getFilterFn(activeCategory);
     return filterFn ? personalisedListings.filter(filterFn) : personalisedListings;
-  }, [personalisedListings, activeCategory]);
+  }, [personalisedListings, activeCategory, getFilterFn]);
 
   // Assemble the heterogeneous feed units from the filtered listings. This is the
   // single place where Discover's feed rhythm + span decisions are made, so
@@ -311,6 +335,12 @@ export function DiscoverScene({
     ),
     [activeCategory, filteredListings, looks, moodboards, posters],
   );
+
+  useEffect(() => {
+    if (units.length > 0 && !isSupplementalLoading) {
+      reportReady('interaction-ready');
+    }
+  }, [units.length, isSupplementalLoading, reportReady]);
 
   // Plain JS scroll handler drives the RefreshIndicator's shared scrollY
   // value from the FlashList's own scrolling — no enclosing ScrollView.
@@ -345,6 +375,26 @@ export function DiscoverScene({
       />
     ),
     [handleRefresh, refreshing],
+  );
+
+  // ── Stable navigation callbacks ──
+  // These are passed to PinterestMasonryGrid which includes them in its
+  // renderItem useCallback deps. Inline arrows would create new identities
+  // every render, invalidating the memoized renderItem and destabilizing
+  // FlashList cell recycling.
+  const handleLookPress = useCallback(
+    (lookId: string) => navigation.navigate('MainTabs', {
+      screen: 'Home',
+      params: { screen: 'LookDetail', params: { lookId } } }),
+    [navigation],
+  );
+  const handlePosterPress = useCallback(
+    (storyId: string) => navigation.navigate('PosterViewer', { storyId }),
+    [navigation],
+  );
+  const handleMoodboardPress = useCallback(
+    (moodboardId: string) => navigation.navigate('MoodboardEditor', { moodboardId }),
+    [navigation],
   );
 
   const hasSupplementalContent = looks.length > 0 || posters.length > 0 || moodboards.length > 0;
@@ -384,12 +434,13 @@ export function DiscoverScene({
       <>
         <DiscoverCategoryBar
           activeCategory={activeCategory}
+          categories={discoverCategories}
           onSelect={setActiveCategory}
         />
         {isOffline && <OfflineBanner />}
       </>
     ),
-    [activeCategory, isOffline],
+    [activeCategory, discoverCategories, isOffline],
   );
 
   // Error and empty states are authored here (with recovery CTAs) and render
@@ -416,7 +467,7 @@ export function DiscoverScene({
       <View style={[styles.container, styles.stateWrap]}>
         <EmptyState
           density="compact"
-          icon="compass-outline"
+          icon="search-outline"
           title="Nothing to explore yet"
           subtitle="New items are uploaded every day. Check back soon or browse categories."
           ctaLabel="Browse Categories"
@@ -427,16 +478,19 @@ export function DiscoverScene({
   }
 
   if (showFilteredEmpty) {
+    const activeCategoryName =
+      discoverCategories.find((c) => c.id === activeCategory)?.name ?? activeCategory;
     return (
       <View style={[styles.container, styles.stateWrap]}>
         <DiscoverCategoryBar
           activeCategory={activeCategory}
+          categories={discoverCategories}
           onSelect={setActiveCategory}
         />
         <EmptyState
           density="compact"
-          icon="pricetags-outline"
-          title={`No ${activeCategory.toLowerCase()} items yet`}
+          icon="bag-handle-outline"
+          title={`No ${activeCategoryName.toLowerCase()} items yet`}
           subtitle="Try another category or check back soon."
           ctaLabel="Show all"
           onCtaPress={() => setActiveCategory('All')}
@@ -449,19 +503,16 @@ export function DiscoverScene({
   // The RefreshIndicator is positioned absolutely over the grid and reads
   // the shared scrollY driven by the animated scroll handler above.
   return (
-    <View style={styles.container}>
-      <RefreshIndicator scrollY={scrollY} isRefreshing={refreshing} topInset={20} />
+    <View ref={a11yRef} style={styles.container}>
+      <RefreshIndicator scrollY={reducedMotion ? staticScrollY : scrollY} isRefreshing={refreshing} topInset={20} />
       <PinterestMasonryGrid
         items={units}
         onItemPress={onPressItem}
         onItemSaveToggle={onToggleSave}
         isItemSaved={isSavedListing}
-        onLookPress={(lookId) => navigation.navigate('MainTabs', {
-          screen: 'Home',
-          params: { screen: 'LookDetail', params: { lookId } },
-        })}
-        onPosterPress={(storyId) => navigation.navigate('PosterViewer', { storyId })}
-        onMoodboardPress={(moodboardId) => navigation.navigate('MoodboardEditor', { moodboardId })}
+        onLookPress={handleLookPress}
+        onPosterPress={handlePosterPress}
+        onMoodboardPress={handleMoodboardPress}
         onEndReached={onLoadMore}
         isLoading={showLoadingSkeleton}
         isLoadingMore={isLoadingMore}

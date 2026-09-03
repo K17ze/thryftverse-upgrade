@@ -13,6 +13,8 @@
  *     `spring` is reserved for spatial continuity (position/scale).
  */
 
+import { Easing, type EasingFunction } from 'react-native-reanimated';
+
 export type KeyframeProperty = 'position' | 'scale' | 'rotation' | 'opacity';
 
 export type KeyframeEasing = 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'spring';
@@ -61,3 +63,24 @@ export const KEYFRAME_EASING_LABELS: Record<KeyframeEasing, string> = {
   'ease-in-out': 'Ease In Out',
   spring: 'Spring',
 };
+
+/**
+ * Map a keyframe easing to its Reanimated easing function for withTiming.
+ * Returns null for 'spring' — callers drive that case with
+ * withSpring(value, Motion.spring.settle) instead.
+ */
+export function keyframeEasingToReanimated(easing: KeyframeEasing): EasingFunction | null {
+  switch (easing) {
+    case 'linear':
+      return Easing.linear;
+    case 'ease-in':
+      return Easing.in(Easing.quad);
+    case 'ease-out':
+      return Easing.out(Easing.quad);
+    case 'ease-in-out':
+      return Easing.inOut(Easing.quad);
+    case 'spring':
+    default:
+      return null;
+  }
+}

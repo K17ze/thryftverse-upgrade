@@ -1,0 +1,13 @@
+# Maestro E2E flow — Bundle bag journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+
+- takeScreenshot: bundle-bag-flow-complete

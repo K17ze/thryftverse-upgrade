@@ -4,9 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Dimensions,
-  Platform,
-} from 'react-native';
+  useWindowDimensions,
+  Platform } from 'react-native';
 import Reanimated, { FadeInRight, FadeInLeft } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -14,15 +13,15 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Type, Space, Radius, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-
-const { width: SCREEN_W } = Dimensions.get('window');
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -46,14 +45,7 @@ const STYLE_OPTIONS: QuizOption[] = [
   { label: 'Vintage', value: 'Vintage', icon: 'time-outline' },
   { label: 'Gorpcore', value: 'Gorpcore', icon: 'leaf-outline' },
   { label: 'Archive', value: 'Archive', icon: 'archive-outline' },
-  { label: 'Techwear', value: 'Techwear', icon: 'hardware-chip-outline' },
-];
-
-const PRICE_OPTIONS: QuizOption[] = [
-  { label: 'Under £50', value: 'budget' },
-  { label: '£50 – £150', value: 'mid' },
-  { label: '£150 – £300', value: 'premium' },
-  { label: '£300+', value: 'luxury' },
+  { label: 'Techwear', value: 'Techwear', icon: 'shirt-outline' },
 ];
 
 export default function StyleQuizScreen() {
@@ -63,7 +55,16 @@ export default function StyleQuizScreen() {
   const reducedMotion = useReducedMotion();
   const updatePersonalisation = useStore((state) => state.updatePersonalisationPreferences);
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const { currencySymbol } = useFormattedPrice();
+  const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
+
+  const PRICE_OPTIONS = useMemo<QuizOption[]>(() => [
+    { label: `Under ${currencySymbol}50`, value: 'budget' },
+    { label: `${currencySymbol}50 – ${currencySymbol}150`, value: 'mid' },
+    { label: `${currencySymbol}150 – ${currencySymbol}300`, value: 'premium' },
+    { label: `${currencySymbol}300+`, value: 'luxury' },
+  ], [currencySymbol]);
 
   const [step, setStep] = useState<Step>(0);
   const [selectedGender, setSelectedGender] = useState<string>('');
@@ -108,8 +109,7 @@ export default function StyleQuizScreen() {
     updatePersonalisation({
       genderFilter,
       categoriesAndSizesPref: selectedStyles.length > 0 ? selectedStyles.join(', ') : 'Balanced',
-      brandsPref: selectedPrice ? selectedPrice : 'Any',
-    });
+      brandsPref: selectedPrice ? selectedPrice : 'Any' });
     show('Saved to your style profile', 'success');
     navigation.navigate('MainTabs', { screen: 'Home' });
   };
@@ -236,7 +236,8 @@ export default function StyleQuizScreen() {
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   return (
     <View style={styles.summaryRow}>
       <Text style={styles.summaryLabel}>{label}</Text>
@@ -245,64 +246,54 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
   scrollContent: { paddingHorizontal: Space.md, paddingTop: Space.lg, paddingBottom: Space.xl },
   progressWrap: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   progressTrack: {
     height: Space.xs,
     borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   progressFill: {
     height: '100%',
     backgroundColor: colors.textPrimary,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   progressHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   progressText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   skipText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand },
   stepContent: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   stepTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   stepSub: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.body.letterSpacing,
-    marginBottom: Space.md,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    marginBottom: Space.md },
   optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   optionCard: {
-    width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
+    width: (screenWidth - Space.md * 2 - Space.sm) / 2,
     aspectRatio: 1.2,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
@@ -310,25 +301,20 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   optionCardActive: {
     backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
-  },
+    borderColor: colors.textPrimary },
   optionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   optionLabelActive: {
-    color: colors.background,
-  },
+    color: colors.background },
   optionsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -338,23 +324,18 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   pillActive: {
     backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
-  },
+    borderColor: colors.textPrimary },
   pillLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   pillLabelActive: {
-    color: colors.background,
-  },
+    color: colors.background },
   optionsColumn: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   rowOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -364,24 +345,19 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   rowOptionActive: {
     backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
-  },
+    borderColor: colors.textPrimary },
   rowOptionLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   rowOptionLabelActive: {
-    color: colors.background,
-  },
+    color: colors.background },
   completeIconWrap: {
     alignItems: 'center',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   summaryCard: {
     marginTop: Space.md,
     backgroundColor: colors.surface,
@@ -389,29 +365,23 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     padding: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   summaryLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   summaryValue: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
     flex: 1,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   footer: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
-  },
-  });
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24 } });
 }

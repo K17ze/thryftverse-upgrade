@@ -92,7 +92,7 @@ interface ReturnRouteDependencies {
   app: FastifyInstance;
   db: Pool;
   resolveAuthenticatedUserId: (request: FastifyRequest) => string | null;
-  ensureUserExists: (client: PoolClient, userId: string) => Promise<void>;
+  ensureUserExists: (userId: string) => Promise<void>;
 }
 
 // ── Helpers ──
@@ -219,7 +219,7 @@ export function registerReturnRoutes({
     try {
       await client.query('BEGIN');
 
-      await ensureUserExists(client, authUserId);
+      await ensureUserExists(authUserId);
 
       // Lock the order row and fetch details needed for basis determination.
       const orderResult = await client.query<{

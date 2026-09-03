@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface Props {
   title: string;
@@ -20,8 +21,7 @@ export function OrderDetailSummary({
   subtitle,
   priceLabel,
   listingAvailable,
-  onPress,
-}: Props) {
+  onPress }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -64,44 +64,35 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   image: {
     width: 96,
     height: 120,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   info: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   title: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   price: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   unavailableRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   unavailableText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted } });

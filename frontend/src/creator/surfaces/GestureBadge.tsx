@@ -20,11 +20,11 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
-  type SharedValue,
-} from 'react-native-reanimated';
-import { Space, Radius, FontFamily, Type } from '../../theme/designTokens';
+  type SharedValue } from 'react-native-reanimated';
+import { Space, Radius, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { Motion } from '../../theme/motionTokens';
 
 export interface GestureBadgeProps {
@@ -40,17 +40,13 @@ export interface GestureBadgeProps {
   offsetY?: number;
 }
 
-// Semi-transparent dark pill — readable over any content (Instagram pattern).
-const PILL_FILL = 'rgba(0,0,0,0.62)';
-const PILL_TEXT = '#FFFFFF';
-
 export function GestureBadge({
   badgeText,
   positionXSv,
   positionYSv,
-  offsetY = 60,
-}: GestureBadgeProps) {
+  offsetY = 60 }: GestureBadgeProps) {
   const reducedMotion = useReducedMotion();
+  const { colors } = useAppTheme();
   const opacitySV = useSharedValue(0);
   const scaleSV = useSharedValue(reducedMotion ? 1 : 0.85);
   // Hold the last text so it remains visible during the fade-out when
@@ -66,9 +62,8 @@ export function GestureBadge({
       } else {
         opacitySV.value = withTiming(1, {
           duration: Motion.duration.fast,
-          easing: Easing.out(Easing.cubic),
-        });
-        scaleSV.value = withSpring(1, { damping: 16, stiffness: 200 });
+          easing: Motion.easing.entrance });
+        scaleSV.value = withSpring(1, Motion.spring.layerLift);
       }
     } else {
       // Fade out — displayText retains the last value for the exit.
@@ -77,9 +72,8 @@ export function GestureBadge({
       } else {
         opacitySV.value = withTiming(0, {
           duration: Motion.duration.fast,
-          easing: Easing.in(Easing.cubic),
-        });
-        scaleSV.value = withSpring(0.85, { damping: 16, stiffness: 200 });
+          easing: Motion.easing.exit });
+        scaleSV.value = withSpring(0.85, Motion.spring.layerLift);
       }
     }
   }, [badgeText, reducedMotion, opacitySV, scaleSV]);
@@ -90,8 +84,7 @@ export function GestureBadge({
     left: positionXSv.value,
     top: positionYSv.value - offsetY,
     opacity: opacitySV.value,
-    transform: [{ scale: scaleSV.value }],
-  }));
+    transform: [{ scale: scaleSV.value }] }));
 
   return (
     <Reanimated.View
@@ -99,9 +92,10 @@ export function GestureBadge({
       pointerEvents="none"
       accessibilityLabel={badgeText ? `Transform ${badgeText}` : undefined}
       accessibilityRole="text"
+      accessibilityLiveRegion="polite"
     >
-      <View style={styles.pill}>
-        <Text style={styles.text} numberOfLines={1}>
+      <View style={[styles.pill, { backgroundColor: colors.mediaOverlayScrim }]}>
+        <Text style={[styles.text, { color: colors.scrimTextPrimary }]} numberOfLines={1}>
           {displayText}
         </Text>
       </View>
@@ -117,24 +111,13 @@ const styles = StyleSheet.create({
     width: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 50,
-  },
+    zIndex: 50 },
   pill: {
-    backgroundColor: PILL_FILL,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
-  },
+    paddingVertical: Space.xs },
   text: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    color: PILL_TEXT,
-    letterSpacing: 0.3,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: 0.3 } });

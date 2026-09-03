@@ -3,11 +3,11 @@ import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-n
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
-import { Radius, Space, Type, Typography } from '../../theme/designTokens';
+import { Radius, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 export interface AppSegmentOption<T extends string> {
@@ -38,8 +38,7 @@ export function AppSegmentControl<T extends string>({
   optionActiveStyle,
   optionTextStyle,
   optionTextActiveStyle,
-  fullWidth = false,
-}: AppSegmentControlProps<T>) {
+  fullWidth = false }: AppSegmentControlProps<T>) {
   const { colors } = useAppTheme();
   const { spring } = useMotionConfig();
   const indicatorX = useSharedValue(0);
@@ -57,8 +56,7 @@ export function AppSegmentControl<T extends string>({
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorX.value }],
-    width: indicatorWidth.value,
-  }));
+    width: indicatorWidth.value }));
 
   return (
     <View
@@ -86,8 +84,7 @@ export function AppSegmentControl<T extends string>({
             onLayout={(e) => {
               optionLayouts.current[index] = {
                 x: e.nativeEvent.layout.x,
-                width: e.nativeEvent.layout.width,
-              };
+                width: e.nativeEvent.layout.width };
               // Set initial indicator position without animation on first layout
               if (isActive && indicatorWidth.value === 0) {
                 indicatorX.value = e.nativeEvent.layout.x;
@@ -139,15 +136,13 @@ const styles = StyleSheet.create({
     gap: 2,
     padding: 3,
     borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   indicator: {
     position: 'absolute',
     top: 3,
     bottom: 3,
     left: 0,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   option: {
     minHeight: 44,
     borderRadius: Radius.sm,
@@ -156,14 +151,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   optionFull: {
-    flex: 1,
-  },
+    flex: 1 },
   optionText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily } });

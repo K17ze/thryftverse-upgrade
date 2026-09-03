@@ -11,8 +11,9 @@ interface RefundRouteDependencies {
     client: PoolClient,
     orderId: string,
     initiatorId: string,
-    amountGbp: number
-  ) => Promise<void>;
+    amountGbp: number,
+    refundRef?: string
+  ) => Promise<{ reversed: boolean; alreadyReversed: boolean }>;
 }
 
 const MAKER_CHECK_THRESHOLD_GBP = 100;

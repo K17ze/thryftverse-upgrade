@@ -2,8 +2,7 @@ import React, { useMemo, useCallback } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -13,10 +12,8 @@ import {
   Space,
   Radius,
   Stroke,
-  Typography,
-  Type,
-  Control,
-} from '../../theme/designTokens';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export type TrendDirection = 'up' | 'down' | 'new' | 'stable';
 
@@ -36,29 +33,25 @@ export interface TrendingSearchesProps {
 const TREND_ICON: Record<TrendDirection, keyof typeof Ionicons.glyphMap> = {
   up: 'trending-up',
   down: 'trending-down',
-  new: 'flash-outline',
-  stable: 'remove',
-};
+  new: 'trending-up-outline',
+  stable: 'remove' };
 
-const TREND_COLOR_KEY: Record<TrendDirection, keyof ThemeColors> = {
+const TREND_COLOR_KEY: Record<TrendDirection, Exclude<keyof ThemeColors, 'outfitBackgrounds'>> = {
   up: 'success',
   down: 'danger',
   new: 'brand',
-  stable: 'textMuted',
-};
+  stable: 'textMuted' };
 
 const TREND_LABEL: Record<TrendDirection, string> = {
   up: 'Rising',
   down: 'Falling',
   new: 'New',
-  stable: 'Steady',
-};
+  stable: 'Steady' };
 
 export function TrendingSearches({
   items,
   onSelect,
-  groupByCategory = false,
-}: TrendingSearchesProps) {
+  groupByCategory = false }: TrendingSearchesProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -131,19 +124,16 @@ export function TrendingSearches({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     categoryGroup: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     categoryHeader: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       letterSpacing: 0.5,
       textTransform: 'uppercase',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -151,30 +141,24 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
       minHeight: Control.hit,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.borderSubtle,
-    },
+      borderTopColor: colors.borderSubtle },
     rankText: {
       width: Control.chrome,
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textMuted,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     termText: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     trendBadge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     trendLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: 0.15,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: 0.15 } });
 }

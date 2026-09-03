@@ -4,40 +4,42 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { ActionSheet } from '../components/sheets/ActionSheet';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 import {
   addConversationMembersOnApi,
+  fetchGroupSettingsFromApi,
   removeConversationMemberOnApi,
   leaveGroupOnApi,
   promoteConversationMemberOnApi,
   demoteConversationMemberOnApi,
-  transferConversationOwnershipOnApi,
-} from '../services/chatApi';
+  transferConversationOwnershipOnApi } from '../services/chatApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
+import { useChatGroupMembershipEvent } from '../services/realtimeClient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupMembers'>;
 
 type MemberRole = 'owner' | 'admin' | 'member';
 
 export default function GroupMembersScreen({ navigation, route }: Props) {
-  const { conversationId } = route.params;
+  const { conversationId } = route.params ?? {};
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
@@ -47,10 +49,28 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
+  const reconcileGroupMembershipEvent = useStore((state) => state.reconcileGroupMembershipEvent);
+
+  useChatGroupMembershipEvent(conversationId, (event) => {
+    const removedUserId = event.type === 'chat.member.removed'
+      ? event.payload.memberUserId
+      : event.type === 'chat.member.left'
+        ? event.payload.actorUserId
+        : null;
+    reconcileGroupMembershipEvent(event);
+    if (removedUserId && removedUserId === currentUser?.id) {
+      deleteConversation(conversationId);
+      navigation.reset({ index: 0, routes: [{ name: 'MainTabs', params: { screen: 'Inbox' } }] });
+    }
+  });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [memberActionMenu, setMemberActionMenu] = useState<{
+    member: { id: string; name: string; role: MemberRole };
+    actions: Array<{ label: string; destructive?: boolean; onPress: () => void }>;
+  } | null>(null);
 
   // Add-members flow state
   const [showAddMembers, setShowAddMembers] = useState(false);
@@ -61,6 +81,14 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   const [searchError, setSearchError] = useState('');
   const [selectedToAdd, setSelectedToAdd] = useState<Set<string>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => void;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const conversation = useMemo(
@@ -91,6 +119,27 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   }, [conversation, currentUser?.id]);
 
   const canManage = currentRole === 'owner' || currentRole === 'admin';
+  const [canAddMembers, setCanAddMembers] = useState(canManage);
+
+  useEffect(() => {
+    let active = true;
+    if (canManage) {
+      setCanAddMembers(true);
+      return () => {
+        active = false;
+      };
+    }
+    fetchGroupSettingsFromApi(conversationId)
+      .then((snapshot) => {
+        if (active) setCanAddMembers(snapshot.capabilities.canAddMembers);
+      })
+      .catch(() => {
+        if (active) setCanAddMembers(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [canManage, conversationId]);
 
   // Determine roles from memberRoles / ownerId
   const members = useMemo(() => {
@@ -111,8 +160,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         id,
         name,
         isMe: id === currentUser?.id,
-        role,
-      };
+        role };
     });
   }, [conversation, currentUser?.id, participantNameLookup]);
 
@@ -184,8 +232,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
       const result = await addConversationMembersOnApi(conversationId, Array.from(selectedToAdd));
       upsertConversation({
         ...conversation!,
-        participantIds: result.participantIds,
-      });
+        participantIds: result.participantIds });
       show(`${selectedToAdd.size} member${selectedToAdd.size === 1 ? '' : 's'} added`, 'success');
       setSelectedToAdd(new Set());
       setAddQuery('');
@@ -200,207 +247,162 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   };
 
   const handleRemoveMember = (memberId: string, memberName: string) => {
-    Alert.alert(
-      'Remove member?',
-      `Remove ${memberName} from this group?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setRemovingId(memberId);
-            try {
-              const result = await removeConversationMemberOnApi(conversationId, memberId);
-              upsertConversation({
-                ...conversation!,
-                participantIds: result.participantIds,
-              });
-              show('Member removed', 'info');
-            } catch (err) {
-              show(parseApiError(err, 'Could not remove member. Try again.').message, 'error');
-            } finally {
-              setRemovingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove member?',
+      message: `Remove ${memberName} from this group?`,
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setRemovingId(memberId);
+        try {
+          const result = await removeConversationMemberOnApi(conversationId, memberId);
+          upsertConversation({
+            ...conversation!,
+            participantIds: result.participantIds });
+          show('Member removed', 'info');
+        } catch (err) {
+          show(parseApiError(err, 'Could not remove member. Try again.').message, 'error');
+        } finally {
+          setRemovingId(null);
+        }
+      } });
   };
 
   const handlePromoteMember = (memberId: string, memberName: string) => {
-    Alert.alert(
-      'Promote to admin?',
-      `${memberName} will be able to manage members, edit group info, and remove others.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Promote',
-          onPress: async () => {
-            haptic.medium();
-            setRemovingId(memberId);
-            try {
-              const result = await promoteConversationMemberOnApi(conversationId, memberId);
-              upsertConversation({
-                ...conversation!,
-                memberRoles: Object.fromEntries(
-                  Object.entries(result.memberRoles).filter(
-                    (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
-                      entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
-                  ),
-                ) as Record<string, 'owner' | 'admin' | 'member'>,
-              });
-              show(`${memberName} is now an admin.`, 'success');
-            } catch (err) {
-              show(parseApiError(err, 'Could not promote member.').message, 'error');
-            } finally {
-              setRemovingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Promote to admin?',
+      message: `${memberName} will be able to manage members, edit group info, and remove others.`,
+      confirmLabel: 'Promote',
+      variant: 'default',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.medium();
+        setRemovingId(memberId);
+        try {
+          const result = await promoteConversationMemberOnApi(conversationId, memberId);
+          upsertConversation({
+            ...conversation!,
+            memberRoles: Object.fromEntries(
+              Object.entries(result.memberRoles).filter(
+                (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
+                  entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
+              ),
+            ) as Record<string, 'owner' | 'admin' | 'member'> });
+          show(`${memberName} is now an admin.`, 'success');
+        } catch (err) {
+          show(parseApiError(err, 'Could not promote member.').message, 'error');
+        } finally {
+          setRemovingId(null);
+        }
+      } });
   };
 
   const handleDemoteMember = (memberId: string, memberName: string) => {
-    Alert.alert(
-      'Demote admin?',
-      `${memberName} will no longer have admin privileges.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Demote',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.medium();
-            setRemovingId(memberId);
-            try {
-              const result = await demoteConversationMemberOnApi(conversationId, memberId);
-              upsertConversation({
-                ...conversation!,
-                memberRoles: Object.fromEntries(
-                  Object.entries(result.memberRoles).filter(
-                    (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
-                      entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
-                  ),
-                ) as Record<string, 'owner' | 'admin' | 'member'>,
-              });
-              show(`${memberName} is now a member.`, 'info');
-            } catch (err) {
-              show(parseApiError(err, 'Could not demote member.').message, 'error');
-            } finally {
-              setRemovingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Demote admin?',
+      message: `${memberName} will no longer have admin privileges.`,
+      confirmLabel: 'Demote',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.medium();
+        setRemovingId(memberId);
+        try {
+          const result = await demoteConversationMemberOnApi(conversationId, memberId);
+          upsertConversation({
+            ...conversation!,
+            memberRoles: Object.fromEntries(
+              Object.entries(result.memberRoles).filter(
+                (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
+                  entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
+              ),
+            ) as Record<string, 'owner' | 'admin' | 'member'> });
+          show(`${memberName} is now a member.`, 'info');
+        } catch (err) {
+          show(parseApiError(err, 'Could not demote member.').message, 'error');
+        } finally {
+          setRemovingId(null);
+        }
+      } });
   };
 
   const handleTransferOwnership = (memberId: string, memberName: string) => {
-    Alert.alert(
-      'Transfer ownership?',
-      `You will no longer be the owner. ${memberName} will become the new group owner and have full control.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Transfer',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setRemovingId(memberId);
-            try {
-              const result = await transferConversationOwnershipOnApi(conversationId, memberId);
-              upsertConversation({
-                ...conversation!,
-                ownerId: result.ownerId,
-                memberRoles: Object.fromEntries(
-                  Object.entries(result.memberRoles).filter(
-                    (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
-                      entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
-                  ),
-                ) as Record<string, 'owner' | 'admin' | 'member'>,
-              });
-              show(`Ownership transferred to ${memberName}.`, 'success');
-            } catch (err) {
-              show(parseApiError(err, 'Could not transfer ownership.').message, 'error');
-            } finally {
-              setRemovingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Transfer ownership?',
+      message: `You will no longer be the owner. ${memberName} will become the new group owner and have full control.`,
+      confirmLabel: 'Transfer',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setRemovingId(memberId);
+        try {
+          const result = await transferConversationOwnershipOnApi(conversationId, memberId);
+          upsertConversation({
+            ...conversation!,
+            ownerId: result.ownerId,
+            memberRoles: Object.fromEntries(
+              Object.entries(result.memberRoles).filter(
+                (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
+                  entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
+              ),
+            ) as Record<string, 'owner' | 'admin' | 'member'> });
+          show(`Ownership transferred to ${memberName}.`, 'success');
+        } catch (err) {
+          show(parseApiError(err, 'Could not transfer ownership.').message, 'error');
+        } finally {
+          setRemovingId(null);
+        }
+      } });
   };
 
   const handleMemberLongPress = (member: { id: string; name: string; role: MemberRole }) => {
     if (!canManage || member.id === currentUser?.id) return;
     const isOwner = currentUser?.id === conversation?.ownerId;
-    const options: Array<{ text: string; onPress?: () => void; style?: 'destructive' | 'cancel' }> = [
-      { text: 'Cancel', style: 'cancel' },
-    ];
+    const actions: Array<{ label: string; destructive?: boolean; onPress: () => void }> = [];
 
     if (member.role === 'member') {
-      options.unshift({
-        text: 'Promote to admin',
-        onPress: () => handlePromoteMember(member.id, member.name),
-      });
-      options.unshift({
-        text: 'Remove from group',
-        style: 'destructive',
-        onPress: () => handleRemoveMember(member.id, member.name),
-      });
+      actions.push({ label: 'Promote to admin', onPress: () => handlePromoteMember(member.id, member.name) });
     } else if (member.role === 'admin') {
-      options.unshift({
-        text: 'Demote to member',
-        onPress: () => handleDemoteMember(member.id, member.name),
-      });
-      options.unshift({
-        text: 'Remove from group',
-        style: 'destructive',
-        onPress: () => handleRemoveMember(member.id, member.name),
-      });
+      actions.push({ label: 'Demote to member', onPress: () => handleDemoteMember(member.id, member.name) });
     }
+    actions.push({ label: 'Remove from group', destructive: true, onPress: () => handleRemoveMember(member.id, member.name) });
 
     // Only owner can transfer ownership
     if (isOwner && member.id !== currentUser?.id) {
-      options.unshift({
-        text: 'Transfer ownership',
-        style: 'destructive',
-        onPress: () => handleTransferOwnership(member.id, member.name),
-      });
+      actions.push({ label: 'Transfer ownership', destructive: true, onPress: () => handleTransferOwnership(member.id, member.name) });
     }
-
-    Alert.alert(member.name, undefined, options);
+    setMemberActionMenu({ member, actions });
   };
 
   const handleLeaveGroup = () => {
-    Alert.alert(
-      'Leave group?',
-      'You will be removed from this group on all devices. Other members will keep their copy.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Leave group',
-          style: 'destructive',
-          onPress: async () => {
-            haptic.heavy();
-            setIsLeaving(true);
-            try {
-              await leaveGroupOnApi(conversationId, currentUser?.id ?? '');
-              deleteConversation(conversationId);
-              show('You left the group', 'info');
-              navigation.navigate('MainTabs', { screen: 'Inbox' });
-            } catch (err) {
-              show(parseApiError(err, 'Could not leave group. Try again.').message, 'error');
-            } finally {
-              setIsLeaving(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Leave group?',
+      message: 'You will be removed from this group on all devices. Other members will keep their copy.',
+      confirmLabel: 'Leave group',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.heavy();
+        setIsLeaving(true);
+        try {
+          await leaveGroupOnApi(conversationId, currentUser?.id ?? '');
+          deleteConversation(conversationId);
+          show('You left the group', 'info');
+          navigation.navigate('MainTabs', { screen: 'Inbox' });
+        } catch (err) {
+          show(parseApiError(err, 'Could not leave group. Try again.').message, 'error');
+        } finally {
+          setIsLeaving(false);
+        }
+      } });
   };
 
   if (!conversation || conversation.type !== 'group') {
@@ -415,10 +417,10 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
 
   const roleBadge = (role: MemberRole) => {
     const roleColors = {
-      owner: { bg: `${colors.brand}15`, text: colors.brand },
+      owner: { bg: colors.brandSubtle, text: colors.brand },
+      // TODO: replace `${colors.textPrimary}15` with textPrimarySubtle token when available
       admin: { bg: `${colors.textPrimary}15`, text: colors.textPrimary },
-      member: { bg: colors.surfaceAlt, text: colors.textMuted },
-    };
+      member: { bg: colors.surfaceAlt, text: colors.textMuted } };
     const labels = { owner: 'Owner', admin: 'Admin', member: 'Member' };
     return (
       <View style={[styles.roleBadge, { backgroundColor: roleColors[role].bg }]}>
@@ -441,7 +443,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         />
 
         {/* Add members section */}
-        {canManage && !showAddMembers && (
+        {canAddMembers && !showAddMembers && (
           <AnimatedPressable
             onPress={() => setShowAddMembers(true)}
             activeOpacity={0.7}
@@ -451,7 +453,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
             accessibilityLabel="Add members"
             style={styles.addRow}
           >
-            <View style={[styles.addAvatar, { backgroundColor: `${colors.brand}15` }]}>
+            <View style={[styles.addAvatar, { backgroundColor: colors.brandSubtle }]}>
               <Ionicons name="person-add-outline" size={20} color={colors.brand} />
             </View>
             <BodyEmphasis style={{ color: colors.brand }}>Add members</BodyEmphasis>
@@ -637,6 +639,41 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
           </View>
         )}
       </ScrollView>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'danger'}
+        onConfirm={confirmSheet.onConfirm}
+      />
+      <ActionSheet
+        visible={memberActionMenu !== null}
+        onDismiss={() => setMemberActionMenu(null)}
+      >
+        {memberActionMenu && (
+          <View style={styles.memberActionSheet}>
+            <Text style={styles.memberActionTitle}>{memberActionMenu.member.name}</Text>
+            {memberActionMenu.actions.map((action) => (
+              <Pressable
+                key={action.label}
+                style={({ pressed }) => [styles.memberActionRow, pressed && styles.memberActionRowPressed]}
+                onPress={() => {
+                  setMemberActionMenu(null);
+                  action.onPress();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+              >
+                <Text style={[styles.memberActionLabel, action.destructive && styles.memberActionLabelDanger]}>
+                  {action.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </ActionSheet>
     </FlagshipScreen>
   );
 }
@@ -645,53 +682,44 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   center: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   content: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   listCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   memberAvatar: {
     width: Space.xl + 8,
     height: Space.xl + 8,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   memberAvatarText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   memberText: {
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginLeft: Space.md + 40 + Space.sm,
-  },
+    marginLeft: Space.md + 40 + Space.sm },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -702,28 +730,23 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   searchInput: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   roleBadge: {
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs - 2,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   roleBadgeText: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily },
   emptyWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -732,85 +755,69 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   emptyText: {
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   memberList: {
-    gap: 0,
-  },
+    gap: 0 },
   memberRowV2: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   memberRowContent: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   memberAvatarV2: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   memberAvatarTextV2: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   memberTextV2: {
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   nameRowV2: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   memberDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
     marginLeft: Space.md + 44 + Space.smMd,
-    marginRight: Space.md,
-  },
+    marginRight: Space.md },
   emptyWrapV2: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.xl,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   emptyTextV2: {
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   addRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd,
     paddingHorizontal: Space.md,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   addAvatar: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   addMembersSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   addMembersHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   addSearchRow: {
     flex: 1,
     flexDirection: 'row',
@@ -821,35 +828,28 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   cancelText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand },
   searchingRow: {
     paddingVertical: Space.sm,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   searchStatusText: {
     paddingVertical: Space.sm,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   searchResultList: {
-    gap: 0,
-  },
+    gap: 0 },
   searchResultRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     gap: Space.smMd,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   rowPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   selectCircle: {
     width: 24,
     height: 24,
@@ -857,8 +857,7 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   addConfirmBtn: {
     backgroundColor: colors.brand,
     borderRadius: Radius.lg,
@@ -866,32 +865,46 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: Control.hit,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   addConfirmText: {
     color: colors.surface,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   actionBtn: {
     minWidth: Control.hit,
     minHeight: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   actionPressed: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   removeText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
   leaveText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.danger,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
+  memberActionSheet: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm },
+  memberActionTitle: {
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    color: colors.textPrimary,
+    paddingVertical: Space.smMd },
+  memberActionRow: {
+    minHeight: Control.hit,
+    justifyContent: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border },
+  memberActionRowPressed: {
+    opacity: 0.58 },
+  memberActionLabel: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
+  memberActionLabelDanger: {
+    color: colors.danger } });
 }

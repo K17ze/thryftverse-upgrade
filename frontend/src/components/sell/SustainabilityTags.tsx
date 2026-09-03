@@ -3,9 +3,8 @@
  *
  * Sustainability tags shown where relevant to listing. This selector lets
  * a seller tag a listing with eco-attributes (Pre-loved, Vintage,
- * Sustainable brand, Upcycled, Carbon-neutral shipping, Plastic-free
- * packaging) and surfaces a short "Sustainability impact" summary when
- * tags are active.
+ * Sustainable brand, Upcycled, Plastic-free packaging) and surfaces a
+ * short "Sustainability impact" summary when tags are active.
  *
  * Design (AGENTS.md §4):
  *   - Chip layout with icon + label; selected = filled brand, unselected = outlined.
@@ -28,10 +27,9 @@ import {
   Space,
   Radius,
   Stroke,
-  Type,
-  TypeStyles,
-  Control,
-} from '../../theme/designTokens';
+  FontFamily,
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface SustainabilityTagsProps {
   /** Currently selected sustainability tag ids. */
@@ -54,44 +52,32 @@ const TAG_DEFINITIONS: SustainabilityTagDef[] = [
     id: 'pre-loved',
     label: 'Pre-loved',
     icon: 'repeat-outline',
-    impact: 'Extends the lifecycle of an existing item.',
-  },
+    impact: 'Extends the lifecycle of an existing item.' },
   {
     id: 'vintage',
     label: 'Vintage',
     icon: 'time-outline',
-    impact: '20+ years old — circular fashion at its best.',
-  },
+    impact: '20+ years old — circular fashion at its best.' },
   {
     id: 'sustainable-brand',
     label: 'Sustainable brand',
     icon: 'leaf-outline',
-    impact: 'Brand with documented sustainability practices.',
-  },
+    impact: 'Brand with documented sustainability practices.' },
   {
     id: 'upcycled',
     label: 'Upcycled',
     icon: 'construct-outline',
-    impact: 'Modified from its original form into something new.',
-  },
-  {
-    id: 'carbon-neutral-shipping',
-    label: 'Carbon-neutral shipping',
-    icon: 'cloud-outline',
-    impact: 'You offset the carbon cost of shipping.',
-  },
+    impact: 'Modified from its original form into something new.' },
   {
     id: 'plastic-free-packaging',
     label: 'Plastic-free packaging',
-    icon: 'cube-outline',
-    impact: 'You ship in eco-friendly, plastic-free packaging.',
-  },
+    icon: 'leaf-outline',
+    impact: 'You ship in eco-friendly, plastic-free packaging.' },
 ];
 
 export function SustainabilityTags({
   selectedTags,
-  onTagsChange,
-}: SustainabilityTagsProps) {
+  onTagsChange }: SustainabilityTagsProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -185,7 +171,7 @@ export function SustainabilityTags({
       {/* Sustainability impact summary */}
       {selectedDefs.length > 0 && (
         <View
-          style={[styles.summary, { backgroundColor: `${colors.success}12` }]}
+          style={[styles.summary, { backgroundColor: colors.successSubtle }]}
           accessibilityLabel={`Sustainability impact. ${selectedDefs.length} ${
             selectedDefs.length === 1 ? 'tag' : 'tags'
           } selected.`}
@@ -229,33 +215,26 @@ export function SustainabilityTags({
 function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
     wrap: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginBottom: Space.xs / 2,
-    },
+      marginBottom: Space.xs / 2 },
     headerIcon: {
-      marginRight: Space.xs / 2,
-    },
+      marginRight: Space.xs / 2 },
     sectionTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: FontFamily.semibold },
     sectionHint: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
       marginBottom: Space.sm,
-      lineHeight: Type.caption.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     chipWrap: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     chip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -264,51 +243,37 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingVertical: Space.xs + 1,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     chipIcon: {
-      marginRight: Space.xs / 4,
-    },
+      marginRight: Space.xs / 4 },
     chipLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.semibold },
     summary: {
       marginTop: Space.md,
       padding: Space.sm + 2,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     summaryHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     summaryTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.semibold },
     summaryRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.xs,
-      paddingVertical: Space.xs / 2,
-    },
+      paddingVertical: Space.xs / 2 },
     summaryCheck: {
       marginTop: Space.xs / 4,
-      marginRight: Space.xs / 4,
-    },
+      marginRight: Space.xs / 4 },
     summaryText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      lineHeight: Type.caption.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      lineHeight: TypographyV2.meta.lineHeight },
     summaryLabel: {
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
-  });
+      fontFamily: FontFamily.semibold } });
 }

@@ -6,6 +6,22 @@
  * In production, demo mode is disabled and agent functions return honest
  * "unavailable" states instead of fabricated AI output (AGENTS.md §11).
  *
+ * IMPORTANT — production deployment state is owned by the backend.
+ *
+ * The backend `chat_bot_installs` table is the single source of truth for
+ * which agents are deployed into which conversations in production. It is
+ * accessed via the real bots API (`botsApi.ts` — `/bots` and `/bots/system`
+ * endpoints). This module's in-memory `deployedAgentsByConversation` map
+ * is a DEMO-ONLY construct used solely in `__DEV__` mode to simulate
+ * deployment state for development and testing. In production
+ * (`!__DEV__`), every function that claims to deploy, remove, or pause
+ * agents returns a truthful "not available in this environment" result
+ * and MUST NOT mutate in-memory state as if it were real deployment state.
+ * `getAvailableAgents`, `getDeployedAgents`, and
+ * `getActiveAgentSessionCount` return empty arrays / 0 in production
+ * because the real catalogue, deployment state, and session counts all
+ * come from the backend bots API.
+ *
  * Agent types:
  *  - shopping_assistant: helps buyers find items, suggests search terms
  *  - negotiator:         helps with offer / counter-offer (Smart Sell tie-in)
@@ -88,7 +104,9 @@ export interface ChatAgentMessage {
 }
 
 // ---------------------------------------------------------------------------
-// Agent catalogue — 5 distinct personalities with clear capabilities.
+// Agent catalogue — DEMO-ONLY (`__DEV__` mode). 5 distinct personalities
+// with clear capabilities. In production the real catalogue comes from the
+// backend `/bots` and `/bots/system` APIs (see botsApi.ts).
 // ---------------------------------------------------------------------------
 
 const AGENT_CATALOGUE: ChatAgent[] = [
@@ -105,7 +123,7 @@ const AGENT_CATALOGUE: ChatAgent[] = [
     id: 'agent_negotiator',
     type: 'negotiator',
     name: 'Deal Maker',
-    avatar: 'pricetags-outline',
+    avatar: 'cash-outline',
     description: 'Helps with offers and counter-offers. Integrates with Smart Sell.',
     capabilities: ['Suggest offer range', 'Counter-offer coaching', 'Smart Sell sync'],
     isDemo: true,
@@ -132,7 +150,7 @@ const AGENT_CATALOGUE: ChatAgent[] = [
     id: 'agent_safety_filter',
     type: 'safety_filter',
     name: 'Safety Shield',
-    avatar: 'shield-checkmark-outline',
+    avatar: 'lock-closed-outline',
     description: 'Flags suspicious messages and detects scams.',
     capabilities: ['Scam detection', 'Off-platform payment alerts', 'Suspicious link flags'],
     isDemo: true,
@@ -140,8 +158,13 @@ const AGENT_CATALOGUE: ChatAgent[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// In-memory deployment registry (demo only — not persisted).
+// In-memory deployment registry — DEMO-ONLY (`__DEV__` mode), not persisted.
 // conversationId -> deployed agent ids
+//
+// This map is a demo construct used solely to simulate deployment state in
+// development. In production, deployment state is owned by the backend
+// `chat_bot_installs` table and accessed via the bots API. The production
+// functions below MUST NOT touch this map.
 // ---------------------------------------------------------------------------
 const deployedAgentsByConversation = new Map<string, string[]>();
 
@@ -187,19 +210,42 @@ function makeId(prefix: string): string {
 
 /**
  * Returns the full catalogue of deployable AI agents.
+ *
+ * In `__DEV__` mode this returns the demo catalogue. In production it
+ * returns an empty array — the real catalogue comes from the backend
+ * `/bots` and `/bots/system` APIs (see botsApi.ts).
  */
 export function getAvailableAgents(): ChatAgent[] {
+  if (!CHAT_AGENTS_DEMO_MODE) {
+    // Production: the real agent catalogue is owned by the backend and
+    // accessed via the bots API (`/bots` and `/bots/system`). This demo
+    // catalogue is not the source of truth in production.
+    return [];
+  }
   return AGENT_CATALOGUE.map((agent) => ({ ...agent }));
 }
 
 /**
  * Deploys an agent of the given type into a conversation. In demo mode this
  * only updates the in-memory registry and returns the agent descriptor.
+ *
+ * In production, deployment is owned by the backend `chat_bot_installs`
+ * table and is performed via the bots API. This function throws to make
+ * clear that the demo deployment path is not available in production —
+ * callers must use the backend bots API instead.
  */
 export function deployAgent(
   conversationId: string,
   agentType: ChatAgentType,
 ): ChatAgent {
+  if (!CHAT_AGENTS_DEMO_MODE) {
+    // Production: deployment state is owned by the backend
+    // `chat_bot_installs` table and accessed via the bots API. This demo
+    // function MUST NOT fabricate deployment state in production.
+    throw new Error(
+      'deployAgent is not available in this environment — use the backend bots API to manage agent deployments',
+    );
+  }
   const agent = agentByType(agentType);
   if (!agent) {
     throw new Error(`Unknown chat agent type: ${agentType}`);
@@ -213,7 +259,7 @@ export function deployAgent(
     type: 'agent_deployed',
     agent: agent.name,
     session: conversationId,
-    runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+    runtime: 'demo',
     summary: `Deployed ${agent.name} into conversation`,
     resultStatus: 'success',
   });
@@ -224,11 +270,24 @@ export function deployAgent(
  * Deploys a custom (user-authored) agent into a conversation. The agent
  * descriptor is registered in-memory so it can be resolved by id for the
  * remainder of the session.
+ *
+ * In production, deployment is owned by the backend `chat_bot_installs`
+ * table and is performed via the bots API. This function throws to make
+ * clear that the demo deployment path is not available in production —
+ * callers must use the backend bots API instead.
  */
 export function deployCustomAgent(
   conversationId: string,
   agent: ChatAgent,
 ): ChatAgent {
+  if (!CHAT_AGENTS_DEMO_MODE) {
+    // Production: deployment state is owned by the backend
+    // `chat_bot_installs` table and accessed via the bots API. This demo
+    // function MUST NOT fabricate deployment state in production.
+    throw new Error(
+      'deployCustomAgent is not available in this environment — use the backend bots API to manage agent deployments',
+    );
+  }
   registerCustomAgent(agent);
   const ids = getDeployedIds(conversationId);
   if (!ids.includes(agent.id)) {
@@ -239,7 +298,7 @@ export function deployCustomAgent(
     type: 'agent_deployed',
     agent: agent.name,
     session: conversationId,
-    runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+    runtime: 'demo',
     summary: `Deployed custom agent ${agent.name} into conversation`,
     resultStatus: 'success',
   });
@@ -248,8 +307,17 @@ export function deployCustomAgent(
 
 /**
  * Returns the agents currently deployed into a conversation.
+ *
+ * In `__DEV__` mode this reads the in-memory demo registry. In production
+ * it returns an empty array — real deployment state comes from the
+ * backend `chat_bot_installs` table via the bots API.
  */
 export function getDeployedAgents(conversationId: string): ChatAgent[] {
+  if (!CHAT_AGENTS_DEMO_MODE) {
+    // Production: real deployment state is owned by the backend
+    // `chat_bot_installs` table and accessed via the bots API.
+    return [];
+  }
   return getDeployedIds(conversationId)
     .map((id) => agentById(id))
     .filter((agent): agent is ChatAgent => Boolean(agent))
@@ -258,8 +326,21 @@ export function getDeployedAgents(conversationId: string): ChatAgent[] {
 
 /**
  * Removes a deployed agent from a conversation.
+ *
+ * In production, removal is owned by the backend `chat_bot_installs`
+ * table and is performed via the bots API. This function throws to make
+ * clear that the demo removal path is not available in production —
+ * callers must use the backend bots API instead.
  */
 export function removeAgent(conversationId: string, agentId: string): void {
+  if (!CHAT_AGENTS_DEMO_MODE) {
+    // Production: deployment state is owned by the backend
+    // `chat_bot_installs` table and accessed via the bots API. This demo
+    // function MUST NOT fabricate removal of deployment state in production.
+    throw new Error(
+      'removeAgent is not available in this environment — use the backend bots API to manage agent deployments',
+    );
+  }
   const agent = agentById(agentId);
   const ids = getDeployedIds(conversationId).filter((id) => id !== agentId);
   if (ids.length === 0) {
@@ -272,7 +353,7 @@ export function removeAgent(conversationId: string, agentId: string): void {
     type: 'agent_removed',
     agent: agent?.name ?? agentId,
     session: conversationId,
-    runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+    runtime: 'demo',
     summary: `Removed ${agent?.name ?? agentId} from conversation`,
     resultStatus: 'success',
   });
@@ -282,11 +363,23 @@ export function removeAgent(conversationId: string, agentId: string): void {
  * Pause all running agent sessions across every conversation with one
  * action (spec 22 acceptance: "Pause all agents exists").
  *
- * Clears the in-memory deployment registry so no agent is actively
- * deployed in any conversation. Returns the number of agent sessions
- * that were paused. Records the action in the activity ledger.
+ * In `__DEV__` mode this clears the in-memory demo deployment registry so
+ * no agent is actively deployed in any conversation, returns the number of
+ * agent sessions that were paused, and records the action in the activity
+ * ledger.
+ *
+ * In production, pausing is owned by the backend. This function returns 0
+ * (no demo sessions exist to pause) and does NOT mutate any state — the
+ * real pause action must be performed via the backend bots API.
  */
 export function pauseAllAgents(): number {
+  if (!CHAT_AGENTS_DEMO_MODE) {
+    // Production: deployment state is owned by the backend
+    // `chat_bot_installs` table and accessed via the bots API. There are
+    // no local demo sessions to pause, and this function MUST NOT
+    // fabricate a pause of backend-owned state.
+    return 0;
+  }
   let pausedCount = 0;
   for (const ids of deployedAgentsByConversation.values()) {
     pausedCount += ids.length;
@@ -296,7 +389,7 @@ export function pauseAllAgents(): number {
   if (pausedCount > 0) {
     void recordAgentActivity({
       type: 'all_agents_paused',
-      runtime: CHAT_AGENTS_DEMO_MODE ? 'demo' : 'provider',
+      runtime: 'demo',
       summary: `Paused all agents (${pausedCount} session${pausedCount === 1 ? '' : 's'})`,
       resultStatus: 'paused',
     });
@@ -310,8 +403,17 @@ export function pauseAllAgents(): number {
  * all conversations. Used by the UI to show a truthful count on the
  * "Pause all agents" control (AGENTS.md §11 — truthful disabled state
  * when no agents are running).
+ *
+ * In `__DEV__` mode this counts the in-memory demo registry. In production
+ * it returns 0 — the real session count comes from the backend
+ * `chat_bot_installs` table via the bots API.
  */
 export function getActiveAgentSessionCount(): number {
+  if (!CHAT_AGENTS_DEMO_MODE) {
+    // Production: the real active session count is owned by the backend
+    // `chat_bot_installs` table and accessed via the bots API.
+    return 0;
+  }
   let count = 0;
   for (const ids of deployedAgentsByConversation.values()) {
     count += ids.length;

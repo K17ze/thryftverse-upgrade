@@ -5,27 +5,29 @@ import {
   StyleSheet,
   Pressable,
   TextInput,
-  Alert,
-  Keyboard,
-} from 'react-native';
+  Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { useToast } from '../context/ToastContext';
 import { useStore } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
+import { useA11yAudit } from '../hooks/useA11yAudit';
 import { RootStackParamList } from '../navigation/types';
 import {
   createUserAddress,
   deleteUserAddress,
-  CreateAddressInput,
-} from '../services/commerceApi';
+  CreateAddressInput } from '../services/commerceApi';
 import { lookupUKPostcode, isUKPostcode } from '../utils/postcodeLookup';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { t } from '../i18n';
 
 
@@ -79,8 +81,7 @@ const ADD_DEFAULTS: FormState = {
   postalCode: '',
   countryCode: '',
   country: '',
-  isDefault: true,
-};
+  isDefault: true };
 
 function normaliseForm(f: FormState): FormState {
   return {
@@ -92,8 +93,7 @@ function normaliseForm(f: FormState): FormState {
     postalCode: f.postalCode.trim().toUpperCase(),
     countryCode: f.countryCode,
     country: f.country,
-    isDefault: f.isDefault,
-  };
+    isDefault: f.isDefault };
 }
 
 function formsEqual(a: FormState, b: FormState): boolean {
@@ -143,6 +143,8 @@ function validateForm(f: FormState): FieldErrors {
 }
 
 export default function AddressFormScreen({ navigation, route }: Props) {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'AddressFormScreen');
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
@@ -166,8 +168,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         postalCode: savedAddress.postalCode,
         countryCode: savedAddress.countryCode,
         country: savedAddress.country,
-        isDefault: savedAddress.isDefault ?? true,
-      };
+        isDefault: savedAddress.isDefault ?? true };
     }
     return { ...ADD_DEFAULTS };
   }, [isEditing, savedAddress]);
@@ -186,6 +187,17 @@ export default function AddressFormScreen({ navigation, route }: Props) {
   const regionRef = useRef<TextInput>(null);
   const postalRef = useRef<TextInput>(null);
   const allowNavigationRef = useRef(false);
+  const pendingNavActionRef = useRef<any>(null);
+
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   const updateField = useCallback(
     <K extends keyof FormState>(key: K, value: FormState[K]) => {
@@ -229,8 +241,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       const allErrors = validateForm(form);
       setErrors((prev) => ({
         ...prev,
-        [field]: allErrors[field],
-      }));
+        [field]: allErrors[field] }));
     },
     [form]
   );
@@ -274,21 +285,20 @@ export default function AddressFormScreen({ navigation, route }: Props) {
 
       event.preventDefault();
 
-      Alert.alert(
-        'Discard changes?',
-        'Your address changes have not been saved.',
-        [
-          {
-            text: 'Keep editing',
-            style: 'cancel',
-          },
-          {
-            text: 'Discard',
-            style: 'destructive',
-            onPress: () => proceedWithNavigation(event.data.action),
-          },
-        ]
-      );
+      pendingNavActionRef.current = event.data.action;
+      setConfirmSheet({
+        visible: true,
+        title: 'Discard changes?',
+        message: 'Your address changes have not been saved.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        variant: 'danger',
+        onConfirm: () => {
+          const action = pendingNavActionRef.current;
+          if (action) {
+            proceedWithNavigation(action);
+          }
+        } });
     });
 
     return unsubscribe;
@@ -306,8 +316,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         name: nameRef,
         streetAddress: streetRef,
         city: cityRef,
-        postalCode: postalRef,
-      };
+        postalCode: postalRef };
       refMap[firstErrorField]?.current?.focus();
       return;
     }
@@ -331,8 +340,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       postalCode: normalised.postalCode,
       countryCode: normalised.countryCode,
       country: normalised.country,
-      isDefault: normalised.isDefault,
-    };
+      isDefault: normalised.isDefault };
 
     try {
       if (isEditing && savedAddress?.id !== undefined) {
@@ -357,8 +365,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           postalCode: created.postalCode,
           countryCode: created.countryCode,
           country: created.country,
-          isDefault: created.isDefault,
-        });
+          isDefault: created.isDefault });
 
         haptic.medium();
         if (oldDeleteFailed) {
@@ -380,8 +387,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
           postalCode: created.postalCode,
           countryCode: created.countryCode,
           country: created.country,
-          isDefault: created.isDefault,
-        });
+          isDefault: created.isDefault });
 
         haptic.medium();
         show('Delivery address added', 'success');
@@ -398,43 +404,39 @@ export default function AddressFormScreen({ navigation, route }: Props) {
   }, [form, savedAddress, isEditing, saveAddress, show, haptic, navigation, currentUser?.id]);
 
   const handleRemove = useCallback(() => {
-    Alert.alert(
-      'Remove delivery address?',
-      'You\'ll need to add an address again before using it at checkout.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            const userId = currentUser?.id;
-            if (!userId) {
-              clearSavedAddress();
-              show('Delivery address removed', 'success');
-              allowNavigationRef.current = true;
-              navigation.goBack();
-              return;
-            }
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove delivery address?',
+      message: 'You\'ll need to add an address again before using it at checkout.',
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        const userId = currentUser?.id;
+        if (!userId) {
+          clearSavedAddress();
+          show('Delivery address removed', 'success');
+          allowNavigationRef.current = true;
+          navigation.goBack();
+          return;
+        }
 
-            if (savedAddress?.id !== undefined) {
-              try {
-                await deleteUserAddress(userId, savedAddress.id);
-              } catch {
-                setSaveError('Address could not be removed. Check your connection and try again.');
-                haptic.light();
-                return;
-              }
-            }
+        if (savedAddress?.id !== undefined) {
+          try {
+            await deleteUserAddress(userId, savedAddress.id);
+          } catch {
+            setSaveError('Address could not be removed. Check your connection and try again.');
+            haptic.light();
+            return;
+          }
+        }
 
-            haptic.medium();
-            clearSavedAddress();
-            show('Delivery address removed', 'success');
-            allowNavigationRef.current = true;
-            navigation.goBack();
-          },
-        },
-      ]
-    );
+        haptic.medium();
+        clearSavedAddress();
+        show('Delivery address removed', 'success');
+        allowNavigationRef.current = true;
+        navigation.goBack();
+      } });
   }, [clearSavedAddress, show, haptic, navigation, currentUser?.id, savedAddress?.id]);
 
   if (!currentUser) {
@@ -444,7 +446,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         scrollEnabled={false}
       >
         <View style={styles.signedOutContainer}>
-          <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
+          <AppIcon name="lock" size={IconSize.hero} color="textMuted" opticalCenter accessible={false} />
           <Text style={styles.signedOutTitle}>Sign in required</Text>
           <Text style={styles.signedOutBody}>
             You need to be signed in to manage your delivery address.
@@ -466,6 +468,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
 
   return (
     <FlagshipScreen
+      ref={a11yRef}
       header={<FlagshipHeader title={isEditing ? 'Edit address' : 'Add address'} onBack={handleCancel} />}
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
@@ -508,10 +511,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={() => streetRef.current?.focus()}
               placeholder="Recipient name"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Full name"
             />
             {errors.name && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
                 <Text style={styles.errorText}>{errors.name}</Text>
               </View>
             )}
@@ -535,10 +539,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={() => apartmentRef.current?.focus()}
               placeholder="Street address"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Address line 1"
             />
             {errors.streetAddress && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
                 <Text style={styles.errorText}>{errors.streetAddress}</Text>
               </View>
             )}
@@ -557,6 +562,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={() => cityRef.current?.focus()}
               placeholder="Apartment, suite, unit"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Address line 2"
             />
           </View>
 
@@ -577,10 +583,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={() => regionRef.current?.focus()}
               placeholder="City or town"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="City"
             />
             {errors.city && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
                 <Text style={styles.errorText}>{errors.city}</Text>
               </View>
             )}
@@ -599,6 +606,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={() => postalRef.current?.focus()}
               placeholder="State, county or region"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Region"
             />
           </View>
 
@@ -617,10 +625,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               onSubmitEditing={handleSave}
               placeholder="Postal code"
               placeholderTextColor={colors.textMuted}
+              accessibilityLabel="Postcode"
             />
             {errors.postalCode && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
                 <Text style={styles.errorText}>{errors.postalCode}</Text>
               </View>
             )}
@@ -631,12 +640,12 @@ export default function AddressFormScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel={`Use ${postcodeSuggestion.city}, ${postcodeSuggestion.region} for this postcode`}
               >
-                <Ionicons name="location-outline" size={14} color={colors.brand} />
+                <AppIcon name="location" size={IconSize.xs} color="brand" opticalCenter accessible={false} />
                 <Text style={styles.postcodeSuggestionText}>
                   Use <Text style={styles.postcodeSuggestionBold}>{postcodeSuggestion.city}</Text>
                   {postcodeSuggestion.region ? `, ${postcodeSuggestion.region}` : ''}
                 </Text>
-                <Ionicons name="arrow-forward-circle" size={16} color={colors.brand} />
+                <AppIcon name="forward" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
               </Pressable>
             )}
           </View>
@@ -660,11 +669,11 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               >
                 {countryDisplayName}
               </Text>
-              <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+              <AppIcon name="chevronDown" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
             </Pressable>
             {errors.country && (
               <View style={styles.errorRow}>
-                <Ionicons name="alert-circle" size={13} color={colors.danger} />
+                <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
                 <Text style={styles.errorText}>{errors.country}</Text>
               </View>
             )}
@@ -685,7 +694,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
             accessibilityHint="When enabled, this address is selected automatically at checkout"
           >
             <View style={styles.defaultToggleLeft}>
-              <Ionicons name="star-outline" size={16} color={colors.textSecondary} />
+              <AppIcon name="checkmark-circle-outline" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
               <View style={styles.defaultToggleTextCol}>
                 <Text style={[styles.defaultToggleTitle, { color: colors.textPrimary }]}>
                   Save as default
@@ -699,15 +708,13 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               styles.defaultSwitch,
               {
                 backgroundColor: form.isDefault ? colors.brand : colors.surfaceAlt,
-                borderColor: form.isDefault ? colors.brand : colors.border,
-              },
+                borderColor: form.isDefault ? colors.brand : colors.border },
             ]}>
               <View style={[
                 styles.defaultSwitchKnob,
                 {
                   backgroundColor: form.isDefault ? colors.textInverse : colors.textMuted,
-                  alignSelf: form.isDefault ? 'flex-end' : 'flex-start',
-                },
+                  alignSelf: form.isDefault ? 'flex-end' : 'flex-start' },
               ]} />
             </View>
           </Pressable>
@@ -721,7 +728,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Remove delivery address"
             >
-              <Ionicons name="trash-outline" size={15} color={colors.textMuted} />
+              <AppIcon name="trash" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
               <Text style={styles.removeBtnText}>Remove address</Text>
             </Pressable>
           )}
@@ -730,7 +737,7 @@ export default function AddressFormScreen({ navigation, route }: Props) {
       {/* Save error display */}
       {saveError ? (
         <View style={styles.saveErrorRow}>
-          <Ionicons name="alert-circle" size={14} color={colors.danger} />
+          <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
           <Text style={styles.saveErrorText}>{saveError}</Text>
         </View>
       ) : null}
@@ -764,6 +771,17 @@ export default function AddressFormScreen({ navigation, route }: Props) {
         selectedValue={form.country ? `${COUNTRY_OPTIONS.find((c) => c.name === form.country)?.flag ?? ''}  ${form.country}` : undefined}
         onSelect={handleCountrySelect}
       />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }
@@ -772,99 +790,82 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   flex: {
-    flex: 1,
-  },
+    flex: 1 },
 
   // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   headerBtn: {
     minWidth: Control.hit,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   headerCancelText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   headerTitle: {
     flex: 1,
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   headerSpacer: {
-    minWidth: Control.hit,
-  },
+    minWidth: Control.hit },
 
   // Scroll
   scrollContent: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
 
   // Intro
   intro: {
     paddingTop: Space.lg,
     paddingBottom: Space.lg,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   introTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: LetterSpacing.tight + LetterSpacing.wide,
-  },
+    letterSpacing: LetterSpacing.tight + LetterSpacing.wide },
   introBody: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
 
   // Section
   section: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   sectionLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginBottom: Space.xs + 2,
-  },
+    marginBottom: Space.xs + 2 },
   input: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: 0,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   separator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
 
   // Error
   errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   errorText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
   postcodeSuggestion: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -872,34 +873,29 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.sm,
     paddingVertical: Space.sm,
     paddingHorizontal: Space.smMd,
-    backgroundColor: `${colors.brand}08`,
+    backgroundColor: colors.brandSubtle,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.brand}30`,
-  },
+    borderColor: colors.brandBorder },
   postcodeSuggestionText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   postcodeSuggestionBold: {
     fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   saveErrorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   saveErrorText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
 
   // Country
   countryRow: {
@@ -907,16 +903,13 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: Control.hit,
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
   countryText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   countryPlaceholder: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
 
   // Default toggle
   defaultToggleRow: {
@@ -925,42 +918,35 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'space-between',
     paddingVertical: Space.md,
     marginTop: Space.sm,
-    minHeight: Control.hit + Space.xs,
-  },
+    minHeight: Control.hit + Space.xs },
   defaultToggleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flex: 1,
-  },
+    flex: 1 },
   defaultToggleTextCol: {
     flex: 1,
-    gap: Space.xs - 2,
-  },
+    gap: Space.xs - 2 },
   defaultToggleTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   defaultToggleSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   defaultSwitch: {
     width: Space.xxl - Space.sm,
     height: Space.lg,
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
     justifyContent: 'center',
-    padding: Space.xs,
-  },
+    padding: Space.xs },
   defaultSwitchKnob: {
     width: Control.iconCompact,
     height: Control.iconCompact,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
 
   // Remove
   removeBtn: {
@@ -970,13 +956,11 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingVertical: Space.md,
     marginTop: Space.lg,
-    minHeight: Control.hit + Space.xs,
-  },
+    minHeight: Control.hit + Space.xs },
   removeBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textMuted },
 
   // Sticky footer
   stickyFooter: {
@@ -984,24 +968,20 @@ function createStyles(colors: ThemeColors) {
     paddingTop: Space.sm,
     backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   saveBtn: {
     backgroundColor: colors.brand,
     paddingVertical: Space.md - 2,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: Control.hit + Space.xs,
-  },
+    minHeight: Control.hit + Space.xs },
   saveBtnPressed: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   saveBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textInverse },
 
   // Signed out
   signedOutContainer: {
@@ -1009,21 +989,18 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xl,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   signedOutTitle: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
     color: colors.textPrimary,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   signedOutBody: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   signedOutBtn: {
     marginTop: Space.md,
     paddingHorizontal: Space.xl,
@@ -1031,12 +1008,9 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
     borderRadius: Radius.md,
     minHeight: Control.hit + Space.xs,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   signedOutBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textInverse } });
 }

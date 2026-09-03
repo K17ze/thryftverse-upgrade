@@ -9,40 +9,66 @@ export type CurrencyDisplayMode = 'ize' | 'fiat' | 'both';
 export const IZE_DECIMALS = 6;
 export const IZE_SYMBOL = '1ze';
 
-export type GoldRates = Record<SupportedCurrencyCode, number>;
+// ── At-par model ──────────────────────────────────────────────────────
+// 1 1ZE = $1.00 USD — always, at par. The platform fee is a transparent
+// separate line item on load and withdraw, never hidden in the rate.
+export const IZE_PER_USD = 1;
 
-export const DEFAULT_GOLD_RATES: GoldRates = {
-  GBP: CURRENCIES.GBP.goldRatePerGram,
-  USD: CURRENCIES.USD.goldRatePerGram,
-  EUR: CURRENCIES.EUR.goldRatePerGram,
-  NGN: CURRENCIES.NGN.goldRatePerGram,
-  JPY: CURRENCIES.JPY.goldRatePerGram,
-  CAD: CURRENCIES.CAD.goldRatePerGram,
-  AUD: CURRENCIES.AUD.goldRatePerGram,
-  AED: CURRENCIES.AED.goldRatePerGram,
-  INR: CURRENCIES.INR.goldRatePerGram,
+/** Convert a 1ZE amount to its USD equivalent at par (1 1ZE = $1). */
+export function izeToUsd(izeAmount: number): number {
+  return izeAmount / IZE_PER_USD;
+}
+
+/** Convert a USD amount to its 1ZE equivalent at par (1 1ZE = $1). */
+export function usdToIze(usdAmount: number): number {
+  return usdAmount * IZE_PER_USD;
+}
+
+/** Format a USD amount as a currency string (e.g. "$100.00"). */
+export function formatUsd(amount: number, fractionDigits: number = 2): string {
+  if (!Number.isFinite(amount)) return '$0.00';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(amount);
+}
+
+export type FxRates = Record<SupportedCurrencyCode, number>;
+
+export const DEFAULT_FX_RATES: FxRates = {
+  GBP: CURRENCIES.GBP.fxRatePerUnit,
+  USD: CURRENCIES.USD.fxRatePerUnit,
+  EUR: CURRENCIES.EUR.fxRatePerUnit,
+  NGN: CURRENCIES.NGN.fxRatePerUnit,
+  JPY: CURRENCIES.JPY.fxRatePerUnit,
+  CAD: CURRENCIES.CAD.fxRatePerUnit,
+  AUD: CURRENCIES.AUD.fxRatePerUnit,
+  AED: CURRENCIES.AED.fxRatePerUnit,
+  INR: CURRENCIES.INR.fxRatePerUnit,
 };
 
 const FALLBACK_CURRENCY = DEFAULT_CURRENCY_CODE;
 
-function getRate(currencyCode: SupportedCurrencyCode, goldRates?: Partial<GoldRates>) {
-  return goldRates?.[currencyCode] ?? DEFAULT_GOLD_RATES[currencyCode];
+function getRate(currencyCode: SupportedCurrencyCode, fxRates?: Partial<FxRates>) {
+  return fxRates?.[currencyCode] ?? DEFAULT_FX_RATES[currencyCode];
 }
 
 export function toFiat(
   izeAmount: number,
   currencyCode: SupportedCurrencyCode = FALLBACK_CURRENCY,
-  goldRates?: Partial<GoldRates>
+  fxRates?: Partial<FxRates>
 ): number {
-  return izeAmount * getRate(currencyCode, goldRates);
+  return izeAmount * getRate(currencyCode, fxRates);
 }
 
 export function toIze(
   fiatAmount: number,
   currencyCode: SupportedCurrencyCode = FALLBACK_CURRENCY,
-  goldRates?: Partial<GoldRates>
+  fxRates?: Partial<FxRates>
 ): number {
-  const rate = getRate(currencyCode, goldRates);
+  const rate = getRate(currencyCode, fxRates);
   if (!rate) {
     return 0;
   }
@@ -95,7 +121,7 @@ export interface FormatPriceParams {
   izeAmount: number;
   displayMode: CurrencyDisplayMode;
   currencyCode: SupportedCurrencyCode;
-  goldRates?: Partial<GoldRates>;
+  fxRates?: Partial<FxRates>;
   fiatFractionDigits?: number;
   izeFractionDigits?: number;
 }
@@ -104,7 +130,7 @@ export function formatPrice({
   izeAmount,
   displayMode,
   currencyCode,
-  goldRates,
+  fxRates,
   fiatFractionDigits = 2,
   izeFractionDigits = IZE_DECIMALS,
 }: FormatPriceParams): string {
@@ -112,7 +138,7 @@ export function formatPrice({
     return formatIzeAmount(izeAmount, izeFractionDigits);
   }
 
-  const fiatValue = toFiat(izeAmount, currencyCode, goldRates);
+  const fiatValue = toFiat(izeAmount, currencyCode, fxRates);
   const fiatFormatted = formatFiatAmount(fiatValue, currencyCode, fiatFractionDigits);
 
   if (displayMode === 'fiat') {

@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions, Modal } from 'r
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Elevation, Stroke, Type } from '../../theme/designTokens';
+import { Space, Radius, Elevation, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export type AuctionHeaderActionKey = 'search' | 'filter' | 'create' | 'seller' | 'activity';
 
@@ -226,15 +227,15 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     flex: 1,
   },
   title: {
-    fontFamily: Typography.family.bold,
-    fontSize: Type.title.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    fontSize: TypographyV2.screenTitle.size,
     color: colors.textPrimary,
     letterSpacing: -0.6,
   },
   // Context elevated — 14pt medium with tighter tracking for editorial feel
   context: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    fontSize: TypographyV2.body.size,
     color: colors.textSecondary,
     marginTop: 2,
     letterSpacing: -0.3,
@@ -260,8 +261,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderColor: colors.background,
   },
   badgeText: {
-    fontFamily: Typography.family.bold,
-    fontSize: 9,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.meta.size,
     color: colors.textInverse,
     fontVariant: ['tabular-nums'],
   },
@@ -289,8 +290,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   },
   overflowLabel: {
     flex: 1,
-    fontFamily: Typography.family.medium,
-    fontSize: Type.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontSize: TypographyV2.bodyStrong.size,
     color: colors.textPrimary,
   },
   overflowBadge: {

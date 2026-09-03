@@ -3,8 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { CachedImage } from './CachedImage';
@@ -13,7 +12,8 @@ import { ChatCard } from './chat/ChatCard';
 import { Caption, BodyEmphasis, Meta } from './ui/Text';
 import { AnimatedPressable } from './AnimatedPressable';
 
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Typography } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 export type OfferType = 'offer' | 'counter' | 'accept' | 'decline' | 'expired';
 
 interface OfferBubbleProps {
@@ -49,8 +49,7 @@ export function OfferBubble({
   onDecline,
   onCounter,
   onViewItem,
-  style,
-}: OfferBubbleProps) {
+  style }: OfferBubbleProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -58,39 +57,34 @@ export function OfferBubble({
     switch (type) {
       case 'offer':
         return {
-          icon: 'pricetag',
+          icon: 'cash-outline',
           color: colors.brand,
           label: 'Offer',
-          bgColor: `${colors.brand}15`,
-        };
+          bgColor: colors.brandSubtle };
       case 'counter':
         return {
           icon: 'swap-horizontal',
           color: colors.textSecondary,
           label: 'Counter Offer',
-          bgColor: colors.surfaceAlt,
-        };
+          bgColor: colors.surfaceAlt };
       case 'accept':
         return {
           icon: 'checkmark-circle',
           color: colors.success,
           label: 'Accepted',
-          bgColor: `${colors.success}15`,
-        };
+          bgColor: colors.successSubtle };
       case 'decline':
         return {
           icon: 'close-circle',
           color: colors.danger,
           label: 'Declined',
-          bgColor: `${colors.danger}15`,
-        };
+          bgColor: colors.dangerSubtle };
       case 'expired':
         return {
           icon: 'time',
           color: colors.textMuted,
           label: 'Expired',
-          bgColor: colors.border,
-        };
+          bgColor: colors.border };
     }
   };
 
@@ -243,102 +237,80 @@ function createStyles(colors: ThemeColors) {
       maxWidth: 300,
       borderRadius: Radius.xl,
       overflow: 'hidden',
-      marginVertical: Space.xs,
-    },
+      marginVertical: Space.xs },
     containerMe: {
       alignSelf: 'flex-end',
-      borderBottomRightRadius: Space.xs,
-    },
+      borderBottomRightRadius: Space.xs },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
       paddingHorizontal: Space.smMd,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     typeLabel: {
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     content: {
       padding: Space.smMd,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     itemRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm + 2,
-      backgroundColor: `${colors.textPrimary}08`,
+      backgroundColor: colors.surfaceAlt,
       padding: Space.sm,
       borderRadius: Radius.md,
-      marginBottom: Space.smMd,
-    },
+      marginBottom: Space.smMd },
     itemImage: {
       width: 40,
       height: 40,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     itemInfo: {
-      flex: 1,
-    },
+      flex: 1 },
     originalPrice: {
-      textDecorationLine: 'line-through',
-    },
+      textDecorationLine: 'line-through' },
     amountRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm + 2,
-      marginBottom: Space.xs + 4,
-    },
+      marginBottom: Space.xs + 4 },
     amount: {
-      fontSize: Type.priceHero.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceHero.size,
+      fontFamily: TypographyV2.priceHero.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: -1,
-    },
+      letterSpacing: -1 },
     discountBadge: {
       backgroundColor: colors.success,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     discountText: {
-      fontFamily: Typography.family.bold,
-    },
+      fontFamily: Typography.family.bold },
     statusRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      marginBottom: Space.xs + 4,
-    },
+      marginBottom: Space.xs + 4 },
     statusText: {
-      fontFamily: Typography.family.medium,
-    },
+      fontFamily: Typography.family.medium },
     actions: {
       flexDirection: 'row',
       gap: Space.sm + 2,
-      marginTop: Space.smMd,
-    },
+      marginTop: Space.smMd },
     actionButton: {
       flex: 1,
       height: 38,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     declineButton: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     counterButton: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     acceptButton: {
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     footer: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.smMd,
       paddingVertical: Space.sm,
       borderTopWidth: 1,
-      borderTopColor: colors.border,
-    },
-  });
+      borderTopColor: colors.border } });
 }

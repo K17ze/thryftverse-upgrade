@@ -58,12 +58,51 @@ export interface PublicProfileViewer {
   isBlocked: boolean;
   isBlockedByTarget: boolean;
   canMessage: boolean;
+  /** Whether the viewer can see social content (Looks, creations). False for
+   *  non-followers viewing a private profile. Shop is always visible. */
+  canViewSocialContent?: boolean;
+  /** Whether the viewer can see the shop. Always true (commerce obligation). */
+  canViewShop?: boolean;
+}
+
+export interface PublicProfileAway {
+  holidayMode: boolean;
+  awayMessage: string | null;
+}
+
+/** DSA Article 30 trader disclosure. Legally required in the EU/UK. */
+export interface PublicProfileTrader {
+  classification: 'trader' | 'non_trader';
+  /** Legal name of the business — only disclosed for verified traders. */
+  legalName: string | null;
+  contactEmail: string | null;
+  registrationNumber: string | null;
+  address: string | null;
+  vatNumber: string | null;
+}
+
+export interface PublicProfileStorefrontSection {
+  kind: string;
+  title: string;
+  sortOrder: number;
+}
+
+export interface PublicProfileStorefrontSummary {
+  announcement: string | null;
+  sections: PublicProfileStorefrontSection[];
+  featuredListingIds: string[];
 }
 
 export interface PublicProfileAggregate {
   user: PublicProfileUser;
   stats: PublicProfileStats;
   viewer: PublicProfileViewer;
+  /** Authoritative away state — only present when holiday mode is on. */
+  away?: PublicProfileAway;
+  /** DSA Article 30 trader disclosure — only present when a compliance record exists. */
+  trader?: PublicProfileTrader;
+  /** Published storefront summary — only present when a published storefront exists. */
+  storefront?: PublicProfileStorefrontSummary;
 }
 
 interface ProfileResponse {
@@ -76,6 +115,9 @@ interface PublicProfileAggregateResponse {
   user: PublicProfileUser;
   stats: PublicProfileStats;
   viewer: PublicProfileViewer;
+  away?: PublicProfileAway;
+  trader?: PublicProfileTrader;
+  storefront?: PublicProfileStorefrontSummary;
 }
 
 export async function fetchMyProfile(): Promise<ProfileUser> {
@@ -90,9 +132,15 @@ export interface UpdateProfileInput {
   location?: string;
   website?: string;
   phone?: string;
-  avatar?: string;
-  coverPhoto?: string;
-  coverVideo?: string;
+  /** Avatar URL (legacy) — must reference your own upload. Prefer avatarAssetId. */
+  avatar?: string | null;
+  /** Cover photo URL (legacy) — must reference your own upload. Prefer coverAssetId. */
+  coverPhoto?: string | null;
+  coverVideo?: string | null;
+  /** Verified media asset ID for avatar — backend verifies ownership. */
+  avatarAssetId?: string;
+  /** Verified media asset ID for cover — backend verifies ownership. */
+  coverAssetId?: string;
 }
 
 export async function updateMyProfile(input: UpdateProfileInput): Promise<ProfileUser> {
@@ -114,7 +162,14 @@ export async function fetchPublicProfileAggregate(userId: string): Promise<Publi
   const response = await fetchJson<PublicProfileAggregateResponse>(`/users/${encodeURIComponent(userId)}/profile`, {
     method: 'GET',
   });
-  return { user: response.user, stats: response.stats, viewer: response.viewer };
+  return {
+    user: response.user,
+    stats: response.stats,
+    viewer: response.viewer,
+    away: response.away,
+    trader: response.trader,
+    storefront: response.storefront,
+  };
 }
 
 // ── Follow ───────────────────────────────────────────────────────────

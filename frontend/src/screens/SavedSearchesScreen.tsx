@@ -5,8 +5,7 @@ import {
   StyleSheet,
   StatusBar,
   ScrollView,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -17,7 +16,8 @@ import { useSavedSearchAlerts } from '../hooks/useSavedSearchAlerts';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { EmptyState } from '../components/EmptyState';
-import { Typography, Space, Radius, Type, Stroke } from '../theme/designTokens';
+import { Typography, Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SavedSearches'>;
 
@@ -77,8 +77,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
     navigation.navigate('Browse', {
       categoryId: 'search',
       title: `Search: "${query}"`,
-      searchQuery: query,
-    });
+      searchQuery: query });
   };
 
   const handleDiscoverSellers = () => {
@@ -88,13 +87,11 @@ export default function SavedSearchesScreen({ navigation }: Props) {
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     tabRow: {
       flexDirection: 'row',
       gap: Space.sm,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     tab: {
       flex: 1,
       paddingVertical: Space.xs + 1,
@@ -103,43 +100,35 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       backgroundColor: colors.surface,
       borderWidth: Stroke.standard,
       borderColor: colors.border,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     tabActive: {
-      backgroundColor: `${colors.brand}12`,
-      borderColor: colors.brand,
-    },
+      backgroundColor: colors.brandSubtle,
+      borderColor: colors.brand },
     tabText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     tabTextActive: {
       color: colors.brand,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     noNewWrap: {
       alignItems: 'center',
       gap: Space.xs + 2,
-      paddingVertical: Space.xl + Space.xl - 8,
-    },
+      paddingVertical: Space.xl + Space.xl - 8 },
     noNewText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     listWrap: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     sectionHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       marginBottom: Space.md,
-      letterSpacing: 0.2,
-    },
+      letterSpacing: 0.2 },
     searchCard: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -147,79 +136,65 @@ export default function SavedSearchesScreen({ navigation }: Props) {
       paddingVertical: Space.smMd,
       paddingHorizontal: Space.sm + 2,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     searchMain: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.smMd,
-    },
+      gap: Space.smMd },
     searchIconWrapInactive: {
-      opacity: 0.6,
-    },
+      opacity: 0.6 },
     searchTextWrap: {
       flex: 1,
-      gap: Space.xs / 2 + 1,
-    },
+      gap: Space.xs / 2 + 1 },
     searchQuery: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
-      flexShrink: 1,
-    },
+      flexShrink: 1 },
     searchQueryRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs + 2,
-    },
+      gap: Space.xs + 2 },
     newBadge: {
-      backgroundColor: `${colors.brand}15`,
+      backgroundColor: colors.brandSubtle,
       borderRadius: Radius.lg,
       paddingHorizontal: Space.xs + 3,
       paddingVertical: Space.xs / 2,
-      flexShrink: 0,
-    },
+      flexShrink: 0 },
     newBadgeText: {
-      fontSize: Type.meta.size - 1,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size - 1,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.brand,
-      letterSpacing: 0.2,
-    },
+      letterSpacing: 0.2 },
     newMatchesBanner: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      backgroundColor: `${colors.brand}10`,
+      backgroundColor: colors.brandSubtle,
       borderRadius: Radius.lg,
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs + 2,
-      marginBottom: Space.sm + 2,
-    },
+      marginBottom: Space.sm + 2 },
     newMatchesText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.brand },
     searchMeta: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     searchActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     actionBtn: {
       width: Space.xl + Space.xs + 4,
       height: Space.xl + Space.xs + 4,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
-  }), [colors]);
+      justifyContent: 'center' } }), [colors]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

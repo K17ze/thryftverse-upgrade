@@ -3,15 +3,15 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { FlashList, type ListRenderItem, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Stroke, Control, FontFamily } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control, FontFamily } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
@@ -27,16 +27,14 @@ import type {
   SupportMessageCitation,
   MessageAuthorRole,
   ConversationOwnershipState,
-  SupportContextKind,
-} from '../contracts/support';
+  SupportContextKind } from '../contracts/support';
 import {
   getSupportConversation,
   listSupportMessages,
   sendSupportMessage,
   requestSupportHandoff,
   confirmSupportResolution,
-  submitSupportFeedback,
-} from '../services/supportConversationApi';
+  submitSupportFeedback } from '../services/supportConversationApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SupportConversation'>;
 
@@ -67,15 +65,14 @@ type ListItem =
 // ─── Context label mapping ───────────────────────────────────────────────────
 const CONTEXT_LABELS: Record<SupportContextKind, { label: string; icon: string }> = {
   general: { label: 'General enquiry', icon: 'help-circle-outline' },
-  order: { label: 'Order', icon: 'cube-outline' },
-  listing: { label: 'Listing', icon: 'pricetag-outline' },
+  order: { label: 'Order', icon: 'bag-handle-outline' },
+  listing: { label: 'Listing', icon: 'document-text-outline' },
   payout: { label: 'Payout', icon: 'card-outline' },
   report: { label: 'Report', icon: 'flag-outline' },
   auction: { label: 'Auction', icon: 'trophy-outline' },
   coown_asset: { label: 'Co-Own asset', icon: 'diamond-outline' },
   catalog_import: { label: 'Import', icon: 'download-outline' },
-  media_job: { label: 'Media', icon: 'image-outline' },
-};
+  media_job: { label: 'Media', icon: 'image-outline' } };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function authorLabel(role: MessageAuthorRole): string {
@@ -99,7 +96,7 @@ function formatContextId(id: string): string {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 export default function SupportConversationScreen({ navigation, route }: Props) {
-  const { conversationId, contextKind, contextId } = route.params;
+  const { conversationId, contextKind, contextId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
@@ -225,8 +222,7 @@ export default function SupportConversationScreen({ navigation, route }: Props) 
       citations: [],
       metadata: {},
       createdAt: new Date().toISOString(),
-      status: 'sending',
-    };
+      status: 'sending' };
 
     setInput('');
     setIsSending(true);
@@ -535,8 +531,7 @@ export default function SupportConversationScreen({ navigation, route }: Props) 
       human_queued: 'A support specialist will continue here.',
       awaiting_customer: 'Waiting for your response.',
       resolved: null,
-      closed: 'This conversation is closed.',
-    };
+      closed: 'This conversation is closed.' };
 
     const text = bannerText[ownershipState];
     if (!text) return null;
@@ -718,67 +713,57 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     contextText: {
       flex: 1,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
       color: colors.textSecondary,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
 
     // ── List ──
     listContent: {
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
 
     // ── Load more ──
     loadMoreWrap: {
       alignItems: 'center',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     loadMoreBtn: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       minHeight: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     loadMoreText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       color: colors.textSecondary,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
 
     // ── System message ──
     systemWrap: {
       alignItems: 'center',
       paddingVertical: Space.sm,
-      paddingHorizontal: Space.lg,
-    },
+      paddingHorizontal: Space.lg },
     systemText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       textAlign: 'center',
-      lineHeight: Type.caption.lineHeight + 2,
-    },
+      lineHeight: TypographyV2.meta.lineHeight + 2 },
 
     // ── Message rows ──
     customerRow: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     otherRow: {
       flexDirection: 'row',
       justifyContent: 'flex-start',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
 
     // ── Message bubbles ──
     customerBubble: {
@@ -786,40 +771,35 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.brand,
       borderRadius: Radius.chat,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm + Space.xs,
-    },
+      paddingVertical: Space.sm + Space.xs },
     otherBubble: {
       maxWidth: '78%',
       backgroundColor: colors.surface,
       borderRadius: Radius.chat,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm + Space.xs,
-    },
+      paddingVertical: Space.sm + Space.xs },
 
     // ── Author label ──
     authorLabel: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       color: colors.textSecondary,
-      letterSpacing: Type.meta.letterSpacing,
-      marginBottom: Space.xs / 2,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginBottom: Space.xs / 2 },
 
     // ── Message text ──
     customerText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textInverse,
-      lineHeight: Type.body.lineHeight + 2,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      lineHeight: TypographyV2.body.lineHeight + 2,
+      letterSpacing: TypographyV2.body.letterSpacing },
     otherText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textPrimary,
-      lineHeight: Type.body.lineHeight + 2,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      lineHeight: TypographyV2.body.lineHeight + 2,
+      letterSpacing: TypographyV2.body.letterSpacing },
 
     // ── Citations ──
     citationsRow: {
@@ -829,89 +809,76 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs,
       paddingTop: Space.xs,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.borderSubtle,
-    },
+      borderTopColor: colors.borderSubtle },
     citationText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
       color: colors.textSecondary,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
 
     // ── Timestamps ──
     customerTime: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textInverse,
       opacity: 0.7,
       marginTop: Space.xs / 2,
-      alignSelf: 'flex-end',
-    },
+      alignSelf: 'flex-end' },
     otherTime: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       marginTop: Space.xs / 2,
-      alignSelf: 'flex-end',
-    },
+      alignSelf: 'flex-end' },
 
     // ── Pending status ──
     pendingIndicator: {
       justifyContent: 'flex-end',
       paddingBottom: Space.xs,
-      paddingLeft: Space.xs,
-    },
+      paddingLeft: Space.xs },
     retryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingVertical: Space.xs,
       paddingRight: Space.xs,
-      alignSelf: 'flex-end',
-    },
+      alignSelf: 'flex-end' },
     retryText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
       color: colors.danger,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
 
     // ── Header handoff button ──
     handoffBtn: {
       minHeight: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     handoffText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       color: colors.textSecondary,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
 
     // ── State banner ──
     stateBanner: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     stateBannerText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
       color: colors.textPrimary,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-      marginBottom: Space.sm,
-    },
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      marginBottom: Space.sm },
     stateBannerActions: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     stateActionBtn: {
-      flex: 1,
-    },
+      flex: 1 },
     feedbackBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -921,50 +888,41 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
       flex: 1,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     feedbackBtnText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
 
     // ── Composer ──
     composer: {
       flexDirection: 'row',
       alignItems: 'flex-end',
       gap: Space.sm,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     composerInputContainer: {
-      flex: 1,
-    },
+      flex: 1 },
     composerInputWrap: {
       minHeight: 40,
       maxHeight: 120,
       borderRadius: Radius.chat,
       paddingVertical: Space.xs,
-      alignItems: 'flex-end',
-    },
+      alignItems: 'flex-end' },
     composerInputText: {
       paddingVertical: Space.xs,
-      maxHeight: 100,
-    },
+      maxHeight: 100 },
     attachBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
-      marginLeft: -Space.xs,
-    },
+      marginLeft: -Space.xs },
     sendBtn: {
       width: 40,
       height: 40,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: Space.xs,
-    },
-  });
+      marginBottom: Space.xs } });
 }

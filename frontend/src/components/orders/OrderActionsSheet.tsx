@@ -5,16 +5,15 @@ import {
   StyleSheet,
   Pressable,
   Modal,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Typography, Type, Radius } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import {
   normaliseOrderStatus,
   needsAction,
-  type OrderRole,
-} from './orderCapabilities';
+  type OrderRole } from './orderCapabilities';
 
 export interface OrderActionItem {
   key: string;
@@ -41,8 +40,7 @@ export function OrderActionsSheet({
   orderId,
   listingAvailable,
   actions,
-  onClose,
-}: OrderActionsSheetProps) {
+  onClose }: OrderActionsSheetProps) {
   const { colors } = useAppTheme();
   const statusLabel = normaliseOrderStatus(orderStatus);
   const hasAction = needsAction(orderStatus, role);
@@ -129,77 +127,64 @@ export function OrderActionsSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
-    maxHeight: '70%',
-  },
+    maxHeight: '70%' },
   handle: {
     width: 36,
     height: 4,
     borderRadius: Radius.full,
     alignSelf: 'center',
     marginTop: Space.sm,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Space.sm,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   title: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   actionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
     paddingVertical: Space.xs,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   actionBannerText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.md,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   actionText: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   orderIdRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingTop: Space.md,
     marginTop: Space.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   orderIdLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   orderIdValue: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] } });

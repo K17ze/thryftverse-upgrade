@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography, Radius } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { CoOwnRiskDisclosures } from '../../services/marketApi';
@@ -119,8 +120,8 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   title: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     letterSpacing: -0.2,
   },
   risksList: {
@@ -139,8 +140,8 @@ const styles = StyleSheet.create({
   },
   riskText: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     lineHeight: 20,
   },
   expandBtn: {
@@ -156,8 +157,8 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   expandText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   reportBtn: {
     flexDirection: 'row',
@@ -169,7 +170,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   reportText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
 });

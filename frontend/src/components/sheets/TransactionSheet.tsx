@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet, Pressable, Text } from 'react-native';
 import { BottomSheet } from '../BottomSheet';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { FontFamily, Space, Type, Radius } from '../../theme/designTokens';
+import { FontFamily, Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 /**
  * TransactionSheet — clear total/consequence, restrained material.
@@ -41,8 +42,7 @@ export function TransactionSheet({
   children,
   confirmAction,
   secondaryAction,
-  snapPoint = 0.6,
-}: TransactionSheetProps) {
+  snapPoint = 0.6 }: TransactionSheetProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const confirmColor = confirmAction.destructive ? colors.danger : colors.brand;
@@ -100,40 +100,31 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       gap: Space.sm,
       paddingTop: Space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.borderSubtle,
-    },
+      borderTopColor: colors.borderSubtle },
     primaryButton: {
       flex: 1,
       height: 52,
       borderRadius: Radius.md,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     primaryButtonFlex: {
-      flex: 1,
-    },
+      flex: 1 },
     primaryButtonDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     primaryText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     secondaryButton: {
       height: 52,
       borderRadius: Radius.md,
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     secondaryButtonFlex: {
-      flex: 1,
-    },
+      flex: 1 },
     secondaryText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      color: colors.textSecondary,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      color: colors.textSecondary } });

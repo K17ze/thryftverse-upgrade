@@ -3,15 +3,20 @@ import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Typography, Control } from '../../theme/designTokens';
+import { Space, Radius, TypeStyles, Control, AvatarSize } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
+import { colorForId } from '../../utils/avatarColor';
 
 interface ChatTopBarProps {
   title: string;
   subtitle?: string;
   avatarUrl?: string | null;
   initials?: string;
+  /** Stable id for deterministic group placeholder color. */
+  groupId?: string;
   /** Show a verified badge next to the title (trusted seller/partner) */
   isVerified?: boolean;
   /**
@@ -40,6 +45,7 @@ export function ChatTopBar({
   subtitle,
   avatarUrl,
   initials,
+  groupId,
   isVerified = false,
   isOnline = false,
   onBack,
@@ -53,9 +59,9 @@ export function ChatTopBar({
   searchResultLabel,
   onPreviousResult,
   onNextResult,
-  onCloseSearch,
-}: ChatTopBarProps) {
+  onCloseSearch }: ChatTopBarProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   return (
@@ -68,7 +74,7 @@ export function ChatTopBar({
             activeOpacity={0.6}
             scaleValue={0.92}
             hapticFeedback="light"
-            accessibilityLabel="Close search"
+            accessibilityLabel={t('search.closeSearch')}
             accessibilityRole="button"
           >
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
@@ -79,12 +85,12 @@ export function ChatTopBar({
               style={styles.searchInput}
               value={searchValue}
               onChangeText={onSearchValueChange}
-              placeholder="Search in chat"
+              placeholder={t('search.placeholder')}
               placeholderTextColor={colors.textMuted}
               autoFocus
               autoCapitalize="none"
               autoCorrect={false}
-              accessibilityLabel="Search in conversation"
+              accessibilityLabel={t('search.inConversation')}
             />
           </View>
           {searchResultLabel ? (
@@ -97,7 +103,7 @@ export function ChatTopBar({
                   activeOpacity={0.6}
                   scaleValue={0.92}
                   hapticFeedback="light"
-                  accessibilityLabel="Previous result"
+                  accessibilityLabel={t('search.previousResult')}
                   accessibilityRole="button"
                 >
                   <Ionicons name="chevron-up" size={16} color={colors.textPrimary} />
@@ -110,7 +116,7 @@ export function ChatTopBar({
                   activeOpacity={0.6}
                   scaleValue={0.92}
                   hapticFeedback="light"
-                  accessibilityLabel="Next result"
+                  accessibilityLabel={t('search.nextResult')}
                   accessibilityRole="button"
                 >
                   <Ionicons name="chevron-down" size={16} color={colors.textPrimary} />
@@ -127,7 +133,7 @@ export function ChatTopBar({
             activeOpacity={0.6}
             scaleValue={0.92}
             hapticFeedback="light"
-            accessibilityLabel="Go back"
+            accessibilityLabel={t('common.goBack')}
             accessibilityRole="button"
           >
             <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
@@ -143,11 +149,11 @@ export function ChatTopBar({
             accessibilityRole={onTitlePress ? 'button' : undefined}
             accessibilityLabel={onTitlePress ? (variant === 'group' ? 'Open group info' : 'Open profile') : undefined}
           >
-            <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
+            <View style={[styles.avatar, !avatarUrl && { backgroundColor: variant === 'group' && groupId ? colorForId(groupId) : colors.surfaceAlt }]}>
               {avatarUrl ? (
                 <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
               ) : variant === 'group' ? (
-                <Ionicons name="people" size={18} color={colors.textSecondary} />
+                <Text style={[styles.avatarText, { color: colors.scrimTextPrimary }]}>{initials ?? 'G'}</Text>
               ) : (
                 <Text style={styles.avatarText}>{initials ?? '?'}</Text>
               )}
@@ -166,7 +172,7 @@ export function ChatTopBar({
                     size={13}
                     color={colors.brand}
                     style={styles.verifiedBadge}
-                    accessibilityLabel="Verified user"
+                    accessibilityLabel={t('common.verifiedUser')}
                   />
                 ) : null}
               </View>
@@ -215,15 +221,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   safe: {
     backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   searchRoot: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm - 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   searchFieldWrap: {
     flex: 1,
     flexDirection: 'row',
@@ -232,129 +236,107 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 0,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
-    minHeight: 38,
-  },
+    minHeight: 38 },
   searchFieldIcon: {
-    marginRight: Space.xs,
-  },
+    marginRight: Space.xs },
   searchInput: {
     flex: 1,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textPrimary,
-    paddingVertical: Space.sm - 2,
-  },
+    paddingVertical: Space.sm - 2 },
   searchNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 0,
-  },
+    gap: 0 },
   searchNavBtn: {
-    width: 36,
-    height: 36,
+    width: Control.chrome,
+    height: Control.chrome,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   searchCount: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textMuted,
     minWidth: 34,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   root: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm - 1,
     gap: Space.xs,
-    minHeight: 56,
-  },
+    minHeight: 56 },
   backBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: -2,
-  },
+    marginLeft: -2 },
   center: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 1,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   avatar: {
-    width: 40,
-    height: 40,
+    width: AvatarSize.md,
+    height: AvatarSize.md,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   avatarImage: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-  },
+    width: AvatarSize.md,
+    height: AvatarSize.md,
+    borderRadius: Radius.full },
   presenceDotOuter: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 12,
-    height: 12,
+    width: Space.smMd,
+    height: Space.smMd,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   presenceDot: {
-    width: 8,
-    height: 8,
-    borderRadius: Radius.full,
-  },
+    width: Space.sm,
+    height: Space.sm,
+    borderRadius: Radius.full },
   avatarText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   titleWrap: {
     flex: 1,
     justifyContent: 'center',
-    minWidth: 0,
-  },
+    minWidth: 0 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    minWidth: 0,
-  },
+    gap: Space.xs,
+    minWidth: 0 },
   title: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    flexShrink: 1,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    flexShrink: 1 },
   verifiedBadge: {
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   subtitle: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textMuted,
     marginTop: 1,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 0,
-  },
+    gap: 0 },
   iconBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+    alignItems: 'center' } });

@@ -3,12 +3,13 @@ import { StyleSheet, Pressable, View } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
-import { Typography, Type } from '../../theme/designTokens';
+  withSpring } from 'react-native-reanimated';
+import { Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useAppTheme } from '../../theme/ThemeContext';
 import { setStoredCreateMode } from '../../preferences/createModePreferences';
 
 // ── CreatorModeSwitch ──────────────────────────────────────────────────
@@ -48,6 +49,7 @@ export function CreatorModeSwitch({ mode, onModeChange }: CreatorModeSwitchProps
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
   const { spring } = useMotionConfig();
+  const { colors } = useAppTheme();
 
   // Active-indicator x-offset (animated dot). Each slot is SLOT_WIDTH wide;
   // the dot centres under the active slot.
@@ -77,8 +79,7 @@ export function CreatorModeSwitch({ mode, onModeChange }: CreatorModeSwitchProps
   };
 
   const dotStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: dotX.value }],
-  }));
+    transform: [{ translateX: dotX.value }] }));
 
   return (
     <View style={styles.container} pointerEvents="box-none">
@@ -99,7 +100,9 @@ export function CreatorModeSwitch({ mode, onModeChange }: CreatorModeSwitchProps
               <Reanimated.Text
                 style={[
                   styles.label,
-                  active && styles.labelActive,
+                  active
+                    ? { color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold }
+                    : { color: colors.scrimTextSecondary, fontFamily: Typography.family.regular },
                 ]}
               >
                 {m.label}
@@ -111,7 +114,7 @@ export function CreatorModeSwitch({ mode, onModeChange }: CreatorModeSwitchProps
       {/* Active indicator — a small dot that springs beneath the active label.
           The track matches the row width so translateX maps 1:1 to slots. */}
       <View style={styles.indicatorTrack} pointerEvents="none">
-        <Reanimated.View style={[styles.dot, dotStyle]} />
+        <Reanimated.View style={[styles.dot, { backgroundColor: colors.scrimTextPrimary }, dotStyle]} />
       </View>
     </View>
   );
@@ -119,37 +122,31 @@ export function CreatorModeSwitch({ mode, onModeChange }: CreatorModeSwitchProps
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Fixed-width slot; 44pt minHeight satisfies the touch-target minimum
   // while the visible text remains compact.
   labelBtn: {
     width: SLOT_WIDTH,
     minHeight: 44,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   label: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: 'rgba(255,255,255,0.55)',
+    fontSize: TypographyV2.body.size,
+    // color + fontFamily applied inline via scrim text tokens (active/inactive)
   },
   labelActive: {
-    color: '#fff',
-    fontFamily: Typography.family.semibold,
+    // Applied inline via colors.scrimTextPrimary + Typography.family.semibold
   },
   // The dot track is exactly the row width (3 × SLOT_WIDTH).
   indicatorTrack: {
     position: 'relative',
     height: DOT_SIZE + 4,
     width: SLOT_WIDTH * MODES.length,
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   dot: {
     position: 'absolute',
     top: 0,
@@ -157,8 +154,7 @@ const styles = StyleSheet.create({
     width: DOT_SIZE,
     height: DOT_SIZE,
     borderRadius: DOT_SIZE / 2,
-    backgroundColor: '#fff',
-  },
-});
+    // backgroundColor applied inline via colors.scrimTextPrimary (theme token)
+  } });
 
 export default CreatorModeSwitch;

@@ -3,7 +3,8 @@ import { StyleSheet, View, Text } from 'react-native';
 import { Controller, Control, FieldError, RegisterOptions } from 'react-hook-form';
 import { Switch } from '@expo/ui';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Type } from '../../theme/designTokens';
+import {} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface ControlledToggleProps {
   name: string;
@@ -17,8 +18,7 @@ export function ControlledToggle({
   name,
   control,
   label,
-  rules,
-}: ControlledToggleProps) {
+  rules }: ControlledToggleProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -43,13 +43,10 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
+    paddingVertical: 12 },
   label: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    flex: 1,
-  },
-  });
+    flex: 1 } });
 }

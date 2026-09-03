@@ -5,25 +5,26 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-} from 'react-native';
+  Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '../BottomSheet';
 import { AppButton } from './AppButton';
 import { AppInput } from './AppInput';
 import { CachedImage } from '../CachedImage';
 import { Meta, Headline } from './Text';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import {
   sanitizeDecimalInput,
-} from '../../utils/currencyAuthoringFlows';
+  convertDisplayToGbpAmount } from '../../utils/currencyAuthoringFlows';
 import { toIze, formatIzeAmount } from '../../utils/currency';
 import { createStableId } from '../../utils/createStableId';
 import { haptics } from '../../utils/haptics';
 import type { SupportedCurrencyCode } from '../../constants/currencies';
-import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
-import type { GoldRates } from '../../utils/currency';
+import type { FxRates } from '../../utils/currency';
 import type { AuctionDetailResponse } from '../../services/marketApi';
+import type { AuctionEffectiveState } from '../../hooks/useServerClock';
 import {
   validateBidEntry,
   applyQuickIncrement,
@@ -33,9 +34,10 @@ import {
   shouldCloseSheetDueToLifecycle,
   isSheetStateStale,
   type BidSheetStage,
-  type TransactionError,
-} from '../../utils/transactionSheetLogic';
+  type TransactionError } from '../../utils/transactionSheetLogic';
 import { parseApiError } from '../../lib/apiClient';
+import { useUnknownOutcomeReconciliation } from '../../hooks/useUnknownOutcomeReconciliation';
+import { lookupAuctionBidByIdempotencyKey, type MarketAuctionBid } from '../../services/marketApi';
 
 export interface BidSheetAuctionContext {
   id: string;
@@ -45,7 +47,7 @@ export interface BidSheetAuctionContext {
   minimumNextBidGbp: number;
   endsAt: string;
   sellerName: string;
-  effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+  effectiveState: AuctionEffectiveState;
   isSeller: boolean;
   countdownText: string;
 }
@@ -55,9 +57,9 @@ interface BidSheetProps {
   onDismiss: () => void;
   auction: BidSheetAuctionContext;
   currencyCode: SupportedCurrencyCode;
-  goldRates: Partial<GoldRates>;
+  fxRates: Partial<FxRates>;
   formatFromFiat: (amount: number, currency?: SupportedCurrencyCode, opts?: any) => string;
-  onSubmitBid: (gbpAmount: number, idempotencyKey: string) => Promise<void>;
+  onSubmitBid: (gbpAmount: number, idempotencyKey: string, maxBidGbp?: number) => Promise<void>;
   onRefreshDetail: () => Promise<AuctionDetailResponse | null>;
   onReviewBuyNow?: () => void;
   serverClockMs: number;
@@ -70,14 +72,13 @@ export function BidSheet({
   onDismiss,
   auction,
   currencyCode,
-  goldRates,
+  fxRates,
   formatFromFiat,
   onSubmitBid,
   onRefreshDetail,
   onReviewBuyNow,
   serverClockMs,
-  initialBidAmount,
-}: BidSheetProps) {
+  initialBidAmount }: BidSheetProps) {
   const { colors } = useAppTheme();
   // Map theme colors to the legacy Colors interface so the static
   // StyleSheet can use themed values. This is a migration bridge �
@@ -95,10 +96,10 @@ export function BidSheet({
     danger: colors.danger,
     dangerSubtle: colors.dangerSubtle,
     success: colors.success,
+    successSubtle: colors.successSubtle,
     warning: colors.warning,
     background: colors.background,
-    textInverse: colors.textInverse,
-  };
+    textInverse: colors.textInverse };
   const styles = React.useMemo(() => createStyles(themed), [themed]);
   const [stage, setStage] = React.useState<BidSheetStage>('entry');
   const [bidInput, setBidInput] = React.useState('');
@@ -108,18 +109,28 @@ export function BidSheet({
   const [isPreflighting, setIsPreflighting] = React.useState(false);
   const [sheetOpenedAtMs, setSheetOpenedAtMs] = React.useState(0);
   const [currentMinimum, setCurrentMinimum] = React.useState(auction.minimumNextBidGbp);
+  // Proxy bidding (max bid) state
+  const [proxyEnabled, setProxyEnabled] = React.useState(false);
+  const [maxBidInput, setMaxBidInput] = React.useState('');
+  const [maxBidGbp, setMaxBidGbp] = React.useState<number | null>(null);
   const idempotencyKeyRef = React.useRef<string | null>(null);
+  const isMountedRef = React.useRef(true);
+  const { reconcile } = useUnknownOutcomeReconciliation();
+
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   // Shared authoritative snapshot helper — returns refreshed state or null on failure
   const getAuthoritativeSnapshot = async (): Promise<{
     minimumNextBidGbp: number;
-    effectiveState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+    effectiveState: AuctionEffectiveState;
   } | null> => {
     if (!isSheetStateStale(sheetOpenedAtMs, Date.now())) {
       return {
         minimumNextBidGbp: currentMinimum,
-        effectiveState: auction.effectiveState,
-      };
+        effectiveState: auction.effectiveState };
     }
     const snapshot = await onRefreshDetail();
     if (!snapshot) {
@@ -128,7 +139,7 @@ export function BidSheet({
     const minFromSnapshot = snapshot.auction.minimumNextBidGbp;
     setCurrentMinimum(minFromSnapshot);
     setSheetOpenedAtMs(Date.now());
-    const snapshotState: 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled' =
+    const snapshotState: AuctionEffectiveState =
       snapshot.auction.cancelledAt ? 'cancelled'
       : snapshot.auction.settledAt ? 'settled'
       : snapshot.auction.lifecycle;
@@ -141,7 +152,7 @@ export function BidSheet({
       // Use pre-filled amount from notification if provided, otherwise calculate suggested bid
       const suggested = initialBidAmount
         ? initialBidAmount.toFixed(2)
-        : getSuggestedBid(auction.minimumNextBidGbp, currencyCode, goldRates);
+        : getSuggestedBid(auction.minimumNextBidGbp, currencyCode, fxRates);
       setBidInput(suggested);
       setStage('entry');
       setError(null);
@@ -149,9 +160,12 @@ export function BidSheet({
       setIsSubmitting(false);
       setCurrentMinimum(auction.minimumNextBidGbp);
       setSheetOpenedAtMs(Date.now());
+      setProxyEnabled(false);
+      setMaxBidInput('');
+      setMaxBidGbp(null);
       idempotencyKeyRef.current = null;
     }
-  }, [visible, auction.minimumNextBidGbp, currencyCode, goldRates, initialBidAmount]);
+  }, [visible, auction.minimumNextBidGbp, currencyCode, fxRates, initialBidAmount]);
 
   // Lifecycle guard — close sheet if auction transitions to terminal
   React.useEffect(() => {
@@ -165,8 +179,7 @@ export function BidSheet({
             : 'This auction has ended. Bidding is no longer available.',
         canRetry: false,
         transactionPossible: false,
-        isAmbiguous: false,
-      });
+        isAmbiguous: false });
       setStage('error');
     }
   }, [visible, auction.effectiveState]);
@@ -184,7 +197,65 @@ export function BidSheet({
   };
 
   const handleQuickIncrement = (pct: number) => {
-    setBidInput(applyQuickIncrement(bidInput, pct, currentMinimum, currencyCode, goldRates));
+    haptics.selection();
+    setBidInput(applyQuickIncrement(bidInput, pct, currentMinimum, currencyCode, fxRates));
+    setError(null);
+  };
+
+  // Validate the optional proxy max bid. Returns the validated GBP amount
+  // or null with an error set on the caller's behalf.
+  const validateMaxBid = (
+    maxBidDisplay: string,
+    bidGbp: number,
+    minGbp: number,
+  ): { gbp: number | null; error: TransactionError | null } => {
+    const raw = Number(maxBidDisplay);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return {
+        gbp: null,
+        error: {
+          kind: 'invalid_amount',
+          message: 'Enter a maximum bid.',
+          canRetry: true,
+          transactionPossible: true,
+          isAmbiguous: false } };
+    }
+    const maxGbp = convertDisplayToGbpAmount(raw, currencyCode, fxRates);
+    if (!Number.isFinite(maxGbp) || maxGbp <= 0) {
+      return {
+        gbp: null,
+        error: {
+          kind: 'invalid_amount',
+          message: 'Couldn\'t convert maximum bid to this currency.',
+          canRetry: true,
+          transactionPossible: true,
+          isAmbiguous: false } };
+    }
+    if (maxGbp < bidGbp) {
+      return {
+        gbp: null,
+        error: {
+          kind: 'invalid_amount',
+          message: 'Maximum bid must be at least your bid amount.',
+          canRetry: true,
+          transactionPossible: true,
+          isAmbiguous: false } };
+    }
+    if (maxGbp < minGbp) {
+      return {
+        gbp: null,
+        error: {
+          kind: 'below_minimum',
+          message: 'Maximum bid is below the minimum to lead.',
+          canRetry: true,
+          transactionPossible: true,
+          isAmbiguous: false } };
+    }
+    return { gbp: maxGbp, error: null };
+  };
+
+  const handleMaxBidChange = (v: string) => {
+    setMaxBidInput(sanitizeDecimalInput(v));
     setError(null);
   };
 
@@ -198,17 +269,15 @@ export function BidSheet({
           message: 'Unable to verify current auction state. Check your connection and try again.',
           canRetry: true,
           transactionPossible: true,
-          isAmbiguous: true,
-        });
+          isAmbiguous: true });
         return;
       }
 
-      const result = validateBidEntry(bidInput, currencyCode, goldRates, {
+      const result = validateBidEntry(bidInput, currencyCode, fxRates, {
         minimumNextBidGbp: snapshot.minimumNextBidGbp,
         isSeller: auction.isSeller,
         effectiveState: snapshot.effectiveState,
-        isSubmitting,
-      });
+        isSubmitting });
 
       if (!result.valid || !result.gbpAmount) {
         setError(result.error);
@@ -216,6 +285,19 @@ export function BidSheet({
       }
 
       const validatedGbpAmount = result.gbpAmount;
+
+      // Validate optional proxy max bid against the authoritative snapshot
+      if (proxyEnabled) {
+        const maxResult = validateMaxBid(maxBidInput, validatedGbpAmount, snapshot.minimumNextBidGbp);
+        if (maxResult.error) {
+          setError(maxResult.error);
+          return;
+        }
+        setMaxBidGbp(maxResult.gbp);
+      } else {
+        setMaxBidGbp(null);
+      }
+
       setGbpAmount(validatedGbpAmount);
       setError(null);
       setStage('review');
@@ -229,6 +311,7 @@ export function BidSheet({
 
     setIsPreflighting(true);
     let validatedGbpAmount = gbpAmount;
+    let validatedMaxBidGbp: number | null = null;
 
     try {
       const snapshot = await getAuthoritativeSnapshot();
@@ -238,19 +321,17 @@ export function BidSheet({
           message: 'Unable to verify current auction state. Check your connection and try again.',
           canRetry: true,
           transactionPossible: true,
-          isAmbiguous: true,
-        });
+          isAmbiguous: true });
         setStage('entry');
         return;
       }
 
       // Re-validate after refresh using the returned snapshot values
-      const result = validateBidEntry(bidInput, currencyCode, goldRates, {
+      const result = validateBidEntry(bidInput, currencyCode, fxRates, {
         minimumNextBidGbp: snapshot.minimumNextBidGbp,
         isSeller: auction.isSeller,
         effectiveState: snapshot.effectiveState,
-        isSubmitting,
-      });
+        isSubmitting });
       if (!result.valid || !result.gbpAmount) {
         setError(result.error);
         setStage('entry');
@@ -258,6 +339,20 @@ export function BidSheet({
       }
       validatedGbpAmount = result.gbpAmount;
       setGbpAmount(validatedGbpAmount);
+
+      // Re-validate optional proxy max bid against the refreshed snapshot
+      if (proxyEnabled) {
+        const maxResult = validateMaxBid(maxBidInput, validatedGbpAmount, snapshot.minimumNextBidGbp);
+        if (maxResult.error) {
+          setError(maxResult.error);
+          setStage('entry');
+          return;
+        }
+        validatedMaxBidGbp = maxResult.gbp;
+        setMaxBidGbp(validatedMaxBidGbp);
+      } else {
+        setMaxBidGbp(null);
+      }
     } finally {
       setIsPreflighting(false);
     }
@@ -272,7 +367,11 @@ export function BidSheet({
 
     try {
       // Submit the validated local variable, not stale state
-      await onSubmitBid(validatedGbpAmount, idempotencyKeyRef.current);
+      await onSubmitBid(
+        validatedGbpAmount,
+        idempotencyKeyRef.current,
+        proxyEnabled && validatedMaxBidGbp != null ? validatedMaxBidGbp : undefined,
+      );
       setStage('success');
       haptics.success();
     } catch (err) {
@@ -285,13 +384,50 @@ export function BidSheet({
         parsed.message,
         parsed.isNetworkError,
         parsed.structuredDetails,
+        currencyCode,
+        fxRates,
       );
       setError(txError);
+      haptics.error();
 
       if (txError.isAmbiguous) {
-        // Ambiguous failure — preserve the same idempotency key for replay
-        // Do NOT reset the key. User retries with the same key.
-        setStage('error');
+        // Ambiguous failure — the server may have committed the bid.
+        // Instead of showing a generic error, poll the lookup endpoint
+        // to resolve the outcome automatically. The idempotency key is
+        // preserved so a manual retry (if reconciliation fails) won't
+        // create a duplicate.
+        setStage('unknown_outcome');
+        const key = idempotencyKeyRef.current;
+        if (!key) {
+          setStage('error');
+          return;
+        }
+        const result = await reconcile<MarketAuctionBid>({
+          lookup: () => lookupAuctionBidByIdempotencyKey(key),
+          onAcknowledged: () => {
+            // Bid was committed — treat as success.
+            setStage('success');
+            haptics.success();
+            // Refresh detail so the auction reflects the new bid.
+            void onRefreshDetail();
+          },
+          onSafeToRetry: () => {
+            // No bid was committed — safe to retry with a new key.
+            idempotencyKeyRef.current = null;
+            setError(null);
+            setStage('review');
+          },
+          onUnresolved: () => {
+            // Could not determine — show the ambiguous error with retry.
+            setError(txError);
+            setStage('error');
+          },
+          shouldContinue: () => isMountedRef.current && visible });
+        if (result.outcome === 'acknowledged' || result.outcome === 'safe_to_retry') {
+          return;
+        }
+        // 'unresolved' falls through to the error stage set by onUnresolved.
+        return;
       } else if (txError.kind === 'buy_now_review_required') {
         // Recoverable conflict — refresh detail once to get authoritative Buy Now price
         await onRefreshDetail();
@@ -382,11 +518,11 @@ export function BidSheet({
             <View style={styles.bidContextStack}>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Current bid</Text>
-                <Text style={styles.bidContextValue}>{formatFromFiat(auction.currentBidGbp, DEFAULT_CURRENCY_CODE)}</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(auction.currentBidGbp, currencyCode)}</Text>
               </View>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Minimum to lead</Text>
-                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, DEFAULT_CURRENCY_CODE)}</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, currencyCode)}</Text>
               </View>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Time remaining</Text>
@@ -415,7 +551,7 @@ export function BidSheet({
 
             {/* 1ZE equivalent — platform value */}
             <Text style={styles.amountIzeEquivalent}>
-              {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, goldRates), 2)}
+              {formatIzeAmount(toIze(Number(bidInput) || 0, currencyCode, fxRates), 2)}
             </Text>
 
             {/* Quick adjustments */}
@@ -437,13 +573,53 @@ export function BidSheet({
               ))}
             </View>
 
+            {/* Proxy bidding toggle — restrained switch, no card chrome */}
+            <View style={styles.proxyToggleRow}>
+              <Text style={styles.proxyToggleLabel}>Set maximum bid</Text>
+              <Switch
+                value={proxyEnabled}
+                onValueChange={(v) => {
+                  haptics.selection();
+                  setProxyEnabled(v);
+                  setError(null);
+                  if (!v) setMaxBidInput('');
+                }}
+                disabled={isPreflighting || isSubmitting}
+                trackColor={{ false: themed.border, true: themed.brand }}
+                ios_backgroundColor={themed.border}
+                accessibilityLabel="Enable proxy bidding with a maximum bid"
+                accessibilityRole="switch"
+              />
+            </View>
+
+            {/* Max bid input — same styling as the bid input, inline below */}
+            {proxyEnabled && (
+              <>
+                <View style={styles.amountContainer}>
+                  <Text style={styles.amountCurrency}>{currencyCode}</Text>
+                  <AppInput
+                    value={maxBidInput}
+                    onChangeText={handleMaxBidChange}
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    accessibilityLabel="Maximum bid amount"
+                    accessibilityHint={`Enter your maximum bid in ${currencyCode}`}
+                    containerStyle={styles.amountInput}
+                  />
+                </View>
+                <Text style={styles.amountIzeEquivalent}>
+                  {formatIzeAmount(toIze(Number(maxBidInput) || 0, currencyCode, fxRates), 2)}
+                </Text>
+              </>
+            )}
+
             {/* Bid confidence indicator — shows if the current amount would lead */}
             {(() => {
               const bidGbp = gbpAmount ?? 0;
               const wouldLead = bidGbp >= currentMinimum && bidGbp > 0;
               if (bidGbp <= 0) return null;
               return (
-                <View style={[styles.confidenceRow, { backgroundColor: wouldLead ? `${themed.success}10` : `${themed.danger}10` }]}>
+                <View style={[styles.confidenceRow, { backgroundColor: wouldLead ? themed.successSubtle : themed.dangerSubtle }]}>
                   <Ionicons
                     name={wouldLead ? 'checkmark-circle-outline' : 'alert-circle-outline'}
                     size={14}
@@ -470,7 +646,7 @@ export function BidSheet({
               variant="primary"
               size="md"
               align="center"
-              title={isPreflighting ? 'Checking...' : 'Review bid'}
+              title={isPreflighting ? 'Checking...' : proxyEnabled ? 'Review proxy bid' : 'Review bid'}
               disabled={isPreflighting || isSubmitting}
               accessibilityLabel="Review your bid"
             />
@@ -497,7 +673,7 @@ export function BidSheet({
                 {currencyCode} {bidInput}
               </Text>
               <Text style={styles.reviewAmountIze}>
-                {formatIzeAmount(gbpAmount ? toIze(gbpAmount, 'GBP', goldRates) : 0, 2)}
+                {formatIzeAmount(gbpAmount ? toIze(gbpAmount, 'GBP', fxRates) : 0, 2)}
               </Text>
               {isNonGbp && gbpEquivalentText && (
                 <Text style={styles.reviewGbpEquivalent}>{gbpEquivalentText}</Text>
@@ -508,12 +684,18 @@ export function BidSheet({
             <View style={styles.reviewReceipt}>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Current value</Text>
-                <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, DEFAULT_CURRENCY_CODE)}</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, currencyCode)}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Minimum to lead</Text>
-                <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, DEFAULT_CURRENCY_CODE)}</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, currencyCode)}</Text>
               </View>
+              {proxyEnabled && maxBidGbp != null && (
+                <View style={styles.reviewReceiptRow}>
+                  <Text style={styles.reviewReceiptLabel}>Maximum bid</Text>
+                  <Text style={styles.reviewReceiptValue}>{formatFromFiat(maxBidGbp, currencyCode)}</Text>
+                </View>
+              )}
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Time remaining</Text>
                 <Text style={styles.reviewReceiptValue}>{auction.countdownText}</Text>
@@ -524,13 +706,21 @@ export function BidSheet({
               </View>
             </View>
 
-            {/* P1-C: Pre-submit confirmation must state amount, binding
-                nature, fees/total if applicable, and cancellation rule. */}
+            {/* P0: Risk disclosure — binding bid, payment deadline, no
+                retraction. Presented above the confirm button, not buried
+                in fine print. The user must acknowledge these terms before
+                committing to an irreversible action. */}
             <View style={styles.commitmentBlock}>
               <View style={styles.commitmentRow}>
                 <Ionicons name="information-circle-outline" size={14} color={themed.textSecondary} />
                 <Text style={styles.commitmentText}>
                   Bids are binding once accepted.
+                </Text>
+              </View>
+              <View style={styles.commitmentRow}>
+                <Ionicons name="time-outline" size={14} color={themed.textSecondary} />
+                <Text style={styles.commitmentText}>
+                  If you win, payment is due promptly after the auction ends.
                 </Text>
               </View>
               <View style={styles.commitmentRow}>
@@ -555,7 +745,7 @@ export function BidSheet({
               variant="primary"
               size="md"
               align="center"
-              title={isPreflighting ? 'Checking...' : 'Confirm bid'}
+              title={isPreflighting ? 'Checking...' : proxyEnabled ? 'Place proxy bid' : 'Confirm bid'}
               disabled={isPreflighting || isSubmitting}
               accessibilityLabel="Confirm and submit your bid"
             />
@@ -582,6 +772,23 @@ export function BidSheet({
           </View>
         )}
 
+        {/* ── Unknown outcome stage ── */}
+        {/* The bid response was lost. We are polling the backend to
+            determine whether the bid was committed. The user must not
+            retry until the status is resolved. */}
+        {stage === 'unknown_outcome' && (
+          <View style={styles.centerStage}>
+            <View style={styles.submittingSpinnerWrap}>
+              <ActivityIndicator size="large" color={themed.brand} />
+            </View>
+            <Text style={styles.submittingText}>Checking your bid...</Text>
+            <Text style={styles.submittingDetail}>
+              We lost connection while placing your bid. We are checking
+              whether it went through. Please do not place another bid.
+            </Text>
+          </View>
+        )}
+
         {/* ── Success stage ── */}
         {stage === 'success' && (
           <View style={styles.centerStage}>
@@ -590,7 +797,7 @@ export function BidSheet({
             </View>
             <Text style={styles.successTitle}>Bid placed</Text>
             <Text style={styles.successDetail}>
-              Your bid of {formatFromFiat(gbpAmount ?? 0, DEFAULT_CURRENCY_CODE)} has been submitted
+              Your bid of {formatFromFiat(gbpAmount ?? 0, currencyCode)} has been submitted
             </Text>
             <AppButton
               style={styles.doneBtn}
@@ -616,7 +823,7 @@ export function BidSheet({
               <View style={styles.conflictPriceRow}>
                 <Meta style={styles.conflictPriceLabel}>Buy Now price</Meta>
                 <Text style={styles.conflictPriceValue}>
-                  {formatFromFiat(error.buyNowPriceGbp, DEFAULT_CURRENCY_CODE)}
+                  {formatFromFiat(error.buyNowPriceGbp, currencyCode)}
                 </Text>
               </View>
             )}
@@ -684,221 +891,188 @@ const createStyles = (themed: {
   textPrimary: string; textSecondary: string; textMuted: string;
   brand: string; border: string; borderSubtle: string;
   surface: string; surfaceAlt: string; surfaceElevated: string;
-  danger: string; dangerSubtle: string; success: string; warning: string;
-  background: string; textInverse: string;
+  danger: string; dangerSubtle: string; success: string; successSubtle: string;
+  warning: string; background: string; textInverse: string;
 }) => StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   itemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   itemThumb: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemThumbContainer: {
     width: 44,
     height: 44,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemThumbPlaceholder: {
     width: 44,
     height: 44,
     borderRadius: Radius.md,
     backgroundColor: themed.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemHeaderText: {
-    flex: 1,
-  },
+    flex: 1 },
   itemTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: themed.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: themed.textPrimary },
   itemSeller: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textSecondary,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: themed.border,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   stageContent: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   // ── Entry stage — large centered amount ──
   entryHeading: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.8,
     textAlign: 'center',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   amountContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   amountCurrency: {
-    fontSize: Type.priceList.size,
+    fontSize: TypographyV2.priceList.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: TypographyV2.priceList.fontFamily },
   amountInput: {
-    flex: 1,
-  },
+    flex: 1 },
   amountIzeEquivalent: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.brand,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     marginBottom: Space.sm,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   bidContextStack: {
     gap: Space.xs + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: themed.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: themed.border,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   bidContextRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   bidContextLabel: {
-    fontSize: Type.meta.size - 2,
+    fontSize: TypographyV2.meta.size - 2,
     color: themed.textMuted,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   bidContextValue: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: themed.textPrimary,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.priceList.fontFamily,
     fontVariant: ['tabular-nums'],
-  },
+    textAlign: 'right' },
   bidContextValueSecondary: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: themed.textSecondary,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypographyV2.body.fontFamily,
     fontVariant: ['tabular-nums'],
-  },
+    textAlign: 'right' },
   dominantAction: {
     width: '100%',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   dismissLink: {
     alignItems: 'center',
     paddingVertical: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   dismissLinkText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.body.fontFamily },
   // ── Review stage — receipt ──
   reviewHeading: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: themed.textMuted,
     letterSpacing: 0.8,
     textAlign: 'center',
     marginBottom: Space.sm,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   reviewAmountBlock: {
     alignItems: 'center',
     paddingVertical: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   reviewAmountValue: {
-    fontSize: Type.display.size + 4,
-    lineHeight: Type.display.lineHeight + 4,
+    fontSize: TypographyV2.display.size + 4,
+    lineHeight: TypographyV2.display.lineHeight + 4,
     fontWeight: '700',
-    letterSpacing: Type.display.letterSpacing,
+    letterSpacing: TypographyV2.display.letterSpacing,
     color: themed.textPrimary,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.display.fontFamily,
+    fontVariant: ['tabular-nums'] },
   reviewAmountIze: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: themed.brand,
-    fontFamily: Typography.family.medium,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'] },
   reviewGbpEquivalent: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.regular,
-    fontVariant: ['tabular-nums'],
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   reviewReceipt: {
     gap: Space.xs + 2,
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: themed.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: themed.border,
-  },
+    borderBottomColor: themed.border },
   reviewReceiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   reviewReceiptLabel: {
-    fontSize: Type.meta.size - 2,
+    fontSize: TypographyV2.meta.size - 2,
     color: themed.textMuted,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.5,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.5 },
   reviewReceiptValue: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: themed.textPrimary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.body.fontFamily,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right' },
   countdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   izeEquivalentText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.regular,
-    marginBottom: Space.xs,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginBottom: Space.xs },
   countdownText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   input: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   incrementRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   incrementChip: {
     flex: 1,
     paddingVertical: Space.sm,
@@ -909,17 +1083,23 @@ const createStyles = (themed: {
     borderColor: themed.border,
     alignItems: 'center',
     minHeight: 44,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   incrementChipPressed: {
     backgroundColor: themed.border,
-    opacity: 0.7,
-  },
+    opacity: 0.85 },
   incrementText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: themed.textPrimary },
+  proxyToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.xs },
+  proxyToggleLabel: {
+    fontSize: TypographyV2.body.size,
     color: themed.textPrimary,
-  },
+    fontFamily: TypographyV2.body.fontFamily },
   confidenceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -927,14 +1107,12 @@ const createStyles = (themed: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   confidenceText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   errorRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -943,111 +1121,89 @@ const createStyles = (themed: {
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: themed.dangerSubtle,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   errorText: {
     flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.danger,
-    fontFamily: Typography.family.medium,
-    lineHeight: 18,
-  },
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: 18 },
   actions: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   actionBtn: {
-    flex: 1,
-  },
+    flex: 1 },
   primaryBtn: {},
   reviewDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: themed.border,
-    marginVertical: Space.xs,
-  },
+    marginVertical: Space.xs },
   commitmentBlock: {
     gap: Space.xs / 2,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   commitmentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    paddingVertical: Space.xs / 2,
-  },
+    paddingVertical: Space.xs / 2 },
   commitmentText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   centerStage: {
     alignItems: 'center',
     paddingVertical: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   submittingText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: themed.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: themed.textPrimary },
   submittingSpinnerWrap: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   submittingDetail: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: themed.textMuted,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   successIcon: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   successTitle: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.semibold,
-    color: themed.textPrimary,
-  },
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    color: themed.textPrimary },
   successDetail: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: themed.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.body.fontFamily },
   doneBtn: {
     minWidth: 160,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   errorIcon: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   errorIconSmall: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   errorTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: themed.textPrimary,
     textAlign: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   conflictIconRow: {
     alignItems: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   conflictHeading: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
     color: themed.textPrimary,
     textAlign: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   conflictExplanation: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: themed.textSecondary,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     textAlign: 'center',
     paddingHorizontal: Space.sm,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   conflictPriceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1056,16 +1212,12 @@ const createStyles = (themed: {
     paddingHorizontal: Space.md,
     backgroundColor: themed.surfaceAlt,
     borderRadius: Radius.md,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   conflictPriceLabel: {
-    fontSize: Type.body.size,
-    color: themed.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    color: themed.textSecondary },
   conflictPriceValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: themed.textPrimary,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: themed.textPrimary } });
 

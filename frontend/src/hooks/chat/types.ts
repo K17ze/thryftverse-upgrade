@@ -14,7 +14,8 @@ export type MsgType =
   | "media"
   | "system"
   | "commerce_state"
-  | "voice";
+  | "voice"
+  | "listing_share";
 
 export interface Message {
   id: string;
@@ -48,6 +49,26 @@ export interface Message {
     expiresAt?: string;
     /** Counter-offer chain depth (0 = initial, 1 = first counter, etc.) */
     counterRound?: number;
+    itemId?: string;
+    itemTitle?: string;
+    itemImage?: string | null;
+    itemBrand?: string | null;
+    itemSize?: string | null;
+    itemCondition?: string | null;
+  };
+
+  listing?: {
+    id: string;
+    title: string;
+    price: number;
+    originalPrice?: number;
+    image: string;
+    brand?: string;
+    size?: string;
+    condition?: string;
+    sellerUsername?: string;
+    sellerRating?: number;
+    isSold?: boolean;
   };
 
   date?: string;
@@ -58,13 +79,28 @@ export interface Message {
 
   mediaUri?: string;
 
-  mediaType?: "image" | "video";
+  mediaType?: "image" | "video" | "document";
 
   voiceUri?: string;
 
   voiceDurationMs?: number;
 
   voiceWaveform?: number[];
+
+  voiceContainer?: 'm4a' | 'ogg' | 'webm' | 'mp4';
+
+  voiceCodec?: 'aac' | 'opus' | 'mp3';
+
+  voiceModerationState?: 'pending' | 'allowed' | 'limited' | 'blocked';
+
+  voiceTranscription?: {
+    id: string;
+    state: 'queued' | 'processing' | 'complete' | 'failed_retryable' | 'failed_final' | 'unsupported';
+    text: string | null;
+    language: string | null;
+    failureReason: string | null;
+    derived: true;
+  };
 
   commerceState?: {
     stateType:
@@ -102,6 +138,23 @@ export interface Message {
    * duplicating it (P0-MSG-2).
    */
   clientMessageId?: string;
+
+  /** P2-03: True when this message has been edited by its sender. */
+  isEdited?: boolean;
+
+  /** P2-03: ISO timestamp of the most recent edit. */
+  editedAt?: string | null;
+
+  /** P2-03: Monotonic edit revision counter (0/undefined = never edited). */
+  editVersion?: number;
+
+  /** P2-02: Pinned location shared in chat (expo-location). */
+  location?: { lat: number; lng: number; label?: string };
+
+  /** P2-02: Document attachment (expo-document-picker). */
+  documentUri?: string;
+  documentName?: string;
+  documentMimeType?: string;
 }
 
 export const INITIAL_MESSAGES: Message[] = [];
@@ -158,9 +211,15 @@ export function formatDateSeparator(dateStr: string): string | null {
 
 export function formatMessageTime(dateStr?: string): string | undefined {
   if (!dateStr) return undefined;
-  const hasExplicitTime = /T\d{2}:\d{2}|\b\d{1,2}:\d{2}\b/.test(dateStr);
-  if (!hasExplicitTime) return undefined;
-  const d = parseMessageDate(dateStr);
-  if (!d) return undefined;
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const trimmed = dateStr.trim();
+  if (!trimmed) return undefined;
+  // If it's already a short human relative string (e.g. "22m ago", "Just now", "now"), return it
+  if (/\b(?:now|ago|yesterday|today)\b/i.test(trimmed)) {
+    return trimmed;
+  }
+  const d = parseMessageDate(trimmed);
+  if (d && !Number.isNaN(d.getTime())) {
+    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  }
+  return trimmed;
 }

@@ -34,6 +34,37 @@ interface MeiliClient {
   index(name: string): MeiliIndex;
 }
 
+interface MeiliTask {
+  taskUid: number;
+}
+
+/**
+ * Poll the Meilisearch task endpoint until a task succeeds or fails.
+ * Throws if the task ends in the `failed` state.
+ */
+async function pollMeiliTask(
+  url: string,
+  apiKey: string | undefined,
+  taskUid: number,
+  timeoutMs = 30_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  const headers = { Authorization: `Bearer ${apiKey ?? ''}` };
+  while (Date.now() < deadline) {
+    const response = await fetch(`${url}/tasks/${taskUid}`, { headers });
+    if (!response.ok) {
+      throw new Error(`Task poll failed: ${response.status} ${await response.text()}`);
+    }
+    const task = (await response.json()) as { status: string; error?: unknown };
+    if (task.status === 'succeeded') return;
+    if (task.status === 'failed') {
+      throw new Error(`Meilisearch task ${taskUid} failed: ${JSON.stringify(task.error)}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`Meilisearch task ${taskUid} timed out after ${timeoutMs}ms`);
+}
+
 /**
  * Map a PostgreSQL listing row into the `ListingDocument` shape expected
  * by the `SearchAdapter`. Numeric columns arrive as strings from pg and
@@ -114,12 +145,62 @@ export async function configureSearchIndex(): Promise<void> {
       { index: MEILISEARCH_INDEX_NAME },
       'Search index configured',
     );
+
+    await configureEmbedder();
   } catch (error) {
     logger.error(
       { err: error, index: MEILISEARCH_INDEX_NAME },
       'Failed to configure search index',
     );
   }
+}
+
+/**
+ * Configure the embedder for the Meilisearch index. Only runs when
+ * MEILISEARCH_EMBEDDER_SOURCE is set. Supported sources: huggingFace,
+ * openAi, ollama, rest. For huggingFace, no API key is needed (local
+ * inference). Throws on failure so callers can surface configuration
+ * errors during startup.
+ */
+export async function configureEmbedder(): Promise<void> {
+  const url = process.env.MEILISEARCH_URL;
+  if (!url) return;
+  const source = process.env.MEILISEARCH_EMBEDDER_SOURCE;
+  if (!source) return;
+  const indexName = process.env.MEILISEARCH_INDEX ?? 'listings';
+  const apiKey = process.env.MEILISEARCH_KEY;
+  const documentTemplate = '{{doc.title}} {{doc.description}} {{doc.brand}} {{doc.category}}';
+
+  const embedderConfig: Record<string, unknown> = { source };
+  if (source === 'openAi') {
+    embedderConfig.apiKey = process.env.MEILISEARCH_EMBEDDER_API_KEY ?? process.env.OPENAI_API_KEY;
+    embedderConfig.model = process.env.MEILISEARCH_EMBEDDER_MODEL ?? 'text-embedding-3-small';
+    embedderConfig.documentTemplate = documentTemplate;
+  } else if (source === 'huggingFace') {
+    embedderConfig.model = process.env.MEILISEARCH_EMBEDDER_MODEL ?? 'sentence-transformers/all-MiniLM-L6-v2';
+    embedderConfig.documentTemplate = documentTemplate;
+  }
+
+  const response = await fetch(
+    `${url}/indexes/${indexName}/settings/embedders`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey ?? ''}`,
+      },
+      body: JSON.stringify({ default: embedderConfig }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to configure embedder: ${response.status} ${await response.text()}`);
+  }
+  const task = (await response.json()) as MeiliTask;
+  await pollMeiliTask(url, apiKey, task.taskUid);
+  logger.info(
+    { index: indexName, source },
+    'Embedder configured on search index',
+  );
 }
 
 /**

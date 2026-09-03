@@ -20,8 +20,7 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,14 +30,15 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Stroke,
-  Control,
-} from '../theme/designTokens';
+  Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ImportedFieldDiff } from '../components/catalogImport/ImportedFieldDiff';
 import { ImportIssueNavigator } from '../components/catalogImport/ImportIssueNavigator';
+import { ExtractionCandidateRow } from '../components/catalogImport/ExtractionCandidateRow';
+import { ExtractionStatusBanner } from '../components/catalogImport/ExtractionStatusBanner';
 import {
   fetchImportItem,
   patchImportItem,
@@ -47,7 +47,8 @@ import {
   type ImportMediaDTO,
   type BlockingIssue,
   type SellerDecision,
-} from '../services/catalogImportApi';
+  type FieldCandidateDTO } from '../services/catalogImportApi';
+import { useExtractionCandidates } from '../hooks/useExtractionCandidates';
 import type { CatalogImportStackParamList } from './CatalogImportStartScreen';
 
 type Nav = NativeStackNavigationProp<CatalogImportStackParamList, 'CatalogImportItem'>;
@@ -133,9 +134,20 @@ export default function CatalogImportItemScreen() {
   const [patching, setPatching] = useState(false);
   const [issueIndex, setIssueIndex] = useState(0);
 
-  // Inline edit modal state
-  const [editing, setEditing] = useState<{ fieldKey: string; label: string; current: string } | null>(null);
+  // Inline edit modal state. When fromExtraction is set, the edit modal
+  // was opened from an extraction candidate — saving routes through the
+  // extraction decision path ('edited'), not the normal patch endpoint.
+  const [editing, setEditing] = useState<{
+    fieldKey: string;
+    label: string;
+    current: string;
+    fromExtraction?: { candidateId: string };
+  } | null>(null);
   const [draftValue, setDraftValue] = useState('');
+
+  // Extraction intelligence — advisory candidates from the item's photo.
+  // Not auto-triggered; the seller explicitly requests extraction.
+  const extraction = useExtractionCandidates(item?.id ?? null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -228,16 +240,66 @@ export default function CatalogImportItemScreen() {
 
   const handleSaveEdit = useCallback(() => {
     if (!editing) return;
-    const { fieldKey, current } = editing;
+    const { fieldKey, current, fromExtraction } = editing;
     const next = draftValue.trim();
     if (next === current) {
       handleCancelEdit();
       return;
     }
-    const fieldsPatch: Record<string, unknown> = { [fieldKey]: next };
-    void applyPatch({ fields: fieldsPatch });
+    if (fromExtraction && item) {
+      // The edit modal was opened from an extraction candidate. Route the
+      // save through the extraction decision path as 'edited' so the
+      // decision is recorded against the candidate with provenance.
+      void extraction
+        .decide(fieldKey, 'edited', item.fieldRevision, next, fromExtraction.candidateId)
+        .then(() => {
+          // Reload the item to get the fresh field_revision — the
+          // extraction decision bumped it. Without this, the next
+          // decision would send a stale revision and fail with 409.
+          if (isMountedRef.current) void load();
+        });
+    } else {
+      const fieldsPatch: Record<string, unknown> = { [fieldKey]: next };
+      void applyPatch({ fields: fieldsPatch });
+    }
     handleCancelEdit();
-  }, [editing, draftValue, applyPatch, handleCancelEdit]);
+  }, [editing, draftValue, applyPatch, handleCancelEdit, item, extraction, load]);
+
+  // ── Extraction decision handlers ───────────────────────────────────────
+  const handleExtractionDecide = useCallback(
+    (fieldName: string, decision: 'accepted' | 'rejected' | 'edited', candidateId: string, value: unknown) => {
+      if (!item) return;
+      void extraction
+        .decide(fieldName, decision, item.fieldRevision, value, candidateId)
+        .then(() => {
+          // Reload the item to get the fresh field_revision after an
+          // accepted/edited decision (which bumps the revision).
+          if (isMountedRef.current) void load();
+        });
+    },
+    [item, extraction, load],
+  );
+
+  const handleExtractionEdit = useCallback(
+    (fieldName: string, label: string, candidateId: string, currentValue: string) => {
+      // Open the edit modal pre-filled with the candidate value. The
+      // fromExtraction flag routes the save through the extraction decision
+      // path as 'edited', preserving the provenance chain.
+      setEditing({ fieldKey: fieldName, label, current: currentValue, fromExtraction: { candidateId } });
+      setDraftValue(currentValue);
+    },
+    [],
+  );
+
+  const handleExtractionTrigger = useCallback(() => {
+    void extraction.triggerExtraction();
+  }, [extraction]);
+
+  const handleShowEvidence = useCallback((_candidate: FieldCandidateDTO) => {
+    // Evidence sheet opens on demand — not implemented in this pass.
+    // The candidate row shows an info icon when evidence exists; tapping it
+    // would open a bottom sheet with OCR regions, barcode rects, etc.
+  }, []);
 
   const handleInclude = useCallback(() => {
     if (sellerDecision === 'selected') return;
@@ -314,8 +376,7 @@ export default function CatalogImportItemScreen() {
           {
             paddingBottom:
               insets.bottom +
-              (blockingIssues.length > 0 ? Space.lg + 72 : Space.lg),
-          },
+              (blockingIssues.length > 0 ? Space.lg + 72 : Space.lg) },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -353,6 +414,25 @@ export default function CatalogImportItemScreen() {
             </View>
           )}
         </ScrollView>
+
+        {/* ── Extraction status — honest state, not auto-triggered ── */}
+        <ExtractionStatusBanner
+          run={extraction.run}
+          loading={extraction.loading}
+          triggering={extraction.triggering}
+          isRunning={extraction.isRunning}
+          onTrigger={handleExtractionTrigger}
+        />
+
+        {/* ── Extraction error — compact inline, no toast ── */}
+        {extraction.error ? (
+          <View style={styles.extractionErrorRow}>
+            <Ionicons name="alert-circle" size={14} color={colors.warning} />
+            <Text style={styles.extractionErrorText} numberOfLines={2}>
+              {extraction.error}
+            </Text>
+          </View>
+        ) : null}
 
         {/* ── Seller decision — two-state, no decorative chrome ── */}
         <View style={styles.decisionRow}>
@@ -407,22 +487,38 @@ export default function CatalogImportItemScreen() {
         <View style={styles.diffList}>
           {FIELD_SPECS.map((spec) => {
             const field = fields[spec.key];
-            if (!field) return null;
-            const imported = stringify(field.sourceValue);
-            const resolved = stringify(field.value);
-            // Skip fields with neither a resolved nor imported value — they
-            // add noise without information.
-            if (imported === null && resolved === null) return null;
+            const imported = stringify(field?.sourceValue);
+            const resolved = stringify(field?.value);
+            const hasFieldData = imported !== null || resolved !== null;
+            // Extraction candidate for this field (top-ranked, non-abstained).
+            const candidate = extraction.topCandidateFor(spec.key);
+
+            // Skip fields with no data AND no candidate — they add noise.
+            if (!hasFieldData && !candidate) return null;
             return (
-              <ImportedFieldDiff
-                key={spec.key}
-                fieldName={spec.key}
-                label={spec.label}
-                importedValue={imported}
-                resolvedValue={resolved}
-                confidence={normaliseConfidence(field.confidence)}
-                onEdit={() => handleStartEdit(spec.key, spec.label)}
-              />
+              <React.Fragment key={spec.key}>
+                {hasFieldData ? (
+                  <ImportedFieldDiff
+                    fieldName={spec.key}
+                    label={spec.label}
+                    importedValue={imported}
+                    resolvedValue={resolved}
+                    confidence={normaliseConfidence(field?.confidence)}
+                    onEdit={() => handleStartEdit(spec.key, spec.label)}
+                  />
+                ) : null}
+                {candidate ? (
+                  <ExtractionCandidateRow
+                    candidate={candidate}
+                    fieldName={spec.key}
+                    label={spec.label}
+                    deciding={extraction.deciding}
+                    onDecide={handleExtractionDecide}
+                    onEdit={handleExtractionEdit}
+                    onShowEvidence={handleShowEvidence}
+                  />
+                ) : null}
+              </React.Fragment>
             );
           })}
         </View>
@@ -500,8 +596,7 @@ export default function CatalogImportItemScreen() {
 // ── Back button — transparent 44pt hit, 22pt glyph, no chrome ────────────────
 function BackButton({
   colors,
-  onPress,
-}: {
+  onPress }: {
   colors: ThemeColors;
   onPress: () => void;
 }) {
@@ -525,8 +620,7 @@ function DecisionButton({
   onPress,
   disabled,
   colors,
-  styles,
-}: {
+  styles }: {
   label: string;
   selected: boolean;
   onPress: () => void;
@@ -568,174 +662,157 @@ const stylesShared = StyleSheet.create({
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     screen: {
-      flex: 1,
-    },
+      flex: 1 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     scroll: {
-      flex: 1,
-    },
+      flex: 1 },
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      flexGrow: 1,
-    },
+      flexGrow: 1 },
     stateWrap: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.smMd,
-    },
+      gap: Space.smMd },
     stateText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textSecondary },
     stateTitle: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary },
     retryHit: {
       minHeight: Control.hit,
       paddingHorizontal: Space.lg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     retryText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.brand },
     title: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary },
     mediaRail: {
       paddingVertical: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
+    extractionErrorRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs },
+    extractionErrorText: {
+      flex: 1,
+      fontFamily: FontFamily.regular,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.warning },
     thumb: {
       width: THUMB_SIZE,
       height: THUMB_SIZE,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     mediaPlaceholder: {
       width: THUMB_SIZE,
       height: THUMB_SIZE,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     decisionRow: {
       flexDirection: 'row',
       gap: Space.sm,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     decisionButton: {
       minHeight: Control.hit,
       borderRadius: Radius.full,
       paddingVertical: Space.sm,
       paddingHorizontal: Space.smMd,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     decisionLabel: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.label.size,
-      lineHeight: Type.label.lineHeight,
-      letterSpacing: Type.label.letterSpacing,
-      textTransform: 'uppercase',
-    },
+      fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight,
+      letterSpacing: TypographyV2.label.letterSpacing,
+      textTransform: 'uppercase' },
     issuesBlock: {
       marginTop: Space.sm,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     issueSeparator: {
       borderTopWidth: Stroke.hairline,
       borderTopColor: colors.borderSubtle,
       marginTop: Space.sm,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     issueRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     issueGlyph: {
       flexShrink: 0,
-      marginTop: 2,
-    },
+      marginTop: 2 },
     issueText: {
       flex: 1,
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     issueMessage: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      color: colors.textPrimary },
     issueHint: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textMuted },
     diffList: {
       marginTop: Space.sm,
       borderTopWidth: Stroke.hairline,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     navigatorWrap: {
       position: 'absolute',
       left: 0,
       right: 0,
-      bottom: 0,
-    },
+      bottom: 0 },
     // ── Modal ──
     modalOverlay: {
       flex: 1,
       backgroundColor: colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.lg,
-    },
+      paddingHorizontal: Space.lg },
     modalCard: {
       width: '100%',
       borderRadius: Radius.lg,
       padding: Space.md,
-      gap: Space.md,
-    },
+      gap: Space.md },
     modalTitle: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary },
     modalInput: {
       borderWidth: Stroke.standard,
       borderRadius: Radius.md,
@@ -743,31 +820,25 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: Space.sm,
       minHeight: 96,
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      textAlignVertical: 'top',
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      textAlignVertical: 'top' },
     modalActions: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     modalActionHit: {
       minHeight: Control.hit,
       paddingHorizontal: Space.md,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     modalCancelText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textMuted },
     modalSaveText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.brand,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.brand } });

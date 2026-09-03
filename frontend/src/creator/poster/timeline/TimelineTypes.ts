@@ -93,6 +93,10 @@ export interface PosterClip {
   cropRect?: ClipCropRect;
   /** Rotation in degrees — one of 0, 90, 180, 270. */
   rotation?: number;
+  /** Reverse playback. */
+  reversed?: boolean;
+  /** Freeze frame timestamp (ms from clip start). */
+  freezeFrameMs?: number;
 }
 
 export interface OverlayLayer {

@@ -2,9 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  Alert,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -12,12 +10,14 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { Space, Radius, Elevation, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { EmptyState } from '../components/EmptyState';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useHaptic } from '../hooks/useHaptic';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useBackendData } from '../context/BackendDataContext';
@@ -25,7 +25,7 @@ import { useBackendData } from '../context/BackendDataContext';
 type Props = NativeStackScreenProps<RootStackParamList, 'EditCollection'>;
 
 export default function EditCollectionScreen({ navigation, route }: Props) {
-  const { collectionId } = route.params;
+  const { collectionId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
@@ -53,6 +53,16 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
   const [isPrivate, setIsPrivate] = useState(collection?.isPrivate ?? false);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
+
   const hasChanges =
     name.trim() !== (collection?.name ?? '').trim() ||
     description.trim() !== (collection?.description ?? '').trim() ||
@@ -69,8 +79,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
       await updateCollectionOnApi(collectionId, {
         name: name.trim(),
         description: description.trim() || null,
-        isPrivate,
-      });
+        isPrivate });
       show('Collection updated', 'success');
       setIsSaving(false);
       navigation.goBack();
@@ -82,28 +91,24 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
 
   const handleDelete = useCallback(() => {
     haptic.heavy();
-    Alert.alert(
-      'Delete Collection?',
-      `This will permanently delete "${collection?.name}". Items in your Saved will not be affected.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (collectionId) {
-              try {
-                await deleteCollectionOnApi(collectionId);
-                show('Collection deleted', 'info');
-                navigation.navigate('Closet');
-              } catch {
-                show('Unable to delete collection. Try again.', 'error');
-              }
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Delete Collection?',
+      message: `This will permanently delete "${collection?.name}". Items in your Saved will not be affected.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        if (collectionId) {
+          try {
+            await deleteCollectionOnApi(collectionId);
+            show('Collection deleted', 'info');
+            navigation.navigate('Closet');
+          } catch {
+            show('Unable to delete collection. Try again.', 'error');
+          }
+        }
+      } });
   }, [collection, collectionId, deleteCollectionOnApi, haptic, show, navigation]);
 
   if (!collection) {
@@ -255,6 +260,17 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
             </Text>
           </View>
       </KeyboardAwareScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }
@@ -262,77 +278,63 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   content: {
-    flex: 1,
-  },
+    flex: 1 },
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     paddingBottom: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   headerAction: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   headerActionDisabled: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   card: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   label: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps + 0.38,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   textArea: {
     minHeight: Space.xl + Space.xxl,
-    textAlignVertical: 'top',
-  },
+    textAlignVertical: 'top' },
   charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textAlign: 'right',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.smMd,
-  },
+    gap: Space.smMd },
   toggleIconWrap: {
     width: Control.chrome,
     height: Control.chrome,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   toggleText: {
-    flex: 1,
-  },
+    flex: 1 },
   toggleLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   toggleSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: Space.xs / 2,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   togglePill: {
     width: Space.xxl,
     height: Space.lg + Space.xs,
@@ -341,29 +343,24 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     justifyContent: 'center',
-    paddingHorizontal: Space.xs - 1,
-  },
+    paddingHorizontal: Space.xs - 1 },
   togglePillActive: {
     backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
-  },
+    borderColor: colors.textPrimary },
   toggleKnob: {
     width: Control.iconCompact + 2,
     height: Control.iconCompact + 2,
     borderRadius: Radius.lg,
     backgroundColor: colors.background,
-    ...Elevation.card,
-  },
+    ...Elevation.card },
   toggleKnobActive: {
-    transform: [{ translateX: 20 }],
-  },
+    transform: [{ translateX: 20 }] },
   dangerCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
     ...Elevation.subtle,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   manageItemsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -375,41 +372,33 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.hairline,
     borderColor: colors.border,
     minHeight: Control.hit,
-    ...Elevation.subtle,
-  },
+    ...Elevation.subtle },
   manageItemsText: {
-    flex: 1,
-  },
+    flex: 1 },
   manageItemsLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   manageItemsSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: Space.xs / 2,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   dangerLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps + 0.38,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   deleteBtn: {
-    borderColor: colors.danger,
-  },
+    borderColor: colors.danger },
   dangerSub: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: Space.sm,
-    textAlign: 'center',
-  },
-  });
+    textAlign: 'center' } });
 }

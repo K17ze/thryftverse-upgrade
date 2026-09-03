@@ -60,6 +60,9 @@ export type CreatorGlyphName =
   | 'align-left'
   | 'align-center'
   | 'align-right'
+  | 'bold'
+  | 'italic'
+  | 'underline'
   // Composition
   | 'safe-zone'
   | 'product-tag'
@@ -197,7 +200,7 @@ function CutoutGlyph({ selected }: GlyphRenderProps) {
     return (
       <>
         <Rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" />
-        <Path d="M9 9l6 6M15 9l-6 6" stroke="white" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} fill="none" />
+        <Path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" strokeOpacity={0.4} strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} fill="none" />
       </>
     );
   }
@@ -300,7 +303,7 @@ function FreezeFrameGlyph({ selected }: GlyphRenderProps) {
     return (
       <>
         <Rect x="3" y="5" width="18" height="14" rx="2" fill="currentColor" />
-        <Path d="M10 9l5 3-5 3V9z" fill="white" />
+        <Path d="M10 9l5 3-5 3V9z" fill="currentColor" fillOpacity={0.4} />
       </>
     );
   }
@@ -397,7 +400,7 @@ function BringForwardGlyph({ selected }: GlyphRenderProps) {
     return (
       <>
         <Rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" />
-        <Path d="M12 16V8M12 8l-3 3M12 8l3 3" stroke="white" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
+        <Path d="M12 16V8M12 8l-3 3M12 8l3 3" stroke="currentColor" strokeOpacity={0.4} strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
       </>
     );
   }
@@ -415,7 +418,7 @@ function BringBackGlyph({ selected }: GlyphRenderProps) {
     return (
       <>
         <Rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor" />
-        <Path d="M12 8v8M12 16l-3-3M12 16l3-3" stroke="white" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
+        <Path d="M12 8v8M12 16l-3-3M12 16l3-3" stroke="currentColor" strokeOpacity={0.4} strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
       </>
     );
   }
@@ -435,7 +438,7 @@ function GradientGlyph({ selected }: GlyphRenderProps) {
     return (
       <>
         <Rect x="3" y="5" width="18" height="14" rx="2" fill="currentColor" />
-        <Path d="M5 17L19 7" stroke="white" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeDasharray="2 2" fill="none" />
+        <Path d="M5 17L19 7" stroke="currentColor" strokeOpacity={0.4} strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeDasharray="2 2" fill="none" />
       </>
     );
   }
@@ -471,7 +474,7 @@ function OpacityGlyph({ selected }: GlyphRenderProps) {
     return (
       <>
         <Circle cx="12" cy="12" r="9" fill="currentColor" />
-        <Path d="M12 3a9 9 0 0 1 0 18z" fill="white" fillOpacity={0.4} />
+        <Path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" fillOpacity={0.4} />
       </>
     );
   }
@@ -543,7 +546,7 @@ function TextBackgroundGlyph({ selected }: GlyphRenderProps) {
     return (
       <>
         <Rect x="2" y="4" width="20" height="16" rx="3" fill="currentColor" />
-        <Path d="M8 10h8M12 10v6" stroke="white" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+        <Path d="M8 10h8M12 10v6" stroke="currentColor" strokeOpacity={0.4} strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
       </>
     );
   }
@@ -561,7 +564,7 @@ function CaptionGlyph({ selected }: GlyphRenderProps) {
     return (
       <>
         <Rect x="2" y="5" width="20" height="14" rx="2" fill="currentColor" />
-        <Path d="M6 10h7M6 14h10" stroke="white" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+        <Path d="M6 10h7M6 14h10" stroke="currentColor" strokeOpacity={0.4} strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
       </>
     );
   }
@@ -627,7 +630,7 @@ function ProductTagGlyph({ selected }: GlyphRenderProps) {
     return (
       <>
         <Path d="M3 12l9-9h9v9l-9 9-9-9z" fill="currentColor" />
-        <Circle cx="16" cy="8" r="1.5" fill="white" />
+        <Circle cx="16" cy="8" r="1.5" fill="currentColor" fillOpacity={0.4} />
       </>
     );
   }
@@ -727,7 +730,7 @@ function DrawingGlyph({ selected }: GlyphRenderProps) {
     return (
       <>
         <Path d="M16 3l5 5-12 12H4v-5L16 3z" fill="currentColor" />
-        <Path d="M14 5l5 5" stroke="white" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+        <Path d="M14 5l5 5" stroke="currentColor" strokeOpacity={0.4} strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
       </>
     );
   }
@@ -745,7 +748,7 @@ function StickerGlyph({ selected }: GlyphRenderProps) {
     return (
       <>
         <Path d="M3 4a1 1 0 0 1 1-1h12l5 5v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z" fill="currentColor" />
-        <Path d="M16 3v5h5" stroke="white" strokeWidth={STROKE_WIDTH} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
+        <Path d="M16 3v5h5" stroke="currentColor" strokeOpacity={0.4} strokeWidth={STROKE_WIDTH} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
       </>
     );
   }
@@ -853,6 +856,35 @@ function RedoGlyph({ selected }: GlyphRenderProps) {
 
 // ── Glyph registry ───────────────────────────────────────────────────
 
+function BoldGlyph(_props: GlyphRenderProps) {
+  return (
+    <>
+      <Path d="M8 5v14" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+      <Path d="M8 5h6c3 0 3 6 0 6H8" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
+      <Path d="M8 11h7c3 0 3 8 0 8H8" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
+    </>
+  );
+}
+
+function ItalicGlyph(_props: GlyphRenderProps) {
+  return (
+    <>
+      <Path d="M10 6h6" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+      <Path d="M14 6l-4 12" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+      <Path d="M8 18h6" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+    </>
+  );
+}
+
+function UnderlineGlyph(_props: GlyphRenderProps) {
+  return (
+    <>
+      <Path d="M7 5v10c0 3 10 3 10 0V5" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
+      <Path d="M5 21h14" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+    </>
+  );
+}
+
 const GLYPH_REGISTRY: Record<CreatorGlyphName, (props: GlyphRenderProps) => React.ReactElement> = {
   trim: TrimGlyph,
   split: SplitGlyph,
@@ -881,6 +913,9 @@ const GLYPH_REGISTRY: Record<CreatorGlyphName, (props: GlyphRenderProps) => Reac
   'align-left': AlignLeftGlyph,
   'align-center': AlignCenterGlyph,
   'align-right': AlignRightGlyph,
+  bold: BoldGlyph,
+  italic: ItalicGlyph,
+  underline: UnderlineGlyph,
   'safe-zone': SafeZoneGlyph,
   'product-tag': ProductTagGlyph,
   'multi-select': MultiSelectGlyph,

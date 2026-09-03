@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Linking, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,25 +10,25 @@ import { clearUserScopedQueryCache } from '../platform/server';
 import { CURRENCIES, SupportedCurrencyCode } from '../constants/currencies';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
+import { LanguagePickerSheet } from '../components/LanguagePickerSheet';
 import { useToast } from '../context/ToastContext';
 import {
   LANGUAGE_OPTIONS,
   SupportedLanguageOption,
-} from '../preferences/settingsPreferences';
+  getLanguageEndonym } from '../preferences/settingsPreferences';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import {
   getPushPermissionStatus,
   requestPushPermissionWithContext,
-  resetPushPermissionAskedFlag,
-} from '../lib/pushPermission';
+  resetPushPermissionAskedFlag } from '../lib/pushPermission';
 import {
   getThemePreferenceLabel,
   ThemePreference,
-  updateThemePreference,
-} from '../theme/themePreference';
+  updateThemePreference } from '../theme/themePreference';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { t } from '../i18n';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
@@ -38,13 +38,13 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
 
-import { Space, FontFamily, Radius, Type } from '../theme/designTokens';
+import { Space, FontFamily, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useFeatureFlag, type FeatureFlagKey } from '../analytics';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 // All feature flags defined in src/analytics/types.ts. Listed here so the
-// debug view shows every flag the app can evaluate — QA can verify flag
+// debug view shows every flag the app can evaluate ΓÇö QA can verify flag
 // states without navigating to each consuming screen.
 const ALL_FEATURE_FLAGS: FeatureFlagKey[] = [
   'new_home_feed',
@@ -62,7 +62,7 @@ const ALL_FEATURE_FLAGS: FeatureFlagKey[] = [
  *
  * Renders each flag name and its current boolean value. Shown only inside
  * the developer-gated "Advanced" section so ordinary consumers never see
- * implementation detail. Uses the existing `useFeatureFlag` hook — no new
+ * implementation detail. Uses the existing `useFeatureFlag` hook ΓÇö no new
  * hooks, no new dependencies.
  */
 function FeatureFlagDebugSection() {
@@ -79,7 +79,7 @@ function FeatureFlagDebugSection() {
   );
 }
 
-/** Single flag row — calls the hook and renders the live value. */
+/** Single flag row ΓÇö calls the hook and renders the live value. */
 function FeatureFlagRow({ flagKey }: { flagKey: FeatureFlagKey }) {
   const { colors } = useAppTheme();
   const enabled = useFeatureFlag(flagKey);
@@ -91,7 +91,7 @@ function FeatureFlagRow({ flagKey }: { flagKey: FeatureFlagKey }) {
       <View
         style={[
           flagStyles.statusPill,
-          { backgroundColor: enabled ? `${colors.success}22` : colors.surfaceAlt },
+          { backgroundColor: enabled ? colors.successSubtle : colors.surfaceAlt },
         ]}
       >
         <View
@@ -116,45 +116,37 @@ function FeatureFlagRow({ flagKey }: { flagKey: FeatureFlagKey }) {
 const flagStyles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   heading: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.meta.letterSpacing,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   flagName: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
-    flex: 1,
-  },
+    flex: 1 },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xxs,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xxs + 1,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   statusDot: {
     width: 7,
     height: 7,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   statusText: {
-    fontSize: Type.caption.size,
-    fontFamily: FontFamily.semibold,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold } });
 
 interface DestinationMeta {
   key: keyof RootStackParamList;
@@ -164,12 +156,12 @@ interface DestinationMeta {
   showSection?: boolean;
 }
 
-// Route metadata for search — searchTerms hold only additional synonyms not already
+// Route metadata for search ΓÇö searchTerms hold only additional synonyms not already
 // covered by the label or section title (the filter checks all three fields).
 // Section names mirror the visible settings grouping so search results stay
 // consistent with the browsable hierarchy.
 const ROUTE_METADATA: DestinationMeta[] = [
-  // ── Your account (profile, security, privacy) ──
+  // ΓöÇΓöÇ Your account (profile, security, privacy) ΓöÇΓöÇ
   { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'avatar name bio username email phone password 2fa two factor', section: 'Your account', showSection: true },
   { key: 'Verification', label: 'Verify your identity', searchTerms: 'identity dac7 tax badge seller trust kyc', section: 'Your account' },
   { key: 'ChangePassword', label: 'Change password', searchTerms: '2fa two factor security', section: 'Your account' },
@@ -182,7 +174,7 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'ChatSettings', label: 'Chat privacy', searchTerms: 'who can message messaging', section: 'Your account' },
   { key: 'DataPrivacy', label: 'Data & privacy', searchTerms: 'gdpr retention third party cookies', section: 'Your account' },
   { key: 'BlockedUsers', label: 'Blocked users', searchTerms: 'block unblock', section: 'Your account' },
-  // ── Buying & selling (payments, payouts, orders, co-own, disputes) ──
+  // ΓöÇΓöÇ Buying & selling (payments, payouts, orders, co-own, disputes) ΓöÇΓöÇ
   { key: 'SavedAddresses', label: 'Saved addresses', searchTerms: 'delivery shipping', section: 'Buying & selling', showSection: true },
   { key: 'Payments', label: 'Payment methods', searchTerms: 'card bank', section: 'Buying & selling' },
   { key: 'Closet', label: 'Saved & collections', searchTerms: 'closet wishlist', section: 'Buying & selling' },
@@ -193,24 +185,23 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'CoOwnRecurringOrders', label: 'Auto-invest plans', searchTerms: 'recurring orders co-own', section: 'Buying & selling' },
   { key: 'CoOwnTaxDocuments', label: 'Tax documents', searchTerms: 'statements cgt co-own', section: 'Buying & selling' },
   { key: 'ResolutionCentre', label: 'Resolution Centre', searchTerms: 'dispute resolution', section: 'Buying & selling' },
-  // ── Notifications ──
+  // ΓöÇΓöÇ Notifications ΓöÇΓöÇ
   { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push alerts', section: 'Notifications', showSection: true },
   { key: 'EmailNotifications', label: 'Email preferences', searchTerms: '', section: 'Notifications' },
   { key: 'NotificationPreferences', label: 'Notification preferences', searchTerms: 'push offers price drop marketing quiet hours', section: 'Notifications' },
-  // ── Experience (appearance, language, currency, accessibility, recommendations) ──
+  // ΓöÇΓöÇ Experience (appearance, language, currency, accessibility, recommendations) ΓöÇΓöÇ
   { key: 'Personalisation', label: 'Content preferences', searchTerms: 'feed personalisation appearance content preferences', section: 'Experience', showSection: true },
   { key: 'AIPreferences', label: 'Recommendations', searchTerms: 'listing suggestions photo enhancement title price autocomplete sell recommendations', section: 'Experience' },
   { key: 'YourAlgorithm', label: 'Your feed', searchTerms: 'feed recommendations topics signals transparency algorithm', section: 'Experience' },
-  { key: 'SustainabilityPreferences', label: 'Sustainability', searchTerms: 'carbon neutral packaging badges eco secondhand', section: 'Experience' },
   { key: 'AccessibilitySettings', label: 'Accessibility', searchTerms: 'text size reduced motion high contrast screen reader', section: 'Experience' },
-  // ── Connected services (normal product destination) ──
+  // ΓöÇΓöÇ Connected services (normal product destination) ΓöÇΓöÇ
   { key: 'BotDirectory', label: 'Agents', searchTerms: 'agent assistant browse catalogue deploy permissions', section: 'Connected services', showSection: true },
   { key: 'AIAgentIntegration', label: 'Connections', searchTerms: 'openai anthropic claude gemini endpoint byok provider credentials api connections', section: 'Connected services' },
   { key: 'CustomBots', label: 'Your agents', searchTerms: 'custom agents created deployed manage draft published', section: 'Connected services' },
-  // ── Help & legal (support, safety, terms, about) ──
+  // ΓöÇΓöÇ Help & legal (support, safety, terms, about) ΓöÇΓöÇ
   { key: 'HelpSupport', label: 'Help Centre', searchTerms: 'support faq contact', section: 'Help & legal', showSection: true },
   { key: 'About', label: 'About Thryftverse', searchTerms: 'version', section: 'Help & legal' },
-  // ── Advanced (developer-only tools, not consumer features) ──
+  // ΓöÇΓöÇ Advanced (developer-only tools, not consumer features) ΓöÇΓöÇ
   { key: 'RuntimeSmokeTest', label: 'Runtime smoke test', searchTerms: 'diagnostic developer debug', section: 'Advanced', showSection: true },
 ];
 
@@ -223,6 +214,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const blockedCount = useStore((s) => s.blockedUsers.length);
   const { show } = useToast();
   const { colors } = useAppTheme();
+  const { t: ts } = useAppTranslation('settings');
 
   const {
     language: selectedLanguage,
@@ -237,7 +229,8 @@ export default function SettingsScreen({ navigation }: Props) {
     setBiometricEnabled,
     biometricLoginEnabled,
     setBiometricLoginEnabled,
-  } = useSettingsPreferences();
+    autoTranslateMessages,
+    setAutoTranslateMessages } = useSettingsPreferences();
 
   const [currencyPickerVisible, setCurrencyPickerVisible] = React.useState(false);
   const [themePickerVisible, setThemePickerVisible] = React.useState(false);
@@ -247,7 +240,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const [isTogglingPush, setIsTogglingPush] = React.useState(false);
   const [isHydrating, setIsHydrating] = React.useState(!useStore.persist.hasHydrated());
 
-  // Probe biometric hardware availability so the toggle subtitle is truthful —
+  // Probe biometric hardware availability so the toggle subtitle is truthful ΓÇö
   // "Not available on this device" when the device has no enrolled biometric,
   // rather than showing a toggle that silently does nothing.
   const { isAvailable: isBiometricAvailable } = useBiometricGate();
@@ -285,8 +278,7 @@ export default function SettingsScreen({ navigation }: Props) {
     currencyCode,
     displayModeLabel,
     setCurrencyCode,
-    cycleDisplayMode,
-  } = useCurrencyPref();
+    cycleDisplayMode } = useCurrencyPref();
 
   const currencyOptions = React.useMemo(
     () =>
@@ -301,11 +293,18 @@ export default function SettingsScreen({ navigation }: Props) {
     [currencyCode, currencyOptions]
   );
 
-  const themeOptions = React.useMemo(() => ['System', 'Light', 'Dark'], []);
+  const themeValues: ThemePreference[] = ['system', 'light', 'dark'];
+  const themeOptions = React.useMemo(
+    () => [ts('picker.themeSystem'), ts('picker.themeLight'), ts('picker.themeDark')],
+    [ts]
+  );
   const languageOptions = React.useMemo(() => [...LANGUAGE_OPTIONS], []);
 
   const selectedThemeOption = React.useMemo(
-    () => themeOptions.find((option) => option.toLowerCase() === themePreference),
+    () => {
+      const idx = themeValues.indexOf(themePreference);
+      return idx >= 0 ? themeOptions[idx] : undefined;
+    },
     [themeOptions, themePreference]
   );
 
@@ -319,11 +318,13 @@ export default function SettingsScreen({ navigation }: Props) {
   const [isApplyingTheme, setIsApplyingTheme] = React.useState(false);
 
   const handleThemeSelect = async (option: string) => {
-    const nextPreference = option.toLowerCase() as ThemePreference;
+    const idx = themeOptions.indexOf(option);
+    if (idx < 0) return;
+    const nextPreference = themeValues[idx];
     if (nextPreference === themePreference) return;
     setThemePickerVisible(false);
     setIsApplyingTheme(true);
-    show(`Applying ${getThemePreferenceLabel(nextPreference)} theme…`, 'info');
+    show(`Applying ${getThemePreferenceLabel(nextPreference)} themeΓÇª`, 'info');
     await updateThemePreference(nextPreference, { reloadApp: true });
     // If reload fails (e.g. production without expo-updates), fall back to
     // the reactive context update so useAppTheme consumers still re-render.
@@ -360,22 +361,22 @@ export default function SettingsScreen({ navigation }: Props) {
           const granted = await requestPushPermissionWithContext('settings');
           setPushPermissionGranted(granted);
           show(
-            granted ? 'Push notifications enabled' : 'Push notifications were denied. Enable them in device settings.',
+            granted ? ts('toast.pushEnabled') : ts('toast.pushDenied'),
             granted ? 'success' : 'info',
           );
         } catch {
-          show('Unable to update push notification permission.', 'error');
+          show(ts('toast.pushUpdateFailed'), 'error');
         } finally {
           setIsTogglingPush(false);
         }
       } else {
         // The OS push permission cannot be revoked programmatically. Direct
         // the user to the system settings screen where they can disable it.
-        show('Manage push notifications in your device settings.', 'info');
+        show(ts('toast.pushManageDeviceSettings'), 'info');
         Linking.openSettings().catch(() => undefined);
       }
     },
-    [show],
+    [show, ts],
   );
 
   const handleLogout = React.useCallback(async () => {
@@ -388,20 +389,20 @@ export default function SettingsScreen({ navigation }: Props) {
   const handleClearSearchHistory = React.useCallback(async () => {
     try {
       await AsyncStorage.removeItem('@thryftverse_recent_searches');
-      show('Search history cleared', 'success');
+      show(ts('toast.searchHistoryCleared'), 'success');
     } catch {
-      show('Unable to clear search history', 'error');
+      show(ts('toast.searchHistoryClearFailed'), 'error');
     }
-  }, [show]);
+  }, [show, ts]);
 
   const isSearching = searchQuery.trim().length > 0;
   const q = searchQuery.toLowerCase().trim();
 
-  // ── Developer eligibility gate ──
+  // ΓöÇΓöÇ Developer eligibility gate ΓöÇΓöÇ
   // The "Advanced" section is hidden from ordinary consumers.
   // It is revealed only when the user has enabled developer mode
-  // (Settings → About → tap version 7 times). Per spec 18, developer mode
-  // keeps only raw debugging tools — not consumer agent features, which now
+  // (Settings ΓåÆ About ΓåÆ tap version 7 times). Per spec 18, developer mode
+  // keeps only raw debugging tools ΓÇö not consumer agent features, which now
   // live in the normal "Connected services" section above.
   const showAdvancedDeveloper = developerMode;
 
@@ -424,27 +425,27 @@ export default function SettingsScreen({ navigation }: Props) {
 
   const notificationSummary = `${pushEnabledCount}/${pushTotalCount} categories`;
 
-  // ── Search overlay ──
-  // Search is now inline — a search field at the top of the settings list
+  // ΓöÇΓöÇ Search overlay ΓöÇΓöÇ
+  // Search is now inline ΓÇö a search field at the top of the settings list
   // that filters settings in-place. No separate overlay screen needed.
 
   return (
-    <View style={{ flex: 1 }}>
+    <View testID="settings-screen" style={{ flex: 1 }}>
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Settings"
+          title={ts('header.title')}
           onBack={() => navigation.goBack()}
         />
       }
     >
-      {/* ── Offline banner ── */}
+      {/* ΓöÇΓöÇ Offline banner ΓöÇΓöÇ */}
       <OfflineBanner />
 
-      {/* ── INLINE SEARCH — filters settings in-place ── */}
+      {/* ΓöÇΓöÇ INLINE SEARCH ΓÇö filters settings in-place ΓöÇΓöÇ */}
       <View style={{ marginBottom: Space.md }}>
         <AppSearchBar
-          placeholder="Search settings"
+          placeholder={ts('search.placeholder')}
           value={searchQuery}
           onChangeText={setSearchQuery}
           containerStyle={styles.searchField}
@@ -452,15 +453,15 @@ export default function SettingsScreen({ navigation }: Props) {
       </View>
 
       {isHydrating ? (
-        /* ── HYDRATION SKELETON — persist store loading user/session data ── */
+        /* ΓöÇΓöÇ HYDRATION SKELETON ΓÇö persist store loading user/session data ΓöÇΓöÇ */
         <SettingsListSkeleton />
       ) : isSearching ? (
-        /* ── SEARCH RESULTS — flat filtered list ── */
-        <SettingsSection title={searchResults.length > 0 ? 'Results' : 'All settings'} noCard>
+        /* ΓöÇΓöÇ SEARCH RESULTS ΓÇö flat filtered list ΓöÇΓöÇ */
+        <SettingsSection title={searchResults.length > 0 ? ts('search.results') : ts('search.allSettings')} noCard>
           {searchResults.length === 0 ? (
             <View style={styles.emptySearch}>
               <Text style={[styles.emptySearchText, { color: colors.textMuted }]}>
-                No matching settings
+                {ts('search.noMatching')}
               </Text>
             </View>
           ) : (
@@ -481,440 +482,444 @@ export default function SettingsScreen({ navigation }: Props) {
         </SettingsSection>
       ) : (
         <>
-          {/* ── IDENTITY — compact flat row, no card ── */}
+          {/* ΓöÇΓöÇ IDENTITY ΓÇö compact flat row, no card ΓöÇΓöÇ */}
           <FlatRow
             label={displayName}
             labelStyle={{ color: colors.textPrimary }}
-            secondary={username ? `@${username}${currentUser?.email ? ` · ${currentUser.email}` : ''}` : (currentUser?.email ?? 'Not signed in')}
+            secondary={username ? `@${username}${currentUser?.email ? ` ┬╖ ${currentUser.email}` : ''}` : (currentUser?.email ?? 'Not signed in')}
             imageUri={avatarUri ?? undefined}
             imageSize={48}
             imageRadius={24}
             onPress={() => navigation.navigate('EditProfile', {})}
             separator={false}
-            accessibilityLabel="Edit profile and account"
-            accessibilityHint="Opens profile, private details, security and account editor"
+            accessibilityLabel={ts('accessibility.editProfileAccount')}
+            accessibilityHint={ts('accessibility.editProfileAccountHint')}
             style={{ paddingVertical: Space.sm }}
           />
 
-          {/* ── Verification prompt — shows when identity/seller verification
+          {/* ΓöÇΓöÇ Verification prompt ΓÇö shows when identity/seller verification
               is not yet complete. Email verification alone does not grant
-              a trust badge (P0-UI-3). ── */}
+              a trust badge (P0-UI-3). ΓöÇΓöÇ */}
           {!currentUser?.identityVerified && !currentUser?.sellerVerified ? (
-            <FlatRow
-              icon="shield-checkmark-outline"
+            <SettingsRow
+              glyph="verified-check"
               iconColor={colors.brand}
-              label="Verify your identity"
-              secondary="Get the verified badge and unlock selling"
+              title={ts('verification.promptTitle')}
+              subtitle={ts('verification.promptSubtitle')}
               onPress={() => navigation.navigate('Verification')}
-              separatorInset={false}
-              accessibilityLabel="Verify identity"
-              accessibilityHint="Opens identity verification"
+              accessibilityLabel={ts('accessibility.verifyIdentity')}
+              accessibilityHint={ts('accessibility.verifyIdentityHint')}
             />
           ) : null}
 
-          {/* ── ACCOUNT HEALTH INDICATOR — compact status pills ──
+          {/* ΓöÇΓöÇ ACCOUNT HEALTH INDICATOR ΓÇö compact status pills ΓöÇΓöÇ
               Shows completed security steps at a glance. Each pill is a
               checkmark + label. Incomplete steps are omitted (not shown as
-              red warnings — the verification prompt above handles that). */}
+              red warnings ΓÇö the verification prompt above handles that). */}
           {currentUser ? (
             <View style={styles.healthRow}>
               {currentUser.emailVerified ? (
                 <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
                   <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-                  <Text style={[styles.healthPillText, { color: colors.success }]}>Email confirmed</Text>
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>{ts('health.emailConfirmed')}</Text>
                 </View>
               ) : null}
               {twoFactorEnabled ? (
                 <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
                   <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-                  <Text style={[styles.healthPillText, { color: colors.success }]}>2FA</Text>
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>{ts('health.twoFA')}</Text>
                 </View>
               ) : null}
               {biometricEnabled ? (
                 <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
                   <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-                  <Text style={[styles.healthPillText, { color: colors.success }]}>Biometric</Text>
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>{ts('health.biometric')}</Text>
                 </View>
               ) : null}
               {savedPaymentMethod ? (
                 <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
                   <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-                  <Text style={[styles.healthPillText, { color: colors.success }]}>Payment</Text>
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>{ts('health.payment')}</Text>
                 </View>
               ) : null}
               {savedAddress ? (
                 <View style={[styles.healthPill, { backgroundColor: colors.successSubtle }]}>
                   <Ionicons name="checkmark-circle" size={13} color={colors.success} />
-                  <Text style={[styles.healthPillText, { color: colors.success }]}>Address</Text>
+                  <Text style={[styles.healthPillText, { color: colors.success }]}>{ts('health.address')}</Text>
                 </View>
               ) : null}
             </View>
           ) : null}
 
-          {/* ── YOUR ACCOUNT (profile, security, privacy) ── */}
-          <SettingsSection title="Your account">
+          {/* ΓöÇΓöÇ YOUR ACCOUNT (profile, security, privacy) ΓöÇΓöÇ */}
+          <SettingsSection title={ts('sections.yourAccount')}>
             <SettingsRow
-              icon="shield-checkmark-outline"
+              glyph="verified-check"
               iconColor={currentUser?.identityVerified || currentUser?.sellerVerified ? colors.success : colors.textMuted}
               titleStyle={currentUser?.identityVerified || currentUser?.sellerVerified ? { color: colors.success } : undefined}
-              title="Verification"
-              subtitle={currentUser?.sellerVerified ? 'Trusted Seller' : currentUser?.identityVerified ? 'ID Verified' : 'Get the verified badge'}
+              title={ts('rows.verification')}
+              subtitle={currentUser?.sellerVerified ? ts('verification.trustedSeller') : currentUser?.identityVerified ? ts('verification.idVerified') : ts('verification.getBadge')}
               onPress={() => navigation.navigate('Verification')}
               isFirst
             />
             <SettingsRow
-              icon="key-outline"
-              title="Change password"
-              subtitle={twoFactorEnabled ? '2FA enabled' : 'Password only'}
+              glyph="security-lock"
+              title={ts('rows.changePassword')}
+              subtitle={twoFactorEnabled ? ts('rows.twoFAEnabled') : ts('rows.passwordOnly')}
               onPress={() => navigation.navigate('ChangePassword')}
             />
             <SettingsRow
-              icon="finger-print-outline"
-              title="Biometric lock"
+              glyph="security-lock"
+              title={ts('rows.biometricLock')}
               subtitle={
                 !isBiometricAvailable
-                  ? 'Not available on this device'
+                  ? ts('rows.biometricNotAvailable')
                   : biometricEnabled
-                    ? 'Face ID, Touch ID & fingerprint for sensitive actions'
-                    : 'Disabled — sensitive screens use password only'
+                    ? ts('rows.biometricEnabled')
+                    : ts('rows.biometricDisabled')
               }
               toggleValue={biometricEnabled && isBiometricAvailable}
               onToggle={(v) => setBiometricEnabled(v)}
               disabled={!isBiometricAvailable}
             />
             <SettingsRow
-              icon="lock-closed-outline"
-              title="Biometric login"
+              glyph="security-lock"
+              title={ts('rows.biometricLogin')}
               subtitle={
                 !isBiometricAvailable
-                  ? 'Not available on this device'
+                  ? ts('rows.biometricNotAvailable')
                   : biometricLoginEnabled
-                    ? 'Require Face ID, Touch ID or fingerprint on app launch'
-                    : 'Disabled — app opens directly to your account'
+                    ? ts('rows.biometricLoginEnabled')
+                    : ts('rows.biometricLoginDisabled')
               }
               toggleValue={biometricLoginEnabled && isBiometricAvailable}
               onToggle={(v) => setBiometricLoginEnabled(v)}
               disabled={!isBiometricAvailable}
             />
             <SettingsRow
-              icon="link-outline"
-              title="Connected accounts"
-              subtitle="Google, Apple sign-in"
+              glyph="connection-link"
+              title={ts('rows.connectedAccounts')}
+              subtitle={ts('rows.connectedAccountsSubtitle')}
               onPress={() => navigation.navigate('ConnectedAccounts')}
             />
             <SettingsRow
-              icon="phone-portrait-outline"
-              title="Devices & sessions"
+              glyph="history-clock"
+              title={ts('rows.devicesSessions')}
               onPress={() => navigation.navigate('ActiveSessions')}
             />
             <SettingsRow
-              icon="shield-outline"
-              title="Account control"
-              subtitle="Security, sessions, password"
+              glyph="security-lock"
+              title={ts('rows.accountControl')}
+              subtitle={ts('rows.accountControlSubtitle')}
               onPress={() => navigation.navigate('AccountControl')}
             />
             <SettingsRow
-              icon="download-outline"
-              title="Download my data"
-              subtitle="Export your account data"
+              icon="download"
+              title={ts('rows.downloadData')}
+              subtitle={ts('rows.downloadDataSubtitle')}
               onPress={() => navigation.navigate('DataExport')}
             />
             <SettingsRow
-              icon="eye-outline"
-              title="Privacy & safety"
-              subtitle="Visibility, blocked users"
+              icon="eye"
+              title={ts('rows.privacySafety')}
+              subtitle={ts('rows.privacySafetySubtitle')}
               onPress={() => navigation.navigate('PrivacySettings')}
             />
             <SettingsRow
-              icon="chatbubble-outline"
-              title="Chat privacy"
-              subtitle="Who can message you"
+              icon="chat"
+              title={ts('rows.chatPrivacy')}
+              subtitle={ts('rows.chatPrivacySubtitle')}
               onPress={() => navigation.navigate('ChatSettings')}
             />
             <SettingsRow
-              icon="lock-closed-outline"
-              title="Data & privacy"
-              subtitle="Privacy controls and retention"
+              glyph="language-globe"
+              title={ts('rows.autoTranslate')}
+              subtitle={
+                autoTranslateMessages
+                  ? ts('rows.autoTranslateEnabled')
+                  : ts('rows.autoTranslateDisabled')
+              }
+              toggleValue={autoTranslateMessages}
+              onToggle={(v) => setAutoTranslateMessages(v)}
+            />
+            <SettingsRow
+              glyph="security-lock"
+              title={ts('rows.dataPrivacy')}
+              subtitle={ts('rows.dataPrivacySubtitle')}
               onPress={() => navigation.navigate('DataPrivacy')}
             />
             <SettingsRow
-              icon="ban-outline"
-              title="Blocked users"
+              icon="ban"
+              title={ts('rows.blockedUsers')}
               subtitle={blockedCount > 0 ? `${blockedCount} blocked` : 'None'}
               onPress={() => navigation.navigate('BlockedUsers')}
               isLast
             />
           </SettingsSection>
     
-          {/* ── BUYING & SELLING (payments, payouts, orders, co-own, disputes) ── */}
-          <SettingsSection title="Buying & selling">
+          {/* ΓöÇΓöÇ BUYING & SELLING (payments, payouts, orders, co-own, disputes) ΓöÇΓöÇ */}
+          <SettingsSection title={ts('sections.buyingSelling')}>
             <SettingsRow
-              icon="location-outline"
-              title="Saved addresses"
-              subtitle={savedAddress ? '1 saved' : 'None saved'}
+              icon="location"
+              title={ts('rows.savedAddresses')}
+              subtitle={savedAddress ? ts('rows.oneSaved') : ts('rows.noneSaved')}
               onPress={() => navigation.navigate('SavedAddresses')}
               isFirst
             />
             <SettingsRow
-              icon="card-outline"
-              title="Payment methods"
-              subtitle={savedPaymentMethod ? savedPaymentMethod.label : 'None saved'}
+              icon="card"
+              title={ts('rows.paymentMethods')}
+              subtitle={savedPaymentMethod ? savedPaymentMethod.label : ts('rows.noneSaved')}
               onPress={() => navigation.navigate('Payments')}
             />
             <SettingsRow
-              icon="heart-outline"
-              title="Saved & collections"
+              icon="bookmark"
+              title={ts('rows.savedCollections')}
               onPress={() => navigation.navigate('Closet')}
             />
             <SettingsRow
-              icon="wallet-outline"
-              title="Payout account"
-              subtitle="Balance and wallet"
+              icon="wallet"
+              title={ts('rows.payoutAccount')}
+              subtitle={ts('rows.payoutAccountSubtitle')}
               onPress={() => navigation.navigate('Wallet')}
             />
             <SettingsRow
-              icon="cash-outline"
-              title="Payout history"
+              icon="receipt"
+              title={ts('rows.payoutHistory')}
               onPress={() => navigation.navigate('BalanceHistory')}
             />
             <SettingsRow
-              icon="cube-outline"
-              title="Shipping preferences"
+              icon="box"
+              title={ts('rows.shippingPreferences')}
               onPress={() => navigation.navigate('Postage')}
             />
             <SettingsRow
-              icon="notifications-outline"
-              title="Price alerts"
-              subtitle="Notify on price thresholds"
+              icon="notifications"
+              title={ts('rows.priceAlerts')}
+              subtitle={ts('rows.priceAlertsSubtitle')}
               onPress={() => navigation.navigate('CoOwnPriceAlerts')}
             />
             <SettingsRow
-              icon="repeat-outline"
-              title="Auto-invest plans"
-              subtitle="Recurring buy schedules"
+              icon="repeat"
+              title={ts('rows.autoInvestPlans')}
+              subtitle={ts('rows.autoInvestPlansSubtitle')}
               onPress={() => navigation.navigate('CoOwnRecurringOrders')}
             />
             <SettingsRow
-              icon="document-text-outline"
-              title="Tax documents"
-              subtitle="Annual statements & P&L"
+              icon="document"
+              title={ts('rows.taxDocuments')}
+              subtitle={ts('rows.taxDocumentsSubtitle')}
               onPress={() => navigation.navigate('CoOwnTaxDocuments')}
             />
             <SettingsRow
-              icon="folder-open-outline"
-              title="Resolution Centre"
-              subtitle="Disputes and resolutions"
+              icon="folder"
+              title={ts('rows.resolutionCentre')}
+              subtitle={ts('rows.resolutionCentreSubtitle')}
               onPress={() => navigation.navigate('ResolutionCentre')}
               isLast
             />
           </SettingsSection>
     
-          {/* ── NOTIFICATIONS ── */}
-          <SettingsSection title="Notifications">
+          {/* ΓöÇΓöÇ NOTIFICATIONS ΓöÇΓöÇ */}
+          <SettingsSection title={ts('sections.notifications')}>
             <SettingsRow
               icon="notifications"
-              title="Enable notifications"
-              subtitle={pushPermissionGranted === null ? 'Permission unknown' : pushPermissionGranted ? 'Allowed' : 'Not allowed'}
+              title={ts('rows.enableNotifications')}
+              subtitle={pushPermissionGranted === null ? ts('rows.permissionUnknown') : pushPermissionGranted ? ts('rows.permissionAllowed') : ts('rows.permissionNotAllowed')}
               toggleValue={pushPermissionGranted === true}
               onToggle={(v) => void handleTogglePushPermission(v)}
               disabled={isTogglingPush}
               isFirst
             />
             <SettingsRow
-              icon="notifications-outline"
-              title="Notification categories"
+              icon="notifications"
+              title={ts('rows.notificationCategories')}
               subtitle={notificationSummary}
               onPress={() => navigation.navigate('PushNotifications')}
             />
             <SettingsRow
-              icon="options-outline"
-              title="Notification preferences"
-              subtitle="Quiet hours, preview"
+              icon="options"
+              title={ts('rows.notificationPreferences')}
+              subtitle={ts('rows.notificationPreferencesSubtitle')}
               onPress={() => navigation.navigate('NotificationPreferences')}
             />
             <SettingsRow
-              icon="mail-outline"
-              title="Email preferences"
+              icon="mail"
+              title={ts('rows.emailPreferences')}
               subtitle={emailNotificationsEnabled ? 'On' : 'Off'}
               onPress={() => navigation.navigate('EmailNotifications')}
               isLast
             />
           </SettingsSection>
     
-          {/* ── EXPERIENCE (appearance, language, currency, accessibility, recommendations) ── */}
-          <SettingsSection title="Experience">
+          {/* ΓöÇΓöÇ EXPERIENCE (appearance, language, currency, accessibility, recommendations) ΓöÇΓöÇ */}
+          <SettingsSection title={ts('sections.experience')}>
             <SettingsRow
-              icon="color-palette-outline"
-              title="Theme"
+              glyph="theme-palette"
+              title={ts('rows.theme')}
               value={getThemePreferenceLabel(themePreference)}
               onPress={() => setThemePickerVisible(true)}
               isFirst
             />
             <SettingsRow
-              icon="swap-horizontal-outline"
-              title="Currency display"
+              icon="repeat"
+              title={ts('rows.currencyDisplay')}
               value={displayModeLabel}
               onPress={cycleDisplayMode}
             />
             <SettingsRow
-              icon="globe-outline"
-              title="Local currency"
+              glyph="currency-local"
+              title={ts('rows.localCurrency')}
               value={`${currencyCode} (${CURRENCIES[currencyCode].symbol})`}
               onPress={() => setCurrencyPickerVisible(true)}
             />
             <SettingsRow
-              icon="language-outline"
-              title="Language"
-              value={selectedLanguage}
+              glyph="language-globe"
+              title={ts('rows.language')}
+              value={getLanguageEndonym(selectedLanguage)}
               onPress={() => setLanguagePickerVisible(true)}
             />
             <SettingsRow
-              icon="options-outline"
-              title="Content preferences"
-              subtitle="Feed and recommendations"
+              glyph="content-sliders"
+              title={ts('rows.contentPreferences')}
+              subtitle={ts('rows.contentPreferencesSubtitle')}
               onPress={() => navigation.navigate('Personalisation')}
             />
             <SettingsRow
-              icon="bulb-outline"
-              title="Recommendations"
-              subtitle="Photo enhancement, title and price suggestions"
+              glyph="ai-smart"
+              title={ts('rows.recommendations')}
+              subtitle={ts('rows.recommendationsSubtitle')}
               onPress={() => navigation.navigate('AIPreferences')}
             />
             <SettingsRow
-              icon="analytics-outline"
-              title="Your feed"
-              subtitle="Recommendations and transparency"
+              glyph="feed-list"
+              title={ts('rows.yourFeed')}
+              subtitle={ts('rows.yourFeedSubtitle')}
               onPress={() => navigation.navigate('YourAlgorithm')}
             />
             <SettingsRow
-              icon="leaf-outline"
-              title="Sustainability"
-              subtitle="Goals, shipping, impact"
-              onPress={() => navigation.navigate('SustainabilityPreferences')}
-            />
-            <SettingsRow
-              icon="accessibility-outline"
-              title="Accessibility"
-              subtitle="Text size, motion, contrast"
+              icon="accessibility"
+              title={ts('rows.accessibility')}
+              subtitle={ts('rows.accessibilitySubtitle')}
               onPress={() => navigation.navigate('AccessibilitySettings')}
             />
             <SettingsRow
-              icon="time-outline"
-              title="Search history"
-              subtitle="Clear recent searches"
+              glyph="history-clock"
+              title={ts('rows.searchHistory')}
+              subtitle={ts('rows.searchHistorySubtitle')}
               onPress={() => void handleClearSearchHistory()}
             />
             <SettingsRow
-              icon="analytics-outline"
-              title="Data sharing"
-              subtitle="Analytics and personalization"
+              glyph="connection-link"
+              title={ts('rows.dataSharing')}
+              subtitle={ts('rows.dataSharingSubtitle')}
               toggleValue={!analyticsOptOut}
               onToggle={(v) => setAnalyticsOptOut(!v)}
               isLast
             />
           </SettingsSection>
     
-          {/* ── CONNECTED SERVICES ── */}
+          {/* ΓöÇΓöÇ CONNECTED SERVICES ΓöÇΓöÇ */}
           {/* Per spec 18: Agents are a normal product destination, not hidden
               behind developer mode. Create Agent is intentionally excluded from
-              Settings — it lives in the Agents home and profile menu. */}
-          <SettingsSection title="Connected services">
+              Settings ΓÇö it lives in the Agents home and profile menu. */}
+          <SettingsSection title={ts('sections.connectedServices')}>
             <SettingsRow
-              icon="people-outline"
-              title="Agents"
-              subtitle="Browse and manage agent permissions"
+              icon="people"
+              title={ts('rows.agents')}
+              subtitle={ts('rows.agentsSubtitle')}
               onPress={() => navigation.navigate('BotDirectory')}
               isFirst
             />
             <SettingsRow
-              icon="key-outline"
-              title="Connections"
-              subtitle="Provider keys and endpoints"
+              icon="key"
+              title={ts('rows.connections')}
+              subtitle={ts('rows.connectionsSubtitle')}
               onPress={() => navigation.navigate('AIAgentIntegration')}
             />
             <SettingsRow
-              icon="person-circle-outline"
-              title="Your agents"
-              subtitle="Agents you have created"
+              icon="profile"
+              title={ts('rows.yourAgents')}
+              subtitle={ts('rows.yourAgentsSubtitle')}
               onPress={() => navigation.navigate('CustomBots')}
               isLast
             />
           </SettingsSection>
     
-          {/* ── HELP & LEGAL (support, safety, terms, about) ── */}
-          <SettingsSection title="Help & legal">
+          {/* ΓöÇΓöÇ HELP & LEGAL (support, safety, terms, about) ΓöÇΓöÇ */}
+          <SettingsSection title={ts('sections.helpLegal')}>
 
             <SettingsRow
-              icon="help-circle-outline"
-              title="Help Centre"
+              icon="help"
+              title={ts('rows.helpCentre')}
               onPress={() => navigation.navigate('HelpSupport')}
               isFirst
             />
             <SettingsRow
-              icon="document-text-outline"
-              title="Terms of Service"
+              icon="document"
+              title={ts('rows.termsOfService')}
               onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
             />
             <SettingsRow
-              icon="shield-checkmark-outline"
-              title="Privacy Policy"
+              glyph="privacy-document"
+              title={ts('rows.privacyPolicy')}
               onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
             />
             <SettingsRow
-              icon="information-circle-outline"
-              title="About Thryftverse"
+              icon="info"
+              title={ts('rows.aboutThryftverse')}
               value="v1.0.0"
               onPress={() => navigation.navigate('About')}
               isLast
             />
           </SettingsSection>
     
-          {/* ── ADVANCED (developer-only) ── */}
-          {/* Per spec 18: Developer mode keeps only raw debugging tools — not
+          {/* ΓöÇΓöÇ ADVANCED (developer-only) ΓöÇΓöÇ */}
+          {/* Per spec 18: Developer mode keeps only raw debugging tools ΓÇö not
               consumer agent features, which now live in "Connected services"
-              above. Gated behind developer mode (Settings → About → tap version
+              above. Gated behind developer mode (Settings ΓåÆ About ΓåÆ tap version
               7 times) so ordinary consumers never see implementation technology. */}
           {showAdvancedDeveloper ? (
-            <SettingsSection title="Advanced">
+            <SettingsSection title={ts('sections.advanced')}>
               <SettingsRow
                 icon="terminal-outline"
-                title="Runtime smoke test"
-                subtitle="Diagnostic checks for local runtime"
+                title={ts('rows.runtimeSmokeTest')}
+                subtitle={ts('rows.runtimeSmokeTestSubtitle')}
                 onPress={() => navigation.navigate('RuntimeSmokeTest')}
                 isFirst
               />
               <SettingsRow
                 icon="flag-outline"
-                title="Feature flags"
-                subtitle="Current flag values for QA"
+                title={ts('rows.featureFlags')}
+                subtitle={ts('rows.featureFlagsSubtitle')}
                 onPress={() => navigation.navigate('RuntimeSmokeTest')}
                 isLast
               />
             </SettingsSection>
           ) : null}
 
-          {/* Feature flag debug view — read-only flag status for QA teams.
+          {/* Feature flag debug view ΓÇö read-only flag status for QA teams.
               Shown only when developer mode is enabled (Advanced section). */}
           {showAdvancedDeveloper ? <FeatureFlagDebugSection /> : null}
     
-          {/* ── DESTRUCTIVE ACTIONS — separate group at the bottom ── */}
-          {/* Per AGENTS.md §4 and App Store 5.1.1(v): destructive actions sit
+          {/* ΓöÇΓöÇ DESTRUCTIVE ACTIONS ΓÇö separate group at the bottom ΓöÇΓöÇ */}
+          {/* Per AGENTS.md ┬º4 and App Store 5.1.1(v): destructive actions sit
               at the bottom of the settings list, separated from benign rows.
               Sign Out and Delete Account are grouped together with danger color. */}
-          <SettingsSection title="Account">
+          <SettingsSection title={ts('sections.account')}>
             <SettingsSignOutRow
               username={currentUser?.username}
               onSignOut={handleLogout}
             />
             <SettingsRow
               icon="trash-outline"
-              title="Delete account"
-              subtitle="Permanently erase your account"
+              title={ts('rows.deleteAccount')}
+              subtitle={ts('rows.deleteAccountSubtitle')}
               danger
               onPress={() => navigation.navigate('DeleteAccount')}
               isLast
-              accessibilityLabel="Delete account"
-              accessibilityHint="Opens the account deletion flow"
+              accessibilityLabel={ts('rows.deleteAccount')}
+              accessibilityHint={ts('accessibility.deleteAccountHint')}
             />
           </SettingsSection>
           </>
@@ -923,7 +928,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
       {/* BottomSheetPickers MUST be rendered OUTSIDE FlagshipScreen's
           ScrollView. When inside the ScrollView, absoluteFill fills the
-          scrollable content container — not the screen viewport — so the
+          scrollable content container ΓÇö not the screen viewport ΓÇö so the
           sheet renders below the fold and is invisible to the user. */}
       <BottomSheetPicker
         visible={currencyPickerVisible}
@@ -935,12 +940,10 @@ export default function SettingsScreen({ navigation }: Props) {
         searchable
       />
 
-      <BottomSheetPicker
+      <LanguagePickerSheet
         visible={languagePickerVisible}
         onClose={() => setLanguagePickerVisible(false)}
-        title={t('settings.picker.languageTitle')}
-        options={languageOptions}
-        selectedValue={selectedLanguage}
+        selectedLanguage={selectedLanguage}
         onSelect={handleLanguageSelect}
       />
 
@@ -958,36 +961,29 @@ export default function SettingsScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   searchField: {
-    height: 48,
-  },
-  // ── Search empty state ──
+    height: 48 },
+  // ΓöÇΓöÇ Search empty state ΓöÇΓöÇ
   emptySearch: {
     paddingVertical: Space.lg,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   emptySearchText: {
     fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.regular,
-  },
-  // ── Account health indicator ──
+    fontFamily: FontFamily.regular },
+  // ΓöÇΓöÇ Account health indicator ΓöÇΓöÇ
   healthRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   healthPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xxs + 1,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xxs + 1,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   healthPillText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.meta.letterSpacing,
-  },
-});
+    letterSpacing: TypographyV2.meta.letterSpacing } });

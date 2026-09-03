@@ -362,3 +362,120 @@ export function buildTimelineEntries(
 
   return entries;
 }
+
+// --- Review eligibility timestamp ---
+
+/**
+ * Computes the timestamp (ms) at which a buyer becomes eligible to review
+ * an order. Prefers a server-derived `reviewEligibleAt`; falls back to
+ * `deliveredAt + eligibleHours` (default 72h). Returns null when no
+ * delivery timestamp is available.
+ */
+export function computeReviewEligibleAtMs(
+  order: CommerceOrder | null,
+  eligibleHours = 72
+): number | null {
+  if (!order) return null;
+  const serverEligible = (order as any)?.reviewEligibleAt;
+  if (serverEligible) {
+    const ms = new Date(serverEligible).getTime();
+    if (Number.isFinite(ms)) return ms;
+  }
+  const deliveredAt = order.deliveredAt;
+  if (!deliveredAt) return null;
+  const ms = new Date(deliveredAt).getTime();
+  if (!Number.isFinite(ms)) return null;
+  return ms + eligibleHours * 60 * 60 * 1000;
+}
+
+// --- ETA window formatting from fulfilment snapshot ---
+
+/**
+ * Formats a human-readable ETA window (e.g. "2–3 days", "1 day") from a
+ * fulfilment snapshot's min/max day fields. Returns null when neither is
+ * present.
+ */
+export function formatEtaWindowFromSnapshot(
+  snapshot: { etaMinDays: number | null; etaMaxDays: number | null } | null | undefined
+): string | null {
+  if (!snapshot) return null;
+  const min = snapshot.etaMinDays;
+  const max = snapshot.etaMaxDays;
+  if (min == null && max == null) return null;
+  if (min != null && max != null && min !== max) {
+    return `${min}–${max} days`;
+  }
+  const single = min ?? max;
+  if (single == null) return null;
+  return `${single} day${single === 1 ? '' : 's'}`;
+}
+
+// --- Estimated delivery date parsing ---
+
+/**
+ * Parses the server-derived `estimatedDeliveryAt` ISO string on an order
+ * into a Date. Returns null when absent or invalid. The client must not
+ * invent a delivery date — it only formats the server value.
+ */
+export function parseEstimatedDeliveryDate(
+  order: CommerceOrder | null
+): Date | null {
+  if (!order) return null;
+  const serverEta = (order as any)?.estimatedDeliveryAt;
+  if (!serverEta) return null;
+  const d = new Date(serverEta);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+// --- Stale tracking detection ---
+
+/**
+ * Determines whether the latest parcel event is stale (> 48h old) while the
+ * order is still in a transit state. Used to surface a "tracking may be
+ * delayed" warning to the buyer.
+ */
+export function isStaleTrackingEvent(
+  latestParcelEvent: OrderParcelEvent | null,
+  normalisedStatus: string,
+  staleThresholdHours = 48
+): boolean {
+  if (!latestParcelEvent) return false;
+  if (
+    normalisedStatus !== 'shipped' &&
+    normalisedStatus !== 'in transit' &&
+    normalisedStatus !== 'out for delivery'
+  ) {
+    return false;
+  }
+  const lastTime = latestParcelEvent.occurredAt ?? latestParcelEvent.receivedAt;
+  const lastMs = new Date(lastTime).getTime();
+  if (Number.isNaN(lastMs)) return false;
+  const hoursSince = (Date.now() - lastMs) / (60 * 60 * 1000);
+  return hoursSince > staleThresholdHours;
+}
+
+// --- Package summary formatting ---
+
+/**
+ * Formats a compact package summary (weight · dimensions) from a
+ * fulfilment snapshot's parcel profile. Returns null when no profile data
+ * is available.
+ */
+export function formatPackageSummary(
+  snapshot: { parcelProfile: { maxWeightKg: number | null; maxLengthCm: number | null } | null } | null | undefined
+): string | null {
+  if (!snapshot) return null;
+  const profile = snapshot.parcelProfile;
+  if (!profile) return null;
+  const parts: string[] = [];
+  if (profile.maxWeightKg != null) {
+    parts.push(profile.maxWeightKg < 1
+      ? `${Math.round(profile.maxWeightKg * 1000)}g`
+      : `${profile.maxWeightKg}kg`);
+  }
+  if (profile.maxLengthCm != null) {
+    parts.push(`≤${profile.maxLengthCm}cm`);
+  }
+  return parts.length > 0 ? parts.join(' · ') : null;
+}

@@ -178,3 +178,11 @@ export function useRealtime(): RealtimeContextValue {
   }
   return ctx;
 }
+
+/** Safe variant of useRealtime that returns null instead of throwing when
+ *  the RealtimeProvider is not mounted. Used by chat hooks that should
+ *  gracefully degrade when realtime is unavailable rather than crash the
+ *  screen. */
+export function useRealtimeSafe(): RealtimeContextValue | null {
+  return useContext(RealtimeContext);
+}

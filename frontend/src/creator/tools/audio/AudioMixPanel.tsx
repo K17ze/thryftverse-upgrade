@@ -23,20 +23,18 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import {
   Space,
   Radius,
-  Type,
   Typography,
   FontFamily,
   Control,
   Stroke,
-  IconGrammar,
-} from '../../../theme/designTokens';
+  IconGrammar } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -87,20 +85,26 @@ function clamp(v: number, min: number, max: number): number {
 /**
  * Extract all music layers from the document across all pages.
  * Voiceover layers are music layers whose trackName indicates a voiceover
- * recording (prefixed with "Voiceover"). This convention is established by
- * the VoiceoverRecorderSheet when it adds a voiceover to the composition.
+ * recording (prefixed with "Voiceover", "Voice-over", or "Voice_over").
+ * This convention is established by the VoiceoverRecorderSheet when it adds
+ * a voiceover to the composition.
+ * TODO: This string-based detection should be replaced with a proper
+ * `sourceType` field on the MusicLayerPayload schema (e.g. 'music' | 'voiceover').
  */
 function extractAudioTracks(layers: CreatorLayer[]): AudioTrackInfo[] {
   const tracks: AudioTrackInfo[] = [];
   for (const layer of layers) {
     if (layer.type !== 'music' || layer.hidden) continue;
     const payload = layer.payload;
-    const isVoiceover = payload.trackName.toLowerCase().startsWith('voiceover');
+    const lowerName = payload.trackName.toLowerCase();
+    const isVoiceover =
+      lowerName.startsWith('voiceover') ||
+      lowerName.startsWith('voice-over') ||
+      lowerName.startsWith('voice_over');
     tracks.push({
       layer,
       type: isVoiceover ? 'voiceover' : 'music',
-      name: payload.trackName,
-    });
+      name: payload.trackName });
   }
   return tracks;
 }
@@ -113,8 +117,7 @@ export function AudioMixPanel({
   masterVolume = 1,
   onMasterVolumeChange,
   ducking,
-  onDuckingChange,
-}: AudioMixPanelProps): React.ReactElement {
+  onDuckingChange }: AudioMixPanelProps): React.ReactElement {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -161,9 +164,7 @@ export function AudioMixPanel({
       updateLayer(layerId, {
         payload: {
           ...tracks.find((t) => t.layer.id === layerId)!.layer.payload,
-          volume: clamp(volume, 0, 1),
-        },
-      } as Partial<CreatorLayer>, 'Adjust volume');
+          volume: clamp(volume, 0, 1) } } as Partial<CreatorLayer>, 'Adjust volume');
     },
     [tracks, updateLayer],
   );
@@ -175,9 +176,7 @@ export function AudioMixPanel({
       updateLayer(layerId, {
         payload: {
           ...track.layer.payload,
-          fadeInMs: clamp(fadeInMs, 0, 3000),
-        },
-      } as Partial<CreatorLayer>, 'Adjust fade in');
+          fadeInMs: clamp(fadeInMs, 0, 3000) } } as Partial<CreatorLayer>, 'Adjust fade in');
     },
     [tracks, updateLayer],
   );
@@ -189,9 +188,7 @@ export function AudioMixPanel({
       updateLayer(layerId, {
         payload: {
           ...track.layer.payload,
-          fadeOutMs: clamp(fadeOutMs, 0, 3000),
-        },
-      } as Partial<CreatorLayer>, 'Adjust fade out');
+          fadeOutMs: clamp(fadeOutMs, 0, 3000) } } as Partial<CreatorLayer>, 'Adjust fade out');
     },
     [tracks, updateLayer],
   );
@@ -211,9 +208,7 @@ export function AudioMixPanel({
             updateLayer(layerId, {
               payload: {
                 ...track.layer.payload,
-                volume: prevVol,
-              },
-            } as Partial<CreatorLayer>, 'Unmute track');
+                volume: prevVol } } as Partial<CreatorLayer>, 'Unmute track');
           }
         } else {
           // Mute — save current volume, set to 0
@@ -226,9 +221,7 @@ export function AudioMixPanel({
           updateLayer(layerId, {
             payload: {
               ...track.layer.payload,
-              volume: 0,
-            },
-          } as Partial<CreatorLayer>, 'Mute track');
+              volume: 0 } } as Partial<CreatorLayer>, 'Mute track');
         }
         return next;
       });
@@ -270,8 +263,7 @@ export function AudioMixPanel({
         enabled: newEnabled,
         level: 0.3,
         priorityTrackId: null,
-        fadeMs: 300,
-      });
+        fadeMs: 300 });
     }
   }, [localDuckingEnabled, onDuckingChange, ducking, haptic, reducedMotion]);
 
@@ -300,9 +292,6 @@ export function AudioMixPanel({
       >
         {/* ── Header ──────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Audio Mix
-          </Text>
           <PressScale
             onPress={handleClose}
             style={styles.closeBtn}
@@ -310,8 +299,12 @@ export function AudioMixPanel({
             accessibilityHint="Closes the audio mixing panel"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} />
           </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            Audio
+          </Text>
+          <View style={styles.closeBtn} />
         </View>
 
         {hasTracks ? (
@@ -338,15 +331,11 @@ export function AudioMixPanel({
             </View>
 
             {/* ── Ducking ────────────────────────────────────────────── */}
-            <View style={styles.sectionDivider} />
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Ducking
-              </Text>
               <Pressable
                 onPress={handleDuckingToggle}
                 style={styles.toggleRow}
-                accessibilityLabel="Ducking — auto-lower music during voiceover"
+                accessibilityLabel="Ducking"
                 accessibilityRole="switch"
                 accessibilityState={{ checked: localDuckingEnabled }}
                 disabled={!hasVoiceover}
@@ -355,14 +344,7 @@ export function AudioMixPanel({
                   <Text
                     style={[styles.toggleTitle, { color: colors.textPrimary }]}
                   >
-                    Auto-lower music during voiceover
-                  </Text>
-                  <Text
-                    style={[styles.toggleHint, { color: colors.textMuted }]}
-                  >
-                    {hasVoiceover
-                      ? 'Background music dips when voiceover is active.'
-                      : 'Add a voiceover to enable ducking.'}
+                    Ducking
                   </Text>
                 </View>
                 <View
@@ -375,8 +357,7 @@ export function AudioMixPanel({
                       borderColor: localDuckingEnabled
                         ? colors.brand
                         : colors.border,
-                      opacity: hasVoiceover ? 1 : 0.4,
-                    },
+                      opacity: hasVoiceover ? 1 : 0.4 },
                   ]}
                 >
                   <View
@@ -388,8 +369,7 @@ export function AudioMixPanel({
                           : colors.textSecondary,
                         transform: [
                           { translateX: localDuckingEnabled ? 22 : 2 },
-                        ],
-                      },
+                        ] },
                     ]}
                   />
                 </View>
@@ -397,17 +377,13 @@ export function AudioMixPanel({
             </View>
 
             {/* ── Master volume ──────────────────────────────────────── */}
-            <View style={styles.sectionDivider} />
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Master
-              </Text>
               <CreatorSlider
                 value={masterVolume}
                 min={0}
                 max={1}
                 step={0.01}
-                label="Master Volume"
+                label="Master"
                 accessibilityLabel={`Master volume, ${formatPercent(masterVolume)}`}
                 onValueChange={handleMasterVolumeChange}
                 onCommit={handleMasterVolumeChange}
@@ -417,12 +393,8 @@ export function AudioMixPanel({
         ) : (
           /* ── Empty state (truthful) ── */
           <View style={styles.emptyBody}>
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-              No audio tracks
-            </Text>
-            <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-              Add music or record a voiceover to start mixing audio for
-              your composition.
+            <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>
+              No audio tracks yet
             </Text>
           </View>
         )}
@@ -460,8 +432,7 @@ function TrackRow({
   onFadeOutChange,
   onMuteToggle,
   onSoloToggle,
-  onDelete,
-}: TrackRowProps): React.ReactElement {
+  onDelete }: TrackRowProps): React.ReactElement {
   const payload = track.layer.payload;
   const iconName: React.ComponentProps<typeof Ionicons>['name'] =
     track.type === 'voiceover' ? 'mic' : 'musical-notes';
@@ -499,7 +470,7 @@ function TrackRow({
             selectedStyle="fill"
             onPress={onMuteToggle}
             accessibilityLabel={isMuted ? 'Unmute track' : 'Mute track'}
-            accessibilityHint={`Mutes or unmutes ${track.name}`}
+            accessibilityHint="Mute or unmute track"
           />
           <CreatorToolButton
             icon={isSoloed ? 'headset' : 'headset-outline'}
@@ -507,13 +478,13 @@ function TrackRow({
             selectedStyle="fill"
             onPress={onSoloToggle}
             accessibilityLabel={isSoloed ? 'Unsolo track' : 'Solo track'}
-            accessibilityHint={`Solos ${track.name}, muting all other tracks`}
+            accessibilityHint="Solo track"
           />
           <CreatorToolButton
             icon="trash-outline"
             onPress={onDelete}
             accessibilityLabel="Delete track"
-            accessibilityHint={`Removes ${track.name} from the composition`}
+            accessibilityHint="Delete track"
           />
         </View>
       </View>
@@ -568,137 +539,95 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     content: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
-    },
+      height: 44 },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      textAlign: 'center' },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     // ── Track list ──
     trackList: {
       gap: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     trackRow: {
       gap: Space.sm,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      paddingVertical: Space.sm },
     trackHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-    },
+      justifyContent: 'space-between' },
     trackInfo: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       flex: 1,
-      paddingRight: Space.sm,
-    },
+      paddingRight: Space.sm },
     trackMeta: {
       flex: 1,
-      gap: 1,
-    },
+      gap: 1 },
     trackName: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     trackType: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     trackActions: {
       flexDirection: 'row',
       gap: Space.xxs,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     // ── Fade row ──
     fadeRow: {
       flexDirection: 'row',
-      gap: Space.md,
-    },
+      gap: Space.md },
     fadeColumn: {
-      flex: 1,
-    },
+      flex: 1 },
     // ── Sections ──
-    sectionDivider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-      marginVertical: Space.md,
-    },
     section: {
       gap: Space.sm,
-    },
-    sectionTitle: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      marginTop: Space.lg },
     // ── Toggle ──
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     toggleTextWrap: {
       flex: 1,
       paddingRight: Space.md,
-      gap: 2,
-    },
+      gap: 2 },
     toggleTitle: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
-    toggleHint: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.body.size },
     switchTrack: {
       width: 46,
       height: 28,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     switchThumb: {
       position: 'absolute',
       width: 22,
       height: 22,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     // ── Empty state ──
     emptyBody: {
       paddingVertical: Space.xl,
-      alignItems: 'center',
-      gap: Space.sm,
-    },
+      alignItems: 'center' },
     emptyTitle: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
-    emptySubtitle: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
-      textAlign: 'center',
-      paddingHorizontal: Space.lg,
-    },
-  });
+      fontSize: TypographyV2.body.size } });
 }
 
 // ── Memoised style factory ────────────────────────────────────────────

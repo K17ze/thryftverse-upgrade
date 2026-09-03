@@ -27,19 +27,19 @@ import {
   StyleSheet,
   Pressable,
   Text,
-  LayoutChangeEvent,
-  PanResponder,
-  GestureResponderEvent,
-  PanResponderGestureState,
-  ViewStyle,
-} from 'react-native';
+  LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, {
+  runOnJS,
+  useSharedValue,
+  useAnimatedStyle,
+} from 'react-native-reanimated';
 import type { Keyframe, KeyframeProperty, KeyframeEasing } from './KeyframeTypes';
 import {
   KEYFRAME_PROPERTY_LABELS,
   KEYFRAME_EASING_LABELS,
-  DEFAULT_KEYFRAME_EASING,
-} from './KeyframeTypes';
+  DEFAULT_KEYFRAME_EASING } from './KeyframeTypes';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import {
@@ -48,16 +48,16 @@ import {
   Stroke,
   Control,
   FontFamily,
-  FontSize,
-  LetterSpacing,
-  Type,
-} from '../../../theme/designTokens';
+  LetterSpacing } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
+import { formatTimecode } from '../timeline/TimelineTypes';
 
 export interface KeyframeEditorProps {
   layerId: string;
   totalDurationMs: number;
   keyframes: Keyframe[];
+  layerDefaults: { x: number; rotation: number };
   onAddKeyframe: (kf: Omit<Keyframe, 'id'>) => void;
   onUpdateKeyframe: (id: string, updates: Partial<Keyframe>) => void;
   onRemoveKeyframe: (id: string) => void;
@@ -72,16 +72,21 @@ export function KeyframeEditor({
   layerId,
   totalDurationMs,
   keyframes,
+  layerDefaults,
   onAddKeyframe,
   onUpdateKeyframe,
-  onRemoveKeyframe,
-}: KeyframeEditorProps) {
+  onRemoveKeyframe }: KeyframeEditorProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
 
   const [activeProperty, setActiveProperty] = useState<KeyframeProperty>('position');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [trackWidth, setTrackWidth] = useState(0);
+  const trackWidthSV = useSharedValue(0);
+  const dragXSV = useSharedValue(0);
+  // Absolute X of the diamond when the drag starts — used to compute the
+  // final timeMs on gesture end.
+  const dragStartXSV = useSharedValue(0);
 
   // Keyframes for the active property, sorted by time.
   const visibleKeyframes = useMemo(
@@ -116,21 +121,25 @@ export function KeyframeEditor({
 
   const handleTrackLayout = useCallback((e: LayoutChangeEvent) => {
     setTrackWidth(e.nativeEvent.layout.width);
-  }, []);
+    trackWidthSV.value = e.nativeEvent.layout.width;
+  }, [trackWidthSV]);
 
   const handleTrackPress = useCallback(
     (e: { nativeEvent: { locationX: number } }) => {
       const timeMs = xToTime(e.nativeEvent.locationX);
       haptic.selection();
+      const value =
+        activeProperty === 'position' ? layerDefaults.x :
+        activeProperty === 'rotation' ? layerDefaults.rotation :
+        1;
       onAddKeyframe({
         layerId,
         property: activeProperty,
         timeMs,
-        value: activeProperty === 'opacity' ? 1 : activeProperty === 'scale' ? 1 : 0,
-        easing: DEFAULT_KEYFRAME_EASING,
-      });
+        value,
+        easing: DEFAULT_KEYFRAME_EASING });
     },
-    [xToTime, haptic, onAddKeyframe, layerId, activeProperty],
+    [xToTime, haptic, onAddKeyframe, layerId, activeProperty, layerDefaults],
   );
 
   const selectProperty = useCallback(
@@ -158,26 +167,57 @@ export function KeyframeEditor({
     setSelectedId(null);
   }, [selectedId, onRemoveKeyframe, haptic]);
 
-  // Pan responder for dragging a selected diamond along the timeline.
-  const dragPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: () => selectedId !== null,
-        onPanResponderMove: (_e: GestureResponderEvent, gestureState: PanResponderGestureState) => {
-          if (!selectedId || trackWidth <= 0) return;
-          const timeMs = xToTime(gestureState.moveX);
-          onUpdateKeyframe(selectedId, { timeMs });
-        },
-        onPanResponderRelease: () => {
-          haptic.selection();
-        },
-      }),
-    [selectedId, trackWidth, xToTime, onUpdateKeyframe, haptic],
+  const makeKeyframeGesture = useCallback(
+    (kfId: string, startTimeMs: number) => {
+      return Gesture.Pan()
+        .onBegin(() => {
+          'worklet';
+          const w = trackWidthSV.value;
+          if (w <= 0 || totalDurationMs <= 0) {
+            dragStartXSV.value = 0;
+          } else {
+            dragStartXSV.value = Math.min(Math.max((startTimeMs / totalDurationMs) * w, 0), w);
+          }
+          dragXSV.value = 0;
+          runOnJS(setSelectedId)(kfId);
+        })
+        .onChange((e) => {
+          'worklet';
+          const w = trackWidthSV.value;
+          if (w <= 0 || totalDurationMs <= 0) return;
+          // dragXSV accumulates the pixel delta from the start position.
+          // Clamped so the diamond stays within the track bounds.
+          const newOffset = dragXSV.value + e.changeX;
+          const absoluteX = dragStartXSV.value + newOffset;
+          const clampedAbsolute = Math.min(Math.max(absoluteX, 0), w);
+          dragXSV.value = clampedAbsolute - dragStartXSV.value;
+        })
+        .onEnd(() => {
+          'worklet';
+          const w = trackWidthSV.value;
+          if (w > 0 && totalDurationMs > 0) {
+            const absoluteX = dragStartXSV.value + dragXSV.value;
+            const ratio = Math.min(Math.max(absoluteX / w, 0), 1);
+            const timeMs = Math.round(ratio * totalDurationMs);
+            // Commit the final time once — no per-frame JS bridge crossing.
+            runOnJS(onUpdateKeyframe)(kfId, { timeMs });
+          }
+          dragXSV.value = 0;
+          runOnJS(haptic.selection)();
+        });
+    },
+    [haptic, onUpdateKeyframe, totalDurationMs, trackWidthSV, dragXSV, dragStartXSV],
   );
+
+  // Animated style for the dragging diamond — reads dragXSV on the UI
+  // thread so the diamond tracks the finger 1:1 without React re-renders.
+  const diamondAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: dragXSV.value }],
+  }));
 
   return (
     <View style={styles.container}>
-      {/* Property selector — underline tabs */}
+      {/* Property selector — filled pills */}
       <View style={styles.propertyRow} accessibilityRole="tablist">
         {PROPERTIES.map((prop) => {
           const active = prop === activeProperty;
@@ -188,15 +228,16 @@ export function KeyframeEditor({
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
               accessibilityLabel={`${KEYFRAME_PROPERTY_LABELS[prop]} property`}
-              style={styles.propertyButton}
+              style={[
+                styles.propertyButton,
+                { backgroundColor: active ? colors.surfaceElevated : 'transparent' },
+              ]}
             >
               <Text
                 style={[
                   styles.propertyLabel,
                   {
-                    color: active ? colors.brand : colors.textSecondary,
-                    textDecorationLine: active ? 'underline' : 'none',
-                  },
+                    color: active ? colors.brand : colors.textSecondary },
                 ]}
               >
                 {KEYFRAME_PROPERTY_LABELS[prop]}
@@ -223,11 +264,29 @@ export function KeyframeEditor({
           {visibleKeyframes.map((kf) => {
             const isSelected = kf.id === selectedId;
             const left = timeToX(kf.timeMs) - DIAMOND_SIZE / 2;
+            if (isSelected) {
+              return (
+                <GestureDetector key={kf.id} gesture={makeKeyframeGesture(kf.id, kf.timeMs)}>
+                  <Reanimated.View
+                    onLayout={() => {}}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Keyframe at ${kf.timeMs} milliseconds, value ${kf.value}`}
+                    style={[
+                      styles.diamond,
+                      diamondAnimStyle,
+                      {
+                        left,
+                        backgroundColor: colors.brand,
+                        borderColor: colors.brand },
+                    ]}
+                  />
+                </GestureDetector>
+              );
+            }
             return (
               <Pressable
                 key={kf.id}
                 onPress={() => selectKeyframe(kf.id)}
-                {...(isSelected ? dragPanResponder.panHandlers : undefined)}
                 hitSlop={Control.hit / 2 - DIAMOND_SIZE / 2}
                 accessibilityRole="button"
                 accessibilityLabel={`Keyframe at ${kf.timeMs} milliseconds, value ${kf.value}`}
@@ -235,9 +294,8 @@ export function KeyframeEditor({
                   styles.diamond,
                   {
                     left,
-                    backgroundColor: isSelected ? colors.brand : colors.surfaceElevated,
-                    borderColor: isSelected ? colors.brand : colors.textMuted,
-                  },
+                    backgroundColor: colors.surfaceElevated,
+                    borderColor: colors.textMuted },
                 ]}
               />
             );
@@ -296,15 +354,16 @@ export function KeyframeEditor({
                     accessibilityRole="radio"
                     accessibilityState={{ checked: active }}
                     accessibilityLabel={KEYFRAME_EASING_LABELS[ease]}
-                    style={styles.easingButton}
+                    style={[
+                      styles.easingButton,
+                      { backgroundColor: active ? colors.surfaceElevated : 'transparent' },
+                    ]}
                   >
                     <Text
                       style={[
                         styles.easingLabel,
                         {
-                          color: active ? colors.brand : colors.textSecondary,
-                          textDecorationLine: active ? 'underline' : 'none',
-                        },
+                          color: active ? colors.brand : colors.textSecondary },
                       ]}
                     >
                       {KEYFRAME_EASING_LABELS[ease]}
@@ -318,7 +377,7 @@ export function KeyframeEditor({
           <View style={styles.inspectorRow}>
             <Text style={[styles.inspectorLabel, { color: colors.textSecondary }]}>Time</Text>
             <Text style={[styles.valueText, { color: colors.textPrimary }]}>
-              {selected.timeMs} ms
+              {formatTimecode(selected.timeMs)}
             </Text>
           </View>
 
@@ -326,13 +385,10 @@ export function KeyframeEditor({
             onPress={handleDelete}
             accessibilityRole="button"
             accessibilityLabel="Delete keyframe"
-            style={[
-              styles.deleteButton,
-              { backgroundColor: colors.danger },
-            ]}
+            style={styles.deleteButton}
+            hitSlop={Control.hit / 2}
           >
-            <Ionicons name="trash-outline" size={IconGrammar.metadata} color="#FFFFFF" />
-            <Text style={styles.deleteLabel}>Delete</Text>
+            <Ionicons name="trash-outline" size={IconGrammar.metadata} color={colors.danger} />
           </Pressable>
         </View>
       )}
@@ -373,6 +429,9 @@ function formatValue(value: number, property: KeyframeProperty): string {
       return `${Math.round(value)}°`;
     case 'position':
     default:
+      // Position is normalized (0–1) in the poster composer; show as a
+      // percentage so the readout is meaningful rather than a raw fraction.
+      if (value >= 0 && value <= 1) return `${Math.round(value * 100)}%`;
       return `${Math.round(value)}px`;
   }
 }
@@ -382,118 +441,86 @@ function formatValue(value: number, property: KeyframeProperty): string {
 const styles = StyleSheet.create({
   container: {
     paddingVertical: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   propertyRow: {
     flexDirection: 'row',
     gap: Space.xs,
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
   propertyButton: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   propertyLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    letterSpacing: LetterSpacing.normal,
-  },
+    fontSize: TypographyV2.body.size,
+    letterSpacing: LetterSpacing.normal },
   timelineWrap: {
     borderTopWidth: Stroke.hairline,
     borderBottomWidth: Stroke.hairline,
     paddingVertical: Space.sm,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   timelineTrack: {
     height: TIMELINE_HEIGHT,
     justifyContent: 'center',
-    position: 'relative',
-  },
+    position: 'relative' },
   timelineLine: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: Stroke.hairline,
-  },
+    height: Stroke.hairline },
   diamond: {
     position: 'absolute',
     width: DIAMOND_SIZE,
     height: DIAMOND_SIZE,
     transform: [{ rotate: '45deg' }],
     borderWidth: Stroke.emphasis,
-    borderRadius: Radius.none,
-  },
+    borderRadius: Radius.none },
   inspector: {
     borderTopWidth: Stroke.hairline,
     paddingTop: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   inspectorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   inspectorLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    letterSpacing: LetterSpacing.normal,
-  },
+    fontSize: TypographyV2.body.size,
+    letterSpacing: LetterSpacing.normal },
   valueControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   stepButton: {
     width: Control.chrome,
     height: Control.chrome,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   valueText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     letterSpacing: LetterSpacing.normal,
     minWidth: 56,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   easingRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.md,
     flex: 1,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   easingButton: {
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   easingLabel: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.body.size,
-    letterSpacing: LetterSpacing.normal,
-  },
+    fontSize: TypographyV2.body.size,
+    letterSpacing: LetterSpacing.normal },
   deleteButton: {
-    flexDirection: 'row',
+    width: 32,
+    height: 32,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.lg,
-    minHeight: 50,
-  },
-  deleteLabel: {
-    fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-    color: '#FFFFFF',
-    letterSpacing: LetterSpacing.normal,
-  },
-});
-
-// Keep ViewStyle referenced for typed style composition without unused-import
-// errors at compile time.
-export type KeyframeEditorViewStyle = ViewStyle;
+    justifyContent: 'center' } });

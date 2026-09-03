@@ -9,7 +9,7 @@
  * Anti-AI principles:
  * - No generic blue-purple gradients
  * - No glassmorphism on content cards
- * - No decorative orbs, sparkles, or breathing icons
+ * - No decorative orbs, glitter, or breathing icons
  * - No shadows on every surface
  * - No card-on-card composition
  * - Luxury from geometry and typography, not gold ornament
@@ -36,8 +36,7 @@ export const Space = {
   /** 32px - Major sections, hero spacing */
   xl: 32,
   /** 48px - Large hero sections, onboarding */
-  xxl: 48,
-} as const;
+  xxl: 48 } as const;
 
 // ============================================================================
 // BORDER RADIUS (Intentional, consistent shapes)
@@ -57,9 +56,12 @@ export const Radius = {
   chat: 20,
   /** 24px - Navigation docks and genuinely dominant panels only */
   xxl: 24,
+  /** 20px - Sheet top corners (collapses EditorRadius.sheet into Radius). */
+  sheet: 20,
+  /** 18px - Floating rail / dock capsule corners (collapses EditorRadius.rail). */
+  rail: 18,
   /** 999px - Pills, avatars, floating buttons, tags */
-  full: 999,
-} as const;
+  full: 999 } as const;
 
 // ============================================================================
 // TYPOGRAPHY (Inter — editorial scale with clear relationships)
@@ -74,14 +76,10 @@ interface TypeStyle {
 // ============================================================================
 // FONT FAMILIES (Inter set)
 // ============================================================================
-export const FontFamily = {
-  light: 'Inter_300Light',
-  regular: 'Inter_400Regular',
-  medium: 'Inter_500Medium',
-  semibold: 'Inter_600SemiBold',
-  bold: 'Inter_700Bold',
-  extrabold: 'Inter_800ExtraBold',
-} as const;
+import { FontFamily, FontFamilySerif } from './fontFamily';
+export { FontFamily, FontFamilySerif };
+
+
 
 export const FontSize = {
   micro: 10,
@@ -92,33 +90,35 @@ export const FontSize = {
   heading: 30,
   display: 40,
   hero: 56,
-  giant: 72,
-} as const;
+  giant: 72 } as const;
 
 export const LetterSpacing = {
   tight: -0.42,
   normal: 0,
   wide: 0.12,
-  caps: 0.82,
-} as const;
+  caps: 0.82 } as const;
 
 // ============================================================================
 // SEMANTIC TYPOGRAPHY — Editorial type scale
 // One weight delta is normally enough to express hierarchy.
 // Prices and financial quantities use tabular figures (see Numeric below).
 // ============================================================================
-export const Type: Record<string, TypeStyle> = {
+export const Type = {
   // ── Display / campaign ──
-  /** 32/38/700 — Auth hero, empty state titles, rare campaign statement */
-  display: { size: 32, lineHeight: 38, weight: '700', letterSpacing: -0.5 },
+  /** 24/30/700 — Auth hero, empty state titles, rare campaign statement */
+  display: { size: 24, lineHeight: 30, weight: '700', letterSpacing: -0.5 },
+  /** 28/34/700 — Hero campaign statements, splash headlines */
+  hero: { size: 28, lineHeight: 34, weight: '700', letterSpacing: -0.5 },
 
   // ── Screen identity ──
-  /** 24/32/700 — Hero titles, screen headers, profile names */
-  title: { size: 24, lineHeight: 32, weight: '700', letterSpacing: -0.6 },
-  /** 24/32/700 — Semantic alias: screen identity (maps to title) */
-  screenTitle: { size: 24, lineHeight: 32, weight: '700', letterSpacing: -0.6 },
+  /** 20/26/700 — Hero titles, screen headers, profile names */
+  title: { size: 20, lineHeight: 26, weight: '700', letterSpacing: -0.6 },
+  /** 20/26/700 — Semantic alias: screen identity (maps to title) */
+  screenTitle: { size: 20, lineHeight: 26, weight: '700', letterSpacing: -0.6 },
 
   // ── Section / item titles ──
+  /** 17/22/600 — Section titles, card headers, product names, feed item titles */
+  heading: { size: 17, lineHeight: 22, weight: '600', letterSpacing: -0.4 },
   /** 17/24/600 — Section titles, card headers, product names */
   subtitle: { size: 17, lineHeight: 24, weight: '600', letterSpacing: -0.4 },
   /** 17/24/600 — Semantic alias: major section (maps to subtitle) */
@@ -160,8 +160,7 @@ export const Type: Record<string, TypeStyle> = {
 
   // ── Numeric metadata ──
   /** 13/18/600 — Bids, quantities, P&L (tabular figures via Numeric.numericMeta) */
-  numericMeta: { size: 13, lineHeight: 18, weight: '600', letterSpacing: 0 },
-} as const;
+  numericMeta: { size: 13, lineHeight: 18, weight: '600', letterSpacing: 0 } } as const satisfies Record<string, TypeStyle>;
 
 // REMOVED (to reduce visual chaos):
 // - captionEmphasis (merged into caption or price)
@@ -177,8 +176,7 @@ export const Type: Record<string, TypeStyle> = {
 export const Typography = {
   family: FontFamily,
   size: FontSize,
-  tracking: LetterSpacing,
-} as const;
+  tracking: LetterSpacing } as const;
 
 /**
  * @deprecated Use `Type` tokens + `FontFamily` directly. TypeStyles is kept
@@ -188,91 +186,67 @@ export const Typography = {
 export const TypeStyles: { [key: string]: import('react-native').TextStyle } = {
   display: {
     fontFamily: FontFamily.bold,
-    fontSize: Type.display.size,
-    letterSpacing: Type.display.letterSpacing,
-    lineHeight: Type.display.lineHeight,
-  },
+    fontSize: TypographyV2.display.size,
+    letterSpacing: TypographyV2.display.letterSpacing,
+    lineHeight: TypographyV2.display.lineHeight },
   hero: {
-    fontFamily: FontFamily.extrabold,
-    fontSize: Type.display.size,
-    letterSpacing: Type.display.letterSpacing,
-    lineHeight: Type.display.lineHeight,
-  },
-  heroDisplay: {
-    fontFamily: FontFamily.extrabold,
-    fontSize: Type.display.size,
-    letterSpacing: -1.0,
-    lineHeight: Type.display.lineHeight,
-  },
-  giantDisplay: {
-    fontFamily: FontFamily.extrabold,
-    fontSize: 48,
-    letterSpacing: -1.2,
-    lineHeight: 52,
-  },
+    fontFamily: FontFamily.bold,
+    fontSize: TypographyV2.display.size,
+    letterSpacing: TypographyV2.display.letterSpacing,
+    lineHeight: TypographyV2.display.lineHeight },
   heading: {
     fontFamily: FontFamily.bold,
-    fontSize: Type.title.size,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    lineHeight: TypographyV2.sectionTitle.lineHeight },
   title: {
-    fontFamily: FontFamily.semibold,
-    fontSize: Type.title.size,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
-  },
+    fontFamily: FontFamily.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
+    lineHeight: TypographyV2.screenTitle.lineHeight },
   body: {
     fontFamily: FontFamily.regular,
-    fontSize: Type.body.size,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight },
   bodyEmphasis: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    letterSpacing: Type.bodyEmphasis.letterSpacing,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   bodyStrong: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   caption: {
     fontFamily: FontFamily.regular,
-    fontSize: Type.caption.size,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   metadata: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.meta.size,
-    letterSpacing: Type.meta.letterSpacing,
-    lineHeight: Type.meta.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   overline: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.metaElevated.size,
-    letterSpacing: Type.metaElevated.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    lineHeight: Type.metaElevated.lineHeight,
-  },
+    lineHeight: TypographyV2.label.lineHeight },
   button: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyEmphasis.size,
-    letterSpacing: 0.12,
-    lineHeight: Type.bodyEmphasis.lineHeight,
-  },
-};
+    fontSize: TypographyV2.bodyStrong.size,
+    letterSpacing: 0,
+    lineHeight: TypographyV2.bodyStrong.lineHeight } };
 
 // ============================================================================
 // ELEVATION / SHADOWS — deliberate depth, not decoration
 // Use depth only to clarify hierarchy, touchability, or modal separation.
 // Avoid shadows on every card, cards inside cards, and decorative badges.
 // ============================================================================
-interface ShadowConfig {
+export interface ShadowConfig {
   shadowColor: string;
   shadowOffset: { width: number; height: number };
   shadowOpacity: number;
@@ -280,15 +254,14 @@ interface ShadowConfig {
   elevation: number;
 }
 
-export const Elevation: Record<string, ShadowConfig> = {
+export const Elevation = {
   /** No shadow — flat elements, default utility structure */
   none: {
     shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0,
     shadowRadius: 0,
-    elevation: 0,
-  },
+    elevation: 0 },
   /** Hairline — barely perceptible separation for grouped content.
    *  Use for cards that need to float above a same-colour canvas. */
   subtle: {
@@ -296,52 +269,47 @@ export const Elevation: Record<string, ShadowConfig> = {
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
-    elevation: 1,
-  },
+    elevation: 1 },
   /** Card — elevated cards, buttons. Deliberate but restrained. */
   card: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 10,
-    elevation: 3,
-  },
+    elevation: 3 },
   /** Floating — FABs, sticky docks, overlays. Separates from scroll content. */
   floating: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.10,
     shadowRadius: 14,
-    elevation: 6,
-  },
+    elevation: 6 },
   /** Modal — bottom sheets, dialogs. Clear material separation. */
   modal: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.16,
     shadowRadius: 22,
-    elevation: 12,
-  },
-} as const;
+    elevation: 12 } } as const satisfies Record<string, ShadowConfig>;
 
 // ============================================================================
 // LAYOUT CONSTANTS
 // ============================================================================
 import { Dimensions } from 'react-native';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+import { TypographyV2 } from '../theme/typography.v2';
 
 export const Layout = {
-  screenWidth: SCREEN_WIDTH,
-  screenHeight: SCREEN_HEIGHT,
+  get screenWidth() { return Dimensions.get('window').width; },
+  get screenHeight() { return Dimensions.get('window').height; },
   /** 2-column masonry grid item width with 16px gaps */
-  gridItemWidth: (SCREEN_WIDTH - Space.md * 3) / 2,
+  get gridItemWidth() { return (Dimensions.get('window').width - Space.md * 3) / 2; },
   /** Full width minus padding */
-  contentWidth: SCREEN_WIDTH - Space.md * 2,
+  get contentWidth() { return Dimensions.get('window').width - Space.md * 2; },
   /** Standard grid configuration */
   gridColumns: 2,
-  gridGap: Space.sm,
-} as const;
+  gridGap: Space.sm };
 
 // ============================================================================
 // Z-INDEX SCALE
@@ -353,41 +321,7 @@ export const ZIndex = {
   dropdown: 200,
   modal: 300,
   toast: 400,
-  overlay: 500,
-} as const;
-
-// ============================================================================
-// COMMON STYLE PRESETS
-// ============================================================================
-export const CommonStyles = {
-  /** Standard card container */
-  card: {
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    ...Elevation.card,
-  },
-  /** Standard screen container */
-  screen: {
-    flex: 1,
-    paddingHorizontal: Space.md,
-  },
-  /** Row with items centered */
-  rowCenter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  /** Row with items spread apart */
-  rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  /** Center content both directions */
-  center: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-} as const;
+  overlay: 500 } as const;
 
 // ============================================================================
 // STICKY DOCK GEOMETRY
@@ -408,8 +342,7 @@ export const DockConstants = {
   /** Secondary/quiet button height per Design.md button-quiet spec (44px) */
   secondaryButtonHeight: 44,
   /** Dock top padding — breathing room above action buttons */
-  dockTopPadding: 10,
-} as const;
+  dockTopPadding: 10 } as const;
 
 // ============================================================================
 // EXCHANGE LAYOUT GEOMETRY — Co-Own market surfaces
@@ -427,8 +360,7 @@ export const ExchangeLayout = {
   // Value strip (last/bid/ask/mid/NAV) row height
   valueStripRowHeight: 44,
   // Chart hero min height on AssetDetail
-  chartHeroMinHeight: 220,
-} as const;
+  chartHeroMinHeight: 220 } as const;
 
 // ============================================================================
 // NUMERIC TYPOGRAPHY — tabular figures for all 1ZE values
@@ -440,37 +372,30 @@ export const Numeric = {
   price: {
     ...Type.price,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
-    fontFeatureSettings: '"tnum" 1, "lnum" 1',
-  },
+    fontFeatureSettings: '"tnum" 1, "lnum" 1' },
   // Elevated price (20/24/700)
   priceList: {
     ...Type.priceList,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   // Hero price (28/32/700)
   priceLarge: {
     ...Type.priceLarge,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
-  // Hero portfolio / wallet value (32/38/700)
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
+  // Hero portfolio / wallet value (24/30/700)
   display: {
     ...Type.display,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   // Numeric metadata — bids, quantities, P&L (13/18/600)
   numericMeta: {
     ...Type.numericMeta,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   // Order book, depth, stats grids — compact mono feel
   mono: {
     size: 13,
     lineHeight: 18,
     weight: '500' as const,
     letterSpacing: 0,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
-} as const;
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] } } as const;
 
 // ============================================================================
 // CONTROL GEOMETRY (hit area and visible chrome are deliberately separate)
@@ -485,8 +410,7 @@ export const Control = {
   /** Standard navigation/action glyph. */
   icon: 22,
   /** Compact inline glyph. */
-  iconCompact: 18,
-} as const;
+  iconCompact: 18 } as const;
 
 export const Stroke = {
   /** Subtle separators and grouped-list hairlines. */
@@ -494,8 +418,7 @@ export const Stroke = {
   /** Fields and intentionally outlined controls. */
   standard: 1,
   /** Selection/focus only; never routine card decoration. */
-  emphasis: 2,
-} as const;
+  emphasis: 2 } as const;
 
 // ============================================================================
 // THUMBNAIL & AVATAR SIZES — canonical dimensions for card media and identity
@@ -509,8 +432,7 @@ export const ThumbSize = {
   /** 72px — standard list row thumbnail (order cards, asset cards) */
   md: 72,
   /** 80px — large list row thumbnail (asset cards) */
-  lg: 80,
-} as const;
+  lg: 80 } as const;
 
 export const AvatarSize = {
   /** 24px — inline metadata avatar (comment rows, chat list) */
@@ -528,8 +450,7 @@ export const AvatarSize = {
   /** 88px — standard profile hero avatar */
   hero: 88,
   /** 104px — large profile hero avatar */
-  xl: 104,
-} as const;
+  xl: 104 } as const;
 
 // ============================================================================
 // ICON GRAMMAR — one icon family, one optical size band, stable outline/filled rule
@@ -544,9 +465,11 @@ export const IconGrammar = {
   badge: 12,
   /** Hero/empty-state glyph. 28–32pt optical band. */
   hero: 28,
-  /** Outline = default/resting state. Filled = selected/active/saved. */
-  filledStates: ['heart', 'bookmark', 'star', 'bookmark-outline', 'heart-outline'] as readonly string[],
-} as const;
+  /** Outline = default/resting state. Filled = selected/active/saved.
+   *  Only filled (selected-state) glyph names belong here — outline names
+   *  are the default, not a filled state. Used by semantic state pairs at
+   *  consuming controls (saved/unsaved, sound-on/muted, visibility-on/hidden). */
+  filledStates: ['heart', 'bookmark', 'star'] as readonly string[] } as const;
 
 // ============================================================================
 // PRESS FEEDBACK — scale values for press interactions
@@ -557,9 +480,8 @@ export const PressScale = {
   tap: 0.97,
   /** Gentle press — large surfaces, cards */
   gentle: 0.985,
-  /** Icon-only press — controls with transparent background */
-  icon: 0.92,
-} as const;
+  /** Icon-only press — subtle scale for transparent header/overlay controls (0.97–0.985 band) */
+  icon: 0.975 } as const;
 
 // ============================================================================
 // ASPECT RATIOS (width / height)
@@ -579,8 +501,7 @@ export const AspectRatio = {
   /** 16:9 — wide */
   wide: 16 / 9,
   /** 4:5 — marketplace standard (Depop, Instagram) */
-  marketplace: 4 / 5,
-} as const;
+  marketplace: 4 / 5 } as const;
 
 // ============================================================================
 // FEED LAYOUT GEOMETRY — Home and discovery feed surfaces
@@ -610,8 +531,7 @@ export const FeedLayout = {
   /** Feed tab vertical padding */
   tabPaddingV: Space.sm,
   /** Pull-to-refresh distance threshold */
-  refreshDistance: 80,
-} as const;
+  refreshDistance: 80 } as const;
 
 // ============================================================================
 // PROFILE LAYOUT GEOMETRY — Profile and identity surfaces
@@ -648,8 +568,7 @@ export const ProfileLayout = {
   /** Utility rail item size */
   utilityRailItem: 56,
   /** Co-Own portfolio preview card height */
-  portfolioPreviewHeight: 72,
-} as const;
+  portfolioPreviewHeight: 72 } as const;
 
 // ============================================================================
 // SEARCH LAYOUT GEOMETRY — Search and explore surfaces
@@ -678,8 +597,7 @@ export const SearchLayout = {
   /** Editorial card height */
   editorialCardHeight: 120,
   /** Explore grid gap */
-  exploreGridGap: Space.smMd,
-} as const;
+  exploreGridGap: Space.smMd } as const;
 
 // ============================================================================
 // COMMERCE DETAIL LAYOUT — Product detail hardcoded dimensions
@@ -725,8 +643,7 @@ export const CommerceLayout = {
   /** Candle width */
   candleWidth: 6,
   /** Candle gap */
-  candleGap: 2,
-} as const;
+  candleGap: 2 } as const;
 
 // ============================================================================
 // EDITOR CHROME — 2026 flagship media-editor grammar
@@ -761,31 +678,42 @@ export interface EditorMaterialSpec {
   hairline: string;
 }
 
+/**
+ * @deprecated Glass material tokens — glass/blur effects are an AI tell on
+ * content chrome per AGENTS.md §4. The `sheet` material is no longer used
+ * by the canonical SheetContainer/GlassSheet (they use solid surfaceElevated
+ * + hairline). The `plate` and `rail` materials still have external consumers
+ * and are kept for backward compatibility; do not add new uses.
+ */
 export const EditorMaterial = {
   /** Editor sheet / tray — glass panel over media (effects, overflow, sticker). */
   sheet: {
     blurIntensity: 90,
     tint: 'systemThickMaterialDark' as EditorBlurTint,
     overlay: 'rgba(20,20,20,0.55)',
-    hairline: 'rgba(255,255,255,0.10)',
-  },
+    hairline: 'rgba(255,255,255,0.10)' },
   /** Floating tool rail / dock over media (timeline, bottom rail). */
   rail: {
     blurIntensity: 24,
     tint: 'dark' as EditorBlurTint,
     overlay: 'rgba(0,0,0,0.35)',
-    hairline: 'rgba(255,255,255,0.12)',
-  },
+    hairline: 'rgba(255,255,255,0.12)' },
   /** Single on-media control plate (32pt tool backplate, loading pill). */
   plate: {
     blurIntensity: 16,
     tint: 'dark' as EditorBlurTint,
     overlay: 'rgba(0,0,0,0.30)',
-    hairline: 'rgba(255,255,255,0.14)',
-  },
-} as const satisfies Record<string, EditorMaterialSpec>;
+    hairline: 'rgba(255,255,255,0.14)' } } as const satisfies Record<string, EditorMaterialSpec>;
 
-/** Role-based radii for editor chrome — replaces ad-hoc Radius.sm/xl usage. */
+/** Theme-independent authored-media canvas. Creator tools use a dark canvas
+ * in both app themes so media, white glyphs and scrim text remain predictable. */
+export const EditorCanvas = '#0C0C0D';
+
+/**
+ * @deprecated Role-based radii for editor chrome. Collapses into `Radius`
+ * (Radius.sheet, Radius.rail). Kept for backward compatibility with external
+ * consumers; do not add new uses — use `Radius.sheet` / `Radius.rail` instead.
+ */
 export const EditorRadius = {
   /** Sheet top corners (replaces mixed 16/20). */
   sheet: 20,
@@ -794,8 +722,7 @@ export const EditorRadius = {
   /** Tool backplate (replaces Radius.sm=4 — the biggest "2015" tell). */
   plate: 10,
   /** Slider thumbs / pills. */
-  thumb: 999,
-} as const;
+  thumb: 999 } as const;
 
 /** On-media glyph & text legibility — single source of truth.
  *  Replaces 26+ files of hand-rolled textShadow values with divergent
@@ -806,21 +733,17 @@ export const GlyphShadow = {
   glyph: {
     textShadowColor: 'rgba(0,0,0,0.45)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
+    textShadowRadius: 3 },
   /** 11pt label under glyph. */
   label: {
     textShadowColor: 'rgba(0,0,0,0.40)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
+    textShadowRadius: 2 },
   /** 17pt sheet title / larger text on media. */
   title: {
     textShadowColor: 'rgba(0,0,0,0.50)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-} as const;
+    textShadowRadius: 4 } } as const;
 
 /** Scrim gradients for top/bottom/side edges over media.
  *  Consumed via expo-linear-gradient `<LinearGradient colors={Scrim.top.colors} locations={Scrim.top.locations} />`. */
@@ -828,16 +751,65 @@ export const Scrim = {
   /** Top edge scrim — fades from 45% black to transparent. */
   top: {
     colors: ['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.18)', 'transparent'],
-    locations: [0, 0.6, 1],
-  },
+    locations: [0, 0.6, 1] },
   /** Bottom edge scrim — fades from transparent to 55% black. */
   bottom: {
     colors: ['transparent', 'rgba(0,0,0,0.22)', 'rgba(0,0,0,0.55)'],
-    locations: [0, 0.5, 1],
-  },
+    locations: [0, 0.5, 1] },
   /** Side edge scrim — for left/right tool columns. */
   edge: {
     colors: ['rgba(0,0,0,0.30)', 'transparent'],
-    locations: [0, 1],
-  },
-} as const;
+    locations: [0, 1] } } as const;
+
+// ============================================================================
+// COIN GRADIENT — 1ZE coin icon gradient
+// The signature gold gradient for the OnezeCoinIcon component. Replaces
+// hardcoded inline hex values with a single source of truth.
+/**
+ * @deprecated Coin gradient — has one external consumer (OnezeCoinIcon).
+ * Kept for backward compatibility; do not add new uses.
+ */
+// ============================================================================
+export const CoinGradient = {
+  start: '#f4d27b',
+  end: '#c68a2d' } as const;
+
+// ============================================================================
+// ICONOGRAPHY TOKENS (Optical size scale, stroke weights, hit targets)
+// ============================================================================
+export {
+  IconSize,
+  IconHitTarget,
+  IconStroke,
+  IconOpticalOffset,
+  SemanticIconMap,
+} from './iconTokens';
+
+export type {
+  IconSizeKey,
+  IoniconsGlyphName,
+  SemanticIconName,
+  SemanticIconDef,
+  OpticalOffset,
+} from './iconTokens';
+
+// ============================================================================
+// AVATAR PALETTE — deterministic avatar placeholder fills
+// Curated palette of 8 distinct, high-saturation fills (Telegram/WhatsApp
+// pattern). All are readable with white semibold initials on top (≥3:1
+// contrast). Chosen to be distinguishable in a dense chat list (hue spread
+// ~45°). Theme-neutral — identical in light and dark mode because the fills
+// are the recognition token, not a themed surface.
+// ============================================================================
+export const AVATAR_PALETTE: readonly string[] = [
+  '#E5484D', // red
+  '#F5A623', // amber
+  '#46A758', // green
+  '#0EA5E9', // sky
+  '#6366F1', // indigo
+  '#A855F7', // purple
+  '#EC4899', // pink
+  '#14B8A6', // teal
+];
+
+

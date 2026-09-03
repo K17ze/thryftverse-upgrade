@@ -1,303 +1,115 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, LayoutChangeEvent } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius, Control, PressScale } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { CachedImage } from '../components/CachedImage';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
-import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type TopPerformerListing } from '../services/commerceApi';
+import {
+  fetchSellerAnalytics,
+  fetchTopPerformers,
+  fetchDailyBreakdown,
+  type SellerAnalytics,
+  type TopPerformerListing,
+  type DailyBreakdownPoint,
+} from '../services/commerceApi';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { useFeatureFlag, track } from '../analytics';
-import { t } from '../i18n';
-
+import { track, trackRaw } from '../analytics';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useA11yAudit } from '../hooks/useA11yAudit';
+import { useAppTranslation } from '../i18n/useAppTranslation';
+import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
+import { openShareSheet } from '../platform/share/shareSheet';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-const TOP_LISTING_CARD_WIDTH = 140;
-
-interface KpiRow {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  value: string;
-  sublabel?: string;
-}
-
-type Period = '7d' | '30d' | '90d' | '1y';
+type Period = '7d' | '30d' | '90d';
 
 const PERIOD_OPTIONS: { key: Period; label: string }[] = [
-  { key: '7d', label: '7d' },
-  { key: '30d', label: '30d' },
-  { key: '90d', label: '90d' },
-  { key: '1y', label: '1y' },
+  { key: '7d', label: '7D' },
+  { key: '30d', label: '30D' },
+  { key: '90d', label: '90D' },
 ];
 
-// ── Simple bar chart for listing activity over time ──
-// Derived from real listing createdAt timestamps. No fabricated data.
-// Shows listings created per day (7d/30d) or per week (90d) or per month (1y).
-interface ChartBucket {
-  label: string;
-  count: number;
-}
-
-function computeActivityBuckets(listings: ListingApiItem[], period: Period): ChartBucket[] {
-  const now = Date.now();
-  const buckets: ChartBucket[] = [];
-
-  if (period === '7d') {
-    // 7 daily buckets
-    const dayMs = 24 * 60 * 60 * 1000;
-    for (let i = 6; i >= 0; i--) {
-      const dayStart = now - i * dayMs;
-      const date = new Date(dayStart);
-      const dayLabel = date.toLocaleDateString('en-GB', { weekday: 'short' });
-      buckets.push({ label: dayLabel, count: 0 });
-    }
-    const bucketStart = now - 7 * dayMs;
-    for (const l of listings) {
-      const created = new Date(l.createdAt).getTime();
-      if (!Number.isNaN(created) && created >= bucketStart) {
-        const dayIndex = Math.floor((created - bucketStart) / dayMs);
-        if (dayIndex >= 0 && dayIndex < 7) {
-          buckets[dayIndex].count++;
-        }
-      }
-    }
-  } else if (period === '30d') {
-    // 30 daily buckets — thin bars
-    const dayMs = 24 * 60 * 60 * 1000;
-    for (let i = 29; i >= 0; i--) {
-      const dayStart = now - i * dayMs;
-      const date = new Date(dayStart);
-      const dayLabel = date.getDate().toString();
-      buckets.push({ label: dayLabel, count: 0 });
-    }
-    const bucketStart = now - 30 * dayMs;
-    for (const l of listings) {
-      const created = new Date(l.createdAt).getTime();
-      if (!Number.isNaN(created) && created >= bucketStart) {
-        const dayIndex = Math.floor((created - bucketStart) / dayMs);
-        if (dayIndex >= 0 && dayIndex < 30) {
-          buckets[dayIndex].count++;
-        }
-      }
-    }
-  } else if (period === '90d') {
-    // ~13 weekly buckets
-    const weekMs = 7 * 24 * 60 * 60 * 1000;
-    const numWeeks = 13;
-    for (let i = numWeeks - 1; i >= 0; i--) {
-      const weekStart = now - i * weekMs;
-      const date = new Date(weekStart);
-      const weekLabel = `${date.getDate()}/${date.getMonth() + 1}`;
-      buckets.push({ label: weekLabel, count: 0 });
-    }
-    const bucketStart = now - numWeeks * weekMs;
-    for (const l of listings) {
-      const created = new Date(l.createdAt).getTime();
-      if (!Number.isNaN(created) && created >= bucketStart) {
-        const weekIndex = Math.floor((created - bucketStart) / weekMs);
-        if (weekIndex >= 0 && weekIndex < numWeeks) {
-          buckets[weekIndex].count++;
-        }
-      }
-    }
-  } else {
-    // 1y — 12 monthly buckets
-    const now2 = new Date();
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now2.getFullYear(), now2.getMonth() - i, 1);
-      const monthLabel = d.toLocaleDateString('en-GB', { month: 'short' });
-      buckets.push({ label: monthLabel, count: 0 });
-    }
-    for (const l of listings) {
-      const created = new Date(l.createdAt);
-      if (!Number.isNaN(created.getTime())) {
-        for (let i = 0; i < 12; i++) {
-          const bucketDate = new Date(now2.getFullYear(), now2.getMonth() - (11 - i), 1);
-          const nextBucketDate = new Date(now2.getFullYear(), now2.getMonth() - (11 - i) + 1, 1);
-          if (created >= bucketDate && created < nextBucketDate) {
-            buckets[i].count++;
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  return buckets;
-}
-
-// ── Activity chart component ──
-// Simple View-based bar chart. No external library. Uses theme colors.
-// Per AGENTS.md §4: flat, no card chrome. Hierarchy from typography.
-function ActivityChart({ buckets, colors, accessibilitySummary }: { buckets: ChartBucket[]; colors: ThemeColors; accessibilitySummary: string }) {
-  const maxCount = Math.max(1, ...buckets.map((b) => b.count));
-  const hasData = buckets.some((b) => b.count > 0);
-  const isCompact = buckets.length > 10;
-
-  if (!hasData) {
-    return (
-      <View style={chartStyles.emptyWrap}>
-        <Ionicons name="bar-chart-outline" size={24} color={colors.textMuted} />
-        <Text style={[chartStyles.emptyText, { color: colors.textMuted }]}>
-          No listing activity in this period
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={chartStyles.container}>
-      <Text
-        accessibilityLabel={accessibilitySummary}
-        accessibilityRole="text"
-        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
-      />
-      {/* Bars row */}
-      <View style={chartStyles.barsRow}>
-        {buckets.map((bucket, i) => {
-          const heightPct = (bucket.count / maxCount) * 100;
-          return (
-            <View key={i} style={chartStyles.barColumn}>
-              <View style={chartStyles.barTrack}>
-                <View
-                  style={[
-                    chartStyles.bar,
-                    {
-                      height: `${heightPct}%`,
-                      backgroundColor: bucket.count > 0 ? colors.brand : colors.surfaceAlt,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          );
-        })}
-      </View>
-      {/* Labels row — show every Nth label for compact charts */}
-      <View style={chartStyles.labelsRow}>
-        {buckets.map((bucket, i) => {
-          const showLabel = isCompact
-            ? i % Math.ceil(buckets.length / 6) === 0 || i === buckets.length - 1
-            : true;
-          return (
-            <View key={i} style={chartStyles.labelColumn}>
-              {showLabel && (
-                <Text style={[chartStyles.labelText, { color: colors.textMuted }]} numberOfLines={1}>
-                  {bucket.label}
-                </Text>
-              )}
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-const chartStyles = StyleSheet.create({
-  container: {
-    paddingVertical: Space.sm,
-  },
-  barsRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 80,
-    gap: 2,
-  },
-  barColumn: {
-    flex: 1,
-    height: '100%',
-    justifyContent: 'flex-end',
-  },
-  barTrack: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  bar: {
-    width: '100%',
-    borderRadius: 2,
-    minHeight: 2,
-  },
-  labelsRow: {
-    flexDirection: 'row',
-    marginTop: Space.xs - 2,
-    gap: 2,
-  },
-  labelColumn: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  labelText: {
-    fontSize: 9,
-    fontFamily: Typography.family.regular,
-  },
-  emptyWrap: {
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingVertical: Space.lg,
-  },
-  emptyText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
-});
-
 export default function SellerAnalyticsScreen() {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'SellerAnalyticsScreen');
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const currentUser = useStore((s) => s.currentUser);
   const { isOffline } = useConnectivity();
-
-  // Feature flag — gates the enhanced Seller Analytics v2 metrics section.
-  // Defaults to false (current behaviour) when PostHog is not loaded.
-  const sellerAnalyticsV2Enabled = useFeatureFlag('seller_analytics_v2');
+  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
-  const [analytics, setAnalytics] = React.useState<SellerAnalytics | null>(null);
-  const [topPerformersData, setTopPerformersData] = React.useState<TopPerformerListing[]>([]);
-  const [period, setPeriod] = React.useState<Period>('30d');
+  const [analytics, setAnalytics] = useState<SellerAnalytics | null>(null);
+  const [prevAnalytics, setPrevAnalytics] = useState<SellerAnalytics | null>(null);
+  const [topPerformersData, setTopPerformersData] = useState<TopPerformerListing[]>([]);
+  const [dailyData, setDailyData] = useState<DailyBreakdownPoint[]>([]);
+  const [period, setPeriod] = useState<Period>('30d');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isError, setIsError] = useState(false);
   const [partialError, setPartialError] = useState(false);
+  const [topPerformersError, setTopPerformersError] = useState(false);
+  const [dailyError, setDailyError] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const { t } = useAppTranslation('commerce');
+  const { show: showToast } = useToast();
+  const haptic = useHaptic();
+
+  const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : 90;
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
       setPartialError(false);
-      const [listingsRes, analyticsData, topData] = await Promise.all([
+      setTopPerformersError(false);
+      setDailyError(false);
+      const [listingsRes, analyticsData, prevData, topData, daily] = await Promise.all([
         fetchUserListingsFromApi(currentUser.id, { limit: 100 }),
         fetchSellerAnalytics(currentUser.id, period).catch(() => null),
-        fetchTopPerformers(currentUser.id, 10).catch(() => [] as TopPerformerListing[]),
+        fetchSellerAnalytics(currentUser.id, period, { offsetDays: periodDays }).catch(() => null),
+        fetchTopPerformers(currentUser.id, 10).catch(() => null),
+        fetchDailyBreakdown(currentUser.id, period).catch(() => null),
       ]);
       setListings(listingsRes.items);
       if (analyticsData) {
         setAnalytics(analyticsData);
       } else {
-        // Analytics endpoint failed — surface a partial-error state instead
-        // of silently rendering zero KPIs (AGENTS.md §11 — unknown outcome is
-        // not success).
         setPartialError(true);
       }
-      setTopPerformersData(topData);
+      setPrevAnalytics(prevData ?? null);
+      if (topData) {
+        setTopPerformersData(topData);
+      } else {
+        setTopPerformersError(true);
+        setTopPerformersData([]);
+      }
+      if (daily) {
+        setDailyData(daily);
+      } else {
+        setDailyError(true);
+        setDailyData([]);
+      }
       setIsError(false);
     } catch {
-      // If the primary listings fetch fails, surface an error state so the
-      // user can retry rather than seeing a silently degraded zero-metrics
-      // view (AGENTS.md §14 — error state with retry).
       setIsError(true);
     }
-  }, [currentUser?.id, period]);
+  }, [currentUser?.id, period, periodDays]);
 
   useEffect(() => {
     let mounted = true;
@@ -314,106 +126,165 @@ export default function SellerAnalyticsScreen() {
     setIsRefreshing(false);
   };
 
-  // ── Primary outcome: revenue ──
-  const revenue = useMemo(() => {
-    if (analytics) return analytics.revenueGbpMinor / 100;
-    const sold = listings.filter((l) => l.status === 'sold');
-    return sold.reduce((sum, l) => sum + l.priceGbp, 0);
-  }, [analytics, listings]);
+  // ── Primary outcome: net sales (revenue − refunds − fees) ──
+  const heroLabel = useMemo(() => {
+    if (!analytics) return 'Revenue';
+    if (analytics.netSalesGbpMinor != null && analytics.completeness === 'complete') {
+      return 'Net sales';
+    }
+    return 'Revenue';
+  }, [analytics]);
 
-  const itemsSold = useMemo(() => {
-    if (analytics) return analytics.itemsSold;
-    return listings.filter((l) => l.status === 'sold').length;
-  }, [analytics, listings]);
+  const heroValue = useMemo<number | null>(() => {
+    if (!analytics) return null;
+    if (analytics.netSalesGbpMinor != null && analytics.completeness === 'complete') {
+      return analytics.netSalesGbpMinor / 100;
+    }
+    return analytics.revenueGbpMinor / 100;
+  }, [analytics]);
 
-  const totalViews = useMemo(() => {
-    if (analytics) return analytics.totalViews;
-    return listings.reduce((sum, l) => sum + (l.engagement?.views ?? 0), 0);
-  }, [analytics, listings]);
-
-  const totalLikes = useMemo(() => {
-    if (analytics) return analytics.totalLikes;
-    return listings.reduce((sum, l) => sum + (l.engagement?.likes ?? 0), 0);
-  }, [analytics, listings]);
-
-  const conversionRate = useMemo(() => {
-    const views = analytics ? analytics.totalViews : listings.reduce((sum, l) => sum + (l.engagement?.views ?? 0), 0);
-    const sold = analytics ? analytics.itemsSold : listings.filter((l) => l.status === 'sold').length;
-    return views > 0 ? (sold / views) * 100 : 0;
-  }, [analytics, listings]);
-
+  const itemsSold = analytics?.itemsSold ?? null;
+  const totalViews = analytics?.totalViews ?? null;
+  const totalLikes = analytics?.totalLikes ?? null;
+  const totalSaves = analytics?.totalSaves ?? null;
+  const activeListings = analytics?.activeListings ?? null;
   const avgRating = analytics?.avgRating ?? null;
   const reviewCount = analytics?.reviewCount ?? 0;
 
-  // ── Avg order value ──
-  const avgOrderValue = useMemo(() => {
-    if (itemsSold === 0) return 0;
-    return revenue / itemsSold;
-  }, [revenue, itemsSold]);
+  const avgOrderValue = useMemo<number | null>(() => {
+    if (heroValue == null || itemsSold == null || itemsSold === 0) return null;
+    return heroValue / itemsSold;
+  }, [heroValue, itemsSold]);
 
-  // ── Trend indicator ──
-  // Per AGENTS.md §11, we do NOT relabel conversion rate as a trend
-  // percentage. Real period-over-period delta data is not available from the
-  // backend in this build, so we show no trend — only the honest item count.
+  const conversionRate = useMemo<number | null>(() => {
+    if (!analytics || totalViews == null || itemsSold == null) return null;
+    return totalViews > 0 ? (itemsSold / totalViews) * 100 : 0;
+  }, [analytics, totalViews, itemsSold]);
 
-  // ── Supporting KPIs as flat rows (2-4 max) ──
-  const kpiRows = useMemo<KpiRow[]>(() => {
-    return [
-      { icon: 'checkmark-done', label: 'Items sold', value: String(itemsSold) },
-      {
-        icon: 'cash-outline',
-        label: 'Avg order value',
-        value: avgOrderValue > 0 ? `£${avgOrderValue.toFixed(2)}` : '—',
-      },
-      { icon: 'trending-up-outline', label: 'Conversion', value: `${conversionRate.toFixed(1)}%` },
-      { icon: 'eye-outline', label: 'Views', value: String(totalViews) },
+  const pctDelta = useCallback(
+    (current: number | null, previous: number | null): number | null => {
+      if (current == null || previous == null || previous === 0) return null;
+      return ((current - previous) / previous) * 100;
+    },
+    []
+  );
+
+  const viewsDelta = useMemo(
+    () => pctDelta(totalViews, prevAnalytics?.totalViews ?? null),
+    [pctDelta, totalViews, prevAnalytics]
+  );
+  const itemsSoldDelta = useMemo(
+    () => pctDelta(itemsSold, prevAnalytics?.itemsSold ?? null),
+    [pctDelta, itemsSold, prevAnalytics]
+  );
+  const revenueDelta = useMemo(
+    () => pctDelta(
+      heroValue,
+      prevAnalytics
+        ? (prevAnalytics.netSalesGbpMinor != null && prevAnalytics.completeness === 'complete'
+            ? prevAnalytics.netSalesGbpMinor / 100
+            : prevAnalytics.revenueGbpMinor / 100)
+        : null
+    ),
+    [pctDelta, heroValue, prevAnalytics]
+  );
+  const prevConversion = useMemo(() => {
+    if (!prevAnalytics) return null;
+    const pv = prevAnalytics.totalViews;
+    const ps = prevAnalytics.itemsSold;
+    if (pv == null || ps == null) return null;
+    return pv > 0 ? (ps / pv) * 100 : 0;
+  }, [prevAnalytics]);
+  const conversionDelta = useMemo(
+    () => pctDelta(conversionRate, prevConversion),
+    [pctDelta, conversionRate, prevConversion]
+  );
+
+  // ── Real daily chart data from the API ──
+  // No fabrication. The backend returns one row per day with real counts.
+  const chartData = useMemo(() => {
+    if (dailyData.length === 0) return [];
+    return dailyData;
+  }, [dailyData]);
+
+  const chartMaxViews = useMemo(
+    () => chartData.reduce((m, d) => (d.views > m ? d.views : m), 0),
+    [chartData]
+  );
+
+  const hasChartData = chartData.length > 0 && chartMaxViews > 0;
+
+  // ── Conversion funnel data ──
+  const funnelSteps = useMemo(() => {
+    const views = analytics?.totalViews ?? 0;
+    const likes = analytics?.totalLikes ?? 0;
+    const saves = analytics?.totalSaves ?? 0;
+    const purchases = analytics?.itemsSold ?? 0;
+    const max = views > 0 ? views : 1;
+    const steps = [
+      { label: 'Views', value: views, pctOfPrev: 100, widthPct: Math.max(2, (views / max) * 100) },
+      { label: 'Likes', value: likes, pctOfPrev: views > 0 ? (likes / views) * 100 : 0, widthPct: Math.max(2, (likes / max) * 100) },
+      { label: 'Saves', value: saves, pctOfPrev: likes > 0 ? (saves / likes) * 100 : (views > 0 ? (saves / views) * 100 : 0), widthPct: Math.max(2, (saves / max) * 100) },
+      { label: 'Purchases', value: purchases, pctOfPrev: saves > 0 ? (purchases / saves) * 100 : (views > 0 ? (purchases / views) * 100 : 0), widthPct: Math.max(2, (purchases / max) * 100) },
     ];
-  }, [itemsSold, avgOrderValue, conversionRate, totalViews]);
+
+    // Identify the biggest drop-off step (lowest pctOfPrev, excluding the first)
+    let biggestDropIdx = -1;
+    let biggestDropPct = 101;
+    for (let i = 1; i < steps.length; i++) {
+      if (steps[i].pctOfPrev < biggestDropPct) {
+        biggestDropPct = steps[i].pctOfPrev;
+        biggestDropIdx = i;
+      }
+    }
+    return { steps, biggestDropIdx };
+  }, [analytics]);
+
+  // ── KPI grid cells — 2-column grid, value dominant, label recessed ──
+  const kpiCells = useMemo(() => {
+    const cells: { label: string; value: string; delta: number | null }[] = [
+      { label: 'Items sold', value: itemsSold != null ? String(itemsSold) : '—', delta: itemsSoldDelta },
+      {
+        label: 'Avg order',
+        value: avgOrderValue != null ? formatFromFiat(avgOrderValue, currencyCode) : '—',
+        delta: null,
+      },
+      {
+        label: 'Conversion',
+        value: conversionRate != null ? `${conversionRate.toFixed(1)}%` : '—',
+        delta: conversionDelta,
+      },
+      { label: 'Views', value: totalViews != null ? totalViews.toLocaleString() : '—', delta: viewsDelta },
+    ];
+    if (activeListings != null) {
+      cells.push({ label: 'Active listings', value: String(activeListings), delta: null });
+    }
+    if (avgRating != null) {
+      cells.push({
+        label: 'Avg rating',
+        value: `${avgRating.toFixed(1)}${reviewCount > 0 ? ` (${reviewCount})` : ''}`,
+        delta: null,
+      });
+    }
+    return cells;
+  }, [itemsSold, avgOrderValue, conversionRate, totalViews, activeListings, avgRating, reviewCount, formatFromFiat, currencyCode, itemsSoldDelta, conversionDelta, viewsDelta]);
 
   // ── Top listings — enriched with imageUrl from listings data ──
   const topPerformers = useMemo(() => {
     const listingMap = new Map(listings.map((l) => [l.id, l]));
-    if (topPerformersData.length > 0) {
-      return topPerformersData.map((t) => {
-        const listing = listingMap.get(t.id);
-        return {
-          id: t.id,
-          title: t.title,
-          price: t.priceGbpMinor / 100,
-          views: t.viewsCount,
-          likes: t.likesCount,
-          status: t.status,
-          imageUrl: listing?.imageUrl ?? listing?.images?.[0] ?? null,
-        };
-      });
-    }
-    return [...listings]
-      .sort((a, b) => (b.engagement?.views ?? 0) - (a.engagement?.views ?? 0))
-      .slice(0, 10)
-      .map((l) => ({
-        id: l.id,
-        title: l.title,
-        price: l.priceGbp,
-        views: l.engagement?.views ?? 0,
-        likes: l.engagement?.likes ?? 0,
-        status: l.status,
-        imageUrl: l.imageUrl ?? l.images?.[0] ?? null,
-      }));
+    return topPerformersData.map((t) => {
+      const listing = listingMap.get(t.id);
+      return {
+        id: t.id,
+        title: t.title,
+        price: t.priceGbpMinor / 100,
+        views: t.viewsCount,
+        likes: t.likesCount,
+        status: t.status,
+        imageUrl: listing?.imageUrl ?? listing?.images?.[0] ?? null,
+      };
+    });
   }, [listings, topPerformersData]);
-
-  // ── Activity chart data ──
-  // Derived from real listing createdAt timestamps. Shows listings created
-  // per day (7d/30d), per week (90d), or per month (1y).
-  const activityBuckets = useMemo(() => computeActivityBuckets(listings, period), [listings, period]);
-
-  const activityChartSummary = useMemo(() => {
-    const counts = activityBuckets.map((b) => b.count);
-    const max = Math.max(...counts);
-    const min = Math.min(...counts);
-    const total = counts.reduce((sum, c) => sum + c, 0);
-    const periodDesc = period === '7d' ? '7 days' : period === '30d' ? '30 days' : period === '90d' ? '90 days' : '1 year';
-    return `Listing activity chart over ${periodDesc}. ${total} listings created. Highest: ${max}, lowest: ${min}.`;
-  }, [activityBuckets, period]);
 
   // ── Needs attention: active listings with low views and no sales ──
   const needsAttention = useMemo(() => {
@@ -429,79 +300,182 @@ export default function SellerAnalyticsScreen() {
         views: l.engagement?.views ?? 0,
         likes: l.engagement?.likes ?? 0,
         status: l.status,
-        imageUrl: l.imageUrl ?? l.images?.[0] ?? null,
-      }));
+        imageUrl: l.imageUrl ?? l.images?.[0] ?? null }));
   }, [listings]);
 
-  const periodLabel = period === '7d' ? '7 days' : period === '30d' ? '30 days' : period === '90d' ? '90 days' : '1 year';
+  const periodLabel = period === '7d' ? '7 days' : period === '30d' ? '30 days' : '90 days';
+  const hasZeroListings = listings.length === 0 && !isLoading && !isError;
 
   const handleListingPress = useCallback((listingId: string) => {
-    navigation.navigate('ItemDetail', { itemId: listingId });
+    navigation.navigate('ManageListing', { itemId: listingId });
   }, [navigation]);
 
+  const handleExport = useCallback(async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(start.getDate() - periodDays);
+
+      const report = {
+        generatedAt: now.toISOString(),
+        period,
+        dateRange: {
+          start: start.toISOString().split('T')[0],
+          end: now.toISOString().split('T')[0],
+          days: periodDays,
+        },
+        kpis: {
+          heroLabel,
+          heroValue,
+          itemsSold,
+          totalViews,
+          totalLikes,
+          totalSaves,
+          activeListings,
+          avgRating,
+          reviewCount,
+          avgOrderValue,
+          conversionRate,
+          revenueGbpMinor: analytics?.revenueGbpMinor ?? null,
+          netSalesGbpMinor: analytics?.netSalesGbpMinor ?? null,
+          refundsGbpMinor: analytics?.refundsGbpMinor ?? null,
+          feesGbpMinor: analytics?.feesGbpMinor ?? null,
+          responseRate: analytics?.responseRate ?? null,
+          positiveRatingPct: analytics?.positiveRatingPct ?? null,
+        },
+        dailyBreakdown: chartData,
+        topPerformers: topPerformers.map((p) => ({
+          id: p.id,
+          title: p.title,
+          priceGbp: p.price,
+          views: p.views,
+          likes: p.likes,
+        })),
+      };
+
+      const json = JSON.stringify(report, null, 2);
+      const fileName = `seller_report_${period}_${now.toISOString().split('T')[0]}.json`;
+      const dir = FileSystem.Paths?.document?.uri;
+      if (!dir) throw new Error('File system unavailable');
+      const fileUri = `${dir}${fileName}`;
+      await FileSystem.writeAsStringAsync(fileUri, json);
+
+      const result = await openShareSheet({
+        url: fileUri,
+        title: 'Seller report',
+        subject: `Seller analytics report — ${periodLabel}`,
+      });
+
+      if (result.success) {
+        haptic.success();
+        showToast(t('sellerAnalytics.exportSuccess'), 'success');
+        trackRaw('seller_report_exported', { period });
+      }
+    } catch {
+      haptic.error();
+      showToast(t('sellerAnalytics.exportFailed'), 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isExporting, periodDays, period, heroLabel, heroValue, itemsSold, totalViews, totalLikes, totalSaves, activeListings, avgRating, reviewCount, avgOrderValue, conversionRate, analytics, chartData, topPerformers, periodLabel, haptic, showToast, t]);
+
+  const exportButton = useMemo(() => (
+    <AnimatedPressable
+      style={styles.headerAction}
+      onPress={handleExport}
+      disabled={isExporting || !analytics}
+      accessibilityRole="button"
+      accessibilityLabel={t('sellerAnalytics.exportReport')}
+      accessibilityHint="Exports a JSON report via the system share sheet"
+      scaleValue={PressScale.icon}
+      hapticFeedback="light"
+      activeOpacity={0.62}
+    >
+      <Ionicons
+        name={isExporting ? 'hourglass-outline' : 'share-outline'}
+        size={20}
+        color={colors.textPrimary}
+        aria-hidden={true}
+      />
+    </AnimatedPressable>
+  ), [styles, handleExport, isExporting, analytics, t, colors.textPrimary]);
+
+  // ── Loading state — skeleton matches the actual populated layout ──
   if (isLoading) {
     return (
       <FlagshipScreen
-        header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
+        header={<FlagshipHeader title="Analytics" onBack={() => navigation.goBack()} />}
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
           {/* Hero skeleton */}
-          <View style={{ height: Space.md }} />
-          <View style={{ backgroundColor: colors.surfaceAlt, height: 13, width: '40%', borderRadius: Radius.sm }} />
-          <View style={{ height: Space.xs }} />
-          <View style={{ backgroundColor: colors.surfaceAlt, height: 32, width: '55%', borderRadius: Radius.sm }} />
-          <View style={{ height: Space.xs }} />
-          <View style={{ backgroundColor: colors.surfaceAlt, height: 14, width: '30%', borderRadius: Radius.sm }} />
-          {/* Period selector skeleton */}
-          <View style={{ height: Space.lg }} />
-          <View style={{ flexDirection: 'row', gap: Space.xs }}>
-            {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={{ backgroundColor: colors.surfaceAlt, height: 32, flex: 1, borderRadius: Radius.full }} />
-            ))}
-          </View>
-          {/* KPI rows skeleton */}
-          <View style={{ height: Space.md }} />
-          {[0, 1, 2, 3].map((i) => (
-            <View key={i} style={styles.skeletonKpiRow}>
-              <View style={{ backgroundColor: colors.surfaceAlt, height: 14, width: '35%', borderRadius: Radius.sm }} />
-              <View style={{ flex: 1 }} />
-              <View style={{ backgroundColor: colors.surfaceAlt, height: 16, width: 60, borderRadius: Radius.sm }} />
+          <View style={styles.skeletonHero}>
+            <View style={styles.skeletonPeriodRow}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={styles.skeletonPeriodPill} />
+              ))}
             </View>
-          ))}
-          {/* Top listings skeleton */}
-          <View style={{ height: Space.lg }} />
-          <View style={{ backgroundColor: colors.surfaceAlt, height: 14, width: '40%', borderRadius: Radius.sm }} />
-          <View style={{ height: Space.sm }} />
-          <View style={{ flexDirection: 'row', gap: Space.sm }}>
-            {[0, 1, 2].map((i) => (
-              <View key={i} style={styles.skeletonTopCard}>
-                <View style={{ backgroundColor: colors.surfaceAlt, width: '100%', height: 90, borderRadius: Radius.md }} />
+            <View style={{ height: Space.md }} />
+            <View style={[styles.skeletonBar, { width: '45%', height: 32 }]} />
+            <View style={{ height: Space.sm }} />
+            <View style={styles.skeletonMetricRow}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={{ flex: 1, gap: Space.xs }}>
+                  <View style={[styles.skeletonBar, { width: '60%', height: 16 }]} />
+                  <View style={[styles.skeletonBar, { width: '40%', height: 11 }]} />
+                </View>
+              ))}
+            </View>
+          </View>
+          {/* KPI grid skeleton */}
+          <View style={styles.skeletonKpiGrid}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={styles.skeletonKpiCell}>
+                <View style={[styles.skeletonBar, { width: '50%', height: 18 }]} />
                 <View style={{ height: Space.xs }} />
-                <View style={{ backgroundColor: colors.surfaceAlt, height: 12, width: '80%', borderRadius: Radius.sm }} />
-                <View style={{ height: 4 }} />
-                <View style={{ backgroundColor: colors.surfaceAlt, height: 14, width: 50, borderRadius: Radius.sm }} />
+                <View style={[styles.skeletonBar, { width: '70%', height: 11 }]} />
               </View>
             ))}
           </View>
+          {/* Chart skeleton */}
+          <View style={{ height: Space.lg }} />
+          <View style={[styles.skeletonBar, { width: '30%', height: 14 }]} />
+          <View style={{ height: Space.sm }} />
+          <View style={styles.skeletonChart} />
+          {/* Top listings skeleton */}
+          <View style={{ height: Space.lg }} />
+          <View style={[styles.skeletonBar, { width: '25%', height: 14 }]} />
+          <View style={{ height: Space.sm }} />
+          {[0, 1, 2].map((i) => (
+            <View key={i} style={styles.skeletonListingRow}>
+              <View style={styles.skeletonThumb} />
+              <View style={{ flex: 1, gap: Space.xs }}>
+                <View style={[styles.skeletonBar, { width: '60%', height: 14 }]} />
+                <View style={[styles.skeletonBar, { width: '35%', height: 11 }]} />
+              </View>
+              <View style={[styles.skeletonBar, { width: 50, height: 16 }]} />
+            </View>
+          ))}
         </ScrollView>
       </FlagshipScreen>
     );
   }
 
-  // ── Error state — primary listings fetch failed; offer retry (AGENTS.md §14) ──
+  // ── Error state ──
   if (isError && listings.length === 0) {
     return (
       <FlagshipScreen
-        header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
+        header={<FlagshipHeader title="Analytics" onBack={() => navigation.goBack()} />}
       >
         <EmptyState
           icon="cloud-offline-outline"
           iconColor={colors.danger}
           title="Couldn't load analytics"
-          subtitle="We couldn't load your seller data. Check your connection and try again."
+          subtitle="Check your connection and try again."
           ctaLabel="Retry"
           onCtaPress={() => { setIsError(false); setIsLoading(true); void load().finally(() => setIsLoading(false)); }}
         />
@@ -509,9 +483,34 @@ export default function SellerAnalyticsScreen() {
     );
   }
 
+  // ── Empty state — seller has no listings ──
+  if (hasZeroListings) {
+    return (
+      <FlagshipScreen
+        ref={a11yRef}
+        header={<FlagshipHeader title="Analytics" onBack={() => navigation.goBack()} />}
+      >
+        <EmptyState
+          icon="analytics"
+          title="No listings yet"
+          subtitle="List an item to start tracking your performance."
+          ctaLabel="List an item"
+          onCtaPress={() => navigation.navigate('Sell')}
+        />
+      </FlagshipScreen>
+    );
+  }
+
   return (
     <FlagshipScreen
-      header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
+      ref={a11yRef}
+      header={
+        <FlagshipHeader
+          title="Analytics"
+          onBack={() => navigation.goBack()}
+          rightAction={exportButton}
+        />
+      }
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
@@ -519,8 +518,8 @@ export default function SellerAnalyticsScreen() {
         <OfflineBanner onRetry={() => void onRefresh()} />
       ) : null}
       {partialError ? (
-        <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt }}>
-          <Text style={{ fontSize: 13, color: colors.textMuted, lineHeight: 18 }}>
+        <View style={styles.partialBanner}>
+          <Text style={styles.partialText}>
             Analytics details couldn't be loaded — showing listing data only. Pull to retry.
           </Text>
         </View>
@@ -530,197 +529,294 @@ export default function SellerAnalyticsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
-        {/* ── Primary outcome: revenue hero ── */}
+        {/* ══ HERO — composed object, period integrated ══
+            The number IS the object. Period selector sits directly above it.
+            Delta is a semantic indicator, not decoration. Supporting metrics
+            recede below. No eyebrow — the period selector provides context. */}
         <View style={styles.heroBlock}>
-          <Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>Revenue · Last {periodLabel}</Text>
-          <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
-            £{revenue.toFixed(2)}
-          </Text>
-          <View style={styles.heroTrendRow}>
-            <Ionicons
-              name={itemsSold > 0 ? 'checkmark-circle-outline' : 'remove'}
-              size={14}
-              color={itemsSold > 0 ? colors.success : colors.textMuted}
-            />
-            <Text style={[styles.heroTrendText, { color: itemsSold > 0 ? colors.success : colors.textMuted }]}>
-              {itemsSold > 0
-                ? `${itemsSold} ${itemsSold === 1 ? 'item sold' : 'items sold'}`
-                : 'No sales yet'}
-            </Text>
+          {/* Period selector — segmented control, part of the hero */}
+          <View style={styles.periodSegment}>
+            {PERIOD_OPTIONS.map((opt) => {
+              const isActive = period === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  style={[
+                    styles.periodSegmentItem,
+                    isActive && { backgroundColor: colors.brand },
+                  ]}
+                  onPress={() => { haptics.tap(); setPeriod(opt.key); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Period: ${opt.label}`}
+                  accessibilityState={{ selected: isActive }}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                >
+                  <Text style={[
+                    styles.periodSegmentText,
+                    { color: isActive ? colors.textInverse : colors.textMuted },
+                  ]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
-        </View>
 
-        {/* ── Period selector — segmented control (7d / 30d / 90d / 1y) ── */}
-        <View style={styles.periodSegmentRow}>
-          {PERIOD_OPTIONS.map((opt) => {
-            const isActive = period === opt.key;
-            return (
-              <Pressable
-                key={opt.key}
-                style={[
-                  styles.periodSegment,
-                  isActive && { backgroundColor: colors.brand },
-                ]}
-                onPress={() => { haptics.tap(); setPeriod(opt.key); setIsLoading(true); }}
-                accessibilityRole="button"
-                accessibilityLabel={`Period: ${opt.label}`}
-                accessibilityState={{ selected: isActive }}
-              >
-                <Text style={[styles.periodSegmentText, isActive && { color: colors.textInverse }]}>
-                  {opt.label}
+          {/* Hero number — THE dominant object */}
+          <View style={styles.heroValueRow}>
+            <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
+              {heroValue != null ? formatFromFiat(heroValue, currencyCode) : '—'}
+            </Text>
+            {revenueDelta != null ? (
+              <View style={[
+                styles.deltaPill,
+                { backgroundColor: revenueDelta >= 0 ? colors.successSubtle : colors.dangerSubtle },
+              ]}>
+                <Text style={[
+                  styles.deltaPillText,
+                  { color: revenueDelta >= 0 ? colors.success : colors.danger },
+                ]}>
+                  {revenueDelta >= 0 ? '+' : ''}{revenueDelta.toFixed(0)}%
                 </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* ── Activity chart — listings created over time ──
-            Simple bar chart derived from real listing createdAt timestamps.
-            Shows listing creation activity per day/week/month depending on
-            the selected period. No fabricated data — only real listings. */}
-        <View style={styles.chartSection}>
-          <View style={styles.chartHeader}>
-            <Text style={[styles.chartTitle, { color: colors.textSecondary }]}>
-              Listing activity
-            </Text>
-            <Text style={[styles.chartSubtitle, { color: colors.textMuted }]}>
-              {activityBuckets.reduce((sum, b) => sum + b.count, 0)} created
-            </Text>
-          </View>
-          <ActivityChart buckets={activityBuckets} colors={colors} accessibilitySummary={activityChartSummary} />
-        </View>
-
-        {/* ── Supporting KPIs as flat rows ── */}
-        <View style={styles.kpiList}>
-          {kpiRows.map((kpi) => (
-            <View key={kpi.label} style={styles.kpiRow}>
-              <View style={styles.kpiLabelCol}>
-                <Ionicons name={kpi.icon} size={16} color={colors.textSecondary} />
-                <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>{kpi.label}</Text>
               </View>
-              <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>{kpi.value}</Text>
+            ) : null}
+          </View>
+          <Text style={[styles.heroLabel, { color: colors.textMuted }]}>
+            {heroLabel} · vs previous {periodLabel}
+          </Text>
+
+          {/* Supporting metrics — tight row, recede below the number */}
+          <View style={styles.heroMetricsRow}>
+            <View style={styles.heroMetricCell}>
+              <Text style={[styles.heroMetricValue, { color: colors.textPrimary }]}>
+                {itemsSold != null ? String(itemsSold) : '—'}
+              </Text>
+              <Text style={[styles.heroMetricLabel, { color: colors.textMuted }]}>
+                sold
+              </Text>
+            </View>
+            <View style={[styles.heroMetricDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.heroMetricCell}>
+              <Text style={[styles.heroMetricValue, { color: colors.textPrimary }]}>
+                {totalViews != null ? totalViews.toLocaleString() : '—'}
+              </Text>
+              <Text style={[styles.heroMetricLabel, { color: colors.textMuted }]}>
+                views
+              </Text>
+            </View>
+            <View style={[styles.heroMetricDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.heroMetricCell}>
+              <Text style={[styles.heroMetricValue, { color: colors.textPrimary }]}>
+                {conversionRate != null ? `${conversionRate.toFixed(1)}%` : '—'}
+              </Text>
+              <Text style={[styles.heroMetricLabel, { color: colors.textMuted }]}>
+                conv.
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ══ KPI GRID — 2-column, value dominant, label recessed ══
+            No icons, no card chrome. Hairline dividers between cells.
+            Density without the list-like feel. */}
+        <View style={styles.kpiGrid}>
+          {kpiCells.map((kpi, i) => (
+            <View
+              key={kpi.label}
+              style={[
+                styles.kpiCell,
+                i % 2 === 1 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.borderSubtle },
+                i >= 2 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
+              ]}
+            >
+              <View style={styles.kpiCellValueRow}>
+                <Text style={[styles.kpiCellValue, { color: colors.textPrimary }]}>
+                  {kpi.value}
+                </Text>
+                {kpi.delta != null ? (
+                  <Text style={[
+                    styles.kpiCellDelta,
+                    { color: kpi.delta >= 0 ? colors.success : colors.danger },
+                  ]}>
+                    {kpi.delta >= 0 ? '+' : ''}{kpi.delta.toFixed(0)}%
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={[styles.kpiCellLabel, { color: colors.textMuted }]}>
+                {kpi.label}
+              </Text>
             </View>
           ))}
         </View>
 
-        {/* ── Seller Analytics v2 — enhanced metrics (gated by feature flag) ──
-            Additive section: engagement ratio + active inventory count. When
-            the flag is off this section is absent (current behaviour). */}
-        {sellerAnalyticsV2Enabled ? (
-          <View style={styles.v2Section}>
-            <View style={styles.v2Header}>
-              <Ionicons name="sparkles" size={14} color={colors.brand} />
-              <Text style={[styles.v2HeaderTitle, { color: colors.textPrimary }]}>Engagement insights</Text>
-            </View>
-            <View style={styles.kpiList}>
-              <View style={styles.kpiRow}>
-                <View style={styles.kpiLabelCol}>
-                  <Ionicons name="heart-outline" size={16} color={colors.textSecondary} />
-                  <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Like-to-view ratio</Text>
-                </View>
-                <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
-                  {totalViews > 0 ? `${((totalLikes / totalViews) * 100).toFixed(1)}%` : '—'}
-                </Text>
-              </View>
-              <View style={styles.kpiRow}>
-                <View style={styles.kpiLabelCol}>
-                  <Ionicons name="pricetag-outline" size={16} color={colors.textSecondary} />
-                  <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Active listings</Text>
-                </View>
-                <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
-                  {listings.filter((l) => l.status === 'active').length}
-                </Text>
-              </View>
-              <View style={styles.kpiRow}>
-                <View style={styles.kpiLabelCol}>
-                  <Ionicons name="star-outline" size={16} color={colors.textSecondary} />
-                  <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>Avg rating</Text>
-                </View>
-                <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>
-                  {avgRating != null ? `${avgRating.toFixed(1)}${reviewCount > 0 ? ` (${reviewCount})` : ''}` : '—'}
-                </Text>
-              </View>
-            </View>
-          </View>
-        ) : null}
-
-        {/* ── Top listings — horizontal scroll of compact cards ── */}
-        <View>
+        {/* ══ DAILY VIEWS — real data from the API, no fabrication ══
+            Area-style bar chart with the peak day labelled.
+            If the API returned no data or all zeros, show an honest state. */}
+        <View style={styles.chartSection}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Top listings</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Views</Text>
+            {hasChartData ? (
+              <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+                {totalViews != null ? totalViews.toLocaleString() : ''} total
+              </Text>
+            ) : null}
           </View>
-          {topPerformers.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.topListingsScroll}
-            >
-              {topPerformers.map((item) => (
-                <Pressable
-                  key={item.id}
-                  style={({ pressed }) => [
-                    styles.topListingCard,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  onPress={() => handleListingPress(item.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Listing: ${item.title}, ${item.views} views, £${item.price.toFixed(0)} revenue`}
-                >
-                  <View style={[styles.topListingImageWrap, { backgroundColor: colors.surfaceAlt }]}>
-                    {item.imageUrl ? (
-                      <CachedImage
-                        uri={item.imageUrl}
-                        style={styles.topListingImage}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View style={styles.topListingImagePlaceholder}>
-                        <Ionicons name="image-outline" size={20} color={colors.textMuted} />
-                      </View>
-                    )}
-                  </View>
-                  <Text style={[styles.topListingTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
-                  <Text style={[styles.topListingRevenue, { color: colors.brand }]}>
-                    £{item.price.toFixed(0)}
-                  </Text>
-                  <Text style={[styles.topListingMeta, { color: colors.textMuted }]}>
-                    {item.views} views
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          ) : (
-            <EmptyState
-              icon="bar-chart-outline"
-              title="No performance data yet"
-              subtitle="Listings with views will appear here"
+          {dailyError ? (
+            <Text style={[styles.chartEmpty, { color: colors.textMuted }]}>
+              Couldn't load daily breakdown. Pull to retry.
+            </Text>
+          ) : hasChartData ? (
+            <DailyViewsChart
+              data={chartData}
+              maxViews={chartMaxViews}
+              barColor={colors.brand}
+              trackColor={colors.surfaceAlt}
+              labelColor={colors.textMuted}
             />
+          ) : (
+            <Text style={[styles.chartEmpty, { color: colors.textMuted }]}>
+              No views in this period yet.
+            </Text>
           )}
         </View>
 
-        {/* ── Needs attention — flat rows with images ── */}
+        {/* ══ CONVERSION FUNNEL — connected stepped bars with drop-off ══
+            Each step shows value + step-to-step conversion %.
+            The biggest drop-off is highlighted with a danger tint. */}
+        {analytics && (analytics.totalViews > 0 || analytics.itemsSold > 0) ? (
+          <View style={styles.funnelSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Funnel</Text>
+              {conversionRate != null ? (
+                <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+                  {conversionRate.toFixed(1)}% view→purchase
+                </Text>
+              ) : null}
+            </View>
+            {funnelSteps.steps.map((step, idx) => {
+              const isBiggestDrop = idx === funnelSteps.biggestDropIdx && idx > 0;
+              return (
+                <View key={step.label} style={styles.funnelRow}>
+                  <View style={styles.funnelLabelRow}>
+                    <Text style={[styles.funnelLabel, { color: colors.textSecondary }]}>
+                      {step.label}
+                    </Text>
+                    <View style={styles.funnelValueRow}>
+                      <Text style={[styles.funnelValue, { color: colors.textPrimary }]}>
+                        {step.value.toLocaleString()}
+                      </Text>
+                      {idx > 0 ? (
+                        <Text style={[
+                          styles.funnelPct,
+                          { color: isBiggestDrop ? colors.danger : colors.textMuted },
+                        ]}>
+                          {step.pctOfPrev.toFixed(0)}%
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={[styles.funnelBarTrack, { backgroundColor: colors.surfaceAlt }]}>
+                    <View
+                      style={[
+                        styles.funnelBar,
+                        {
+                          width: `${step.widthPct}%`,
+                          backgroundColor: colors.brand,
+                          opacity: 1 - idx * 0.18,
+                        },
+                      ]}
+                    />
+                  </View>
+                  {isBiggestDrop ? (
+                    <Text style={[styles.funnelDropHint, { color: colors.danger }]}>
+                      Biggest drop-off
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* ══ TOP LISTINGS — media-first, rank, strong composition ══
+            72pt thumbnails for a media-first marketplace. Rank is a quiet
+            metadata element, not a decorative badge. */}
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Top listings</Text>
+        </View>
+        {topPerformersError ? (
+          <Text style={[styles.sectionError, { color: colors.textMuted }]}>
+            Couldn't load top listings. Pull to retry.
+          </Text>
+        ) : topPerformers.length > 0 ? (
+          <View>
+            {topPerformers.map((item, idx) => (
+              <Pressable
+                key={item.id}
+                style={({ pressed }) => [
+                  styles.topListingRow,
+                  { borderBottomColor: colors.borderSubtle },
+                  pressed && { opacity: 0.6 },
+                ]}
+                onPress={() => handleListingPress(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Listing ${idx + 1}: ${item.title}, ${item.views} views, ${currencySymbol}${item.price.toFixed(0)}`}
+              >
+                <Text style={[styles.rankLabel, { color: colors.textMuted }]}>
+                  {idx + 1}
+                </Text>
+                <View style={[styles.topListingThumb, { backgroundColor: colors.surfaceAlt }]}>
+                  {item.imageUrl ? (
+                    <CachedImage
+                      uri={item.imageUrl}
+                      style={styles.topListingThumbImage}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={styles.topListingThumbPlaceholder} />
+                  )}
+                </View>
+                <View style={styles.topListingInfo}>
+                  <Text style={[styles.topListingRowTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
+                  <Text style={[styles.topListingRowMeta, { color: colors.textMuted }]}>
+                    {item.views.toLocaleString()} views{item.likes > 0 ? ` · ${item.likes} likes` : ''}
+                  </Text>
+                </View>
+                <Text style={[styles.topListingRowPrice, { color: colors.textPrimary }]}>
+                  {currencySymbol}{item.price.toFixed(0)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <EmptyState
+            icon="analytics"
+            title="No performance data yet"
+            subtitle="Listings with views will appear here"
+          />
+        )}
+
+        {/* ══ NEEDS ATTENTION — actionable, clear issue label ══
+            The issue is stated as text, not decorated with warning color.
+            The row is pressable → takes the seller to manage the listing. */}
         {needsAttention.length > 0 ? (
           <View>
             <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Ionicons name="alert-circle-outline" size={15} color={colors.warning} />
-                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Needs attention</Text>
-              </View>
-              <Text style={[styles.sectionHint, { color: colors.textMuted }]}>Low views, no sales</Text>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Needs attention</Text>
+              <Text style={[styles.sectionHint, { color: colors.textMuted }]}>Low engagement</Text>
             </View>
-            <View style={styles.listingList}>
+            <View>
               {needsAttention.map((item) => (
                 <Pressable
                   key={item.id}
                   style={({ pressed }) => [
                     styles.attentionRow,
-                    { borderBottomColor: colors.border },
+                    { borderBottomColor: colors.borderSubtle },
                     pressed && { opacity: 0.6 },
                   ]}
                   onPress={() => handleListingPress(item.id)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Needs attention: ${item.title}, ${item.views} views, £${item.price.toFixed(0)}`}
+                  accessibilityLabel={`Needs attention: ${item.title}, ${item.views} views`}
                 >
                   <View style={[styles.attentionImageWrap, { backgroundColor: colors.surfaceAlt }]}>
                     {item.imageUrl ? (
@@ -730,20 +826,21 @@ export default function SellerAnalyticsScreen() {
                         contentFit="cover"
                       />
                     ) : (
-                      <View style={styles.attentionImagePlaceholder}>
-                        <Ionicons name="image-outline" size={14} color={colors.textMuted} />
-                      </View>
+                      <View style={styles.attentionImagePlaceholder} />
                     )}
                   </View>
                   <View style={styles.attentionInfo}>
                     <Text style={[styles.attentionTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
-                    <Text style={[styles.attentionIssue, { color: colors.warning }]}>
-                      {item.views} views — low visibility
+                    <Text style={[styles.attentionIssue, { color: colors.textMuted }]}>
+                      {item.views} views · low engagement
                     </Text>
                   </View>
-                  <Text style={[styles.attentionPrice, { color: colors.textSecondary }]}>
-                    £{item.price.toFixed(0)}
-                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={colors.textMuted}
+                    aria-hidden={true}
+                  />
                 </Pressable>
               ))}
             </View>
@@ -754,252 +851,441 @@ export default function SellerAnalyticsScreen() {
   );
 }
 
+// ── Daily Views Chart — real data, View-based, no chart library ──
+// Compact area-style bars showing the real per-day view counts from the API.
+// The peak day is marked. No fabrication, no Math.sin distribution.
+function DailyViewsChart({
+  data,
+  maxViews,
+  barColor,
+  trackColor,
+  labelColor,
+}: {
+  data: DailyBreakdownPoint[];
+  maxViews: number;
+  barColor: string;
+  trackColor: string;
+  labelColor: string;
+}) {
+  const [chartWidth, setChartWidth] = useState(0);
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    setChartWidth(e.nativeEvent.layout.width);
+  }, []);
+
+  // For periods > 30d, label every ~2 weeks. For 30d, label every ~week.
+  // For 7d, label every day.
+  const labelInterval = data.length <= 7 ? 1 : data.length <= 30 ? 7 : 14;
+
+  const peakIdx = useMemo(() => {
+    let peak = 0;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i].views > data[peak].views) peak = i;
+    }
+    return peak;
+  }, [data]);
+
+  // Show the peak day label only if there's room (chart width > 120)
+  const showPeakLabel = chartWidth > 120 && data[peakIdx]?.views > 0;
+
+  return (
+    <View onLayout={onLayout} style={{ marginTop: Space.sm }}>
+      {/* Bar chart */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 80, gap: 2 }}>
+        {data.map((d, i) => {
+          const ratio = maxViews > 0 ? d.views / maxViews : 0;
+          const isPeak = i === peakIdx && d.views > 0;
+          return (
+            <View key={i} style={{ flex: 1, height: '100%', justifyContent: 'flex-end' }}>
+              <View
+                style={{
+                  width: '100%',
+                  height: `${Math.max(ratio * 100, d.views > 0 ? 4 : 0)}%`,
+                  backgroundColor: barColor,
+                  opacity: isPeak ? 1 : 0.35 + ratio * 0.4,
+                  borderRadius: Radius.sm,
+                }}
+              />
+            </View>
+          );
+        })}
+      </View>
+      {/* Date labels — sparse, not every day */}
+      <View style={{ flexDirection: 'row', marginTop: Space.xs, height: 14 }}>
+        {data.map((d, i) => {
+          if (i % labelInterval !== 0 && i !== data.length - 1) {
+            return <View key={i} style={{ flex: 1 }} />;
+          }
+          const date = new Date(d.date);
+          const label = `${date.getMonth() + 1}/${date.getDate()}`;
+          return (
+            <View key={i} style={{ flex: labelInterval, alignItems: 'flex-start' }}>
+              <Text style={{
+                fontSize: TypographyV2.meta.size,
+                fontFamily: TypographyV2.meta.fontFamily,
+                color: labelColor,
+                fontVariant: ['tabular-nums' as any],
+              }}>
+                {label}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+      {/* Peak annotation */}
+      {showPeakLabel ? (
+        <Text style={{
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: labelColor,
+          marginTop: Space.xs,
+        }}>
+          Peak: {data[peakIdx].views.toLocaleString()} views on{' '}
+          {new Date(data[peakIdx].date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xxl },
 
-    // ── Primary outcome hero ──
-    heroBlock: {
-      paddingVertical: Space.md,
-    },
-    heroEyebrow: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
-      marginBottom: Space.xs - 2,
-    },
-    heroValue: {
-      fontSize: Type.priceHero.size,
-      lineHeight: Type.priceHero.lineHeight,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
-    heroTrendRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      marginTop: Space.xs,
-    },
-    heroTrendText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      fontVariant: ['tabular-nums'],
-    },
-
-    // ── Period selector — segmented control ──
-    periodSegmentRow: {
-      flexDirection: 'row',
-      gap: Space.xs,
-      marginVertical: Space.sm,
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.md,
-      padding: 2,
-    },
-    periodSegment: {
-      flex: 1,
-      paddingVertical: Space.xs + 2,
-      borderRadius: Radius.sm,
-      alignItems: 'center',
+    // ── Header action ──
+    headerAction: {
+      width: Control.hit,
+      height: Control.hit,
       justifyContent: 'center',
-      minHeight: 36,
-    },
-    periodSegmentText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-    },
+      alignItems: 'center' },
 
-    // ── Activity chart section ──
-    chartSection: {
-      marginTop: Space.sm,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    chartHeader: {
+    // ── Hero — composed object ──
+    heroBlock: {
+      paddingVertical: Space.md },
+
+    // Period segmented control — part of the hero, not a separate section
+    periodSegment: {
+      flexDirection: 'row',
+      alignSelf: 'flex-start',
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.sm,
+      padding: 2,
+      marginBottom: Space.md },
+    periodSegmentItem: {
+      paddingVertical: Space.xs + 1,
+      paddingHorizontal: Space.sm + 2,
+      borderRadius: Radius.sm - 1,
+      minWidth: 44,
+      alignItems: 'center' },
+    periodSegmentText: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600' },
+
+    // Hero number — THE dominant object
+    heroValueRow: {
       flexDirection: 'row',
       alignItems: 'baseline',
-      justifyContent: 'space-between',
-      marginBottom: Space.xs,
-    },
-    chartTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-    },
-    chartSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      gap: Space.sm,
+      marginBottom: Space.xs },
+    heroValue: {
+      fontSize: TypographyV2.priceHero.size,
+      lineHeight: TypographyV2.priceHero.lineHeight,
+      fontFamily: TypographyV2.priceHero.fontFamily,
       fontVariant: ['tabular-nums'],
-    },
+      letterSpacing: TypographyV2.priceHero.letterSpacing },
+    heroLabel: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
 
-    // ── KPI flat rows ──
-    kpiList: {
-      marginTop: Space.sm,
-    },
-    // ── Seller Analytics v2 — engagement insights section ──
-    v2Section: {
-      marginTop: Space.lg,
+    // Delta pill — semantic, not decorative
+    deltaPill: {
+      paddingVertical: 2,
+      paddingHorizontal: Space.sm,
+      borderRadius: Radius.sm,
+      alignSelf: 'center' },
+    deltaPillText: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600',
+      fontVariant: ['tabular-nums'] },
+
+    // Supporting metrics — tight row, recede
+    heroMetricsRow: {
+      flexDirection: 'row',
+      marginTop: Space.md,
       paddingTop: Space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
-    v2Header: {
+      borderTopColor: colors.borderSubtle },
+    heroMetricCell: {
+      flex: 1,
+      gap: 0 },
+    heroMetricDivider: {
+      width: StyleSheet.hairlineWidth,
+      alignSelf: 'stretch' },
+    heroMetricValue: {
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontVariant: ['tabular-nums'] },
+    heroMetricLabel: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily },
+
+    // ── KPI grid — 2-column, value dominant ──
+    kpiGrid: {
       flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      marginBottom: Space.xs,
-    },
-    v2HeaderTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    kpiRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: Space.sm + 2,
+      flexWrap: 'wrap',
+      marginTop: Space.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+      borderLeftWidth: StyleSheet.hairlineWidth,
+      borderLeftColor: colors.borderSubtle },
+    kpiCell: {
+      width: '50%',
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md,
+      borderRightWidth: StyleSheet.hairlineWidth,
+      borderRightColor: colors.borderSubtle,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    kpiLabelCol: {
+      borderBottomColor: colors.borderSubtle },
+    kpiCellValueRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs + 2,
-    },
-    kpiLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-    },
-    kpiValue: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      fontVariant: ['tabular-nums'],
-    },
+      alignItems: 'baseline',
+      gap: Space.xs },
+    kpiCellValue: {
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontVariant: ['tabular-nums'] },
+    kpiCellDelta: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600',
+      fontVariant: ['tabular-nums'] },
+    kpiCellLabel: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginTop: 2 },
 
     // ── Section headers ──
     sectionHeader: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'baseline',
       justifyContent: 'space-between',
       marginTop: Space.lg,
-      marginBottom: Space.sm,
-    },
-    sectionTitleRow: {
+      marginBottom: Space.sm },
+    sectionTitle: {
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
+    sectionHint: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontVariant: ['tabular-nums'] },
+    sectionError: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      paddingVertical: Space.md },
+
+    // ── Chart ──
+    chartSection: {
+      marginTop: Space.sm },
+    chartEmpty: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      paddingVertical: Space.md },
+
+    // ── Funnel ──
+    funnelSection: {
+      marginTop: Space.sm },
+    funnelRow: {
+      paddingVertical: Space.sm - 1,
+      gap: Space.xs },
+    funnelLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between' },
+    funnelValueRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: Space.sm },
+    funnelLabel: {
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily },
+    funnelValue: {
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontVariant: ['tabular-nums'] },
+    funnelPct: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600',
+      fontVariant: ['tabular-nums'] },
+    funnelBarTrack: {
+      height: 6,
+      borderRadius: Radius.sm,
+      overflow: 'hidden' },
+    funnelBar: {
+      height: '100%',
+      borderRadius: Radius.sm },
+    funnelDropHint: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginTop: 1 },
+
+    // ── Top listings — media-first ──
+    topListingRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
-    sectionTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-    },
-    sectionHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
-
-    // ── Top listings — horizontal scroll cards ──
-    topListingsScroll: {
       gap: Space.sm,
-      paddingRight: Space.md,
-    },
-    topListingCard: {
-      width: TOP_LISTING_CARD_WIDTH,
+      paddingVertical: Space.sm + 2,
+      borderBottomWidth: StyleSheet.hairlineWidth },
+    rankLabel: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600',
+      width: 16,
+      textAlign: 'center',
+      fontVariant: ['tabular-nums'] },
+    topListingThumb: {
+      width: 72,
+      height: 72,
       borderRadius: Radius.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.sm,
-      gap: Space.xs - 1,
-    },
-    topListingImageWrap: {
+      overflow: 'hidden' },
+    topListingThumbImage: {
       width: '100%',
-      height: 90,
-      borderRadius: Radius.sm,
-      overflow: 'hidden',
-      marginBottom: Space.xs - 1,
-    },
-    topListingImage: {
-      width: '100%',
-      height: '100%',
-    },
-    topListingImagePlaceholder: {
+      height: '100%' },
+    topListingThumbPlaceholder: {
+      flex: 1 },
+    topListingInfo: {
       flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    topListingTitle: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.semibold,
-    },
-    topListingRevenue: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
-    topListingMeta: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      fontVariant: ['tabular-nums'],
-    },
+      gap: Space.xs - 1 },
+    topListingRowTitle: {
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily },
+    topListingRowMeta: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontVariant: ['tabular-nums'] },
+    topListingRowPrice: {
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontVariant: ['tabular-nums'] },
 
-    // ── Needs attention — flat rows with images ──
-    listingList: {
-      gap: 0,
-    },
+    // ── Needs attention ──
     attentionRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm + 2,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     attentionImageWrap: {
-      width: 40,
-      height: 40,
+      width: 48,
+      height: 48,
       borderRadius: Radius.sm,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     attentionImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     attentionImagePlaceholder: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
+      flex: 1 },
     attentionInfo: {
       flex: 1,
-      gap: Space.xs - 2,
-    },
+      gap: Space.xs - 1 },
     attentionTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily },
     attentionIssue: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily },
     attentionPrice: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      fontVariant: ['tabular-nums'] },
+
+    // ── Partial error banner ──
+    partialBanner: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      backgroundColor: colors.surfaceAlt },
+    partialText: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
 
     // ── Skeleton ──
-    skeletonKpiRow: {
+    skeletonHero: {
+      paddingVertical: Space.md },
+    skeletonPeriodRow: {
+      flexDirection: 'row',
+      gap: Space.xs },
+    skeletonPeriodPill: {
+      backgroundColor: colors.surfaceAlt,
+      width: 44,
+      height: 24,
+      borderRadius: Radius.sm },
+    skeletonMetricRow: {
+      flexDirection: 'row',
+      paddingTop: Space.md,
+      marginTop: Space.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle },
+    skeletonKpiGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginTop: Space.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle },
+    skeletonKpiCell: {
+      width: '50%',
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md,
+      borderRightWidth: StyleSheet.hairlineWidth,
+      borderRightColor: colors.borderSubtle },
+    skeletonChart: {
+      height: 80,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.sm,
+      opacity: 0.5 },
+    skeletonListingRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      gap: Space.sm,
       paddingVertical: Space.sm + 2,
-    },
-    skeletonTopCard: {
-      width: TOP_LISTING_CARD_WIDTH,
-      padding: Space.sm,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle },
+    skeletonThumb: {
+      width: 72,
+      height: 72,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt },
+    skeletonBar: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.sm },
   });
 }

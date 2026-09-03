@@ -52,14 +52,26 @@ config.transformer.getTransformOptions = async () => ({
   },
 });
 
-// ── Web shim for @stripe/stripe-react-native ──────────────────────────
-// The native module imports codegenNativeCommands which crashes Metro on web.
+// ── Web shims for native-only modules ────────────────────────────────
 // Intercept resolution on web only; native platforms use the real module.
 const stripeShimPath = path.resolve(__dirname, 'src/platform/stripe-web-shim.ts');
+const opSqliteShimPath = path.resolve(__dirname, 'src/platform/op-sqlite-web-shim.ts');
 const defaultResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (platform === 'web' && moduleName === '@stripe/stripe-react-native') {
-    return { type: 'sourceFile', filePath: stripeShimPath };
+  if (platform === 'web') {
+    // @stripe/stripe-react-native imports codegenNativeCommands which
+    // crashes Metro on web.
+    if (moduleName === '@stripe/stripe-react-native') {
+      return { type: 'sourceFile', filePath: stripeShimPath };
+    }
+    // @op-engineering/op-sqlite's web build requires @sqlite.org/sqlite-wasm
+    // and a Web Worker. The app's storage layer already guards all access
+    // with isDbAvailable() (returns false on web), so the database is never
+    // opened in the browser. This shim avoids pulling the wasm worker into
+    // the web bundle.
+    if (moduleName === '@op-engineering/op-sqlite') {
+      return { type: 'sourceFile', filePath: opSqliteShimPath };
+    }
   }
   if (defaultResolveRequest) {
     return defaultResolveRequest(context, moduleName, platform);

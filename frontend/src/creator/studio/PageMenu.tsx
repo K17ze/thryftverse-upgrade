@@ -11,7 +11,8 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -49,8 +50,7 @@ export function PageMenu({
   onDuplicate,
   onDelete,
   onMoveLeft,
-  onMoveRight,
-}: PageMenuProps) {
+  onMoveRight }: PageMenuProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const canMoveLeft = pageIndex > 0;
@@ -157,50 +157,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   pageSheetTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-  },
+    fontSize: TypographyV2.sectionTitle.size },
   closeBtn: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   pageSheetBody: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xl,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   pageSheetLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+    letterSpacing: 0.5 },
   pageSheetDurationRow: {
     flexDirection: 'row',
     gap: Space.xs,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   pageSheetDurationBtn: {
     flex: 1,
     paddingVertical: Space.smMd,
     borderRadius: Radius.md,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   pageSheetDurationText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   pageSheetActions: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   pageSheetActionBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -208,10 +199,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.sm,
     paddingVertical: Space.md,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   pageSheetActionLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
-});
+    fontSize: TypographyV2.body.size } });

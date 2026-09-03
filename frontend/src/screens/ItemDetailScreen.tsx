@@ -6,6 +6,7 @@ import {
   StatusBar,
   Pressable,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import Reanimated, {
   useAnimatedScrollHandler,
@@ -25,10 +26,12 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
-import { Ionicons } from '@expo/vector-icons';
+import { AppIcon } from '../components/common/AppIcon';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../theme/ThemeContext';
+import type { IoniconsGlyphName } from '../theme/iconTokens';
 import type { Listing } from '../services/listingsApi';
+import { trackListingView, trackListingInteraction } from '../services/listingsApi';
 import type { DisplayReadyListing } from '../services/listingMapper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../store/useStore';
@@ -52,16 +55,18 @@ import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModa
 import { ShareSheet } from '../components/ShareSheet';
 import { BottomSheet } from '../components/BottomSheet';
 import { HorizontalRail } from '../components/HorizontalRail';
-import { ProductCardV2 } from '../components/ProductCardV2';
+import { ProductCard } from '../components/ProductCard';
 import type { Listing as CatalogListing } from '../domain';
+import { fetchCoOwnAssetByListingId, type CoOwnAssetSummary } from '../services/marketApi';
+import { CoOwnShareSection } from '../components/listing/CoOwnShareSection';
 
 import {
-  ProductDetailSkeleton,
   FullscreenMediaViewer,
   ProductFamilyBadge,
   SizeGuideSheet,
   BundleUpsellRow,
   ListingQA,
+  SeenInLooksRail,
 } from '../components/product';
 import {
   CommerceMediaStage,
@@ -80,6 +85,7 @@ import {
   CommerceDetailOfflineBanner,
   SellerInfoCard,
   ShippingReturnsInfo,
+  SustainabilityImpact,
   MakeOfferSheet,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
@@ -98,12 +104,15 @@ import {
   buildCommerceContext,
   buildSellerTrustSummary,
   buildCapabilities,
+  buildDirectViewModel,
+  isDirectViewModel,
   isRecommendationLook,
+  type RecommendationLook,
 } from '../platform/product';
 import { trackTelemetryEvent } from '../lib/telemetry';
 import { track } from '../analytics/track';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
-import { Space, FontFamily, DockConstants, Control, AspectRatio, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, Control, AspectRatio, Stroke, LetterSpacing, PressScale } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { t } from '../i18n';
@@ -111,106 +120,6 @@ import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type ItemDetailRoute = RouteProp<RootStackParamList, 'ItemDetail'>;
 type ItemDetailNav = NativeStackNavigationProp<RootStackParamList>;
-
-// ───────────────────────────────────────────────────────────────────────────
-// Image pagination dots.
-// A row of dots below the carousel; the active dot stretches into a pill.
-// A single spring-driven SharedValue (activeIndex) interpolates each dot's
-// width so the pill stretch feels physical, not snapped.
-// ───────────────────────────────────────────────────────────────────────────
-const DOT_INACTIVE = 6;
-const DOT_ACTIVE = 20;
-const DOT_HEIGHT = 6;
-
-function PaginationDot({
-  index,
-  activeIndex,
-  color,
-}: {
-  index: number;
-  activeIndex: SharedValue<number>;
-  color: string;
-}) {
-  const style = useAnimatedStyle(() => {
-    const width = interpolate(
-      activeIndex.value,
-      [index - 0.5, index, index + 0.5],
-      [DOT_INACTIVE, DOT_ACTIVE, DOT_INACTIVE],
-      Extrapolation.CLAMP,
-    );
-    return {
-      width,
-      opacity: interpolate(
-        activeIndex.value,
-        [index - 0.5, index, index + 0.5],
-        [0.35, 1, 0.35],
-        Extrapolation.CLAMP,
-      ),
-    };
-  });
-  return (
-    <Reanimated.View
-      style={[paginationStyles.dot, { backgroundColor: color }, style]}
-    />
-  );
-}
-
-function PaginationDots({
-  count,
-  activeIndex,
-  counterText,
-  color,
-}: {
-  count: number;
-  activeIndex: SharedValue<number>;
-  counterText?: string;
-  color: string;
-}) {
-  return (
-    <View style={paginationStyles.wrap}>
-      <View style={paginationStyles.dotRow}>
-        {Array.from({ length: count }, (_, i) => (
-          <PaginationDot
-            key={i}
-            index={i}
-            activeIndex={activeIndex}
-            color={color}
-          />
-        ))}
-      </View>
-      {counterText ? (
-        <Text style={[paginationStyles.counter, { color }]} numberOfLines={1}>
-          {counterText}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-const paginationStyles = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-  },
-  dotRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
-  dot: {
-    height: DOT_HEIGHT,
-    borderRadius: DOT_HEIGHT / 2,
-  },
-  counter: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-    letterSpacing: LetterSpacing.wide,
-    fontVariant: ['tabular-nums'],
-  },
-});
 
 export default function ItemDetailScreen() {
   const { isDark, colors } = useAppTheme();
@@ -282,6 +191,19 @@ export default function ItemDetailScreen() {
     return () => { cancelled = true; };
   }, [item?.id]);
 
+  // ── Co-Own asset lookup ──
+  // When a listing has been syndicated into a co-own asset, fetch the summary
+  // so we can render a "Buy Shares" section inline on the listing detail.
+  const [coOwnAsset, setCoOwnAsset] = useState<CoOwnAssetSummary | null>(null);
+  useEffect(() => {
+    if (!item?.id) return;
+    let cancelled = false;
+    fetchCoOwnAssetByListingId(item.id)
+      .then((summary) => { if (!cancelled) setCoOwnAsset(summary); })
+      .catch(() => { /* not syndicated — leave null */ });
+    return () => { cancelled = true; setCoOwnAsset(null); };
+  }, [item?.id]);
+
   const { data: sellerTrustData } = useSellerTrust(item?.sellerId ?? undefined);
   const sellerFollowMutation = useSellerFollow(item?.sellerId ?? undefined);
 
@@ -311,10 +233,15 @@ export default function ItemDetailScreen() {
         seller_id: item.sellerId ?? item.seller?.id ?? '',
         price: item.price,
       });
+      // ── Feed the backend interactions table ──
+      // This is the critical bridge that makes seller analytics real.
+      // Without this call, views/conversion/top-performers are always zero.
+      // Fire-and-forget — failures must never block the viewing flow.
+      trackListingView(item.id, { qualified: true }).catch(() => {});
     }
   }, [item?.id, sectionKey, position, reasonCode, personalised]);
 
-  const { formatFromFiat, goldRates, displayMode } = useFormattedPrice();
+  const { formatFromFiat, fxRates, displayMode } = useFormattedPrice();
   const { show } = useToast();
   const haptic = useHaptic();
   const { requireAuth } = useSignupWall();
@@ -372,6 +299,7 @@ export default function ItemDetailScreen() {
   const dismissPan = useMemo(
     () =>
       Gesture.Pan()
+        .enabled(Platform.OS === 'ios')
         .manualActivation(true)
         .onTouchesDown((event) => {
           'worklet';
@@ -490,6 +418,10 @@ export default function ItemDetailScreen() {
     toggleFav(item.id);
     ProductAnalytics.itemSave(item.id);
     track('item_favorited', { listing_id: item.id, action: isFav ? 'unsave' : 'save' });
+    // Feed the backend interactions table for seller analytics
+    if (!isFav) {
+      trackListingInteraction(item.id, 'save').catch(() => {});
+    }
     if (!isFav) {
       show('Added to wishlist', 'success');
     }
@@ -510,7 +442,10 @@ export default function ItemDetailScreen() {
 
   const handleShare = () => {
     setShareVisible(true);
-    if (item) ProductAnalytics.itemShare(item.id);
+    if (item) {
+      ProductAnalytics.itemShare(item.id);
+      trackListingInteraction(item.id, 'share').catch(() => {});
+    }
   };
 
   const handleOpenFullscreen = (index: number) => {
@@ -552,6 +487,7 @@ export default function ItemDetailScreen() {
       ? buildSellerTrustSummary(item.seller)
       : null;
 
+
   // "More from this seller" browse rail — moved before conditional returns.
   const moreFromSellerRailItems: Listing[] = useMemo(
     () =>
@@ -573,7 +509,11 @@ export default function ItemDetailScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
-        <ProductDetailSkeleton />
+        <CommerceStateCanvas
+          state="loading"
+          family="direct"
+          heroFraction={isCompactScreen ? 0.54 : 0.58}
+        />
       </View>
     );
   }
@@ -606,6 +546,9 @@ export default function ItemDetailScreen() {
   }
 
   const displayTitle = item.title ?? 'Listing details';
+  const sanitizedImages = useMemo(() => {
+    return (item.images ?? []).filter((img): img is string => typeof img === 'string' && img.trim().length > 0);
+  }, [item.images]);
   const hasPrice = item.price !== null;
   const hasDiscount = hasPrice
     && item.originalPrice !== undefined
@@ -622,20 +565,29 @@ export default function ItemDetailScreen() {
   const formattedProtectionTotal = serverCommerce?.estimatedTotal != null
     ? formatFromFiat(serverCommerce.estimatedTotal, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
     : null;
-  const priceIzeText = hasPrice && goldRates && displayMode !== 'fiat'
-    ? formatIzeAmount(toIze(item.price!, 'GBP', goldRates))
+  const priceIzeText = hasPrice && fxRates && displayMode !== 'fiat'
+    ? `≈ ${toIze(item.price!, 'GBP', fxRates).toFixed(2)} 1ZE`
     : null;
 
   const capabilities = buildCapabilities(item, currentUser?.id);
-  const commerce = buildCommerceContext(item, serverCommerce ? {
-    buyerProtectionFee: serverCommerce.buyerProtectionFee,
-    estimatedTotal: serverCommerce.estimatedTotal,
-    shippingMethod: serverCommerce.shippingMethod,
-    shippingPayer: (serverCommerce.shippingPayer as 'buyer' | 'seller' | null) ?? null,
-    protectionPolicy: serverCommerce.protectionPolicy,
-    returnPolicy: serverCommerce.returnPolicy,
-    authenticity: serverCommerce.authenticity,
-  } : undefined);
+  // Use the platform view-model builder for the commerce context
+  // transformation — single source of truth for direct-listing data
+  // shaping. buildCapabilities is retained for the full capability
+  // set (isOwner / isSold / isAvailable / commerceTier / canEnquire)
+  // which the VM's capabilities subset does not expose.
+  const directViewModel = buildDirectViewModel({
+    listing: item,
+    commerce: serverCommerce ?? undefined,
+    seller: seller ?? undefined,
+    currentUserId: currentUser?.id,
+    isLiked: isFav,
+    isSavedToCollection: isItemSavedAnywhere(item.id),
+  });
+  // buildDirectViewModel always returns the direct family branch; the
+  // type guard narrows the discriminated union so commerce is typed.
+  const commerce = isDirectViewModel(directViewModel)
+    ? directViewModel.commerce
+    : buildCommerceContext(item);
   const recommendationSections = recommendationsData?.sections ?? [];
 
   // Bundle upsell: items from the same seller (more_from_seller section)
@@ -644,6 +596,15 @@ export default function ItemDetailScreen() {
     ? moreFromSellerSection.items.filter(
         (i): i is DisplayReadyListing => !isRecommendationLook(i)
       )
+    : [];
+
+  // "Seen in Looks" — community Looks that tag this item. Sourced from
+  // the `seen_in_looks` recommendation section. Only rendered when the
+  // backend supplies real look data (Design.md: "Seen in Looks" below
+  // core decision info).
+  const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
+  const seenInLooksItems: RecommendationLook[] = seenInLooksSection
+    ? seenInLooksSection.items.filter(isRecommendationLook)
     : [];
 
   const handlePressRecommendation = (
@@ -712,7 +673,10 @@ export default function ItemDetailScreen() {
     formattedProtectionTotal ? `${formattedProtectionTotal} with Buyer Protection` : null,
   ].filter(Boolean).join(' · ') || undefined;
 
-  const familyStateAccent = item.isSold ? 'Sold' : null;
+  // The sold state is already shown via the media overlay "SOLD" badge
+  // and the dock "Sold" badge — don't repeat it on the ProductFamilyBadge.
+  // The family badge should communicate provenance, not transaction state.
+  const familyStateAccent = null;
 
   // ── Dock geometry ──
   const isDualActionDock = !capabilities.isOwner && !capabilities.isSold && capabilities.canBuy && capabilities.canOffer;
@@ -791,9 +755,9 @@ export default function ItemDetailScreen() {
       : null,
   ].filter(Boolean).join(' · ');
 
-  return (
-    <GestureDetector gesture={dismissPan}>
+  const screenContent = (
     <Reanimated.View
+      testID="item-detail-screen"
       entering={reducedMotion ? FadeIn.duration(0) : FadeIn.duration(Motion.transitions.mediaLoad.duration)}
       style={[styles.container, { backgroundColor: colors.background }, dismissContainerStyle]}
     >
@@ -804,7 +768,7 @@ export default function ItemDetailScreen() {
           Separate hit area from visible shape.
           Wrapped in a chrome-fade layer so the header recedes as the
           swipe-to-dismiss drag progresses. */}
-      <Reanimated.View style={dismissChromeStyle}>
+      <Reanimated.View style={[styles.headerWrapper, dismissChromeStyle]} pointerEvents="box-none">
       <CommerceDetailHeader
         scrollY={scrollY}
         title={displayTitle}
@@ -818,6 +782,7 @@ export default function ItemDetailScreen() {
       </Reanimated.View>
 
       <Reanimated.ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: scrollBottomPadding }}
         onScroll={scrollHandler}
@@ -839,7 +804,7 @@ export default function ItemDetailScreen() {
             CommerceDetailMediaRail overlays the max-3-visible-controls
             (Back, Share, Save) + overflow (Fav, Watch, Report). */}
         <CommerceMediaStage
-          images={item.images}
+          images={sanitizedImages}
           category={item.category ?? undefined}
           objectId={item.id}
           isFav={isFav}
@@ -866,7 +831,7 @@ export default function ItemDetailScreen() {
           bigHeartScale={bigHeartScale}
           showDefaultControls={false}
           showPageIndicator={false}
-          showThumbnailStrip={item.images ? item.images.length > 1 : false}
+          showThumbnailStrip={sanitizedImages.length > 1}
           overlayTopContent={
             familyStateAccent ? (
               <View style={styles.familyBadgeOverlay}>
@@ -911,7 +876,8 @@ export default function ItemDetailScreen() {
             Direct keeps critical copy off arbitrary seller photography.
             Media establishes desire first; the stable editorial canvas
             then owns brand, identity and price. The dock is the only
-            actionable repetition of that price. */}
+            actionable repetition of that price.
+            The single authoritative seller profile & trust showcase lives in Zone E below. */}
         <View style={styles.editorialIdentityChapter}>
           <CommerceDetailIdentity
             family="direct"
@@ -946,12 +912,14 @@ export default function ItemDetailScreen() {
                   <Pressable
                     onPress={() => { haptic.light(); setConditionInfoVisible(true); }}
                     hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
-                    style={[
+                    style={({ pressed }) => [
                       styles.conditionChip,
                       {
+                        // TODO: replace `${conditionMeta.color}66` and `${conditionMeta.color}14` with conditionColorSubtle token when available
                         borderColor: conditionMeta ? `${conditionMeta.color}66` : colors.borderSubtle,
                         backgroundColor: conditionMeta ? `${conditionMeta.color}14` : 'transparent',
                       },
+                      pressed && styles.pressed,
                     ]}
                     accessibilityLabel={`Condition: ${item.condition}. Tap for definition.`}
                     accessibilityRole="button"
@@ -960,7 +928,7 @@ export default function ItemDetailScreen() {
                     <Text style={[styles.conditionChipText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1}>
                       {item.condition}
                     </Text>
-                    <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+                    <AppIcon name="info" size={14} color={colors.textMuted} />
                   </Pressable>
                 ) : null}
                 {(() => {
@@ -988,7 +956,7 @@ export default function ItemDetailScreen() {
                 <Pressable
                   onPress={() => { haptic.light(); setSizeGuideVisible(true); }}
                   hitSlop={8}
-                  style={styles.quietTextTarget}
+                  style={({ pressed }) => [styles.quietTextTarget, pressed && styles.pressed]}
                   accessibilityLabel="View size guide"
                   accessibilityRole="button"
                 >
@@ -1000,7 +968,7 @@ export default function ItemDetailScreen() {
             </View>
           ) : null}
 
-          {/* izeText — quiet gold-equivalent value on its own line
+          {/* izeText — quiet 1ZE-equivalent value on its own line
               below the attribute row. Kept separate because it is a
               price-adjacent fact, not an attribute. */}
           {priceIzeText ? (
@@ -1020,7 +988,7 @@ export default function ItemDetailScreen() {
             Each row is one fact with an icon + label, separated by
             hairlines for clear scanning. */}
         {(() => {
-          const trustRows: { icon: keyof typeof Ionicons.glyphMap; label: string; dotColor?: string }[] = [];
+          const trustRows: { icon: IoniconsGlyphName; label: string; dotColor?: string }[] = [];
           // 1. Seller rating — social proof (review count/score summary)
           if (seller?.rating != null && seller.rating > 0) {
             const ratingText = seller.reviewCount != null && seller.reviewCount > 0
@@ -1053,12 +1021,12 @@ export default function ItemDetailScreen() {
           // 4. Dispatch time — when will it arrive?
           if (seller?.dispatchTimeLabel) {
             trustRows.push({
-              icon: 'cube-outline',
+              icon: 'car-outline',
               label: seller.dispatchTimeLabel,
             });
           } else if (commerce.shippingMethod) {
             trustRows.push({
-              icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'cube-outline',
+              icon: commerce.shippingPayer === 'seller' ? 'gift-outline' : 'car-outline',
               label: commerce.shippingPayer === 'seller'
                 ? `Free ${commerce.shippingMethod}`
                 : commerce.shippingMethod,
@@ -1071,7 +1039,7 @@ export default function ItemDetailScreen() {
           // is the baseline trust guarantee.
           if (trustRows.length === 0 && commerce.protectionPolicy?.available) {
             trustRows.push({
-              icon: 'shield-checkmark-outline',
+              icon: 'checkmark-circle-outline',
               label: commerce.protectionPolicy.label ?? 'Buyer Protection',
             });
           }
@@ -1090,7 +1058,7 @@ export default function ItemDetailScreen() {
                   {row.dotColor ? (
                     <View style={[styles.trustFactDot, { backgroundColor: row.dotColor }]} />
                   ) : (
-                    <Ionicons name={row.icon} size={16} color={colors.textSecondary} />
+                    <AppIcon name={row.icon} size={16} color={colors.textSecondary} />
                   )}
                   <Text style={[styles.trustFactText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1}>
                     {row.label}
@@ -1134,6 +1102,7 @@ export default function ItemDetailScreen() {
                     Visual signal that there's more content below. */}
                 {!descriptionExpanded && item.description.length > 120 && (
                   <LinearGradient
+                    // NOTE: hex-alpha required for gradient stops — token substitution not applicable
                     colors={[`${colors.background}00`, colors.background]}
                     style={styles.descriptionFade}
                     pointerEvents="none"
@@ -1144,7 +1113,7 @@ export default function ItemDetailScreen() {
                 <Pressable
                   onPress={() => setDescriptionExpanded((prev) => !prev)}
                   hitSlop={8}
-                  style={styles.quietTextTarget}
+                  style={({ pressed }) => [styles.quietTextTarget, pressed && styles.pressed]}
                   accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: descriptionExpanded }}
@@ -1319,7 +1288,7 @@ export default function ItemDetailScreen() {
             Horizontal browse rail of other live listings from the same
             seller. Contextual to the seller section — closes it with a
             bottom hairline. Only rendered when there are at least 2 real
-            items. Uses ProductCardV2 inside HorizontalRail so cards match
+            items. Uses ProductCard inside HorizontalRail so cards match
             discovery surfaces. Distinct from the Bundle upsell discovery
             module in the tail (which incentivises multi-item purchase). */}
         {seller && moreFromSellerRailItems.length >= 2 ? (
@@ -1333,7 +1302,7 @@ export default function ItemDetailScreen() {
             >
               {moreFromSellerRailItems.map((railItem) => (
                 <View key={railItem.id} style={styles.railCardWrap}>
-                  <ProductCardV2
+                  <ProductCard
                     item={railItem as unknown as CatalogListing}
                     onPress={() => handlePressRecommendation(railItem, 'more_from_seller')}
                     showSaveButton={false}
@@ -1363,8 +1332,8 @@ export default function ItemDetailScreen() {
             />
             <ShippingReturnsInfo
               commerce={commerce}
-              carbonNeutral={commerce.shippingPayer === 'seller'}
             />
+            <SustainabilityImpact listingId={item.id} />
           </CommerceDetailSection>
         ) : null}
 
@@ -1405,8 +1374,9 @@ export default function ItemDetailScreen() {
                     accessibilityLabel={priceAlertEnabled ? 'Disable price drop alert' : 'Enable price drop alert'}
                   >
                     <View style={styles.alertRowLeft}>
-                      <Ionicons
-                        name={priceAlertEnabled ? 'notifications' : 'notifications-outline'}
+                      <AppIcon
+                        name="notifications"
+                        focused={priceAlertEnabled}
                         size={18}
                         color={priceAlertEnabled ? colors.brand : colors.textSecondary}
                       />
@@ -1414,7 +1384,7 @@ export default function ItemDetailScreen() {
                         Price drop alerts
                       </Text>
                     </View>
-                    <View style={[styles.toggleTrack, { borderColor: priceAlertEnabled ? colors.brand : colors.border, backgroundColor: priceAlertEnabled ? `${colors.brand}20` : colors.surfaceAlt }]}>
+                    <View style={[styles.toggleTrack, { borderColor: priceAlertEnabled ? colors.brand : colors.border, backgroundColor: priceAlertEnabled ? colors.brandSubtle : colors.surfaceAlt }]}>
                       <View style={[styles.toggleThumb, { backgroundColor: priceAlertEnabled ? colors.brand : colors.textMuted, alignSelf: priceAlertEnabled ? 'flex-end' : 'flex-start' }]} />
                     </View>
                   </Pressable>
@@ -1434,6 +1404,30 @@ export default function ItemDetailScreen() {
             accessibilityLabel="View questions and answers"
           />
         </CommerceDetailSection>
+
+        {/* ── Zone F2 — Co-Own shares (conditional) ──
+            When a listing has been syndicated into a co-own asset, show
+            share availability, price per share, and a buy-shares CTA.
+            This sits after all item-critical content (description, seller,
+            shipping, Q&A) and before discovery surfaces. */}
+        {coOwnAsset && (
+          <CoOwnShareSection
+            assetId={coOwnAsset.id}
+            totalUnits={coOwnAsset.totalUnits}
+            availableUnits={coOwnAsset.availableUnits}
+            unitPriceGbp={coOwnAsset.unitPriceGbp}
+            isOpen={coOwnAsset.isOpen}
+            issuerName={coOwnAsset.issuer?.displayName ?? coOwnAsset.issuer?.username ?? null}
+            onPressBuyShares={() => {
+              haptic.light();
+              navigation.navigate('Trade', { assetId: coOwnAsset.id, side: 'buy' });
+            }}
+            onPressViewDetail={() => {
+              haptic.light();
+              navigation.navigate('AssetDetail', { assetId: coOwnAsset.id });
+            }}
+          />
+        )}
 
         {/* ── Zone G — Related / recommended (below fold) ──
             Bundle upsell + visual-similar grid. These are discovery
@@ -1512,6 +1506,16 @@ export default function ItemDetailScreen() {
               </CommerceDetailSection>
           );
         })()}
+
+        {/* Seen in Looks — community-styled outfits featuring this item.
+            Per Design.md: "Seen in Looks" below core decision info.
+            Only rendered when the backend supplies real look data. */}
+        {seenInLooksItems.length > 0 ? (
+          <SeenInLooksRail
+            items={seenInLooksItems}
+            onPressItem={(look) => navigation.navigate('LookDetail', { lookId: look.id })}
+          />
+        ) : null}
 
         {recsError && recommendationSections.length === 0 && (
           <View style={styles.recErrorRow}>
@@ -1810,6 +1814,8 @@ export default function ItemDetailScreen() {
         title={displayTitle}
         subtitle={item.brand ? `${item.brand} · ${formattedPrice}` : formattedPrice}
         imageUri={item.images?.[0]}
+        contentType="listing"
+        contentId={item.id}
       />
 
       <SizeGuideSheet
@@ -1839,7 +1845,7 @@ export default function ItemDetailScreen() {
             accessibilityLabel="Close costs, delivery and protection"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <AppIcon name="close" size={22} color={colors.textSecondary} />
           </Pressable>
         </View>
         <View style={styles.purchaseSheetBody}>
@@ -1867,6 +1873,7 @@ export default function ItemDetailScreen() {
               value={formattedProtectionTotal}
               subLabel={commerce.shippingPayer === 'seller' ? undefined : 'excl. shipping'}
               emphasis
+              large
               separated
             />
           ) : null}
@@ -1916,7 +1923,7 @@ export default function ItemDetailScreen() {
             accessibilityLabel="Close questions and answers"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={22} color={colors.textSecondary} />
+            <AppIcon name="close" size={22} color={colors.textSecondary} />
           </Pressable>
         </View>
         <ListingQA
@@ -1944,7 +1951,7 @@ export default function ItemDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel="Share listing"
         >
-          <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+          <AppIcon name="share" size={20} color={colors.textPrimary} />
           <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>Share listing</Text>
         </Pressable>
         <Pressable
@@ -1957,7 +1964,7 @@ export default function ItemDetailScreen() {
           accessibilityState={{ selected: isFav }}
           accessibilityLabel={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
         >
-          <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={20} color={isFav ? colors.danger : colors.textPrimary} />
+          <AppIcon name="heart" focused={isFav} size={20} color={isFav ? colors.danger : colors.textPrimary} />
           <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
             {isFav ? 'Remove from wishlist' : 'Add to wishlist'}
           </Text>
@@ -1971,7 +1978,7 @@ export default function ItemDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel="Report this listing"
         >
-          <Ionicons name="flag-outline" size={20} color={colors.textSecondary} />
+          <AppIcon name="flag" size={20} color={colors.textSecondary} />
           <Text style={[styles.overflowRowText, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>Report listing</Text>
         </Pressable>
       </BottomSheet>
@@ -2017,10 +2024,11 @@ export default function ItemDetailScreen() {
               accessibilityLabel="Close condition definition"
               accessibilityRole="button"
             >
-              <Ionicons name="close" size={22} color={colors.textSecondary} />
+              <AppIcon name="close" size={22} color={colors.textSecondary} />
             </Pressable>
           </View>
           <View style={styles.conditionSheetBody}>
+            {/* TODO: replace `${conditionMeta.color}1F` with conditionColorSubtle token when available */}
             <View style={[styles.conditionSheetBadge, { backgroundColor: conditionMeta ? `${conditionMeta.color}1F` : colors.surfaceAlt }]}>
               <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
               <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]} maxFontSizeMultiplier={1}>
@@ -2046,23 +2054,40 @@ export default function ItemDetailScreen() {
                 accessibilityLabel="View condition evidence photos"
                 accessibilityRole="button"
               >
-                <Ionicons name="images-outline" size={18} color={colors.brand} />
+                <AppIcon name="images" size={18} color={colors.brand} />
                 <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={1}>
                   View condition photos
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.brand} />
+                <AppIcon name="forward" size={16} color={colors.brand} />
               </Pressable>
             ) : null}
           </View>
         </View>
       </BottomSheet>
     </Reanimated.View>
+  );
+
+  return Platform.OS === 'ios' ? (
+    <GestureDetector gesture={dismissPan}>
+      {screenContent}
     </GestureDetector>
+  ) : (
+    screenContent
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  headerWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+  },
+  scrollView: {
+    flex: 1,
+  },
   familyBadgeOverlay: {
     alignSelf: 'flex-start',
   },
@@ -2123,8 +2148,9 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   attributeText: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
     flexShrink: 1,
     fontVariant: ['tabular-nums'],
   },
@@ -2415,7 +2441,7 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.85,
-    transform: [{ scale: 0.97 }],
+    transform: [{ scale: PressScale.gentle }],
   },
   // ── Condition definition sheet ──
   conditionSheetWrap: {

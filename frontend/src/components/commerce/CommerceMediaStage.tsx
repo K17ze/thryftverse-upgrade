@@ -6,8 +6,7 @@ import {
   Pressable,
   useWindowDimensions,
   AccessibilityInfo,
-  AppState,
-} from 'react-native';
+  AppState } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,28 +15,25 @@ import Reanimated, {
   withSpring,
   withTiming,
   runOnJS,
-  type SharedValue,
-} from 'react-native-reanimated';
+  type SharedValue } from 'react-native-reanimated';
 import {
   GestureDetector,
   Gesture,
-  FlatList,
-} from 'react-native-gesture-handler';
+  FlatList } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Control } from '../../theme/designTokens';
+import { Space, Radius, Control, Stroke, PressScale } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { isVideoUri, getCategoryFocalPoint } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AnimatedHeart } from '../AnimatedHeart';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
-import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
-import { SharedTransitionImage } from '../SharedTransitionImage';
 import type { ProductMediaItem } from '../../platform/product/productDetailViewModel';
 
 const MAX_ZOOM = 4;
@@ -52,12 +48,10 @@ const applyRubberBand = (v: number, min: number, max: number, friction = 0.24) =
 
 const createSubComponentStyles = (colors: ThemeColors) => StyleSheet.create({
   page: {
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   image: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -66,14 +60,11 @@ const createSubComponentStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   retryText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary } });
 
 interface MediaPageProps {
   item: ProductMediaItem;
@@ -92,8 +83,7 @@ function MediaPage({
   onDoubleTap,
   sharedTransitionTag,
   onZoomStart,
-  onOpenFullscreen,
-}: MediaPageProps) {
+  onOpenFullscreen }: MediaPageProps) {
   const reducedMotion = useReducedMotion();
   const { colors } = useAppTheme();
   const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
@@ -201,8 +191,7 @@ function MediaPage({
     pinch,
   );
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
-  }));
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }] }));
 
   return (
     <GestureDetector gesture={composed}>
@@ -220,7 +209,7 @@ function MediaPage({
             style={subComponentStyles.image}
           >
             <Pressable
-              style={subComponentStyles.retryBtn}
+              style={({ pressed }) => [subComponentStyles.retryBtn, pressed && { opacity: 0.85, transform: [{ scale: PressScale.tap }] }]}
               onPress={() => { setFailed(false); setRetryKey((k) => k + 1); }}
               accessibilityLabel="Retry loading image"
               accessibilityRole="button"
@@ -238,19 +227,24 @@ function MediaPage({
               style={subComponentStyles.image}
               containerStyle={subComponentStyles.image}
               contentFit={item.fit ?? 'cover'}
+              transition={Motion.duration.normal}
               focalPoint={item.focalPoint}
               sharedTransitionTag={sharedTransitionTag}
               onError={() => setFailed(true)}
               downscaleWidth={width}
             />
           ) : (
-            <SharedTransitionImage
+            <CachedImage
               key={retryKey}
-              source={{ uri: item.uri }}
+              uri={item.uri}
+              blurhash={item.blurhash ?? undefined}
               style={subComponentStyles.image}
-              resizeMode={item.fit ?? 'contain'}
+              containerStyle={subComponentStyles.image}
+              contentFit={item.fit ?? 'cover'}
+              transition={Motion.duration.normal}
               sharedTransitionTag={sharedTransitionTag}
               onError={() => setFailed(true)}
+              downscaleWidth={width}
             />
           )
         )}
@@ -271,8 +265,7 @@ function VideoPage({
   width,
   height,
   isActive,
-  onOpenFullscreen,
-}: {
+  onOpenFullscreen }: {
   item: ProductMediaItem;
   width: number;
   height: number;
@@ -284,6 +277,7 @@ function VideoPage({
   const [appIsActive, setAppIsActive] = useState(true);
   const { colors } = useAppTheme();
   const subComponentStyles = useMemo(() => createSubComponentStyles(colors), [colors]);
+  const videoControlStyles = useMemo(() => createVideoControlStyles(colors), [colors]);
   const reducedMotion = useReducedMotion();
 
   // ── Custom video control state ──
@@ -526,12 +520,12 @@ function VideoPage({
           {/* Center play/pause button — only show when paused or on first load */}
           {!isPlaying && (
             <Pressable
-              style={videoControlStyles.centerPlayBtn}
+              style={({ pressed }) => [videoControlStyles.centerPlayBtn, pressed && { opacity: 0.85, transform: [{ scale: PressScale.tap }] }]}
               onPress={togglePlayPause}
               accessibilityLabel="Play video"
               accessibilityRole="button"
             >
-              <Ionicons name="play" size={32} color="#fff" />
+              <Ionicons name="play" size={32} color={colors.scrimTextPrimary} />
             </Pressable>
           )}
 
@@ -539,13 +533,13 @@ function VideoPage({
           <View style={videoControlStyles.controlBar}>
             {/* Play/pause */}
             <Pressable
-              style={videoControlStyles.controlBtn}
+              style={({ pressed }) => [videoControlStyles.controlBtn, pressed && { opacity: 0.85, transform: [{ scale: PressScale.tap }] }]}
               onPress={togglePlayPause}
               accessibilityLabel={isPlaying ? 'Pause video' : 'Play video'}
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />
+              <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color={colors.scrimTextPrimary} />
             </Pressable>
 
             {/* Scrub bar — only when duration is meaningful (> 0) */}
@@ -568,8 +562,7 @@ function VideoPage({
                   accessibilityValue={{
                     min: 0,
                     max: Math.round(duration),
-                    now: Math.round(currentTime),
-                  }}
+                    now: Math.round(currentTime) }}
                   hitSlop={{ top: 12, bottom: 12 }}
                 >
                   <View style={videoControlStyles.scrubTrackBg}>
@@ -585,24 +578,24 @@ function VideoPage({
 
             {/* Mute toggle */}
             <Pressable
-              style={videoControlStyles.controlBtn}
+              style={({ pressed }) => [videoControlStyles.controlBtn, pressed && { opacity: 0.85, transform: [{ scale: PressScale.tap }] }]}
               onPress={toggleMute}
               accessibilityLabel={isMuted ? 'Unmute video' : 'Mute video'}
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={isMuted ? 'volume-mute' : 'volume-medium'} size={20} color="#fff" />
+              <Ionicons name={isMuted ? 'volume-mute' : 'volume-medium'} size={20} color={colors.scrimTextPrimary} />
             </Pressable>
 
             {/* Fullscreen */}
             <Pressable
-              style={videoControlStyles.controlBtn}
+              style={({ pressed }) => [videoControlStyles.controlBtn, pressed && { opacity: 0.85, transform: [{ scale: PressScale.tap }] }]}
               onPress={handleFullscreen}
               accessibilityLabel="Open video fullscreen"
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name="expand" size={20} color="#fff" />
+              <Ionicons name="expand" size={20} color={colors.scrimTextPrimary} />
             </Pressable>
           </View>
         </>
@@ -611,14 +604,13 @@ function VideoPage({
   );
 }
 
-const videoControlStyles = StyleSheet.create({
+const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
   bottomScrim: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 80,
-  },
+    height: 80 },
   centerPlayBtn: {
     position: 'absolute',
     top: '50%',
@@ -628,10 +620,9 @@ const videoControlStyles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   controlBar: {
     position: 'absolute',
     bottom: 0,
@@ -641,55 +632,49 @@ const videoControlStyles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     paddingBottom: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   controlBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   scrubTrack: {
     flex: 1,
     height: Control.hit,
     justifyContent: 'center',
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   scrubTrackBg: {
     height: 3,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    overflow: 'visible',
-  },
+    backgroundColor: colors.scrimTextTertiary,
+    overflow: 'visible' },
   scrubTrackFill: {
     height: '100%',
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
-  },
+    backgroundColor: colors.scrimTextPrimary },
   scrubThumb: {
     position: 'absolute',
     top: -5,
     width: 13,
     height: 13,
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
-    marginLeft: -6.5,
-  },
+    backgroundColor: colors.scrimTextPrimary,
+    marginLeft: -6.5 },
   timeText: {
-    color: '#fff',
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
     minWidth: 32,
-    textAlign: 'center',
-  },
-});
+    textAlign: 'center' } });
 
 export interface CommerceMediaStageProps {
-  images?: string[];
-  /** Authoritative typed media. When supplied, media kind is never guessed
+  /** Canonical typed media. When supplied, media kind is never guessed
    * from a URL and crop/poster metadata remains attached end-to-end. */
   media?: readonly ProductMediaItem[];
+  /** Raw image URIs — mapped internally to ProductMediaItem[] (cover fit)
+   * so both props render through the single media code path. */
+  images?: string[];
   /** Canonical video URLs supplied by the API. URL-suffix detection remains
    * as a compatibility fallback for older callers. */
   videoUris?: readonly string[];
@@ -746,8 +731,8 @@ export interface CommerceMediaStageProps {
 }
 
 export function CommerceMediaStage({
-  images = [],
   media,
+  images = [],
   videoUris = [],
   objectId,
   topInset,
@@ -774,8 +759,7 @@ export function CommerceMediaStage({
   onActiveIndexChange,
   initialIndex = 0,
   showPageIndicator = true,
-  category,
-}: CommerceMediaStageProps) {
+  category }: CommerceMediaStageProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -807,8 +791,7 @@ export function CommerceMediaStage({
         uri,
         kind: videoUriSet.has(uri) || isVideoUri(uri) ? 'video' : 'image',
         fit: videoUriSet.has(uri) || isVideoUri(uri) ? 'contain' : 'cover',
-        focalPoint: videoUriSet.has(uri) || isVideoUri(uri) ? null : defaultFocalPoint,
-      }));
+        focalPoint: videoUriSet.has(uri) || isVideoUri(uri) ? null : defaultFocalPoint }));
   }, [images, media, videoUris, category]);
   React.useEffect(() => {
     if (reducedMotion || mediaItems.length === 0) return;
@@ -846,7 +829,17 @@ export function CommerceMediaStage({
     }
   }, [activeIndex, mediaItems]);
 
-  const heroHeight = Math.min(screenHeight * heightFraction, screenWidth * 1.35);
+  // Preserve the authored product crop when the API provides intrinsic media
+  // dimensions. The bounded fallback keeps legacy callers stable.
+  const heroHeight = React.useMemo(() => {
+    const firstMedia = mediaItems[0];
+    const width = firstMedia?.width;
+    const height = firstMedia?.height;
+    if (width && height && width > 0 && height > 0) {
+      return Math.min(screenWidth * (height / width), screenWidth * 1.35);
+    }
+    return Math.min(screenHeight * heightFraction, screenWidth * 1.35);
+  }, [heightFraction, mediaItems, screenHeight, screenWidth]);
 
   const heroStyle = useAnimatedStyle(() => {
     if (reducedMotion) {
@@ -863,11 +856,9 @@ export function CommerceMediaStage({
 
   const bigHeartStyle = useAnimatedStyle(() => ({
     opacity: bigHeartOpacity?.value ?? 0,
-    transform: [{ scale: bigHeartScale?.value ?? 0 }],
-  }));
+    transform: [{ scale: bigHeartScale?.value ?? 0 }] }));
   const zoomHintStyle = useAnimatedStyle(() => ({
-    opacity: zoomHintOpacity.value,
-  }));
+    opacity: zoomHintOpacity.value }));
   const bottomScrimStyle = useAnimatedStyle(() => {
     // Clear the editorial caption before the collapsed navigation title
     // begins to appear. Overlapping two copies of a long product title makes
@@ -876,8 +867,7 @@ export function CommerceMediaStage({
     const hidden = scrollY.value >= 128;
     return {
       opacity: reducedMotion ? (scrollY.value < 112 ? 1 : 0) : opacity,
-      display: hidden ? 'none' : 'flex',
-    };
+      display: hidden ? 'none' : 'flex' };
   });
   // Reanimated styles are view-bound; the scrim and caption need separate
   // animated style instances even though they follow the same curve.
@@ -886,8 +876,7 @@ export function CommerceMediaStage({
     const hidden = scrollY.value >= 128;
     return {
       opacity: reducedMotion ? (scrollY.value < 112 ? 1 : 0) : opacity,
-      display: hidden ? 'none' : 'flex',
-    };
+      display: hidden ? 'none' : 'flex' };
   });
 
   // FlatList requires onViewableItemsChanged to have a stable identity —
@@ -994,7 +983,7 @@ export function CommerceMediaStage({
           style={[StyleSheet.absoluteFill, styles.bigHeartWrap, bigHeartStyle]}
           pointerEvents="none"
         >
-          <Ionicons name="heart" size={100} color="#fff" style={styles.bigHeartIcon} />
+          <Ionicons name="heart" size={100} color={colors.scrimTextPrimary} style={styles.bigHeartIcon} />
         </Reanimated.View>
       )}
 
@@ -1009,33 +998,36 @@ export function CommerceMediaStage({
           <AnimatedPressable
             style={styles.controlBtn}
             onPress={onBack}
-            {...PressPresets.iconButton}
+            scaleValue={PressScale.tap}
+            activeOpacity={0.85}
             accessibilityLabel="Go back"
           >
-            <Ionicons name="chevron-back" size={24} color="#fff" style={styles.controlIcon} />
+            <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} style={styles.controlIcon} />
           </AnimatedPressable>
 
           <View style={styles.headerRight}>
             <AnimatedPressable
               style={styles.controlBtn}
               onPress={onShare}
-              {...PressPresets.iconButton}
+              scaleValue={PressScale.tap}
+              activeOpacity={0.85}
               accessibilityLabel="Share"
             >
-              <Ionicons name="share-outline" size={24} color="#fff" style={styles.controlIcon} />
+              <Ionicons name="share-outline" size={24} color={colors.scrimTextPrimary} style={styles.controlIcon} />
             </AnimatedPressable>
 
             {showSaveControl && onSave && (
               <AnimatedPressable
                 style={styles.controlBtn}
                 onPress={onSave}
-                {...PressPresets.iconButton}
+                scaleValue={PressScale.tap}
+                activeOpacity={0.85}
                 accessibilityLabel={isSaved ? 'Saved to collection' : 'Save to collection'}
               >
                 <Ionicons
                   name={isSaved ? 'bookmark' : 'bookmark-outline'}
                   size={24}
-                  color={isSaved ? colors.brand : '#fff'}
+                  color={isSaved ? colors.brand : colors.scrimTextPrimary}
                   style={styles.controlIcon}
                 />
               </AnimatedPressable>
@@ -1048,7 +1040,7 @@ export function CommerceMediaStage({
                   onToggle={onToggleFav}
                   size={24}
                   activeColor={colors.danger}
-                  inactiveColor="#fff"
+                  inactiveColor={colors.scrimTextPrimary}
                 />
               </View>
             )}
@@ -1100,7 +1092,7 @@ export function CommerceMediaStage({
 
       {mediaItems.length > 0 && mediaItems[activeIndex]?.kind === 'video' && (
         <View style={styles.videoBadge}>
-          <Ionicons name="play-circle" size={16} color="#fff" />
+          <Ionicons name="play-circle" size={16} color={colors.scrimTextPrimary} />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
       )}
@@ -1110,7 +1102,7 @@ export function CommerceMediaStage({
           visual cue that pinch-to-zoom is available. */}
       {!reducedMotion && mediaItems.length > 0 && (
         <Reanimated.View style={[styles.zoomHint, zoomHintStyle]} pointerEvents="none">
-          <Ionicons name="add-circle-outline" size={18} color="#fff" style={styles.zoomHintIcon} />
+          <Ionicons name="add-circle-outline" size={18} color={colors.scrimTextPrimary} style={styles.zoomHintIcon} />
           <Text style={styles.zoomHintText}>Pinch to zoom</Text>
         </Reanimated.View>
       )}
@@ -1139,7 +1131,7 @@ export function CommerceMediaStage({
                 >
                   {isVid ? (
                     <View style={[styles.thumbnailImage, styles.thumbnailVideoFallback]}>
-                      <Ionicons name="play-circle" size={20} color="#fff" />
+                      <Ionicons name="play-circle" size={20} color={colors.scrimTextPrimary} />
                     </View>
                   ) : (
                     <CachedImage
@@ -1154,7 +1146,7 @@ export function CommerceMediaStage({
                   )}
                   {isVid && (
                     <View style={styles.thumbnailVideoBadge}>
-                      <Ionicons name="play" size={8} color="#fff" />
+                      <Ionicons name="play" size={8} color={colors.scrimTextPrimary} />
                     </View>
                   )}
                 </Pressable>
@@ -1172,21 +1164,18 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   heroContainer: {
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   emptyHero: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   topScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 132,
-  },
+    height: 132 },
   // Image count badge — top-right pill (e.g. "1/8").
   // Semi-transparent dark pill with white tabular-nums text.
   countBadge: {
@@ -1197,25 +1186,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    zIndex: 9,
-  },
+    zIndex: 9 },
   countBadgeText: {
     color: colors.scrimTextPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   bigHeartWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 5,
-  },
+    zIndex: 5 },
   bigHeartIcon: {
-    shadowColor: '#000',
+    shadowColor: colors.textPrimary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
+    shadowRadius: 10 },
   soldOverlay: {
     position: 'absolute',
     bottom: Space.lg,
@@ -1223,14 +1208,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.success,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   soldText: {
     color: colors.background,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 1,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 1 },
   floatingHeader: {
     position: 'absolute',
     top: 0,
@@ -1239,26 +1222,22 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   headerRight: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   controlBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Subtle media-contrast scrim behind control glyphs. Functional
   // (legibility over arbitrary imagery), not decorative chrome.
   controlIcon: {
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   overlayTopZone: {
     position: 'absolute',
     top: 0,
@@ -1266,8 +1245,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 0,
     paddingTop: 100,
     paddingHorizontal: Space.md,
-    zIndex: 8,
-  },
+    zIndex: 8 },
   overlayBottomZone: {
     position: 'absolute',
     bottom: 0,
@@ -1275,45 +1253,38 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 0,
     paddingHorizontal: Space.md,
     paddingBottom: Space.md,
-    zIndex: 8,
-  },
+    zIndex: 8 },
   indexBadge: {
     position: 'absolute',
     bottom: Space.sm,
     right: Space.md,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   indexBadgePressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.95 }],
-  },
+    opacity: 0.85,
+    transform: [{ scale: PressScale.tap }] },
   // Dot indicators — quiet position signal (Depop/Vinted pattern).
   // Inactive dots are small and translucent; active dot is wider and opaque.
   dotRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   dot: {
     width: 5,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.45)',
-  },
+    backgroundColor: colors.scrimTextTertiary },
   dotActive: {
     width: 14,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
-  },
+    backgroundColor: colors.scrimTextPrimary },
   indexText: {
-    color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   videoBadge: {
     position: 'absolute',
     bottom: Space.sm,
@@ -1321,16 +1292,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   videoBadgeText: {
-    color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   // Zoom hint — bottom-center pill, fades out after 2.8s or on first
   // zoom interaction. Quiet, one-time cue (Airbnb pattern).
   zoomHint: {
@@ -1340,65 +1309,54 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   zoomHintIcon: {
-    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
+    textShadowRadius: 3 },
   zoomHintText: {
-    color: '#fff',
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-  },
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   bottomScrim: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '48%',
-  },
+    height: '48%' },
   thumbnailStrip: {
     position: 'absolute',
     bottom: 40,
     left: 0,
-    right: 0,
-  },
+    right: 0 },
   thumbnailContent: {
     paddingHorizontal: Space.md,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   thumbnail: {
     width: 40,
     height: 40,
     borderRadius: Radius.sm,
     overflow: 'hidden',
     opacity: 0.5,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
+    borderWidth: Stroke.standard,
+    borderColor: 'transparent' },
   thumbnailActive: {
     opacity: 1,
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
+    borderWidth: Stroke.emphasis,
+    borderColor: colors.scrimTextPrimary },
   thumbnailPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.92 }],
-  },
+    opacity: 0.85,
+    transform: [{ scale: PressScale.tap }] },
   thumbnailImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   thumbnailVideoFallback: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.background,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   thumbnailVideoBadge: {
     position: 'absolute',
     bottom: 2,
@@ -1406,8 +1364,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: Radius.md,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });

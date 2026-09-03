@@ -7,6 +7,8 @@ export interface HistoryEntry {
 }
 
 const MAX_HISTORY = 50;
+// Rapid same-label pushes within this window coalesce into a single undo step.
+const COALESCE_WINDOW_MS = 600;
 
 export class HistoryStack {
   private undoStack: HistoryEntry[] = [];
@@ -17,9 +19,16 @@ export class HistoryStack {
   }
 
   push(doc: CreatorDocument, label: string): void {
-    this.undoStack.push({ document: doc, label, timestamp: Date.now() });
-    if (this.undoStack.length > MAX_HISTORY) {
-      this.undoStack.shift();
+    const now = Date.now();
+    const top = this.undoStack[this.undoStack.length - 1];
+    if (top.label === label && now - top.timestamp < COALESCE_WINDOW_MS) {
+      top.document = doc;
+      top.timestamp = now;
+    } else {
+      this.undoStack.push({ document: doc, label, timestamp: now });
+      if (this.undoStack.length > MAX_HISTORY) {
+        this.undoStack.shift();
+      }
     }
     this.redoStack = [];
   }

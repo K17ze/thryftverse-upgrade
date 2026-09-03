@@ -5,13 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Numeric } from '../theme/designTokens';
+import { Space, Radius, Typography, Numeric } from '../theme/designTokens';
 import { AppButton } from '../components/ui/AppButton';
 import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 import { useToast } from '../context/ToastContext';
-import { cancelCoOwnOrderReservation, placeCoOwnOrder } from '../services/marketApi';
+import { cancelCoOwnOrderReservation, placeCoOwnOrder, lookupCoOwnOrderByIdempotencyKey } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useStore } from '../store/useStore';
 import { makeStableId } from '../utils/createStableId';
@@ -22,6 +22,7 @@ import {
   CoOwnRiskDisclosure,
 } from '../components/coown';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { track } from '../analytics/track';
 import { t } from '../i18n';
 
 
@@ -40,7 +41,10 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     netValue,
     orderMode,
     ticketOrderType,
+    // P0.1: backend order type for protected_market
+    backendOrderType,
     limitPriceGbp,
+    protectionPriceGbp,
     averageFillPriceGbp,
     worstPriceGbp,
     estimatedFilledUnits,
@@ -50,7 +54,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     previewValidUntil,
     maxReserved1ze,
     marketDataTimestamp,
-  } = route.params;
+  } = route.params ?? {};
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { isVeryCompact: isCompactDock } = useBreakpoint();
@@ -140,12 +144,19 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
       // Reuse the same idempotency key for this order attempt on every retry
       // (spec 10 §1) — a replayed command must return the original result,
       // never post a duplicate order.
+      // P0.1: Send protected_market with maxPriceGbp/minPriceGbp instead of
+      // market + limitPriceGbp (which the backend rejects as contract-invalid).
+      const effectiveBackendOrderType = backendOrderType ?? (ticketOrderType === 'protected_instant' ? 'protected_market' : orderMode);
       const remoteOrder = await placeCoOwnOrder(assetId, {
         userId: currentUser.id,
         side,
         units: quantity,
-        orderType: orderMode,
-        limitPriceGbp,
+        orderType: effectiveBackendOrderType,
+        ...(effectiveBackendOrderType === 'protected_market'
+          ? (side === 'buy'
+            ? { maxPriceGbp: protectionPriceGbp ?? limitPriceGbp }
+            : { minPriceGbp: protectionPriceGbp ?? limitPriceGbp })
+          : { limitPriceGbp }),
         reservationId,
         idempotencyKey: idempotencyKeyRef.current!,
       });
@@ -166,6 +177,12 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         show('Order executed on CO-OWN engine.', 'success');
       }
       if (remoteOrder.aml?.alertId) show('Trade is flagged for AML review.', 'info');
+      track('coown_order_filled', {
+        asset_id: assetId,
+        order_id: String(remoteOrder.order.id),
+        units: quantity,
+        price_gbp: remoteOrder.order.unitPriceGbp,
+      });
       navigation.navigate('CoOwnHub');
     } catch (error) {
       const parsedError = parseApiError(error, 'Unable to submit order');
@@ -175,9 +192,31 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         // by the backend's own idempotency dedup; keep the key so a user retry
         // after fixing the cause (e.g. re-authenticating) still dedupes correctly.
       } else {
-        show('Trading engine unavailable. Retry once connection is restored.', 'error');
-        // Network error: the request may or may not have reached the server.
-        // Keep the same key so retry is a safe no-op/duplicate-return, not a new order.
+        // P0.7: Network error — the request may or may not have reached the
+        // server. Attempt to look up the result by idempotency key before
+        // telling the user the result is unknown.
+        try {
+          const lookup = await lookupCoOwnOrderByIdempotencyKey(
+            assetId,
+            idempotencyKeyRef.current!,
+          );
+          if (lookup.status === 'acknowledged') {
+            // The order was actually placed — navigate to the hub.
+            show('Order placed.', 'success');
+            navigation.navigate('CoOwnHub');
+            return;
+          }
+          if (lookup.status === 'processing') {
+            show('Result not confirmed. Check order before trying again.', 'info');
+            navigation.navigate('CoOwnHub');
+            return;
+          }
+          // safe_to_retry — no record found, keep the key for safe retry
+          show('Order was not placed. Please retry.', 'error');
+        } catch {
+          // Lookup itself failed — keep the key so retry is a safe no-op
+          show('Trading engine unavailable. Retry once connection is restored.', 'error');
+        }
       }
     } finally {
       setIsSubmitting(false);

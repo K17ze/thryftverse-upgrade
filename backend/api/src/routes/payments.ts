@@ -1104,6 +1104,49 @@ app.post('/payments/intents', async (request, reply) => {
     }
 
     await client.query('COMMIT');
+
+    // ── Inline settlement for 1ZE internal gateway ──
+    // The 1ZE payment is atomic — the intent is already 'succeeded'.
+    // Settle inline to post ledger entries (debit 1ZE wallet, credit
+    // escrow) and advance the order to 'paid' without waiting for a
+    // webhook or explicit confirm call.
+    if (gatewayId === 'oneze_internal' && gatewayIntent.initialStatus === 'succeeded') {
+      try {
+        const settleClient = await db.connect();
+        try {
+          await settleClient.query('BEGIN');
+          const settled = await settlePaymentIntent(settleClient, {
+            intentId,
+            finalStatus: 'succeeded',
+            providerAttemptRef: gatewayIntent.providerIntentRef,
+            rawPayload: { gateway: 'oneze_internal', settledAt: new Date().toISOString() },
+          });
+          await settleClient.query('COMMIT');
+
+          reply.code(201);
+          return {
+            ok: true,
+            idempotent: false,
+            intent: settled.intent,
+          };
+        } catch (inlineSettleError) {
+          await settleClient.query('ROLLBACK');
+          request.log.error(
+            { err: inlineSettleError, intentId },
+            '1ZE inline settlement failed — intent is succeeded but order not settled'
+          );
+          // Fall through to return the succeeded intent as-is.
+        } finally {
+          settleClient.release();
+        }
+      } catch (settleClientError) {
+        request.log.error(
+          { err: settleClientError, intentId },
+          'Failed to acquire client for 1ZE inline settlement'
+        );
+      }
+    }
+
     reply.code(201);
     return {
       ok: true,
@@ -1950,7 +1993,7 @@ app.post('/payments/disputes/:disputeId/evidence', async (request, reply) => {
     // Submit evidence to the provider when supported.
     if (payload.submitToProvider && dispute.gateway_id === 'stripe_americas' && config.stripeSecretKey) {
       const stripe = new Stripe(config.stripeSecretKey, {
-        apiVersion: '2024-06-20',
+        apiVersion: '2026-08-26.dahlia',
       });
       try {
         const evidenceResponse = await stripe.disputes.update(

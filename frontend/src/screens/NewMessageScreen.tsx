@@ -12,7 +12,8 @@ import { createDmConversationOnApi, joinGroupByInviteOnApi } from '../services/c
 import { parseApiError } from '../lib/apiClient';
 import { getAvailableAgents, deployAgent, type ChatAgent } from '../services/chatAgentsApi';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Control, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useHaptic } from '../hooks/useHaptic';
 import { CachedImage } from '../components/CachedImage';
@@ -41,17 +42,14 @@ export default function NewMessageScreen({ navigation, route }: Props) {
     searchWrap: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     searchBar: {
       backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.full,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     quickActions: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.md,
-    },
+      paddingBottom: Space.md },
     quickActionRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -59,18 +57,15 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       minHeight: 64,
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     quickActionIcon: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     quickActionBody: {
       flex: 1,
-      gap: Space.xs / 4,
-    },
+      gap: Space.xs / 4 },
     quickActionBadge: {
       minWidth: Space.smMd,
       height: Space.smMd,
@@ -78,28 +73,23 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       backgroundColor: colors.brand,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: Space.xs + 2,
-    },
+      paddingHorizontal: Space.xs + 2 },
     quickActionBadgeText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textInverse },
     searchingRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     sectionLabelWrap: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     listContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -107,8 +97,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       paddingVertical: Space.md,
       paddingHorizontal: Space.md,
       marginHorizontal: -Space.md,
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     contactAvatar: {
       width: Space.xl + Space.xl + 4,
       height: Space.xl + Space.xl + 4,
@@ -116,28 +105,22 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: colors.surfaceAlt,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     contactAvatarImage: {
       width: Space.xl + Space.xl + 4,
       height: Space.xl + Space.xl + 4,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     contactAvatarText: {
-      fontSize: Type.bodyStrong.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: TypeStyles.title.fontFamily,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     rowBody: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     separator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginHorizontal: -Space.md,
-    },
-  }), [colors]);
+      marginHorizontal: -Space.md } }), [colors]);
 
   const { show } = useToast();
   const haptic = useHaptic();
@@ -182,8 +165,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       show('Joined group', 'success');
       navigation.navigate('GroupChat', {
         groupId: result.conversation.id,
-        groupName: result.conversation.title ?? 'Group',
-      });
+        groupName: result.conversation.title ?? 'Group' });
     } catch (err) {
       show(parseApiError(err, 'Could not join group. Check the link and try again.').message, 'error');
     } finally {
@@ -222,13 +204,10 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       messages: [{
         id: `agent_intro_${Date.now()}`,
         senderId: agent.id,
-        text: `Hi! I'm ${agent.name}, your AI ${agent.type.replace('_', ' ')}. I'm running in demo mode — I can suggest replies and help with ${agent.capabilities.join(', ').toLowerCase()}. What can I help you with?`,
+        text: `Hi! I'm ${agent.name}, your AI assistant.`,
         timestamp: now,
-        isRead: true,
         botId: agent.id,
-        isDemo: true,
-      } as any],
-    });
+        isDemo: true }] });
     navigation.navigate('Chat', { conversationId, partnerUserId: agent.id });
     setAgentPickerVisible(false);
   }, [conversations, currentUser?.id, haptic, navigation, upsertConversation]);
@@ -257,8 +236,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
         conversationId: convo.id,
         listingTitle: linkedListing?.title,
         listingId: linkedListing?.id,
-        isExisting: true,
-      });
+        isExisting: true });
     }
     return items;
   }, [conversations, currentUser?.id, profileMediaOverrides, listings]);
@@ -316,8 +294,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
           name: r.displayName ?? r.username,
           avatar: r.avatar ?? undefined,
           conversationId: existing?.conversationId,
-          isExisting: !!existing,
-        };
+          isExisting: !!existing };
       });
 
     return [...localMatches, ...remoteItems];
@@ -350,8 +327,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
     try {
       const conversation = await createDmConversationOnApi({
         recipientUserId: contact.userId,
-        itemId: contact.listingId,
-      });
+        itemId: contact.listingId });
       navigation.navigate('Chat', { conversationId: conversation.id, partnerUserId: contact.userId });
     } catch {
       show('Could not start conversation. Try again.', 'error');
@@ -390,7 +366,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
         )}
       </View>
       <Ionicons
-        name={item.isExisting ? 'chevron-forward' : 'pricetag-outline'}
+        name={item.isExisting ? 'chevron-forward' : 'bag-handle-outline'}
         size={18}
         color={colors.textMuted}
       />
@@ -581,7 +557,7 @@ export default function NewMessageScreen({ navigation, route }: Props) {
       >
         <KeyboardAvoidingView
           behavior={Platform.select({ ios: 'padding', android: undefined })}
-          style={joinStyles.overlay}
+          style={[joinStyles.overlay, { backgroundColor: colors.overlay }]}
         >
           <View style={[joinStyles.sheet, { backgroundColor: colors.surface }]}>
             <Text style={[joinStyles.title, { color: colors.textPrimary }]}>
@@ -630,46 +606,36 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 const joinStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   sheet: {
     width: '100%',
     maxWidth: 360,
     borderRadius: Radius.lg,
     padding: Space.lg,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   title: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   subtitle: {
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   input: {
     minHeight: 44,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     paddingHorizontal: Space.md,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: Space.md,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   actionBtn: {
     minHeight: 44,
     paddingHorizontal: Space.md,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   actionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily } });

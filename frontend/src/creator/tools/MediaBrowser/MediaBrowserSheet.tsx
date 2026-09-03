@@ -43,8 +43,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   Modal,
-  type DimensionValue,
-} from 'react-native';
+  type DimensionValue } from 'react-native';
 import { Image } from 'expo-image';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -53,12 +52,12 @@ import * as MediaLibrary from 'expo-media-library/legacy';
 import {
   Space,
   Radius,
-  Type,
   Typography,
   Stroke,
   Control,
   FontFamily,
-} from '../../../theme/designTokens';
+  Elevation } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -66,6 +65,8 @@ import { useHaptic } from '../../../hooks/useHaptic';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
 import { Motion } from '../../../theme/motionTokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -73,9 +74,7 @@ import Reanimated, {
   withTiming,
   withDelay,
   interpolate,
-  Extrapolation,
-  Easing,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -159,8 +158,7 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
 
   const style = useAnimatedStyle(() => ({
     backgroundColor: colors.surfaceAlt,
-    opacity: 0.5 + 0.3 * shimmerSV.value,
-  }));
+    opacity: 0.5 + 0.3 * shimmerSV.value }));
 
   return (
     <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
@@ -218,8 +216,7 @@ function MediaGridItem({
   onPress,
   onLongPress,
   colors,
-  styles,
-}: MediaGridItemProps) {
+  styles }: MediaGridItemProps) {
   const reduceMotion = useReducedMotion();
   const { spring } = useMotionConfig();
   const pressedSV = useSharedValue(0);
@@ -236,13 +233,11 @@ function MediaGridItem({
   const pressStyle = useAnimatedStyle(() => ({
     transform: [
       { scale: interpolate(pressedSV.value, [0, 1], [1, 0.95], Extrapolation.CLAMP) },
-    ],
-  }));
+    ] }));
 
   const badgeStyle = useAnimatedStyle(() => ({
     transform: [{ scale: badgeScaleSV.value }],
-    opacity: badgeScaleSV.value,
-  }));
+    opacity: badgeScaleSV.value }));
 
   return (
     <Pressable
@@ -271,7 +266,7 @@ function MediaGridItem({
         />
         {asset.mediaType === 'video' && (
           <View style={styles.mediaGridVideoBadge}>
-            <Ionicons name="play" size={IconGrammar.badge} color="#fff" />
+            <AppIcon name="play" size={IconSize.xs} color="textInverse" opticalCenter={true} accessible={false} />
             {asset.durationMs != null && (
               <Text style={styles.mediaGridDuration}>
                 {formatDuration(asset.durationMs)}
@@ -298,19 +293,18 @@ function MediaGridItem({
 function StaticStateIcon({
   name,
   size,
-  color,
-}: {
-  name: React.ComponentProps<typeof Ionicons>['name'];
+  color }: {
+  name: string;
   size: number;
   color: string;
 }) {
-  return <Ionicons name={name} size={size} color={color} />;
+  return <AppIcon name={name} size={size} color={color} opticalCenter={true} accessible={false} />;
 }
 
 // ── PermissionDeniedState — spring entrance with retry CTA ──────────
 
 interface PermissionDeniedStateProps {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: string;
   title: string;
   message: string;
   ctaLabel: string;
@@ -326,24 +320,23 @@ function PermissionDeniedState({
   ctaLabel,
   onCta,
   colors,
-  styles,
-}: PermissionDeniedStateProps) {
+  styles }: PermissionDeniedStateProps) {
   const reduceMotion = useReducedMotion();
-  const { spring } = useMotionConfig();
   const entranceSV = useSharedValue(reduceMotion ? 1 : 0);
 
   useEffect(() => {
     if (!reduceMotion) {
-      entranceSV.value = withDelay(100, withSpring(1, spring.entrance));
+      // Per §5.14: entrance uses timing (ease-out), not spring.
+      const entranceDelayMs = 100;
+      entranceSV.value = withDelay(entranceDelayMs, withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance }));
     }
-  }, [reduceMotion, spring, entranceSV]);
+  }, [reduceMotion, entranceSV]);
 
   const entranceStyle = useAnimatedStyle(() => ({
     opacity: entranceSV.value,
     transform: [
       { translateY: interpolate(entranceSV.value, [0, 1], [20, 0], Extrapolation.CLAMP) },
-    ],
-  }));
+    ] }));
 
   return (
     <Reanimated.View style={[styles.centerState, entranceStyle]}>
@@ -379,7 +372,7 @@ function CameraTile({ onPress, colors, styles }: CameraTileProps) {
       accessibilityHint="Opens the camera to capture a new photo"
       hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
     >
-      <Ionicons name="camera-outline" size={IconGrammar.hero} color={colors.brand} />
+      <AppIcon name="camera-outline" size={IconSize.hero} color="brand" opticalCenter={true} accessible={false} />
     </PressScale>
   );
 }
@@ -396,7 +389,7 @@ function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
   if (!asset) return null;
   return (
     <Modal visible={!!asset} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={previewStyles.backdrop} onPress={onClose} accessibilityRole="image">
+      <Pressable style={[previewStyles.backdrop, { backgroundColor: colors.mediaOverlayScrim }]} onPress={onClose} accessibilityRole="image">
         <View style={previewStyles.content}>
           <Image
             source={{ uri: asset.uri }}
@@ -405,16 +398,16 @@ function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
             transition={150}
           />
           {asset.mediaType === 'video' && asset.durationMs != null && (
-            <View style={previewStyles.durationBadge}>
-              <Ionicons name="play" size={IconGrammar.badge} color="#fff" />
-              <Text style={previewStyles.durationText}>
+            <View style={[previewStyles.durationBadge, { backgroundColor: colors.mediaOverlayScrim }]}>
+              <AppIcon name="play" size={IconSize.xs} color="textInverse" opticalCenter={true} accessible={false} />
+              <Text style={[previewStyles.durationText, { color: colors.scrimTextPrimary }]}>
                 {formatDuration(asset.durationMs)}
               </Text>
             </View>
           )}
         </View>
-        <Pressable style={previewStyles.closeBtn} onPress={onClose} hitSlop={12} accessibilityLabel="Close preview" accessibilityRole="button">
-          <Ionicons name="close" size={IconGrammar.hero} color="#fff" />
+        <Pressable style={[previewStyles.closeBtn, { backgroundColor: colors.scrimTextTertiary }]} onPress={onClose} hitSlop={12} accessibilityLabel="Close preview" accessibilityRole="button">
+          <AppIcon name="close" size={IconSize.hero} color="textInverse" opticalCenter={true} accessible={false} />
         </Pressable>
       </Pressable>
     </Modal>
@@ -424,18 +417,14 @@ function LargePreviewModal({ asset, onClose, colors }: LargePreviewModalProps) {
 const previewStyles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   content: {
     width: '100%',
-    height: '80%',
-  },
+    height: '80%' },
   image: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   durationBadge: {
     position: 'absolute',
     bottom: Space.md,
@@ -443,16 +432,12 @@ const previewStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   durationText: {
-    color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   closeBtn: {
     position: 'absolute',
     top: 50,
@@ -460,11 +445,8 @@ const previewStyles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });
 
 // ── AlbumRow — loads its own cover thumbnail (first asset in album) ──
 
@@ -511,7 +493,7 @@ function AlbumRow({ album, isActive, onSelect, colors, styles }: AlbumRowProps) 
             recyclingKey={album.id}
           />
         ) : (
-          <Ionicons name="images-outline" size={IconGrammar.standard} color={colors.textMuted} />
+          <AppIcon name="images-outline" size={IconSize.lg} color="textMuted" opticalCenter={true} accessible={false} />
         )}
       </View>
       <View style={styles.albumRowTextCol}>
@@ -528,7 +510,7 @@ function AlbumRow({ album, isActive, onSelect, colors, styles }: AlbumRowProps) 
           {album.assetCount} items
         </Text>
       </View>
-      {isActive && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} />}
+      {isActive && <AppIcon name="check" size={IconSize.sm} color="brand" opticalCenter={true} accessible={false} />}
     </Pressable>
   );
 }
@@ -548,12 +530,11 @@ function AlbumListView({
   activeAlbumId,
   onSelectAlbum,
   colors,
-  styles,
-}: AlbumListViewProps) {
+  styles }: AlbumListViewProps) {
   if (albums.length === 0) {
     return (
       <View style={styles.centerState}>
-        <StaticStateIcon name="folder-open-outline" size={IconGrammar.hero} color={colors.textMuted} />
+        <StaticStateIcon name="folder-open-outline" size={IconSize.hero} color={colors.textMuted} />
         <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
           No albums found
         </Text>
@@ -571,7 +552,7 @@ function AlbumListView({
         accessibilityState={{ selected: activeAlbumId === null }}
       >
         <View style={[styles.albumThumb, { backgroundColor: colors.brandSubtle }]}>
-          <Ionicons name="images-outline" size={IconGrammar.standard} color={colors.brand} />
+          <AppIcon name="images-outline" size={IconSize.lg} color="brand" opticalCenter={true} accessible={false} />
         </View>
         <View style={styles.albumRowTextCol}>
           <Text
@@ -586,7 +567,7 @@ function AlbumListView({
             Everything in your library
           </Text>
         </View>
-        {activeAlbumId === null && <Ionicons name="checkmark" size={IconGrammar.metadata} color={colors.brand} />}
+        {activeAlbumId === null && <AppIcon name="check" size={IconSize.sm} color="brand" opticalCenter={true} accessible={false} />}
       </Pressable>
       {albums.slice(0, 30).map((album) => (
         <AlbumRow
@@ -611,8 +592,7 @@ export function MediaBrowserSheet({
   maxSelections,
   title = 'Select photos',
   showCameraTile = true,
-  allowVideos = true,
-}: MediaBrowserSheetProps) {
+  allowVideos = true }: MediaBrowserSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
@@ -631,6 +611,7 @@ export function MediaBrowserSheet({
   const [status, requestPermission] = MediaLibrary.usePermissions();
   const [assets, setAssets] = useState<MediaAsset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   // Ordered selection — preserved as an array so tap order is deterministic.
@@ -685,6 +666,7 @@ export function MediaBrowserSheet({
     async (reset: boolean) => {
       if (reset) {
         setIsLoading(true);
+        setLoadError(false);
         cursorRef.current = undefined;
       } else {
         if (!hasMore || loadingMore) return;
@@ -695,8 +677,7 @@ export function MediaBrowserSheet({
         const opts: MediaLibrary.AssetsOptions = {
           first: 60,
           mediaType: allowVideos ? ['photo', 'video'] : ['photo'],
-          sortBy: [['creationTime', false]],
-        };
+          sortBy: [['creationTime', false]] };
         if (!reset && cursorRef.current) {
           opts.after = cursorRef.current;
         }
@@ -716,14 +697,14 @@ export function MediaBrowserSheet({
           // Legacy expo-media-library returns duration in seconds; normalize
           // to milliseconds at the boundary.
           durationMs: a.duration != null ? Math.round(a.duration * 1000) : undefined,
-          filename: a.filename,
-        }));
+          filename: a.filename }));
 
         setAssets((prev) => (reset ? mapped : [...prev, ...mapped]));
         cursorRef.current = page.endCursor;
         setHasMore(page.hasNextPage);
       } catch {
         if (reset) setAssets([]);
+        setLoadError(true);
         setHasMore(false);
       } finally {
         if (mountedRef.current) {
@@ -815,8 +796,7 @@ export function MediaBrowserSheet({
         width: a.width,
         height: a.height,
         durationMs: a.durationMs,
-        filename: a.filename,
-      }));
+        filename: a.filename }));
     onConfirm(selected);
     onClose();
   }, [selectedIds, assets, onConfirm, onClose, haptic]);
@@ -828,16 +808,14 @@ export function MediaBrowserSheet({
     if (camStatus !== 'granted') return;
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.9,
-    });
+      quality: 0.9 });
     if (!result.canceled && result.assets[0]) {
       const captured: SelectedAsset = {
         uri: result.assets[0].uri,
         mediaType: 'image',
         width: result.assets[0].width,
         height: result.assets[0].height,
-        filename: result.assets[0].fileName ?? undefined,
-      };
+        filename: result.assets[0].fileName ?? undefined };
       onConfirm([captured]);
       onClose();
     }
@@ -853,8 +831,7 @@ export function MediaBrowserSheet({
   // ── Tab indicator animated style ──
   const tabIndicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tabIndicatorXSV.value }],
-    width: tabIndicatorWidthSV.value,
-  }));
+    width: tabIndicatorWidthSV.value }));
 
   // ── FlashList renderItem ──
   type GridItem = MediaAsset | 'camera';
@@ -901,7 +878,7 @@ export function MediaBrowserSheet({
             accessibilityLabel="Close"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
         <View style={styles.centerState}>
@@ -922,13 +899,13 @@ export function MediaBrowserSheet({
             accessibilityLabel="Close"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
         <PermissionDeniedState
           icon="lock-closed-outline"
           title="Photo access needed"
-          message="Allow access to your photo library to pick media for your creation."
+          message="Allow access to pick media."
           ctaLabel="Open settings"
           onCta={handleOpenSettings}
           colors={colors}
@@ -949,13 +926,13 @@ export function MediaBrowserSheet({
             accessibilityLabel="Close"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
         <PermissionDeniedState
           icon="images-outline"
           title="Access your photos"
-          message="We need access to show your recent photos and videos here."
+          message="Allow access to see your photos."
           ctaLabel="Allow access"
           onCta={() => requestPermission()}
           colors={colors}
@@ -987,7 +964,7 @@ export function MediaBrowserSheet({
             accessibilityHint="Closes the media browser"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
 
@@ -1007,8 +984,7 @@ export function MediaBrowserSheet({
                 onLayout={(e) => {
                   tabLayoutsRef.current[tab.key] = {
                     x: e.nativeEvent.layout.x,
-                    width: e.nativeEvent.layout.width,
-                  };
+                    width: e.nativeEvent.layout.width };
                   if (tab.key === 'recents' && tabIndicatorWidthSV.value === 0) {
                     tabIndicatorWidthSV.value = e.nativeEvent.layout.width;
                   }
@@ -1017,7 +993,7 @@ export function MediaBrowserSheet({
                 accessibilityLabel={`Tab ${tab.label}`}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
-                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               >
                 <Text
                   style={[
@@ -1043,6 +1019,23 @@ export function MediaBrowserSheet({
           />
         ) : isLoading ? (
           <MediaGridSkeleton />
+        ) : loadError && filteredAssets.length === 0 ? (
+          <View style={styles.centerState}>
+            <StaticStateIcon name="alert-circle-outline" size={IconGrammar.hero} color={colors.textMuted} />
+            <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>
+              Couldn't load photos
+            </Text>
+            <PressScale
+              onPress={() => { setLoadError(false); loadRecentMedia(true); }}
+              style={[styles.stateBtn, { backgroundColor: colors.brand }]}
+              accessibilityLabel="Retry loading photos"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Text style={[styles.stateBtnText, { color: colors.textInverse }]}>
+                Retry
+              </Text>
+            </PressScale>
+          </View>
         ) : filteredAssets.length === 0 ? (
           <View style={styles.centerState}>
             <StaticStateIcon name="images-outline" size={IconGrammar.hero} color={colors.textMuted} />
@@ -1083,11 +1076,11 @@ export function MediaBrowserSheet({
                 accessibilityLabel="Limited photo access — tap to select more photos"
                 accessibilityRole="button"
               >
-                <Ionicons name="images-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
+                <AppIcon name="images-outline" size={IconSize.sm} color="textSecondary" opticalCenter={true} accessible={false} />
                 <Text style={[styles.limitedBannerText, { color: colors.textSecondary }]}>
-                  Limited access — tap to add more photos
+                  Limited access — tap to manage
                 </Text>
-                <Ionicons name="chevron-forward" size={IconGrammar.badge} color={colors.textMuted} />
+                <AppIcon name="forward" size={IconSize.xs} color="textMuted" opticalCenter={true} accessible={false} />
               </Pressable>
             )}
 
@@ -1119,8 +1112,7 @@ export function MediaBrowserSheet({
             style={[
               styles.confirmBtn,
               {
-                backgroundColor: selectedCount > 0 ? colors.brand : colors.surfaceAlt,
-              },
+                backgroundColor: selectedCount > 0 ? colors.brand : colors.surfaceAlt },
             ]}
             accessibilityLabel={
               selectedCount > 0
@@ -1134,16 +1126,17 @@ export function MediaBrowserSheet({
               style={[
                 styles.confirmBtnText,
                 {
-                  color: selectedCount > 0 ? colors.textInverse : colors.textMuted,
-                },
+                  color: selectedCount > 0 ? colors.textInverse : colors.textMuted },
               ]}
             >
               {selectedCount > 0 ? `Next (${selectedCount})` : 'Next'}
             </Text>
-            <Ionicons
-              name="chevron-forward"
-              size={IconGrammar.metadata}
-              color={selectedCount > 0 ? colors.textInverse : colors.textMuted}
+            <AppIcon
+              name="forward"
+              size={IconSize.sm}
+              color={selectedCount > 0 ? 'textInverse' : 'textMuted'}
+              opticalCenter={true}
+              accessible={false}
             />
           </PressScale>
         </View>
@@ -1165,21 +1158,18 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.title.size,
+      fontSize: TypographyV2.screenTitle.size,
       color: colors.textPrimary,
-      flex: 1,
-    },
+      flex: 1 },
     closeBtn: {
       width: 44,
       height: 44,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
 
     // ── Tab bar ──
     tabRow: {
@@ -1187,66 +1177,54 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       paddingHorizontal: Space.md,
       position: 'relative',
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     tabIndicator: {
       position: 'absolute',
       bottom: 0,
       height: Stroke.emphasis,
-      borderRadius: Stroke.emphasis,
-    },
+      borderRadius: Stroke.emphasis },
     tab: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.smMd,
-      zIndex: 1,
-    },
+      zIndex: 1 },
     tabLabel: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
 
     // ── Album list ──
     albumList: {
-      flex: 1,
-    },
+      flex: 1 },
     albumListContent: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     albumRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.smMd,
       paddingVertical: Space.xs,
-      minHeight: 56,
-    },
+      minHeight: 56 },
     albumThumb: {
       width: 48,
       height: 48,
       borderRadius: Radius.md,
       alignItems: 'center',
       justifyContent: 'center',
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     albumThumbImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     albumRowTextCol: {
       flex: 1,
       flexDirection: 'column',
-      gap: 1,
-    },
+      gap: 1 },
     albumRowText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     albumRowSubtext: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
 
     // ── Limited-access banner ──
     limitedBanner: {
@@ -1257,19 +1235,16 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       paddingVertical: Space.smMd,
       marginHorizontal: Space.md,
       marginBottom: Space.sm,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     limitedBannerText: {
       flex: 1,
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
 
     // ── Media grid ──
     gridContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     mediaGridCell: {
       width: thumbSize,
       height: thumbSize,
@@ -1277,16 +1252,13 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       overflow: 'hidden',
       justifyContent: 'center',
       alignItems: 'center',
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     mediaGridThumb: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     cameraTile: {
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     mediaGridVideoBadge: {
       position: 'absolute',
       bottom: Space.xs,
@@ -1294,17 +1266,15 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 2,
-      backgroundColor: 'rgba(0,0,0,0.45)',
+      backgroundColor: colors.mediaOverlayScrim,
       paddingHorizontal: 6,
       paddingVertical: 2,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     mediaGridDuration: {
-      color: '#fff',
-      fontSize: 10,
+      color: colors.scrimTextPrimary,
+      fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.semibold,
-      letterSpacing: 0.2,
-    },
+      letterSpacing: 0.2 },
     mediaGridSelectionBadge: {
       position: 'absolute',
       top: Space.xs,
@@ -1314,73 +1284,56 @@ function createStyles(colors: ThemeColors, thumbSize: number) {
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.3,
-      shadowRadius: 3,
-      elevation: 3,
-    },
+      ...Elevation.modal },
     mediaGridSelectionText: {
-      fontSize: 11,
-      fontFamily: Typography.family.bold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: Typography.family.bold },
     gridFooter: {
       paddingVertical: Space.md,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
 
     // ── States ──
     centerState: {
       paddingVertical: Space.xxl,
       alignItems: 'center',
       gap: Space.md,
-      paddingHorizontal: Space.xl,
-    },
+      paddingHorizontal: Space.xl },
     stateTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.title.size,
-      marginTop: Space.sm,
-    },
+      fontSize: TypographyV2.screenTitle.size,
+      marginTop: Space.sm },
     stateMessage: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       textAlign: 'center',
-      lineHeight: 22,
-    },
+      lineHeight: 22 },
     stateBtn: {
       paddingHorizontal: Space.lg,
       height: 44,
       borderRadius: Radius.md,
       justifyContent: 'center',
       alignItems: 'center',
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     stateBtnText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     emptyText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
 
     // ── Bottom bar ──
     bottomBar: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
+      borderTopWidth: StyleSheet.hairlineWidth },
     confirmBtn: {
       height: 50,
       borderRadius: Radius.lg,
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
-      gap: Space.xxs,
-    },
+      gap: Space.xxs },
     confirmBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size } });
 }

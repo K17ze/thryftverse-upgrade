@@ -3,7 +3,8 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Typography, Radius, Type, Space } from '../../theme/designTokens';
+import { Typography, Radius, Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface Props {
   kicker?: string;
@@ -47,33 +48,28 @@ export function EditorialSection({ kicker, title, onSearchPress, children, style
 
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
-    marginBottom: 28,
-  },
+    marginBottom: 28 },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     marginBottom: 12,
-    gap: 8,
-  },
+    gap: 8 },
   titleBlock: {
     flex: 1,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   kicker: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
     marginBottom: 2,
-    letterSpacing: 0.1,
-  },
+    letterSpacing: 0.1 },
   title: {
     fontFamily: Typography.family.bold,
-    fontSize: 22,
+    fontSize: TypographyV2.screenTitle.size,
     color: colors.textPrimary,
-    letterSpacing: -0.4,
-  },
+    letterSpacing: -0.4 },
   searchBtn: {
     width: 36,
     height: 36,
@@ -82,6 +78,4 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Space.sm,
-    flexShrink: 0,
-  },
-});
+    flexShrink: 0 } });

@@ -9,12 +9,12 @@ import Reanimated, {
   withSpring,
   withDelay,
   interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 
 import { Typography, Radius, Space, Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { AnimatedPressable } from '../../AnimatedPressable';
-import { useAppTheme } from '../../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
@@ -62,10 +62,11 @@ const ColorSwatch = React.memo(function ColorSwatch({
   isActive,
   index,
   reducedMotion,
-  onSelect,
-}: ColorSwatchProps) {
+  onSelect }: ColorSwatchProps) {
   const haptic = useHaptic();
   const { spring, stagger } = useMotionConfig();
+  const { colors } = useAppTheme();
+  const swatchStyles = React.useMemo(() => createSwatchStyles(colors), [colors]);
 
   // Per-swatch staggered entrance: scale 0.8->1.0 with spring
   const entrance = useSharedValue(reducedMotion ? 1 : 0);
@@ -134,6 +135,7 @@ export default function BackgroundPicker({ visible, currentColor, onSelect, onCl
   const reducedMotion = useReducedMotion();
   const { isEnabled, spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const swatchStyles = React.useMemo(() => createSwatchStyles(colors), [colors]);
   const [showCustom, setShowCustom] = React.useState(false);
   const [hsl, setHsl] = React.useState(() => hexToHsl(currentColor ?? '#9b0202'));
 
@@ -330,22 +332,21 @@ export default function BackgroundPicker({ visible, currentColor, onSelect, onCl
   );
 }
 
-const swatchStyles = StyleSheet.create({
-  colorOrb: {
-    width: SWATCH_SIZE, height: SWATCH_SIZE, borderRadius: SWATCH_SIZE / 2,
-    borderWidth: Stroke.standard, borderColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  transparentOrb: { backgroundColor: 'transparent' },
-  addColorOrb: { borderWidth: Stroke.standard },
-});
+function createSwatchStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    colorOrb: {
+      width: SWATCH_SIZE, height: SWATCH_SIZE, borderRadius: SWATCH_SIZE / 2,
+      borderWidth: Stroke.standard, borderColor: colors.glassBorder,
+      alignItems: 'center', justifyContent: 'center' },
+    transparentOrb: { backgroundColor: 'transparent' },
+    addColorOrb: { borderWidth: Stroke.standard } });
+}
 
-function createStyles(colors: any) {
+function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     backdrop: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: colors.overlay,
-    },
+      backgroundColor: colors.overlay },
     panel: {
       position: 'absolute',
       bottom: 0,
@@ -359,92 +360,75 @@ function createStyles(colors: any) {
       paddingTop: Space.sm,
       gap: 12,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.glassBorder,
-    },
+      borderTopColor: colors.glassBorder },
     handleRow: {
       alignItems: 'center',
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     handle: {
       width: 36,
       height: 4,
       borderRadius: Radius.full,
-      backgroundColor: colors.borderSubtle,
-    },
+      backgroundColor: colors.borderSubtle },
     title: {
-      fontSize: 18,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.textPrimary,
       textAlign: 'center',
-      marginBottom: 4,
-    },
+      marginBottom: 4 },
     sectionLabel: {
-      fontSize: 12,
+      fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.semibold,
       color: colors.textSecondary,
       textTransform: 'uppercase',
       letterSpacing: 0.8,
-      marginTop: 4,
-    },
+      marginTop: 4 },
     colorRow: {
       flexDirection: 'row',
       gap: 10,
       paddingBottom: Space.sm,
-      paddingTop: 4,
-    },
+      paddingTop: 4 },
     gradientRow: {
       flexDirection: 'row',
       gap: 10,
       paddingBottom: Space.sm,
-      paddingTop: 4,
-    },
+      paddingTop: 4 },
     customWrap: {
       gap: 14,
-      paddingTop: 4,
-    },
+      paddingTop: 4 },
     customHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingBottom: 4,
-    },
+      paddingBottom: 4 },
     customTitle: {
-      fontSize: 16,
+      fontSize: TypographyV2.body.size,
       fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     customPreview: {
       height: 64,
       borderRadius: Radius.lg,
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: Stroke.standard,
-      borderColor: colors.borderSubtle,
-    },
+      borderColor: colors.borderSubtle },
     customPreviewLabel: {
-      fontSize: 14,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: Typography.family.semibold },
     sliderWrap: {
-      gap: 6,
-    },
+      gap: 6 },
     sliderLabel: {
-      fontSize: 12,
+      fontSize: TypographyV2.meta.size,
       fontFamily: Typography.family.medium,
-      color: colors.textSecondary,
-    },
+      color: colors.textSecondary },
     applyCustomBtn: {
       alignSelf: 'center',
       backgroundColor: colors.brand,
       borderRadius: Radius.full,
       paddingHorizontal: 40,
       paddingVertical: 12,
-      marginTop: 4,
-    },
+      marginTop: 4 },
     applyCustomText: {
       color: colors.textInverse,
-      fontSize: 15,
-      fontFamily: Typography.family.bold,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: Typography.family.bold } });
 }

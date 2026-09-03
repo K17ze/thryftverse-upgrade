@@ -1,0 +1,25 @@
+# Maestro E2E flow — Authentication journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Profile"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+
+- runFlow:
+    when:
+      visible: "Sign In"
+    commands:
+      - tapOn: "Sign In"
+      - assertVisible: "Email"
+      - inputText: "testuser@thryftverse.com"
+      - tapOn: "Password"
+      - inputText: "Password123!"
+      - tapOn: "Sign In"
+      - assertVisible: "Profile"
+
+- takeScreenshot: auth-journey-complete

@@ -7,16 +7,14 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Control,
-  Numeric,
-} from '../../theme/designTokens';
+  Numeric } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type {
   ImportItemDTO,
   ImportMediaDTO,
-  ItemReadiness,
-} from '../../services/catalogImportApi';
+  ItemReadiness } from '../../services/catalogImportApi';
 
 interface Props {
   item: ImportItemDTO;
@@ -27,8 +25,7 @@ const STATUS_DOT_COLOR: Partial<Record<ItemReadiness, 'success' | 'warning' | 'b
   ready: 'success',
   needs_input: 'warning',
   probable_duplicate: 'brand',
-  source_changed: 'danger',
-};
+  source_changed: 'danger' };
 
 const DOT_SIZE = 8;
 
@@ -153,51 +150,42 @@ export function ImportListingTile({ item, onPress }: Props) {
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
   StyleSheet.create({
     tile: {
-      width: '100%',
-    },
+      width: '100%' },
     mediaWrap: {
       width: '100%',
       aspectRatio: 1,
       borderRadius: Radius.md,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     image: {
       width: '100%',
       height: '100%',
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     placeholder: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     statusDot: {
       position: 'absolute',
       top: Space.xs,
       right: Space.xs,
       width: DOT_SIZE,
       height: DOT_SIZE,
-      borderRadius: DOT_SIZE / 2,
-    },
+      borderRadius: DOT_SIZE / 2 },
     meta: {
       gap: Space.xs,
-      paddingTop: Space.xs,
-    },
+      paddingTop: Space.xs },
     title: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textPrimary },
     price: {
       fontFamily: FontFamily.bold,
       fontSize: Numeric.priceList.size,
       lineHeight: Numeric.priceList.lineHeight,
       letterSpacing: Numeric.priceList.letterSpacing,
       color: colors.textPrimary,
-      fontVariant: Numeric.priceList.fontVariant,
-    },
-  });
+      fontVariant: Numeric.priceList.fontVariant } });

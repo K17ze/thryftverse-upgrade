@@ -6,8 +6,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  type DimensionValue,
-} from 'react-native';
+  type DimensionValue } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -18,20 +17,18 @@ import Reanimated, {
   withSpring,
   withDelay,
   runOnJS,
-  Easing,
   interpolate,
   Extrapolation,
   useReducedMotion,
-  type SharedValue,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Control, Stroke, IconGrammar } from '../theme/designTokens';
+  type SharedValue } from 'react-native-reanimated';
+import { Space, Radius, Typography, Control, Stroke, IconGrammar } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { CreatorDraftService, type DraftMeta, type Folder } from './drafts';
 import { createStableId, makeStableId } from '../utils/createStableId';
 import { formatRelativeTime } from '../utils/dateFormat';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SwipeableRow } from '../components/SwipeableRow';
-import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
@@ -39,8 +36,7 @@ import type { CreatorDocument } from './composition';
 import { CreatorFolderOrganizeSheet } from './CreatorFolderOrganizeSheet';
 import {
   useProjectFolderStore,
-  getFolderProjectCount,
-} from './core/projectStore/ProjectFolderStore';
+  getFolderProjectCount } from './core/projectStore/ProjectFolderStore';
 
 type FolderFilter = 'all' | 'unfiled' | { folderId: string };
 type SortBy = 'recent' | 'name' | 'type';
@@ -61,8 +57,7 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
 
   const style = useAnimatedStyle(() => ({
     backgroundColor: colors.surfaceAlt,
-    opacity: 0.5 + 0.3 * shimmerSV.value,
-  }));
+    opacity: 0.5 + 0.3 * shimmerSV.value }));
 
   return (
     <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
@@ -82,15 +77,14 @@ function DraftListSkeleton() {
             gap: Space.md,
             padding: Space.md,
             borderBottomWidth: Stroke.hairline,
-            borderBottomColor: 'transparent',
-          }}
+            borderBottomColor: 'transparent' }}
         >
           {/* Thumbnail rectangle */}
-          <SkeletonBlock width={100} height={100} radius={Radius.lg} />
+          <SkeletonBlock width={48} height={48} radius={Radius.md} />
           {/* Two text lines */}
           <View style={{ flex: 1, gap: Space.xs }}>
-            <SkeletonBlock width={'60%'} height={Type.bodyStrong.size + 4} radius={Radius.sm} />
-            <SkeletonBlock width={'40%'} height={Type.caption.size + 2} radius={Radius.sm} />
+            <SkeletonBlock width={'60%'} height={TypographyV2.bodyStrong.size + 4} radius={Radius.sm} />
+            <SkeletonBlock width={'40%'} height={TypographyV2.meta.size + 2} radius={Radius.sm} />
           </View>
           {/* Action icons placeholder */}
           <View style={{ flexDirection: 'row', gap: Space.xs }}>
@@ -129,8 +123,7 @@ function FilterTab({ label, isActive, onPress, colors, icon, accessibilityLabel 
   }, [isActive, underlineOpacity]);
 
   const underlineStyle = useAnimatedStyle(() => ({
-    opacity: underlineOpacity.value,
-  }));
+    opacity: underlineOpacity.value }));
 
   return (
     <Pressable
@@ -141,8 +134,7 @@ function FilterTab({ label, isActive, onPress, colors, icon, accessibilityLabel 
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
           alignItems: 'center',
-          marginRight: Space.xs,
-        },
+          marginRight: Space.xs },
         pressed && { opacity: 0.7 },
       ]}
       accessibilityLabel={accessibilityLabel}
@@ -159,9 +151,8 @@ function FilterTab({ label, isActive, onPress, colors, icon, accessibilityLabel 
         <Text
           style={{
             fontFamily: Typography.family.semibold,
-            fontSize: Type.body.size,
-            color: isActive ? colors.textPrimary : colors.textSecondary,
-          }}
+            fontSize: TypographyV2.body.size,
+            color: isActive ? colors.textPrimary : colors.textSecondary }}
           numberOfLines={1}
         >
           {label}
@@ -173,8 +164,7 @@ function FilterTab({ label, isActive, onPress, colors, icon, accessibilityLabel 
             height: Stroke.emphasis,
             backgroundColor: colors.brand,
             width: '100%',
-            marginTop: Space.xxs,
-          },
+            marginTop: Space.xxs },
           underlineStyle,
         ]}
       />
@@ -213,15 +203,19 @@ export function CreatorDraftListScreen() {
 
   const showToast = useCallback(() => {
     toastTranslateY.value = withSpring(0, spring.entrance);
-    toastOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+    toastOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
   }, [toastTranslateY, toastOpacity, spring.entrance]);
 
   const hideToast = useCallback(() => {
-    toastTranslateY.value = withTiming(100, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+    toastTranslateY.value = withTiming(100, { duration: Motion.duration.normal, easing: Motion.easing.exit });
     toastOpacity.value = withTiming(0, { duration: Motion.duration.normal });
   }, [toastTranslateY, toastOpacity]);
 
   const loadDrafts = useCallback(async () => {
+    // Verify local thumbnail URIs still exist before rendering the list.
+    // Stale local URIs (OS cleaned up temp files) are cleared so the list
+    // shows a graceful fallback instead of a broken image.
+    await CreatorDraftService.verifyAndPruneThumbnails();
     const items = await CreatorDraftService.listDrafts();
     setDrafts(items);
     const docs: Record<string, CreatorDocument | null> = {};
@@ -310,8 +304,7 @@ export function CreatorDraftListScreen() {
     haptic.light();
     navigation.navigate('CreatorStudio', {
       type: draft.type,
-      draftId: draft.id,
-    });
+      draftId: draft.id });
   }, [navigation, haptic]);
 
   const handleDeleteDraft = useCallback((draft: DraftMeta) => {
@@ -387,19 +380,15 @@ export function CreatorDraftListScreen() {
       id: newId,
       metadata: {
         ...doc.metadata,
-        title: `${draft.title} (copy)`,
-      },
+        title: `${draft.title} (copy)` },
       pages: doc.pages.map((p) => ({
         ...p,
         id: makeStableId('page'),
         layers: p.layers.map((l) => ({
           ...l,
-          id: `${l.id}_dup_${createStableId()}`,
-        })),
-      })),
+          id: `${l.id}_dup_${createStableId()}` })) })),
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+      updatedAt: new Date().toISOString() };
     await CreatorDraftService.saveDraft(duplicatedDoc);
     loadDrafts();
   }, [loadDrafts]);
@@ -410,11 +399,10 @@ export function CreatorDraftListScreen() {
 
   const renderItem = useCallback(({ item, index }: { item: DraftMeta; index: number }) => {
     const doc = draftDocs[item.id];
-    const thumbW = 120;
-    const thumbH = doc ? Math.floor(thumbW / doc.canvas.aspectRatio) : 120;
-    const isPortrait = thumbH > thumbW;
-    const finalThumbW = isPortrait ? 100 : thumbW;
-    const finalThumbH = isPortrait ? Math.min(140, Math.floor(finalThumbW / (doc?.canvas.aspectRatio ?? 0.8))) : thumbH;
+    const thumbW = 48;
+    const thumbH = 48;
+    const finalThumbW = thumbW;
+    const finalThumbH = thumbH;
     return (
       <DraftCard
         item={item}
@@ -444,7 +432,7 @@ export function CreatorDraftListScreen() {
             accessibilityLabel="Back"
             accessibilityRole="button"
           >
-            <Ionicons name="chevron-back" size={IconGrammar.hero} color={colors.textPrimary} />
+            <Ionicons name="chevron-back" size={IconGrammar.standard} color={colors.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>Drafts</Text>
           <View style={styles.organizeBtn} />
@@ -463,7 +451,7 @@ export function CreatorDraftListScreen() {
           accessibilityLabel="Back"
           accessibilityRole="button"
         >
-          <Ionicons name="chevron-back" size={IconGrammar.hero} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={IconGrammar.standard} color={colors.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>Drafts</Text>
         <Pressable
@@ -599,12 +587,10 @@ function UndoToast({
   toastTranslateY,
   toastOpacity,
   onUndo,
-  onDismiss,
-}: UndoToastProps) {
+  onDismiss }: UndoToastProps) {
   const toastStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: toastTranslateY.value }],
-    opacity: toastOpacity.value,
-  }));
+    opacity: toastOpacity.value }));
 
   if (!visible) return null;
 
@@ -625,11 +611,10 @@ function UndoToast({
           justifyContent: 'space-between',
           gap: Space.sm,
           shadowColor: colors.shadow,
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.18,
-          shadowRadius: 12,
-          elevation: 8,
-        },
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.12,
+          shadowRadius: 8,
+          elevation: 4 },
         toastStyle,
       ]}
     >
@@ -637,19 +622,17 @@ function UndoToast({
         <Text
           style={{
             fontFamily: Typography.family.medium,
-            fontSize: Type.body.size,
-            color: colors.textPrimary,
-          }}
+            fontSize: TypographyV2.body.size,
+            color: colors.textPrimary }}
           numberOfLines={1}
         >
           Draft deleted
         </Text>
         <Text
           style={{
-            fontFamily: Typography.family.regular,
-            fontSize: Type.caption.size,
-            color: colors.textSecondary,
-          }}
+            fontFamily: TypographyV2.body.fontFamily,
+            fontSize: TypographyV2.meta.size,
+            color: colors.textSecondary }}
           numberOfLines={1}
         >
           {title}
@@ -664,8 +647,7 @@ function UndoToast({
             minHeight: 50,
             justifyContent: 'center',
             borderRadius: Radius.lg,
-            backgroundColor: pressed ? colors.brandPressed : colors.brand,
-          },
+            backgroundColor: pressed ? colors.brandPressed : colors.brand },
         ]}
         accessibilityLabel="Undo delete"
         accessibilityRole="button"
@@ -673,9 +655,8 @@ function UndoToast({
         <Text
           style={{
             fontFamily: Typography.family.semibold,
-            fontSize: Type.bodyStrong.size,
-            color: colors.textInverse,
-          }}
+            fontSize: TypographyV2.bodyStrong.size,
+            color: colors.textInverse }}
         >
           Undo
         </Text>
@@ -685,7 +666,7 @@ function UndoToast({
         style={{ width: 32, height: 32, justifyContent: 'center', alignItems: 'center' }}
         accessibilityLabel="Dismiss"
         accessibilityRole="button"
-        hitSlop={8}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Ionicons name="close" size={IconGrammar.metadata} color={colors.textSecondary} />
       </Pressable>
@@ -723,27 +704,29 @@ function DraftCard({
   onPress,
   onDuplicate,
   onDelete,
-  onSwipeDelete,
-}: DraftCardProps) {
+  onSwipeDelete }: DraftCardProps) {
   // Thumbnail press spring scale
   const thumbScale = useSharedValue(1);
   const thumbAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: thumbScale.value }],
-  }));
+    transform: [{ scale: thumbScale.value }] }));
 
   // Refined stagger entrance — opacity only (no scale), 30ms delay per
-  // card, 200ms duration. Respects reduceMotion (opacity = 1 immediately).
+  // card, 200ms duration. Capped to the first viewport per Motion.stagger.maxItems
+  // so long lists do not animate their entire history (AGENTS §16).
+  // Respects reduceMotion (opacity = 1 immediately).
   const entranceOpacity = useSharedValue(reduceMotion ? 1 : 0);
   useEffect(() => {
     if (reduceMotion) {
       entranceOpacity.value = 1;
+    } else if (index < Motion.stagger.maxItems) {
+      entranceOpacity.value = withDelay(index * 30, withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance }));
     } else {
-      entranceOpacity.value = withDelay(index * 30, withTiming(1, { duration: 200 }));
+      // Beyond the first viewport — appear instantly, no cascade.
+      entranceOpacity.value = 1;
     }
   }, [reduceMotion, index, entranceOpacity]);
   const entranceStyle = useAnimatedStyle(() => ({
-    opacity: entranceOpacity.value,
-  }));
+    opacity: entranceOpacity.value }));
 
   return (
     <Reanimated.View style={entranceStyle}>
@@ -755,8 +738,7 @@ function DraftCard({
           icon: 'trash-outline',
           label: 'Delete',
           onPress: onSwipeDelete,
-          color: colors.danger,
-        }}
+          color: colors.danger }}
         swipeThreshold={88}
       >
         <View style={styles.draftRow}>
@@ -779,11 +761,11 @@ function DraftCard({
                   />
                 </View>
               ) : (
-                <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: item.type === 'look' ? colors.discoverySubtle : colors.bronzeSubtle }]}>
+                <View style={[styles.draftIcon, { width: finalThumbW, height: finalThumbH, backgroundColor: colors.surfaceAlt }]}>
                   <Ionicons
                     name={item.type === 'look' ? 'shirt-outline' : 'film-outline'}
-                    size={IconGrammar.hero}
-                    color={item.type === 'look' ? colors.discovery : colors.bronze}
+                    size={20}
+                    color={colors.textMuted}
                   />
                 </View>
               )}
@@ -791,12 +773,9 @@ function DraftCard({
           </Pressable>
           <View style={styles.draftInfo}>
             <Text style={styles.draftTitle} numberOfLines={1}>{item.title}</Text>
-            <View style={styles.draftMetaRow}>
-              <View style={[styles.typeDot, { backgroundColor: item.type === 'poster' ? colors.antiqueGold : '#FFFFFF' }]} />
-              <Text style={styles.draftMeta} numberOfLines={1}>
-                {item.type === 'look' ? 'Look' : 'Poster'} · {formatRelativeTime(item.updatedAt)}
-              </Text>
-            </View>
+            <Text style={styles.draftMeta} numberOfLines={1}>
+              {formatRelativeTime(item.updatedAt)}
+            </Text>
           </View>
           <View style={styles.actions}>
             <Pressable
@@ -836,35 +815,33 @@ interface EmptyDraftsStateProps {
 }
 
 function EmptyDraftsState({ colors, styles, reduceMotion, onCreate }: EmptyDraftsStateProps) {
-  const { spring } = useMotionConfig();
   const entranceSV = useSharedValue(reduceMotion ? 1 : 0);
 
   useEffect(() => {
     if (!reduceMotion) {
-      entranceSV.value = withDelay(100, withSpring(1, spring.entrance));
+      // Per §5.14: entrance uses timing (ease-out), not spring.
+      entranceSV.value = withDelay(100, withTiming(1, { duration: Motion.duration.slow, easing: Motion.easing.entrance }));
     }
-  }, [reduceMotion, spring, entranceSV]);
+  }, [reduceMotion, entranceSV]);
 
   const entranceStyle = useAnimatedStyle(() => ({
     opacity: entranceSV.value,
-    transform: [{ translateY: interpolate(entranceSV.value, [0, 1], [12, 0], Extrapolation.CLAMP) }],
-  }));
+    transform: [{ translateY: interpolate(entranceSV.value, [0, 1], [12, 0], Extrapolation.CLAMP) }] }));
 
   return (
     <View style={styles.emptyState}>
       <Reanimated.View style={entranceStyle}>
         <Text style={styles.emptyTitle}>No drafts yet</Text>
+        <Text style={styles.emptySubtitle}>Start creating to see your drafts here.</Text>
       </Reanimated.View>
-      <Text style={styles.emptySubtext}>Create your first poster to see it here</Text>
-      <PressScale
+      <Pressable
         onPress={onCreate}
-        style={styles.emptyCta}
-        accessibilityLabel="Create your first poster"
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityLabel="New post"
         accessibilityRole="button"
-        scale={0.95}
       >
-        <Text style={styles.emptyCtaText}>Create Poster</Text>
-      </PressScale>
+        <Text style={styles.emptyCtaText}>New post</Text>
+      </Pressable>
     </View>
   );
 }
@@ -891,26 +868,24 @@ function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }
         backdropOpacity.value = 1;
       } else {
         translateY.value = withSpring(0, Motion.spring.entrance);
-        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
       }
     } else if (mounted.current) {
       if (reduceMotion) {
         translateY.value = 400;
         backdropOpacity.value = 0;
       } else {
-        translateY.value = withTiming(400, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        translateY.value = withTiming(400, { duration: Motion.duration.normal, easing: Motion.easing.exit });
         backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
       }
     }
   }, [draft, reduceMotion, translateY, backdropOpacity]);
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
+    opacity: backdropOpacity.value }));
 
   if (!draft && !mounted.current) return null;
 
@@ -931,19 +906,18 @@ function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }
             borderTopRightRadius: Radius.xl,
             paddingTop: Space.xs,
             paddingBottom: Space.lg,
-            paddingHorizontal: Space.md,
-          },
+            paddingHorizontal: Space.md },
           sheetStyle,
         ]}
       >
         <View style={{ alignItems: 'center', paddingVertical: Space.xs }}>
           <View style={{ width: 32, height: 4, borderRadius: Radius.sm, backgroundColor: colors.borderSubtle }} />
         </View>
-        <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.subtitle.size, color: colors.textPrimary, marginTop: Space.sm, textAlign: 'center' }}>
-          Delete this draft?
+        <Text style={{ fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, color: colors.textPrimary, marginTop: Space.sm, textAlign: 'center' }}>
+          Delete draft?
         </Text>
-        <Text style={{ fontFamily: Typography.family.regular, fontSize: Type.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs, marginBottom: Space.md }}>
-          &ldquo;{draft?.title ?? ''}&rdquo; will be permanently deleted.
+        <Text style={{ fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary, textAlign: 'center', marginTop: Space.xs, marginBottom: Space.md }}>
+          This can&rsquo;t be undone.
         </Text>
         <Pressable
           onPress={onConfirm}
@@ -955,12 +929,11 @@ function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }
             justifyContent: 'center',
             borderRadius: Radius.lg,
             alignItems: 'center',
-            marginBottom: Space.sm,
-          })}
+            marginBottom: Space.sm })}
           accessibilityLabel="Confirm delete"
           accessibilityRole="button"
         >
-          <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.bodyStrong.size, color: colors.textInverse }}>
+          <Text style={{ fontFamily: TypographyV2.bodyStrong.fontFamily, fontSize: TypographyV2.bodyStrong.size, color: colors.textInverse }}>
             Delete
           </Text>
         </Pressable>
@@ -972,12 +945,11 @@ function DeleteConfirmSheet({ draft, colors, reduceMotion, onCancel, onConfirm }
             minHeight: 50,
             justifyContent: 'center',
             borderRadius: Radius.lg,
-            alignItems: 'center',
-          })}
+            alignItems: 'center' })}
           accessibilityLabel="Cancel"
           accessibilityRole="button"
         >
-          <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.body.size, color: colors.textSecondary }}>
+          <Text style={{ fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textSecondary }}>
             Cancel
           </Text>
         </Pressable>
@@ -990,146 +962,100 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    paddingVertical: Space.sm },
   backBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   organizeBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   headerTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.title.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    color: colors.textPrimary },
   // ── Folder tab bar ──
   folderTabBar: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   // ── Sort bar ──
   sortBar: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   listContent: {
-    padding: Space.md,
-  },
+    padding: Space.md },
   // ── Draft row ──
   draftRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    padding: Space.md,
-    borderBottomWidth: Stroke.hairline,
-    borderBottomColor: colors.borderSubtle,
-  },
+    padding: Space.md },
   draftRowPressed: {
-    opacity: 0.85,
-  },
+    opacity: 0.85 },
   draftThumb: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   draftIcon: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   draftInfo: {
     flex: 1,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   draftTitle: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    color: colors.textPrimary },
   draftMeta: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    color: colors.textSecondary,
-  },
-  draftMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xxs,
-  },
-  typeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: Radius.full,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.textSecondary },
   actions: {
     flexDirection: 'row',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   actionBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   actionBtnPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   // ── Empty state ──
   emptyState: {
     alignItems: 'center',
     paddingVertical: Space.xl * 2,
-    gap: Space.sm,
-  },
+    gap: Space.md },
   emptyTitle: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-    color: colors.textPrimary,
-  },
-  emptySubtext: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    color: colors.textSecondary,
+    fontSize: TypographyV2.body.size,
+    color: colors.textMuted,
+    textAlign: 'center' },
+  emptySubtitle: {
+    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted,
     textAlign: 'center',
-  },
-  emptyCta: {
-    backgroundColor: colors.brand,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Space.lg,
-    minHeight: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.md,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.xs },
   emptyCtaText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    color: colors.textInverse,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    color: colors.brand } });
 }

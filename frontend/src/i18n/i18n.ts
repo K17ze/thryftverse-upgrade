@@ -1,26 +1,29 @@
 /**
  * i18next configuration for ThryftVerse.
  *
- * Migrates the hand-rolled i18n system to i18next + react-i18next +
- * expo-localization, adding:
- *   - ICU plural rules (via intl-pluralrules polyfill)
- *   - Automatic device locale detection (via expo-localization)
- *   - Namespace-based organization (future-proofing)
- *   - RTL support (via I18nManager)
- *   - Type-safe translation keys
+ * Dual-resource architecture:
+ *   1. Legacy `translation` namespace — flat-key system from `./index.ts`
+ *      (EN_TRANSLATIONS + locale patches). Used by the backward-compatible
+ *      `t(key)` export and ~8 files that haven't migrated yet.
+ *   2. Structured namespaces — `common`, `home`, `search`, `settings`,
+ *      `profile`, `listing`, `messaging`, `commerce`, `auction`, `coown`,
+ *      `seller`, `trade`, `discovery`, `asset` from `./locales/en.json`.
+ *      Used by `useAppTranslation(namespace)` which is the preferred hook
+ *      for all new and migrated screens.
  *
- * Backward compatibility:
- *   The existing `t(key, params)` function signature is preserved.
- *   The existing translation data (EN_TRANSLATIONS, ES_TRANSLATION_PATCH,
- *   FR_TRANSLATION_PATCH, DE_TRANSLATION_PATCH) is reused as i18next
- *   resources. Keys use dot notation (e.g., "auctions.bid.current") which
- *   maps to i18next's nested resource structure.
+ * Both systems coexist during the migration period. Once all screens
+ * migrate to `useAppTranslation`, the legacy `translation` namespace and
+ * `./index.ts` flat-key system will be removed.
  *
  * Key flattening:
- *   i18next supports both flat keys ("auctions.bid.current") and nested
- *   keys ("auctions": { "bid": { "current": "..." } }). We use flat keys
- *   with `keySeparator: false` so the existing dot-notation keys work
- *   without restructuring the translation data.
+ *   `keySeparator: false` — keys like `auctions.bid.current` are flat
+ *   keys (dots are part of the name, not path separators). This applies
+ *   to both the legacy `translation` namespace and the flattened namespace
+ *   resources from `./locales/index.ts`.
+ *
+ * Namespace separation:
+ *   `nsSeparator: ':'` — allows `t('common:buttons.close')` to resolve
+ *   across namespaces. Legacy keys don't contain `:` so this is safe.
  *
  * @see https://www.i18next.com
  * @see https://react.i18next.com
@@ -30,6 +33,7 @@ import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import * as Localization from 'expo-localization';
 import { I18nManager, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   EN_TRANSLATIONS,
@@ -39,31 +43,69 @@ import {
   type SupportedLocale,
   type TranslationKey,
 } from './index';
+import { localeResources } from './locales';
 
 // ── Locale constants ───────────────────────────────────────────────
 
-export const SUPPORTED_LOCALES: SupportedLocale[] = ['en', 'es', 'fr', 'de'];
+export const SUPPORTED_LOCALES: SupportedLocale[] = ['en', 'es', 'fr', 'de', 'ar', 'hi', 'zh', 'pt', 'ja', 'ru', 'tr', 'ko', 'id'];
 
 const RTL_LOCALES: string[] = ['ar', 'he', 'fa', 'ur'];
+
+/**
+ * Dedicated AsyncStorage key for the persisted user locale choice.
+ * Separate from the general settings preferences key so locale
+ * hydration can happen early in app startup before the full
+ * settings context is mounted.
+ */
+export const LOCALE_STORAGE_KEY = 'thryftverse:locale:v1';
 
 // ── Resource construction ──────────────────────────────────────────
 
 /**
  * Merge the English base with a locale patch, producing a complete
- * translation resource for i18next. Missing keys fall through to English.
+ * translation resource for the legacy `translation` namespace.
+ * Missing keys fall through to English.
  */
-function buildResource(
+function buildLegacyResource(
   patch: Partial<Record<TranslationKey, string>>,
 ): Record<string, string> {
   return { ...EN_TRANSLATIONS, ...patch };
 }
 
-const resources = {
-  en: { translation: EN_TRANSLATIONS },
-  es: { translation: buildResource(ES_TRANSLATION_PATCH) },
-  fr: { translation: buildResource(FR_TRANSLATION_PATCH) },
-  de: { translation: buildResource(DE_TRANSLATION_PATCH) },
-} as const;
+/**
+ * Build the full resource bundle for a locale. Combines:
+ *   - The legacy `translation` namespace (flat keys from index.ts)
+ *   - The structured namespaces (common, home, search, etc. from locale JSON)
+ *
+ * Non-English locales get per-key fallback to English via `localeResources`
+ * (which merges locale JSON over the English base at the flattened-key level).
+ */
+function buildLocaleResources(
+  legacyPatch: Partial<Record<TranslationKey, string>>,
+  localeCode: string,
+): Record<string, Record<string, string>> {
+  const namespaced = localeResources[localeCode] ?? localeResources.en;
+  return {
+    translation: buildLegacyResource(legacyPatch),
+    ...namespaced,
+  };
+}
+
+const resources: Record<string, Record<string, Record<string, string>>> = {
+  en: buildLocaleResources({}, 'en'),
+  es: buildLocaleResources(ES_TRANSLATION_PATCH, 'es'),
+  fr: buildLocaleResources(FR_TRANSLATION_PATCH, 'fr'),
+  de: buildLocaleResources(DE_TRANSLATION_PATCH, 'de'),
+  ar: buildLocaleResources({}, 'ar'),
+  hi: buildLocaleResources({}, 'hi'),
+  zh: buildLocaleResources({}, 'zh'),
+  pt: buildLocaleResources({}, 'pt'),
+  ja: buildLocaleResources({}, 'ja'),
+  ru: buildLocaleResources({}, 'ru'),
+  tr: buildLocaleResources({}, 'tr'),
+  ko: buildLocaleResources({}, 'ko'),
+  id: buildLocaleResources({}, 'id'),
+};
 
 // ── Device locale detection ────────────────────────────────────────
 
@@ -122,9 +164,21 @@ export function initI18n(initialLocale?: SupportedLocale): void {
     lng: locale,
     fallbackLng: 'en',
     supportedLngs: SUPPORTED_LOCALES,
+    // Load only the base language code (e.g. 'en' not 'en-US'),
+    // so i18next matches our flat resource keys regardless of the
+    // region tag returned by the device or AsyncStorage.
+    load: 'languageOnly',
+    // Use v4 plural compatibility for modern ICU plural rules
+    // (required by intl-pluralrules polyfill for correct pluralisation)
+    compatibilityJSON: 'v4',
+    // Legacy `translation` namespace is the default so `t('auctions.bid.current')`
+    // continues to work without specifying a namespace.
+    defaultNS: 'translation',
     // Flat keys — don't split on dots (existing keys use dots as part of the key name)
     keySeparator: false,
-    nsSeparator: false,
+    // Allow `t('common:buttons.close')` to resolve across namespaces.
+    // Legacy keys don't contain `:` so this is safe.
+    nsSeparator: ':',
     // Disable HTML escaping — React handles XSS prevention
     interpolation: {
       escapeValue: false,
@@ -150,13 +204,40 @@ export function initI18n(initialLocale?: SupportedLocale): void {
 // ── Locale management ──────────────────────────────────────────────
 
 /**
+ * Hydrate the persisted locale from AsyncStorage on app startup.
+ * Returns the persisted locale, or the device locale if no choice
+ * has been saved yet (first launch). Falls back to 'en'.
+ *
+ * Call this early in app initialization, before the settings context
+ * is mounted, so the correct locale is active from the first render.
+ */
+export async function hydratePersistedLocale(): Promise<SupportedLocale> {
+  try {
+    const stored = await AsyncStorage.getItem(LOCALE_STORAGE_KEY);
+    if (stored && SUPPORTED_LOCALES.includes(stored as SupportedLocale)) {
+      return stored as SupportedLocale;
+    }
+  } catch {
+    // AsyncStorage unavailable — fall through to device detection
+  }
+  return detectDeviceLocale();
+}
+
+/**
  * Change the active locale. Updates i18next, RTL support, and persists
- * the choice for next app launch.
+ * the choice to AsyncStorage so it survives app restarts.
  */
 export async function setI18nLocale(locale: SupportedLocale): Promise<void> {
   if (!initialized) initI18n(locale);
   await i18next.changeLanguage(locale);
   applyRTLSupport(locale);
+  // Persist the user's locale choice in a dedicated key so it can be
+  // hydrated early on next launch, independent of the full settings context.
+  try {
+    await AsyncStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  } catch {
+    // Best-effort persistence — don't block the locale change
+  }
 }
 
 /**

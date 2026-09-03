@@ -30,11 +30,8 @@ export interface ListingEngagementSummaryApi {
   generatedAt: string;
 }
 
-export type ListingCondition =
-  | 'New with tags'
-  | 'Very good'
-  | 'Good'
-  | 'Satisfactory';
+export type { ListingCondition } from '../contracts/taxonomy';
+import type { ListingCondition } from '../contracts/taxonomy';
 
 export type ListingLifecycleStatus =
   | 'draft'
@@ -75,6 +72,9 @@ export interface Listing {
   engagement?: ListingEngagementSummaryApi | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */
   featured?: boolean | null;
+  sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
+  materialComposition?: string | null;
+  weightKg?: number | null;
 }
 
 interface ApiListingRow {
@@ -98,6 +98,9 @@ interface ApiListingRow {
   seller?: ListingSeller | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */
   featured?: boolean | null;
+  sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
+  materialComposition?: string | null;
+  weightKg?: number | null;
 }
 
 interface ApiListingsResponse {
@@ -179,7 +182,8 @@ export async function fetchFilteredListings(options?: {
   condition?: string;
   minPrice?: number;
   maxPrice?: number;
-  sort?: 'newest' | 'price_asc' | 'price_desc';
+  sort?: 'newest' | 'price_asc' | 'price_desc' | 'most_liked' | 'ending_soon';
+  sustainableOnly?: boolean;
   limit?: number;
   cursor?: string;
 }): Promise<ListingsSyncResult> {
@@ -192,6 +196,7 @@ export async function fetchFilteredListings(options?: {
   if (options?.minPrice !== undefined) params.set('minPrice', String(options.minPrice));
   if (options?.maxPrice !== undefined) params.set('maxPrice', String(options.maxPrice));
   if (options?.sort) params.set('sort', options.sort);
+  if (options?.sustainableOnly) params.set('sustainableOnly', 'true');
   if (options?.limit) params.set('limit', String(options.limit));
   if (options?.cursor) params.set('cursor', options.cursor);
   const qs = params.toString();
@@ -263,6 +268,12 @@ export async function visualSearch(params: {
   maxPrice?: number;
   sort?: 'newest' | 'price_asc' | 'price_desc' | 'similarity';
   limit?: number;
+  /**
+   * Optional `AbortSignal` for request cancellation. When the caller aborts
+   * (e.g. component unmount or a newer search supersedes this one), the
+   * in-flight request is aborted immediately rather than completing wastefully.
+   */
+  signal?: AbortSignal;
 }): Promise<VisualSearchResult> {
   try {
     const payload = await fetchJson<{
@@ -294,7 +305,7 @@ export async function visualSearch(params: {
         sort: params.sort ?? 'similarity',
         limit: params.limit ?? 48,
       }),
-    });
+    }, params.signal ? { signal: params.signal } : undefined);
 
     const rows = Array.isArray(payload.items) ? payload.items : [];
     return {
@@ -334,6 +345,8 @@ export interface ListingCreateBody {
   originalPriceGbp?: number;
   shippingMethod?: string;
   shippingPayer?: string;
+  materialComposition?: string;
+  weightKg?: number;
 }
 
 export interface ListingApiItem {
@@ -353,6 +366,8 @@ export interface ListingApiItem {
   shippingMethod: string | null;
   shippingPayer: string | null;
   createdAt: string;
+  /** Server-side last-update timestamp; used for edit conflict detection. */
+  updatedAt?: string | null;
   /** M07: When media was frozen (cannot be silently swapped). */
   mediaFrozenAt?: string | null;
   seller?: ListingSeller | null;
@@ -539,6 +554,50 @@ export async function reportListing(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason, details, evidence_uris: evidenceUris }),
+    }
+  );
+}
+
+/**
+ * Record a listing view — feeds the `interactions` table so seller
+ * analytics (views, conversion rate, top performers) have real data.
+ * Fire-and-forget at call sites; the server handles idempotency.
+ */
+export async function trackListingView(
+  listingId: string,
+  options?: { qualified?: boolean; idempotencyKey?: string }
+): Promise<{ ok: boolean; recorded: boolean }> {
+  return fetchJson<{ ok: boolean; recorded: boolean }>(
+    `/listings/${encodeURIComponent(listingId)}/view`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        qualified: options?.qualified ?? false,
+        idempotencyKey: options?.idempotencyKey,
+      }),
+    }
+  );
+}
+
+/**
+ * Record a listing interaction (like/save/share) — feeds the
+ * `interactions` table for seller analytics engagement metrics.
+ */
+export async function trackListingInteraction(
+  listingId: string,
+  action: 'like' | 'save' | 'share',
+  options?: { idempotencyKey?: string }
+): Promise<{ ok: boolean; recorded: boolean }> {
+  return fetchJson<{ ok: boolean; recorded: boolean }>(
+    `/listings/${encodeURIComponent(listingId)}/interact`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action,
+        idempotencyKey: options?.idempotencyKey,
+      }),
     }
   );
 }

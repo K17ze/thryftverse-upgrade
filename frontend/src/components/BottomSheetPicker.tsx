@@ -1,19 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions, TextInput } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   runOnJS,
-  withTiming,
-} from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { Radius, Space, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from './AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-
-const { height, width } = Dimensions.get('window');
 
 interface Props {
   visible: boolean;
@@ -27,7 +25,8 @@ interface Props {
 
 export function BottomSheetPicker({ visible, onClose, title, options, selectedValue, onSelect, searchable }: Props) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { height, width } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, width, height), [colors, width, height]);
   const [searchQuery, setSearchQuery] = useState('');
   const [shouldRender, setShouldRender] = useState(visible);
   const translateY = useSharedValue(height);
@@ -46,7 +45,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
       translateY.value = reducedMotion ? withTiming(height, { duration: 0 }) : height;
       setShouldRender(false);
     }
-  }, [shouldRender, visible, reducedMotion]);
+  }, [shouldRender, visible, reducedMotion, height]);
 
   const handleClose = () => {
     translateY.value = reducedMotion ? withTiming(height, { duration: 0 }) : height;
@@ -76,14 +75,12 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
     });
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   const overlayStyle = useAnimatedStyle(() => {
     return {
       opacity: visible ? 0.6 : 0,
-      display: visible ? 'flex' : 'none',
-    };
+      display: visible ? 'flex' : 'none' };
   });
 
   if (!shouldRender) {
@@ -134,9 +131,11 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
                   style={styles.optionRow}
                   activeOpacity={0.7}
                   onPress={() => handleSelect(opt)}
+                  accessibilityRole="button"
+                  accessibilityLabel={opt}
                 >
                   <Text style={[styles.optionText, selectedValue === opt && styles.optionTextActive]}>{opt}</Text>
-                  {selectedValue === opt && <Ionicons name="checkmark-circle" size={24} color={colors.brand} />}
+                  {selectedValue === opt && <Ionicons name="checkmark-circle" size={24} color={colors.brand} aria-hidden={true} />}
                 </AnimatedPressable>
               ))
             )}
@@ -147,7 +146,7 @@ export function BottomSheetPicker({ visible, onClose, title, options, selectedVa
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createStyles = (colors: ThemeColors, width: number, height: number) => StyleSheet.create({
   sheet: {
     position: 'absolute',
     bottom: 0,
@@ -156,30 +155,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 20,
-  },
+    ...Elevation.modal },
   handleContainer: { alignItems: 'center', paddingVertical: 14 },
   handle: { width: 44, height: 5, borderRadius: Radius.sm, backgroundColor: colors.border },
   header: { alignItems: 'center', marginBottom: 12 },
-  headerTitle: { fontSize: Type.priceList.size, fontFamily: Typography.family.semibold, color: colors.textPrimary, letterSpacing: 0.08 },
+  headerTitle: { fontSize: TypographyV2.priceList.size, fontFamily: TypographyV2.priceList.fontFamily, color: colors.textPrimary, letterSpacing: 0.08 },
 
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 0.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     marginHorizontal: 20,
     paddingHorizontal: Space.md,
     height: 50,
     borderRadius: Radius.full,
-    marginBottom: Space.md,
-  },
-  searchInput: { flex: 1, marginLeft: 10, color: colors.textPrimary, fontFamily: Typography.family.medium, fontSize: Type.body.size, letterSpacing: 0.08 },
+    marginBottom: Space.md },
+  searchInput: { flex: 1, marginLeft: 10, color: colors.textPrimary, fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, letterSpacing: 0.08 },
 
   scrollList: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
@@ -190,10 +183,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.md,
     borderBottomWidth: 0.5,
-    borderBottomColor: colors.border,
-  },
-  optionText: { fontSize: Type.body.size, fontFamily: Typography.family.medium, color: colors.textPrimary, letterSpacing: 0.08 },
-  optionTextActive: { fontFamily: Typography.family.semibold, color: colors.brand },
+    borderBottomColor: colors.border },
+  optionText: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textPrimary, letterSpacing: 0.08 },
+  optionTextActive: { fontFamily: TypographyV2.body.fontFamily, color: colors.brand },
 
-  noResultsText: { textAlign: 'center', color: colors.textMuted, marginTop: 40, fontFamily: Typography.family.medium },
-});
+  noResultsText: { textAlign: 'center', color: colors.textMuted, marginTop: 40, fontFamily: TypographyV2.body.fontFamily } });

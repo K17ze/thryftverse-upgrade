@@ -1,0 +1,20 @@
+export default {
+  input: ['src/**/*.{ts,tsx}'],
+  output: 'src/i18n/locales/$LOCALE.json',
+  locales: ['en', 'es', 'fr', 'de'],
+  defaultNamespace: 'common',
+  namespaceSeparator: ':',
+  keySeparator: false,
+  pluralSeparator: '_',
+  contextSeparator: '_',
+  lineEnding: 'lf',
+  sort: true,
+  keepRemoved: false,
+  createOldCatalogs: false,
+  indentation: 2,
+  skipDefaultValues: true,
+  verbose: false,
+  customTranslations: {
+    useAppTranslation: ['useTranslation'],
+  },
+};

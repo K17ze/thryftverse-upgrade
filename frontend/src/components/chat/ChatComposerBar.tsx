@@ -7,16 +7,14 @@ import {
   ActivityIndicator,
   Text,
   ScrollView,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles, Typography } from '../../theme/designTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
-import {
-  VoiceMessageRecorder,
-  VoiceRecordingIndicator,
-} from './VoiceMessageRecorder';
+import { VoiceMessageRecorder } from './VoiceMessageRecorder';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface AttachmentPreview {
   uri: string;
@@ -47,16 +45,19 @@ interface ChatComposerBarProps {
   cautionWarning?: string;
   onDismissDangerWarning?: () => void;
   onDismissCautionWarning?: () => void;
-  onVoicePress?: () => void;
+  onVoiceRecord: (draft: {
+    uri: string;
+    fileName: string;
+    contentType: string;
+    durationMs: number;
+    sizeBytes: number;
+  }) => void;
   isVoiceRecording?: boolean;
-  onVoiceCancel?: () => void;
-  onVoiceSend?: (uri: string, durationMs: number) => void;
+  onVoiceRecordingChange?: (isRecording: boolean) => void;
 }
 
 const MAX_INPUT_HEIGHT = 120;
 const MAX_CHARS = 2000;
-const CHAR_WARN_THRESHOLD = 1500;
-const CHAR_DANGER_THRESHOLD = 1800;
 
 export function ChatComposerBar({
   value,
@@ -75,21 +76,16 @@ export function ChatComposerBar({
   cautionWarning,
   onDismissDangerWarning,
   onDismissCautionWarning,
-  onVoicePress,
+  onVoiceRecord,
   isVoiceRecording = false,
-  onVoiceCancel,
-  onVoiceSend,
-}: ChatComposerBarProps) {
+  onVoiceRecordingChange }: ChatComposerBarProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const inputRef = useRef<TextInput>(null);
   const hasText = value.trim().length > 0;
   const canSend = (hasText || attachments.length > 0) && !isSending && !disabled;
   const showQuickReplies = quickReplies.length > 0 && !hasText && attachments.length === 0 && !isVoiceRecording;
-  const showMicButton = !hasText && attachments.length === 0 && !isVoiceRecording && !!onVoiceSend;
-  const charCount = value.length;
-  const showCharCount = charCount > CHAR_WARN_THRESHOLD;
-  const charCountColor = charCount >= MAX_CHARS ? colors.danger : charCount >= CHAR_DANGER_THRESHOLD ? colors.warning : colors.textMuted;
 
   return (
     <View style={styles.root}>
@@ -104,7 +100,7 @@ export function ChatComposerBar({
             <Pressable
               onPress={onDismissDangerWarning}
               hitSlop={8}
-              accessibilityLabel="Dismiss safety warning"
+              accessibilityLabel={t('compose.dismissSafetyWarning')}
               accessibilityRole="button"
             >
               <Ionicons name="close-circle" size={16} color={colors.textMuted} />
@@ -116,7 +112,7 @@ export function ChatComposerBar({
       {/* Info-level static safety reminder */}
       {safetyWarning && !dangerWarning && !cautionWarning ? (
         <View style={styles.safetyBanner}>
-          <Ionicons name="shield-outline" size={12} color={colors.textMuted} />
+          <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
           <Text style={styles.safetyBannerText} numberOfLines={2}>{safetyWarning}</Text>
         </View>
       ) : null}
@@ -132,7 +128,7 @@ export function ChatComposerBar({
             <Pressable
               onPress={onDismissCautionWarning}
               hitSlop={8}
-              accessibilityLabel="Dismiss caution warning"
+              accessibilityLabel={t('compose.dismissCautionWarning')}
               accessibilityRole="button"
             >
               <Ionicons name="close-circle" size={16} color={colors.textMuted} />
@@ -145,15 +141,12 @@ export function ChatComposerBar({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentStrip} contentContainerStyle={styles.attachmentStripContent}>
           {attachments.map((att, i) => (
             <View key={i} style={styles.attachmentChip}>
-              <Ionicons name={att.type === 'video' ? 'videocam-outline' : 'image-outline'} size={16} color={colors.textSecondary} />
-              <Text style={styles.attachmentChipText} numberOfLines={1}>
-                {att.type === 'video' ? 'Video' : 'Photo'}
-              </Text>
+              <Ionicons name={att.type === 'video' ? 'videocam-outline' : 'image-outline'} size={18} color={colors.textSecondary} />
               {onRemoveAttachment ? (
                 <Pressable
                   onPress={() => onRemoveAttachment(i)}
                   hitSlop={8}
-                  accessibilityLabel="Remove attachment"
+                  accessibilityLabel={t('compose.removeAttachment')}
                   accessibilityRole="button"
                 >
                   <Ionicons name="close-circle" size={16} color={colors.textMuted} />
@@ -175,7 +168,7 @@ export function ChatComposerBar({
                 pressed && styles.quickReplyChipPressed,
               ]}
               accessibilityRole="button"
-              accessibilityLabel={`Quick reply: ${qr.label}`}
+              accessibilityLabel={t('compose.quickReply', { label: qr.label })}
             >
               <Text style={styles.quickReplyText} numberOfLines={1}>{qr.label}</Text>
             </Pressable>
@@ -191,7 +184,7 @@ export function ChatComposerBar({
             activeOpacity={0.7}
             scaleValue={0.9}
             hapticFeedback="light"
-            accessibilityLabel="Add attachment"
+            accessibilityLabel={t('compose.addAttachment')}
             accessibilityRole="button"
             disabled={disabled || isSending || isVoiceRecording}
           >
@@ -200,7 +193,13 @@ export function ChatComposerBar({
         ) : null}
 
         {isVoiceRecording ? (
-          <VoiceRecordingIndicator />
+          <View style={styles.inputWrap}>
+            <VoiceMessageRecorder
+              onSend={onVoiceRecord}
+              onRecordingStateChange={onVoiceRecordingChange}
+              disabled={disabled || isSending}
+            />
+          </View>
         ) : (
           <View style={styles.inputWrap}>
             <TextInput
@@ -216,31 +215,14 @@ export function ChatComposerBar({
               autoCapitalize="sentences"
               autoCorrect
               textAlignVertical="center"
-              accessibilityLabel="Message input"
+              accessibilityLabel={t('compose.inputAccessibility')}
               accessibilityRole="text"
               onSubmitEditing={canSend ? onSend : undefined}
             />
-            {showCharCount ? (
-              <Text style={[styles.charCount, { color: charCountColor }]}>
-                {charCount}/{MAX_CHARS}
-              </Text>
-            ) : null}
           </View>
         )}
 
-        {isVoiceRecording ? (
-          <AnimatedPressable
-            onPress={onVoiceCancel}
-            style={styles.actionBtn}
-            activeOpacity={0.7}
-            scaleValue={0.9}
-            hapticFeedback="light"
-            accessibilityLabel="Cancel voice recording"
-            accessibilityRole="button"
-          >
-            <Ionicons name="close" size={24} color={colors.danger} />
-          </AnimatedPressable>
-        ) : hasText || attachments.length > 0 ? (
+        {hasText || attachments.length > 0 ? (
           <AnimatedPressable
             onPress={onSend}
             style={[styles.sendBtn, canSend && styles.sendBtnActive]}
@@ -255,18 +237,9 @@ export function ChatComposerBar({
             {isSending ? (
               <ActivityIndicator size="small" color={colors.textInverse} />
             ) : (
-              <Ionicons name="arrow-up" size={20} color={canSend ? colors.textInverse : colors.textMuted} />
+              <Ionicons name="send" size={18} color={canSend ? colors.textInverse : colors.textMuted} />
             )}
           </AnimatedPressable>
-        ) : showMicButton ? (
-          <VoiceMessageRecorder
-            onSend={(uri, durationMs) => onVoiceSend?.(uri, durationMs)}
-            onCancel={onVoiceCancel}
-            onRecordingChange={(recording) => {
-              if (recording) onVoicePress?.();
-            }}
-            disabled={disabled || isSending}
-          />
         ) : onCameraPress ? (
           <AnimatedPressable
             onPress={onCameraPress}
@@ -274,7 +247,7 @@ export function ChatComposerBar({
             activeOpacity={0.7}
             scaleValue={0.9}
             hapticFeedback="light"
-            accessibilityLabel="Open camera"
+            accessibilityLabel={t('compose.openCamera')}
             accessibilityRole="button"
             disabled={disabled || isSending}
           >
@@ -286,111 +259,92 @@ export function ChatComposerBar({
   );
 }
 
-const createStyles = (colors: any) => StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     backgroundColor: colors.background,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   safetyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs + 1,
-    backgroundColor: `${colors.danger}06`,
+    backgroundColor: colors.dangerSubtle,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: `${colors.danger}18`,
-  },
+    borderBottomColor: colors.dangerBorder },
   safetyBannerText: {
     flex: 1,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textMuted,
-    lineHeight: Type.meta.lineHeight + 1,
-  },
+    lineHeight: TypographyV2.meta.lineHeight + 1 },
   dangerBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: `${colors.danger}0A`,
+    backgroundColor: colors.dangerSubtle,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: `${colors.danger}25`,
-  },
+    borderBottomColor: colors.dangerBorder },
   dangerBannerContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs + 2,
     flex: 1,
-    paddingRight: Space.sm,
-  },
+    paddingRight: Space.sm },
   dangerBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    lineHeight: 16,
-  },
+    lineHeight: 16 },
   cautionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: `${colors.warning}0A`,
+    backgroundColor: colors.warningSubtle,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: `${colors.warning}25`,
-  },
+    borderBottomColor: colors.warningBorder },
   cautionBannerContent: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs + 2,
     flex: 1,
-    paddingRight: Space.sm,
-  },
+    paddingRight: Space.sm },
   cautionBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.warning,
-    lineHeight: 16,
-  },
+    lineHeight: 16 },
   attachmentStrip: {
-    maxHeight: 48,
-  },
+    maxHeight: 48 },
   attachmentStripContent: {
     flexDirection: 'row',
     gap: Space.xs,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 1,
-  },
+    paddingVertical: Space.xs + 1 },
   attachmentChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingHorizontal: Space.sm + 1,
-    paddingVertical: 5,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 1,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  attachmentChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: colors.textSecondary,
-  },
+    borderColor: colors.border },
   quickReplyStrip: {
-    maxHeight: 48,
-  },
+    maxHeight: 48 },
   quickReplyContent: {
     flexDirection: 'row',
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.xs + 1,
-  },
+    paddingVertical: Space.xs + 1 },
   quickReplyChip: {
     maxWidth: 200,
     minHeight: 36,
@@ -400,30 +354,25 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: 'transparent',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   quickReplyChipPressed: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   quickReplyText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
-    color: colors.textSecondary,
-  },
+    color: colors.textSecondary },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Platform.OS === 'ios' ? Space.sm : 6,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   actionBtn: {
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   inputWrap: {
     flex: 1,
     flexDirection: 'column',
@@ -433,27 +382,19 @@ const createStyles = (colors: any) => StyleSheet.create({
     maxHeight: MAX_INPUT_HEIGHT + 24,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.xl,
-  },
-  charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    textAlign: 'right',
-    paddingTop: 2,
-    paddingBottom: 2,
-  },
+    justifyContent: 'center' },
   input: {
     flex: 1,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    lineHeight: Type.body.lineHeight,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    lineHeight: TypographyV2.body.lineHeight,
     padding: 0,
     margin: 0,
     paddingTop: Platform.OS === 'ios' ? 4 : 6,
     paddingBottom: Platform.OS === 'ios' ? 4 : 6,
-    maxHeight: MAX_INPUT_HEIGHT,
-  },
+    maxHeight: MAX_INPUT_HEIGHT },
   sendBtn: {
     width: 44,
     height: 44,
@@ -461,9 +402,6 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'flex-end',
-  },
+    alignSelf: 'flex-end' },
   sendBtnActive: {
-    backgroundColor: colors.brand,
-  },
-});
+    backgroundColor: colors.brand } });

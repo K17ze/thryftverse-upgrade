@@ -12,9 +12,7 @@ import {
   Text,
   StyleSheet,
   RefreshControl,
-  Alert,
-  TextInput,
-} from 'react-native';
+  TextInput } from 'react-native';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,36 +21,42 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { haptics } from '../utils/haptics';
 import { useToast } from '../context/ToastContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
+import { SettingsSection } from '../components/settings/SettingsSection';
+import { SettingsRow } from '../components/settings/SettingsRow';
+import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { BuyerProtectionSkeleton } from '../components/skeletons/BuyerProtectionSkeleton';
 import { AppButton } from '../components/ui/AppButton';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import {
   fetchBuyerProtection,
   createBuyerProtectionClaim,
-  type BuyerProtectionInfo,
-} from '../services/commerceApi';
+  type BuyerProtectionInfo } from '../services/commerceApi';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BuyerProtection'>;
-
-function formatGbp(minor: number): string {
-  return `£${(minor / 100).toFixed(2)}`;
-}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
-    year: 'numeric',
-  });
+    year: 'numeric' });
 }
 
 export default function BuyerProtectionScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const { show } = useToast();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
+
+  const formatGbp = React.useCallback(
+    (minor: number) => formatFromFiat(minor / 100, currencyCode),
+    [formatFromFiat, currencyCode]
+  );
   const { orderId } = route.params;
 
   const [protection, setProtection] = React.useState<BuyerProtectionInfo | null>(null);
@@ -65,6 +69,15 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
   const [reason, setReason] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
+  const [confirmSheet, setConfirmSheet] = React.useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   const loadProtection = React.useCallback(async () => {
     try {
@@ -99,35 +112,31 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
       return;
     }
 
-    Alert.alert(
-      'Submit claim?',
-      'This will create a support ticket with our team. We respond as quickly as we can.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit',
-          onPress: async () => {
-            setSubmitting(true);
-            try {
-              await createBuyerProtectionClaim(orderId, {
-                reason: reason.trim(),
-                description: description.trim(),
-              });
-              haptics.success();
-              show('Claim submitted. We respond as quickly as we can.', 'success');
-              setShowClaimForm(false);
-              setReason('');
-              setDescription('');
-              await loadProtection();
-            } catch (err) {
-              show(err instanceof Error ? err.message : 'Failed to submit claim', 'error');
-            } finally {
-              setSubmitting(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Submit claim?',
+      message: 'This will create a support ticket with our team. We respond as quickly as we can.',
+      confirmLabel: 'Submit',
+      cancelLabel: 'Cancel',
+      onConfirm: async () => {
+        setSubmitting(true);
+        try {
+          await createBuyerProtectionClaim(orderId, {
+            reason: reason.trim(),
+            description: description.trim() });
+          haptics.success();
+          show('Claim submitted. We respond as quickly as we can.', 'success');
+          setShowClaimForm(false);
+          setReason('');
+          setDescription('');
+          await loadProtection();
+        } catch (err) {
+          show(err instanceof Error ? err.message : 'Failed to submit claim', 'error');
+        } finally {
+          setSubmitting(false);
+        }
+      },
+      variant: 'default' });
   };
 
   if (loading) {
@@ -166,82 +175,46 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.textSecondary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Coverage summary */}
-          <View style={styles.coverageCard}>
-            <View style={styles.coverageHeader}>
-              <View style={[styles.coverageIcon, { backgroundColor: isCovered ? colors.successSubtle : colors.surfaceAlt }]}>
-                <Ionicons name="checkmark-circle" size={24} color={isCovered ? colors.success : colors.textMuted} />
-              </View>
-              <View style={styles.coverageHeaderText}>
-                <Text style={styles.coverageTitle}>
-                  {isCovered ? 'You\'re protected' : 'Not covered'}
-                </Text>
-                <Text style={styles.coverageSubtitle}>
-                  {isCovered ? `Coverage up to ${formatGbp(protection!.coverageAmountGbpMinor)}` : 'No buyer protection fee was paid'}
-                </Text>
-              </View>
-            </View>
+        {/* Coverage summary — status banner with circular icon */}
+          <SettingsInfoBanner
+            tone={isCovered ? 'success' : 'info'}
+            icon="checkmark-circle-outline"
+            title={isCovered ? 'You\'re protected' : 'Protection pending'}
+            description={isCovered ? `Coverage up to ${formatGbp(protection!.coverageAmountGbpMinor)}` : 'No buyer protection fee was paid'}
+          />
 
-            {isCovered && (
-              <View style={styles.coverageDetails}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Protection fee paid</Text>
-                  <Text style={styles.detailValue}>{formatGbp(protection!.feeGbpMinor)}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Coverage amount</Text>
-                  <Text style={styles.detailValue}>{formatGbp(protection!.coverageAmountGbpMinor)}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Eligible until</Text>
-                  <Text style={styles.detailValue}>{formatDate(protection!.eligibleUntil)}</Text>
-                </View>
-              </View>
-            )}
-          </View>
+          {isCovered && (
+            <SettingsSection title="Coverage details">
+              <SettingsRow title="Protection fee paid" value={formatGbp(protection!.feeGbpMinor)} isFirst />
+              <SettingsRow title="Coverage amount" value={formatGbp(protection!.coverageAmountGbpMinor)} />
+              <SettingsRow title="Eligible until" value={formatDate(protection!.eligibleUntil)} isLast />
+            </SettingsSection>
+          )}
 
         {/* What's covered */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>What's covered</Text>
-            <View style={styles.coverageList}>
-              <View style={styles.coverageItem}>
-                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-                <Text style={styles.coverageItemText}>Item not as described</Text>
-              </View>
-              <View style={styles.coverageItem}>
-                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-                <Text style={styles.coverageItemText}>Item not received</Text>
-              </View>
-              <View style={styles.coverageItem}>
-                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-                <Text style={styles.coverageItemText}>Counterfeit or fake items</Text>
-              </View>
-              <View style={styles.coverageItem}>
-                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-                <Text style={styles.coverageItemText}>Damaged in transit</Text>
-              </View>
-            </View>
-          </View>
+          <SettingsSection title="What's covered">
+            <SettingsRow title="Item not as described" icon="checkmark-circle-outline" iconColor={colors.success} isFirst />
+            <SettingsRow title="Item not received" icon="checkmark-circle-outline" iconColor={colors.success} />
+            <SettingsRow title="Counterfeit or fake items" icon="checkmark-circle-outline" iconColor={colors.success} />
+            <SettingsRow title="Damaged in transit" icon="checkmark-circle-outline" iconColor={colors.success} isLast />
+          </SettingsSection>
 
         {/* Claims history */}
         {protection && protection.claims.length > 0 && (
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Claims history</Text>
+            <SettingsSection title="Claims history">
               {protection.claims.map((claim, idx) => (
-                <View key={claim.ticketId} style={[styles.claimRow, idx < protection.claims.length - 1 && styles.claimRowBorder]}>
-                  <View style={styles.claimHeader}>
-                    <Ionicons
-                      name={claim.status === 'open' ? 'hourglass-outline' : claim.status === 'resolved' ? 'checkmark-circle-outline' : 'alert-circle-outline'}
-                      size={18}
-                      color={claim.status === 'open' ? colors.warning : claim.status === 'resolved' ? colors.success : colors.textMuted}
-                    />
-                    <Text style={styles.claimTopic}>{claim.topic.replace(/_/g, ' ')}</Text>
-                    <Text style={styles.claimDate}>{formatDate(claim.createdAt)}</Text>
-                  </View>
-                  <Text style={styles.claimStatus}>{claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}</Text>
-                </View>
+                <SettingsRow
+                  key={claim.ticketId}
+                  title={claim.topic.replace(/_/g, ' ')}
+                  subtitle={`Updated ${formatDate(claim.createdAt)}`}
+                  value={claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}
+                  icon={claim.status === 'open' ? 'hourglass-outline' : claim.status === 'resolved' ? 'checkmark-circle-outline' : 'alert-circle-outline'}
+                  iconColor={claim.status === 'open' ? colors.warning : claim.status === 'resolved' ? colors.success : colors.textMuted}
+                  isFirst={idx === 0}
+                  isLast={idx === protection.claims.length - 1}
+                />
               ))}
-            </View>
+            </SettingsSection>
         )}
 
         {/* Claim form */}
@@ -253,7 +226,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
                 onPress={() => { haptics.tap(); setShowClaimForm(true); }}
                 variant="primary"
                 size="lg"
-                icon={<Ionicons name="shield-outline" size={18} color={colors.textInverse} />}
+                icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} />}
                 style={{ marginHorizontal: Space.md, marginTop: Space.md }}
               />
             ) : (
@@ -312,6 +285,17 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 
         <View style={{ height: 40 }} />
       </KeyboardAwareScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }
@@ -319,163 +303,49 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scrollContent: {
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
     errorContainer: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: Space.xl,
-    },
+      paddingHorizontal: Space.xl },
     errorTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     errorBody: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
-      marginTop: Space.xs,
-    },
-    coverageCard: {
-      padding: Space.lg,
-      marginHorizontal: Space.md,
-      marginTop: Space.md,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
-    coverageHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    coverageIcon: {
-      width: Space.xxl,
-      height: Space.xxl,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    coverageHeaderText: {
-      flex: 1,
-    },
-    coverageTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
-    coverageSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      marginTop: Space.xs / 2,
-    },
-    coverageDetails: {
-      marginTop: Space.md,
-      gap: Space.sm,
-    },
-    detailRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    detailLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
-    detailValue: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
-    sectionCard: {
-      padding: Space.md,
-      marginHorizontal: Space.md,
-      marginTop: Space.md,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      marginTop: Space.xs },
     sectionTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      marginBottom: Space.sm,
-    },
-    coverageList: {
-      gap: Space.sm,
-    },
-    coverageItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    coverageItemText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-    },
-    claimRow: {
-      paddingVertical: Space.sm,
-    },
-    claimRowBorder: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
-    claimHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    claimTopic: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textPrimary,
-      flex: 1,
-      textTransform: 'capitalize',
-    },
-    claimDate: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
-    claimStatus: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      marginTop: Space.xs,
-      marginLeft: Space.xl + Space.sm,
-    },
+      marginBottom: Space.sm },
     claimForm: {
       padding: Space.md,
       marginHorizontal: Space.md,
-      marginTop: Space.md,
-    },
+      marginTop: Space.md },
     inputLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       marginTop: Space.sm,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     input: {
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     textArea: {
       minHeight: Space.xxl * 2 + Space.xs,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     claimFormActions: {
       flexDirection: 'row',
-      marginTop: Space.md,
-    },
-  });
+      marginTop: Space.md } });
 }

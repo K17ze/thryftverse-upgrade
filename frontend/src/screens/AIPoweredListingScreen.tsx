@@ -5,38 +5,25 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  Dimensions,
+  useWindowDimensions,
   Image,
   ScrollView,
   KeyboardAvoidingView,
-  Platform,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
+  Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import Reanimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withSequence,
-  Easing,
-  interpolate,
-  cancelAnimation,
-} from 'react-native-reanimated';
 
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 import { useAIListingSuggestion } from '../hooks/useAIListingSuggestion';
-import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Motion } from '../theme/motionTokens';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
@@ -45,45 +32,27 @@ import { makeStableId } from '../utils/createStableId';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import {
   createListingOnApi,
-  createListingImageOnApi,
-} from '../services/listingsApi';
+  createListingImageOnApi } from '../services/listingsApi';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
-import {
-  type ListingMediaDraftItem,
-} from '../utils/mediaUploadAsset';
+import { consumeEnhancementResult } from '../services/enhancementResultHandoff';
 import { SmartSellCard } from '../components/sell/SmartSellCard';
 import { ListingQualityMeter } from '../components/sell/ListingQualityMeter';
 import { ListingPreviewCard } from '../components/sell/ListingPreviewCard';
 import { SustainabilityTags } from '../components/sell/SustainabilityTags';
 import {
-  fetchSmartSellConfig,
-  SMART_SELL_DEMO_MODE,
-  type SmartSellConfig,
-} from '../services/smartSellApi';
+  fetchSmartSellPolicy,
+  type SmartSellPolicy } from '../services/smartSellApi';
 import {
-
+  type FieldSuggestion,
+  type ListingField } from '../services/aiListingApi';
+import {
   scoreListing,
-  type ListingQualityScore,
-} from '../services/listingQualityApi';
-import { t } from '../i18n';
-
-const { width: SCREEN_W } = Dimensions.get('window');
-
-const CONDITION_OPTIONS = ['New with tags', 'Very good', 'Good', 'Satisfactory'];
-const CATEGORY_OPTIONS = [
-  'Women', 'Men', 'Kids', 'Home', 'Vintage', 'Accessories',
-  'Beauty', 'Sportswear', 'Luxury',
-];
+  type ListingQualityScore } from '../services/listingQualityApi';
+import { useTaxonomy } from '../context/TaxonomyContext';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AIPoweredListing'>;
-
-type ScreenPhase =
-  | 'empty' // no photos yet
-  | 'analyzing' // AI analysis in progress
-  | 'populated' // suggestions loaded, form editable
-  | 'submitting' // publishing listing
-  | 'success' // listing created
-  | 'error'; // analysis or publish error
 
 interface DraftPhoto {
   uri: string;
@@ -94,10 +63,17 @@ interface DraftPhoto {
 export default function AIPoweredListingScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
   const currentUser = useStore((s) => s.currentUser);
   const { showError, showInfo } = useNotifications();
+  const { categories, conditions } = useTaxonomy();
+  const { currencySymbol } = useFormattedPrice();
+  const { t } = useAppTranslation('aiListing');
+  const categoryOptions = useMemo(
+    () => categories.filter((n) => n.parentId === null).map((n) => n.name),
+    [categories],
+  );
+  const conditionOptions = useMemo(() => conditions.map((n) => n.name), [conditions]);
 
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
   const [title, setTitle] = useState('');
@@ -111,10 +87,18 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
   const [pickerMode, setPickerMode] = useState<'Category' | 'Condition' | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [smartSellConfig, setSmartSellConfig] = useState<SmartSellConfig>(() =>
-    fetchSmartSellConfig(`draft_${currentUser?.id ?? 'anon'}`),
+  const [smartSellPolicy, setSmartSellPolicy] = useState<SmartSellPolicy>(() =>
+    fetchSmartSellPolicy(`draft_${currentUser?.id ?? 'anon'}`),
   );
   const [sustainabilityTags, setSustainabilityTags] = useState<string[]>([]);
+  const [materialComposition, setMaterialComposition] = useState<string>('');
+  const [weightKg, setWeightKg] = useState<string>('');
+
+  // Track which fields the seller has manually edited — these are never
+  // overwritten by suggestions. This is the dirty-field protection (P0).
+  const dirtyFieldsRef = useRef<Set<ListingField>>(new Set());
+  // Track which suggestions have been dismissed by the seller.
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<ListingField>>(new Set());
 
   const photoUris = useMemo(() => photos.map((p) => p.uri), [photos]);
 
@@ -125,33 +109,33 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     analyze,
     clearError,
     reset: resetSuggestion,
-  } = useAIListingSuggestion(photoUris);
+    getField } = useAIListingSuggestion(photoUris);
 
-  // -- Apply suggestions to form fields when they arrive -------------------
-  const appliedSignatureRef = useRef<string>('');
-  useEffect(() => {
-    if (!suggestion) return;
-    const sig = JSON.stringify(suggestion);
-    if (sig === appliedSignatureRef.current) return;
-    appliedSignatureRef.current = sig;
-
-    setTitle(suggestion.suggestedTitle);
-    setDescription(suggestion.suggestedDescription);
-    setCategory(suggestion.suggestedCategory);
-    setBrand(suggestion.suggestedBrand ?? '');
-    setCondition(suggestion.suggestedCondition);
-    // Price is NOT auto-filled — the suggested range is shown as guidance so
-    // the seller picks their own price (communicates uncertainty honestly).
-    setTags(suggestion.suggestedTags);
-    haptics.tap();
-  }, [suggestion]);
+  // -- Consume enhancement result when returning from AIPhotoEnhancement ----
+  // The enhancement modal writes the result to a module-level handoff store
+  // before goBack(). We consume it here when this screen regains focus.
+  useFocusEffect(
+    useCallback(() => {
+      const handoff = consumeEnhancementResult();
+      if (!handoff) return;
+      setPhotos((prev) =>
+        prev.map((p) =>
+          p.uri === handoff.originalUri
+            ? { ...p, uri: handoff.enhancedUri }
+            : p,
+        ),
+      );
+      showInfo(t('toast.photoEnhanced'), handoff.appliedOperationLabel);
+    }, [showInfo, t]),
+  );
 
   // -- Auto-analyze whenever the photo set changes --------------------------
+  // NOTE: This does NOT auto-apply suggestions. It only triggers analysis.
+  // The seller must explicitly accept each suggestion via the inline row.
   const analyzeSignatureRef = useRef<string>('');
   useEffect(() => {
     if (photoUris.length === 0) {
       resetSuggestion();
-      appliedSignatureRef.current = '';
       return;
     }
     const sig = photoUris.join('|');
@@ -166,7 +150,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        showError('Photo access needed', 'Photo access is required to add listing photos.');
+        showError(t('toast.photoAccessTitle'), t('toast.photoAccessBody'));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -174,34 +158,31 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         allowsMultipleSelection: true,
         selectionLimit: 8,
         quality: 0.85,
-        exif: false,
-      });
+        exif: false });
       if (result.canceled) return;
       const assets = result.assets.map((a) => ({
         uri: a.uri,
         width: a.width,
-        height: a.height,
-      }));
+        height: a.height }));
       setPhotos((prev) => [...prev, ...assets].slice(0, 8));
     } catch {
-      showError('Pick failed', 'Could not pick photos. Try again.');
+      showError(t('toast.pickFailedTitle'), t('toast.pickFailedBody'));
     }
-  }, [showError]);
+  }, [showError, t]);
 
   const handlePickFromCamera = useCallback(async () => {
     haptics.tap();
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        showError('Camera access needed', 'Camera access is required to take listing photos.');
+        showError(t('toast.cameraAccessTitle'), t('toast.cameraAccessBody'));
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.85,
         allowsEditing: false,
-        exif: false,
-      });
+        exif: false });
       if (result.canceled) return;
       const asset = result.assets[0];
       if (!asset) return;
@@ -209,9 +190,9 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         [...prev, { uri: asset.uri, width: asset.width, height: asset.height }].slice(0, 8),
       );
     } catch {
-      showError('Capture failed', 'Could not take a photo. Try again.');
+      showError(t('toast.captureFailedTitle'), t('toast.captureFailedBody'));
     }
-  }, [showError]);
+  }, [showError, t]);
 
   const handleRemovePhoto = useCallback((uri: string) => {
     haptics.tap();
@@ -227,6 +208,71 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     [navigation],
   );
 
+  // -- Suggestion accept / dismiss -----------------------------------------
+  const handleAcceptSuggestion = useCallback(
+    (field: ListingField, candidate: FieldSuggestion['candidate']) => {
+      haptics.selection();
+      if (field === 'title' && typeof candidate === 'string') setTitle(candidate);
+      else if (field === 'description' && typeof candidate === 'string') setDescription(candidate);
+      else if (field === 'category' && typeof candidate === 'string') setCategory(candidate);
+      else if (field === 'brand' && typeof candidate === 'string') setBrand(candidate);
+      else if (field === 'tags' && Array.isArray(candidate)) setTags(candidate as string[]);
+      else if (field === 'color' && Array.isArray(candidate)) {
+        // Colors are informational; don't fill a form field, just dismiss
+      }
+      // Condition is never suggested — it requires seller attestation
+      // Price is never auto-filled — the range is shown as guidance
+
+      // Mark as dismissed so the suggestion row hides after accepting
+      setDismissedSuggestions((prev) => new Set(prev).add(field));
+    },
+    [],
+  );
+
+  const handleDismissSuggestion = useCallback((field: ListingField) => {
+    haptics.tap();
+    setDismissedSuggestions((prev) => new Set(prev).add(field));
+  }, []);
+
+  // -- Mark fields dirty when the seller edits them ------------------------
+  const markDirty = useCallback((field: ListingField) => {
+    dirtyFieldsRef.current.add(field);
+    // Dismiss the suggestion for this field since the seller is editing manually
+    setDismissedSuggestions((prev) => {
+      if (prev.has(field)) return prev;
+      return new Set(prev).add(field);
+    });
+  }, []);
+
+  const handleTitleChange = useCallback((v: string) => {
+    markDirty('title');
+    setTitle(v);
+  }, [markDirty]);
+  const handleDescriptionChange = useCallback((v: string) => {
+    markDirty('description');
+    setDescription(v);
+  }, [markDirty]);
+  const handleCategorySelect = useCallback((val: string) => {
+    markDirty('category');
+    setCategory(val);
+    setPickerMode(null);
+    haptics.selection();
+  }, [markDirty]);
+  const handleConditionSelect = useCallback((val: string) => {
+    markDirty('condition');
+    setCondition(val);
+    setPickerMode(null);
+    haptics.selection();
+  }, [markDirty]);
+  const handleBrandChange = useCallback((v: string) => {
+    markDirty('brand');
+    setBrand(v);
+  }, [markDirty]);
+  const handlePriceChange = useCallback((v: string) => {
+    markDirty('price');
+    setPrice(v);
+  }, [markDirty]);
+
   // -- Tags ----------------------------------------------------------------
   const handleAddTag = useCallback(() => {
     const trimmed = tagInput.trim().toLowerCase();
@@ -235,10 +281,11 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       setTagInput('');
       return;
     }
+    markDirty('tags');
     setTags((prev) => [...prev, trimmed]);
     setTagInput('');
     haptics.tap();
-  }, [tagInput, tags]);
+  }, [tagInput, tags, markDirty]);
 
   const handleRemoveTag = useCallback((tag: string) => {
     haptics.tap();
@@ -247,20 +294,10 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
   // -- Picker --------------------------------------------------------------
   const pickerOptions = useMemo(() => {
-    if (pickerMode === 'Category') return CATEGORY_OPTIONS;
-    if (pickerMode === 'Condition') return CONDITION_OPTIONS;
+    if (pickerMode === 'Category') return categoryOptions;
+    if (pickerMode === 'Condition') return conditionOptions;
     return [];
-  }, [pickerMode]);
-
-  const handlePickerSelect = useCallback(
-    (val: string) => {
-      if (pickerMode === 'Category') setCategory(val);
-      if (pickerMode === 'Condition') setCondition(val);
-      setPickerMode(null);
-      haptics.selection();
-    },
-    [pickerMode],
-  );
+  }, [pickerMode, categoryOptions, conditionOptions]);
 
   // -- Publish -------------------------------------------------------------
   const uploadQueueRef = useRef<MediaUploadQueue | null>(null);
@@ -281,19 +318,19 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
 
   const handlePublish = useCallback(async () => {
     if (!currentUser?.id) {
-      setPublishError('Sign in to publish a listing.');
+      setPublishError(t('publish.signInToPublish'));
       haptics.error();
       return;
     }
     if (isOffline) {
-      setPublishError('You appear to be offline. Check your connection and try again.');
+      setPublishError(t('publish.offline'));
       haptics.error();
       return;
     }
     const trimmedTitle = title.trim();
     const numericPrice = Number(sanitizeDecimalInput(price));
     if (!trimmedTitle || !numericPrice || photos.length === 0) {
-      setPublishError('Add at least one photo, a title and a price before publishing.');
+      setPublishError(t('publish.missingFields'));
       haptics.error();
       return;
     }
@@ -310,8 +347,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         mimeType: 'image/jpeg',
         kind: 'image' as const,
         width: p.width,
-        height: p.height,
-      }));
+        height: p.height }));
       queue.addAssets(assets);
       await queue.run();
       const queueItems = queue.getItems();
@@ -319,7 +355,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         (item) => item.state === 'uploaded' && item.publicUrl && item.finalizationId,
       );
       if (!coverUpload) {
-        throw new Error('A verified cover image is required before publishing.');
+        throw new Error(t('publish.missingCover'));
       }
       const coverImage = coverUpload.publicUrl!;
       const uploadedUrls = queueItems
@@ -341,7 +377,8 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         condition: condition || undefined,
         shippingMethod: 'standard',
         shippingPayer: 'buyer',
-      });
+        materialComposition: materialComposition.trim() || undefined,
+        weightKg: weightKg ? parseFloat(weightKg) : undefined });
 
       for (let i = 0; i < uploadedUrls.length; i++) {
         const verifiedUpload = queueItems.find(
@@ -355,18 +392,16 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
           sortOrder: i,
           mediaWidth: verifiedUpload.asset.width,
           mediaHeight: verifiedUpload.asset.height,
-          finalizationId: verifiedUpload.finalizationId!,
-        });
+          finalizationId: verifiedUpload.finalizationId! });
       }
 
       queue.reset();
       haptics.success();
-      // Truthful demo message when Smart Sell is enabled — the setting is
-      // illustrative only (SMART_SELL_DEMO_MODE) and is not sent to a backend.
-      if (smartSellConfig.enabled && SMART_SELL_DEMO_MODE) {
+      // Honest preview message when Smart Sell is enabled in preview mode
+      if (smartSellPolicy.enabled && smartSellPolicy.capability.kind === 'preview') {
         showInfo(
-          'Smart Sell enabled (demo)',
-          'Auto-negotiation settings are illustrative.',
+          t('toast.smartSellSavedPreviewTitle'),
+          t('toast.smartSellSavedPreviewBody'),
         );
       }
       navigation.replace('ListingSuccess', {
@@ -375,8 +410,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         price: numericPrice,
         categoryId: category,
         photoUri: coverImage,
-        smartSellEnabled: smartSellConfig.enabled,
-      });
+        smartSellEnabled: smartSellPolicy.enabled });
     } catch (e: unknown) {
       const isNetwork =
         isOffline ||
@@ -384,30 +418,13 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       const rawMsg =
         typeof e === 'object' && e && 'message' in e && typeof (e as Error).message === 'string'
           ? (e as Error).message
-          : 'Failed to publish. Try again.';
-      setPublishError(isNetwork ? 'You appear to be offline. Check your connection and try again.' : rawMsg);
+          : t('publish.failed');
+      setPublishError(isNetwork ? t('publish.offline') : rawMsg);
       haptics.error();
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentUser, isOffline, photos, title, price, description, category, brand, condition, navigation, smartSellConfig, showInfo]);
-
-  // -- Derived phase -------------------------------------------------------
-  const phase: ScreenPhase = useMemo(() => {
-    if (isSubmitting) return 'submitting';
-    if (publishError) return 'error';
-    if (photos.length === 0) return 'empty';
-    if (isAnalyzing) return 'analyzing';
-    if (suggestion) return 'populated';
-    if (analysisError) return 'error';
-    return 'empty';
-  }, [isSubmitting, publishError, photos.length, isAnalyzing, suggestion, analysisError]);
-
-  const styles = useMemo(() => createStyles(colors), [colors]);
-
-  const confidencePct = suggestion
-    ? Math.round(suggestion.confidenceScore * 100)
-    : 0;
+  }, [currentUser, isOffline, photos, title, price, description, category, brand, condition, materialComposition, weightKg, navigation, smartSellPolicy, showInfo, t]);
 
   // -- Listing quality score (heuristic, updates live as the form fills) -----
   const qualityScore: ListingQualityScore = useMemo(() => {
@@ -422,37 +439,48 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         | import('../services/listingsApi').ListingCondition
         | undefined,
       brand: brand || undefined,
-      shippingMethod: 'standard',
-    });
+      shippingMethod: 'standard' });
   }, [photoUris, title, description, price, category, condition, brand]);
 
   const numericPriceForPreview = Number(sanitizeDecimalInput(price)) || 0;
   const previewCoverUri = photoUris[0] ?? null;
   const sellerName = currentUser?.username ?? currentUser?.handle ?? null;
   const sellerAvatar = currentUser?.avatar ?? null;
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  // Helper: should we show a suggestion row for this field?
+  const shouldShowSuggestion = useCallback(
+    (field: ListingField): FieldSuggestion | null => {
+      if (dismissedSuggestions.has(field)) return null;
+      if (dirtyFieldsRef.current.has(field)) return null;
+      const s = getField(field);
+      if (!s || s.abstained) return null;
+      return s;
+    },
+    [dismissedSuggestions, getField],
+  );
+
+  const titleSuggestion = shouldShowSuggestion('title');
+  const descSuggestion = shouldShowSuggestion('description');
+  const categorySuggestion = shouldShowSuggestion('category');
+  const brandSuggestion = shouldShowSuggestion('brand');
+  const tagsSuggestion = shouldShowSuggestion('tags');
+  const priceSuggestion = shouldShowSuggestion('price');
+  const conditionField = getField('condition');
+  const priceGuidance = suggestion?.priceGuidance;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* -- Header -- */}
+      {/* -- Header -- product language, not AI branding */}
       <ScreenHeader
-        title="AI Quick List"
-        subtitle="Snap photos · review · publish"
+        title={t('header.title')}
+        subtitle={t('header.subtitle')}
         backIcon="arrow-back"
         onBack={() => navigation.goBack()}
         style={{
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
-        }}
+          borderBottomColor: colors.border }}
       />
-
-      {SMART_SELL_DEMO_MODE && (
-        <View style={[styles.demoBanner, { backgroundColor: `${colors.warning}15`, borderBottomColor: `${colors.warning}30` }]}>
-          <Ionicons name="flask-outline" size={16} color={colors.warning} aria-hidden={true} />
-          <Text style={[styles.demoBannerText, { color: colors.textPrimary }]}>
-            Demo Mode — AI suggestions are illustrative and not sent to a backend.
-          </Text>
-        </View>
-      )}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -475,23 +503,9 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             onEnhancePhoto={handleEnhancePhoto}
             colors={colors}
             styles={styles}
-            reducedMotion={reducedMotion}
           />
 
-          {/* -- 2. AI ANALYSIS / SCANNING STATE -- */}
-          {phase === 'analyzing' && (
-            <>
-              <AnalyzingOverlay colors={colors} styles={styles} reducedMotion={reducedMotion} />
-              <ListingFormSkeleton colors={colors} styles={styles} reducedMotion={reducedMotion} />
-            </>
-          )}
-
-          {/* -- 3. EMPTY STATE -- */}
-          {phase === 'empty' && photos.length === 0 && (
-            <EmptyState colors={colors} styles={styles} reducedMotion={reducedMotion} />
-          )}
-
-          {/* -- 4. ANALYSIS ERROR -- */}
+          {/* -- 2. ANALYSIS ERROR -- */}
           {analysisError && photos.length > 0 && !isAnalyzing && (
             <ErrorBanner
               message={analysisError}
@@ -505,7 +519,7 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             />
           )}
 
-          {/* -- 5. PUBLISH ERROR -- */}
+          {/* -- 3. PUBLISH ERROR -- */}
           {publishError && (
             <ErrorBanner
               message={publishError}
@@ -519,77 +533,71 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
             />
           )}
 
-          {/* -- 6. SUGGESTED FIELDS -- */}
-          {suggestion && !isAnalyzing && (
-            <View>
-              {/* AI confidence banner — truthful labelling (§11) */}
-              <View style={[styles.confidenceBanner, { backgroundColor: `${colors.brand}10`, borderColor: `${colors.brand}30` }]}>
-                <Ionicons name="document-text-outline" size={16} color={colors.brand} aria-hidden={true} />
-                <View style={styles.confidenceTextWrap}>
-                  <Text style={[styles.confidenceTitle, { color: colors.brand }]}>
-                    Suggestions — review before publishing
-                  </Text>
-                  <Text style={[styles.confidenceSub, { color: colors.textSecondary }]}>
-                    Confidence {confidencePct}% · heuristic preview, not image recognition
-                  </Text>
-                </View>
-                <View style={[styles.confidencePill, { backgroundColor: colors.brand }]}>
-                  <Text style={[styles.confidencePillText, { color: colors.textInverse }]}>
-                    {confidencePct}%
-                  </Text>
-                </View>
-              </View>
+          {/* -- 4. EMPTY STATE (no photos) -- */}
+          {photos.length === 0 && (
+            <EmptyState colors={colors} styles={styles} />
+          )}
 
+          {/* -- 5. LOADING SKELETON (field geometry, no scanning animation) -- */}
+          {isAnalyzing && photos.length > 0 && (
+            <ListingFormSkeleton styles={styles} />
+          )}
+
+          {/* -- 6. FORM FIELDS -- always visible when photos exist, not hidden behind analysis */}
+          {photos.length > 0 && !isAnalyzing && (
+            <View>
               {/* Title */}
-              <AIBadgeField
-                label="Title"
-                isAISuggested={title === suggestion.suggestedTitle}
-                colors={colors}
-                styles={styles}
-              >
-                <TextInput
-                  style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
-                  value={title}
-                  onChangeText={setTitle}
-                  placeholder="e.g. Vintage Levi's 501 Denim Jacket"
-                  placeholderTextColor={colors.textMuted}
-                  returnKeyType="next"
+              <FieldLabel label={t('fields.title')} colors={colors} styles={styles} />
+              <TextInput
+                style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                value={title}
+                onChangeText={handleTitleChange}
+                placeholder={t('placeholders.title')}
+                placeholderTextColor={colors.textMuted}
+                returnKeyType="next"
+              />
+              {titleSuggestion && (
+                <SuggestionRow
+                  suggestion={titleSuggestion}
+                  onAccept={() => handleAcceptSuggestion('title', titleSuggestion.candidate)}
+                  onDismiss={() => handleDismissSuggestion('title')}
+                  colors={colors}
+                  styles={styles}
                 />
-              </AIBadgeField>
+              )}
 
               {/* Description */}
-              <AIBadgeField
-                label="Description"
-                isAISuggested={description === suggestion.suggestedDescription}
-                colors={colors}
-                styles={styles}
-              >
-                <TextInput
-                  style={[styles.fieldTextarea, { color: colors.textPrimary, borderColor: colors.border }]}
-                  value={description}
-                  onChangeText={setDescription}
-                  placeholder="Describe your item…"
-                  placeholderTextColor={colors.textMuted}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
+              <FieldLabel label={t('fields.description')} colors={colors} styles={styles} />
+              <TextInput
+                style={[styles.fieldTextarea, { color: colors.textPrimary, borderColor: colors.border }]}
+                value={description}
+                onChangeText={handleDescriptionChange}
+                placeholder={t('placeholders.description')}
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+              {descSuggestion && (
+                <SuggestionRow
+                  suggestion={descSuggestion}
+                  onAccept={() => handleAcceptSuggestion('description', descSuggestion.candidate)}
+                  onDismiss={() => handleDismissSuggestion('description')}
+                  colors={colors}
+                  styles={styles}
                 />
-              </AIBadgeField>
+              )}
 
               {/* Category + Brand row */}
               <View style={styles.fieldRow}>
-                <AIBadgeField
-                  label="Category"
-                  isAISuggested={category === suggestion.suggestedCategory}
-                  colors={colors}
-                  styles={styles}
-                  style={{ flex: 1, marginRight: Space.sm }}
-                >
+                <View style={{ flex: 1, marginRight: Space.sm }}>
+                  <FieldLabel label={t('fields.category')} colors={colors} styles={styles} />
                   <Pressable
                     style={({ pressed }) => [styles.pickerField, { borderColor: colors.border }, pressed && { opacity: 0.6 }]}
                     onPress={() => setPickerMode('Category')}
                     accessibilityRole="button"
-                    accessibilityLabel="Select category"
+                    accessibilityLabel={t('accessibility.selectCategory')}
+                    accessibilityHint={t('accessibility.opensCategoryPicker')}
                   >
                     <Text
                       style={[
@@ -598,43 +606,54 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                       ]}
                       numberOfLines={1}
                     >
-                      {category || 'Select category'}
+                      {category || t('placeholders.selectCategory')}
                     </Text>
-                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} aria-hidden={true} />
+                    <AppIcon name="chevronDown" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                   </Pressable>
-                </AIBadgeField>
+                  {categorySuggestion && (
+                    <SuggestionRow
+                      suggestion={categorySuggestion}
+                      onAccept={() => handleAcceptSuggestion('category', categorySuggestion.candidate)}
+                      onDismiss={() => handleDismissSuggestion('category')}
+                      colors={colors}
+                      styles={styles}
+                      compact
+                    />
+                  )}
+                </View>
 
-                <AIBadgeField
-                  label="Brand"
-                  isAISuggested={brand === (suggestion.suggestedBrand ?? '')}
-                  colors={colors}
-                  styles={styles}
-                  style={{ flex: 1 }}
-                >
+                <View style={{ flex: 1 }}>
+                  <FieldLabel label={t('fields.brand')} colors={colors} styles={styles} />
                   <TextInput
                     style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
                     value={brand}
-                    onChangeText={setBrand}
-                    placeholder="Brand"
+                    onChangeText={handleBrandChange}
+                    placeholder={t('placeholders.brand')}
                     placeholderTextColor={colors.textMuted}
                   />
-                </AIBadgeField>
+                  {brandSuggestion && (
+                    <SuggestionRow
+                      suggestion={brandSuggestion}
+                      onAccept={() => handleAcceptSuggestion('brand', brandSuggestion.candidate)}
+                      onDismiss={() => handleDismissSuggestion('brand')}
+                      colors={colors}
+                      styles={styles}
+                      compact
+                    />
+                  )}
+                </View>
               </View>
 
               {/* Condition + Price row */}
               <View style={styles.fieldRow}>
-                <AIBadgeField
-                  label="Condition"
-                  isAISuggested={condition === suggestion.suggestedCondition}
-                  colors={colors}
-                  styles={styles}
-                  style={{ flex: 1, marginRight: Space.sm }}
-                >
+                <View style={{ flex: 1, marginRight: Space.sm }}>
+                  <FieldLabel label={t('fields.condition')} colors={colors} styles={styles} />
                   <Pressable
                     style={({ pressed }) => [styles.pickerField, { borderColor: colors.border }, pressed && { opacity: 0.6 }]}
                     onPress={() => setPickerMode('Condition')}
                     accessibilityRole="button"
-                    accessibilityLabel="Select condition"
+                    accessibilityLabel={t('accessibility.selectCondition')}
+                    accessibilityHint={t('accessibility.opensConditionPicker')}
                   >
                     <Text
                       style={[
@@ -643,139 +662,134 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                       ]}
                       numberOfLines={1}
                     >
-                      {condition || 'Select condition'}
+                      {condition || t('placeholders.selectCondition')}
                     </Text>
-                    <Ionicons name="chevron-down" size={16} color={colors.textMuted} aria-hidden={true} />
+                    <AppIcon name="chevronDown" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
                   </Pressable>
-                </AIBadgeField>
+                  {/* Condition always requires seller attestation — no suggestion */}
+                  {conditionField?.abstained && !condition && (
+                    <Text style={[styles.attentionHint, { color: colors.warning }]}>
+                      {conditionField.reason}
+                    </Text>
+                  )}
+                </View>
 
-                <AIBadgeField
-                  label="Price (GBP)"
-                  isAISuggested={false}
-                  colors={colors}
-                  styles={styles}
-                  style={{ flex: 1 }}
-                >
+                <View style={{ flex: 1 }}>
+                  <FieldLabel label={t('fields.price')} colors={colors} styles={styles} />
                   <TextInput
                     style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
                     value={price}
-                    onChangeText={(v) => setPrice(sanitizeDecimalInput(v))}
+                    onChangeText={handlePriceChange}
                     placeholder="0.00"
                     placeholderTextColor={colors.textMuted}
                     keyboardType="decimal-pad"
                   />
-                </AIBadgeField>
+                  {priceSuggestion && (
+                    <SuggestionRow
+                      suggestion={priceSuggestion}
+                      onAccept={() => handleAcceptSuggestion('price', priceSuggestion.candidate)}
+                      onDismiss={() => handleDismissSuggestion('price')}
+                      colors={colors}
+                      styles={styles}
+                      compact
+                    />
+                  )}
+                </View>
               </View>
 
-              {/* Suggested price range helper — communicates uncertainty as a
-                  range, not a single number (§3.2 truthfulness) */}
-              {suggestion.suggestedPriceRange && (
-                <Text style={[styles.priceRangeHint, { color: colors.textMuted }]}>
-                  Suggested range £{suggestion.suggestedPriceRange.min}–£{suggestion.suggestedPriceRange.max} · pick a price within this range
-                </Text>
-              )}
-
-              {/* Smart Sell — auto-negotiation (demo mode) */}
-              <SmartSellCard
-                listingId={`draft_${currentUser?.id ?? 'anon'}`}
-                config={smartSellConfig}
-                onConfigChange={setSmartSellConfig}
-                listingPrice={Number(sanitizeDecimalInput(price)) || undefined}
-              />
-
-              {/* Detected attributes */}
-              {(suggestion.detectedAttributes.color.length > 0 ||
-                suggestion.detectedAttributes.material ||
-                suggestion.detectedAttributes.style ||
-                suggestion.detectedAttributes.season) && (
-                <View style={styles.attributeWrap}>
-                  <Text style={[styles.attributeLabel, { color: colors.textSecondary }]}>
-                    Detected attributes
-                  </Text>
-                  <View style={styles.attributeChips}>
-                    {suggestion.detectedAttributes.color.map((c) => (
-                      <View key={`color-${c}`} style={[styles.attributeChip, { backgroundColor: colors.surfaceAlt }]}>
-                        <Text style={[styles.attributeChipText, { color: colors.textPrimary }]}>{c}</Text>
-                      </View>
-                    ))}
-                    {suggestion.detectedAttributes.material && (
-                      <View style={[styles.attributeChip, { backgroundColor: colors.surfaceAlt }]}>
-                        <Text style={[styles.attributeChipText, { color: colors.textPrimary }]}>
-                          {suggestion.detectedAttributes.material}
-                        </Text>
-                      </View>
-                    )}
-                    {suggestion.detectedAttributes.style && (
-                      <View style={[styles.attributeChip, { backgroundColor: colors.surfaceAlt }]}>
-                        <Text style={[styles.attributeChipText, { color: colors.textPrimary }]}>
-                          {suggestion.detectedAttributes.style}
-                        </Text>
-                      </View>
-                    )}
-                    {suggestion.detectedAttributes.season && (
-                      <View style={[styles.attributeChip, { backgroundColor: colors.surfaceAlt }]}>
-                        <Text style={[styles.attributeChipText, { color: colors.textPrimary }]}>
-                          {suggestion.detectedAttributes.season}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              )}
+              {/* Dynamic pricing intelligence card */}
+              <View style={{ marginTop: Space.sm }}>
+                <SmartSellCard
+                  category={category}
+                  condition={condition}
+                  listingPrice={Number(sanitizeDecimalInput(price)) || undefined}
+                />
+              </View>
 
               {/* Tags */}
-              <View style={styles.tagsSection}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Tags</Text>
-                <View style={styles.tagsWrap}>
-                  {tags.map((tag) => (
-                    <View key={tag} style={[styles.tagChip, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                      <Text style={[styles.tagText, { color: colors.brand }]}>{tag}</Text>
-                      <Pressable
-                        hitSlop={8}
-                        onPress={() => handleRemoveTag(tag)}
-                        style={({ pressed }) => pressed && { opacity: 0.5 }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove tag ${tag}`}
-                      >
-                        <Ionicons name="close" size={14} color={colors.textMuted} aria-hidden={true} />
-                      </Pressable>
-                    </View>
-                  ))}
-                  <View style={[styles.tagInputWrap, { borderColor: colors.border }]}>
-                    <TextInput
-                      style={[styles.tagInput, { color: colors.textPrimary }]}
-                      value={tagInput}
-                      onChangeText={setTagInput}
-                      placeholder="Add tag"
-                      placeholderTextColor={colors.textMuted}
-                      onSubmitEditing={handleAddTag}
-                      returnKeyType="done"
-                    />
-                    {tagInput.trim().length > 0 && (
-                      <Pressable
-                        hitSlop={8}
-                        onPress={handleAddTag}
-                        style={({ pressed }) => pressed && { opacity: 0.5 }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Add tag"
-                      >
-                        <Ionicons name="add-circle" size={18} color={colors.brand} aria-hidden={true} />
-                      </Pressable>
-                    )}
+              <FieldLabel label={t('fields.tags')} colors={colors} styles={styles} />
+              <View style={styles.tagsWrap}>
+                {tags.map((tag) => (
+                  <View key={tag} style={[styles.tagChip, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Text style={[styles.tagText, { color: colors.brand }]}>{tag}</Text>
+                    <Pressable
+                      hitSlop={8}
+                      onPress={() => handleRemoveTag(tag)}
+                      style={({ pressed }) => pressed && { opacity: 0.5 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('accessibility.removeTag', { tag })}
+                      accessibilityHint={t('accessibility.removeTagHint', { tag })}
+                    >
+                      <AppIcon name="close" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
+                    </Pressable>
                   </View>
+                ))}
+                <View style={[styles.tagInputWrap, { borderColor: colors.border }]}>
+                  <TextInput
+                    style={[styles.tagInput, { color: colors.textPrimary }]}
+                    value={tagInput}
+                    onChangeText={setTagInput}
+                    placeholder={t('placeholders.addTag')}
+                    placeholderTextColor={colors.textMuted}
+                    onSubmitEditing={handleAddTag}
+                    returnKeyType="done"
+                  />
+                  {tagInput.trim().length > 0 && (
+                    <Pressable
+                      hitSlop={8}
+                      onPress={handleAddTag}
+                      style={({ pressed }) => pressed && { opacity: 0.5 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('accessibility.addTag')}
+                      accessibilityHint={t('accessibility.addTagHint')}
+                    >
+                      <AppIcon name="plus" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+                    </Pressable>
+                  )}
                 </View>
               </View>
+              {tagsSuggestion && (
+                <SuggestionRow
+                  suggestion={tagsSuggestion}
+                  onAccept={() => handleAcceptSuggestion('tags', tagsSuggestion.candidate)}
+                  onDismiss={() => handleDismissSuggestion('tags')}
+                  colors={colors}
+                  styles={styles}
+                />
+              )}
 
-              {/* -- Sustainability tags -- */}
+              {/* Sustainability tags */}
               <SustainabilityTags
                 selectedTags={sustainabilityTags}
                 onTagsChange={setSustainabilityTags}
               />
 
-              {/* -- Listing preview -- */}
+              {/* Material composition + weight — used to calculate real environmental impact */}
+              <FieldLabel label={t('fields.materialComposition')} colors={colors} styles={styles} />
+              <TextInput
+                style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                value={materialComposition}
+                onChangeText={setMaterialComposition}
+                placeholder={t('placeholders.material')}
+                placeholderTextColor={colors.textMuted}
+              />
+              <FieldLabel label={t('fields.weight')} colors={colors} styles={styles} />
+              <TextInput
+                style={[styles.fieldInput, { color: colors.textPrimary, borderColor: colors.border }]}
+                value={weightKg}
+                onChangeText={(v) => setWeightKg(sanitizeDecimalInput(v))}
+                placeholder={t('placeholders.weight')}
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+              />
+              <Text style={[styles.impactHelperText, { color: colors.textMuted }]}>
+                {t('impact.helper')}
+              </Text>
+
+              {/* Listing preview */}
               <View style={styles.sectionLabelWrap}>
                 <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                  Preview
+                  {t('preview.label')}
                 </Text>
               </View>
               <ListingPreviewCard
@@ -787,10 +801,10 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                 sellerAvatar={sellerAvatar}
               />
 
-              {/* -- Listing quality meter -- */}
+              {/* Listing quality meter */}
               <View style={styles.sectionLabelWrap}>
                 <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                  Quality
+                  {t('preview.completeness')}
                 </Text>
               </View>
               <ListingQualityMeter score={qualityScore} />
@@ -803,14 +817,15 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
       {photos.length > 0 && (
         <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
           <AppButton
-            title={isSubmitting ? 'Publishing…' : 'Review & publish'}
+            title={isSubmitting ? t('publish.publishing') : t('publish.reviewPublish')}
             onPress={handlePublish}
             disabled={!canPublish}
             loading={isSubmitting}
             variant="primary"
             size="lg"
-            accessibilityLabel="Publish AI-assisted listing"
-            icon={<Ionicons name="checkmark-circle-outline" size={18} color={colors.textInverse} aria-hidden={true} />}
+            accessibilityLabel={t('accessibility.publishListing')}
+            accessibilityHint={t('accessibility.publishListingHint')}
+            icon={<AppIcon name="verified" focused size={IconSize.sm} color={colors.textInverse} opticalCenter accessible={false} />}
           />
         </View>
       )}
@@ -820,13 +835,102 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
         <PickerSheet
           options={pickerOptions}
           selectedValue={pickerMode === 'Category' ? category : condition}
-          onSelect={handlePickerSelect}
+          onSelect={pickerMode === 'Category' ? handleCategorySelect : handleConditionSelect}
           onClose={() => setPickerMode(null)}
-          title={pickerMode === 'Category' ? 'Select category' : 'Select condition'}
+          title={pickerMode === 'Category' ? t('picker.selectCategory') : t('picker.selectCondition')}
           colors={colors}
         />
       )}
     </View>
+  );
+}
+
+// ===========================================================================
+// Suggestion row — inline, restrained, one row per field
+// ===========================================================================
+
+interface SuggestionRowProps {
+  suggestion: FieldSuggestion;
+  onAccept: () => void;
+  onDismiss: () => void;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  compact?: boolean;
+}
+
+function SuggestionRow({ suggestion, onAccept, onDismiss, colors, styles, compact }: SuggestionRowProps) {
+  const { t } = useAppTranslation('aiListing');
+  const candidateText = useMemo(() => {
+    if (typeof suggestion.candidate === 'string') return suggestion.candidate;
+    if (Array.isArray(suggestion.candidate)) return (suggestion.candidate as string[]).join(', ');
+    return '';
+  }, [suggestion.candidate]);
+
+  const evidenceText = suggestion.evidence.length > 0
+    ? suggestion.evidence[0].ref
+    : t('suggestion.suggested');
+
+  return (
+    <View style={[styles.suggestionRow, compact && styles.suggestionRowCompact]}>
+      <View style={styles.suggestionContent}>
+        <Text
+          style={[styles.suggestionCandidate, { color: colors.textSecondary }]}
+          numberOfLines={compact ? 1 : 2}
+        >
+          {candidateText}
+        </Text>
+        <Text style={[styles.suggestionEvidence, { color: colors.textMuted }]}>
+          {evidenceText}
+        </Text>
+      </View>
+      <View style={styles.suggestionActions}>
+        <Pressable
+          hitSlop={8}
+          onPress={onAccept}
+          style={({ pressed }) => [
+            styles.suggestionAcceptBtn,
+            { borderColor: colors.brand },
+            pressed && { opacity: 0.6 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={t('accessibility.acceptSuggestion', { text: candidateText })}
+          accessibilityHint={t('accessibility.acceptSuggestionHint')}
+        >
+          <Text style={[styles.suggestionAcceptText, { color: colors.brand }]}>
+            {t('suggestion.use')}
+          </Text>
+        </Pressable>
+        <Pressable
+          hitSlop={8}
+          onPress={onDismiss}
+          style={({ pressed }) => pressed && { opacity: 0.5 }}
+          accessibilityRole="button"
+          accessibilityLabel={t('accessibility.dismissSuggestion')}
+          accessibilityHint={t('accessibility.dismissSuggestionHint')}
+        >
+          <AppIcon name="close" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// ===========================================================================
+// Field label — simple, no AI badge
+// ===========================================================================
+
+function FieldLabel({
+  label,
+  colors,
+  styles }: {
+  label: string;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+      {label}
+    </Text>
   );
 }
 
@@ -842,7 +946,6 @@ interface PhotoCaptureSectionProps {
   onEnhancePhoto: (uri: string) => void;
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
-  reducedMotion: boolean;
 }
 
 function PhotoCaptureSection({
@@ -852,14 +955,13 @@ function PhotoCaptureSection({
   onRemovePhoto,
   onEnhancePhoto,
   colors,
-  styles,
-  reducedMotion,
-}: PhotoCaptureSectionProps) {
+  styles }: PhotoCaptureSectionProps) {
+  const { t } = useAppTranslation('aiListing');
+  const { width: SCREEN_W } = useWindowDimensions();
   const thumbSize = (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3;
 
   return (
     <View style={styles.photoSection}>
-      {/* Photo grid */}
       {photos.length > 0 && (
         <View style={styles.photoGrid}>
           {photos.map((photo, index) => (
@@ -870,52 +972,53 @@ function PhotoCaptureSection({
               <Image source={{ uri: photo.uri }} style={styles.photoImage} />
               {index === 0 && (
                 <View style={[styles.coverBadge, { backgroundColor: colors.brand }]}>
-                  <Text style={[styles.coverBadgeText, { color: colors.textInverse }]}>Cover</Text>
+                  <Text style={[styles.coverBadgeText, { color: colors.textInverse }]}>{t('photo.cover')}</Text>
                 </View>
               )}
               <Pressable
                 style={({ pressed }) => [styles.photoRemoveBtn, pressed && { opacity: 0.5 }]}
                 onPress={() => onRemovePhoto(photo.uri)}
                 accessibilityRole="button"
-                accessibilityLabel="Remove photo"
+                accessibilityLabel={t('accessibility.removePhoto')}
+                accessibilityHint={t('accessibility.removePhotoHint')}
               >
-                <Ionicons name="close-circle" size={22} color={colors.textInverse} aria-hidden={true} />
+                <AppIcon name="close" size={IconSize.md} color={colors.textInverse} opticalCenter accessible={false} />
               </Pressable>
-              {/* Enhance affordance — entry point to AI Photo Enhancement */}
               <Pressable
-                style={({ pressed }) => [styles.photoEnhanceBtn, { backgroundColor: `${colors.background}E6` }, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.photoEnhanceBtn, { backgroundColor: colors.overlay }, pressed && { opacity: 0.6 }]}
                 onPress={() => onEnhancePhoto(photo.uri)}
                 accessibilityRole="button"
-                accessibilityLabel="Enhance photo"
-                accessibilityHint="Opens AI photo enhancement to improve this listing image"
+                accessibilityLabel={t('accessibility.enhancePhoto')}
+                accessibilityHint={t('accessibility.enhancePhotoHint')}
               >
-                <Ionicons name="color-filter-outline" size={12} color={colors.brand} aria-hidden={true} />
-                <Text style={[styles.photoEnhanceText, { color: colors.brand }]}>Enhance</Text>
+                <AppIcon name="palette" size={IconSize.micro} color="brand" opticalCenter accessible={false} />
+                <Text style={[styles.photoEnhanceText, { color: colors.brand }]}>{t('photo.enhance')}</Text>
               </Pressable>
             </View>
           ))}
         </View>
       )}
 
-      {/* Capture actions */}
       <View style={styles.captureRow}>
         <Pressable
           style={({ pressed }) => [styles.captureBtn, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && { opacity: 0.6 }]}
           onPress={onPickFromCamera}
           accessibilityRole="button"
-          accessibilityLabel="Take a photo with the camera"
+          accessibilityLabel={t('accessibility.takePhotoWithCamera')}
+          accessibilityHint={t('accessibility.takePhotoWithCameraHint')}
         >
-          <Ionicons name="camera-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
-          <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>Camera</Text>
+          <AppIcon name="camera" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
+          <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>{t('photo.camera')}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.captureBtn, { borderColor: colors.border, backgroundColor: colors.surface }, pressed && { opacity: 0.6 }]}
           onPress={onPickFromLibrary}
           accessibilityRole="button"
-          accessibilityLabel="Pick photos from gallery"
+          accessibilityLabel={t('accessibility.pickPhotosFromGallery')}
+          accessibilityHint={t('accessibility.pickPhotosFromGalleryHint')}
         >
-          <Ionicons name="images-outline" size={22} color={colors.textPrimary} aria-hidden={true} />
-          <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>Gallery</Text>
+          <AppIcon name="image" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
+          <Text style={[styles.captureBtnText, { color: colors.textPrimary }]}>{t('photo.library')}</Text>
         </Pressable>
       </View>
     </View>
@@ -923,162 +1026,66 @@ function PhotoCaptureSection({
 }
 
 // ===========================================================================
-// Analyzing overlay — scanning animation
-// ===========================================================================
-
-interface AnalyzingOverlayProps {
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-  reducedMotion: boolean;
-}
-
-function AnalyzingOverlay({ colors, styles, reducedMotion }: AnalyzingOverlayProps) {
-  const scanY = useSharedValue(0);
-  const dotOpacity = useSharedValue(0.3);
-
-  useEffect(() => {
-    if (reducedMotion) return;
-    scanY.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: Motion.duration.crawl, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      true,
-    );
-    dotOpacity.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: Motion.duration.slower }),
-        withTiming(0.3, { duration: Motion.duration.slower }),
-      ),
-      -1,
-      true,
-    );
-    return () => {
-      cancelAnimation(scanY);
-      cancelAnimation(dotOpacity);
-    };
-  }, [reducedMotion, scanY, dotOpacity]);
-
-  const scanStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY: interpolate(scanY.value, [0, 1], [0, 56]),
-      },
-    ],
-  }));
-
-  const dotStyle = useAnimatedStyle(() => ({ opacity: dotOpacity.value }));
-
-  return (
-    <View
-      style={[styles.analyzingCard, { backgroundColor: colors.surface, borderColor: `${colors.brand}30` }]}
-    >
-      <View style={styles.analyzingHeader}>
-        <Ionicons name="analytics-outline" size={18} color={colors.brand} aria-hidden={true} />
-        <Text style={[styles.analyzingTitle, { color: colors.textPrimary }]}>Analyzing photos…</Text>
-      </View>
-
-      {/* Scanning window */}
-      <View style={[styles.scanWindow, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-        <View style={styles.scanFrame}>
-          <Reanimated.View
-            style={[
-              styles.scanLine,
-              { backgroundColor: colors.brand },
-              reducedMotion ? undefined : scanStyle,
-            ]}
-          />
-        </View>
-        <View style={styles.scanDots}>
-          <Reanimated.View style={[styles.scanDot, { backgroundColor: colors.brand }, reducedMotion ? undefined : dotStyle]} />
-          <Reanimated.View style={[styles.scanDot, { backgroundColor: colors.brand }, reducedMotion ? undefined : dotStyle]} />
-          <Reanimated.View style={[styles.scanDot, { backgroundColor: colors.brand }, reducedMotion ? undefined : dotStyle]} />
-        </View>
-      </View>
-
-      <Text style={[styles.analyzingHint, { color: colors.textMuted }]}>
-        Reading photo metadata for brand, category and colour hints
-      </Text>
-    </View>
-  );
-}
-
-// ===========================================================================
-// Listing form skeleton — placeholder layout while AI analyses photos
+// Listing form skeleton — field geometry, no scanning animation
 // ===========================================================================
 
 function ListingFormSkeleton({
-  colors,
-  styles,
-  reducedMotion,
-}: {
-  colors: ThemeColors;
+  styles }: {
   styles: ReturnType<typeof createStyles>;
-  reducedMotion: boolean;
 }) {
-  const thumbSize = (SCREEN_W - Space.md * 2 - Space.sm * 2) / 3;
+  const { t } = useAppTranslation('aiListing');
   return (
     <View
-      accessibilityLabel="Loading AI suggestions"
+      accessibilityLabel={t('accessibility.loadingSuggestions')}
+      accessibilityHint={t('accessibility.loadingSuggestionsHint')}
       accessibilityState={{ busy: true }}
     >
-      {/* Photo placeholder row */}
-      <View style={styles.skeletonPhotoRow}>
-        <PremiumSkeletonTile width={thumbSize} height={thumbSize} borderRadius={Radius.md} />
-        <PremiumSkeletonTile width={thumbSize} height={thumbSize} borderRadius={Radius.md} />
-        <PremiumSkeletonTile width={thumbSize} height={thumbSize} borderRadius={Radius.md} />
-      </View>
-
-      {/* Title field placeholder */}
       <View style={styles.skeletonFieldGroup}>
-        <PremiumSkeletonTile width="30%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
+        <PremiumSkeletonTile width="30%" height={TypographyV2.meta.size + 2} borderRadius={Radius.sm} />
         <PremiumSkeletonTile
           width="100%"
-          height={Type.body.size + Space.sm * 2 + 4}
+          height={TypographyV2.body.size + Space.sm * 2 + 4}
           borderRadius={Radius.md}
           style={styles.skeletonFieldBlock}
         />
       </View>
 
-      {/* Category + Brand row placeholder */}
       <View style={[styles.fieldRow, styles.skeletonFieldGroup]}>
         <View style={{ flex: 1, marginRight: Space.sm }}>
-          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={TypographyV2.meta.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
-            height={Type.body.size + Space.sm * 2 + 4}
+            height={TypographyV2.body.size + Space.sm * 2 + 4}
             borderRadius={Radius.md}
             style={styles.skeletonFieldBlock}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={TypographyV2.meta.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
-            height={Type.body.size + Space.sm * 2 + 4}
+            height={TypographyV2.body.size + Space.sm * 2 + 4}
             borderRadius={Radius.md}
             style={styles.skeletonFieldBlock}
           />
         </View>
       </View>
 
-      {/* Condition + Price row placeholder */}
       <View style={[styles.fieldRow, styles.skeletonFieldGroup]}>
         <View style={{ flex: 1, marginRight: Space.sm }}>
-          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={TypographyV2.meta.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
-            height={Type.body.size + Space.sm * 2 + 4}
+            height={TypographyV2.body.size + Space.sm * 2 + 4}
             borderRadius={Radius.md}
             style={styles.skeletonFieldBlock}
           />
         </View>
         <View style={{ flex: 1 }}>
-          <PremiumSkeletonTile width="40%" height={Type.caption.size + 2} borderRadius={Radius.sm} />
+          <PremiumSkeletonTile width="40%" height={TypographyV2.meta.size + 2} borderRadius={Radius.sm} />
           <PremiumSkeletonTile
             width="100%"
-            height={Type.body.size + Space.sm * 2 + 4}
+            height={TypographyV2.body.size + Space.sm * 2 + 4}
             borderRadius={Radius.md}
             style={styles.skeletonFieldBlock}
           />
@@ -1094,26 +1101,21 @@ function ListingFormSkeleton({
 
 function EmptyState({
   colors,
-  styles,
-  reducedMotion,
-}: {
+  styles }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
-  reducedMotion: boolean;
 }) {
+  const { t } = useAppTranslation('aiListing');
   return (
-    <View
-      style={styles.emptyState}
-    >
+    <View style={styles.emptyState}>
       <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="camera-outline" size={28} color={colors.textMuted} aria-hidden={true} />
+        <AppIcon name="camera" size={IconSize.xl} color="textMuted" opticalCenter accessible={false} />
       </View>
       <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-        Snap to list
+        {t('empty.title')}
       </Text>
       <Text style={[styles.emptyDesc, { color: colors.textSecondary }]}>
-        Add photos above and AI will suggest a title, description, category and
-        price range. Review and edit everything before publishing.
+        {t('empty.body')}
       </Text>
     </View>
   );
@@ -1132,10 +1134,11 @@ interface ErrorBannerProps {
 }
 
 function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBannerProps) {
+  const { t } = useAppTranslation('aiListing');
   return (
-    <View style={[styles.errorBanner, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
+    <View style={[styles.errorBanner, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
       <View style={styles.errorHeader}>
-        <Ionicons name="alert-circle-outline" size={18} color={colors.danger} aria-hidden={true} />
+        <AppIcon name="warning" size={IconSize.sm} color="danger" opticalCenter accessible={false} />
         <Text style={[styles.errorText, { color: colors.danger }]} numberOfLines={3}>
           {message}
         </Text>
@@ -1144,58 +1147,27 @@ function ErrorBanner({ message, onRetry, onDismiss, colors, styles }: ErrorBanne
           onPress={onDismiss}
           style={({ pressed }) => pressed && { opacity: 0.5 }}
           accessibilityRole="button"
-          accessibilityLabel="Dismiss error"
+          accessibilityLabel={t('accessibility.dismissError')}
+          accessibilityHint={t('accessibility.dismissErrorHint')}
         >
-          <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
+          <AppIcon name="close" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         </Pressable>
       </View>
       <Pressable
         style={({ pressed }) => [styles.errorRetryBtn, { borderColor: colors.danger }, pressed && { opacity: 0.6 }]}
         onPress={onRetry}
         accessibilityRole="button"
-        accessibilityLabel="Retry"
+        accessibilityLabel={t('error.retry')}
+        accessibilityHint={t('accessibility.retryHint')}
       >
-        <Text style={[styles.errorRetryText, { color: colors.danger }]}>Retry</Text>
+        <Text style={[styles.errorRetryText, { color: colors.danger }]}>{t('error.retry')}</Text>
       </Pressable>
     </View>
   );
 }
 
 // ===========================================================================
-// AI badge field wrapper
-// ===========================================================================
-
-interface AIBadgeFieldProps {
-  label: string;
-  /** Whether the field still holds the unedited AI suggestion. When false
-   *  (the seller has edited the field), the "Suggested" badge is hidden —
-   *  the field is now user-authored. */
-  isAISuggested: boolean;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-  style?: StyleProp<ViewStyle>;
-  children: React.ReactNode;
-}
-
-function AIBadgeField({ label, isAISuggested, colors, styles, style, children }: AIBadgeFieldProps) {
-  return (
-    <View style={[styles.fieldGroup, style]}>
-      <View style={styles.fieldLabelRow}>
-        <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
-        {isAISuggested && (
-          <View style={[styles.aiBadge, { backgroundColor: `${colors.brand}15` }]}>
-            <Ionicons name="bulb-outline" size={12} color={colors.brand} aria-hidden={true} />
-            <Text style={[styles.aiBadgeText, { color: colors.brand }]}>Suggested</Text>
-          </View>
-        )}
-      </View>
-      {children}
-    </View>
-  );
-}
-
-// ===========================================================================
-// Picker sheet (lightweight bottom sheet)
+// Picker sheet
 // ===========================================================================
 
 interface PickerSheetProps {
@@ -1209,19 +1181,19 @@ interface PickerSheetProps {
 
 function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors }: PickerSheetProps) {
   const insets = useSafeAreaInsets();
+  const { t } = useAppTranslation('aiListing');
   return (
-    <Pressable style={[pickerStyles.overlay, { backgroundColor: colors.overlay }]} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close picker">
+    <Pressable style={[pickerStyles.overlay, { backgroundColor: colors.overlay }]} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('accessibility.closePicker')} accessibilityHint={t('accessibility.closePickerHint')}>
       <Pressable
         style={[
           pickerStyles.sheet,
           {
             backgroundColor: colors.background,
             paddingBottom: insets.bottom + Space.md,
-            borderTopColor: colors.border,
-          },
+            borderTopColor: colors.border },
         ]}
         onPress={(e) => e.stopPropagation()}
-      accessibilityRole="button"
+        accessibilityRole="button"
       >
         <View style={[pickerStyles.handle, { backgroundColor: colors.border }]} />
         <Text style={[pickerStyles.title, { color: colors.textPrimary }]}>{title}</Text>
@@ -1238,7 +1210,8 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
                 ]}
                 onPress={() => onSelect(opt)}
                 accessibilityRole="button"
-                accessibilityLabel={`Select ${opt}`}
+                accessibilityLabel={t('accessibility.selectOption', { option: opt })}
+                accessibilityHint={t('accessibility.chooseOption', { option: opt })}
               >
                 <Text
                   style={[
@@ -1248,7 +1221,7 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
                 >
                   {opt}
                 </Text>
-                {selected && <Ionicons name="checkmark" size={18} color={colors.brand} aria-hidden={true} />}
+                {selected && <AppIcon name="verified" focused size={IconSize.sm} color="brand" opticalCenter accessible={false} />}
               </Pressable>
             );
           })}
@@ -1265,59 +1238,37 @@ function PickerSheet({ options, selectedValue, onSelect, onClose, title, colors 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: {
-      flex: 1,
-    },
-    demoBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderBottomWidth: Stroke.standard,
-    },
-    demoBannerText: {
-      flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      lineHeight: Type.caption.lineHeight,
-    },
+      flex: 1 },
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.md,
-    },
+      paddingTop: Space.md },
     // Photo capture
     photoSection: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     photoGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       marginHorizontal: -Space.sm / 2,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     photoThumb: {
       margin: Space.sm / 2,
       borderRadius: Radius.md,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     photoImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     coverBadge: {
       position: 'absolute',
       top: Space.xs,
       left: Space.xs,
       paddingHorizontal: Space.xs,
       paddingVertical: Space.xs,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     coverBadgeText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontWeight: '700',
-      letterSpacing: LetterSpacing.wide + 0.18,
-    },
+      letterSpacing: LetterSpacing.wide + 0.18 },
     photoRemoveBtn: {
       position: 'absolute',
       top: Space.xs,
@@ -1325,8 +1276,7 @@ function createStyles(colors: ThemeColors) {
       width: Control.hit - Space.lg,
       height: Control.hit - Space.lg,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     photoEnhanceBtn: {
       position: 'absolute',
       bottom: Space.xs,
@@ -1336,17 +1286,14 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     photoEnhanceText: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontWeight: '700',
-      letterSpacing: LetterSpacing.wide + 0.08,
-    },
+      letterSpacing: LetterSpacing.wide + 0.08 },
     captureRow: {
       flexDirection: 'row',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     captureBtn: {
       flex: 1,
       flexDirection: 'row',
@@ -1356,185 +1303,36 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm + 2,
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     captureBtnText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
-    // Analyzing
-    analyzingCard: {
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-      padding: Space.md,
-      marginBottom: Space.md,
-    },
-    analyzingHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      marginBottom: Space.sm,
-    },
-    analyzingTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
-    scanWindow: {
-      height: Space.xxl + Space.xxl + Space.sm,
-      borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
-      overflow: 'hidden',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    scanFrame: {
-      width: '70%',
-      height: Space.xxl + Space.lg + Space.xs,
-      justifyContent: 'flex-start',
-    },
-    scanLine: {
-      width: '100%',
-      height: Stroke.emphasis,
-      borderRadius: Radius.sm,
-    },
-    scanDots: {
-      flexDirection: 'row',
-      gap: Space.xs,
-      marginTop: Space.sm,
-    },
-    scanDot: {
-      width: Space.xs + 2,
-      height: Space.xs + 2,
-      borderRadius: Radius.sm,
-    },
-    analyzingHint: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      marginTop: Space.sm,
-      textAlign: 'center',
-    },
-    // Form skeleton
-    skeletonPhotoRow: {
-      flexDirection: 'row',
-      gap: Space.sm,
-      marginBottom: Space.md,
-    },
-    skeletonFieldGroup: {
-      marginBottom: Space.md,
-    },
-    skeletonFieldBlock: {
-      marginTop: Space.xs,
-    },
-    // Empty state
-    emptyState: {
-      alignItems: 'center',
-      paddingVertical: Space.xl,
-      paddingHorizontal: Space.md,
-    },
-    emptyIcon: {
-      width: Space.xxl + Space.lg,
-      height: Space.xxl + Space.lg,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: Space.md,
-    },
-    emptyTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: TypeStyles.title.fontFamily,
-      fontWeight: '700',
-      marginBottom: Space.xs,
-    },
-    emptyDesc: {
-      fontSize: Type.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      color: colors.textSecondary,
-      textAlign: 'center',
-      lineHeight: Type.body.lineHeight,
-    },
-    // Confidence banner
-    confidenceBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
-      padding: Space.sm + 2,
-      marginBottom: Space.md,
-    },
-    confidenceTextWrap: {
-      flex: 1,
-    },
-    confidenceTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
-    confidenceSub: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      marginTop: Space.xs,
-    },
-    confidencePill: {
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-    },
-    confidencePillText: {
-      fontSize: Type.meta.size,
-      fontWeight: '700',
-    },
-    // Fields
-    fieldGroup: {
-      marginBottom: Space.md,
-    },
-    fieldLabelRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      marginBottom: Space.xs,
-    },
+      fontWeight: '600' },
+    // Form fields
     fieldLabel: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
       fontWeight: '500',
-    },
-    aiBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.xs,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.sm,
-    },
-    aiBadgeText: {
-      fontSize: Type.meta.size,
-      fontWeight: '700',
-      letterSpacing: LetterSpacing.wide + 0.28,
-    },
+      marginBottom: Space.xs,
+      marginTop: Space.md },
     fieldInput: {
       borderWidth: Stroke.standard,
       borderRadius: Radius.md,
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm + 2,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: TypeStyles.body.fontFamily,
-      minHeight: Control.hit + Space.sm,
-    },
+      minHeight: Control.hit + Space.sm },
     fieldTextarea: {
       borderWidth: Stroke.standard,
       borderRadius: Radius.md,
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm + 2,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: TypeStyles.body.fontFamily,
-      minHeight: Space.xxl + Space.xxl + Space.sm,
-    },
+      minHeight: Space.xxl + Space.xxl + Space.sm },
     fieldRow: {
-      flexDirection: 'row',
-    },
+      flexDirection: 'row' },
     pickerField: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1543,65 +1341,71 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm + 2,
-      minHeight: Control.hit + Space.sm,
-    },
+      minHeight: Control.hit + Space.sm },
     pickerValue: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: TypeStyles.body.fontFamily,
-      flex: 1,
-    },
+      flex: 1 },
     priceRangeHint: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      marginTop: -Space.xs,
-      marginBottom: Space.md,
-    },
-    // Attributes
-    attributeWrap: {
-      marginBottom: Space.md,
-    },
-    attributeLabel: {
-      fontSize: Type.caption.size,
+      marginTop: Space.xs,
+      marginBottom: Space.md },
+    attentionHint: {
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      fontWeight: '500',
-      marginBottom: Space.xs,
-    },
-    attributeChips: {
+      marginTop: Space.xs,
+      lineHeight: TypographyV2.meta.lineHeight },
+    impactHelperText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      marginTop: Space.xs,
+      lineHeight: TypographyV2.meta.lineHeight },
+    // Suggestion row — inline, restrained
+    suggestionRow: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Space.xs,
-    },
-    attributeChip: {
+      alignItems: 'center',
+      gap: Space.sm,
+      marginTop: Space.xs,
+      paddingVertical: Space.sm,
+      paddingHorizontal: Space.sm + 2,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt },
+    suggestionRowCompact: {
+      paddingVertical: Space.xs + 2 },
+    suggestionContent: {
+      flex: 1 },
+    suggestionCandidate: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight },
+    suggestionEvidence: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      marginTop: Space.xxs },
+    suggestionActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm },
+    suggestionAcceptBtn: {
       paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-    },
-    attributeChipText: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-    },
-    // Tags
-    tagsSection: {
-      marginBottom: Space.md,
-    },
-    // Section labels (Preview / Quality)
-    sectionLabelWrap: {
+      paddingVertical: Space.xs + 2,
+      borderRadius: Radius.sm,
+      borderWidth: Stroke.standard },
+    suggestionAcceptText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      fontWeight: '600' },
+    // Smart Sell
+    smartSellWrap: {
       marginTop: Space.md,
-      marginBottom: Space.xs,
-    },
-    sectionLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      fontWeight: '600',
-      letterSpacing: LetterSpacing.wide + 0.28,
-      textTransform: 'uppercase',
-    },
+      marginBottom: Space.md },
+    // Tags
     tagsWrap: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.xs,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     tagChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1609,13 +1413,11 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
-      borderWidth: Stroke.hairline,
-    },
+      borderWidth: Stroke.hairline },
     tagText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
+      fontWeight: '600' },
     tagInputWrap: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1623,91 +1425,113 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
       borderRadius: Radius.full,
-      borderWidth: Stroke.hairline,
-    },
+      borderWidth: Stroke.hairline },
     tagInput: {
       minWidth: Space.xxl + Space.lg - 2,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.body.fontFamily,
-      padding: 0,
-    },
+      padding: 0 },
+    // Section labels
+    sectionLabelWrap: {
+      marginTop: Space.md,
+      marginBottom: Space.xs },
+    sectionLabel: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      fontWeight: '600',
+      letterSpacing: LetterSpacing.wide + 0.28,
+      textTransform: 'uppercase' },
+    // Skeleton
+    skeletonFieldGroup: {
+      marginBottom: Space.md },
+    skeletonFieldBlock: {
+      marginTop: Space.xs },
+    // Empty state
+    emptyState: {
+      alignItems: 'center',
+      paddingVertical: Space.xl,
+      paddingHorizontal: Space.md },
+    emptyIcon: {
+      width: Space.xxl + Space.lg,
+      height: Space.xxl + Space.lg,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: Space.md },
+    emptyTitle: {
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypeStyles.title.fontFamily,
+      fontWeight: '700',
+      marginBottom: Space.xs },
+    emptyDesc: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypeStyles.body.fontFamily,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: TypographyV2.body.lineHeight },
     // Error banner
     errorBanner: {
       borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
+      borderWidth: Stroke.hairline,
       padding: Space.sm + 2,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     errorHeader: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     errorText: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: TypeStyles.body.fontFamily,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypeStyles.body.fontFamily },
     errorRetryBtn: {
       alignSelf: 'flex-start',
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
       borderRadius: Radius.sm,
       borderWidth: Stroke.standard,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     errorRetryText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600',
-    },
+      fontWeight: '600' },
     // Footer
     footer: {
       borderTopWidth: StyleSheet.hairlineWidth,
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.md,
-    },
-  });
+      paddingBottom: Space.md } });
 }
 
 const pickerStyles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'transparent',
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingTop: Space.sm,
     paddingHorizontal: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   handle: {
     width: Space.xxl + Space.sm,
     height: Stroke.standard * 4,
     borderRadius: Radius.sm,
     backgroundColor: 'transparent',
     alignSelf: 'center',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   title: {
-    fontSize: Type.subtitle.size,
+    fontSize: TypographyV2.sectionTitle.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     fontWeight: '600',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   rowText: {
-    fontSize: Type.body.size,
-    fontFamily: TypeStyles.body.fontFamily,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypeStyles.body.fontFamily } });

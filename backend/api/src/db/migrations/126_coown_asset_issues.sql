@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS coown_asset_issues (
   id TEXT PRIMARY KEY,
-  asset_id TEXT NOT NULL REFERENCES "coOwn_assets"(id) ON DELETE CASCADE,
+  asset_id TEXT NOT NULL REFERENCES coown_assets(id) ON DELETE CASCADE,
   reporter_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   category TEXT NOT NULL CHECK (category IN ('dispute', 'technical', 'fraud', 'other')),
   description TEXT NOT NULL,

@@ -5,14 +5,12 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { CachedImage } from '../CachedImage';
 import {
   NotificationRowBase,
-  NotificationThumbnail,
-} from './NotificationRowBase';
+  NotificationThumbnail } from './NotificationRowBase';
 import {
-  Space,
   Radius,
-  Type,
   FontFamily,
-} from '../../theme/designTokens';
+  Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { NotificationEventV2 } from '../../services/notificationsApi';
 
 // ---------------------------------------------------------------------------
@@ -39,8 +37,7 @@ export function SocialNotificationRow({
   aggregatedActors,
   inAttentionSection = false,
   onPress,
-  onActorPress,
-}: SocialNotificationRowProps) {
+  onActorPress }: SocialNotificationRowProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -124,34 +121,28 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     avatarWrap: {
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     avatar: {
-      width: 44,
-      height: 44,
-      borderRadius: Radius.full,
-    },
+      width: 40,
+      height: 40,
+      borderRadius: Radius.full },
     avatarFallback: {
-      backgroundColor: colors.surfaceAlt,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     title: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyLarge.lineHeight,
-      paddingRight: Space.xxl + Space.sm,
-    },
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      flexShrink: 1 },
     titleUnread: {
       color: colors.textPrimary,
-      fontFamily: FontFamily.semibold,
-    },
+      fontFamily: FontFamily.semibold },
     body: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      lineHeight: TypographyV2.body.lineHeight } });
 }

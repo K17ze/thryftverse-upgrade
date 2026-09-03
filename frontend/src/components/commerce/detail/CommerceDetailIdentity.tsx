@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { Space, Type, Typography, Radius } from '../../../theme/designTokens';
+import { Space, Radius, FontFamily } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import type {
   CommerceDetailFamily,
-  CommerceDetailIdentityDensity,
-} from './types';
+  CommerceDetailIdentityDensity } from './types';
 
 /**
  * Identity seam — one compact identity composition immediately after
@@ -56,6 +56,10 @@ export interface CommerceDetailIdentityProps {
   interestSignal?: string;
   /** Optional small family chip rendered inline with the eyebrow. */
   familyChip?: React.ReactNode;
+  /** Optional single quiet trust row (e.g. seller verification) rendered
+   *  under the price/identity block. Height-capped, no card or badge
+   *  chrome. Omit for zero visual change. */
+  trustSlot?: React.ReactNode;
   /** Family variant — controls price eligibility and title rhythm.
    * Defaults to `direct` for backward compatibility. */
   family?: CommerceDetailFamily;
@@ -75,10 +79,10 @@ export function CommerceDetailIdentity({
   secondaryLine,
   interestSignal,
   familyChip,
+  trustSlot,
   family = 'direct',
   density = 'standard',
-  tone = 'canvas',
-}: CommerceDetailIdentityProps) {
+  tone = 'canvas' }: CommerceDetailIdentityProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const isMedia = tone === 'media';
@@ -200,6 +204,12 @@ export function CommerceDetailIdentity({
           {interestSignal}
         </Text>
       ) : null}
+
+      {trustSlot ? (
+        <View style={styles.trustSlot}>
+          {trustSlot}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -208,76 +218,69 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   containerMedia: {
     maxWidth: '88%',
     paddingHorizontal: 0,
     paddingTop: 0,
-    paddingBottom: 0,
-  },
+    paddingBottom: 0 },
   eyebrowRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   eyebrow: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
-  },
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
   eyebrowMedia: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
-  },
+    textShadowRadius: 6 },
   title: {
-    fontSize: Type.priceHero.size,
-    lineHeight: Type.priceHero.lineHeight + 2,
-    fontFamily: Typography.family.bold,
-    letterSpacing: -0.5,
-  },
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight + 2,
+    fontFamily: TypographyV2.priceHero.fontFamily,
+    letterSpacing: -0.5 },
   titleDirect: {
-    fontSize: Type.priceHero.size + 2,
-    lineHeight: Type.priceHero.lineHeight + 3,
-    letterSpacing: -0.65,
-  },
+    fontSize: TypographyV2.priceHero.size + 2,
+    lineHeight: TypographyV2.priceHero.lineHeight + 3,
+    letterSpacing: -0.65 },
   titleAuction: {
-    fontSize: Type.priceHero.size - 2,
-    lineHeight: Type.priceHero.lineHeight - 1,
-    letterSpacing: -0.4,
-  },
+    fontSize: TypographyV2.priceHero.size - 2,
+    lineHeight: TypographyV2.priceHero.lineHeight - 1,
+    letterSpacing: -0.4 },
   titleCoOwn: {
-    fontSize: Type.priceHero.size,
-    lineHeight: Type.priceHero.lineHeight + 1,
-    letterSpacing: -0.45,
-  },
+    fontSize: TypographyV2.priceHero.size,
+    lineHeight: TypographyV2.priceHero.lineHeight + 1,
+    letterSpacing: -0.45 },
   titleMedia: {
-    fontSize: Type.priceHero.size - 1,
-    lineHeight: Type.priceHero.lineHeight - 1,
+    fontSize: TypographyV2.priceHero.size - 1,
+    lineHeight: TypographyV2.priceHero.lineHeight - 1,
     letterSpacing: -0.6,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 12,
-  },
+    textShadowRadius: 12 },
   containerAuction: {
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   containerCoOwn: {
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   // Per spec 05 §3: compact width uses 26pt title with tighter line
   // height so long titles do not crowd the first viewport.
   titleCompact: {
-    fontSize: Type.priceHero.size - 2,
-    lineHeight: Type.priceHero.lineHeight - 1,
-  },
+    fontSize: TypographyV2.priceHero.size - 2,
+    lineHeight: TypographyV2.priceHero.lineHeight - 1 },
+  // Quiet trust row under the price/identity block — one compact line,
+  // height-capped, no card or badge chrome.
+  trustSlot: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Space.xs,
+    maxHeight: 28 },
   // Value row: price + secondary line sit on one baseline row. The
   // price is dominant; the secondary line is a quiet truth partner.
   // Wrapping is suppressed so the price never stacks below itself.
@@ -285,8 +288,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: Space.sm,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   // Per Design.md: the in-page product price is the primary price
   // anchor — larger than a line item (priceList 20px) but smaller
   // than a checkout total (priceLarge 28px). 22px matches the
@@ -294,30 +296,27 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   // value, so the identity price remains the visual anchor while
   // the dock is the actionable repetition.
   primaryValue: {
-    fontSize: Type.priceList.size + 2,
-    lineHeight: Type.priceList.lineHeight + 3,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size + 2,
+    lineHeight: TypographyV2.priceList.lineHeight + 3,
+    fontFamily: TypographyV2.priceList.fontFamily,
     letterSpacing: -0.3,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   primaryValueMedia: {
-    fontSize: Type.priceList.size + 2,
-    lineHeight: Type.priceList.lineHeight + 3,
+    fontSize: TypographyV2.priceList.size + 2,
+    lineHeight: TypographyV2.priceList.lineHeight + 3,
     letterSpacing: -0.3,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
-  },
+    textShadowRadius: 8 },
   // Strikethrough original price — quiet, muted, line-through.
   // Depop/eBay pattern: shows the savings visually without requiring
   // the user to read the secondary line.
   originalValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     textDecorationLine: 'line-through',
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   // Discount badge — small danger-tinted pill with the savings %.
   // eBay pattern: draws the eye to the deal without dominating.
   discountBadge: {
@@ -325,42 +324,35 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.xs / 2,
     borderRadius: Radius.sm,
     alignSelf: 'flex-start',
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   discountBadgeText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'] },
   // Secondary truth line — now on its own line below the price row.
   // marginTop Space.xs keeps it close to the price so it reads as a
   // truth partner, not a disconnected metadata fragment.
   secondaryLine: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     flexShrink: 1,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   secondaryLineMedia: {
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
-  },
+    textShadowRadius: 6 },
   // Interest signal sits on its own line below the value row — a
   // quiet metadata line, not a third member of the value cluster.
   interest: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    marginTop: Space.xs,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs },
   interestMedia: {
-    fontFamily: Typography.family.medium,
+    fontFamily: FontFamily.medium,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 5,
-  },
-});
+    textShadowRadius: 5 } });

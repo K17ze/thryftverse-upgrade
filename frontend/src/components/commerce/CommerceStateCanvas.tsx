@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Stroke, Control, PressScale } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export type CommerceStateType = 'loading' | 'error' | 'unavailable';
 
@@ -21,6 +22,12 @@ export interface CommerceStateCanvasProps {
    * detail layout.
    */
   family?: 'direct' | 'auction' | 'coown';
+  /**
+   * Exact hero height fraction used by the populated media stage, for
+   * loading→populated geometry parity. When omitted, the skeleton uses
+   * the family defaults that mirror the shipped detail screens.
+   */
+  heroFraction?: number;
 }
 
 /**
@@ -42,12 +49,12 @@ export function CommerceStateCanvas({
   secondaryActionLabel,
   onSecondaryAction,
   family = 'direct',
-}: CommerceStateCanvasProps) {
+  heroFraction }: CommerceStateCanvasProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
 
   if (state === 'loading') {
-    return <CommerceDetailSkeleton family={family} />;
+    return <CommerceDetailSkeleton family={family} heroFraction={heroFraction} />;
   }
 
   const defaultTitle =
@@ -59,7 +66,7 @@ export function CommerceStateCanvas({
     : 'This item is no longer available.';
 
   const iconName =
-    state === 'error' ? 'cloud-offline-outline' : 'cube-outline';
+    state === 'error' ? 'cloud-offline-outline' : 'bag-handle-outline';
 
   return (
     <View
@@ -67,13 +74,15 @@ export function CommerceStateCanvas({
         styles.container,
         {
           paddingTop: insets.top + 60,
-          backgroundColor: colors.background,
-        },
+          backgroundColor: colors.background },
       ]}
     >
-      <View style={[styles.iconWrap, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name={iconName} size={32} color={colors.textMuted} />
-      </View>
+      <Ionicons
+        name={iconName}
+        size={32}
+        color={colors.textMuted}
+        style={styles.icon}
+      />
 
       <Text style={[styles.title, { color: colors.textPrimary }]}>
         {title ?? defaultTitle}
@@ -88,7 +97,7 @@ export function CommerceStateCanvas({
           style={({ pressed }) => [
             styles.retryBtn,
             { backgroundColor: colors.surface, borderColor: colors.border },
-            pressed && { opacity: 0.7 },
+            pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] },
           ]}
           onPress={onRetry}
           accessibilityRole="button"
@@ -103,7 +112,7 @@ export function CommerceStateCanvas({
         <Pressable
           style={({ pressed }) => [
             styles.secondaryBtn,
-            pressed && { opacity: 0.7 },
+            pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] },
           ]}
           onPress={onSecondaryAction}
           accessibilityRole="button"
@@ -126,14 +135,21 @@ export function CommerceStateCanvas({
  * heightFraction used by the real screens so the loading → populated
  * transition is geometry-stable.
  */
-function CommerceDetailSkeleton({ family }: { family: 'direct' | 'auction' | 'coown' }) {
+function CommerceDetailSkeleton({
+  family,
+  heroFraction }: {
+  family: 'direct' | 'auction' | 'coown';
+  heroFraction?: number;
+}) {
   const { colors } = useAppTheme();
   const { width, height } = useWindowDimensions();
   const isCompact = width < 390;
-  const heroFraction = family === 'coown'
-    ? (width < 340 ? 0.48 : isCompact ? 0.5 : 0.56)
-    : (isCompact ? 0.5 : 0.56);
-  const heroHeight = Math.min(height * heroFraction, width * 1.35);
+  // Defaults mirror the heightFraction values the shipped detail screens
+  // pass to CommerceMediaStage so the skeleton matches the final hero.
+  const defaultFraction = family === 'coown'
+    ? (width < 340 ? 0.5 : isCompact ? 0.54 : 0.58)
+    : (isCompact ? 0.54 : 0.58);
+  const heroHeight = Math.min(height * (heroFraction ?? defaultFraction), width * 1.35);
 
   return (
     <View style={[styles.skeletonContainer, { backgroundColor: colors.background }]}>
@@ -142,46 +158,46 @@ function CommerceDetailSkeleton({ family }: { family: 'direct' | 'auction' | 'co
 
       {/* Identity seam */}
       <View style={styles.skeletonIdentity}>
-        <View style={[styles.skeletonLine, { width: 90, height: 12, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: 90, height: TypographyV2.meta.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.xs }} />
-        <View style={[styles.skeletonLine, { width: '80%', height: 26, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '80%', height: TypographyV2.screenTitle.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.xs }} />
-        <View style={[styles.skeletonLine, { width: '45%', height: 22, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '45%', height: TypographyV2.priceList.lineHeight, backgroundColor: colors.surfaceAlt }]} />
       </View>
 
       {/* Transaction surface */}
       <View style={[styles.skeletonSurface, { backgroundColor: colors.surface }]}>
-        <View style={[styles.skeletonLine, { width: '30%', height: 12, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '30%', height: TypographyV2.meta.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.xs }} />
-        <View style={[styles.skeletonLine, { width: '55%', height: 28, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '55%', height: TypographyV2.priceHero.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.sm }} />
         <View style={styles.skeletonRow}>
-          <View style={[styles.skeletonLine, { flex: 1, height: 14, backgroundColor: colors.surfaceAlt }]} />
-          <View style={[styles.skeletonLine, { width: 80, height: 14, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { flex: 1, height: TypographyV2.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { width: 80, height: TypographyV2.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         </View>
       </View>
 
       {/* Section placeholder */}
       <View style={styles.skeletonSection}>
-        <View style={[styles.skeletonLine, { width: '40%', height: 14, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '40%', height: TypographyV2.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.sm }} />
-        <View style={[styles.skeletonLine, { width: '100%', height: 14, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '100%', height: TypographyV2.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.xs }} />
-        <View style={[styles.skeletonLine, { width: '85%', height: 14, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '85%', height: TypographyV2.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
       </View>
 
       {/* Section placeholder */}
       <View style={styles.skeletonSection}>
-        <View style={[styles.skeletonLine, { width: '35%', height: 14, backgroundColor: colors.surfaceAlt }]} />
+        <View style={[styles.skeletonLine, { width: '35%', height: TypographyV2.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         <View style={{ height: Space.sm }} />
         <View style={styles.skeletonRow}>
-          <View style={[styles.skeletonLine, { flex: 1, height: 14, backgroundColor: colors.surfaceAlt }]} />
-          <View style={[styles.skeletonLine, { width: 60, height: 14, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { flex: 1, height: TypographyV2.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { width: 60, height: TypographyV2.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         </View>
         <View style={{ height: Space.xs }} />
         <View style={styles.skeletonRow}>
-          <View style={[styles.skeletonLine, { flex: 1, height: 14, backgroundColor: colors.surfaceAlt }]} />
-          <View style={[styles.skeletonLine, { width: 60, height: 14, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { flex: 1, height: TypographyV2.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
+          <View style={[styles.skeletonLine, { width: 60, height: TypographyV2.body.lineHeight, backgroundColor: colors.surfaceAlt }]} />
         </View>
       </View>
     </View>
@@ -193,83 +209,61 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.xl,
-  },
-  iconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Space.md,
-  },
+    paddingHorizontal: Space.xl },
+  icon: {
+    marginBottom: Space.md },
   title: {
-    fontSize: 18,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.itemTitle.size,
+    fontFamily: TypographyV2.itemTitle.fontFamily,
     textAlign: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   message: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'center',
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   retryBtn: {
     marginTop: Space.lg,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    minHeight: 44,
+    borderWidth: Stroke.standard,
+    minHeight: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   retryText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   secondaryBtn: {
-    minHeight: 44,
+    minHeight: Control.hit,
     marginTop: Space.sm,
     paddingHorizontal: Space.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   secondaryText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   // ── Skeleton ──
   skeletonContainer: {
-    flex: 1,
-  },
+    flex: 1 },
   skeletonHero: {
-    width: '100%',
-  },
+    width: '100%' },
   skeletonIdentity: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
+  // Flat on the canvas — mirrors the transparent transaction surface so
+  // the loading→populated transition introduces no new surface.
   skeletonSurface: {
     marginHorizontal: Space.md,
     marginTop: Space.sm,
     padding: Space.md + 2,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   skeletonSection: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   skeletonRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   skeletonLine: {
-    borderRadius: Radius.sm,
-  },
-});
+    borderRadius: Radius.sm } });

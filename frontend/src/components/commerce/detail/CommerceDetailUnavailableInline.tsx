@@ -2,7 +2,9 @@ import React from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type } from '../../../theme/designTokens';
+import { Space, Control } from '../../../theme/designTokens';
+import { FontFamily } from '../../../theme/fontFamily';
+import { TypographyV2 } from '../../../theme/typography.v2';
 
 /**
  * Inline unavailable state — a compact, factual block for missing
@@ -35,8 +37,7 @@ export function CommerceDetailUnavailableInline({
   body,
   onRetry,
   icon = 'information-circle-outline',
-  critical = false,
-}: CommerceDetailUnavailableInlineProps) {
+  critical = false }: CommerceDetailUnavailableInlineProps) {
   const { colors } = useAppTheme();
 
   return (
@@ -44,7 +45,7 @@ export function CommerceDetailUnavailableInline({
       <View style={styles.textCluster}>
         <Ionicons
           name={icon}
-          size={18}
+          size={Control.iconCompact}
           color={critical ? colors.danger : colors.textMuted}
           style={styles.icon}
         />
@@ -91,43 +92,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   textCluster: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   icon: {
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   copy: {
     flexShrink: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   title: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontWeight: '500',
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.medium },
   body: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   retry: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 2,
-    minHeight: 36,
+    minHeight: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   pressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.85 },
   retryText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontWeight: '600',
-  },
-});
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.semibold } });

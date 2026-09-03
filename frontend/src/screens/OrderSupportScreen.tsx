@@ -4,15 +4,15 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Elevation, LetterSpacing, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -22,7 +22,6 @@ import { useHaptic } from '../hooks/useHaptic';
 import { Caption, Meta } from '../components/ui/Text';
 import { CommerceOrder, getOrder } from '../services/commerceApi';
 import { normaliseOrderStatus } from '../components/orders/orderCapabilities';
-import { ElevatedSurface } from '../components/ui/ElevatedSurface';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import * as ImagePicker from 'expo-image-picker';
@@ -42,7 +41,7 @@ interface SupportTopic {
 }
 
 const ALL_SUPPORT_TOPICS: SupportTopic[] = [
-  { id: 'not_received', icon: 'cube-outline', label: 'Item not received', description: 'My order has not arrived within the expected timeframe.', requiresStatus: ['shipped', 'in transit', 'out for delivery', 'delivered'] },
+  { id: 'not_received', icon: 'car-outline', label: 'Item not received', description: 'My order has not arrived within the expected timeframe.', requiresStatus: ['shipped', 'in transit', 'out for delivery', 'delivered'] },
   { id: 'not_as_described', icon: 'alert-circle-outline', label: 'Not as described', description: 'The item condition, size, or authenticity does not match the listing.', requiresStatus: ['delivered'] },
   { id: 'damaged', icon: 'bandage-outline', label: 'Item arrived damaged', description: 'The item was damaged during shipping or arrived broken.', requiresStatus: ['delivered'] },
   { id: 'wrong_item', icon: 'shuffle-outline', label: 'Wrong item sent', description: 'I received a different item than what I ordered.', requiresStatus: ['delivered'] },
@@ -63,8 +62,7 @@ const EVIDENCE_GUIDANCE: Record<string, { needsPhotos: boolean; hint: string }> 
   wrong_item: { needsPhotos: true, hint: 'Attach photos of the received item.' },
   return: { needsPhotos: false, hint: '' },
   payment_issue: { needsPhotos: false, hint: '' },
-  other: { needsPhotos: false, hint: 'Photos optional.' },
-};
+  other: { needsPhotos: false, hint: 'Photos optional.' } };
 
 /**
  * One-line outcome preview shown as a final confirmation right before the
@@ -77,11 +75,10 @@ const OUTCOME_PREVIEW: Record<string, string> = {
   wrong_item: "We'll review the photos and coordinate a return.",
   return: "We'll review your return eligibility.",
   payment_issue: "We'll investigate the payment discrepancy.",
-  other: 'Our team will review and respond.',
-};
+  other: 'Our team will review and respond.' };
 
 export default function OrderSupportScreen({ navigation, route }: Props) {
-  const { orderId, categoryId } = route.params;
+  const { orderId, categoryId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
@@ -147,8 +144,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.85,
-        selectionLimit: 3 - evidenceUris.length,
-      });
+        selectionLimit: 3 - evidenceUris.length });
       if (result.canceled || !result.assets?.length) return;
       setIsUploadingEvidence(true);
       const uploaded: string[] = [];
@@ -182,8 +178,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
         topicId: topic.id,
         topicLabel: topic.label,
         details: details.trim(),
-        evidenceMediaUrls: evidenceUris.length > 0 ? evidenceUris : undefined,
-      });
+        evidenceMediaUrls: evidenceUris.length > 0 ? evidenceUris : undefined });
 
       setIsSubmitting(false);
       setIsSubmitted(true);
@@ -209,51 +204,46 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          {/* Order Context Card */}
+          {/* Order Context — flat section, no card chrome */}
           {order && (
-            <View>
-              <ElevatedSurface variant="surface" style={styles.orderCard}>
-                <View style={styles.orderRow}>
-                  {order.listingImageUrl && (
-                    <CachedImage
-                      uri={getListingCoverUri([order.listingImageUrl], '')}
-                      style={styles.orderThumb}
-                      contentFit="cover"
-                    />
-                  )}
-                  <View style={styles.orderInfo}>
-                    <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
-                    <Text style={styles.orderMeta}>Order #{orderId.slice(-8).toUpperCase()}</Text>
-                    <Text style={styles.orderStatus}>{order.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</Text>
-                  </View>
+            <View style={styles.orderCard}>
+              <View style={styles.orderRow}>
+                {order.listingImageUrl && (
+                  <CachedImage
+                    uri={getListingCoverUri([order.listingImageUrl], '')}
+                    style={styles.orderThumb}
+                    contentFit="cover"
+                  />
+                )}
+                <View style={styles.orderInfo}>
+                  <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
+                  <Text style={styles.orderMeta}>Order #{orderId.slice(-8).toUpperCase()}</Text>
+                  <Text style={styles.orderStatus}>{order.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</Text>
                 </View>
-              </ElevatedSurface>
+              </View>
             </View>
           )}
 
-          {/* Existing Open Ticket */}
+          {/* Existing Open Ticket — flat section */}
           {openTicket && !isSubmitted && (
-            <View>
-              <ElevatedSurface variant="surface" style={styles.existingTicketCard}>
-                <View style={styles.existingTicketRow}>
-                  <Ionicons name="help-circle-outline" size={22} color={colors.brand} />
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.existingTicketLabel}>Open support request</Text>
-                    <Caption color={colors.textMuted}>{openTicket.topicLabel}</Caption>
-                  </View>
+            <View style={styles.existingTicketCard}>
+              <View style={styles.existingTicketRow}>
+                <Ionicons name="help-circle-outline" size={22} color={colors.brand} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.existingTicketLabel}>Open support request</Text>
+                  <Caption color={colors.textMuted}>{openTicket.topicLabel}</Caption>
                 </View>
-                <AppButton
-                  title="View ticket"
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id })}
-                />
-              </ElevatedSurface>
+              </View>
+              <AppButton
+                title="View ticket"
+                variant="secondary"
+                size="sm"
+                onPress={() => navigation.navigate('SupportTicketDetail', { ticketId: openTicket.id })}
+              />
             </View>
           )}
 
           <View>
-            <Meta color={colors.textMuted} style={styles.sectionLabel}>REASON</Meta>
             <View style={styles.topicsCard}>
               {availableTopics.map((topic, index) => {
                 const isActive = selectedTopic === topic.id;
@@ -305,8 +295,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
               wrong_item: 'Attach photos of the received item. We\'ll review and help coordinate a return or resolution.',
               return: 'We\'ll review your return eligibility and guide you through the next steps.',
               payment_issue: 'We\'ll investigate the payment and billing discrepancy and correct any erroneous charges.',
-              other: 'Describe the issue in detail below. Our support team will review and respond.',
-            };
+              other: 'Describe the issue in detail below. Our support team will review and respond.' };
             return (
               <View>
                 <View style={styles.guidanceCard}>
@@ -329,7 +318,6 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
           })()}
 
           <View>
-            <Meta color={colors.textMuted} style={styles.sectionLabel}>DETAILS</Meta>
             <View style={styles.detailsCard}>
               <AppInput
                 value={details}
@@ -349,7 +337,7 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
           {!isSubmitted && showEvidence && evidenceConfig && (
             <View>
               <Meta color={colors.textMuted} style={styles.sectionLabel}>
-                {evidenceConfig.needsPhotos ? 'EVIDENCE' : 'EVIDENCE (OPTIONAL)'}
+                {evidenceConfig.needsPhotos ? 'Evidence' : 'Evidence (optional)'}
               </Meta>
               <View style={styles.evidenceCard}>
                 {evidenceConfig.hint ? (
@@ -475,267 +463,201 @@ export default function OrderSupportScreen({ navigation, route }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   content: {
-    flex: 1,
-  },
+    flex: 1 },
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xl,
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   sectionLabel: {
     marginLeft: Space.sm,
-    letterSpacing: LetterSpacing.caps,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   topicsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    ...Elevation.subtle,
-  },
+    overflow: 'hidden' },
   guidanceCard: {
     marginTop: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    backgroundColor: `${colors.brand}08`,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.brand}25`,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   guidanceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   guidanceTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   guidanceBody: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.size + 5,
-  },
+    lineHeight: TypographyV2.meta.size + 5 },
   escrowNoticeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   escrowNoticeText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.success,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.success },
   topicRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd,
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   topicRowSeparator: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   topicRowActive: {
-    backgroundColor: `${colors.brand}0A`,
-  },
+    backgroundColor: colors.brandSubtle },
   topicText: {
-    flex: 1,
-  },
+    flex: 1 },
   topicLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    marginBottom: Space.xs / 2,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    marginBottom: Space.xs / 2 },
   topicLabelActive: {
-    color: colors.brand,
-  },
+    color: colors.brand },
   detailsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    ...Elevation.subtle,
-  },
+    padding: Space.md },
   textArea: {
     minHeight: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xxl + 4,
-    textAlignVertical: 'top',
-  },
+    textAlignVertical: 'top' },
   charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textAlign: 'right',
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   evidenceHint: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.size + 5,
-    marginBottom: Space.sm,
-  },
+    lineHeight: TypographyV2.meta.size + 5,
+    marginBottom: Space.sm },
   outcomePreview: {
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   outcomePreviewText: {
-    lineHeight: Type.caption.lineHeight + 2,
-  },
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
   footer: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   btnDisabled: {
-    opacity: 0.45,
-  },
+    opacity: 0.45 },
   timeline: {
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   timelineStep: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   timelineMarker: {
     width: 28,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   timelineCheck: {
     width: 28,
     height: 28,
     borderRadius: Radius.full,
     backgroundColor: colors.success,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   timelineDot: {
     width: 12,
     height: 12,
     borderRadius: Radius.full,
     backgroundColor: colors.border,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   timelineStepContent: {
     flex: 1,
-    paddingTop: Space.xs / 2,
-  },
+    paddingTop: Space.xs / 2 },
   timelineStepTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    marginBottom: Space.xs / 2,
-  },
+    marginBottom: Space.xs / 2 },
   timelineStepLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary,
-    marginBottom: Space.xs / 2,
-  },
+    marginBottom: Space.xs / 2 },
   timelineStepSub: {
-    lineHeight: Type.caption.lineHeight + 2,
-  },
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
   timelineConnector: {
     marginLeft: 14,
     width: StyleSheet.hairlineWidth,
     height: Space.md,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
   timelineActions: {
     marginTop: Space.lg,
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   orderCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
     padding: Space.md,
-    ...Elevation.subtle,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border },
   orderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   orderThumb: {
     width: Space.xl + Space.xl - 4,
     height: Space.xl + Space.xl - 4,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   orderInfo: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   orderTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   orderMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   orderStatus: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.brand,
-    textTransform: 'capitalize',
-  },
+    textTransform: 'capitalize' },
   existingTicketCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
     padding: Space.md,
     gap: Space.sm,
-    ...Elevation.subtle,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border },
   existingTicketRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   existingTicketLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   evidenceCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    ...Elevation.subtle,
-  },
+    padding: Space.md },
   evidenceThumbs: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   evidenceThumbWrap: {
-    position: 'relative',
-  },
+    position: 'relative' },
   evidenceThumb: {
     width: Space.xl + Space.xl + Space.sm,
     height: Space.xl + Space.xl + Space.sm,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   evidenceRemoveBtn: {
     position: 'absolute',
     top: -6,
     right: -6,
     backgroundColor: colors.textPrimary,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   evidenceAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -745,12 +667,9 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     borderStyle: 'dashed',
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   evidenceAddText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.brand,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand } });
 }

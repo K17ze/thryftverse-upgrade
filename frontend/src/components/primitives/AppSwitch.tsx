@@ -5,14 +5,14 @@ import Reanimated, {
   useAnimatedStyle,
   useDerivedValue,
   withSpring,
-  interpolateColor,
-} from 'react-native-reanimated';
+  interpolateColor } from 'react-native-reanimated';
 
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useHaptics } from '../../platform/haptics';
 import { REDUCED_SPRING } from '../../theme/motionTokens';
-import { Radius, Space, Type, Typography } from '../../theme/designTokens';
+import { Radius, Space, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 const ReanimatedView = Reanimated.View;
 
@@ -49,8 +49,7 @@ export function AppSwitch({
   onValueChange,
   disabled = false,
   label,
-  testID,
-}: AppSwitchProps) {
+  testID }: AppSwitchProps) {
   const { colors } = useAppTheme();
   const { spring } = useMotionConfig();
   const haptics = useHaptics();
@@ -72,12 +71,10 @@ export function AppSwitch({
       progress.value,
       [0, 1],
       [colors.border, colors.brand],
-    ),
-  }));
+    ) }));
 
   const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
+    transform: [{ translateX: translateX.value }] }));
 
   const handlePress = React.useCallback(() => {
     if (disabled) return;
@@ -112,40 +109,29 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      minHeight: 44,
-    },
+      minHeight: 44 },
     disabled: {
-      opacity: 0.5,
-    },
+      opacity: 0.5 },
     label: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-      marginRight: Space.sm,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
+      marginRight: Space.sm },
     trackHost: {
-      padding: Space.xxs,
-    },
+      padding: Space.xxs },
     track: {
       width: TRACK_WIDTH,
       height: TRACK_HEIGHT,
       borderRadius: TRACK_RADIUS,
       justifyContent: 'center',
-      paddingHorizontal: THUMB_INSET,
-    },
+      paddingHorizontal: THUMB_INSET },
     thumb: {
       width: THUMB_SIZE,
       height: THUMB_SIZE,
       borderRadius: THUMB_SIZE / 2,
       backgroundColor: colors.scrimTextPrimary,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-  });
+      ...Elevation.modal } });
 }

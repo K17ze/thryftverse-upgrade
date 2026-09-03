@@ -14,7 +14,8 @@
  */
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { Space, Radius, Stroke, Type } from '../../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { resolveFontPreviewStyle, type FontArchetype } from './FontRegistry';
@@ -34,8 +35,7 @@ export function FontChooserRail({
   text,
   fonts,
   selectedId,
-  onSelect,
-}: FontChooserRailProps) {
+  onSelect }: FontChooserRailProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useRailStyles(colors);
@@ -60,7 +60,7 @@ export function FontChooserRail({
     >
       {fonts.map((font) => {
         const isSelected = selectedId === font.id;
-        const previewStyle = resolveFontPreviewStyle(font.id, Type.body.size);
+        const previewStyle = resolveFontPreviewStyle(font.id, TypographyV2.body.size);
         // Clamp long text so the 64pt cell stays legible.
         const cellText =
           displayText.length > 6 ? `${displayText.slice(0, 6)}…` : displayText;
@@ -110,8 +110,7 @@ function useRailStyles(colors: ThemeColors) {
         content: {
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         item: {
           width: ITEM_WIDTH,
           height: ITEM_HEIGHT,
@@ -120,22 +119,17 @@ function useRailStyles(colors: ThemeColors) {
           borderColor: colors.borderSubtle,
           alignItems: 'center',
           justifyContent: 'center',
-          paddingHorizontal: Space.xs,
-        },
+          paddingHorizontal: Space.xs },
         itemSelected: {
           borderWidth: Stroke.emphasis,
-          borderColor: colors.brand,
-        },
+          borderColor: colors.brand },
         itemText: {
-          fontSize: Type.body.size,
-          textAlign: 'center',
-        },
+          fontSize: TypographyV2.body.size,
+          textAlign: 'center' },
         itemLabel: {
-          fontSize: Type.meta.size,
+          fontSize: TypographyV2.meta.size,
           marginTop: Space.xxs,
-          letterSpacing: 0.15,
-        },
-      }),
+          letterSpacing: 0.15 } }),
     [colors],
   );
 }

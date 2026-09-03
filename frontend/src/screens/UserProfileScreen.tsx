@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { FlashList } from '@shopify/flash-list';
+import { useVisuallyComplete } from '../performance/visuallyComplete';
 import * as Clipboard from 'expo-clipboard';
 import Reanimated, {
   useSharedValue,
@@ -40,6 +41,8 @@ import { useStore } from '../store/useStore';
 import {
   type PublicProfileStats,
   type PublicProfileViewer,
+  type PublicProfileTrader,
+  type PublicProfileStorefrontSummary,
   type ReportReason,
 } from '../services/profileApi';
 import {
@@ -76,6 +79,7 @@ import { ReviewReportSheet } from '../components/profile/ReviewReportSheet';
 import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '../components/profile/ProfileSheets';
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
+import { ShopRail, type ShopRailItem } from '../components/profile/ShopRail';
 import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { track } from '../analytics';
@@ -96,7 +100,7 @@ const LOOK_GAP = 4;
 const LOOK_COLS = 3;
 const COLLAPSED_BAR_HEIGHT = 50;
 
-type Tab = 'Shop' | 'Looks' | 'Reviews';
+type Tab = 'Listings' | 'Looks' | 'About' | 'Reviews';
 type ShopSegment = 'forsale' | 'sold';
 
 const PROFILE_WEB_BASE = 'https://thryftverse.app';
@@ -119,6 +123,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const { requireAuth } = useSignupWall();
   const { colors, isDark } = useAppTheme();
   const haptic = useHaptic();
+  useVisuallyComplete('UserProfile');
 
   // Themed color aliases - keep JSX readable, match old module-level consts
   const BG = colors.background;
@@ -148,12 +153,19 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     awayBanner: { backgroundColor: SURFACE_ALT, borderColor: BORDER },
     awayBannerTitle: { color: TEXT },
     awayBannerSub: { color: MUTED },
+    announcementText: { color: TEXT },
+    traderClassification: { color: TEXT },
+    traderDetail: { color: MUTED },
     listStateTitle: { color: TEXT },
     listStateSub: { color: MUTED },
+    aboutSectionTitle: { color: TEXT },
+    aboutRow: { borderBottomColor: BORDER },
+    aboutLabel: { color: MUTED },
+    aboutValue: { color: TEXT },
   };
 
 
-  const [activeTab, setActiveTab] = useState<Tab>('Shop');
+  const [activeTab, setActiveTab] = useState<Tab>('Listings');
   const [shopSegment, setShopSegment] = useState<ShopSegment>('forsale');
   const [connectionsSheet, setConnectionsSheet] = useState<{ visible: boolean; segment: 'followers' | 'following' }>({ visible: false, segment: 'followers' });
   const [moreSheetVisible, setMoreSheetVisible] = useState(false);
@@ -194,8 +206,25 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const looksQuery = useUserLooksInfinite(targetUserId);
   const reviewsQuery = useSellerReviewsInfinite(targetUserId);
 
-  // Seller trust summary - verified badge, response time, dispatch time, completed sales
+  // Seller trust summary - verified badge, response time, dispatch time, completed sales.
+  // This provides the detailed trust signals (response rate, dispatch time, badges)
+  // that complement the aggregate's verification flags and away state.
   const { data: sellerTrust } = useSellerTrust(targetUserId ?? undefined);
+
+  // Authoritative away state from the profile aggregate — replaces the
+  // previous useSellerTrust-derived holiday mode. The aggregate is the
+  // source-of-truth for the public profile projection.
+  const awayState = publicProfileQuery.away ?? null;
+
+  // DSA Article 30 trader disclosure from the aggregate.
+  // Legally required in EU/UK — buyers must know if they're transacting
+  // with a business (trader) or a private individual (non-trader).
+  const traderDisclosure = publicProfileQuery.trader ?? null;
+
+  // Published storefront summary from the aggregate.
+  // Contains the seller's shop announcement, section titles, and
+  // server-owned featured listing IDs for ordering.
+  const storefrontSummary = publicProfileQuery.storefront ?? null;
 
   // Story highlights — fetched for the highlights rail below the ProfileHero.
   // Renders nothing when empty (truthful UI — no fabricated placeholder content).
@@ -246,18 +275,36 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   // List data
   const listData = useMemo(() => {
-    if (activeTab === 'Shop') {
+    if (activeTab === 'About') return [];
+    if (activeTab === 'Listings') {
       const query = shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery;
       const pages = query.data?.pages ?? [];
       const items: ListingApiItem[] = [];
       for (const page of pages) for (const item of page.items) items.push(item);
-      // Pinned/featured listings appear first in the Shop grid (2026 pattern).
-      // Stable sort preserves backend ordering for non-featured items.
-      return items.sort((a, b) => {
-        const af = a.featured === true ? 0 : 1;
-        const bf = b.featured === true ? 0 : 1;
-        return af - bf;
-      });
+      // Server-owned featured listing ranks from the storefront aggregate.
+      // The backend determines which listings are featured and their rank
+      // order via storefront_featured_listings. We apply the server's rank
+      // order to the grid — featured listings appear first in rank order,
+      // non-featured listings follow in their original backend order.
+      // This is NOT client-side featured derivation — it's applying the
+      // server's authoritative ranking.
+      const featuredIds = storefrontSummary?.featuredListingIds;
+      if (featuredIds && featuredIds.length > 0 && shopSegment === 'forsale') {
+        const rankMap = new Map<string, number>();
+        featuredIds.forEach((id, idx) => rankMap.set(id, idx));
+        const featured: ListingApiItem[] = [];
+        const rest: ListingApiItem[] = [];
+        for (const item of items) {
+          if (rankMap.has(item.id)) {
+            featured.push(item);
+          } else {
+            rest.push(item);
+          }
+        }
+        featured.sort((a, b) => (rankMap.get(a.id) ?? 0) - (rankMap.get(b.id) ?? 0));
+        return [...featured, ...rest];
+      }
+      return items;
     }
     if (activeTab === 'Looks') {
       const pages = looksQuery.data?.pages ?? [];
@@ -269,9 +316,35 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     const items: SellerReviewItem[] = [];
     for (const page of pages) for (const item of page.items) items.push(item);
     return items;
-  }, [activeTab, shopSegment, activeListingsQuery.data, soldListingsQuery.data, looksQuery.data, reviewsQuery.data]);
+  }, [activeTab, shopSegment, activeListingsQuery.data, soldListingsQuery.data, looksQuery.data, reviewsQuery.data, storefrontSummary]);
 
-  const activeQuery = activeTab === 'Shop' ? (shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery) : activeTab === 'Looks' ? looksQuery : reviewsQuery;
+  // Curated shop window — featured listings for the ShopRail. Uses the
+  // server-owned featuredListingIds from the storefront aggregate to pick
+  // the curated selection. ShopRail renders nothing when empty.
+  const shopRailItems = useMemo<ShopRailItem[]>(() => {
+    const featuredIds = storefrontSummary?.featuredListingIds;
+    if (!featuredIds || featuredIds.length === 0) return [];
+    const pages = activeListingsQuery.data?.pages ?? [];
+    const allItems: ListingApiItem[] = [];
+    for (const page of pages) for (const item of page.items) allItems.push(item);
+    const rankMap = new Map<string, number>();
+    featuredIds.forEach((id, idx) => rankMap.set(id, idx));
+    return allItems
+      .filter((item) => rankMap.has(item.id))
+      .sort((a, b) => (rankMap.get(a.id) ?? 0) - (rankMap.get(b.id) ?? 0))
+      .slice(0, 10)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        price: item.priceGbp,
+        imageUri: item.images?.[0] ?? item.imageUrl ?? '',
+        brand: item.brand,
+        isSold: item.status === 'sold',
+        isPinned: true,
+      }));
+  }, [storefrontSummary, activeListingsQuery.data]);
+
+  const activeQuery = activeTab === 'Listings' ? (shopSegment === 'forsale' ? activeListingsQuery : soldListingsQuery) : activeTab === 'Looks' ? looksQuery : activeTab === 'About' ? activeListingsQuery : reviewsQuery;
   const isRefreshing = activeQuery.isRefetching;
   const hasNextPage = Boolean(activeQuery.hasNextPage);
   const isFetchingNextPage = activeQuery.isFetchingNextPage;
@@ -287,7 +360,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // Declared before the scroll handler so saveScrollOffset is accessible
   // in the animatedScrollHandler closure (temporal dead zone safety).
   const scrollOffsets = useRef<Record<string, number>>({});
-  const currentDestination: string = activeTab === 'Shop' ? `${activeTab}-${shopSegment}` : activeTab;
+  const currentDestination: string = activeTab === 'Listings' ? `${activeTab}-${shopSegment}` : activeTab;
   const listRef = useRef<any>(null);
   const pendingRestore = useRef<string | null>(null);
   const isListReady = useRef(false);
@@ -399,7 +472,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const handleFollowToggle = useCallback(() => {
     haptic.light();
     if (!requireAuth('follow_seller')) return;
-    if (targetUserId && viewer) followMutation.mutate(!viewer.isFollowing);
+    if (targetUserId && viewer) {
+      followMutation.mutate(!viewer.isFollowing);
+      track('follow_toggled', { user_id: targetUserId, action: !viewer.isFollowing ? 'follow' : 'unfollow' });
+    }
   }, [requireAuth, targetUserId, viewer, followMutation, haptic]);
   const handleMore = useCallback(() => setMoreSheetVisible(true), []);
   const handleReport = useCallback(() => { setMoreSheetVisible(false); setReportSheetVisible(true); }, []);
@@ -472,7 +548,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
 
   // Render item
   const renderItem = useCallback(({ item }: { item: ListingApiItem | LookApiItem | SellerReviewItem }): React.ReactElement | null => {
-    if (activeTab === 'Shop') {
+    if (activeTab === 'Listings') {
       return <ProfileShopTile item={item as ListingApiItem} isSold={shopSegment === 'sold'} onPress={() => navigation.push('ItemDetail', { itemId: (item as ListingApiItem).id })} formatPrice={formatFromFiat} cardWidth={cardWidth} cardHeight={cardHeight} />;
     }
     if (activeTab === 'Looks') {
@@ -510,7 +586,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // CONDITIONAL RENDERS - loading, error, unavailable, blocked
   // -----------------------------------------------------------------------
   if (isLoadingProfile && !targetProfile) {
-    return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab as 'Shop' | 'Looks' | 'Reviews'} />;
+    return <ProfileSkeleton coverHeight={COVER_HEIGHT} screenWidth={screenWidth} destination={activeTab as 'Listings' | 'Looks' | 'About' | 'Reviews'} />;
   }
   if (profileError && !targetProfile) {
     return <ProfileErrorState onRetry={() => publicProfileQuery.refetch()} onBack={() => navigation.goBack()} coverHeight={COVER_HEIGHT} />;
@@ -527,7 +603,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // -----------------------------------------------------------------------
   // MAIN RENDER
   // -----------------------------------------------------------------------
-  const numColumns = activeTab === 'Reviews' ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
+  const numColumns = activeTab === 'Reviews' || activeTab === 'About' ? 1 : activeTab === 'Looks' ? LOOK_COLS : SHOP_COLS;
 
   const listHeader = (
     <View>
@@ -544,6 +620,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         reviewCount={reviewCount}
         memberSince={memberSince}
         sellerTrust={sellerTrust}
+        traderClassification={traderDisclosure}
         followPending={followMutation.isPending}
         isBlocked={isBlocked}
         scrollY={scrollY}
@@ -551,14 +628,15 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onFollowToggle={handleFollowToggle}
         onMessage={handleMessageProfile}
         onMore={handleMore}
-        onShare={handleShare}
         onOpenConnections={openConnections}
         onTabSelect={(t) => setActiveTab(t)}
         onShopSegmentSelect={(s) => setShopSegment(s)}
       />
 
-      {/* Away-mode banner - shown when seller has holiday mode enabled */}
-      {sellerTrust?.holidayMode === true ? (
+      {/* Away-mode banner - shown when the profile aggregate reports holiday mode.
+          The aggregate is the authoritative source for away state (privacy-aware,
+          viewer-dependent). sellerTrust is a secondary signal for detailed trust. */}
+      {awayState?.holidayMode === true ? (
         <View style={[styles.awayBanner, t.awayBanner]}>
           <Ionicons name="pause-circle" size={18} color={MUTED} />
           <View style={styles.awayBannerTextWrap}>
@@ -566,11 +644,62 @@ export default function UserProfileScreen({ navigation, route }: Props) {
               This shop is on holiday
             </Text>
             <Text style={[styles.awayBannerSub, t.awayBannerSub]}>
-              {sellerTrust.awayMessage?.trim()
-                ? sellerTrust.awayMessage.trim()
+              {awayState.awayMessage?.trim()
+                ? awayState.awayMessage.trim()
                 : 'The seller is away right now. Listings are paused and will return when they are back.'}
             </Text>
           </View>
+        </View>
+      ) : null}
+
+      {/* Storefront announcement — the seller's shop greeting.
+          Only rendered when a published storefront with an announcement exists.
+          No decorative container — just text with spacing, per anti-AI design. */}
+      {storefrontSummary?.announcement?.trim() ? (
+        <View style={styles.announcementWrap}>
+          <Text style={[styles.announcementText, t.announcementText]}>
+            {storefrontSummary.announcement.trim()}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* DSA Article 30 trader disclosure — legally required in EU/UK.
+          Subtle, factual, no decorative chrome. Buyers must know whether
+          they are transacting with a business or a private individual.
+          Legal details (name, address, registration) are only shown for
+          verified traders — non-traders see only the classification. */}
+      {traderDisclosure ? (
+        <View style={styles.traderDisclosureWrap}>
+          <Text style={[styles.traderClassification, t.traderClassification]}>
+            {traderDisclosure.classification === 'trader'
+              ? 'Business seller'
+              : 'Private seller'}
+          </Text>
+          {traderDisclosure.classification === 'trader' && traderDisclosure.legalName ? (
+            <Text style={[styles.traderDetail, t.traderDetail]}>
+              {traderDisclosure.legalName}
+            </Text>
+          ) : null}
+          {traderDisclosure.classification === 'trader' && traderDisclosure.address ? (
+            <Text style={[styles.traderDetail, t.traderDetail]}>
+              {traderDisclosure.address}
+            </Text>
+          ) : null}
+          {traderDisclosure.classification === 'trader' && traderDisclosure.registrationNumber ? (
+            <Text style={[styles.traderDetail, t.traderDetail]}>
+              Reg: {traderDisclosure.registrationNumber}
+            </Text>
+          ) : null}
+          {traderDisclosure.classification === 'trader' && traderDisclosure.vatNumber ? (
+            <Text style={[styles.traderDetail, t.traderDetail]}>
+              VAT: {traderDisclosure.vatNumber}
+            </Text>
+          ) : null}
+          {traderDisclosure.classification === 'trader' && traderDisclosure.contactEmail ? (
+            <Text style={[styles.traderDetail, t.traderDetail]}>
+              {traderDisclosure.contactEmail}
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -589,13 +718,22 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         />
       ) : null}
 
+      {/* Curated shop window — horizontal rail of featured listings.
+          Renders only when the storefront aggregate provides featured IDs
+          and matching listings are loaded (ShopRail returns null when empty). */}
+      <ShopRail
+        items={shopRailItems}
+        onPressItem={(id) => navigation.push('ItemDetail', { itemId: id })}
+      />
+
       {/* Tab rail - measures Y for sticky threshold */}
       <View onLayout={(e) => onTabRailLayout(e.nativeEvent.layout.y)}>
         <TabRail
           tabs={[
-            { key: 'Shop', label: 'Shop', count: activeCount + soldCount },
+            { key: 'Listings', label: 'Listings', count: activeCount + soldCount },
             { key: 'Looks', label: 'Looks', count: lookCount },
-            { key: 'Reviews', label: 'Reviews', count: reviewCount },
+            { key: 'About', label: 'About' },
+            ...(reviewCount > 0 ? [{ key: 'Reviews' as const, label: 'Reviews', count: reviewCount }] : []),
           ]}
           activeKey={activeTab as any}
           onChange={(k) => setActiveTab(k as Tab)}
@@ -603,7 +741,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         />
       </View>
 
-      {activeTab === 'Shop' ? (
+      {activeTab === 'Listings' ? (
         <View style={styles.segmentWrap}>
           <SegmentedControl
             segments={[{ key: 'forsale', label: 'For sale' }, { key: 'sold', label: 'Sold' }]}
@@ -623,6 +761,89 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   );
 
   const listEmpty = (() => {
+    // About tab — static editorial content, not a paginated list.
+    // Renders bio, website, shop policies and trust signals. Bypasses the
+    // loading/error/empty states of the listing queries since the data is
+    // already resolved by the public profile aggregate.
+    if (activeTab === 'About') {
+      const bio = targetProfile?.bio?.trim();
+      const website = targetProfile?.website?.trim();
+      const hasPolicies = Boolean(sellerTrust);
+      const hasAboutContent = Boolean(bio || website || hasPolicies || storefrontSummary?.announcement?.trim());
+      if (!hasAboutContent) {
+        return (
+          <View style={styles.listState}>
+            <Text style={[styles.listStateTitle, t.listStateTitle]}>No additional details</Text>
+            <Text style={[styles.listStateSub, t.listStateSub]}>This seller hasn't added an about section yet.</Text>
+          </View>
+        );
+      }
+      return (
+        <View style={{ paddingTop: Space.md, paddingBottom: 100 }}>
+          {storefrontSummary?.announcement?.trim() ? (
+            <View style={styles.aboutContainer}>
+              <Text style={[styles.announcementText, t.announcementText]}>
+                {storefrontSummary.announcement.trim()}
+              </Text>
+            </View>
+          ) : null}
+
+          {bio ? (
+            <View style={styles.aboutContainer}>
+              <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>About</Text>
+              <Text style={[styles.aboutBio, t.aboutValue]}>{bio}</Text>
+            </View>
+          ) : null}
+
+          {website ? (
+            <View style={styles.aboutContainer}>
+              <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>Website</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs }}>
+                  <Text style={[styles.aboutValue, t.aboutValue, { flexShrink: 1 }]} numberOfLines={1}>{website}</Text>
+                  <Ionicons name="open-outline" size={12} color={MUTED} aria-hidden={true} />
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {/* Shop policies — dispatch/response details from seller trust. */}
+          <View style={styles.aboutContainer}>
+            <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>Shop policies</Text>
+            <View style={[styles.aboutRow, t.aboutRow]}>
+              <Text style={[styles.aboutLabel, t.aboutLabel]}>Payments</Text>
+              <Text style={[styles.aboutValue, t.aboutValue]}>Secure checkout with buyer protection</Text>
+            </View>
+            <View style={[styles.aboutRow, t.aboutRow]}>
+              <Text style={[styles.aboutLabel, t.aboutLabel]}>Shipping</Text>
+              <Text style={[styles.aboutValue, t.aboutValue]}>
+                {sellerTrust?.dispatchTimeLabel
+                  ? `Seller ${sellerTrust.dispatchTimeLabel.toLowerCase()}. Tracking provided on dispatch.`
+                  : 'Tracking provided on dispatch.'}
+              </Text>
+            </View>
+            <View style={[styles.aboutRow, t.aboutRow]}>
+              <Text style={[styles.aboutLabel, t.aboutLabel]}>Returns</Text>
+              <Text style={[styles.aboutValue, t.aboutValue]}>Returns accepted for items not as described.</Text>
+            </View>
+            {sellerTrust?.responseRate !== null && sellerTrust?.responseRate !== undefined ? (
+              <View style={[styles.aboutRow, t.aboutRow]}>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>Response rate</Text>
+                <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.responseRate}%</Text>
+              </View>
+            ) : null}
+            <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
+              <Text style={[styles.aboutLabel, t.aboutLabel]}>Response</Text>
+              <Text style={[styles.aboutValue, t.aboutValue]}>
+                {sellerTrust?.responseTimeLabel
+                  ? `Seller typically replies ${sellerTrust.responseTimeLabel.toLowerCase()}.`
+                  : 'Seller aims to respond promptly.'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      );
+    }
     if (activeQuery.isLoading) return null;
     if (activeQuery.error) {
       return (
@@ -633,13 +854,13 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           accessibilityLabel="Retry loading content"
         >
           <Ionicons name="cloud-offline-outline" size={32} color={MUTED} />
-          <Text style={[styles.listStateTitle, t.listStateTitle]}>Couldn't load {activeTab === 'Shop' ? 'listings' : activeTab === 'Looks' ? 'Looks' : 'reviews'}</Text>
+          <Text style={[styles.listStateTitle, t.listStateTitle]}>Couldn't load {activeTab === 'Listings' ? 'listings' : activeTab === 'Looks' ? 'Looks' : 'reviews'}</Text>
           <Text style={[styles.listStateSub, t.listStateSub]}>Tap to retry</Text>
         </Pressable>
       );
     }
     if (listData.length === 0) {
-      if (activeTab === 'Shop') {
+      if (activeTab === 'Listings') {
         return (
           <View style={styles.listState}>
             <Ionicons name="shirt-outline" size={32} color={MUTED} />
@@ -787,15 +1008,16 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       >
         <TabRail
           tabs={[
-            { key: 'Shop', label: 'Shop', count: activeCount + soldCount },
+            { key: 'Listings', label: 'Listings', count: activeCount + soldCount },
             { key: 'Looks', label: 'Looks', count: lookCount },
-            { key: 'Reviews', label: 'Reviews', count: reviewCount },
+            { key: 'About', label: 'About' },
+            ...(reviewCount > 0 ? [{ key: 'Reviews' as const, label: 'Reviews', count: reviewCount }] : []),
           ]}
           activeKey={activeTab as any}
           onChange={(k) => setActiveTab(k as Tab)}
           reducedMotion={reducedMotion}
         />
-        {activeTab === 'Shop' ? (
+        {activeTab === 'Listings' ? (
           <View style={styles.stickySegmentWrap}>
             <SegmentedControl
               segments={[{ key: 'forsale', label: 'For sale' }, { key: 'sold', label: 'Sold' }]}
@@ -834,7 +1056,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           )}
           {listData.length > 0 && (
             numColumns > 1 ? (
-              <View style={{ paddingHorizontal: Space.md, flexDirection: 'row', flexWrap: 'wrap', gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP }}>
+              <View style={{ paddingHorizontal: Space.md, flexDirection: 'row', flexWrap: 'wrap', gap: activeTab === 'Listings' ? GRID_GAP : LOOK_GAP }}>
                 {listData.map((item, index) => {
                   const rendered = renderItem({ item });
                   return rendered ? <View key={(item as { id?: string }).id ?? `item-${index}`} style={{ width: cardWidth }}>{rendered}</View> : null;
@@ -868,7 +1090,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           ) : null}
           ListFooterComponent={listFooter}
           numColumns={numColumns}
-          {...(numColumns > 1 ? { columnWrapperStyle: { paddingHorizontal: Space.md, gap: activeTab === 'Shop' ? GRID_GAP : LOOK_GAP } } : {})}
+          {...(numColumns > 1 ? { columnWrapperStyle: { paddingHorizontal: Space.md, gap: activeTab === 'Listings' ? GRID_GAP : LOOK_GAP } } : {})}
           contentContainerStyle={{ paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
           onScroll={scrollHandler}
@@ -1003,9 +1225,66 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     lineHeight: TypographyV2.meta.lineHeight + 1,
   },
+  // Storefront announcement — seller's shop greeting. No decorative
+  // container, just text with horizontal padding matching the screen.
+  announcementWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xs,
+  },
+  announcementText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.body.lineHeight,
+  },
+  // DSA Article 30 trader disclosure — factual, no decorative chrome.
+  // Hairline top separator distinguishes it from the announcement above.
+  traderDisclosureWrap: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.sm,
+    paddingBottom: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: Space.xs,
+    gap: Space.xs / 2,
+  },
+  traderClassification: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    lineHeight: TypographyV2.meta.lineHeight,
+  },
+  traderDetail: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.meta.lineHeight,
+  },
   listState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.xl, paddingHorizontal: Space.md, gap: Space.sm },
   listStateTitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: FontFamily.semibold },
   listStateSub: { fontSize: TypographyV2.meta.size, fontFamily: FontFamily.regular, textAlign: 'center' },
   loadMoreIndicator: { paddingVertical: Space.md, alignItems: 'center' },
   btnDisabled: { opacity: 0.5 },
+  // About tab — flat editorial rows, mirroring MyProfile About composition.
+  aboutContainer: { paddingHorizontal: Space.md },
+  aboutSectionTitle: {
+    fontSize: TypographyV2.label.size,
+    fontFamily: FontFamily.bold,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    paddingTop: Space.md + 4,
+    paddingBottom: Space.sm },
+  aboutBio: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.body.lineHeight },
+  aboutRow: {
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: Space.xs },
+  aboutRowLast: { borderBottomWidth: 0 },
+  aboutLabel: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.label.letterSpacing },
+  aboutValue: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: TypographyV2.body.lineHeight },
 });

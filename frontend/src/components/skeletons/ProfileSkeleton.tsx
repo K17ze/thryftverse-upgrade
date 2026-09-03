@@ -1,19 +1,16 @@
 import React from 'react';
-import { View, Dimensions, StyleSheet } from 'react-native';
+import { View, useWindowDimensions, StyleSheet } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
 
-import { Radius, Space, Type } from '../../theme/designTokens';
-
-const { width: W } = Dimensions.get('window');
+import { Radius, Space, AvatarSize } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 // ── Geometry constants — mirror MyProfileScreen exact final layout ──
 const COVER_HEIGHT = 152;
-const AVATAR_SIZE = 84;
+const AVATAR_SIZE = AvatarSize.identity;
 const GRID_COLS = 3;
-const GRID_GAP = 4;
-const CARD_WIDTH = (W - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
-const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait
+const GRID_GAP = Space.xs;
 
 /**
  * ProfileSkeleton — deterministic skeleton matching the exact final
@@ -33,6 +30,9 @@ const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait
  */
 export function ProfileSkeleton() {
   const { colors } = useAppTheme();
+  const { width: W } = useWindowDimensions();
+  const CARD_WIDTH = (W - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
+  const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait
 
   return (
     <View style={styles.container}>
@@ -56,7 +56,7 @@ export function ProfileSkeleton() {
         {/* Display name */}
         <SkeletonLoader
           width={160}
-          height={Type.title.size}
+          height={TypographyV2.screenTitle.size}
           borderRadius={Radius.sm}
           style={styles.skeletonName}
         />
@@ -64,7 +64,7 @@ export function ProfileSkeleton() {
         {/* Username */}
         <SkeletonLoader
           width={120}
-          height={Type.caption.size}
+          height={TypographyV2.meta.size}
           borderRadius={Radius.sm}
           style={styles.skeletonUsername}
         />
@@ -72,7 +72,7 @@ export function ProfileSkeleton() {
         {/* Bio line */}
         <SkeletonLoader
           width={W - Space.md * 2}
-          height={Type.body.size}
+          height={TypographyV2.body.size}
           borderRadius={Radius.sm}
           style={styles.skeletonBio}
         />
@@ -83,14 +83,14 @@ export function ProfileSkeleton() {
             <View key={i} style={styles.statItem}>
               <SkeletonLoader
                 width={48}
-                height={Type.bodyStrong.size}
+                height={TypographyV2.bodyStrong.size}
                 borderRadius={Radius.sm}
               />
               <SkeletonLoader
                 width={56}
-                height={Type.meta.size}
+                height={TypographyV2.meta.size}
                 borderRadius={Radius.sm}
-                style={{ marginTop: 4 }}
+                style={{ marginTop: Space.xs }}
               />
             </View>
           ))}
@@ -103,7 +103,7 @@ export function ProfileSkeleton() {
           <SkeletonLoader
             key={i}
             width={70}
-            height={Type.bodyStrong.size}
+            height={TypographyV2.bodyStrong.size}
             borderRadius={Radius.sm}
           />
         ))}
@@ -127,47 +127,36 @@ export function ProfileSkeleton() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   heroBlock: {
     paddingHorizontal: Space.md,
     alignItems: 'center',
-    marginTop: -AVATAR_SIZE / 2 - 8,
-    gap: Space.xs,
-  },
+    marginTop: -AVATAR_SIZE / 2 - Space.sm,
+    gap: Space.xs },
   avatar: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   skeletonName: {
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   skeletonUsername: {
-    marginTop: 2,
-  },
+    marginTop: Space.xxs },
   skeletonBio: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
     paddingVertical: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   statItem: {
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   tabRail: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: Space.md,
-  },
+    gap: Space.md },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
-    gap: GRID_GAP,
-  },
-});
+    gap: GRID_GAP } });

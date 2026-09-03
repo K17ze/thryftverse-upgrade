@@ -14,24 +14,20 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import * as DocumentPicker from 'expo-document-picker';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Stroke,
   Control,
-  DockConstants,
-} from '../theme/designTokens';
+  DockConstants } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
@@ -39,9 +35,9 @@ import {
   presignSellerPackage,
   finalizeSellerPackage,
   createImportBatch,
-  CatalogImportError,
-} from '../services/catalogImportApi';
+  CatalogImportError } from '../services/catalogImportApi';
 import type { CatalogImportStackParamList } from './CatalogImportStartScreen';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type Nav = NativeStackNavigationProp<CatalogImportStackParamList, 'CatalogImportConsent'>;
 type ConsentRoute = RouteProp<CatalogImportStackParamList, 'CatalogImportConsent'>;
@@ -80,7 +76,7 @@ export default function CatalogImportConsentScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const route = useRoute<ConsentRoute>();
-  const { source } = route.params;
+  const { source } = route.params ?? {};
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -90,6 +86,14 @@ export default function CatalogImportConsentScreen() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const isMountedRef = useRef(true);
   React.useEffect(() => {
@@ -107,18 +111,17 @@ export default function CatalogImportConsentScreen() {
   const handleChooseFile = useCallback(async () => {
     setUploadError(null);
     try {
+      const DocumentPicker = await import('expo-document-picker');
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
-        multiple: false,
-      });
+        multiple: false });
       if (result.canceled || !result.assets || result.assets.length === 0) return;
       const asset = result.assets[0];
       const selected: SelectedFile = {
         uri: asset.uri,
         name: asset.name ?? 'catalogue.csv',
         size: asset.size ?? 0,
-        mimeType: asset.mimeType ?? 'text/csv',
-      };
+        mimeType: asset.mimeType ?? 'text/csv' };
       setFile(selected);
       haptic.selection();
     } catch {
@@ -136,15 +139,13 @@ export default function CatalogImportConsentScreen() {
       const presign = await presignSellerPackage({
         fileName: file.name,
         contentType: file.mimeType,
-        sizeBytes: file.size,
-      });
+        sizeBytes: file.size });
       // PUT the raw file to the presigned URL. No auth headers — the URL
       // carries its own signed query params.
       const putResponse = await fetch(presign.uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': file.mimeType },
-        body: { uri: file.uri } as unknown as BodyInit,
-      });
+        body: { uri: file.uri } as unknown as BodyInit });
       if (!putResponse.ok) {
         throw new Error(`Upload failed (${putResponse.status})`);
       }
@@ -152,8 +153,7 @@ export default function CatalogImportConsentScreen() {
         objectKey: presign.objectKey,
         fileName: file.name,
         contentType: file.mimeType,
-        sizeBytes: file.size,
-      });
+        sizeBytes: file.size });
       return presign.packageId;
     } catch (cause) {
       const message =
@@ -181,8 +181,7 @@ export default function CatalogImportConsentScreen() {
       const batch = await createImportBatch({
         source,
         packageId,
-        consentVersion: CONSENT_VERSION,
-      });
+        consentVersion: CONSENT_VERSION });
       haptic.medium();
       navigation.replace('CatalogImportProgress', { batchId: batch.id });
     } catch (cause) {
@@ -196,18 +195,17 @@ export default function CatalogImportConsentScreen() {
 
   const handleBack = useCallback(() => {
     if (uploading || creating) {
-      Alert.alert(
-        'Discard this import?',
-        'Your file selection and attestations will be cleared.',
-        [
-          { text: 'Keep', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
-        ]
-      );
+      setConfirmSheet({
+        visible: true,
+        title: 'Discard this import?',
+        message: 'Your file selection and attestations will be cleared.',
+        confirmLabel: 'Discard',
+        variant: 'danger',
+        onConfirm: () => navigation.goBack() });
       return;
     }
     navigation.goBack();
-  }, [uploading, creating, navigation]);
+  }, [uploading, creating, navigation, setConfirmSheet]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -322,8 +320,7 @@ export default function CatalogImportConsentScreen() {
           {
             paddingBottom: insets.bottom + Space.sm,
             backgroundColor: colors.background,
-            borderTopColor: colors.borderSubtle,
-          },
+            borderTopColor: colors.borderSubtle },
         ]}
       >
         <AnimatedPressable
@@ -342,6 +339,16 @@ export default function CatalogImportConsentScreen() {
           )}
         </AnimatedPressable>
       </View>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </View>
   );
 }
@@ -351,8 +358,7 @@ function AttestationRow({
   label,
   checked,
   onToggle,
-  colors,
-}: {
+  colors }: {
   label: string;
   checked: boolean;
   onToggle: () => void;
@@ -390,8 +396,7 @@ const createAttestStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       gap: Space.smMd,
       minHeight: Control.hit,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     checkbox: {
       width: 22,
       height: 22,
@@ -399,122 +404,99 @@ const createAttestStyles = (colors: ThemeColors) =>
       borderWidth: Stroke.standard,
       borderColor: colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     checkboxChecked: {
       backgroundColor: colors.brand,
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
     label: {
       flex: 1,
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textPrimary,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textPrimary } });
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     screen: {
-      flex: 1,
-    },
+      flex: 1 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     backHit: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     scrollContent: {
       paddingHorizontal: Space.md,
-      flexGrow: 1,
-    },
+      flexGrow: 1 },
     title: {
       fontFamily: FontFamily.bold,
-      fontSize: Type.title.size,
-      lineHeight: Type.title.lineHeight,
-      letterSpacing: Type.title.letterSpacing,
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
       color: colors.textPrimary,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     intro: {
       marginTop: Space.sm,
       marginBottom: Space.lg,
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textSecondary },
     section: {
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     sectionLabel: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
       color: colors.textPrimary,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     listRow: {
-      paddingVertical: Space.smMd,
-    },
+      paddingVertical: Space.smMd },
     listRowBorder: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
-    },
+      borderBottomColor: colors.borderSubtle },
     listRowText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textPrimary },
     listRowTextMuted: {
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     controlLine: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textPrimary,
-      marginBottom: Space.xl,
-    },
+      marginBottom: Space.xl },
     uploadSection: {
-      marginBottom: Space.xl,
-    },
+      marginBottom: Space.xl },
     fileInput: {
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     chooseFileButton: {
       alignSelf: 'flex-start',
       paddingVertical: Space.smMd,
       paddingHorizontal: Space.lg,
       borderRadius: Radius.sm,
       borderWidth: Stroke.standard,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     chooseFileText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textPrimary },
     attestSection: {
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     errorText: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.danger,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     dock: {
       position: 'absolute',
       left: 0,
@@ -522,22 +504,17 @@ const createStyles = (colors: ThemeColors) =>
       bottom: 0,
       paddingTop: Space.sm,
       paddingHorizontal: Space.md,
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
+      borderTopWidth: StyleSheet.hairlineWidth },
     dockButton: {
       height: DockConstants.primaryButtonHeight,
       borderRadius: Radius.sm,
       backgroundColor: colors.brand,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     dockButtonDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     dockButtonText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-      color: colors.textInverse,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      color: colors.textInverse } });

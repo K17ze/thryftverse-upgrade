@@ -8,8 +8,8 @@ import {
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
@@ -51,16 +51,8 @@ const DEFAULT_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 /**
  * AnimatedPressable — the canonical pressable surface for ThryftVerse.
  *
- * Every tap feels native via:
- *   - spring-based scale feedback (0.97–0.985 per AGENTS §17, §27.9)
- *   - slight opacity response on press
- *   - haptic grammar gated by platform + reduced-motion (useHaptic)
- *   - 44pt hit target via default hitSlop
- *   - accessibility role/label/state
- *
- * Reduced motion: the spring is critically damped (settles instantly) and the
- * opacity timing collapses to 0ms, so the press still communicates state
- * change without visible travel (AGENTS §17, §27.2).
+ * Press feedback is opacity-only (no spring scale). Haptics still fire on
+ * activation. Reduced motion collapses the opacity timing to 0ms.
  */
 export function AnimatedPressable({
   children,
@@ -80,10 +72,25 @@ export function AnimatedPressable({
   hitSlop,
   ...rest
 }: Props) {
+  // scaleValue is retained as a prop for API compatibility but no longer
+  // drives a visual transform. It is still used for autoHaptic intensity.
+  void scaleValue;
+
   const haptic = useHaptic();
-  const { spring, duration, isEnabled } = useMotionConfig();
-  const scale = useSharedValue(1);
+  const { duration, isEnabled } = useMotionConfig();
   const opacity = useSharedValue(1);
+
+  // Cancel any in-flight animations on unmount. Without this, Reanimated's
+  // worklet thread can try to synchronously update UI props on a view that
+  // has already been unmounted (e.g. a FlashList item recycled away during
+  // scroll). This causes RetryableMountingLayerException on Android Fabric.
+  // Cancelling the animations stops the worklet from queuing prop updates
+  // for a dead view tag.
+  React.useEffect(() => {
+    return () => {
+      cancelAnimation(opacity);
+    };
+  }, [opacity]);
 
   const triggerHapticFeedback = React.useCallback(() => {
     if (autoHaptic && scaleValue < 1) {
@@ -116,7 +123,6 @@ export function AnimatedPressable({
   const animStyle = useAnimatedStyle(() => {
     'worklet';
     return {
-      transform: [{ scale: scale.value }],
       opacity: opacity.value,
     };
   });
@@ -143,13 +149,9 @@ export function AnimatedPressable({
       hitSlop={hitSlop ?? DEFAULT_HIT_SLOP}
       onPressIn={(event) => {
         if (!disabled && !disableAnimation) {
-          // Spring-based scale feedback — settles naturally like a physical
-          // press. When reduced motion is on, the spring is critically
-          // damped so the scale change is effectively instant.
-          scale.value = withSpring(scaleValue, spring.press);
-        }
-        if (typeof activeOpacity === 'number') {
-          opacity.value = withTiming(activeOpacity, { duration: pressOpacityMs });
+          if (typeof activeOpacity === 'number') {
+            opacity.value = withTiming(activeOpacity, { duration: pressOpacityMs });
+          }
         }
         // Haptic moved to onPress — firing on press-in triggers haptics
         // on aborted scroll gestures (AGENTS.md P1-UI-2 fix).
@@ -159,10 +161,9 @@ export function AnimatedPressable({
       }}
       onPressOut={(event) => {
         if (!disableAnimation) {
-          scale.value = withSpring(1, spring.press);
-        }
-        if (typeof activeOpacity === 'number') {
-          opacity.value = withTiming(1, { duration: pressOpacityMs });
+          if (typeof activeOpacity === 'number') {
+            opacity.value = withTiming(1, { duration: pressOpacityMs });
+          }
         }
         if (onPressOut) {
           onPressOut(event);

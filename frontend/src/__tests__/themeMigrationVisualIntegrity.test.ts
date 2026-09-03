@@ -23,7 +23,7 @@ describe('theme migration visual integrity', () => {
     ['screens/EditProfileScreen.tsx', ['backgroundColor:surface', 'color:textPrimary', 'borderColor:border']],
     ['screens/ClosetScreen.tsx', ['backgroundColor:background', 'color:textPrimary', 'color:textSecondary']],
     ['screens/ItemDetailScreen.tsx', ['backgroundColor:background', 'color:textPrimary', 'borderColor:border']],
-    ['components/ProductCardV2.tsx', ['backgroundColor:surfaceAlt', 'color:textPrimary', 'color:textSecondary']],
+    ['components/ProductCard.tsx', ['backgroundColor:surfaceAlt', 'color:textPrimary', 'color:textSecondary']],
   ])('%s retains explicit flagship colour roles', (relativePath, requiredRoles) => {
     const source = readSource(relativePath);
     for (const role of requiredRoles) {

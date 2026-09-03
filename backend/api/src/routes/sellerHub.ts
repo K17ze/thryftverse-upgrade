@@ -1,16 +1,216 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
+import { createHash } from 'node:crypto';
+import {
+  executeListingCommand,
+  type ListingCommand,
+} from '../lib/listingCommandService.js';
 
 type SellerHubRouteDependencies = {
   app: FastifyInstance;
   readDb: Pool;
+  db: Pool;
 };
 
-export const registerSellerHubRoutes = ({ app, readDb }: SellerHubRouteDependencies) => {
-  // Server-backed aggregate that computes real money, tasks, and inventory
-  // from the orders, listing_offers, and listings tables.
-  // Per closure program 05_SELLER_HUB_AND_PROFILE_OS: no frontend
-  // approximation of financial KPIs.
+// ── Table availability checks ──
+// The seller hub aggregate spans multiple domains (listings, orders, offers,
+// ledger, wallet, payout, trust). Not all tables may exist on every deployment.
+// Each source reports its own freshness so the UI can label partial data
+// truthfully rather than silently merging stale and fresh sources.
+async function tableExists(pool: Pool, tableName: string): Promise<boolean> {
+  try {
+    const result = await pool.query<{ exists: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)`,
+      [tableName],
+    );
+    return Boolean(result.rows[0]?.exists);
+  } catch {
+    return false;
+  }
+}
+
+// ── Types ──
+
+interface SellerTask {
+  id: string;
+  type: 'ship_order' | 'respond_offer' | 'listing_issue' | 'catalogue_awaiting' | 'payout_hold';
+  priority: 'critical' | 'high' | 'normal' | 'low';
+  count: number;
+  dueAt: string | null;
+  consequence: { kind: 'money' | 'buyer' | 'trust' | 'listing'; amountGbp?: number } | null;
+  actionRoute: string;
+  actionLabel: string;
+}
+
+interface FreshnessEntry {
+  asOf: string;
+  state: 'fresh' | 'stale' | 'unavailable';
+}
+
+interface SellerOverviewV2 {
+  schemaVersion: 2;
+  generatedAt: string;
+  freshness: Record<string, FreshnessEntry>;
+  tasks: SellerTask[];
+  topTask: SellerTask | null;
+  taskSummary: Record<string, number>;
+  money: {
+    currency: 'GBP';
+    availableGbp: number;
+    processingGbp: number;
+    heldGbp: number;
+    nextPayoutAt: string | null;
+  } | null;
+  inventory: {
+    active: number;
+    drafts: number;
+    paused: number;
+    sold: number;
+    listedValueGbp: number;
+  };
+  businessPulse: {
+    period: '30d';
+    grossSalesGbp: number;
+    refundsGbp: number;
+    feesGbp: number;
+    netSalesGbp: number;
+    orders: number;
+    completeness: 'complete' | 'partial';
+  } | null;
+}
+
+// ── Batch command types ──
+
+interface BatchCommandItem {
+  listingId: string;
+  expectedVersion?: number;
+}
+
+interface BatchCommandResult {
+  listingId: string;
+  state: 'applied' | 'rejected' | 'conflict' | 'unknown';
+  code?: string;
+  currentStatus?: string;
+}
+
+interface BatchCommandResponse {
+  ok: boolean;
+  batchId: string;
+  state: 'complete' | 'partial';
+  results: BatchCommandResult[];
+}
+
+interface BatchJobRow {
+  id: string;
+  seller_id: string;
+  request_hash: string;
+  status: string;
+  is_stale?: boolean;
+}
+
+interface BatchItemRow {
+  listing_id: string;
+  status: string;
+  reason: string | null;
+  current_status: string | null;
+}
+
+function hashBatchRequest(command: string, items: BatchCommandItem[]): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      command,
+      items: items.map((item) => ({
+        listingId: item.listingId,
+        expectedVersion: item.expectedVersion ?? null,
+      })),
+    }))
+    .digest('hex');
+}
+
+function commandForItem(
+  command: 'pause' | 'resume' | 'delete' | 'mark_sold_external',
+  item: BatchCommandItem,
+  actorId: string,
+): ListingCommand {
+  return {
+    type: command,
+    listingId: item.listingId,
+    actorId,
+    reason: 'seller_hub',
+  } as ListingCommand;
+}
+
+async function readBatchResponse(
+  db: Pool,
+  jobId: string,
+): Promise<BatchCommandResponse> {
+  const jobResult = await db.query<{ status: string }>(
+    `SELECT status FROM listing_batch_jobs WHERE id = $1 LIMIT 1`,
+    [jobId],
+  );
+  const itemResult = await db.query<BatchItemRow>(
+    `SELECT listing_id, status, reason, current_status
+       FROM listing_batch_items
+      WHERE batch_job_id = $1
+      ORDER BY created_at ASC, listing_id ASC`,
+    [jobId],
+  );
+
+  const results = itemResult.rows.map<BatchCommandResult>((item) => {
+    if (item.status === 'applied') {
+      return {
+        listingId: item.listing_id,
+        state: 'applied',
+        currentStatus: item.current_status ?? undefined,
+      };
+    }
+    if (item.status === 'rejected') {
+      return {
+        listingId: item.listing_id,
+        state: 'rejected',
+        code: item.reason ?? 'rejected',
+        currentStatus: item.current_status ?? undefined,
+      };
+    }
+    if (item.status === 'conflict' && item.reason !== 'server_error') {
+      return {
+        listingId: item.listing_id,
+        state: 'conflict',
+        code: item.reason ?? 'conflict',
+        currentStatus: item.current_status ?? undefined,
+      };
+    }
+    return {
+      listingId: item.listing_id,
+      state: 'unknown',
+      code: item.reason ?? (item.status === 'pending' ? 'processing' : 'server_error'),
+      currentStatus: item.current_status ?? undefined,
+    };
+  });
+
+  const finished = jobResult.rows[0]?.status === 'completed';
+  const allApplied = finished && results.length > 0 && results.every((item) => item.state === 'applied');
+  return {
+    ok: true,
+    batchId: jobId,
+    state: allApplied ? 'complete' : 'partial',
+    results,
+  };
+}
+
+export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDependencies) => {
+  // ════════════════════════════════════════════════════════════════════════
+  // GET /seller-hub/overview — canonical seller OS aggregate (v2)
+  //
+  // Per closure program 05_SELLER_HUB_AND_PROFILE_OS and Report 17:
+  // no frontend approximation of financial KPIs, no 100-listing cap,
+  // no false "all caught up" when order/offer sources are unchecked.
+  //
+  // This endpoint computes real money, tasks, and inventory from the
+  // orders, listing_offers, listings, ledger_entries, payout_reserve_holds,
+  // and seller_trust tables. Each source reports its own freshness so
+  // the UI can label partial data truthfully.
+  // ════════════════════════════════════════════════════════════════════════
   app.get('/seller-hub/overview', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.authUser) {
       reply.code(401);
@@ -18,8 +218,29 @@ export const registerSellerHubRoutes = ({ app, readDb }: SellerHubRouteDependenc
     }
 
     const sellerId = request.authUser.userId;
+    const generatedAt = new Date().toISOString();
+    const freshness: Record<string, FreshnessEntry> = {};
 
-    // Inventory counts from listings (real statuses)
+    // ── Check table availability for freshness tracking ──
+    const [
+      ordersAvailable,
+      offersAvailable,
+      ledgerAvailable,
+      payoutAvailable,
+      trustAvailable,
+      reserveHoldsAvailable,
+    ] = await Promise.all([
+      tableExists(readDb, 'orders'),
+      tableExists(readDb, 'listing_offers'),
+      tableExists(readDb, 'ledger_entries'),
+      tableExists(readDb, 'payout_accounts'),
+      tableExists(readDb, 'seller_trust'),
+      tableExists(readDb, 'payout_reserve_holds'),
+    ]);
+
+    // ── Inventory counts (real, uncapped) ──
+    // Per Report 17 P0: the old screen capped at 100 listings and derived
+    // counts on-device. This aggregate counts ALL listings server-side.
     const inventoryResult = await readDb.query<{
       active: string;
       drafts: string;
@@ -37,102 +258,608 @@ export const registerSellerHubRoutes = ({ app, readDb }: SellerHubRouteDependenc
       FROM listings
       WHERE seller_id = $1 AND status != 'deleted'
     `,
-      [sellerId]
+      [sellerId],
     );
-
-    // Order tasks: orders that need shipping (status = 'paid')
-    const shipOrdersResult = await readDb.query<{ count: string; oldest_created: string | null }>(
-      `
-      SELECT COUNT(*) AS count, MIN(created_at)::text AS oldest_created
-      FROM orders
-      WHERE seller_id = $1 AND status = 'paid'
-    `,
-      [sellerId]
-    );
-
-    // Offer tasks: pending offers on seller's listings
-    const offersResult = await readDb.query<{ count: string }>(
-      `
-      SELECT COUNT(*) AS count
-      FROM listing_offers
-      WHERE seller_id = $1 AND status = 'pending' AND expires_at > NOW()
-    `,
-      [sellerId]
-    );
-
-    // Sales performance (last 30 days) — real settled order totals
-    const performanceResult = await readDb.query<{
-      gross_sales: string | null;
-      orders: string;
-    }>(
-      `
-      SELECT
-        COALESCE(SUM(subtotal_gbp), 0) AS gross_sales,
-        COUNT(*) AS orders
-      FROM orders
-      WHERE seller_id = $1
-        AND status IN ('paid', 'shipped', 'delivered')
-        AND created_at >= NOW() - INTERVAL '30 days'
-    `,
-      [sellerId]
-    );
-
-    // Listing issues: active listings missing required fields (title, price, or image)
-    const listingIssuesResult = await readDb.query<{ count: string }>(
-      `
-      SELECT COUNT(*) AS count
-      FROM listings
-      WHERE seller_id = $1
-        AND status = 'active'
-        AND (title IS NULL OR title = '' OR price_gbp IS NULL OR price_gbp <= 0 OR image_url IS NULL)
-    `,
-      [sellerId]
-    );
-
     const inventory = inventoryResult.rows[0] ?? { active: '0', drafts: '0', paused: '0', sold: '0', active_value: '0' };
-    const shipOrders = shipOrdersResult.rows[0] ?? { count: '0', oldest_created: null };
-    const offers = offersResult.rows[0] ?? { count: '0' };
-    const performance = performanceResult.rows[0] ?? { gross_sales: '0', orders: '0' };
-    const listingIssues = listingIssuesResult.rows[0] ?? { count: '0' };
+    freshness.listings = { asOf: generatedAt, state: 'fresh' };
 
-    // Build tasks array (only include tasks with count > 0)
-    const tasks: Array<
-      | { type: 'ship_order'; count: number; oldestDueAt?: string }
-      | { type: 'respond_offer'; count: number }
-      | { type: 'listing_issue'; count: number }
-    > = [];
-
-    const shipCount = parseInt(shipOrders.count, 10) || 0;
-    if (shipCount > 0) {
-      tasks.push({ type: 'ship_order', count: shipCount, oldestDueAt: shipOrders.oldest_created ?? undefined });
-    }
-    const offerCount = parseInt(offers.count, 10) || 0;
-    if (offerCount > 0) {
-      tasks.push({ type: 'respond_offer', count: offerCount });
-    }
-    const issueCount = parseInt(listingIssues.count, 10) || 0;
-    if (issueCount > 0) {
-      tasks.push({ type: 'listing_issue', count: issueCount });
+    // ── Seller trust (for ship_within_days) ──
+    let shipWithinDays: number | null = null;
+    if (trustAvailable) {
+      try {
+        const trustResult = await readDb.query<{ ship_within_days: number | null }>(
+          `SELECT ship_within_days FROM seller_trust WHERE user_id = $1 LIMIT 1`,
+          [sellerId],
+        );
+        shipWithinDays = trustResult.rows[0]?.ship_within_days ?? null;
+        freshness.trust = { asOf: generatedAt, state: 'fresh' };
+      } catch {
+        freshness.trust = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.trust = { asOf: generatedAt, state: 'unavailable' };
     }
 
-    return {
-      ok: true,
-      overview: {
-        generatedAt: new Date().toISOString(),
-        inventory: {
-          active: parseInt(inventory.active, 10) || 0,
-          drafts: parseInt(inventory.drafts, 10) || 0,
-          paused: parseInt(inventory.paused, 10) || 0,
-          sold: parseInt(inventory.sold, 10) || 0,
-          listedValueGbp: parseFloat(String(inventory.active_value ?? '0')) || 0,
-        },
-        tasks,
-        performance: {
-          period: '30d' as const,
-          grossSalesGbp: parseFloat(String(performance.gross_sales ?? '0')) || 0,
-          orders: parseInt(performance.orders, 10) || 0,
-        },
+    // ── Build cross-domain tasks ──
+    const tasks: SellerTask[] = [];
+
+    // Task 1: Ship orders (paid, not yet shipped)
+    // Per Report 17 P0: uses paid_at + ship_within_days as the real dispatch
+    // deadline, NOT order creation timestamp. This is the contractual
+    // handling-time deadline that actually costs trust if missed.
+    if (ordersAvailable) {
+      try {
+        const shipOrdersResult = await readDb.query<{
+          count: string;
+          oldest_paid: string | null;
+          overdue_count: string;
+        }>(
+          `
+          SELECT
+            COUNT(*) AS count,
+            MIN(paid_at)::text AS oldest_paid,
+            COUNT(*) FILTER (
+              WHERE paid_at IS NOT NULL
+                AND paid_at + COALESCE(
+                  (SELECT ship_within_days FROM seller_trust WHERE user_id = $1 LIMIT 1),
+                  3
+                ) * INTERVAL '1 day' < NOW()
+            ) AS overdue_count
+          FROM orders
+          WHERE seller_id = $1 AND status = 'paid'
+        `,
+          [sellerId],
+        );
+        const shipCount = parseInt(shipOrdersResult.rows[0]?.count ?? '0', 10) || 0;
+        const overdueCount = parseInt(shipOrdersResult.rows[0]?.overdue_count ?? '0', 10) || 0;
+        const oldestPaid = shipOrdersResult.rows[0]?.oldest_paid ?? null;
+
+        if (shipCount > 0) {
+          // Compute the real dispatch deadline: oldest paid_at + handling time
+          let dueAt: string | null = null;
+          if (oldestPaid) {
+            const handlingDays = shipWithinDays ?? 3;
+            const paidDate = new Date(oldestPaid);
+            paidDate.setDate(paidDate.getDate() + handlingDays);
+            dueAt = paidDate.toISOString();
+          }
+
+          tasks.push({
+            id: `ship_order_${sellerId}`,
+            type: 'ship_order',
+            priority: overdueCount > 0 ? 'critical' : 'high',
+            count: shipCount,
+            dueAt,
+            consequence: { kind: 'trust', amountGbp: undefined },
+            actionRoute: 'MyOrders',
+            actionLabel: 'Ship orders',
+          });
+        }
+        freshness.orders = { asOf: generatedAt, state: 'fresh' };
+      } catch {
+        freshness.orders = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.orders = { asOf: generatedAt, state: 'unavailable' };
+    }
+
+    // Task 2: Respond to offers (pending, not expired)
+    if (offersAvailable) {
+      try {
+        const offersResult = await readDb.query<{
+          count: string;
+          nearest_expiry: string | null;
+          total_offer_value: string | null;
+        }>(
+          `
+          SELECT
+            COUNT(*) AS count,
+            MIN(expires_at)::text AS nearest_expiry,
+            COALESCE(SUM(offer_price_gbp), 0)::text AS total_offer_value
+          FROM listing_offers
+          WHERE seller_id = $1 AND status = 'pending' AND expires_at > NOW()
+        `,
+          [sellerId],
+        );
+        const offerCount = parseInt(offersResult.rows[0]?.count ?? '0', 10) || 0;
+        const nearestExpiry = offersResult.rows[0]?.nearest_expiry ?? null;
+        const totalOfferValue = parseFloat(offersResult.rows[0]?.total_offer_value ?? '0') || 0;
+
+        if (offerCount > 0) {
+          tasks.push({
+            id: `respond_offer_${sellerId}`,
+            type: 'respond_offer',
+            priority: 'high',
+            count: offerCount,
+            dueAt: nearestExpiry,
+            consequence: { kind: 'money', amountGbp: totalOfferValue },
+            actionRoute: 'Inbox',
+            actionLabel: 'Review offers',
+          });
+        }
+        freshness.offers = { asOf: generatedAt, state: 'fresh' };
+      } catch {
+        freshness.offers = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.offers = { asOf: generatedAt, state: 'unavailable' };
+    }
+
+    // Task 3: Listing issues (active listings missing required fields)
+    try {
+      const listingIssuesResult = await readDb.query<{ count: string }>(
+        `
+        SELECT COUNT(*) AS count
+        FROM listings
+        WHERE seller_id = $1
+          AND status = 'active'
+          AND (title IS NULL OR title = '' OR price_gbp IS NULL OR price_gbp <= 0 OR image_url IS NULL)
+      `,
+        [sellerId],
+      );
+      const issueCount = parseInt(listingIssuesResult.rows[0]?.count ?? '0', 10) || 0;
+      if (issueCount > 0) {
+        tasks.push({
+          id: `listing_issue_${sellerId}`,
+          type: 'listing_issue',
+          priority: 'normal',
+          count: issueCount,
+          dueAt: null,
+          consequence: { kind: 'listing' },
+          actionRoute: 'InventoryManagement',
+          actionLabel: 'Fix listings',
+        });
+      }
+    } catch {
+      // Non-fatal — listings freshness already set
+    }
+
+    // Task 4: Payout reserve holds (money held, eligible for release)
+    if (reserveHoldsAvailable) {
+      try {
+        const holdsResult = await readDb.query<{
+          count: string;
+          held_total: string | null;
+          oldest_eligible: string | null;
+        }>(
+          `
+          SELECT
+            COUNT(*) AS count,
+            COALESCE(SUM(held_amount_gbp), 0)::text AS held_total,
+            MIN(release_eligible_at)::text AS oldest_eligible
+          FROM payout_reserve_holds
+          WHERE user_id = $1 AND released_at IS NULL AND release_eligible_at <= NOW()
+        `,
+          [sellerId],
+        );
+        const holdCount = parseInt(holdsResult.rows[0]?.count ?? '0', 10) || 0;
+        const heldTotal = parseFloat(holdsResult.rows[0]?.held_total ?? '0') || 0;
+        if (holdCount > 0) {
+          tasks.push({
+            id: `payout_hold_${sellerId}`,
+            type: 'payout_hold',
+            priority: 'low',
+            count: holdCount,
+            dueAt: null,
+            consequence: { kind: 'money', amountGbp: heldTotal },
+            actionRoute: 'Wallet',
+            actionLabel: 'View holds',
+          });
+        }
+        freshness.payout_holds = { asOf: generatedAt, state: 'fresh' };
+      } catch {
+        freshness.payout_holds = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.payout_holds = { asOf: generatedAt, state: 'unavailable' };
+    }
+
+    // ── Sort tasks by priority ──
+    const priorityOrder: Record<string, number> = { critical: 0, high: 1, normal: 2, low: 3 };
+    tasks.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+
+    // ── Task summary ──
+    const taskSummary: Record<string, number> = {};
+    for (const task of tasks) {
+      taskSummary[task.type] = task.count;
+    }
+
+    // ── Money posture (from ledger/wallet) ──
+    // Per Report 17: money needs state, reason and action — not one "earnings"
+    // number. This queries the same ledger_entries / payout_reserve_holds
+    // tables as the wallet balances endpoint, so the Hub and Wallet screen
+    // always agree.
+    let money: SellerOverviewV2['money'] = null;
+    if (ledgerAvailable) {
+      try {
+        // Available: seller_payable credits minus debits
+        const availableResult = await readDb.query<{ available_gbp: string }>(
+          `
+          SELECT COALESCE(SUM(
+            CASE WHEN direction = 'credit' THEN amount_gbp ELSE -amount_gbp END
+          ), 0)::text AS available_gbp
+          FROM ledger_entries
+          WHERE account_id = (
+            SELECT id FROM ledger_accounts
+            WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+            LIMIT 1
+          )
+        `,
+          [sellerId],
+        );
+        const availableGbp = Number(availableResult.rows[0]?.available_gbp ?? '0');
+
+        // Processing: orders paid/shipped/delivered but escrow not yet released
+        const pendingResult = await readDb.query<{ pending_gbp: string }>(
+          `
+          SELECT COALESCE(SUM(o.subtotal_gbp), 0)::text AS pending_gbp
+          FROM orders o
+          WHERE o.seller_id = $1
+            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.escrow_released_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM ledger_entries le
+              WHERE le.source_id = o.id
+                AND le.line_type = 'seller_payable_release'
+                AND le.direction = 'credit'
+            )
+        `,
+          [sellerId],
+        );
+        const processingGbp = Number(pendingResult.rows[0]?.pending_gbp ?? '0');
+
+        // Held: reserve holds not yet released
+        let heldGbp = 0;
+        if (reserveHoldsAvailable) {
+          const reserveResult = await readDb.query<{ held_gbp: string }>(
+            `
+            SELECT COALESCE(SUM(held_amount_gbp), 0)::text AS held_gbp
+            FROM payout_reserve_holds
+            WHERE user_id = $1 AND released_at IS NULL
+          `,
+            [sellerId],
+          );
+          heldGbp = Number(reserveResult.rows[0]?.held_gbp ?? '0');
+        }
+
+        // Next payout: from payout_accounts schedule
+        let nextPayoutAt: string | null = null;
+        if (payoutAvailable) {
+          const payoutResult = await readDb.query<{ next_scheduled_payout_at: string | null }>(
+            `SELECT next_scheduled_payout_at FROM payout_accounts WHERE user_id = $1 LIMIT 1`,
+            [sellerId],
+          );
+          nextPayoutAt = payoutResult.rows[0]?.next_scheduled_payout_at ?? null;
+        }
+
+        money = {
+          currency: 'GBP',
+          availableGbp: Math.max(0, Math.round(availableGbp * 100) / 100),
+          processingGbp: Math.round(processingGbp * 100) / 100,
+          heldGbp: Math.round(heldGbp * 100) / 100,
+          nextPayoutAt,
+        };
+        freshness.money = { asOf: generatedAt, state: 'fresh' };
+      } catch {
+        freshness.money = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.money = { asOf: generatedAt, state: 'unavailable' };
+    }
+
+    // ── Business pulse (30-day, from settled order facts) ──
+    // Per Report 17 P0: "revenue" must come from settled order/ledger facts,
+    // NOT from listings.price_gbp (asking price). This queries orders.subtotal_gbp
+    // for paid/shipped/delivered orders in the last 30 days, and derives
+    // refunds and fees from ledger_entries.
+    let businessPulse: SellerOverviewV2['businessPulse'] = null;
+    if (ordersAvailable) {
+      try {
+        const pulseResult = await readDb.query<{
+          gross_sales: string | null;
+          orders: string;
+        }>(
+          `
+          SELECT
+            COALESCE(SUM(subtotal_gbp), 0) AS gross_sales,
+            COUNT(*) AS orders
+          FROM orders
+          WHERE seller_id = $1
+            AND status IN ('paid', 'shipped', 'delivered')
+            AND paid_at >= NOW() - INTERVAL '30 days'
+        `,
+          [sellerId],
+        );
+        const grossSalesGbp = parseFloat(String(pulseResult.rows[0]?.gross_sales ?? '0')) || 0;
+        const orders = parseInt(pulseResult.rows[0]?.orders ?? '0', 10) || 0;
+
+        // Refunds and fees from ledger (if available)
+        let refundsGbp = 0;
+        let feesGbp = 0;
+        let completeness: 'complete' | 'partial' = 'complete';
+        if (ledgerAvailable) {
+          try {
+            const refundsResult = await readDb.query<{ refunds: string | null }>(
+              `
+              SELECT COALESCE(SUM(amount_gbp), 0)::text AS refunds
+              FROM ledger_entries
+              WHERE account_id = (
+                SELECT id FROM ledger_accounts
+                WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+                LIMIT 1
+              )
+              AND source_type = 'refund'
+              AND direction = 'debit'
+              AND created_at >= NOW() - INTERVAL '30 days'
+            `,
+              [sellerId],
+            );
+            refundsGbp = parseFloat(String(refundsResult.rows[0]?.refunds ?? '0')) || 0;
+
+            const feesResult = await readDb.query<{ fees: string | null }>(
+              `
+              SELECT COALESCE(SUM(amount_gbp), 0)::text AS fees
+              FROM ledger_entries
+              WHERE account_id = (
+                SELECT id FROM ledger_accounts
+                WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+                LIMIT 1
+              )
+              AND source_type = 'order_payment'
+              AND direction = 'debit'
+              AND line_type = 'platform_fee'
+              AND created_at >= NOW() - INTERVAL '30 days'
+            `,
+              [sellerId],
+            );
+            feesGbp = parseFloat(String(feesResult.rows[0]?.fees ?? '0')) || 0;
+          } catch {
+            completeness = 'partial';
+          }
+        } else {
+          completeness = 'partial';
+        }
+
+        const netSalesGbp = grossSalesGbp - refundsGbp - feesGbp;
+
+        businessPulse = {
+          period: '30d',
+          grossSalesGbp: Math.round(grossSalesGbp * 100) / 100,
+          refundsGbp: Math.round(refundsGbp * 100) / 100,
+          feesGbp: Math.round(feesGbp * 100) / 100,
+          netSalesGbp: Math.round(netSalesGbp * 100) / 100,
+          orders,
+          completeness,
+        };
+        freshness.business_pulse = { asOf: generatedAt, state: 'fresh' };
+      } catch {
+        freshness.business_pulse = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.business_pulse = { asOf: generatedAt, state: 'unavailable' };
+    }
+
+    const overview: SellerOverviewV2 = {
+      schemaVersion: 2,
+      generatedAt,
+      freshness,
+      tasks,
+      topTask: tasks[0] ?? null,
+      taskSummary,
+      money,
+      inventory: {
+        active: parseInt(inventory.active, 10) || 0,
+        drafts: parseInt(inventory.drafts, 10) || 0,
+        paused: parseInt(inventory.paused, 10) || 0,
+        sold: parseInt(inventory.sold, 10) || 0,
+        listedValueGbp: parseFloat(String(inventory.active_value ?? '0')) || 0,
       },
+      businessPulse,
     };
+
+    return { ok: true, overview };
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // POST /seller-hub/batch-command — durable batch operations with per-item
+  // receipts
+  //
+  // Per Report 17 P0: replaces Promise.all of individual PATCH/DELETE calls
+  // that can partially commit on the server while the client rolls the entire
+  // batch back visually. This endpoint executes each item independently and
+  // returns a per-item receipt so the UI can render truthful partial results.
+  //
+  // Partial failure is a first-class truthful result. The UI never restores
+  // a committed row because a sibling failed.
+  // ════════════════════════════════════════════════════════════════════════
+  app.post('/seller-hub/batch-command', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const sellerId = request.authUser.userId;
+
+    const body = request.body as any;
+    if (!body || typeof body.idempotencyKey !== 'string' || body.idempotencyKey.length < 4) {
+      reply.code(400);
+      return { ok: false, error: 'idempotencyKey is required (min 4 chars)' };
+    }
+    if (!['pause', 'resume', 'delete', 'mark_sold_external'].includes(body.command)) {
+      reply.code(400);
+      return { ok: false, error: 'command must be pause, resume, delete, or mark_sold_external' };
+    }
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      reply.code(400);
+      return { ok: false, error: 'items must be a non-empty array of { listingId }' };
+    }
+    if (body.items.length > 200) {
+      reply.code(400);
+      return { ok: false, error: 'Maximum 200 items per batch' };
+    }
+
+    const command = body.command as 'pause' | 'resume' | 'delete' | 'mark_sold_external';
+    const items: BatchCommandItem[] = body.items.map((item: any) => ({
+      listingId: item.listingId,
+      expectedVersion: Number.isInteger(item.expectedVersion) && item.expectedVersion > 0
+        ? item.expectedVersion
+        : undefined,
+    }));
+    if (items.some((item) => typeof item.listingId !== 'string' || item.listingId.length < 2)) {
+      reply.code(400);
+      return { ok: false, error: 'Each item must include a valid listingId' };
+    }
+    if (new Set(items.map((item) => item.listingId)).size !== items.length) {
+      reply.code(400);
+      return { ok: false, error: 'A listing can appear only once in a batch' };
+    }
+
+    const requestHash = hashBatchRequest(command, items);
+    // Migration 231 has a global uniqueness constraint. Prefixing the opaque
+    // client key keeps it seller-scoped and prevents cross-account collisions.
+    const durableKey = `${sellerId}:${body.idempotencyKey}`;
+    const initClient = await db.connect();
+    let jobId = '';
+    let shouldProcess = true;
+    try {
+      await initClient.query('BEGIN');
+      const existingJob = await initClient.query<BatchJobRow>(
+        `SELECT id, seller_id, request_hash, status,
+                created_at < NOW() - INTERVAL '30 seconds' AS is_stale
+           FROM listing_batch_jobs
+          WHERE idempotency_key = $1
+          LIMIT 1
+          FOR UPDATE`,
+        [durableKey],
+      );
+
+      if (existingJob.rowCount) {
+        const existing = existingJob.rows[0];
+        if (existing.seller_id !== sellerId || existing.request_hash !== requestHash) {
+          await initClient.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'This idempotency key was already used for a different request',
+            code: 'IDEMPOTENCY_KEY_REUSED',
+          };
+        }
+        jobId = existing.id;
+        shouldProcess = existing.status !== 'completed'
+          && (existing.status !== 'processing' || Boolean(existing.is_stale));
+        if (shouldProcess) {
+          await initClient.query(
+            `UPDATE listing_batch_jobs SET status = 'processing' WHERE id = $1`,
+            [jobId],
+          );
+        }
+      } else {
+        const insertedJob = await initClient.query<{ id: string }>(
+          `INSERT INTO listing_batch_jobs (
+             idempotency_key, request_hash, seller_id, command, status, total_items
+           )
+           VALUES ($1, $2, $3, $4, 'processing', $5)
+           RETURNING id`,
+          [durableKey, requestHash, sellerId, command, items.length],
+        );
+        jobId = insertedJob.rows[0].id;
+        for (const item of items) {
+          await initClient.query(
+            `INSERT INTO listing_batch_items (batch_job_id, listing_id, status)
+             VALUES ($1, $2, 'pending')`,
+            [jobId, item.listingId],
+          );
+        }
+      }
+      await initClient.query('COMMIT');
+    } catch (error) {
+      await initClient.query('ROLLBACK');
+      app.log.error({ err: error, sellerId, command }, 'Failed to initialise listing batch command');
+      reply.code(500);
+      return { ok: false, error: 'Failed to start listing update' };
+    } finally {
+      initClient.release();
+    }
+
+    // A concurrent replay returns the durable state as it stands. Pending
+    // rows become `unknown`, prompting reconciliation rather than duplication.
+    if (!shouldProcess) {
+      return readBatchResponse(db, jobId);
+    }
+
+    const pendingRows = await db.query<{ listing_id: string }>(
+      `SELECT listing_id
+         FROM listing_batch_items
+        WHERE batch_job_id = $1 AND status = 'pending'
+        ORDER BY created_at ASC, listing_id ASC`,
+      [jobId],
+    );
+    const itemById = new Map(items.map((item) => [item.listingId, item]));
+
+    // Execute independently, but always through the canonical state machine.
+    for (const pending of pendingRows.rows) {
+      const item = itemById.get(pending.listing_id) ?? { listingId: pending.listing_id };
+      const ownership = await db.query<{ seller_id: string }>(
+        `SELECT seller_id FROM listings WHERE id = $1 LIMIT 1`,
+        [item.listingId],
+      );
+      if (!ownership.rowCount) {
+        await db.query(
+          `UPDATE listing_batch_items
+              SET status = 'rejected', reason = 'not_found', current_status = 'unknown'
+            WHERE batch_job_id = $1 AND listing_id = $2 AND status = 'pending'`,
+          [jobId, item.listingId],
+        );
+        continue;
+      }
+      if (ownership.rows[0].seller_id !== sellerId) {
+        await db.query(
+          `UPDATE listing_batch_items
+              SET status = 'rejected', reason = 'forbidden', current_status = 'unknown'
+            WHERE batch_job_id = $1 AND listing_id = $2 AND status = 'pending'`,
+          [jobId, item.listingId],
+        );
+        continue;
+      }
+
+      const result = await executeListingCommand(
+        db,
+        commandForItem(command, item, sellerId),
+        item.expectedVersion,
+      );
+      await db.query(
+        `UPDATE listing_batch_items
+            SET status = $3, reason = $4, current_status = $5
+          WHERE batch_job_id = $1 AND listing_id = $2 AND status = 'pending'`,
+        [
+          jobId,
+          item.listingId,
+          result.status,
+          result.status === 'applied' ? null : result.reason,
+          result.status === 'applied' ? result.newStatus : result.currentStatus,
+        ],
+      );
+    }
+
+    await db.query(
+      `UPDATE listing_batch_jobs job
+          SET status = 'completed',
+              completed_at = NOW(),
+              applied_count = counts.applied_count,
+              rejected_count = counts.rejected_count,
+              conflict_count = counts.conflict_count
+         FROM (
+           SELECT
+             COUNT(*) FILTER (WHERE status = 'applied')::int AS applied_count,
+             COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected_count,
+             COUNT(*) FILTER (WHERE status = 'conflict')::int AS conflict_count
+           FROM listing_batch_items
+           WHERE batch_job_id = $1
+         ) counts
+        WHERE job.id = $1`,
+      [jobId],
+    );
+
+    return readBatchResponse(db, jobId);
   });
 };

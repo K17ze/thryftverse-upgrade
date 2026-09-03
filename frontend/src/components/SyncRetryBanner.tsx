@@ -3,7 +3,8 @@ import { StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-n
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { AnimatedPressable } from './AnimatedPressable';
 import { trackTelemetryEvent } from '../lib/telemetry';
-import { Typography, Radius, Type, Space } from '../theme/designTokens';
+import { Radius, Space, Stroke} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 interface SyncRetryBannerProps {
   message: string;
@@ -32,8 +33,7 @@ export function SyncRetryBanner({
   actionStyle,
   actionTextStyle,
   telemetryContext,
-  trackImpression = true,
-}: SyncRetryBannerProps) {
+  trackImpression = true }: SyncRetryBannerProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const actionDisabled = disabled || isRetrying;
@@ -50,15 +50,13 @@ export function SyncRetryBanner({
 
     trackedImpressionContext.current = telemetryContext;
     trackTelemetryEvent('sync_retry_banner_impression', {
-      context: telemetryContext,
-    });
+      context: telemetryContext });
   }, [telemetryContext, trackImpression]);
 
   const handleRetry = React.useCallback(() => {
     if (telemetryContext) {
       trackTelemetryEvent('sync_retry_tapped', {
-        context: telemetryContext,
-      });
+        context: telemetryContext });
     }
     onRetry();
   }, [onRetry, telemetryContext]);
@@ -84,34 +82,29 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       borderRadius: Radius.lg,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       backgroundColor: colors.surfaceAlt,
       paddingHorizontal: 10,
       paddingVertical: Space.sm,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-    },
+      gap: 8 },
     message: {
       flex: 1,
       color: colors.textSecondary,
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       lineHeight: 15,
-      fontFamily: Typography.family.medium,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
     actionBtn: {
       borderRadius: Radius.lg,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.border,
       backgroundColor: colors.surface,
       paddingHorizontal: 10,
-      paddingVertical: 5,
-    },
+      paddingVertical: 5 },
     actionText: {
       color: colors.textPrimary,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily } });
 }

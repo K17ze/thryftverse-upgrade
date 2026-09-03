@@ -4,7 +4,8 @@ import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { LottieAnimation, type LottieAnimationSource } from './LottieAnimation';
 
 // ---------------------------------------------------------------------------
@@ -49,8 +50,7 @@ export function AnimatedSuccessState({
   subtitle,
   onComplete,
   animationSize = 140,
-  style,
-}: AnimatedSuccessStateProps) {
+  style }: AnimatedSuccessStateProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -90,9 +90,9 @@ export function AnimatedSuccessState({
       ) : (
         <Reanimated.View
           entering={enter}
-          style={styles.iconRing}
+          style={styles.iconSlot}
         >
-          <Ionicons name="checkmark" size={48} color={colors.success} />
+          <Ionicons name="checkmark" size={32} color={colors.success} />
         </Reanimated.View>
       )}
 
@@ -122,7 +122,7 @@ type ThemeColors = ReturnType<typeof useAppTheme>['colors'];
 
 interface SuccessStateStyles {
   container: ViewStyle;
-  iconRing: ViewStyle;
+  iconSlot: ViewStyle;
   title: TextStyle;
   subtitle: TextStyle;
   animation: (size: number) => ViewStyle;
@@ -136,43 +136,29 @@ function createStyles(colors: ThemeColors): SuccessStateStyles {
       justifyContent: 'center',
       paddingHorizontal: Space.xl + Space.sm,
       paddingVertical: Space.xxl + Space.sm,
-      gap: Space.sm + 2,
-    },
-    iconRing: {
-      width: 104,
-      height: 104,
-      borderRadius: Radius.full,
-      borderWidth: 2,
-      borderColor: colors.successBorder,
-      backgroundColor: colors.successSubtle,
+      gap: Space.sm + 2 },
+    iconSlot: {
       alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     title: {
-      fontSize: Type.priceList.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
       letterSpacing: -0.2,
       color: colors.textPrimary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     subtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       letterSpacing: 0.08,
       color: colors.textMuted,
       textAlign: 'center',
-      lineHeight: Type.body.lineHeight + 1,
-      maxWidth: 280,
-    },
-  });
+      lineHeight: TypographyV2.body.lineHeight + 1,
+      maxWidth: 280 } });
 
   return {
     ...staticStyles,
     animation: (size: number): ViewStyle => ({
       width: size,
       height: size,
-      marginBottom: Space.md,
-    }),
-  };
+      marginBottom: Space.md }) };
 }

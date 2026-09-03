@@ -17,8 +17,7 @@ import {
   ScrollView,
   TextInput,
   FlatList,
-  type DimensionValue,
-} from 'react-native';
+  type DimensionValue } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,24 +25,26 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  useReducedMotion,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, FontFamily, Control, Stroke } from '../../../theme/designTokens';
+  useReducedMotion } from 'react-native-reanimated';
+import { Space, Radius, Typography, FontFamily, Control } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { Motion } from '../../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
+import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import {
   searchListingsFromApi,
   fetchUserListingsFromApi,
   fetchListingByIdFromApi,
   type ListingSearchResult,
-  type ListingApiItem,
-} from '../../../services/listingsApi';
+  type ListingApiItem } from '../../../services/listingsApi';
 import { useStore } from '../../../store/useStore';
 import { createStableId } from '../../../utils/createStableId';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ const MAX_RECENT = 30;
 const ALL_TABS: Array<{ key: TabKey; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }> = [
   { key: 'discover', label: 'Discover', icon: 'search-outline' },
   { key: 'closet', label: 'Closet', icon: 'shirt-outline' },
-  { key: 'listings', label: 'My Listings', icon: 'pricetag-outline' },
+  { key: 'listings', label: 'Listings', icon: 'bag-handle-outline' },
   { key: 'saved', label: 'Saved', icon: 'bookmark-outline' },
 ];
 
@@ -124,8 +125,7 @@ async function recordRecentListing(item: ListingSearchResult): Promise<void> {
       title: item.title,
       priceGbp: item.priceGbp,
       imageUrl: item.imageUrl,
-      createdAt: item.createdAt,
-    };
+      createdAt: item.createdAt };
     const filtered = existing.filter((e) => e.id !== entry.id);
     const next = [entry, ...filtered].slice(0, MAX_RECENT);
     await AsyncStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(next));
@@ -148,8 +148,7 @@ function listingApiItemToSearchResult(item: ListingApiItem): ListingSearchResult
     brand: item.brand,
     size: item.size,
     condition: item.condition,
-    category: item.category,
-  };
+    category: item.category };
 }
 
 function listingToProductRef(item: ListingSearchResult): ProductRef {
@@ -160,8 +159,7 @@ function listingToProductRef(item: ListingSearchResult): ProductRef {
     priceGbp: item.priceGbp,
     imageUri: item.imageUrl ?? '',
     brand: item.brand ?? undefined,
-    size: item.size ?? undefined,
-  };
+    size: item.size ?? undefined };
 }
 
 // ── SkeletonBlock — one-time shimmer sweep (AGENTS.md §14, §17) ──────
@@ -178,24 +176,23 @@ function SkeletonBlock({ width, height, radius }: { width: DimensionValue; heigh
 
   const style = useAnimatedStyle(() => ({
     backgroundColor: colors.surfaceAlt,
-    opacity: 0.5 + 0.3 * shimmerSV.value,
-  }));
+    opacity: 0.5 + 0.3 * shimmerSV.value }));
 
   return (
     <Reanimated.View style={[{ width, height, borderRadius: radius ?? Radius.sm }, style]} />
   );
 }
 
-// ── ProductTileSkeleton — matches a single product row (thumb + text + price) ──
+// ── ProductTileSkeleton — matches a single product row (64pt, thumb + text + price) ──
 function ProductTileSkeleton() {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'transparent' }}>
-      <SkeletonBlock width={48} height={48} radius={Radius.sm} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, height: 64, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'transparent' }}>
+      <SkeletonBlock width={48} height={48} radius={Radius.md} />
       <View style={{ flex: 1, gap: Space.xs }}>
-        <SkeletonBlock width={'70%'} height={Type.body.size + 2} radius={Radius.sm} />
-        <SkeletonBlock width={'40%'} height={Type.caption.size + 2} radius={Radius.sm} />
-        <SkeletonBlock width={36} height={Type.caption.size + 2} radius={Radius.sm} />
+        <SkeletonBlock width={'70%'} height={TypographyV2.body.size + 2} radius={Radius.sm} />
+        <SkeletonBlock width={40} height={TypographyV2.captionElevated.size + 2} radius={Radius.sm} />
       </View>
+      <SkeletonBlock width={20} height={20} radius={Radius.full} />
     </View>
   );
 }
@@ -211,19 +208,27 @@ function SearchLoadingSkeleton() {
   );
 }
 
-// ── ProductGridSkeleton — full loading state (2 cols × 3 rows of tiles) ──
+// ── ProductCardSkeleton — matches a single media-first grid card ──
+function ProductCardSkeleton() {
+  return (
+    <View style={{ flex: 1, paddingHorizontal: Space.xs, paddingVertical: Space.sm }}>
+      <SkeletonBlock width={'100%'} height={120} radius={Radius.md} />
+      <View style={{ gap: Space.xxs, marginTop: Space.xs }}>
+        <SkeletonBlock width={'80%'} height={TypographyV2.captionElevated.size + 2} radius={Radius.sm} />
+        <SkeletonBlock width={40} height={TypographyV2.captionElevated.size + 2} radius={Radius.sm} />
+      </View>
+    </View>
+  );
+}
+
+// ── ProductGridSkeleton — 2-column media-first card grid (loading state) ──
 function ProductGridSkeleton() {
   return (
     <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
-      {[0, 1, 2].map((row) => (
-        <View key={row} style={{ flexDirection: 'row', gap: Space.sm, marginBottom: Space.md }}>
-          {[0, 1].map((col) => (
-            <View key={col} style={{ flex: 1, gap: Space.xs }}>
-              <SkeletonBlock width={'100%'} height={120} radius={Radius.md} />
-              <SkeletonBlock width={'80%'} height={Type.body.size + 2} radius={Radius.sm} />
-              <SkeletonBlock width={40} height={Type.caption.size + 2} radius={Radius.sm} />
-            </View>
-          ))}
+      {[0, 1, 2].map((i) => (
+        <View key={i} style={{ flexDirection: 'row', gap: Space.sm }}>
+          <ProductCardSkeleton />
+          <ProductCardSkeleton />
         </View>
       ))}
     </View>
@@ -236,9 +241,9 @@ export function ProductBrowserSheet({
   visible,
   onClose,
   onProductSelect,
-  sources,
-}: ProductBrowserSheetProps) {
+  sources }: ProductBrowserSheetProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const currentUserId = useStore((state) => state.currentUser?.id);
@@ -252,10 +257,14 @@ export function ProductBrowserSheet({
   const defaultTab = visibleTabs[0]?.key ?? 'discover';
 
   const [activeTab, setActiveTab] = useState<TabKey>(defaultTab);
+  const [selectedProduct, setSelectedProduct] = useState<ListingSearchResult | null>(null);
 
   // Reset to default tab when the sheet opens
   useEffect(() => {
-    if (visible) setActiveTab(defaultTab);
+    if (visible) {
+      setActiveTab(defaultTab);
+      setSelectedProduct(null);
+    }
   }, [visible, defaultTab]);
 
   // ── Discover/Search state ──────────────────────────────────────────
@@ -380,11 +389,17 @@ export function ProductBrowserSheet({
     (item: ListingSearchResult) => {
       haptic.selection();
       recordRecentListing(item);
-      onProductSelect(listingToProductRef(item));
-      onClose();
+      setSelectedProduct(item);
     },
-    [onProductSelect, onClose, haptic],
+    [haptic],
   );
+
+  const handleDone = useCallback(() => {
+    if (!selectedProduct) return;
+    haptic.medium();
+    onProductSelect(listingToProductRef(selectedProduct));
+    onClose();
+  }, [selectedProduct, haptic, onProductSelect, onClose]);
 
   const handleRetry = useCallback(() => {
     if (activeTab === 'discover') {
@@ -435,7 +450,6 @@ export function ProductBrowserSheet({
       >
         {/* ── Header ──────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Add Item</Text>
           <PressScale
             onPress={onClose}
             style={styles.closeBtn}
@@ -443,7 +457,18 @@ export function ProductBrowserSheet({
             accessibilityHint="Closes the product browser sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
+          </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Tag Product</Text>
+          <PressScale
+            onPress={handleDone}
+            style={styles.doneBtn}
+            accessibilityLabel="Done"
+            accessibilityRole="button"
+            accessibilityHint="Tags the selected product and closes the sheet"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
           </PressScale>
         </View>
 
@@ -472,18 +497,18 @@ export function ProductBrowserSheet({
 
         {/* ── Search input (Discover tab only) ────────────────────── */}
         {activeTab === 'discover' && (
-          <View style={styles.searchRow}>
-            <Ionicons name="search" size={IconGrammar.metadata} color={colors.textMuted} style={styles.searchIcon} />
+          <View style={[styles.searchRow, { backgroundColor: colors.surfaceAlt }]}>
+            <AppIcon name="search" size={IconSize.sm} color="textMuted" style={styles.searchIcon} opticalCenter={true} accessible={false} />
             <TextInput
-              style={[styles.searchInput, { color: colors.textPrimary, borderColor: colors.border }]}
-              placeholder="Search listings..."
+              style={[styles.searchInput, { color: colors.textPrimary }]}
+              placeholder="Search"
               placeholderTextColor={colors.textMuted}
               value={query}
               onChangeText={setQuery}
               autoCapitalize="none"
               autoCorrect={false}
               autoFocus
-              accessibilityLabel="Search listings"
+              accessibilityLabel="Search products"
             />
             {isSearchLoading && (
               <View style={{ flex: 1 }}>
@@ -496,7 +521,7 @@ export function ProductBrowserSheet({
         {/* ── Results / states ────────────────────────────────────── */}
         {activeError ? (
           <View style={styles.errorBody}>
-            <Text style={[styles.errorText, { color: colors.textMuted }]}>Couldn't load items</Text>
+            <Text style={[styles.errorText, { color: colors.textMuted }]}>Couldn't load</Text>
             <Pressable
               onPress={handleRetry}
               style={[styles.retryBtn, { borderColor: colors.border }]}
@@ -513,51 +538,55 @@ export function ProductBrowserSheet({
           <FlatList
             data={activeResults}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => handleSelect(item)}
-                style={[styles.resultRow, { borderBottomColor: colors.border }]}
-                accessibilityLabel={`Select ${item.title}`}
-                accessibilityRole="button"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <View style={[styles.resultThumb, { backgroundColor: colors.surfaceAlt }]}>
-                  {item.imageUrl ? (
-                    <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} contentFit="cover" />
-                  ) : (
-                    <Ionicons name="pricetag" size={IconGrammar.metadata} color={colors.textSecondary} />
-                  )}
-                </View>
-                <View style={styles.resultInfo}>
-                  <Text style={[styles.resultName, { color: colors.textPrimary }]} numberOfLines={1}>
+            numColumns={2}
+            columnWrapperStyle={styles.productGridRow}
+            renderItem={({ item }) => {
+              const isSelected = selectedProduct?.id === item.id;
+              return (
+                <Pressable
+                  onPress={() => handleSelect(item)}
+                  style={styles.productCard}
+                  accessibilityLabel={`Select ${item.title}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <View style={styles.productImageWrap}>
+                    {item.imageUrl ? (
+                      <Image source={{ uri: item.imageUrl }} style={styles.productImage} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.productImagePlaceholder, { backgroundColor: colors.surfaceAlt }]}>
+                        <AppIcon name="tag" size={IconSize.sm} color="textSecondary" opticalCenter={true} accessible={false} />
+                      </View>
+                    )}
+                    {isSelected && (
+                      <View style={styles.selectedBadge}>
+                        <AppIcon name="checkmarkCircle" size={IconSize.md} color="brand" opticalCenter={true} accessible={false} />
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.productName, { color: colors.textPrimary }]} numberOfLines={1}>
                     {item.title}
                   </Text>
-                  {item.brand && (
-                    <Text style={[styles.resultSubtext, { color: colors.textMuted }]} numberOfLines={1}>
-                      {item.brand}
-                    </Text>
-                  )}
-                  <Text style={[styles.resultPrice, { color: colors.brand }]}>
-                    £{item.priceGbp.toFixed(0)}
+                  <Text style={[styles.productPrice, { color: colors.textPrimary }]}>
+                    {currencySymbol}{item.priceGbp.toFixed(0)}
                   </Text>
-                </View>
-              </Pressable>
-            )}
+                </Pressable>
+              );
+            }}
             style={styles.resultList}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               activeTab === 'discover' ? (
                 hasSearched && !isSearchLoading ? (
                   <View style={styles.emptyState}>
-                    <Text style={[styles.emptyText, { color: colors.textMuted }]}>No listings found</Text>
+                    <Text style={[styles.emptyText, { color: colors.textMuted }]}>No products</Text>
                   </View>
                 ) : null
               ) : (
                 <View style={styles.emptyState}>
                   <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                    {activeTab === 'closet' || activeTab === 'listings'
-                      ? 'No listings yet'
-                      : 'No saved items'}
+                    No products
                   </Text>
                 </View>
               )
@@ -578,126 +607,114 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
+      flex: 1,
+      textAlign: 'center',
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-    },
+      fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: 44,
       height: 44,
       justifyContent: 'center',
-      alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      alignItems: 'center' },
+    doneBtn: {
+      width: 44,
+      height: 44,
+      justifyContent: 'center',
+      alignItems: 'center' },
+    doneBtnText: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size },
     // ── Tab bar ──
     tabBar: {
       flexDirection: 'row',
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     tabBarContent: {
       gap: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     tab: {
       paddingVertical: Space.sm,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
     tabLabel: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     // ── Search ──
     searchRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      gap: Space.sm,
-    },
+      marginHorizontal: Space.md,
+      marginVertical: Space.sm,
+      height: 36,
+      borderRadius: Radius.sm,
+      paddingHorizontal: Space.sm,
+      gap: Space.xs },
     searchIcon: {},
     searchInput: {
       flex: 1,
-      borderWidth: 1,
-      borderRadius: Radius.md,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      fontSize: Type.body.size,
-    },
+      fontFamily: FontFamily.regular,
+      fontSize: TypographyV2.captionElevated.size,
+      padding: 0 },
     // ── Results ──
     resultList: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
-    resultRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
-    resultThumb: {
-      width: 48,
-      height: 48,
-      borderRadius: Radius.sm,
-      justifyContent: 'center',
-      alignItems: 'center',
+      paddingBottom: Space.xl },
+    productGridRow: {
+      gap: Space.sm },
+    productCard: {
+      flex: 1,
+      paddingHorizontal: Space.xs,
+      paddingVertical: Space.sm },
+    productImageWrap: {
+      width: '100%',
+      aspectRatio: 1,
+      borderRadius: Radius.md,
       overflow: 'hidden',
-    },
-    resultThumbImg: {
+      marginBottom: Space.xs },
+    productImage: {
+      width: '100%',
+      height: '100%' },
+    productImagePlaceholder: {
       width: '100%',
       height: '100%',
-    },
-    resultInfo: {
-      flex: 1,
-      gap: 2,
-    },
-    resultName: {
-      fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
-    resultSubtext: {
+      justifyContent: 'center',
+      alignItems: 'center' },
+    selectedBadge: {
+      position: 'absolute',
+      top: Space.xs,
+      right: Space.xs },
+    productName: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
-    resultPrice: {
-      fontFamily: Typography.family.bold,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.captionElevated.size },
+    productPrice: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.captionElevated.size },
     // ── States ──
     emptyState: {
       paddingVertical: Space.xl,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     emptyText: {
-      fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.bodyStrong.size },
     errorBody: {
       paddingVertical: Space.xl,
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     errorText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     retryBtn: {
       height: 50,
       paddingHorizontal: Space.xl,
       borderRadius: Radius.lg,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     retryBtnText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-      color: colors.textInverse,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.textInverse } });
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -7,10 +7,8 @@ import { CachedImage } from '../CachedImage';
 import { Collection } from '../../store/useStore';
 import type { Listing } from '../../domain';
 import { useBackendData } from '../../context/BackendDataContext';
-import { Type, Space, Radius, Typography, Stroke } from '../../theme/designTokens';
-const { width: SCREEN_W } = Dimensions.get('window');
-const CARD_W = SCREEN_W - Space.md * 2;
-const COVER_SIZE = (CARD_W - 8) / 3; // 3-up collage with 4px gaps
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface Props {
   collection: Collection;
@@ -19,7 +17,10 @@ interface Props {
 
 export function CollectionCard({ collection, onPress }: Props) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const cardW = SCREEN_W - Space.md * 2;
+  const coverSize = (cardW - 8) / 3; // 3-up collage with 4px gaps
+  const styles = React.useMemo(() => createStyles(colors, coverSize), [colors, coverSize]);
   const { listings } = useBackendData();
   const count = collection.itemIds?.length ?? 0;
 
@@ -94,7 +95,7 @@ export function CollectionCard({ collection, onPress }: Props) {
   );
 }
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
+const createStyles = (colors: ThemeColors, coverSize: number) => StyleSheet.create({
   // Flattened — no bordered card wrapper. Media is the colour; the info
   // row sits on the flat canvas with a hairline top separator. This removes
   // the card-on-card composition (AGENTS.md §4) where rounded media surfaces
@@ -103,42 +104,34 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     marginBottom: Space.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   collage: {
     flexDirection: 'row',
     gap: 4,
     padding: Space.xs,
-    height: COVER_SIZE * 2 + 4,
-  },
+    height: coverSize * 2 + 4 },
   mainCover: {
-    width: COVER_SIZE * 2,
+    width: coverSize * 2,
     height: '100%',
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   mainCoverSingle: {
-    width: '100%',
-  },
+    width: '100%' },
   sideColumn: {
     flex: 1,
-    gap: 4,
-  },
+    gap: 4 },
   sideCover: {
     flex: 1,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   sideEmpty: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverImg: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   // Empty cover — dashed-outline creation prompt, not a status label
   emptyCover: {
     flex: 1,
@@ -149,38 +142,30 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
     borderStyle: 'dashed',
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   emptyCoverText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   info: {
     padding: Space.sm,
     paddingHorizontal: Space.md,
     borderTopWidth: Stroke.hairline,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   privacyGlyph: {
-    marginTop: 1,
-  },
+    marginTop: 1 },
   name: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    flex: 1,
-  },
+    flex: 1 },
   meta: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginTop: 2,
-  },
-});
+    marginTop: 2 } });

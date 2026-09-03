@@ -21,15 +21,12 @@ export function HomeStack() {
   return (
     <Stack.Navigator screenOptions={pushScreenOptions}>
       <Stack.Screen name="Home" getComponent={() => require('../../screens/HomeScreen').default} />
-      <Stack.Screen name="PulseFeed" getComponent={() => require('../../screens/PulseFeedScreen').default} />
       <Stack.Screen name="ExploreCollection" getComponent={() => require('../../screens/ExploreCollectionScreen').default} />
       <Stack.Screen name="LookDetail" getComponent={() => require('../../screens/LookDetailScreen').default} />
-      <Stack.Screen name="Galleria" getComponent={() => require('../../screens/GalleriaScreen').default} />
       <Stack.Screen name="GalleriaCollectionDetail" getComponent={() => require('../../screens/GalleriaCollectionDetailScreen').default} />
       <Stack.Screen name="MoodboardHome" getComponent={() => require('../../screens/MoodboardHomeScreen').default} />
       <Stack.Screen name="YourAlgorithm" getComponent={() => require('../../screens/YourAlgorithmScreen').default} />
       <Stack.Screen name="StyleQuiz" getComponent={() => require('../../screens/StyleQuizScreen').default} options={{ presentation: 'modal' as const, gestureEnabled: true }} />
-      <Stack.Screen name="ConversationalSearch" getComponent={() => require('../../screens/ConversationalSearchScreen').default} />
     </Stack.Navigator>
   );
 }

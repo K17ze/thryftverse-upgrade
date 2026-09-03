@@ -4,7 +4,8 @@ import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { LottieAnimation, type LottieAnimationSource } from './LottieAnimation';
 
@@ -49,14 +50,13 @@ export interface AnimatedEmptyStateProps {
  */
 export function AnimatedEmptyState({
   animation,
-  fallbackIcon = 'cube-outline',
+  fallbackIcon = 'image-outline',
   title,
   subtitle,
   actionLabel,
   onAction,
   animationSize = 120,
-  style,
-}: AnimatedEmptyStateProps) {
+  style }: AnimatedEmptyStateProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -79,9 +79,9 @@ export function AnimatedEmptyState({
       ) : (
         <Reanimated.View
           entering={enter}
-          style={styles.iconRing}
+          style={styles.iconSlot}
         >
-          <Ionicons name={fallbackIcon} size={38} color={colors.brand} />
+          <Ionicons name={fallbackIcon} size={24} color={colors.brand} />
         </Reanimated.View>
       )}
 
@@ -125,7 +125,7 @@ type ThemeColors = ReturnType<typeof useAppTheme>['colors'];
 
 interface EmptyStateStyles {
   container: ViewStyle;
-  iconRing: ViewStyle;
+  iconSlot: ViewStyle;
   title: TextStyle;
   subtitle: TextStyle;
   cta: ViewStyle;
@@ -141,56 +141,40 @@ function createStyles(colors: ThemeColors): EmptyStateStyles {
       justifyContent: 'center',
       paddingHorizontal: Space.xl + Space.sm,
       paddingVertical: Space.xxl + Space.sm,
-      gap: Space.sm + 2,
-    },
-    iconRing: {
-      width: 96,
-      height: 96,
-      borderRadius: Radius.full,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceAlt,
+      gap: Space.sm + 2 },
+    iconSlot: {
       alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     title: {
-      fontSize: Type.priceList.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
       letterSpacing: -0.2,
       color: colors.textPrimary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     subtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       letterSpacing: 0.08,
       color: colors.textMuted,
       textAlign: 'center',
-      lineHeight: Type.body.lineHeight + 1,
-      maxWidth: 260,
-    },
+      lineHeight: TypographyV2.body.lineHeight + 1,
+      maxWidth: 260 },
     cta: {
       marginTop: Space.md + 4,
       backgroundColor: colors.textPrimary,
       paddingHorizontal: Space.xl,
       paddingVertical: Space.md - 2,
-      borderRadius: Radius.xxl,
-    },
+      borderRadius: Radius.xxl },
     ctaText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       letterSpacing: 0.3,
-      color: colors.background,
-    },
-  });
+      color: colors.background } });
 
   return {
     ...staticStyles,
     animation: (size: number): ViewStyle => ({
       width: size,
       height: size,
-      marginBottom: Space.md,
-    }),
-  };
+      marginBottom: Space.md }) };
 }

@@ -4,14 +4,13 @@ import {
   StyleSheet,
   Text,
   View,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 // Note: ScrollView is retained for the horizontal subcategory rail only.
 // The vertical scroll surface is owned by the FlashList inside PinterestMasonryGrid.
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { CATEGORIES } from '../constants/categories';
+import { useTaxonomy } from '../context/TaxonomyContext';
 import { useBackendData } from '../context/BackendDataContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -20,19 +19,19 @@ import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { SkeletonLoader } from '../components/SkeletonLoader';
-import { Space, Typography, Type, Control, Stroke, Radius } from '../theme/designTokens';
-import { useStore } from '../store/useStore';
+import { Space, Typography, Control, Stroke, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { useStore, type BrowseSortOption } from '../store/useStore';
 import { useHaptic } from '../hooks/useHaptic';
 
 const normalize = (value?: string) =>
   (value ?? '').trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-');
 
-const SORT_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'Recommended', label: 'Recommended' },
+const SORT_OPTIONS: Array<{ value: BrowseSortOption; label: string }> = [
+  { value: 'Most liked', label: 'Most liked' },
   { value: 'Newest', label: 'Newest' },
   { value: 'Price: Low to High', label: 'Price: Low to High' },
   { value: 'Price: High to Low', label: 'Price: High to Low' },
-  { value: 'Most liked', label: 'Most liked' },
 ];
 
 export default function CategoryDetailScreen() {
@@ -45,10 +44,11 @@ export default function CategoryDetailScreen() {
   const browseFilters = useStore((state) => state.browseFilters);
   const updateBrowseFilters = useStore((state) => state.updateBrowseFilters);
   const haptic = useHaptic();
+  const { categories } = useTaxonomy();
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
 
-  const handleSortSelect = useCallback((sortValue: string) => {
-    updateBrowseFilters({ sort: sortValue as any });
+  const handleSortSelect = useCallback((sortValue: BrowseSortOption) => {
+    updateBrowseFilters({ sort: sortValue });
     setSortMenuOpen(false);
   }, [updateBrowseFilters]);
 
@@ -62,18 +62,25 @@ export default function CategoryDetailScreen() {
 
   const category = useMemo(() => {
     const target = normalize(categoryId);
-    return CATEGORIES.find(
-      (candidate) =>
-        normalize(candidate.id) === target || normalize(candidate.name) === target
-    );
-  }, [categoryId]);
+    return categories
+      .filter((candidate) => candidate.parentId === null)
+      .find(
+        (candidate) =>
+          normalize(candidate.id) === target || normalize(candidate.name) === target
+      );
+  }, [categoryId, categories]);
+
+  const subcategories = useMemo(
+    () => (category ? categories.filter((candidate) => candidate.parentId === category.id) : []),
+    [category, categories],
+  );
 
   const gridData = useMemo(() => {
     if (!category) return [];
     const categoryTokens = new Set([
       normalize(category.id),
       normalize(category.name),
-      ...category.subcategories.flatMap((subcategory) => [
+      ...subcategories.flatMap((subcategory) => [
         normalize(subcategory.id),
         normalize(subcategory.name),
       ]),
@@ -122,8 +129,6 @@ export default function CategoryDetailScreen() {
         });
         break;
       case 'Most liked':
-        sorted.sort((a, b) => b.likes - a.likes);
-        break;
       case 'Recommended':
       default:
         sorted.sort((a, b) => b.likes - a.likes);
@@ -131,31 +136,27 @@ export default function CategoryDetailScreen() {
     }
 
     return sorted;
-  }, [category, listings, browseFilters.brands, browseFilters.sizes, browseFilters.condition, browseFilters.sort, browseFilters.priceMin, browseFilters.priceMax]);
+  }, [category, subcategories, listings, browseFilters.brands, browseFilters.sizes, browseFilters.condition, browseFilters.sort, browseFilters.priceMin, browseFilters.priceMax]);
 
   const styles = useMemo(
     () =>
       StyleSheet.create({
         content: {
-          flex: 1,
-        },
+          flex: 1 },
         summary: {
           paddingHorizontal: Space.md,
           paddingTop: Space.xs,
           paddingBottom: Space.sm,
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         count: {
           color: colors.textPrimary,
           fontFamily: Typography.family.semibold,
-          fontSize: Type.body.size,
-          lineHeight: Type.body.lineHeight,
-        },
+          fontSize: TypographyV2.body.size,
+          lineHeight: TypographyV2.body.lineHeight },
         categoryRail: {
           paddingHorizontal: Space.md,
           paddingBottom: Space.sm,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         categoryChip: {
           paddingHorizontal: Space.sm + 2,
           paddingVertical: Space.sm,
@@ -165,21 +166,17 @@ export default function CategoryDetailScreen() {
           borderColor: colors.border,
           minHeight: Control.chrome,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         categoryChipText: {
           color: colors.textPrimary,
           fontFamily: Typography.family.medium,
-          fontSize: Type.caption.size,
-        },
+          fontSize: TypographyV2.meta.size },
         filterBar: {
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         filterRow: {
           paddingHorizontal: Space.md,
           gap: Space.sm,
-          alignItems: 'center',
-        },
+          alignItems: 'center' },
         filterPill: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -188,20 +185,16 @@ export default function CategoryDetailScreen() {
           paddingVertical: Space.sm,
           borderRadius: Radius.full,
           backgroundColor: 'transparent',
-          minHeight: Control.chrome,
-        },
+          minHeight: Control.chrome },
         filterPillActive: {
-          backgroundColor: colors.surfaceAlt,
-        },
+          backgroundColor: colors.surfaceAlt },
         filterPillText: {
           color: colors.textMuted,
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
-        },
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily },
         filterPillTextActive: {
           color: colors.textPrimary,
-          fontFamily: Typography.family.semibold,
-        },
+          fontFamily: Typography.family.semibold },
         sortMenu: {
           marginHorizontal: Space.md,
           marginBottom: Space.sm,
@@ -209,8 +202,7 @@ export default function CategoryDetailScreen() {
           overflow: 'hidden',
           backgroundColor: colors.surface,
           borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.border,
-        },
+          borderColor: colors.border },
         sortMenuItem: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -218,44 +210,34 @@ export default function CategoryDetailScreen() {
           paddingVertical: Space.sm + 2,
           paddingHorizontal: Space.md,
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
-        },
+          borderBottomColor: colors.border },
         sortMenuItemText: {
-          fontSize: Type.body.size,
-          fontFamily: Typography.family.regular,
-          color: colors.textPrimary,
-        },
+          fontSize: TypographyV2.body.size,
+          fontFamily: TypographyV2.body.fontFamily,
+          color: colors.textPrimary },
         sortMenuItemTextActive: {
           color: colors.brand,
-          fontFamily: Typography.family.semibold,
-        },
+          fontFamily: Typography.family.semibold },
         grid: {
           flex: 1,
-          paddingTop: Space.xs,
-        },
+          paddingTop: Space.xs },
         loadingGrid: {
           flex: 1,
           flexDirection: 'row',
           flexWrap: 'wrap',
           gap: Space.sm,
-          paddingHorizontal: Space.md,
-        },
+          paddingHorizontal: Space.md },
         loadingColumn: {
           width: '48%',
-          marginBottom: Space.md,
-        },
+          marginBottom: Space.md },
         skeletonLine: {
-          marginTop: Space.sm,
-        },
+          marginTop: Space.sm },
         skeletonMeta: {
-          marginTop: Space.xs + 2,
-        },
+          marginTop: Space.xs + 2 },
         emptyWrap: {
           flex: 1,
           minHeight: Space.xxl * 7 + Space.lg,
-          justifyContent: 'center',
-        },
-      }),
+          justifyContent: 'center' } }),
     [colors]
   );
 
@@ -280,6 +262,9 @@ export default function CategoryDetailScreen() {
   }
 
   const listingCountText = `${gridData.length} ${gridData.length === 1 ? 'listing' : 'listings'}`;
+  // "Recommended" is the store default but sorts by likes — display it as
+  // "Most liked" so the label is truthful (no recommendation engine exists).
+  const displaySort: string = browseFilters.sort === 'Recommended' ? 'Most liked' : browseFilters.sort;
 
   return (
     <FlagshipScreen
@@ -312,7 +297,7 @@ export default function CategoryDetailScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryRail}
         >
-          {category.subcategories.map((subcategory) => (
+          {subcategories.map((subcategory) => (
             <AnimatedPressable
               key={subcategory.id}
               style={styles.categoryChip}
@@ -320,8 +305,7 @@ export default function CategoryDetailScreen() {
                 navigation.navigate('Browse', {
                   categoryId: category.id,
                   subcategoryId: subcategory.id,
-                  title: subcategory.name,
-                })
+                  title: subcategory.name })
               }
               activeOpacity={0.7}
               scaleValue={0.97}
@@ -355,12 +339,12 @@ export default function CategoryDetailScreen() {
               onPress={() => setSortMenuOpen((v) => !v)}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel={`Sort by ${browseFilters.sort}`}
+              accessibilityLabel={`Sort by ${displaySort}`}
               accessibilityState={{ expanded: sortMenuOpen }}
             >
               <Ionicons name="swap-vertical" size={14} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} />
               <Text style={[styles.filterPillText, browseFilters.sort !== 'Recommended' && styles.filterPillTextActive]}>
-                {browseFilters.sort}
+                {displaySort}
               </Text>
               <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} />
             </AnimatedPressable>
@@ -394,7 +378,8 @@ export default function CategoryDetailScreen() {
         {sortMenuOpen ? (
           <View style={styles.sortMenu}>
             {SORT_OPTIONS.map((opt, idx) => {
-              const isActive = browseFilters.sort === opt.value;
+              const isActive = browseFilters.sort === opt.value ||
+                (browseFilters.sort === 'Recommended' && opt.value === 'Most liked');
               return (
                 <Pressable
                   key={opt.value}
@@ -451,8 +436,7 @@ export default function CategoryDetailScreen() {
                   sustainableOnly: false,
                   priceMin: null,
                   priceMax: null,
-                  sort: 'Recommended',
-                });
+                  sort: 'Recommended' });
               }}
             />
           </View>
@@ -473,8 +457,7 @@ export default function CategoryDetailScreen() {
                   : () =>
                       navigation.navigate('Browse', {
                         categoryId: 'all',
-                        title: 'Browse',
-                      })
+                        title: 'Browse' })
               }
             />
           </View>

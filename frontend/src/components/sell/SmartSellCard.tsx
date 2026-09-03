@@ -5,530 +5,848 @@ import {
   TextInput,
   StyleSheet,
   Pressable,
-  LayoutChangeEvent,
-} from 'react-native';
+  Switch,
+  Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
   Space,
   Radius,
   Stroke,
-  Typography,
-  Type,
-  Control,
-} from '../../theme/designTokens';
-import { PremiumToggle } from '../PremiumToggle';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
-  SMART_SELL_DEMO_MODE,
-  type SmartSellConfig,
-} from '../../services/smartSellApi';
+  type SmartSellPolicy,
+  type NetQuote,
+  type SmartSellDecisionRecord,
+  computeNetQuote,
+  computeGrossForNet,
+  enableSmartSell,
+  disableSmartSell,
+  updateSmartSellPolicy,
+  fetchSmartSellDecisions } from '../../services/smartSellApi';
 
 export interface SmartSellCardProps {
-  /** Listing id the config applies to. */
-  listingId: string;
-  /** Current Smart Sell configuration. */
-  config: SmartSellConfig;
-  /** Called whenever the seller edits the config (enabled flag or thresholds). */
-  onConfigChange: (config: SmartSellConfig) => void;
+  /** Listing id the policy applies to. Omitted in preview contexts without a policy yet. */
+  listingId?: string;
+  /** Current Smart Sell policy. Omitted in preview contexts — the card renders nothing. */
+  policy?: SmartSellPolicy;
+  /** Called whenever the seller edits the policy. */
+  onPolicyChange?: (policy: SmartSellPolicy) => void;
   /** Optional listing price (GBP) used to seed sensible threshold defaults. */
   listingPrice?: number;
+  /** Listing context for category-aware threshold defaults. */
+  category?: string;
+  /** Listing context for condition-aware threshold defaults. */
+  condition?: string;
+  /** Server policy ID for fetching decision history. Omitted in preview mode. */
+  serverPolicyId?: string;
 }
 
 /**
- * Smart Sell card — lets a seller enable and configure auto-negotiation
- * thresholds for a listing. Per AGENTS.md §11, the card is clearly labelled
- * "Demo mode" while `SMART_SELL_DEMO_MODE` is true; it never claims a real
- * negotiation is taking place.
+ * Smart Sell — compact row that opens a focused configuration sheet.
+ *
+ * The primary mental model is minimum expected net payout (what the seller
+ * receives after fees). Gross thresholds are advanced settings behind
+ * disclosure. No fabricated metrics, no trend arrows, no glowing ranges.
+ *
+ * Per AGENTS.md anti-AI design:
+ * - Compact row, not a large nested card in an already long form
+ * - Configuration opens a focused sheet, not an inline expansion
+ * - One mental model: minimum payout
+ * - Full state coverage: preview, disabled, draft, active, paused
+ * - No decorative chrome, no celebratory animation
  */
 export function SmartSellCard({
   listingId,
-  config,
-  onConfigChange,
+  policy,
+  onPolicyChange,
   listingPrice,
-}: SmartSellCardProps) {
+  serverPolicyId }: SmartSellCardProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(), []);
 
-  // Local numeric inputs so the seller can type freely before committing.
-  const [minPriceText, setMinPriceText] = useState<string>(
-    config.minPrice ? String(config.minPrice) : '',
-  );
-  const [acceptText, setAcceptText] = useState<string>(
-    config.autoAcceptThreshold ? String(config.autoAcceptThreshold) : '',
-  );
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Range slider geometry
-  const [sliderWidth, setSliderWidth] = useState(0);
-  const handleSliderLayout = useCallback((e: LayoutChangeEvent) => {
-    setSliderWidth(e.nativeEvent.layout.width);
-  }, []);
+  // Preview contexts (e.g. the AI listing composer) pass listing context
+  // without a policy — nothing to render until a listing exists.
+  if (!policy || !onPolicyChange || !listingId) return null;
 
-  // Normalised positions for the accept/decline zones (0–1).
-  const maxScale = useMemo(() => {
-    const ceiling = Math.max(
-      Number(acceptText) || 0,
-      Number(minPriceText) || 0,
-      listingPrice || 0,
-      10,
-    );
-    return ceiling * 1.25; // headroom so the accept zone is visible
-  }, [acceptText, minPriceText, listingPrice]);
-
-  const minPos = Math.min(1, (Number(minPriceText) || 0) / maxScale);
-  const acceptPos = Math.min(1, (Number(acceptText) || 0) / maxScale);
-
-  // Animated reveal of the configuration panel.
-  const panelProgress = useSharedValue(config.enabled ? 1 : 0);
-  React.useEffect(() => {
-    panelProgress.value = withTiming(config.enabled ? 1 : 0, {
-      duration: reducedMotion ? 0 : 220,
-    });
-  }, [config.enabled, panelProgress, reducedMotion]);
-
-  const panelStyle = useAnimatedStyle(() => ({
-    opacity: panelProgress.value,
-    height: panelProgress.value === 0 ? 0 : undefined,
-  }));
-
-  const emitConfig = useCallback(
-    (patch: Partial<SmartSellConfig>) => {
-      onConfigChange({
-        ...config,
-        ...patch,
-        listingId,
-        updatedAt: new Date().toISOString(),
-        isDemo: SMART_SELL_DEMO_MODE,
-      });
-    },
-    [config, listingId, onConfigChange],
-  );
+  const isPreview = policy.capability.kind === 'preview';
 
   const handleToggle = useCallback(
     (next: boolean) => {
       haptic.light();
-      // Seed sensible defaults from the listing price on first enable.
-      let patch: Partial<SmartSellConfig> = { enabled: next };
-      if (next && listingPrice && !config.autoAcceptThreshold) {
-        const accept = Math.round(listingPrice * 0.9 * 100) / 100;
-        const floor = Math.round(listingPrice * 0.6 * 100) / 100;
-        patch = {
-          enabled: true,
-          autoAcceptThreshold: accept,
-          minPrice: floor,
-          declineThreshold: floor,
-        };
-        setAcceptText(String(accept));
-        setMinPriceText(String(floor));
+      if (!onPolicyChange || !listingId) return;
+      if (next) {
+        const updated = enableSmartSell(listingId, listingPrice);
+        onPolicyChange(updated);
+      } else {
+        const updated = disableSmartSell(listingId);
+        onPolicyChange(updated);
       }
-      emitConfig(patch);
     },
-    [config.autoAcceptThreshold, emitConfig, haptic, listingPrice],
+    [listingId, listingPrice, onPolicyChange, haptic],
   );
 
-  const commitMinPrice = useCallback(
-    (text: string) => {
-      setMinPriceText(text);
-      const value = Number(text) || 0;
-      emitConfig({ minPrice: value, declineThreshold: value });
+  const handleRowPress = useCallback(() => {
+    haptic.light();
+    setSheetOpen(true);
+  }, [haptic]);
+
+  const handlePolicyUpdate = useCallback(
+    (patch: Partial<SmartSellPolicy>) => {
+      if (!onPolicyChange || !listingId) return;
+      const updated = updateSmartSellPolicy(listingId, patch);
+      onPolicyChange(updated);
     },
-    [emitConfig],
+    [listingId, onPolicyChange],
   );
 
-  const commitAccept = useCallback(
-    (text: string) => {
-      setAcceptText(text);
-      const value = Number(text) || 0;
-      emitConfig({ autoAcceptThreshold: value });
-    },
-    [emitConfig],
-  );
+  // Summary text for the compact row
+  const summary = useMemo(() => {
+    if (!policy.enabled) return 'Auto-accept offers above your threshold';
+    if (policy.minimumNet > 0) {
+      return `Min payout ${currencySymbol}${policy.minimumNet.toFixed(2)}`;
+    }
+    if (policy.acceptGrossThreshold > 0) {
+      return `Auto-accept above ${currencySymbol}${policy.acceptGrossThreshold.toFixed(2)}`;
+    }
+    return 'Configure thresholds';
+  }, [policy.enabled, policy.minimumNet, policy.acceptGrossThreshold, currencySymbol]);
 
   return (
-    <View
-      style={styles.card}
-      accessibilityLabel="Smart Sell auto-negotiation"
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerText}>
-          <View style={styles.titleRow}>
-            <Ionicons
-              name="trending-up-outline"
-              size={20}
-              color={colors.brand}
-              style={styles.titleIcon}
-            />
-            <Text style={styles.title}>Smart Sell</Text>
+    <>
+      <View
+        style={[
+          styles.row,
+          { borderColor: colors.border },
+        ]}
+      >
+        <Pressable
+          style={({ pressed }) => [
+            styles.rowLeft,
+            pressed && { opacity: 0.6 },
+          ]}
+          onPress={handleRowPress}
+          accessibilityRole="button"
+          accessibilityLabel="Smart Sell auto-negotiation"
+          accessibilityHint="Opens Smart Sell settings"
+        >
+          <Ionicons
+            name="cash-outline"
+            size={18}
+            color={policy.enabled ? colors.brand : colors.textSecondary}
+            aria-hidden={true}
+          />
+          <View style={styles.rowText}>
+            <Text style={[styles.rowTitle, { color: colors.textPrimary }]}>
+              Smart Sell
+            </Text>
+            <Text
+              style={[styles.rowSummary, { color: colors.textSecondary }]}
+              numberOfLines={1}
+            >
+              {summary}
+            </Text>
           </View>
-          <Text style={styles.subtitle}>
-            Auto-accept offers at or above your threshold. Auto-decline offers below your floor.
-          </Text>
-        </View>
-        <PremiumToggle
-          value={config.enabled}
+        </Pressable>
+        <Switch
+          value={policy.enabled}
           onValueChange={handleToggle}
+          trackColor={{
+            false: colors.surfaceAlt,
+            true: colors.brand }}
+          thumbColor={colors.scrimTextPrimary}
+          accessibilityLabel="Toggle Smart Sell"
+          accessibilityHint="Enable or disable auto-negotiation"
         />
       </View>
 
-      {/* Configuration panel */}
-      {config.enabled && (
-        <Reanimated.View
-          style={panelStyle}
-        >
-          <View
-            style={styles.divider}
-            accessible={false}
-          />
+      {sheetOpen && (
+        <SmartSellSheet
+          visible
+          policy={policy}
+          onUpdate={handlePolicyUpdate}
+          onClose={() => setSheetOpen(false)}
+          colors={colors}
+          insets={insets}
+          reducedMotion={reducedMotion}
+          isPreview={isPreview}
+          policyId={serverPolicyId}
+        />
+      )}
+    </>
+  );
+}
 
-          {/* Threshold inputs */}
-          <View style={styles.inputRow}>
-            <ThresholdField
-              label="Min price (floor)"
-              hint="Auto-decline below this"
-              value={minPriceText}
-              onChangeText={commitMinPrice}
-              colors={colors}
-              styles={styles}
-              prefix="£"
-            />
-            <ThresholdField
-              label="Auto-accept at"
-              hint="Accept offers at or above"
-              value={acceptText}
-              onChangeText={commitAccept}
-              colors={colors}
-              styles={styles}
-              prefix="£"
+// ---------------------------------------------------------------------------
+// Configuration sheet — focused, one mental model: minimum payout
+// ---------------------------------------------------------------------------
+
+interface SmartSellSheetProps {
+  visible: boolean;
+  policy: SmartSellPolicy;
+  onUpdate: (patch: Partial<SmartSellPolicy>) => void;
+  onClose: () => void;
+  colors: ThemeColors;
+  insets: { bottom: number };
+  reducedMotion: boolean;
+  isPreview: boolean;
+  policyId?: string;
+}
+
+function SmartSellSheet({
+  visible,
+  policy,
+  onUpdate,
+  onClose,
+  colors,
+  insets,
+  isPreview,
+  policyId }: SmartSellSheetProps) {
+  const { currencySymbol } = useFormattedPrice();
+  const styles = useMemo(() => createSheetStyles(colors), [colors]);
+  const haptic = useHaptic();
+
+  // Local input state so the seller can type freely
+  const [minNetText, setMinNetText] = useState(
+    policy.minimumNet ? String(policy.minimumNet) : '',
+  );
+  const [acceptGrossText, setAcceptGrossText] = useState(
+    policy.acceptGrossThreshold ? String(policy.acceptGrossThreshold) : '',
+  );
+  const [declineGrossText, setDeclineGrossText] = useState(
+    policy.declineBelowGross ? String(policy.declineBelowGross) : '',
+  );
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [decisions, setDecisions] = useState<SmartSellDecisionRecord[]>([]);
+
+  // Fetch decision history when the sheet opens and a policyId is available.
+  React.useEffect(() => {
+    if (!policyId || !policy.enabled) return;
+    let cancelled = false;
+    fetchSmartSellDecisions(policyId, 10)
+      .then((records) => {
+        if (!cancelled) setDecisions(records);
+      })
+      .catch(() => {
+        // Non-fatal — the decision history is supplementary.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [policyId, policy.enabled]);
+
+  // Derived net quote for the current accept threshold
+  const acceptQuote: NetQuote | null = useMemo(() => {
+    const gross = Number(acceptGrossText) || 0;
+    if (gross <= 0) return null;
+    return computeNetQuote(gross, policy.feeRate);
+  }, [acceptGrossText, policy.feeRate]);
+
+  // When minimum net changes, derive the gross threshold needed
+  const handleMinNetChange = useCallback(
+    (text: string) => {
+      setMinNetText(text);
+      const net = Number(text) || 0;
+      const gross = computeGrossForNet(net, policy.feeRate);
+      setAcceptGrossText(gross > 0 ? String(gross) : '');
+      onUpdate({ minimumNet: net, acceptGrossThreshold: gross });
+      haptic.light();
+    },
+    [policy.feeRate, onUpdate, haptic],
+  );
+
+  const handleAcceptGrossChange = useCallback(
+    (text: string) => {
+      setAcceptGrossText(text);
+      const gross = Number(text) || 0;
+      const quote = computeNetQuote(gross, policy.feeRate);
+      setMinNetText(quote.net > 0 ? String(quote.net) : '');
+      onUpdate({ acceptGrossThreshold: gross, minimumNet: quote.net });
+      haptic.light();
+    },
+    [policy.feeRate, onUpdate, haptic],
+  );
+
+  const handleDeclineGrossChange = useCallback(
+    (text: string) => {
+      setDeclineGrossText(text);
+      const gross = Number(text) || 0;
+      onUpdate({ declineBelowGross: gross });
+      haptic.light();
+    },
+    [onUpdate, haptic],
+  );
+
+  const handleAutoDeclineToggle = useCallback(
+    (next: boolean) => {
+      onUpdate({ autoDeclineEnabled: next });
+      haptic.light();
+    },
+    [onUpdate, haptic],
+  );
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <Pressable
+        style={styles.overlay}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Close Smart Sell settings"
+        accessibilityHint="Dismiss the sheet and return to the listing"
+      >
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: colors.background,
+              paddingBottom: insets.bottom + Space.md,
+              borderTopColor: colors.border },
+          ]}
+          accessibilityViewIsModal={true}
+        >
+        <View style={[styles.handle, { backgroundColor: colors.border }]} />
+
+        {/* Title */}
+        <Text style={[styles.title, { color: colors.textPrimary }]}>
+          Smart Sell
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Auto-accept offers that meet your minimum payout. Offers between your
+          floor and threshold stay manual for you to review.
+        </Text>
+
+        {/* Primary input: minimum net payout */}
+        <View style={styles.field}>
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+            Minimum payout
+          </Text>
+          <View
+            style={[
+              styles.inputWrap,
+              { backgroundColor: colors.input, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.inputPrefix, { color: colors.textSecondary }]}>
+              {currencySymbol}
+            </Text>
+            <TextInput
+              style={[styles.input, { color: colors.textPrimary }]}
+              value={minNetText}
+              onChangeText={handleMinNetChange}
+              placeholder="0.00"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="decimal-pad"
+              accessibilityLabel="Minimum payout after fees"
+              accessibilityHint="The minimum amount you want to receive after platform fees"
+              returnKeyType="done"
             />
           </View>
+          <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
+            The minimum you receive after fees. Offers that produce at least this
+            amount are auto-accepted.
+          </Text>
+        </View>
 
-          {/* Range slider showing accept / manual / decline zones */}
+        {/* Net proceeds illustration */}
+        {acceptQuote && (
           <View
-            style={styles.rangeWrap}
-            onLayout={handleSliderLayout}
-            accessibilityLabel="Smart Sell threshold range"
-            accessibilityRole="adjustable"
+            style={[
+              styles.quoteCard,
+              { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
+            ]}
           >
-            <RangeBar
-              width={sliderWidth}
-              minPos={minPos}
-              acceptPos={acceptPos}
-              colors={colors}
-            />
-            <View style={styles.rangeLabels}>
-              <Text style={styles.rangeLabel}>Decline</Text>
-              <Text style={styles.rangeLabel}>Manual</Text>
-              <Text style={styles.rangeLabel}>Auto-accept</Text>
+            <View style={styles.quoteRow}>
+              <Text style={[styles.quoteLabel, { color: colors.textSecondary }]}>
+                Offer
+              </Text>
+              <Text
+                style={[styles.quoteValue, { color: colors.textPrimary }]}
+                accessibilityLabel={`Offer amount ${acceptQuote.gross} pounds`}
+                accessibilityHint="The gross offer amount"
+              >
+                {currencySymbol}{acceptQuote.gross.toFixed(2)}
+              </Text>
+            </View>
+            <View style={styles.quoteRow}>
+              <Text style={[styles.quoteLabel, { color: colors.textSecondary }]}>
+                {`Platform fee (${Math.round(policy.feeRate * 100)}%)`}
+              </Text>
+              <Text
+                style={[styles.quoteValue, { color: colors.danger }]}
+                accessibilityLabel={`Platform fee ${acceptQuote.fee} pounds`}
+                accessibilityHint="The platform fee deducted"
+              >
+                −{currencySymbol}{acceptQuote.fee.toFixed(2)}
+              </Text>
+            </View>
+            <View style={[styles.quoteDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.quoteRow}>
+              <Text style={[styles.quoteNetLabel, { color: colors.textPrimary }]}>
+                You receive
+              </Text>
+              <Text
+                style={[styles.quoteNetValue, { color: colors.success }]}
+                accessibilityLabel={`You receive ${acceptQuote.net} pounds`}
+                accessibilityHint="Your net payout after fees"
+              >
+                {currencySymbol}{acceptQuote.net.toFixed(2)}
+              </Text>
             </View>
           </View>
+        )}
 
-          {/* Manual review zone note — truthful, no fabricated stats */}
-          <View style={styles.statsPreview}>
+        {/* Advanced settings behind disclosure */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.advancedToggle,
+            { borderColor: colors.borderSubtle },
+            pressed && { opacity: 0.6 },
+          ]}
+          onPress={() => {
+            haptic.light();
+            setShowAdvanced((v) => !v);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Toggle advanced settings"
+          accessibilityHint="Show or hide advanced threshold settings"
+        >
+          <Text style={[styles.advancedToggleText, { color: colors.textSecondary }]}>
+            Advanced
+          </Text>
+          <Ionicons
+            name={showAdvanced ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={colors.textMuted}
+            aria-hidden={true}
+          />
+        </Pressable>
+
+        {showAdvanced && (
+          <View style={styles.advancedPanel}>
+            {/* Gross accept threshold */}
+            <View style={styles.field}>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                Auto-accept at (gross)
+              </Text>
+              <View
+                style={[
+                  styles.inputWrap,
+                  { backgroundColor: colors.input, borderColor: colors.border },
+                ]}
+              >
+                <Text
+                  style={[styles.inputPrefix, { color: colors.textSecondary }]}
+                >
+                  {currencySymbol}
+                </Text>
+                <TextInput
+                  style={[styles.input, { color: colors.textPrimary }]}
+                  value={acceptGrossText}
+                  onChangeText={handleAcceptGrossChange}
+                  placeholder="0.00"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="decimal-pad"
+                  accessibilityLabel="Auto-accept gross threshold"
+                  accessibilityHint="Accept offers at or above this amount"
+                  returnKeyType="done"
+                />
+              </View>
+              <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
+                Accept offers at or above this gross amount.
+              </Text>
+            </View>
+
+            {/* Auto-decline toggle + floor */}
+            <View style={styles.autoDeclineRow}>
+              <View style={styles.autoDeclineText}>
+                <Text
+                  style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                >
+                  Auto-decline low offers
+                </Text>
+                <Text
+                  style={[styles.fieldHint, { color: colors.textMuted }]}
+                >
+                  Decline offers below your floor automatically.
+                </Text>
+              </View>
+              <Switch
+                value={policy.autoDeclineEnabled}
+                onValueChange={handleAutoDeclineToggle}
+                trackColor={{
+                  false: colors.surfaceAlt,
+                  true: colors.brand }}
+                thumbColor={colors.scrimTextPrimary}
+                accessibilityLabel="Toggle auto-decline"
+                accessibilityHint="Enable or disable auto-decline of low offers"
+              />
+            </View>
+
+            {policy.autoDeclineEnabled && (
+              <View style={styles.field}>
+                <Text
+                  style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                >
+                  Decline below (gross)
+                </Text>
+                <View
+                  style={[
+                    styles.inputWrap,
+                    { backgroundColor: colors.input, borderColor: colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[styles.inputPrefix, { color: colors.textSecondary }]}
+                  >
+                    {currencySymbol}
+                  </Text>
+                  <TextInput
+                    style={[styles.input, { color: colors.textPrimary }]}
+                    value={declineGrossText}
+                    onChangeText={handleDeclineGrossChange}
+                    placeholder="0.00"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="decimal-pad"
+                    accessibilityLabel="Auto-decline gross floor"
+                    accessibilityHint="Decline offers below this amount"
+                    returnKeyType="done"
+                  />
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Preview mode disclosure — honest in every build */}
+        {isPreview && (
+          <View
+            style={[
+              styles.previewBanner,
+              { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder },
+            ]}
+          >
             <Ionicons
               name="information-circle-outline"
               size={14}
-              color={colors.textMuted}
-              style={styles.statsIcon}
+              color={colors.warning}
+              aria-hidden={true}
             />
-            <Text style={styles.statsText}>
-              Offers between your floor and accept threshold stay manual for you to review.
+            <Text style={[styles.previewText, { color: colors.textSecondary }]}>
+              {policy.capability.kind === 'preview'
+                ? policy.capability.reason
+                : 'Smart Sell is in preview.'}
             </Text>
           </View>
-        </Reanimated.View>
-      )}
+        )}
 
-      {/* Demo mode indicator (truthful UI) */}
-      {SMART_SELL_DEMO_MODE && (
-        <View style={styles.demoBadge}>
-          <Ionicons
-            name="information-circle-outline"
-            size={12}
-            color={colors.textMuted}
-            style={styles.demoIcon}
-          />
-          <Text style={styles.demoText}>
-            Demo mode — Smart Sell settings are illustrative and not sent to a backend.
-          </Text>
+        {/* Decision history — audit trail of auto-negotiation decisions */}
+        {policy.enabled && policyId && decisions.length > 0 && (
+          <View style={styles.decisionsSection}>
+            <Text style={[styles.decisionsTitle, { color: colors.textSecondary }]}>
+              Recent decisions
+            </Text>
+            {decisions.slice(0, 5).map((d) => (
+              <View
+                key={d.id}
+                style={[
+                  styles.decisionRow,
+                  { borderBottomColor: colors.borderSubtle },
+                ]}
+              >
+                <View style={styles.decisionLeft}>
+                  <View
+                    style={[
+                      styles.decisionDot,
+                      {
+                        backgroundColor:
+                          d.decision === 'accept'
+                            ? colors.success
+                            : d.decision === 'counter'
+                              ? colors.brand
+                              : d.decision === 'escalate'
+                                ? colors.warning
+                                : colors.textMuted },
+                    ]}
+                  />
+                  <View style={styles.decisionText}>
+                    <Text
+                      style={[styles.decisionAction, { color: colors.textPrimary }]}
+                      numberOfLines={1}
+                    >
+                      {d.decision === 'accept'
+                        ? 'Accepted'
+                        : d.decision === 'counter'
+                          ? `Countered at ${currencySymbol}${d.counterPriceGbp?.toFixed(2) ?? '—'}`
+                          : d.decision === 'escalate'
+                            ? 'Escalated to you'
+                            : 'Declined'}
+                    </Text>
+                    <Text
+                      style={[styles.decisionReason, { color: colors.textMuted }]}
+                      numberOfLines={2}
+                    >
+                      {d.reason}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.decisionNet, { color: colors.textSecondary }]}>
+                  {currencySymbol}{d.netProceedsGbp.toFixed(2)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Done button */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.doneBtn,
+            { backgroundColor: colors.brand },
+            pressed && { opacity: 0.85 },
+          ]}
+          onPress={() => {
+            haptic.light();
+            onClose();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Done"
+          accessibilityHint="Close Smart Sell settings"
+        >
+          <Text style={styles.doneBtnText}>Done</Text>
+        </Pressable>
         </View>
-      )}
-    </View>
+      </Pressable>
+    </Modal>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Threshold field
+// Compact row styles
 // ---------------------------------------------------------------------------
 
-interface ThresholdFieldProps {
-  label: string;
-  hint: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  colors: ThemeColors;
-  styles: ReturnType<typeof createStyles>;
-  prefix?: string;
-}
-
-const ThresholdField = React.memo(function ThresholdField({
-  label,
-  hint,
-  value,
-  onChangeText,
-  colors,
-  styles,
-  prefix,
-}: ThresholdFieldProps) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View
-        style={[
-          styles.fieldInputWrap,
-          {
-            backgroundColor: colors.input,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        {prefix ? <Text style={styles.fieldPrefix}>{prefix}</Text> : null}
-        <TextInput
-          style={[styles.fieldInput, { color: colors.textPrimary }]}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder="0.00"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="decimal-pad"
-          accessibilityLabel={label}
-          accessibilityHint={hint}
-          returnKeyType="done"
-        />
-      </View>
-      <Text style={styles.fieldHint}>{hint}</Text>
-    </View>
-  );
-});
-
-// ---------------------------------------------------------------------------
-// Range bar — visualises the decline / manual / accept zones
-// ---------------------------------------------------------------------------
-
-interface RangeBarProps {
-  width: number;
-  minPos: number;
-  acceptPos: number;
-  colors: ThemeColors;
-}
-
-function RangeBar({ width, minPos, acceptPos, colors }: RangeBarProps) {
-  const styles = useMemo(() => createRangeStyles(colors), [colors]);
-  const declineWidth = Math.max(0, Math.min(1, minPos)) * width;
-  const manualWidth = Math.max(0, acceptPos - minPos) * width;
-  const acceptWidth = Math.max(0, 1 - acceptPos) * width;
-
-  return (
-    <View style={styles.track}>
-      <View
-        style={[styles.zoneDecline, { width: declineWidth }]}
-        accessibilityLabel="Decline zone"
-      />
-      <View
-        style={[styles.zoneManual, { width: manualWidth }]}
-        accessibilityLabel="Manual review zone"
-      />
-      <View
-        style={[styles.zoneAccept, { width: acceptWidth }]}
-        accessibilityLabel="Auto-accept zone"
-      />
-      {/* Threshold markers */}
-      {declineWidth > 0 && (
-        <View style={[styles.marker, { left: declineWidth }]} />
-      )}
-      {acceptPos > 0 && acceptPos < 1 && (
-        <View style={[styles.marker, { left: acceptPos * width }]} />
-      )}
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
-function createRangeStyles(colors: ThemeColors) {
+function createStyles() {
   return StyleSheet.create({
-    track: {
-      height: Space.sm,
-      borderRadius: Radius.full,
+    row: {
       flexDirection: 'row',
-      overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
-    zoneDecline: {
-      backgroundColor: colors.danger,
-      opacity: 0.5,
-    },
-    zoneManual: {
-      backgroundColor: colors.surfaceAlt,
-    },
-    zoneAccept: {
-      backgroundColor: colors.success,
-      opacity: 0.7,
-    },
-    marker: {
-      position: 'absolute',
-      top: -Space.xs / 2,
-      width: Stroke.emphasis,
-      height: Space.sm + Space.xs,
-      backgroundColor: colors.textPrimary,
-      borderRadius: Radius.sm,
-    },
-  });
-}
-
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    card: {
-      backgroundColor: colors.surface,
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      padding: Space.md,
-      marginBottom: Space.md,
-    },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'center',
       justifyContent: 'space-between',
-      gap: Space.sm,
-    },
-    headerText: {
-      flex: 1,
-      paddingRight: Space.sm,
-    },
-    titleRow: {
+      paddingVertical: Space.sm + 2,
+      paddingHorizontal: Space.sm + 2,
+      borderWidth: Stroke.hairline,
+      borderRadius: Radius.md,
+      minHeight: Control.hit },
+    rowLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
-    titleIcon: {
-      marginRight: Space.xs / 2,
-    },
+      gap: Space.sm,
+      flex: 1 },
+    rowText: {
+      flex: 1 },
+    rowTitle: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: -0.2 },
+    rowSummary: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginTop: Space.xxs } });
+}
+
+// ---------------------------------------------------------------------------
+// Sheet styles
+// ---------------------------------------------------------------------------
+
+function createSheetStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: colors.overlay,
+      justifyContent: 'flex-end' },
+    sheet: {
+      borderTopLeftRadius: Radius.xl,
+      borderTopRightRadius: Radius.xl,
+      paddingTop: Space.sm,
+      paddingHorizontal: Space.md,
+      borderTopWidth: Stroke.hairline,
+      maxHeight: '85%' },
+    handle: {
+      width: Space.xxl + Space.sm,
+      height: Stroke.standard * 3,
+      borderRadius: Radius.sm,
+      alignSelf: 'center',
+      marginBottom: Space.md },
     title: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-      letterSpacing: -0.3,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: -0.4,
+      marginBottom: Space.xs },
     subtitle: {
-      marginTop: Space.xs,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      lineHeight: Type.caption.lineHeight,
-    },
-    divider: {
-      height: Stroke.hairline,
-      backgroundColor: colors.borderSubtle,
-      marginVertical: Space.md,
-    },
-    inputRow: {
-      flexDirection: 'row',
-      gap: Space.sm,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight,
+      marginBottom: Space.lg },
     field: {
-      flex: 1,
-    },
+      marginBottom: Space.md },
     fieldLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-      marginBottom: Space.xs + 2,
-    },
-    fieldInputWrap: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: 0.1,
+      marginBottom: Space.xs },
+    fieldHint: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs },
+    inputWrap: {
       flexDirection: 'row',
       alignItems: 'center',
-      borderRadius: Radius.xl,
+      borderRadius: Radius.md,
       borderWidth: Stroke.standard,
       paddingHorizontal: Space.sm + 2,
-      minHeight: 52,
-    },
-    fieldPrefix: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textSecondary,
-      marginRight: Space.xs,
-    },
-    fieldInput: {
+      minHeight: Control.hit + Space.sm },
+    inputPrefix: {
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
+      marginRight: Space.xs },
+    input: {
       flex: 1,
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
       paddingVertical: Space.sm,
-    },
-    fieldHint: {
-      marginTop: Space.xs + 2,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-      lineHeight: Type.meta.lineHeight,
-    },
-    rangeWrap: {
-      marginTop: Space.md,
-    },
-    rangeLabels: {
+      fontVariant: ['tabular-nums'] },
+    // Net proceeds illustration
+    quoteCard: {
+      borderRadius: Radius.md,
+      borderWidth: Stroke.hairline,
+      padding: Space.md,
+      marginBottom: Space.md },
+    quoteRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      marginTop: Space.xs + 2,
-    },
-    rangeLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-      letterSpacing: 0.15,
-    },
-    statsPreview: {
+      alignItems: 'center',
+      paddingVertical: Space.xs },
+    quoteLabel: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
+    quoteValue: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontVariant: ['tabular-nums'] },
+    quoteDivider: {
+      height: Stroke.hairline,
+      marginVertical: Space.xs },
+    quoteNetLabel: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
+    quoteNetValue: {
+      fontSize: TypographyV2.priceList.size,
+      fontFamily: TypographyV2.priceList.fontFamily,
+      fontVariant: ['tabular-nums'] },
+    // Advanced disclosure
+    advancedToggle: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginTop: Space.md,
-      gap: Space.xs,
-    },
-    statsIcon: {
-      marginRight: Space.xs / 2,
-    },
-    statsText: {
-      flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-      lineHeight: Type.caption.lineHeight,
-    },
-    demoBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: Space.md,
-      paddingTop: Space.sm,
+      justifyContent: 'space-between',
+      paddingVertical: Space.sm,
       borderTopWidth: Stroke.hairline,
-      borderTopColor: colors.borderSubtle,
-      gap: Space.xs,
-    },
-    demoIcon: {
-      marginRight: Space.xs / 2,
-    },
-    demoText: {
-      flex: 1,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
+      borderBottomWidth: Stroke.hairline },
+    advancedToggleText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: 0.15,
-    },
-  });
+      textTransform: 'uppercase' },
+    advancedPanel: {
+      paddingTop: Space.md },
+    autoDeclineRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: Space.md,
+      marginBottom: Space.md },
+    autoDeclineText: {
+      flex: 1 },
+    // Preview banner
+    previewBanner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.xs,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.hairline,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.sm,
+      marginBottom: Space.md },
+    previewText: {
+      flex: 1,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight },
+    // Decision history
+    decisionsSection: {
+      marginBottom: Space.md },
+    decisionsTitle: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: 0.15,
+      textTransform: 'uppercase',
+      marginBottom: Space.sm },
+    decisionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Space.sm,
+      borderBottomWidth: Stroke.hairline,
+      gap: Space.sm },
+    decisionLeft: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.sm,
+      flex: 1 },
+    decisionDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      marginTop: 5 },
+    decisionText: {
+      flex: 1 },
+    decisionAction: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: -0.2 },
+    decisionReason: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: 2 },
+    decisionNet: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontVariant: ['tabular-nums'] },
+    // Done button
+    doneBtn: {
+      borderRadius: Radius.md,
+      paddingVertical: Space.sm + 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: Control.hit + Space.sm },
+    doneBtnText: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.scrimTextPrimary } });
 }

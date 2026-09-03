@@ -3,31 +3,31 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-} from 'react-native';
+  Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { useHaptic } from '../hooks/useHaptic';
-import { PremiumStatusPill, type StatusPillTone } from '../components/ui/PremiumStatusPill';
+import { AppStatusPill, type AppStatusTone } from '../components/ui/AppStatusPill';
 import { Meta, Caption } from '../components/ui/Text';
 import type {
   SupportCase,
   SupportCaseEvent,
   CaseOperationalState,
-  CaseResolutionDisposition,
-} from '../contracts/support';
+  CaseResolutionDisposition } from '../contracts/support';
 import { getSupportCase, sendSupportCaseMessage, appealSupportCase } from '../services/supportConversationApi';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SupportCaseDetail'>;
 
@@ -36,7 +36,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SupportCaseDetail'>;
 // ============================================================================
 interface StateDisplay {
   label: string;
-  tone: StatusPillTone;
+  tone: AppStatusTone;
   icon: keyof typeof Ionicons.glyphMap;
 }
 
@@ -48,8 +48,7 @@ const STATE_DISPLAY: Record<CaseOperationalState, StateDisplay> = {
   in_review: { label: 'Under review', tone: 'pending', icon: 'search-outline' },
   awaiting_external: { label: 'Awaiting external party', tone: 'pending', icon: 'globe-outline' },
   resolved: { label: 'Resolved', tone: 'success', icon: 'checkmark-circle-outline' },
-  closed: { label: 'Closed', tone: 'neutral', icon: 'lock-closed-outline' },
-};
+  closed: { label: 'Closed', tone: 'neutral', icon: 'lock-closed-outline' } };
 
 // ============================================================================
 // RESOLUTION DISPOSITION MAPPING
@@ -67,8 +66,7 @@ const DISPOSITION_LABEL: Record<CaseResolutionDisposition, string> = {
   duplicate: 'Duplicate case',
   merged: 'Merged with another case',
   external_dispute: 'Resolved via external dispute',
-  unable_to_resolve: 'Unable to resolve',
-};
+  unable_to_resolve: 'Unable to resolve' };
 
 // ============================================================================
 // PRIORITY MAPPING — subtle indicator, not decorative
@@ -82,8 +80,7 @@ const PRIORITY_DISPLAY: Record<SupportCase['priority'], PriorityDisplay> = {
   urgent: { label: 'Urgent', color: 'danger' },
   high: { label: 'High', color: 'warning' },
   normal: { label: 'Normal', color: 'textSecondary' },
-  low: { label: 'Low', color: 'textMuted' },
-};
+  low: { label: 'Low', color: 'textMuted' } };
 
 // ============================================================================
 // ACTOR ROLE MAPPING
@@ -124,8 +121,7 @@ function renderEvent(event: SupportCaseEvent): EventRender {
       const count = typeof p.count === 'number' ? p.count : null;
       return {
         label: 'Evidence received',
-        summary: count != null ? `${count} item${count === 1 ? '' : 's'} attached` : null,
-      };
+        summary: count != null ? `${count} item${count === 1 ? '' : 's'} attached` : null };
     }
     case 'assigned': {
       const team = str(p.team) ?? str(p.assignedTeam);
@@ -174,8 +170,7 @@ function renderEvent(event: SupportCaseEvent): EventRender {
       const detail = str(p.detail) ?? str(p.summary);
       return {
         label: event.eventType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        summary: detail,
-      };
+        summary: detail };
     }
   }
 }
@@ -227,9 +222,9 @@ function contextLinkLabel(kind: ContextLinkKind): string {
 function contextLinkIcon(kind: ContextLinkKind): keyof typeof Ionicons.glyphMap {
   switch (kind) {
     case 'order':
-      return 'cube-outline';
+      return 'bag-handle-outline';
     case 'listing':
-      return 'pricetag-outline';
+      return 'document-text-outline';
     case 'payout':
       return 'card-outline';
   }
@@ -256,8 +251,7 @@ function formatTimestamp(iso: string): string {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
-    minute: '2-digit',
-  });
+    minute: '2-digit' });
 }
 
 function formatDate(iso: string): string {
@@ -266,15 +260,14 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
-    year: 'numeric',
-  });
+    year: 'numeric' });
 }
 
 // ============================================================================
 // COMPONENT
 // ============================================================================
 export default function SupportCaseDetailScreen({ navigation, route }: Props) {
-  const { caseId } = route.params;
+  const { caseId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
@@ -287,6 +280,14 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [appealing, setAppealing] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const inputRef = useRef<React.ComponentRef<typeof AppInput>>(null);
 
   // ── Load case + events ──────────────────────────────────────────────────
@@ -357,31 +358,25 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
   const handleAppeal = useCallback(() => {
     if (!caseRecord || appealing) return;
     haptic.heavy();
-    Alert.alert(
-      'Appeal this decision?',
-      'Submitting an appeal asks the support team to review the decision on this case.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Submit Appeal',
-          style: 'destructive',
-          onPress: async () => {
-            if (!caseRecord) return;
-            setAppealing(true);
-            try {
-              const event = await appealSupportCase(caseRecord.id, 'Appeal requested by customer from case detail.');
-              setEvents((prev) => [...prev, event]);
-              show('Appeal submitted', 'success');
-            } catch {
-              show('Could not submit appeal. Try again later.', 'error');
-            } finally {
-              setAppealing(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [caseRecord, appealing, haptic, show]);
+    setConfirmSheet({
+      visible: true,
+      title: 'Appeal this decision?',
+      message: 'Submitting an appeal asks the support team to review the decision on this case.',
+      confirmLabel: 'Submit Appeal',
+      onConfirm: async () => {
+        if (!caseRecord) return;
+        setAppealing(true);
+        try {
+          const event = await appealSupportCase(caseRecord.id, 'Appeal requested by customer from case detail.');
+          setEvents((prev) => [...prev, event]);
+          show('Appeal submitted', 'success');
+        } catch {
+          show('Could not submit appeal. Try again later.', 'error');
+        } finally {
+          setAppealing(false);
+        }
+      } });
+  }, [caseRecord, appealing, haptic, show, setConfirmSheet]);
 
   const handleContextLinkPress = useCallback(
     (link: ContextLink) => {
@@ -463,7 +458,8 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
             </Caption>
           </View>
           {stateDisplay && (
-            <PremiumStatusPill
+            <AppStatusPill
+              variant="block"
               tone={stateDisplay.tone}
               label={stateDisplay.label}
               icon={stateDisplay.icon}
@@ -475,7 +471,6 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
         <View style={styles.metaRow}>
           {priorityDisplay && (
             <View style={styles.metaItem}>
-              <Meta color={colors.textMuted}>PRIORITY</Meta>
               <View style={styles.priorityValueRow}>
                 <View style={[styles.priorityDot, { backgroundColor: priorityColor }]} />
                 <Text style={[styles.metaValue, { color: priorityColor }]}>{priorityDisplay.label}</Text>
@@ -483,12 +478,10 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
             </View>
           )}
           <View style={styles.metaItem}>
-            <Meta color={colors.textMuted}>OPENED</Meta>
             <Text style={styles.metaValue}>{createdDate}</Text>
           </View>
           {createdDate !== updatedDate && (
             <View style={styles.metaItem}>
-              <Meta color={colors.textMuted}>UPDATED</Meta>
               <Text style={styles.metaValue}>{updatedDate}</Text>
             </View>
           )}
@@ -498,7 +491,6 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
       {/* ── Requested outcome — flat text block, hairline separator ─────── */}
       {caseRecord.requestedOutcome && (
         <View style={styles.section}>
-          <Meta color={colors.textMuted} style={styles.sectionLabel}>REQUESTED OUTCOME</Meta>
           <Text style={styles.outcomeText}>{caseRecord.requestedOutcome}</Text>
         </View>
       )}
@@ -506,7 +498,6 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
       {/* ── Resolution disposition — flat text block ─────────────────────── */}
       {caseRecord.resolutionDisposition && (
         <View style={styles.section}>
-          <Meta color={colors.textMuted} style={styles.sectionLabel}>RESOLUTION</Meta>
           <Text style={styles.outcomeText}>
             {DISPOSITION_LABEL[caseRecord.resolutionDisposition] ?? caseRecord.resolutionDisposition.replace(/_/g, ' ')}
           </Text>
@@ -516,7 +507,6 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
       {/* ── Related context — flat rows with hairline separators ─────────── */}
       {contextLinks.length > 0 && (
         <View style={styles.section}>
-          <Meta color={colors.textMuted} style={styles.sectionLabel}>RELATED</Meta>
           <View style={styles.contextList}>
             {contextLinks.map((link, index) => (
               <React.Fragment key={`${link.kind}:${link.id}`}>
@@ -543,7 +533,6 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
 
       {/* ── Timeline — vertical line with dots, flat (no card) ───────────── */}
       <View style={styles.section}>
-        <Meta color={colors.textMuted} style={styles.sectionLabel}>TIMELINE</Meta>
         {publicEvents.length === 0 ? (
           <Text style={styles.emptyTimelineText}>No public activity yet.</Text>
         ) : (
@@ -596,7 +585,7 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
       {/* ── Message input — add information to the case ───────────────────── */}
       {canSendMessage && (
         <View style={styles.messageSection}>
-          <Meta color={colors.textMuted} style={styles.sectionLabel}>ADD INFORMATION</Meta>
+          <Meta color={colors.textMuted} style={styles.sectionLabel}>Add information</Meta>
           <AppInput
             ref={inputRef}
             value={messageText}
@@ -628,6 +617,16 @@ export default function SupportCaseDetailScreen({ navigation, route }: Props) {
           <Text style={styles.closedNoticeText}>This case is closed. Contact support to reopen it.</Text>
         </View>
       )}
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }
@@ -641,186 +640,149 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
       gap: Space.lg,
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
 
     // ── Identity ──
     identityBlock: {
-      gap: Space.md,
-    },
+      gap: Space.md },
     identityRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      gap: Space.md,
-    },
+      gap: Space.md },
     issueType: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      color: colors.textPrimary },
     caseId: {
       marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     metaRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.lg,
       borderTopWidth: Stroke.hairline,
       borderTopColor: colors.border,
-      paddingTop: Space.md,
-    },
+      paddingTop: Space.md },
     metaItem: {
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     metaValue: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     priorityValueRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     priorityDot: {
       width: 6,
       height: 6,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
 
     // ── Sections ──
     section: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     sectionLabel: {
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
-    },
+      letterSpacing: 0 },
     outcomeText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight + 4,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight + 4,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
 
     // ── Context links ──
     contextList: {
       borderTopWidth: Stroke.hairline,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     contextRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
     contextLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     contextId: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     hairline: {
       height: Stroke.hairline,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
 
     // ── Timeline ──
     timeline: {
-      paddingTop: Space.xs,
-    },
+      paddingTop: Space.xs },
     timelineRow: {
       flexDirection: 'row',
-      gap: Space.md,
-    },
+      gap: Space.md },
     timelineRail: {
       width: 12,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     timelineDot: {
       width: 8,
       height: 8,
       borderRadius: Radius.full,
       backgroundColor: colors.brand,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     timelineDotCustomer: {
-      backgroundColor: colors.textPrimary,
-    },
+      backgroundColor: colors.textPrimary },
     timelineLine: {
       width: Stroke.standard,
       flex: 1,
       backgroundColor: colors.border,
       marginTop: Space.xs / 2,
-      minHeight: Space.lg,
-    },
+      minHeight: Space.lg },
     timelineContent: {
       flex: 1,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     timelineLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     timelineSummary: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight + 2,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight + 2,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textSecondary,
-      marginTop: Space.xs / 2,
-    },
+      marginTop: Space.xs / 2 },
     timelineMeta: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     timelineActor: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     timelineTime: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     emptyTimelineText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted,
-      paddingVertical: Space.md,
-    },
+      paddingVertical: Space.md },
 
     // ── Actions ──
     fullWidth: {
-      width: '100%',
-    },
+      width: '100%' },
 
     // ── Message input ──
     messageSection: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     messageInputContainer: {
       minHeight: 72,
-      alignItems: 'flex-start',
-    },
+      alignItems: 'flex-start' },
     messageInput: {
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     sendBtn: {
-      alignSelf: 'flex-start',
-    },
+      alignSelf: 'flex-start' },
 
     // ── Closed notice ──
     closedNotice: {
@@ -829,13 +791,10 @@ function createStyles(colors: ThemeColors) {
       gap: Space.sm,
       paddingVertical: Space.md,
       borderTopWidth: Stroke.hairline,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     closedNoticeText: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textMuted } });
 }

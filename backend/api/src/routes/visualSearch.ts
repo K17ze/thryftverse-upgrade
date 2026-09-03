@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { z } from 'zod';
+import crypto from 'node:crypto';
 import {
   extractImageFeatures,
   extractRemoteImageFeatures,
@@ -8,7 +9,9 @@ import {
   mapWithConcurrency,
   type ImageFeatures,
 } from '../lib/visualSimilarity.js';
+import { safeFetchMediaBuffer } from '../lib/safeRemoteMediaFetch.js';
 import type { RetrievalMeta, RetrievalFallbackReason } from '../lib/retrievalMeta.js';
+import logger from '../lib/logger.js';
 
 type VisualSearchRouteDependencies = {
   app: FastifyInstance;
@@ -18,7 +21,7 @@ type VisualSearchRouteDependencies = {
 };
 
 const visualSearchBodySchema = z.object({
-  imageUrl: z.string().optional(),
+  imageUrl: z.string().url().optional(),
   imageBase64: z.string().optional(),
   query: z.string().trim().max(120).optional(),
   category: z.string().optional(),
@@ -31,20 +34,67 @@ const visualSearchBodySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(48),
 });
 
+/** Maximum base64 payload size (5 MB after encoding overhead). */
+const MAX_BASE64_BYTES = 5 * 1024 * 1024;
 /** How many candidate listings to score before ranking. */
-const CANDIDATE_CAP = 150;
-/** Concurrent image downloads during scoring. */
-const SCORING_CONCURRENCY = 8;
+const CANDIDATE_CAP = 60;
+/** Concurrent image downloads during scoring — reduced from 8 to bound egress. */
+const SCORING_CONCURRENCY = 4;
+
+/**
+ * In-flight concurrency guard for visual search.
+ *
+ * Visual search is resource-intensive (image download + decode + per-candidate
+ * scoring), so in addition to the per-route rate limit (10 req/min via
+ * `@fastify/rate-limit`) we cap concurrent executions per user/IP. This is a
+ * simple in-memory counter — sufficient for a single-process deployment and
+ * intentionally not over-engineered. The counter is decremented in a
+ * `finally` block so crashed handlers never leak slots.
+ */
+const VISUAL_SEARCH_MAX_CONCURRENT = 3;
+const visualSearchInFlight = new Map<string, number>();
+
+function resolveConcurrencyKey(request: FastifyRequest): string {
+  // Prefer the authenticated user id when available so a logged-in user's
+  // limit is stable across IP changes; fall back to the client IP otherwise.
+  const userId = (request as FastifyRequest & { authUser?: { userId?: string } }).authUser?.userId;
+  return userId ? `user:${userId}` : `ip:${request.ip}`;
+}
+
+function tryAcquireVisualSearchSlot(key: string): boolean {
+  const current = visualSearchInFlight.get(key) ?? 0;
+  if (current >= VISUAL_SEARCH_MAX_CONCURRENT) return false;
+  visualSearchInFlight.set(key, current + 1);
+  return true;
+}
+
+function releaseVisualSearchSlot(key: string): void {
+  const current = visualSearchInFlight.get(key);
+  if (current === undefined) return;
+  if (current <= 1) {
+    visualSearchInFlight.delete(key);
+  } else {
+    visualSearchInFlight.set(key, current - 1);
+  }
+}
 
 /**
  * Decode the query image from the request payload into a Buffer.
  * Accepts raw base64 (with or without a data-URI prefix) or a remote URL.
- * Returns null when no image was supplied.
+ * Returns null when no image was supplied or validation fails.
+ *
+ * Security: remote URLs are fetched via `safeFetchMediaBuffer` which enforces
+ * HTTPS, DNS/IP validation (SSRF prevention), redirect controls, byte caps,
+ * and content-type/magic-bytes validation. Base64 payloads are capped at
+ * MAX_BASE64_BYTES to prevent memory exhaustion.
  */
 async function decodeQueryImage(
   payload: z.infer<typeof visualSearchBodySchema>,
 ): Promise<Buffer | null> {
   if (payload.imageBase64 && payload.imageBase64.trim().length > 0) {
+    if (payload.imageBase64.length > MAX_BASE64_BYTES) {
+      return null;
+    }
     const stripped = payload.imageBase64.replace(/^data:[^;]+;base64,/, '');
     try {
       return Buffer.from(stripped, 'base64');
@@ -53,20 +103,10 @@ async function decodeQueryImage(
     }
   }
   if (payload.imageUrl && payload.imageUrl.trim().length > 0) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      const response = await fetch(payload.imageUrl, {
-        signal: controller.signal,
-        redirect: 'follow',
-      });
-      clearTimeout(timer);
-      if (!response.ok) return null;
-      const arrayBuffer = await response.arrayBuffer();
-      return Buffer.from(arrayBuffer);
-    } catch {
-      return null;
-    }
+    const result = await safeFetchMediaBuffer(payload.imageUrl, {
+      maxBytes: MAX_BASE64_BYTES,
+    });
+    return result?.buffer ?? null;
   }
   return null;
 }
@@ -89,15 +129,68 @@ async function decodeQueryImage(
  * with `visualMatching: false`.
  */
 export const registerVisualSearchRoutes = ({ app, db, readDb }: VisualSearchRouteDependencies): void => {
-  app.post('/visual-search', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.post(
+    '/visual-search',
+    {
+      // Visual search is substantially more expensive than regular search
+      // (remote image download + decode + per-candidate feature scoring), so
+      // it gets a stricter per-route rate limit than the global default.
+      // See `@fastify/rate-limit` registration in index.ts for the baseline.
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '1 minute',
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      // ── Concurrency guard (3 in-flight per user/IP) ───────────────────
+      // Acquired before any heavy work and released in `finally` so a
+      // crashed handler never leaks a slot.
+      const concurrencyKey = resolveConcurrencyKey(request);
+      if (!tryAcquireVisualSearchSlot(concurrencyKey)) {
+        reply.code(429);
+        return {
+          ok: false,
+          error: 'Too many concurrent visual search requests',
+          retryAfterSeconds: 5,
+        };
+      }
+
+      try {
+        return await handleVisualSearch(request, reply, { db, readDb });
+      } finally {
+        releaseVisualSearchSlot(concurrencyKey);
+      }
+    },
+  );
+};
+
+/**
+ * Inner handler for POST /visual-search, extracted so the route wrapper can
+ * enforce the concurrency guard around it via try/finally.
+ */
+async function handleVisualSearch(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  { db, readDb }: Omit<VisualSearchRouteDependencies, 'app'>,
+) {
+    const requestStartTime = Date.now();
     const payload = visualSearchBodySchema.parse(request.body ?? {});
 
-    // Telemetry: keep logging requests for future ML training/integration.
+    // Telemetry: record the request without storing the raw image URL.
+    // A SHA-256 hash of the URL is stored instead so analytics can deduplicate
+    // repeated queries without retaining a potentially sensitive URL that
+    // could point to a user's personal photo. The expires_at column gives
+    // the row a bounded lifetime for privacy compliance.
     if (payload.imageUrl) {
       try {
+        const urlHash = crypto.createHash('sha256').update(payload.imageUrl).digest('hex');
         await db.query(
-          `INSERT INTO visual_search_requests (id, image_url, created_at) VALUES ($1, $2, NOW()) ON CONFLICT DO NOTHING`,
-          [`vs_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, payload.imageUrl]
+          `INSERT INTO visual_search_requests (id, image_url, created_at, expires_at)
+           VALUES ($1, $2, NOW(), NOW() + INTERVAL '30 days')
+           ON CONFLICT DO NOTHING`,
+          [`vs_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, urlHash]
         );
       } catch {
         // Telemetry is best-effort; never fail the request on it.
@@ -210,6 +303,18 @@ export const registerVisualSearchRoutes = ({ app, db, readDb }: VisualSearchRout
 
     const hasImageScoring = queryFeatures !== null;
 
+    const imageSuppliedEarly = Boolean(payload.imageBase64?.trim() || payload.imageUrl?.trim());
+    if (!hasImageScoring && imageSuppliedEarly) {
+      logger.warn(
+        {
+          reason: 'image_decode_failed',
+          hasBase64: Boolean(payload.imageBase64),
+          hasImageUrl: Boolean(payload.imageUrl),
+        },
+        'visual_search.image_decode_failed',
+      );
+    }
+
     type ScoredRow = (typeof candidateRows)[number] & {
       similarityScore: number | null;
     };
@@ -314,6 +419,23 @@ export const registerVisualSearchRoutes = ({ app, db, readDb }: VisualSearchRout
       embedderConfigured: false,
     };
 
+    logger.info(
+      {
+        method: similarityMethod,
+        visualMatching,
+        candidateCount: candidateRows.length,
+        resultCount: trimmed.length,
+        hasImage: imageSupplied,
+        fallbackReason: visualFallbackReason ?? null,
+        latencyMs: Date.now() - requestStartTime,
+        // Never log the raw image URL or base64 — only the hash if present
+        imageUrlHash: payload.imageUrl
+          ? crypto.createHash('sha256').update(payload.imageUrl).digest('hex').slice(0, 12)
+          : null,
+      },
+      'visual_search.request_completed',
+    );
+
     reply.code(200);
     return {
       ok: true,
@@ -353,5 +475,4 @@ export const registerVisualSearchRoutes = ({ app, db, readDb }: VisualSearchRout
           : null,
       })),
     };
-  });
-};
+}

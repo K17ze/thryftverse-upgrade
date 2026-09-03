@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  RefreshControl,
-} from 'react-native';
+  RefreshControl } from 'react-native';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, Stroke, IconGrammar } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { getWalletLedger, type WalletLedgerItem } from '../../services/walletApi';
 import { formatRelativeTime, formatDayLabel } from '../../utils/dateFormat';
@@ -18,7 +18,6 @@ import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { EmptyState } from '../EmptyState';
 import { useConnectivity } from '../../hooks/useConnectivity';
 import { OfflineBanner } from '../OfflineBanner';
-import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 interface WalletTransactionHistoryProps {
   /** Optional filter — 'ALL' shows everything, '1ZE' or 'FIAT' filters by asset */
@@ -39,8 +38,7 @@ const KIND_LABELS: Record<string, { label: string; icon: keyof typeof Ionicons.g
   AUCTION_SETTLEMENT: { label: 'Auction win', icon: 'trophy', direction: 'in' },
   PAYOUT: { label: 'Payout', icon: 'cash-outline', direction: 'out' },
   TRANSFER_SENT: { label: 'Transfer sent', icon: 'arrow-forward-outline', direction: 'out' },
-  TRANSFER_RECEIVED: { label: 'Transfer received', icon: 'arrow-back', direction: 'in' },
-};
+  TRANSFER_RECEIVED: { label: 'Transfer received', icon: 'arrow-back', direction: 'in' } };
 
 function groupByDate(items: WalletLedgerItem[]): { title: string; data: WalletLedgerItem[] }[] {
   const groups: Record<string, WalletLedgerItem[]> = {};
@@ -76,12 +74,11 @@ function flattenSections(
 
 export function WalletTransactionHistory({
   assetFilter = 'ALL',
-  limit = 100,
-}: WalletTransactionHistoryProps) {
+  limit = 100 }: WalletTransactionHistoryProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const currentUser = useStore((state) => state.currentUser);
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { isOffline } = useConnectivity();
 
   const [items, setItems] = useState<WalletLedgerItem[]>([]);
@@ -119,19 +116,16 @@ export function WalletTransactionHistory({
     const isPositive = item.amount > 0;
     const amountText = item.asset === '1ZE'
       ? `${isPositive ? '+' : ''}${item.amountDisplay.toFixed(3)} 1ZE`
-      : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`;
+      : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), currencyCode, { displayMode: 'fiat' })}`;
 
     // Direction-aware icon color: inflows use success, outflows use textPrimary,
     // neutral trades use brand. This pairs glyph + colour per AGENTS.md §13.
     const iconColor = isPositive ? colors.success : kindInfo.direction === 'neutral' ? colors.brand : colors.textSecondary;
-    const iconBg = isPositive ? `${colors.success}15` : kindInfo.direction === 'neutral' ? `${colors.brand}15` : colors.surfaceAlt;
     const amountColor = isPositive ? colors.success : colors.textPrimary;
 
     return (
       <View style={styles.txRow} accessibilityRole="text" accessibilityLabel={`${kindInfo.label}, ${amountText}, ${formatRelativeTime(item.createdAt)}`}>
-        <View style={[styles.txIconWrap, { backgroundColor: iconBg }]}>
-          <Ionicons name={kindInfo.icon} size={IconGrammar.metadata} color={iconColor} />
-        </View>
+        <Ionicons name={kindInfo.icon} size={IconGrammar.metadata} color={iconColor} />
         <View style={styles.txContent}>
           <Text style={styles.txLabel} numberOfLines={1}>{kindInfo.label}</Text>
           <Text style={styles.txTime}>{formatRelativeTime(item.createdAt)}</Text>
@@ -233,97 +227,73 @@ export function WalletTransactionHistory({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
-      flex: 1,
-    },
+      flex: 1 },
     listContent: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     loadingContainer: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      gap: 0,
-    },
+      gap: 0 },
     stateContainer: {
-      flex: 1,
-    },
+      flex: 1 },
     txRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.sm + 2,
       gap: Space.sm + 2,
-      minHeight: 56,
-    },
-    txIconWrap: {
-      width: 36,
-      height: 36,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
+      minHeight: 56 },
     txContent: {
       flex: 1,
-      gap: 2,
-    },
+      gap: 2 },
     // Labels use captionElevated per spec — clear, scannable metadata
     txLabel: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textPrimary },
     txTime: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.textMuted },
     // Amounts use priceList with tabular-nums per spec — financial numerics
     txAmount: {
-      fontSize: Type.priceList.size,
-      lineHeight: Type.priceList.lineHeight,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.priceList.letterSpacing,
+      fontSize: TypographyV2.priceList.size,
+      lineHeight: TypographyV2.priceList.lineHeight,
+      fontFamily: TypographyV2.priceList.fontFamily,
+      letterSpacing: TypographyV2.priceList.letterSpacing,
       fontVariant: ['tabular-nums'],
-      textAlign: 'right',
-    },
+      textAlign: 'right' },
     sectionHeader: {
       paddingTop: Space.lg,
       paddingBottom: Space.xs + 2,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     sectionHeaderText: {
-      fontSize: Type.label.size,
-      lineHeight: Type.label.lineHeight,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight,
+      fontFamily: TypographyV2.label.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.label.letterSpacing,
-    },
+      letterSpacing: TypographyV2.label.letterSpacing },
     separator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.borderSubtle,
-      marginLeft: 52,
-    },
+      marginLeft: 52 },
     skeletonRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.sm + 2,
-      gap: Space.sm + 2,
-    },
+      gap: Space.sm + 2 },
     skeletonIcon: {
       width: 36,
       height: 36,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     skeletonContent: {
       flex: 1,
-      gap: 4,
-    },
+      gap: 4 },
     skeletonLine: {
       height: 14,
-      borderRadius: Radius.sm,
-    },
-  });
+      borderRadius: Radius.sm } });
 }

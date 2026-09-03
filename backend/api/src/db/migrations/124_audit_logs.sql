@@ -38,7 +38,7 @@ DECLARE
 BEGIN
   start_date := DATE_TRUNC('month', NOW())::DATE;
   FOR i IN 0..3 LOOP
-    PERFORM create_partition_if_not_exists('admin_audit_logs', start_date + (i || ' month')::INTERVAL);
+    PERFORM create_partition_if_not_exists('admin_audit_logs', (start_date + (i || ' month')::INTERVAL)::DATE);
   END LOOP;
 
   CREATE TABLE IF NOT EXISTS admin_audit_logs_default

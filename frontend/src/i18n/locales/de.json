@@ -1,0 +1,1897 @@
+{
+  "common": {
+    "buttons": {
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "delete": "Löschen",
+      "edit": "Bearbeiten",
+      "share": "Teilen",
+      "retry": "Erneut versuchen",
+      "close": "Schließen",
+      "done": "Fertig",
+      "continue": "Weiter",
+      "clearAll": "Alle löschen",
+      "clearFilters": "Filter löschen",
+      "browseAll": "Alle ansehen",
+      "refresh": "Aktualisieren",
+      "follow": "Folgen",
+      "unfollow": "Entfolgen",
+      "message": "Nachricht",
+      "buy": "Kaufen",
+      "bid": "Bieten",
+      "sell": "Verkaufen",
+      "ok": "OK",
+      "confirm": "Bestätigen"
+    },
+    "states": {
+      "loading": "Laden…",
+      "loadingMore": "Mehr wird geladen…",
+      "noResults": "Keine Ergebnisse",
+      "somethingWentWrong": "Etwas ist schiefgelaufen",
+      "youAreOffline": "Du bist offline",
+      "retry": "Erneut versuchen",
+      "searching": "Suchen…"
+    },
+    "navigation": {
+      "back": "Zurück",
+      "home": "Start",
+      "search": "Suchen",
+      "profile": "Profil",
+      "settings": "Einstellungen"
+    },
+    "actions": {
+      "follow": "Folgen",
+      "unfollow": "Entfolgen",
+      "message": "Nachricht",
+      "buy": "Kaufen",
+      "bid": "Bieten",
+      "sell": "Verkaufen"
+    },
+    "trust": {
+      "verified": "Verifiziert",
+      "responseTime": "Antwortzeit",
+      "reviews": "Bewertungen",
+      "followers": "Follower",
+      "following": "Folgt"
+    },
+    "misc": {
+      "items": "Artikel",
+      "on": "An",
+      "off": "Aus",
+      "none": "Keine",
+      "notSignedIn": "Nicht angemeldet"
+    }
+  },
+  "home": {
+    "brandTitle": "Thryftverse",
+    "tabs": {
+      "foryou": "Für dich",
+      "following": "Folgt"
+    },
+    "looks": {
+      "shopLabel": "Looks zum Shoppen",
+      "itemsCount": "{count} Artikel"
+    },
+    "poster": {
+      "fallback": "Poster"
+    },
+    "newListings": {
+      "bannerSingular": "{count} neuer Drop bereit",
+      "bannerPlural": "{count} neue Drops bereit",
+      "badgeNew": "{count} neu"
+    },
+    "sync": {
+      "unavailableCached": "Synchronisierung ist nicht verfügbar. Zwischengespeicherte Artikel werden angezeigt."
+    },
+    "empty": {
+      "followingNoNewTitle": "Noch keine neuen Drops",
+      "followingNoNewSubtitle": "Zum Aktualisieren ziehen.",
+      "followingNoSellersTitle": "Folge Verkäufern, um ihre Drops zu sehen",
+      "followingNoSellersSubtitle": "Tippe auf Folgen auf Verkäuferprofilen, um deinen Feed aufzubauen.",
+      "followingDiscoverSellers": "Verkäufer entdecken",
+      "followingBrowseAll": "Alle ansehen",
+      "forYouNoDropsTitle": "Noch keine Drops online",
+      "forYouNoDropsSubtitle": "Zum Aktualisieren ziehen oder Kategorien durchsuchen."
+    },
+    "footer": {
+      "reachedEnd": "Du hast das Ende erreicht"
+    },
+    "peek": {
+      "closeButton": "Schließen",
+      "viewListing": "Anzeige ansehen"
+    }
+  },
+  "search": {
+    "placeholder": "Artikel, Verkäufer, Styles suchen",
+    "scope": {
+      "items": "Artikel",
+      "people": "Personen"
+    },
+    "resultCount": {
+      "singular": "{count} Ergebnis",
+      "plural": "{count} Ergebnisse"
+    },
+    "sort": {
+      "title": "Sortieren nach",
+      "recommended": "Empfohlen",
+      "newest": "Neueste",
+      "priceLowToHigh": "Preis: niedrig zu hoch",
+      "priceHighToLow": "Preis: hoch zu niedrig",
+      "mostLiked": "Am meisten gemocht"
+    },
+    "sections": {
+      "discover": "Entdecken",
+      "recent": "Aktuell",
+      "recentSearches": "Letzte Suchen",
+      "savedSearches": "Gespeicherte Suchen",
+      "browseCategories": "Kategorien durchsuchen",
+      "categories": "Kategorien",
+      "trending": "Beliebte Suchen"
+    },
+    "suggestion": {
+      "brand": "Marke",
+      "category": "Kategorie",
+      "item": "Artikel",
+      "search": "Suchen"
+    },
+    "typeahead": {
+      "searchFor": "“{query}” suchen",
+      "viewAllResults": "Alle Ergebnisse für {query} ansehen",
+      "suggestionsUnavailable": "Vorschläge sind nicht verfügbar. Tippe auf Suchen, um fortzufahren.",
+      "noCloseSuggestions": "Keine nahen Vorschläge. Tippe auf Suchen, um alle Treffer zu sehen.",
+      "showingLocalMatches": "Treffer auf diesem Gerät werden angezeigt"
+    },
+    "savedSearch": {
+      "alertsOn": "Benachrichtigungen an",
+      "alertsOff": "Benachrichtigungen aus",
+      "newMatches": "· {count} neu"
+    },
+    "status": {
+      "refreshingIndex": "Index wird aktualisiert",
+      "liveIndex": "Live-Index",
+      "offlineIndex": "Offline-Index",
+      "cachedIndex": "Zwischengespeicherter Index"
+    },
+    "errors": {
+      "searchUnavailable": "Suche nicht verfügbar",
+      "retrySearch": "Suche wiederholen",
+      "peopleSearchUnavailable": "Personensuche nicht verfügbar",
+      "searchIndexDelayed": "Suchindex ist verzögert. Zwischengespeicherte Ergebnisse werden angezeigt.",
+      "noPeopleFound": "Keine Personen für “{query}” gefunden",
+      "tryDifferentName": "Versuche einen anderen Namen oder Benutzernamen.",
+      "noMatches": "Keine Treffer für “{query}”",
+      "noMatchesWithFilters": "Keine Treffer für “{query}” mit diesen Filtern",
+      "searchingIndex": "Index wird durchsucht…",
+      "tryClearingFilters": "Versuche, deine Filter zu löschen oder die Suche zu erweitern.",
+      "tryBroadened": "Versuche {suggestions} — oder durchsuche alle Kategorien.",
+      "noPicksWithFilters": "Keine Auswahl passt zu deinen aktuellen Filtern. Passe sie an oder lösche sie.",
+      "noPicksNoResults": "Noch keine Ranglisten-Ergebnisse. Versuche ein kürzeres Schlagwort."
+    },
+    "noResults": {
+      "browseByCategory": "Nach Kategorie durchsuchen"
+    },
+    "follow": {
+      "following": "Folgt",
+      "follow": "Folgen"
+    }
+  },
+  "settings": {
+    "header": {
+      "title": "Einstellungen"
+    },
+    "search": {
+      "placeholder": "Einstellungen suchen",
+      "results": "Ergebnisse",
+      "allSettings": "Alle Einstellungen",
+      "noMatching": "Keine passenden Einstellungen"
+    },
+    "verification": {
+      "promptTitle": "Verifiziere deine Identität",
+      "promptSubtitle": "Erhalte das Verifizierungs-Badge und schalte den Verkauf frei",
+      "verified": "Verifiziert",
+      "getBadge": "Verifizierungs-Badge erhalten",
+      "trustedSeller": "Vertrauenswürdiger Verkäufer",
+      "idVerified": "Ausweis verifiziert"
+    },
+    "health": {
+      "verified": "Verifiziert",
+      "twoFA": "2FA",
+      "biometric": "Biometrie",
+      "payment": "Zahlung",
+      "address": "Adresse",
+      "emailConfirmed": "E-Mail bestätigt"
+    },
+    "sections": {
+      "yourAccount": "Dein Konto",
+      "buyingSelling": "Kaufen & verkaufen",
+      "notifications": "Benachrichtigungen",
+      "experience": "Erlebnis",
+      "connectedServices": "Verbundene Dienste",
+      "helpLegal": "Hilfe & Rechtliches",
+      "advanced": "Erweitert",
+      "account": "Konto",
+      "profile": "Profile",
+      "accountSecurity": "Account & security",
+      "privacy": "Privacy",
+      "selling": "Selling",
+      "appearance": "Appearance",
+      "dataStorage": "Data & storage",
+      "support": "Support",
+      "about": "About",
+      "developer": "Developer"
+    },
+    "rows": {
+      "verification": "Verifizierung",
+      "changePassword": "Passwort ändern",
+      "twoFAEnabled": "2FA aktiviert",
+      "passwordOnly": "Nur Passwort",
+      "biometricLock": "Biometrische Sperre",
+      "biometricNotAvailable": "Auf diesem Gerät nicht verfügbar",
+      "biometricEnabled": "Face ID, Touch ID & Fingerabdruck für sensible Aktionen",
+      "biometricDisabled": "Deaktiviert — sensible Bildschirme nutzen nur Passwort",
+      "connectedAccounts": "Verbundene Konten",
+      "connectedAccountsSubtitle": "Google-, Apple-Anmeldung",
+      "devicesSessions": "Geräte & Sitzungen",
+      "accountControl": "Kontoverwaltung",
+      "accountControlSubtitle": "Sicherheit, Sitzungen, Passwort",
+      "downloadData": "Meine Daten herunterladen",
+      "downloadDataSubtitle": "Exportiere deine Kontodaten",
+      "privacySafety": "Privatsphäre & Sicherheit",
+      "privacySafetySubtitle": "Sichtbarkeit, blockierte Nutzer",
+      "chatPrivacy": "Chat-Privatsphäre",
+      "chatPrivacySubtitle": "Wer dir Nachrichten senden darf",
+      "dataPrivacy": "Daten & Privatsphäre",
+      "dataPrivacySubtitle": "Privatsphäre-Einstellungen und Aufbewahrung",
+      "blockedUsers": "Blockierte Nutzer",
+      "blockedCount": "{count} blockiert",
+      "savedAddresses": "Gespeicherte Adressen",
+      "oneSaved": "1 gespeichert",
+      "noneSaved": "Keine gespeichert",
+      "paymentMethods": "Zahlungsmethoden",
+      "savedCollections": "Gespeichertes & Sammlungen",
+      "payoutAccount": "Auszahlungskonto",
+      "payoutAccountSubtitle": "Guthaben und Geldbörse",
+      "payoutHistory": "Auszahlungsverlauf",
+      "shippingPreferences": "Versand-Einstellungen",
+      "priceAlerts": "Preisalarme",
+      "priceAlertsSubtitle": "Benachrichtigung bei Preisschwellen",
+      "autoInvestPlans": "Auto-Invest-Pläne",
+      "autoInvestPlansSubtitle": "Wiederkehrende Kaufpläne",
+      "taxDocuments": "Steuerunterlagen",
+      "taxDocumentsSubtitle": "Jahresabrechnungen & G/V",
+      "resolutionCentre": "Konfliktlösungszentrum",
+      "resolutionCentreSubtitle": "Streitfälle und Lösungen",
+      "enableNotifications": "Benachrichtigungen aktivieren",
+      "permissionUnknown": "Berechtigung unbekannt",
+      "permissionAllowed": "Erlaubt",
+      "permissionNotAllowed": "Nicht erlaubt",
+      "notificationPreferences": "Benachrichtigungs-Einstellungen",
+      "emailPreferences": "E-Mail-Einstellungen",
+      "theme": "Design",
+      "currencyDisplay": "Währungsanzeige",
+      "localCurrency": "Lokale Währung",
+      "language": "Sprache",
+      "contentPreferences": "Inhaltseinstellungen",
+      "contentPreferencesSubtitle": "Feed und Empfehlungen",
+      "recommendations": "Empfehlungen",
+      "recommendationsSubtitle": "Foto-Verbesserung, Titel- und Preisvorschläge",
+      "yourFeed": "Dein Feed",
+      "yourFeedSubtitle": "Empfehlungen und Transparenz",
+      "sustainability": "Nachhaltigkeit",
+      "sustainabilitySubtitle": "Ziele, Versand, Impact",
+      "accessibility": "Barrierefreiheit",
+      "accessibilitySubtitle": "Textgröße, Animation, Kontrast",
+      "searchHistory": "Suchverlauf",
+      "searchHistorySubtitle": "Letzte Suchen löschen",
+      "dataSharing": "Datenweitergabe",
+      "dataSharingSubtitle": "Analyse und Personalisierung",
+      "agents": "Agenten",
+      "agentsSubtitle": "Agent-Berechtigungen ansehen und verwalten",
+      "connections": "Verbindungen",
+      "connectionsSubtitle": "Provider-Schlüssel und Endpunkte",
+      "yourAgents": "Deine Agenten",
+      "yourAgentsSubtitle": "Von dir erstellte Agenten",
+      "helpCentre": "Hilfecenter",
+      "termsOfService": "Nutzungsbedingungen",
+      "privacyPolicy": "Datenschutzrichtlinie",
+      "aboutThryftverse": "Über Thryftverse",
+      "runtimeSmokeTest": "Runtime-Test",
+      "runtimeSmokeTestSubtitle": "Diagnose-Checks für lokales Runtime",
+      "deleteAccount": "Konto löschen",
+      "deleteAccountSubtitle": "Lösche dein Konto dauerhaft",
+      "editProfileAccount": "Profil & Konto bearbeiten",
+      "biometricLogin": "Biometrische Anmeldung",
+      "biometricLoginEnabled": "Face ID, Touch ID oder Fingerabdruck beim App-Start verlangen",
+      "biometricLoginDisabled": "Deaktiviert — die App öffnet direkt dein Konto",
+      "notificationCategories": "Benachrichtigungskategorien",
+      "notificationPreferencesSubtitle": "Ruhezeiten, Vorschau",
+      "featureFlags": "Feature Flags",
+      "featureFlagsSubtitle": "Aktuelle Flag-Werte für QA",
+      "autoTranslate": "Nachrichten automatisch ubersetzen",
+      "autoTranslateEnabled": "Fremdsprachige Nachrichten automatisch ubersetzt",
+      "autoTranslateDisabled": "Tippen um fremdsprachige Nachrichten manuell zu ubersetzen",
+      "enabled": "On",
+      "disabled": "Off",
+      "appVersion": "v{{version}}"
+    },
+    "toast": {
+      "themeApplying": "Design {theme} wird angewendet…",
+      "pushEnabled": "Push-Benachrichtigungen aktiviert",
+      "pushDenied": "Push-Benachrichtigungen wurden abgelehnt. Aktiviere sie in den Geräteeinstellungen.",
+      "pushUpdateFailed": "Push-Benachrichtigungsberechtigung konnte nicht aktualisiert werden.",
+      "pushManageDeviceSettings": "Verwalte Push-Benachrichtigungen in deinen Geräteeinstellungen.",
+      "searchHistoryCleared": "Suchverlauf gelöscht",
+      "searchHistoryClearFailed": "Suchverlauf konnte nicht gelöscht werden",
+      "unableOpenLink": "Link konnte nicht geöffnet werden. Versuche es gleich noch einmal."
+    },
+    "notificationSummary": "{enabled}/{total} Kategorien",
+    "accessibility": {
+      "editProfileAccount": "Profil und Konto bearbeiten",
+      "editProfileAccountHint": "Öffnet Profil-, Privatsphäre-, Sicherheits- und Konto-Editor",
+      "verifyIdentity": "Identität verifizieren",
+      "verifyIdentityHint": "Öffnet die Identitätsverifizierung",
+      "deleteAccountHint": "Öffnet den Kontolöschung-Vorgang"
+    },
+    "picker": {
+      "currencyTitle": "Lokale Währung wählen",
+      "themeTitle": "Designmodus",
+      "themeSystem": "System",
+      "themeLight": "Hell",
+      "themeDark": "Dunkel"
+    }
+  },
+  "profile": {
+    "userProfile": "Profil von {{name}}"
+  },
+  "listing": {
+    "create": {
+      "title": "Verkaufen",
+      "createListing": "Anzeige erstellen",
+      "editTitle": "Anzeige bearbeiten",
+      "listingTitle": "Titel",
+      "description": "Beschreibung",
+      "price": "Preis",
+      "category": "Kategorie",
+      "condition": "Zustand",
+      "size": "Größe",
+      "brand": "Marke",
+      "photos": "Fotos",
+      "publish": "Veröffentlichen",
+      "saveDraft": "Entwurf speichern",
+      "saved": "Gespeichert",
+      "details": "Details",
+      "priceAndCondition": "Preis & Zustand",
+      "required": "Erforderlich",
+      "optional": "Optional",
+      "addPhotosTitle": "Fotos hinzufügen, um zu beginnen",
+      "addPhotosSubtitle": "Gut beleuchtete Fotos aus mehreren Winkeln verkaufen sich schneller.",
+      "photoTips": "Fototipps",
+      "photoTipsMin": "Mindestens 3 Fotos empfohlen",
+      "photoTipLighting": "Gute Beleuchtung",
+      "photoTipAngles": "Alle Winkel zeigen",
+      "photoTipBackground": "Natürlicher Hintergrund",
+      "titlePlaceholder": "z.B. Vintage Levi's 501 Jeansjacke",
+      "descriptionHelper": "Füge mehr Details hinzu, um Käufern zu helfen, diesen Artikel zu finden",
+      "suggestedDetails": "Vorgeschlagene Details",
+      "applyToEmptyFields": "Auf leere Felder anwenden",
+      "startingBid": "Startgebot",
+      "reservePriceOptional": "Mindestpreis (optional)",
+      "duration": "Dauer",
+      "totalValuation": "Gesamtbewertung",
+      "originalPriceHelper": "Originalpreis hinzufügen, um den Wert zu zeigen",
+      "readyToPublish": "Bereit zum Veröffentlichen",
+      "bulkList": "Massenliste",
+      "inventory": "Bestand",
+      "hub": "Zentrum",
+      "tapToSet": "Tippen zum Festlegen"
+    },
+    "detail": {
+      "addToCart": "In den Warenkorb",
+      "buyNow": "Jetzt kaufen",
+      "makeOffer": "Angebot machen",
+      "seller": "Verkäufer",
+      "itemCondition": "Zustand",
+      "itemSize": "Größe",
+      "itemBrand": "Marke",
+      "postedOn": "Veröffentlicht am {{date}}",
+      "addedToWishlist": "Zur Wunschliste hinzugefügt",
+      "priceDropAlertsEnabled": "Preisalarme für diesen Artikel aktiviert",
+      "priceDropAlertsDisabled": "Preisalarme deaktiviert",
+      "couldNotUpdatePriceAlert": "Preisalarm konnte nicht aktualisiert werden. Erneut versuchen.",
+      "browseSimilar": "Ähnliches ansehen",
+      "manageListing": "Anzeige verwalten"
+    },
+    "edit": {
+      "couldNotLoad": "Couldn't load this listing",
+      "retryLoad": "Retry",
+      "discardTitle": "Discard changes?",
+      "discardMessage": "Your changes haven't been saved.",
+      "discard": "Discard",
+      "keepEditing": "Keep editing",
+      "unsaved": "Unsaved changes",
+      "updated": "Listing updated",
+      "updateFailed": "Couldn't update the listing. Try again.",
+      "titlePlaceholder": "e.g. Vintage Levi's 501 Denim Jacket",
+      "descriptionPlaceholder": "Describe the item's condition, size, and details",
+      "selectCategory": "Select category",
+      "selectCondition": "Select condition",
+      "selectSize": "Select size",
+      "selectBrand": "Select brand",
+      "select": "Select",
+      "remove": "Remove",
+      "pricing": "Pricing",
+      "format": "Format",
+      "formatFixedPrice": "Fixed price",
+      "formatHelper": "Choose how buyers can purchase this item",
+      "restricted": "Some categories can't be listed yet",
+      "shipping": "Shipping",
+      "shippingMethod": "Shipping method",
+      "shippingStandard": "Standard",
+      "shippingExpress": "Express",
+      "selectMethod": "Select method",
+      "whoPays": "Who pays shipping?",
+      "selectPayer": "Select payer",
+      "payerSeller": "You pay",
+      "payerBuyer": "Buyer pays",
+      "toggleShippingMethod": "Change shipping method",
+      "toggleShippingPayer": "Change who pays shipping",
+      "expandPhotoTips": "Photo tips",
+      "collapsePhotoTips": "Hide photo tips",
+      "showTips": "Show tips",
+      "hideTips": "Hide tips",
+      "tipsToImprove": "Tips to improve your listing",
+      "listingQuality": "Listing quality",
+      "allowCamera": "Allow camera access",
+      "allowGallery": "Allow photo library access",
+      "noPermission": "Camera access is off. Enable it in Settings.",
+      "couldNotOpenCamera": "Couldn't open the camera",
+      "couldNotOpenLibrary": "Couldn't open your photo library",
+      "mediaFailedRetry": "A photo failed to load. Retry.",
+      "retry": "Retry",
+      "lockedPhotos": "Photos locked while editing",
+      "statusDraft": "Draft",
+      "statusActive": "Active",
+      "statusPaused": "Paused",
+      "statusSold": "Sold",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "offlineChanges": "Offline changes",
+      "conflict": "Conflict",
+      "conflictTitle": "Listing edited elsewhere",
+      "conflictMessage": "This listing was edited on another device. Would you like to:",
+      "conflictKeepMine": "Keep my changes",
+      "conflictUseTheirs": "Use their changes",
+      "conflictCompare": "Compare changes",
+      "conflictCompareTitle": "Your changes vs their changes",
+      "draftFound": "Unsaved draft found",
+      "draftRestore": "Restore draft from {date}?",
+      "draftRestoreAction": "Restore",
+      "draftDiscard": "Discard draft",
+      "saveButton": "Save",
+      "retrySave": "Retry",
+      "savingButton": "Saving…",
+      "mediaUploading": "Uploading media…"
+    }
+  },
+  "messaging": {
+    "compose": {
+      "placeholder": "Nachricht…",
+      "send": "Senden",
+      "attach": "Anhängen",
+      "attachPhoto": "Foto",
+      "attachCamera": "Kamera",
+      "inputAccessibility": "Nachricht-Eingabe",
+      "dismissSafetyWarning": "Sicherheitswarnung ausblenden",
+      "dismissCautionWarning": "Warnung ausblenden",
+      "removeAttachment": "Anhang entfernen",
+      "addAttachment": "Anhang hinzufügen",
+      "openCamera": "Kamera öffnen",
+      "quickReply": "Schnellantwort: {{label}}"
+    },
+    "conversation": {
+      "title": "Nachrichten",
+      "empty": "Noch keine Nachrichten",
+      "startChatting": "Sende unten eine Nachricht, um zu beginnen.",
+      "startConversation": "Konversation starten",
+      "typing": "{{name}} schreibt…",
+      "onlineNow": "Jetzt online",
+      "newMessages": "Neue Nachrichten",
+      "undo": "Rückgängig",
+      "message": "Nachricht",
+      "mediaPress": "Medien-Tap",
+      "messageSent": "Nachricht gesendet",
+      "sending": "Wird gesendet…",
+      "draft": "Entwurf",
+      "ai": "AI",
+      "retryDraft": "Zum Wiederholen tippen",
+      "sendDraft": "Senden",
+      "memberCount": "{{count}} Mitglieder",
+      "loadError": "Nachrichten konnten nicht geladen werden. Prüfe deine Verbindung und versuche es erneut.",
+      "offlineMessage": "Du bist offline. Nachrichten werden beim erneuten Verbinden gesendet.",
+      "copied": "Kopiert",
+      "reportSubmitted": "Meldung eingereicht. Danke.",
+      "reportFailed": "Meldung konnte nicht eingereicht werden. Bitte erneut versuchen.",
+      "exitSelectionMode": "Auswahlmodus verlassen",
+      "exitSelectionModeHint": "Schließt die Nachrichten-Auswahlleiste",
+      "deleteSelected": "Ausgewählte Nachrichten löschen",
+      "deleteSelectedHint": "Entfernt die ausgewählten Nachrichten dauerhaft aus dieser Konversation",
+      "undoMessageDeletion": "Nachrichten-Löschung rückgängig machen",
+      "reactWith": "Mit {{emoji}} reagieren",
+      "openLink": "Link zu {{domain}} öffnen",
+      "typingIndicator": "Tippt...",
+      "edited": "Edited"
+    },
+    "inbox": {
+      "primary": "Primär",
+      "buying": "Käufe",
+      "selling": "Verkäufe",
+      "requests": "Anfragen",
+      "tabBadge": "{{label}}-Tab{{plural}}",
+      "newBadge": ", {{count}} neu",
+      "openConversation": "{{title}} öffnen",
+      "performAction": "{{action}} {{title}}",
+      "performSecondaryAction": "{{action}} {{title}}",
+      "linkedListing": "Verknüpfte Anzeige: {{title}}, {{price}}, {{availability}}",
+      "listingHint": "Öffnet die Anzeigen-Detailseite",
+      "scrollToBottom": "Nach unten scrollen{{unread}}",
+      "scrollToBottomHint": "Scrollt zur neuesten Nachricht",
+      "unread": ", {{count}} ungelesen"
+    },
+    "requests": {
+      "title": "Nachrichtenanfragen",
+      "noRequests": "Keine Nachrichtenanfragen",
+      "noRequestsSubtitle": "Nachrichten von Personen, denen du nicht folgst, erscheinen hier.",
+      "acceptMessageRequest": "Nachrichtenanfrage annehmen",
+      "deleteMessageRequest": "Nachrichtenanfrage löschen",
+      "deleteConfirmationTitle": "Anfrage löschen?",
+      "deleteConfirmationMessage": "Dies entfernt die Anfrage. Sie können später eine weitere Nachricht senden.",
+      "blockConfirmationTitle": "{{name}} blockieren?",
+      "blockConfirmationMessage": "Sie werden dir keine Nachrichten senden können und dein Profil nicht sehen. Die Anfrage wird entfernt.",
+      "accepted": "Anfrage angenommen",
+      "acceptError": "Diese Anfrage konnte nicht angenommen werden. Prüfe deine Verbindung und versuche es erneut.",
+      "deleted": "Anfrage gelöscht",
+      "deleteError": "Diese Anfrage konnte nicht gelöscht werden. Prüfe deine Verbindung und versuche es erneut.",
+      "blockError": "Dieses Konto konnte nicht blockiert werden. Prüfe deine Verbindung und versuche es erneut.",
+      "reportError": "Dieses Konto kann hier nicht gemeldet werden.",
+      "blocked": "{{name}} blockiert"
+    },
+    "archived": {
+      "title": "Archivierte Konversationen",
+      "subtitle": "Wiederhergestellte Konversationen kehren in deinen Posteingang zurück",
+      "noArchived": "Keine archivierten Konversationen",
+      "noArchivedSubtitle": "Von dir archivierte Konversationen bleiben aus deinem Posteingang heraus, ohne gelöscht zu werden.",
+      "clearAllConversations": "Alle archivierten Konversationen löschen",
+      "removeConfirmationTitle": "Aus dem Posteingang entfernen?",
+      "removeConfirmationMessage": "\"{{title}}\" wird aus deinen archivierten Konversationen entfernt.",
+      "clearAllConfirmationTitle": "Alle archivierten löschen?",
+      "clearAllConfirmationMessage": "Alle archivierten Konversationen werden dauerhaft gelöscht.",
+      "restored": "Konversation in den Posteingang wiederhergestellt",
+      "restoreError": "Diese Konversation konnte nicht wiederhergestellt werden. Prüfe deine Verbindung und versuche es erneut.",
+      "removed": "Konversation entfernt",
+      "removeError": "Diese Konversation konnte nicht gelöscht werden. Prüfe deine Verbindung und versuche es erneut.",
+      "cleared": "Archiv gelöscht",
+      "clearError": "{{deleted}} gelöscht · {{failed}} fehlgeschlagen"
+    },
+    "muted": {
+      "title": "Stummgeschaltete Konversationen",
+      "subtitle": "Benachrichtigungen sind für diese Chats pausiert",
+      "noMuted": "Keine stummgeschalteten Konversationen",
+      "noMutedSubtitle": "Du hast keine Chats stummgeschaltet. Stummgeschaltete Konversationen erscheinen hier.",
+      "unmute": "Stummschaltung aufheben",
+      "unmuteError": "Die Stummschaltung dieser Konversation konnte nicht aufgehoben werden. Prüfe deine Verbindung und versuche es erneut."
+    },
+    "sharedMedia": {
+      "title": "Geteilte Medien",
+      "noMedia": "Noch keine geteilten Medien",
+      "noMediaSubtitle": "Fotos und Videos, die in dieser Konversation geteilt wurden, erscheinen hier.",
+      "videoThumbnail": "Video-Miniaturbild",
+      "deleteSelected": "Ausgewählte Medien löschen",
+      "summary": "{{photoCount}} Foto{{photoPlural}} · {{videoCount}} Video{{videoPlural}}",
+      "selectItem": "{{action}} {{type}}",
+      "select": "Auswählen",
+      "deselect": "Abwählen",
+      "photo": "Foto",
+      "video": "Video",
+      "selectedCount": "{{count}} ausgewählt",
+      "removeSelectedHint": "Entfernt {{count}} ausgewählte(s) Element{{plural}}",
+      "filter": "{{label}}-Filter"
+    },
+    "attachments": {
+      "reviewTitle": "Anhang überprüfen",
+      "cancelAttachment": "Anhang abbrechen",
+      "captionPlaceholder": "Beschriftung hinzufügen…",
+      "captionAccessibility": "Anhang-Beschriftung",
+      "sendAttachment": "Anhang senden",
+      "actionSheetTitle": "Anhängen",
+      "actionSheetSubtitle": "Fotos und Videos in diesem Chat teilen",
+      "photoAndVideo": "Foto & Video",
+      "chooseFromLibrary": "Aus deiner Bibliothek wählen",
+      "camera": "Kamera",
+      "takePhotoOrVideo": "Neues Foto oder Video aufnehmen",
+      "makeOffer": "Angebot machen",
+      "product": "Produkt",
+      "priceQuote": "Preisangebot",
+      "shareListing": "Anzeige teilen",
+      "orderStatus": "Bestellstatus",
+      "payment": "Zahlung",
+      "agent": "Agent",
+      "location": "Location",
+      "shareLocation": "Share a pinned location",
+      "document": "Document",
+      "shareDocument": "Share a file from your device"
+    },
+    "offers": {
+      "declineOffer": "Angebot ablehnen",
+      "counterOffer": "Gegenangebot",
+      "acceptOffer": "Angebot annehmen",
+      "declined": "Abgelehnt",
+      "accepted": "Angenommen",
+      "expired": "Abgelaufen",
+      "waitingForResponse": "Wartet auf Antwort",
+      "pass": "Ablehnen",
+      "counter": "Gegenangebot",
+      "accept": "Annehmen",
+      "verified": "Verifiziert",
+      "verifiedSystemUpdate": "Verifizierte Systemaktualisierung",
+      "counterRound": "Gegenangebot #{{round}}",
+      "expiresIn": "Läuft ab in {{time}}"
+    },
+    "agentPicker": {
+      "title": "AI-Agent hinzufügen",
+      "sheet": "AI-Agent-Sheet hinzufügen",
+      "connect": "Verbinde einen Assistenten zur Hilfe in diesem Chat",
+      "demoNotice": "Demo-Assistenten schlagen Beispiel-Antworten vor",
+      "noAgents": "Keine Agenten verfügbar",
+      "noAgentsBody": "Erstelle einen Agenten auf dem Agenten-Bildschirm, um zu beginnen.",
+      "loading": "Bereitgestellte Agenten werden geladen…",
+      "loadError": "Agenten konnten nicht geladen werden",
+      "loadErrorBody": "Wir konnten den Server nicht erreichen. Ziehen, um erneut zu versuchen.",
+      "noAgentsDeployed": "Keine Agenten bereitgestellt",
+      "noAgentsDeployedBody": "Installiere einen Agenten in diese Konversation über den Agenten-Bildschirm.",
+      "addAssistant": "Assistent hinzufügen",
+      "addAssistantDescription": "Einen AI-Assistenten in diesem Chat bereitstellen",
+      "addAgent": "{{name}}-Agent hinzufügen",
+      "alreadyAdded": "{{name}} bereits hinzugefügt",
+      "openManagement": "Agenten-Verwaltung öffnen",
+      "activeOne": "{{name}} ist aktiv. Tippen, um Agenten zu verwalten.",
+      "activeMany": "{{count}} Agenten sind aktiv. Tippen, um Agenten zu verwalten.",
+      "activeShortOne": "{{name}} aktiv",
+      "activeShortMany": "{{count}} Agenten aktiv",
+      "retryDraft": "Agent-Entwurf erneut senden",
+      "sendDraft": "Agent-Entwurf senden"
+    },
+    "suggestedReplies": {
+      "title": "Vorgeschlagene Antworten",
+      "titleFrom": "Vorgeschlagene Antworten von {{agentName}}",
+      "use": "Vorgeschlagene Antwort verwenden: {{reply}}",
+      "fill": "Füllt die Nachricht-Eingabe mit dieser Antwort",
+      "dismiss": "Vorgeschlagene Antworten ausblenden",
+      "dismissHint": "Blendet vorgeschlagene Antworten für diese Konversation aus",
+      "manage": "Antworten verwalten"
+    },
+    "voice": {
+      "notAvailable": "Sprachnachrichten sind nicht verfügbar",
+      "notSupportedHint": "Audio-Aufnahme wird in dieser Version nicht unterstützt",
+      "micPermission": "Mikrofon-Berechtigung verweigert. Tippen, um Berechtigung anzufordern.",
+      "deleteRecording": "Aufnahme löschen und neu beginnen",
+      "readyToSend": "Bereit zum Senden",
+      "sendVoice": "Sprachnachricht senden",
+      "sendVoiceHint": "Sendet die Aufnahme. Kann nicht rückgängig gemacht werden.",
+      "stopRecording": "Aufnahme stoppen und überprüfen",
+      "stopRecordingHint": "Tippen, um die Aufnahme zu beenden. Vor dem Senden überprüfen.",
+      "cancelRecording": "Aufnahme abbrechen und löschen",
+      "recordVoice": "Sprachnachricht aufnehmen",
+      "recordVoiceHint": "Tippen, um die Aufnahme zu starten. Stopp tippen, um vor dem Senden zu überprüfen.",
+      "voiceMessage": "Sprachnachricht, {{duration}} lang{{state}}",
+      "playbackSpeed": "Wiedergabegeschwindigkeit {{rate}}-fach",
+      "playHint": "Doppeltippen zum Abspielen oder Pausieren. Aktionen zum Suchen, Geschwindigkeit ändern oder Transkript anfordern verwenden.",
+      "loadError": "Sprachnachricht konnte nicht geladen werden"
+    },
+    "transcription": {
+      "show": "Transkript für diese Sprachnachricht anzeigen",
+      "showHint": "Fordert eine automatische Transkription an. Der Text ist abgeleitet, nicht die eigenen Worte des Senders.",
+      "title": "Transkript",
+      "notAvailable": "Transkription für dieses Audioformat nicht verfügbar",
+      "close": "Transkript schließen",
+      "failed": "Transkription fehlgeschlagen",
+      "temporarilyUnavailable": "Vorübergehend nicht verfügbar",
+      "retryTranscription": "Transkription erneut versuchen",
+      "requesting": "Transkript wird angefordert…",
+      "transcribing": "Audio wird transkribiert…",
+      "empty": "(leeres Transkript)",
+      "derivedLabel": "Automatisch transkribiert",
+      "accurate": "Transkription als korrekt markieren",
+      "inaccurate": "Transkription als inkorrekt markieren",
+      "loadError": "Transkript konnte nicht geladen werden"
+    },
+    "orders": {
+      "placed": "Bestellung aufgegeben",
+      "placedBody": "Der Verkäufer wurde benachrichtigt.",
+      "paymentConfirmed": "Zahlung bestätigt",
+      "paymentConfirmedBody": "Deine Zahlung wurde verarbeitet.",
+      "shipped": "Bestellung versendet",
+      "shippedBody": "Das Paket wurde verschickt.",
+      "inTransit": "Unterwegs",
+      "inTransitBody": "Dein Paket ist unterwegs.",
+      "delivered": "Geliefert",
+      "deliveredBody": "Die Lieferung wurde bestätigt.",
+      "cancelled": "Bestellung storniert",
+      "cancelledBody": "Diese Bestellung wurde storniert.",
+      "refunded": "Erstattet",
+      "refundedBody": "Deine Zahlung wurde erstattet.",
+      "orderPreview": "{{title}}. {{subtitle}}. {{orderId}}. {{timestamp}}. Tippen, um Bestelldetails anzuzeigen.",
+      "viewDetails": "Details ansehen",
+      "dispatchItem": "Artikel verschicken",
+      "trackParcel": "Paket verfolgen",
+      "checkItem": "Artikel prüfen",
+      "viewOrder": "Bestellung ansehen",
+      "shipBy": "Versenden bis {{date}}",
+      "eta": "Voraussichtlich {{window}}",
+      "etaWindow": "{{min}}–{{max}} Tage",
+      "etaDay": "{{count}} Tag",
+      "orderStatusAccessibility": "Bestellung {{status}}{{deadline}}{{cta}}"
+    },
+    "safety": {
+      "title": "Zahlungen auf ThryftVerse halten",
+      "body": "Zahlungen außerhalb der Plattform sind nicht vom Käuferschutz abgedeckt. Wenn dies eine legitime Transaktion ist, schließe sie in der App ab, um geschützt zu bleiben.",
+      "dismiss": "Warnung ausblenden",
+      "reportConversation": "Diese Konversation melden"
+    },
+    "search": {
+      "placeholder": "Im Chat suchen",
+      "inConversation": "In Konversation suchen",
+      "previousResult": "Vorheriges Ergebnis",
+      "nextResult": "Nächstes Ergebnis",
+      "closeSearch": "Suche schließen",
+      "browseResults": "Ergebnisse im Browser ansehen",
+      "browseResultsHint": "Öffnet den Browser-Bildschirm mit den übereinstimmenden Filtern angewendet",
+      "refine": "Suche verfeinern: {{suggestion}}",
+      "refineHint": "Fügt diese Verfeinerung zu deiner Suche hinzu",
+      "searchFor": "Nach {{suggestion}} suchen",
+      "startQueryHint": "Startet eine konversationelle Suche mit dieser Anfrage",
+      "queryInput": "Suchanfrage-Eingabe",
+      "queryInputHint": "Tippe eine natürlichsprachliche Beschreibung dessen, was du finden möchtest",
+      "sendQuery": "Suchanfrage senden",
+      "sendQueryHint": "Sendet deine Anfrage und startet die konversationelle Suche",
+      "retry": "Suche erneut versuchen",
+      "retryHint": "Sendet deine letzte Suchanfrage erneut"
+    },
+    "common": {
+      "cancel": "Abbrechen",
+      "goBack": "Zurück",
+      "verifiedUser": "Verifizierter Nutzer",
+      "retry": "Erneut versuchen",
+      "delete": "Löschen",
+      "block": "Blockieren",
+      "report": "Melden",
+      "remove": "Entfernen",
+      "clearAll": "Alle löschen",
+      "restore": "Wiederherstellen",
+      "blockWithName": "{{name}} blockieren",
+      "reportWithName": "{{name}} melden"
+    },
+    "messageActions": {
+      "dismissReply": "Antwort ausblenden",
+      "scrollToOriginal": "Scrollt zur ursprünglichen Nachricht",
+      "quotedReply": "Zitierte Antwort von {{sender}}"
+    },
+    "translation": {
+      "translate": "Ubersetzen",
+      "showOriginal": "Original anzeigen",
+      "translating": "Ubersetzung...",
+      "translationFailed": "Ubersetzung nicht verfugbar",
+      "translatedFrom": "Ubersetzt aus {{language}}"
+    }
+  },
+  "commerce": {
+    "checkout": {
+      "title": "Kasse",
+      "subtotal": "Zwischensumme",
+      "shipping": "Versand",
+      "tax": "Steuer",
+      "total": "Gesamt",
+      "payNow": "Jetzt bezahlen",
+      "paymentMethod": "Zahlungsmethode",
+      "deliveryAddress": "Lieferadresse",
+      "orderPlaced": "Bestellung aufgegeben",
+      "orderFailed": "Bestellung fehlgeschlagen",
+      "signInToCheckout": "Anmelden zur Kasse",
+      "signIn": "Anmelden",
+      "cannotPurchaseOwnListing": "Du kannst nicht deine eigene Anzeige kaufen",
+      "cannotBuyOwnItem": "Du kannst keinen Artikel kaufen, den du zum Verkauf angeboten hast.",
+      "itemUnavailable": "Artikel nicht verfügbar",
+      "listingNoLongerPurchasable": "Diese Anzeige kann nicht mehr gekauft werden.",
+      "goBack": "Zurück",
+      "delivery": "Lieferung",
+      "noAddress": "Keine Adresse",
+      "change": "Ändern",
+      "add": "Hinzufügen",
+      "noPaymentMethod": "Keine Zahlungsmethode",
+      "requiredForDelivery": "Für Lieferung erforderlich",
+      "needsSavingBeforePayment": "Vor Zahlung speichern",
+      "shippingNotAvailable": "Versand für deine Region nicht verfügbar",
+      "cardsUnavailableRegion": "Karten in deiner Region nicht verfügbar",
+      "securePayment": "Sichere Zahlung · Kartendaten verschlüsselt",
+      "useWalletBalance": "Geldbörsen-Guthaben verwenden",
+      "available": "verfügbar",
+      "retryPayment": "Zahlung wiederholen",
+      "tryAgain": "Erneut versuchen",
+      "addAddress": "Adresse hinzufügen",
+      "addPayment": "Zahlung hinzufügen",
+      "item": "Artikel",
+      "buyerProtection": "Käuferschutz",
+      "walletApplied": "Geldbörse angewendet",
+      "viewFullBreakdown": "Vollständige Aufschlüsselung ansehen",
+      "fullBreakdown": "Vollständige Aufschlüsselung",
+      "payWithApplePay": "Mit Apple Pay bezahlen",
+      "payWithGooglePay": "Mit Google Pay bezahlen",
+      "payWithCard": "Mit Karte bezahlen",
+      "processing": "Verarbeitung",
+      "waitingForConfirmation": "Warten auf Bestätigung",
+      "savingWithWallet": "{{amount}} mit Geldbörsen-Guthaben gespart",
+      "shippingQuoteUnavailable": "Versandangebot nicht verfügbar — Fortsetzung mit Standardversand.",
+      "addDeliveryAddressToContinue": "Füge eine Lieferadresse hinzu, um fortzufahren.",
+      "addPaymentMethodToContinue": "Füge eine Zahlungsmethode hinzu, um fortzufahren.",
+      "estimated": "Geschätzt",
+      "tracking": "Sendungsverfolgung",
+      "closeCheckout": "Kasse schließen",
+      "paymentInProgress": "Zahlung läuft",
+      "paymentInProgressBody": "Die Zahlungsbestätigung kann nach dem Verlassen abgeschlossen werden. Prüfe deine Bestellungen vor einem erneuten Versuch.",
+      "stay": "Bleiben",
+      "leave": "Verlassen"
+    },
+    "offer": {
+      "makeOffer": "Angebot machen",
+      "offerAmount": "Angebotsbetrag",
+      "submitOffer": "Angebot senden",
+      "offerAccepted": "Angebot angenommen",
+      "offerDeclined": "Angebot abgelehnt",
+      "offerExpired": "Angebot abgelaufen"
+    },
+    "bid": {
+      "placeBid": "Gebot abgeben",
+      "currentBid": "Aktuelles Gebot",
+      "yourBid": "Dein Gebot",
+      "bidPlaced": "Gebot abgegeben",
+      "outbid": "Du wurdest überboten",
+      "winning": "Führend"
+    },
+    "wallet": {
+      "title": "Geldbörse",
+      "balance": "Guthaben",
+      "spendableNow": "Jetzt verfügbar",
+      "withdraw": "Auszahlen",
+      "withdrawAmount": "Auszahlungsbetrag",
+      "withdrawSuccess": "Auszahlung angefordert",
+      "withdrawFailed": "Auszahlung fehlgeschlagen",
+      "addMoney": "Geld hinzufügen",
+      "transactionHistory": "Transaktionsverlauf",
+      "convert": "Konvertieren",
+      "recentActivity": "Letzte Aktivität",
+      "seeAll": "Alle ansehen",
+      "noBalanceYet": "Noch kein 1ZE",
+      "addMoneyToStart": "Füge Geld hinzu, um mit Co-Own-Einheiten zu handeln.",
+      "authenticateToView": "Authentifiziere dich, um deine Geldbörse zu sehen",
+      "showBalance": "Guthaben anzeigen",
+      "hideBalance": "Guthaben verbergen",
+      "balanceHidden": "Guthaben verborgen",
+      "reservedForOrders": "Für Bestellungen reserviert",
+      "redemptionPending": "Rückzahlung ausstehend",
+      "otherHolds": "Andere Rückstellungen",
+      "pendingDeposit": "Einzug ausstehend",
+      "unsettledSaleProceeds": "Unerledigte Verkaufserlöse",
+      "withdrawable": "Abhebbar",
+      "sellerEarnings": "Verkäufererlöse",
+      "safeguarded": "Geschützt",
+      "safeguardingPending": "Schutz ausstehend",
+      "evidence": "Nachweis",
+      "terms": "Bedingungen",
+      "activity": "Aktivität"
+    },
+    "order": {
+      "title": "Bestellung",
+      "orderNumber": "Bestellung #{{number}}",
+      "statusPending": "Ausstehend",
+      "statusProcessing": "In Verarbeitung",
+      "statusShipped": "Versendet",
+      "statusDelivered": "Geliefert",
+      "statusCancelled": "Storniert",
+      "statusRefunded": "Erstattet"
+    },
+    "sellerAnalytics": {
+      "metricsTitle": "What do these metrics mean?",
+      "metricsExpand": "Show metric definitions",
+      "metricsCollapse": "Hide metric definitions",
+      "exportReport": "Export report",
+      "exporting": "Exporting…",
+      "exportSuccess": "Report exported",
+      "exportFailed": "Couldn't export report. Try again.",
+      "scopeListing": "Per listing",
+      "scopeSeller": "Per seller",
+      "scopePlatform": "Platform-wide"
+    }
+  },
+  "myProfile": {
+    "cover": {
+      "uploadFailed": "Cover-Upload fehlgeschlagen",
+      "retry": "Erneut versuchen",
+      "cancel": "Abbrechen"
+    },
+    "utility": {
+      "orders": "Bestellungen",
+      "analytics": "Analytik",
+      "closet": "Schrank",
+      "wallet": "Geldbörse",
+      "auctions": "Auktionen",
+      "coOwn": "Co-Own",
+      "sellerHub": "Verkäufer-Zentrum",
+      "itemsCount": "{{count}} Artikel",
+      "assetsCount": "{{count}} Assets"
+    },
+    "notSignedIn": {
+      "subtitle": "Melde dich an, um dein Profil, deine Anzeigen und deine Geldbörse zu sehen.",
+      "signIn": "Anmelden"
+    },
+    "holiday": {
+      "title": "Urlaubsmodus ist aktiv",
+      "subtitle": "Dein Shop ist pausiert. Tippen zum Verwalten."
+    },
+    "tabs": {
+      "shop": "Shop",
+      "looks": "Looks",
+      "about": "Über",
+      "reviews": "Bewertungen"
+    },
+    "listings": {
+      "emptyTitle": "Liste deinen ersten Artikel",
+      "emptyBody": "Fotografiere einen Artikel und veröffentliche ihn, wenn du bereit bist.",
+      "startSelling": "Verkaufen starten",
+      "bringOverListings": "Bestehende Anzeigen übernehmen",
+      "viewAll": "Alle ansehen",
+      "sold": "VERKAUFT",
+      "listingsCount": "{{count}} Anzeigen"
+    },
+    "looks": {
+      "errorTitle": "Looks konnten nicht geladen werden",
+      "errorSubtitle": "Prüfe deine Verbindung und versuche es erneut.",
+      "tryAgain": "Erneut versuchen",
+      "emptyTitle": "Noch keine Looks",
+      "emptySubtitle": "Erstelle deinen ersten Look, um deinen Stil zu präsentieren.",
+      "createLook": "Look erstellen"
+    },
+    "about": {
+      "coOwnPortfolio": "CO-OWN-PORTFOLIO",
+      "viewAll": "Alle ansehen",
+      "unit": "Einheit",
+      "units": "Einheiten",
+      "website": "Website",
+      "shopPolicies": "Shop-Richtlinien",
+      "payments": "Zahlungen",
+      "paymentsValue": "Sichere Kasse mit Käuferschutz",
+      "shipping": "Versand",
+      "shippingSeller": "Verkäufer {{label}}. Sendungsverfolgung bei Versand.",
+      "shippingDefault": "Sendungsverfolgung bei Versand.",
+      "returns": "Rückgaben",
+      "returnsValue": "Rückgaben akzeptiert bei nicht wie beschriebenen Artikeln.",
+      "responseRate": "Antwortrate",
+      "response": "Antwort",
+      "responseSeller": "Verkäufer antwortet normalerweise {{label}}.",
+      "responseDefault": "Verkäufer bemüht sich um zeitnahe Antworten.",
+      "noDetails": "Keine weiteren Details verfügbar."
+    },
+    "completion": {
+      "title": "Profil vervollständigen",
+      "progress": "{{percent}}% · {{done}}/{{total}}"
+    },
+    "growth": {
+      "title": "Wachse auf Thryftverse",
+      "listFirstItemTitle": "Liste deinen ersten Artikel",
+      "listFirstItemSub": "Fotografiere und veröffentliche einen Artikel, um mit dem Verkauf zu beginnen.",
+      "growAudienceTitle": "Eigene Zielgruppe aufbauen",
+      "growAudienceSub": "Teile dein Profil und erstelle Inhalte, um Follower zu gewinnen."
+    },
+    "toast": {
+      "coverUpdated": "Cover aktualisiert",
+      "coverUploadFailed": "Cover-Upload fehlgeschlagen",
+      "avatarUpdated": "Avatar aktualisiert",
+      "avatarUploadFailed": "Avatar-Upload fehlgeschlagen",
+      "portfolioLoadFailed": "Portfolio konnte nicht geladen werden"
+    },
+    "accessibility": {
+      "orders": "Bestellungen",
+      "creatorAnalytics": "Creator-Analytik",
+      "closet": "Schrank",
+      "wallet": "Geldbörse",
+      "browseAuctions": "Auktionen durchsuchen",
+      "browseCoOwnMarket": "Co-Own-Markt durchsuchen",
+      "sellerHub": "Verkäufer-Zentrum",
+      "openSettings": "Einstellungen öffnen",
+      "openSettingsHint": "Öffnet die Einstellungen",
+      "shareProfile": "Profil teilen",
+      "shareProfileHint": "Öffnet die Teilen-Funktion des Systems, um dein Profil zu teilen",
+      "retryCoverUpload": "Cover-Upload erneut versuchen",
+      "cancelCoverChange": "Cover-Änderung abbrechen",
+      "uploadingCover": "Profil-Cover wird hochgeladen",
+      "changeCover": "Profil-Cover ändern",
+      "holidayMode": "Urlaubsmodus ist aktiv — tippen zum Verwalten",
+      "importListingsHint": "Katalog-Import von eBay oder einer Datei starten",
+      "loadingLooks": "Deine Looks werden geladen",
+      "viewCoOwnPortfolio": "Co-Own-Portfolio ansehen",
+      "viewCoOwnPortfolioHint": "Öffnet deinen Co-Own-Bestand-Hub",
+      "dismissCompletion": "Profil-Vervollständigungs-Hinweis ausblenden",
+      "dismissGrowth": "Wachstums-Hinweise ausblenden",
+      "listFirstItemHint": "Öffnet den Verkaufs-Flow, um deine erste Anzeige zu erstellen",
+      "growAudienceHint": "Öffnet die Creator-Analytik mit Werkzeugen zum Zielgruppen-Wachstum"
+    },
+    "completionCta": {
+      "addName": "Name hinzufügen",
+      "addBio": "Bio hinzufügen",
+      "addPhoto": "Foto hinzufügen",
+      "addCover": "Cover hinzufügen",
+      "editProfile": "Profil bearbeiten"
+    },
+    "share": {
+      "message": "Schau dir @{{username}} auf Thryftverse an! https://thryftverse.com/@{{username}}",
+      "title": "{{name}} auf Thryftverse"
+    }
+  },
+  "galleria": {
+    "editorial": {
+      "eyebrow": "REDAKTIONELL"
+    },
+    "collections": {
+      "eyebrow": "KURATIERTE SAMMLUNGEN",
+      "curatedBy": "Kuratiert von {{curator}}"
+    },
+    "assets": {
+      "eyebrow": "FEATURED ASSETS",
+      "title": "Co-Own-Highlights"
+    },
+    "editorialList": {
+      "eyebrow": "REDAKTIONELL",
+      "title": "Geschichten aus der Galleria"
+    },
+    "creativeTools": {
+      "eyebrow": "KREATIVE WERKZEUGE",
+      "title": "Mach es zu deinem",
+      "posterStudio": "Poster-Studio",
+      "posterStudioSub": "Poster, Looks & Moodboard-Collagen erstellen"
+    },
+    "demo": {
+      "content": "Demo-Inhalt"
+    },
+    "offline": {
+      "banner": "Offline — zwischengespeicherte Galleria-Inhalte werden angezeigt"
+    },
+    "error": {
+      "title": "Galleria nicht verfügbar",
+      "retry": "Erneut versuchen",
+      "loadFailed": "Wir konnten die Galleria nicht laden. Versuche es erneut."
+    },
+    "empty": {
+      "title": "Die Galleria wird kuratiert",
+      "subtitle": "Unsere Kuratoren bereiten neue Sammlungen und redaktionelle Beiträge vor. Schau bald wieder vorbei.",
+      "refresh": "Aktualisieren"
+    },
+    "accessibility": {
+      "loadingCollections": "Kuratierte Sammlungen werden geladen",
+      "collectionsRail": "Kuratierte Sammlungen-Leiste",
+      "openPosterStudio": "Poster-Studio öffnen",
+      "posterStudioHint": "Poster, Looks und Moodboard-Collagen erstellen",
+      "editorial": "Redaktionell: {{title}}",
+      "collection": "Sammlung: {{title}}",
+      "collectionHint": "Öffnet die Sammlungs-Details",
+      "featuredCollection": "Featured-Sammlung: {{title}}",
+      "asset": "{{title}}, Wert {{value}}",
+      "assetHint": "Öffnet die Asset-Details"
+    }
+  },
+  "agentLedger": {
+    "header": {
+      "title": "Agent-Läufe",
+      "subtitle": "Servergestützte Ausführungsprotokolle"
+    },
+    "status": {
+      "succeeded": "Erfolgreich",
+      "failed": "Fehlgeschlagen",
+      "running": "Läuft",
+      "queued": "In Warteschlange",
+      "cancelled": "Abgebrochen",
+      "timedOut": "Zeitüberschreitung",
+      "unknown": "Unbekannt",
+      "awaitingApproval": "Wartet auf Freigabe",
+      "awaitingInput": "Wartet auf Eingabe"
+    },
+    "error": {
+      "title": "Läufe konnten nicht geladen werden",
+      "retry": "Erneut versuchen",
+      "loadFailed": "Läufe konnten nicht geladen werden"
+    },
+    "empty": {
+      "title": "Noch keine Agent-Läufe",
+      "body": "Wenn Agenten ausgeführt werden — über Erwähnungen, Befehle oder Zeitpläne — erscheinen ihre Läufe hier mit Status, Token-Nutzung und Zeitangaben."
+    },
+    "footer": {
+      "note": "Das zuvor angezeigte lokale Aktivitätsprotokoll wurde durch servergestützte Laufprotokolle ersetzt."
+    },
+    "approvals": {
+      "title": "Ausstehende Freigaben",
+      "approving": "Wird freigegeben…",
+      "approve": "Freigeben",
+      "approveAction": "Anfrage von {{botName}} freigeben",
+      "rejecting": "Wird abgelehnt…",
+      "reject": "Ablehnen",
+      "rejectAction": "Anfrage von {{botName}} ablehnen",
+      "errorApproveTitle": "Freigabe nicht möglich",
+      "errorApproveMessage": "Die Anfrage konnte nicht freigegeben werden.",
+      "errorRejectTitle": "Ablehnung nicht möglich",
+      "errorRejectMessage": "Die Anfrage konnte nicht abgelehnt werden."
+    },
+    "cancel": {
+      "cancelling": "Wird abgebrochen…",
+      "cancel": "Abbrechen",
+      "cancelAction": "Lauf für {{botName}} abbrechen",
+      "confirmTitle": "Agent-Lauf abbrechen",
+      "confirmMessage": "Den Lauf für {{botName}} abbrechen?",
+      "confirmLabel": "Lauf abbrechen",
+      "errorTitle": "Abbrechen nicht möglich",
+      "errorMessage": "Der Lauf konnte nicht abgebrochen werden."
+    },
+    "tools": {
+      "search": "Suche: {{searchQuery}}",
+      "listing": "Anzeige: {{listingId}}",
+      "priceHistory": "Preishistorie: {{searchQuery}}",
+      "readMessages": "{{count}} Nachrichten gelesen"
+    },
+    "time": {
+      "justNow": "Gerade eben",
+      "minutesAgo": "vor {{count}} Min",
+      "hoursAgo": "vor {{count}} Std",
+      "daysAgo": "vor {{count}} T"
+    },
+    "tokens": {
+      "usage": "{{input}} rein · {{output}} raus"
+    }
+  },
+  "liveStreamViewer": {
+    "lotStatus": {
+      "comingUp": "Demnächst",
+      "openForBidding": "Geöffnet für Gebote",
+      "closingSoon": "Schließt bald!",
+      "sold": "Verkauft für £{{price}}",
+      "passed": "Weitergereicht (Mindestpreis nicht erreicht)",
+      "cancelled": "Abgebrochen"
+    },
+    "toast": {
+      "couldNotSend": "Nachricht konnte nicht gesendet werden",
+      "bidFailed": "Gebot fehlgeschlagen",
+      "bidNotAccepted": "Gebot wurde nicht akzeptiert",
+      "stillChecking": "Noch in Prüfung — dein Gebot wurde möglicherweise abgegeben",
+      "purchaseComplete": "Kauf abgeschlossen — prüfe deinen Posteingang",
+      "couldNotPurchase": "Kauf konnte nicht abgeschlossen werden",
+      "followDemoUnavailable": "Folgen im Demo-Modus nicht verfügbar",
+      "followUnavailable": "Folgen nicht verfügbar",
+      "unfollowed": "Entfolgt",
+      "following": "Folgt",
+      "followError": "Folge-Status konnte nicht aktualisiert werden",
+      "checkoutError": "Kasse konnte nicht gestartet werden. Bitte erneut versuchen."
+    },
+    "share": {
+      "message": "Schaue den Live-Stream von {{sellerName}} auf ThryftVerse",
+      "defaultSeller": "diesem Verkäufer"
+    },
+    "connecting": {
+      "title": "Verbindung zum Stream wird hergestellt",
+      "subtitle": "Echtzeit-Verbindung wird aufgebaut"
+    },
+    "error": {
+      "title": "Verbindung zum Stream fehlgeschlagen",
+      "subtitle": "Der Stream wurde möglicherweise beendet oder die Verbindung wurde unterbrochen.",
+      "reconnect": "Erneut verbinden",
+      "goBack": "Zurück"
+    },
+    "ended": {
+      "title": "Stream beendet",
+      "subtitle": "Danke fürs Zuschauen",
+      "viewers": "Zuschauer",
+      "lotsSold": "Verkaufte Lose",
+      "totalSales": "Gesamtumsatz",
+      "done": "Fertig"
+    },
+    "demo": {
+      "label": "DEMO",
+      "stream": "Demo-Stream"
+    },
+    "video": {
+      "connecting": "Verbindung zum Stream wird hergestellt…"
+    },
+    "seller": {
+      "following": "Folgt",
+      "follow": "Folgen"
+    },
+    "live": {
+      "label": "LIVE"
+    },
+    "chat": {
+      "seller": "VERKÄUFER",
+      "placeholder": "Nachricht senden…"
+    },
+    "product": {
+      "bids": "Gebote"
+    },
+    "bid": {
+      "placeBid": "Bieten",
+      "buyNow": "Kaufen",
+      "buyNowFull": "Jetzt kaufen",
+      "completeCheckout": "Kasse abschließen"
+    },
+    "bidSheet": {
+      "title": "Gebot abgeben",
+      "currentBid": "Aktuelles Gebot",
+      "minNextBid": "Mindestgebot",
+      "cancel": "Abbrechen",
+      "close": "Schließen",
+      "riskDisclosure": "Bids are binding. If you win, you must complete payment within 48 hours. No retraction after confirmation.",
+      "paymentDeadline": "Payment due within 48 hours of auction close."
+    },
+    "unknown": {
+      "title": "Gebot-Status unbekannt",
+      "subtitle": "Dein Gebot wurde möglicherweise abgegeben. Wir konnten das Ergebnis nicht bestätigen.",
+      "checkResult": "Ergebnis prüfen",
+      "dismiss": "Ausblenden"
+    }
+  },
+  "liveShopping": {
+    "live": {
+      "label": "LIVE",
+      "demo": "DEMO"
+    },
+    "header": {
+      "title": "Live"
+    },
+    "sections": {
+      "liveNow": "Jetzt live",
+      "comingUp": "Demnächst",
+      "pastEvents": "Vergangene Events",
+      "streaming": "{{count}} live",
+      "scheduled": "{{count}} geplant",
+      "replays": "{{count}} Replays",
+      "replay_one": "{{count}} Replay",
+      "replay_other": "{{count}} Replays"
+    },
+    "featured": {
+      "currentBid": "Aktuelles Gebot"
+    },
+    "replay": {
+      "justEnded": "Gerade beendet",
+      "hoursAgo": "vor {{count}} Std",
+      "daysAgo": "vor {{count}} T"
+    },
+    "upcoming": {
+      "waiting": "wartend",
+      "notified": "Benachrichtigt",
+      "notifyMe": "Benachrichtigen",
+      "startingSoon": "Startet bald"
+    },
+    "scheduled": {
+      "inMinutes": "In {{minutes}} Min · {{time}}",
+      "inHours": "In {{hours}} Std {{minutes}} Min · {{time}}",
+      "inDays": "{{day}} · {{time}}"
+    },
+    "noLive": {
+      "text": "Aktuell ist niemand live"
+    },
+    "error": {
+      "title": "Live-Sessions konnten nicht geladen werden",
+      "retry": "Erneut versuchen",
+      "subtitle": "Prüfe deine Verbindung und versuche es erneut.",
+      "loadFailed": "Live-Sessions konnten nicht geladen werden"
+    },
+    "empty": {
+      "title": "Aktuell keine Live-Sessions",
+      "subtitle": "Schau bald wieder vorbei oder starte deine eigene Session aus dem Verkäufer-Zentrum.",
+      "goToSellerHub": "Zum Verkäufer-Zentrum"
+    }
+  },
+  "conversationalSearch": {
+    "header": {
+      "title": "Frag ThryftVerse"
+    },
+    "demo": {
+      "banner": "Stichwort-Abgleich — wir extrahieren Filter aus deiner Beschreibung."
+    },
+    "offline": {
+      "banner": "Du bist offline. Verbinde dich erneut zum Suchen."
+    },
+    "empty": {
+      "greetingTitle": "Wonach suchst du heute?",
+      "greetingSubtitle": "Beschreibe es in deinen eigenen Worten.",
+      "suggestionsLabel": "Probiere eines davon"
+    },
+    "matched": {
+      "label": "Übereinstimmende Stichworte"
+    },
+    "actions": {
+      "viewResults": "Ergebnisse ansehen",
+      "refine": "Verfeinern"
+    },
+    "error": {
+      "retry": "Erneut versuchen",
+      "offline": "Du bist offline. Verbinde dich erneut zum Suchen.",
+      "generic": "Etwas ist schiefgelaufen. Versuche es erneut."
+    },
+    "input": {
+      "placeholder": "Beschreibe, wonach du suchst…"
+    },
+    "browseTitle": "Suchergebnisse",
+    "filters": {
+      "brand": "Marke: {{value}}",
+      "category": "Kategorie: {{value}}",
+      "size": "Größe: {{value}}",
+      "condition": "Zustand: {{value}}",
+      "colour": "Farbe: {{value}}",
+      "style": "Stil: {{value}}",
+      "priceLabel": "Preis: ",
+      "priceUnder": "unter {{value}}",
+      "priceOver": "über {{value}}",
+      "sustainableOnly": "Nur nachhaltig"
+    },
+    "trust": {
+      "matchedKeywords": "Übereinstimmende Stichworte: {{keywords}}",
+      "noMatch": "Keine Stichworte übereinstimmend — allgemeine Antwort wird angezeigt"
+    }
+  },
+  "aiAgent": {
+    "header": {
+      "title": "Agent-Studio",
+      "subtitle": "Agenten, Verbindungen und Schlüssel verwalten"
+    },
+    "demo": {
+      "banner": "Schlüssel werden nur formal validiert — es wird keine Live-Anfrage an einen Provider gesendet."
+    },
+    "sections": {
+      "yourAgents": "DEINE AGENTEN",
+      "serverConnections": "SERVER-VERBINDUNGEN",
+      "deviceLocalKeys": "GERÄTE-LOKALE SCHLÜSSEL"
+    },
+    "status": {
+      "agents": " Agent(en)",
+      "connections": "Verbindungen",
+      "pendingApprovals": "{{count}} ausstehende Freigabe(n)",
+      "viewPending": "{{count}} ausstehende Freigabe(n) ansehen",
+      "subtitleNone": "Erstelle einen Agenten und verbinde einen Provider, um zu beginnen",
+      "subtitleNoAgents": "Verbinde einen Provider und erstelle dann deinen ersten Agenten",
+      "subtitleNoConnections": "Verbinde einen Provider serverseitig, um die Agent-Ausführung zu ermöglichen",
+      "subtitleReady": "Agenten laufen auf deinen verbundenen serverseitigen Schlüsseln"
+    },
+    "agentStatus": {
+      "draft": "Entwurf",
+      "disabled": "Deaktiviert",
+      "setupNeeded": "Einrichtung nötig",
+      "published": "Veröffentlicht"
+    },
+    "serverConnections": {
+      "hint": "Schlüssel verifiziert und verschlüsselt auf dem Server gespeichert. Diese ermöglichen die Agent-Ausführung.",
+      "connectServerSide": "Serverseitig verbinden",
+      "connectServerSideSub": "Schlüssel werden verifiziert und verschlüsselt auf dem Server gespeichert.",
+      "empty": "Noch keine Server-Verbindungen. Verbinde einen Provider, um deine Agenten zu ermöglichen."
+    },
+    "deviceLocal": {
+      "note": "Nur Discovery — nicht für Ausführung verwendet",
+      "expandedNote": "Geräte-lokale Schlüssel werden nur für Modell-Discovery verwendet. Server-Verbindungen ermöglichen die Agent-Ausführung."
+    },
+    "agents": {
+      "empty": "Noch keine Agenten. Erstelle einen, um ihm eine Spezialisierung, Grenzen und Kontext zu geben.",
+      "create": "Agent erstellen",
+      "pauseAll": "Alle Agenten pausieren",
+      "noSessionsRunning": "Keine Agent-Sitzungen aktiv",
+      "sessionsRunning": "{{count}} Agent-Sitzung(en) aktiv",
+      "activity": "Agent-Aktivität",
+      "activitySub": "Lokales Protokoll von Agent-Aktionen und Freigaben"
+    },
+    "connect": {
+      "cancel": "Abbrechen",
+      "verifySave": "Verifizieren & speichern",
+      "verifying": "Wird verifiziert…",
+      "apiKey": "API-Schlüssel",
+      "labelOptional": "Bezeichnung (optional)",
+      "baseUrl": "Basis-URL (optional, benutzerdefinierte Provider)"
+    },
+    "confirm": {
+      "title": "Diese Verbindung entfernen?",
+      "body": "Agenten, die diese Verbindung nutzen, können nicht mehr ausgeführt werden, bis du eine Ersatzverbindung herstellst.",
+      "cancel": "Abbrechen",
+      "remove": "Entfernen",
+      "removing": "Wird entfernt…"
+    },
+    "connection": {
+      "reverify": "Erneut verifizieren",
+      "verifying": "Wird verifiziert…",
+      "remove": "Entfernen",
+      "removing": "Wird entfernt…",
+      "verified": "Verifiziert {{time}}",
+      "notVerified": "Noch nicht verifiziert",
+      "modelsCount": "{{count}} Modell(e)",
+      "more": "mehr"
+    },
+    "health": {
+      "healthy": "Gesund",
+      "failed": "Fehlgeschlagen",
+      "revoked": "Widerrufen",
+      "expired": "Abgelaufen",
+      "degraded": "Beeinträchtigt",
+      "unverified": "Unverifiziert"
+    },
+    "providerStatus": {
+      "comingSoon": "Demnächst",
+      "connected": "Verbunden",
+      "invalid": "Ungültig",
+      "notConnected": "Nicht verbunden"
+    },
+    "provider": {
+      "soon": "Bald",
+      "comingSoon": "Demnächst — auf dieser Bereitstellung noch nicht verfügbar.",
+      "modelsAvailable": "{{count}} Modell(e) verfügbar",
+      "discoveringModels": "Modelle werden ermittelt…",
+      "storedLocally": "Lokal gespeichert · {{storage}}",
+      "secureStorage": "Sicherer Speicher",
+      "deviceStorage": "Gerätespeicher",
+      "disconnect": "Trennen",
+      "replaceKey": "Schlüssel ersetzen",
+      "noKeySaved": "Kein Schlüssel gespeichert. Verbinde dich, um {{name}}-Modelle zu nutzen.",
+      "connect": "Verbinden",
+      "availableModels": "Verfügbare Modelle",
+      "discoveringFrom": "Modelle von {{name}} werden ermittelt…",
+      "noModelsReturned": "Keine Modelle von {{name}} zurückgegeben.",
+      "modelsAfterConnect": "Modelle werden von {{name}} ermittelt, nachdem du verbunden bist.",
+      "testing": "Wird getestet…",
+      "testSave": "Testen & speichern"
+    },
+    "toast": {
+      "connectionSaved": "Verbindung verifiziert und gespeichert.",
+      "verifyFailed": "Schlüssel konnte nicht verifiziert werden. Prüfe den Schlüssel und versuche es erneut.",
+      "reverified": "Verbindung erneut verifiziert.",
+      "reverifyFailed": "Erneute Verifizierung fehlgeschlagen.",
+      "removedWithAgents": "Entfernt. {{count}} Agent(en) aktualisiert.",
+      "connectionRemoved": "Verbindung entfernt.",
+      "removeFailed": "Verbindung konnte nicht entfernt werden."
+    },
+    "help": {
+      "title": "Was Agenten können und nicht können",
+      "body": "Agenten entwerfen Antworten und fassen Konversationen zusammen, wobei sie die von dir verbundenen Provider-Schlüssel nutzen. Sie können nicht auf deine Geldbörse zugreifen, Zahlungen vornehmen oder außerhalb der von dir erteilten Berechtigungen handeln. Serverseitige Schlüssel werden verschlüsselt auf dem Server gespeichert; geräte-lokale Schlüssel verlassen nie dieses Gerät. Jede Agent-Aktion wird im Aktivitätsprotokoll protokolliert für Transparenz."
+    }
+  },
+  "algorithm": {
+    "header": {
+      "title": "Dein Algorithmus",
+      "subtitle": "Die Signale, die deinen Feed formen"
+    },
+    "demo": {
+      "banner": "Algorithmus-Daten sind im Demo-Modus illustrativ."
+    },
+    "offline": {
+      "banner": "Du bist offline. Das zuletzt gespeicherte Profil wird angezeigt."
+    },
+    "summary": {
+      "activeTopics": "Aktive Themen",
+      "signals": "Signale",
+      "lastUpdated": "Zuletzt aktualisiert"
+    },
+    "howItWorks": {
+      "title": "So funktioniert das"
+    },
+    "empty": {
+      "title": "Noch keine Themen",
+      "subtitle": "Dein Feed basiert auf allgemeiner Beliebtheit. Füge unten ein Thema hinzu, um deine Empfehlungen zu formen."
+    },
+    "topics": {
+      "title": "Themen, die deinen Feed beeinflussen",
+      "caption": "Tippe auf ein Thema, um seine Gewichtung anzupassen oder zu entfernen.",
+      "influenceWeight": "Einfluss-Gewichtung",
+      "removeTopic": "Thema entfernen",
+      "lockHint": "Für Vertrauen und Buchhaltung behalten. Du kannst seinen Einfluss auf deinen Feed pausieren."
+    },
+    "signals": {
+      "title": "Letzte Signale",
+      "caption": "Die neuesten Aktionen, die deinen Feed geformt haben."
+    },
+    "addTopic": {
+      "title": "Thema hinzufügen",
+      "caption": "Sag uns, woran du interessiert bist.",
+      "placeholder": "z.B. Vintage-Uhren",
+      "addBtn": "Thema hinzufügen"
+    },
+    "error": {
+      "title": "Dein Algorithmus konnte nicht geladen werden",
+      "subtitle": "Wir konnten dein Algorithmus-Profil nicht abrufen. Prüfe deine Verbindung und versuche es erneut.",
+      "retry": "Erneut versuchen"
+    }
+  },
+  "aiListing": {
+    "header": {
+      "title": "Schnell listen",
+      "subtitle": "Fotos machen · prüfen · veröffentlichen"
+    },
+    "fields": {
+      "title": "Titel",
+      "description": "Beschreibung",
+      "category": "Kategorie",
+      "brand": "Marke",
+      "condition": "Zustand",
+      "price": "Preis (GBP)",
+      "tags": "Tags",
+      "materialComposition": "Materialzusammensetzung",
+      "weight": "Gewicht (kg)"
+    },
+    "placeholders": {
+      "title": "z.B. Vintage Levi's 501 Jeansjacke",
+      "description": "Beschreibe deinen Artikel…",
+      "selectCategory": "Kategorie wählen",
+      "brand": "Marke",
+      "selectCondition": "Zustand wählen",
+      "price": "0,00",
+      "addTag": "Tag hinzufügen",
+      "material": "z.B. Baumwolle, Polyester, Wolle…",
+      "weight": "z.B. 0,45"
+    },
+    "impact": {
+      "helper": "Wird zur Berechnung des realen Umwelt-Impacts verwendet. Optional, aber empfohlen."
+    },
+    "preview": {
+      "label": "Vorschau",
+      "completeness": "Vollständigkeit"
+    },
+    "photo": {
+      "cover": "Cover",
+      "enhance": "Verbessern",
+      "camera": "Kamera",
+      "library": "Bibliothek"
+    },
+    "suggestion": {
+      "use": "Übernehmen",
+      "suggested": "Vorgeschlagen"
+    },
+    "picker": {
+      "selectCategory": "Kategorie wählen",
+      "selectCondition": "Zustand wählen"
+    },
+    "empty": {
+      "title": "Fotografieren zum Listen",
+      "body": "Füge oben Fotos hinzu und wir schlagen einen Titel, eine Beschreibung, eine Kategorie und einen Preisbereich vor. Prüfe und bearbeite alles vor dem Veröffentlichen."
+    },
+    "error": {
+      "retry": "Erneut versuchen"
+    },
+    "toast": {
+      "photoEnhanced": "Foto verbessert",
+      "photoAccessTitle": "Foto-Zugriff erforderlich",
+      "photoAccessBody": "Foto-Zugriff ist erforderlich, um Anzeigen-Fotos hinzuzufügen.",
+      "pickFailedTitle": "Auswahl fehlgeschlagen",
+      "pickFailedBody": "Fotos konnten nicht ausgewählt werden. Versuche es erneut.",
+      "cameraAccessTitle": "Kamera-Zugriff erforderlich",
+      "cameraAccessBody": "Kamera-Zugriff ist erforderlich, um Anzeigen-Fotos aufzunehmen.",
+      "captureFailedTitle": "Aufnahme fehlgeschlagen",
+      "captureFailedBody": "Foto konnte nicht aufgenommen werden. Versuche es erneut.",
+      "smartSellSavedPreviewTitle": "Smart Sell gespeichert (Vorschau)",
+      "smartSellSavedPreviewBody": "Deine Einstellungen werden aktiviert, wenn Smart Sell vollständig verfügbar ist."
+    },
+    "publish": {
+      "publishing": "Wird veröffentlicht…",
+      "reviewPublish": "Prüfen & veröffentlichen",
+      "signInToPublish": "Melde dich an, um eine Anzeige zu veröffentlichen.",
+      "offline": "Du scheinst offline zu sein. Prüfe deine Verbindung und versuche es erneut.",
+      "missingFields": "Füge mindestens ein Foto, einen Titel und einen Preis hinzu, bevor du veröffentlichst.",
+      "missingCover": "Ein verifiziertes Cover-Bild ist vor dem Veröffentlichen erforderlich.",
+      "failed": "Veröffentlichung fehlgeschlagen. Versuche es erneut."
+    },
+    "accessibility": {
+      "selectCategory": "Kategorie wählen",
+      "opensCategoryPicker": "Öffnet die Kategorie-Auswahl",
+      "selectCondition": "Zustand wählen",
+      "opensConditionPicker": "Öffnet die Zustands-Auswahl",
+      "removeTag": "Tag {{tag}} entfernen",
+      "removeTagHint": "Entferne den Tag {{tag}} aus dieser Anzeige",
+      "addTag": "Tag hinzufügen",
+      "addTagHint": "Diesen Tag zur Anzeige hinzufügen",
+      "publishListing": "Anzeige veröffentlichen",
+      "publishListingHint": "Reiche deine Anzeige zum Veröffentlichen ein",
+      "acceptSuggestion": "Vorschlag übernehmen: {{text}}",
+      "acceptSuggestionHint": "Diese Vorschlag auf das Feld anwenden",
+      "dismissSuggestion": "Vorschlag ausblenden",
+      "dismissSuggestionHint": "Diese Vorschlag ausblenden, ohne sie anzuwenden",
+      "removePhoto": "Foto entfernen",
+      "removePhotoHint": "Dieses Foto aus der Anzeige entfernen",
+      "enhancePhoto": "Foto verbessern",
+      "enhancePhotoHint": "Öffnet die Foto-Verbesserung, um dieses Anzeigen-Bild zu verbessern",
+      "takePhotoWithCamera": "Foto mit der Kamera aufnehmen",
+      "takePhotoWithCameraHint": "Kamera öffnen, um ein Foto aufzunehmen",
+      "pickPhotosFromGallery": "Fotos aus der Galerie auswählen",
+      "pickPhotosFromGalleryHint": "Galerie öffnen, um Fotos auszuwählen",
+      "loadingSuggestions": "Vorschläge werden geladen",
+      "loadingSuggestionsHint": "Vorschläge werden generiert",
+      "dismissError": "Fehler ausblenden",
+      "dismissErrorHint": "Diese Fehlermeldung ausblenden",
+      "retryHint": "Die fehlgeschlagene Aktion erneut versuchen",
+      "closePicker": "Auswahl schließen",
+      "closePickerHint": "Das Auswahl-Sheet schließen",
+      "selectOption": "{{option}} wählen",
+      "chooseOption": "{{option}} als ausgewählte Option wählen"
+    }
+  },
+  "report": {
+    "header": {
+      "title": "Melden",
+      "reportAccount": "Konto melden",
+      "reportGroup": "Gruppe melden",
+      "reportListing": "Anzeige melden",
+      "subtitle": "Meldungen sind vertraulich"
+    },
+    "received": {
+      "title": "Meldung erhalten",
+      "body": "Wir werden es prüfen und dich über das Ergebnis informieren.",
+      "reportId": "Meldung #{{reportId}}",
+      "receivedAt": "Empfangen um {{time}}",
+      "referenceNote": "Referenziere diese Nummer bei zukünftigen Support-Kontakten.",
+      "blockUser": "Diesen Nutzer blockieren",
+      "blockedNote": "Dieses Konto ist blockiert und kann dich nicht kontaktieren.",
+      "done": "Fertig"
+    },
+    "unavailable": {
+      "title": "Meldungs-Ziel nicht verfügbar",
+      "body": "Diese Meldung wurde ohne gültige Referenz geöffnet. Es wurde nichts eingereicht.",
+      "goBack": "Zurück"
+    },
+    "submit": {
+      "label": "Meldung senden"
+    },
+    "intro": {
+      "title": "Was ist passiert?",
+      "body": "Wähle den Grund, der das Problem am besten beschreibt. Füge keine Passwörter, Zahlungsdaten oder andere sensible Informationen hinzu."
+    },
+    "details": {
+      "label": "Zusätzliche Details (optional)",
+      "placeholder": "Beschreibe, was passiert ist",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "Nachweis-Fotos (optional)",
+      "camera": "Kamera",
+      "gallery": "Galerie",
+      "count": "{{count}}/3 Fotos"
+    },
+    "accessibility": {
+      "blockUser": "Diesen Nutzer blockieren",
+      "detailsInput": "Zusätzliche Meldungs-Details",
+      "evidencePhoto": "Nachweis-Foto {{index}}",
+      "removeEvidencePhoto": "Nachweis-Foto {{index}} entfernen",
+      "takeEvidenceCamera": "Nachweis-Foto mit der Kamera aufnehmen",
+      "chooseEvidenceGallery": "Nachweis-Fotos aus der Galerie auswählen"
+    },
+    "reasons": {
+      "spam": "Spam",
+      "spamDesc": "Unerwünschte Werbung, Betrug oder wiederholte Nachrichten",
+      "harassment": "Belästigung",
+      "harassmentDesc": "Bedrohende, missbräuchliche oder gezielte unerwünschte Kontaktaufnahme",
+      "hateSpeech": "Hassrede",
+      "hateSpeechDesc": "Schimpfwörter, entmenschlichende Sprache oder Angriffe auf geschützte Gruppen",
+      "counterfeit": "Fälschung",
+      "counterfeitDesc": "Gefälschte Waren oder irreführende Echtheitsangaben",
+      "prohibited": "Verbotener Artikel",
+      "prohibitedDesc": "Waffen, Drogen, Wildtiere oder andere verbotene Kategorien",
+      "offPlatform": "Anfrage außerhalb der Plattform",
+      "offPlatformDesc": "Aufforderung zur Transaktion außerhalb von Thryftverse, gegen Richtlinie",
+      "scam": "Betrug oder Fraud",
+      "scamDesc": "Versuchter Finanzbetrug, Phishing oder Identitätsmissbrauch",
+      "misinformation": "Irreführende Inhalte",
+      "misinformationDesc": "Falsche oder irreführende Aussagen über einen Artikel",
+      "privacy": "Verletzung der Privatsphäre",
+      "privacyDesc": "Private Informationen ohne Zustimmung geteilt",
+      "impersonation": "Identitätsmissbrauch",
+      "impersonationDesc": "Ausgeben als jemand anderes",
+      "minorSafety": "Sicherheit Minderjähriger",
+      "minorSafetyDesc": "Inhalte oder Verhalten, das Minderjährige gefährdet",
+      "other": "Etwas anderes",
+      "otherDesc": "Sag dem Moderations-Team, was passiert ist"
+    },
+    "toast": {
+      "attachUpTo3": "Bis zu 3 Fotos anhängen.",
+      "offline": "Du scheinst offline zu sein. Prüfe deine Verbindung und versuche es erneut.",
+      "allowPhotoAccess": "Erlaube Foto-Zugriff, um Nachweise hochzuladen.",
+      "allowCameraAccess": "Erlaube Kamera-Zugriff, um Nachweis-Fotos aufzunehmen.",
+      "photosAttached": "{{count}} Foto(s) angehängt.",
+      "uploadFailed": "Foto(s) konnten nicht hochgeladen werden. Versuche es erneut.",
+      "singleUploadFailed": "Foto konnte nicht hochgeladen werden. Versuche es erneut.",
+      "photoAttached": "Foto angehängt.",
+      "reportFailed": "Die Meldung konnte nicht gesendet werden. Prüfe deine Verbindung und versuche es erneut.",
+      "accountBlocked": "Konto blockiert",
+      "blockFailed": "Dieses Konto konnte nicht blockiert werden. Versuche es erneut."
+    }
+  },
+  "appeal": {
+    "header": {
+      "title": "Entscheidung anfechten"
+    },
+    "loading": {
+      "title": "Entscheidung wird geladen",
+      "subtitle": "Einen Moment, wir rufen die Details ab."
+    },
+    "error": {
+      "title": "Entscheidung konnte nicht geladen werden",
+      "subtitle": "Wir konnten die Entscheidungs-Details nicht abrufen. Tippe unten, um es erneut zu versuchen.",
+      "tryAgain": "Erneut versuchen",
+      "goBack": "Zurück"
+    },
+    "windowClosed": {
+      "title": "Einspruchs-Frist abgelaufen",
+      "body": "Entscheidungen können innerhalb von 6 Monaten angefochten werden. Diese Entscheidung wurde am {{date}} mitgeteilt.",
+      "goBack": "Zurück"
+    },
+    "offline": {
+      "title": "Du bist offline",
+      "subtitle": "Prüfe deine Verbindung und versuche es erneut.",
+      "tryAgain": "Erneut versuchen",
+      "goBack": "Zurück"
+    },
+    "submitted": {
+      "title": "Einspruch eingereicht",
+      "body": "Wir werden es prüfen und dich über das Ergebnis informieren.",
+      "appealId": "Einspruch #{{appealId}}",
+      "submittedAt": "Eingereicht um {{time}}",
+      "referenceNote": "Referenziere diese Nummer bei zukünftigen Support-Kontakten.",
+      "done": "Fertig"
+    },
+    "duration": {
+      "permanent": "Dauerhaft",
+      "until": "Bis {{date}}"
+    },
+    "decision": {
+      "noViolation": "Kein Verstoß",
+      "restrict": "Inhalt eingeschränkt",
+      "escalate": "Eskaliert",
+      "emergencyHold": "Notfall-Sperre"
+    },
+    "grounds": {
+      "label": "Warum denkst du, diese Entscheidung war falsch?",
+      "placeholder": "Erkläre, warum die Entscheidung überdacht werden sollte",
+      "characterCount": "{{current}}/{{max}}"
+    },
+    "evidence": {
+      "label": "Nachweis-Fotos (optional)",
+      "camera": "Kamera",
+      "gallery": "Galerie",
+      "count": "{{count}}/3 Fotos"
+    },
+    "accessibility": {
+      "groundsInput": "Gründe für den Einspruch",
+      "evidencePhoto": "Nachweis-Foto {{index}}",
+      "removeEvidencePhoto": "Nachweis-Foto {{index}} entfernen",
+      "takeEvidenceCamera": "Nachweis-Foto mit der Kamera aufnehmen",
+      "chooseEvidenceGallery": "Nachweis-Fotos aus der Galerie auswählen"
+    },
+    "submit": {
+      "label": "Einspruch einreichen"
+    },
+    "toast": {
+      "attachUpTo3": "Bis zu 3 Fotos anhängen.",
+      "offline": "Du scheinst offline zu sein. Prüfe deine Verbindung und versuche es erneut.",
+      "allowPhotoAccess": "Erlaube Foto-Zugriff, um Nachweise hochzuladen.",
+      "allowCameraAccess": "Erlaube Kamera-Zugriff, um Nachweis-Fotos aufzunehmen.",
+      "photosAttached": "{{count}} Foto(s) angehängt.",
+      "uploadFailed": "Foto(s) konnten nicht hochgeladen werden. Versuche es erneut.",
+      "singleUploadFailed": "Foto konnte nicht hochgeladen werden. Versuche es erneut.",
+      "photoAttached": "Foto angehängt.",
+      "appealFailed": "Der Einspruch konnte nicht eingereicht werden. Prüfe deine Verbindung und versuche es erneut."
+    }
+  },
+  "stateCopy": {
+    "actions": {
+      "tryAgain": "Try again",
+      "refresh": "Refresh",
+      "clearFilters": "Clear filters"
+    },
+    "conversations": {
+      "loading": "Loading your conversations…",
+      "empty": "No conversations yet. Start one from a listing or profile.",
+      "emptyFiltered": "No conversations match this filter.",
+      "error": "Couldn't load your conversations. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached conversations.",
+      "stale": "These conversations may be out of date. Pull to refresh.",
+      "permissionDenied": "Sign in to see your conversations."
+    },
+    "messages": {
+      "loading": "Loading messages…",
+      "empty": "No messages yet. Say hello to start the conversation.",
+      "error": "Couldn't load messages. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached messages.",
+      "stale": "These messages may be out of date. Pull to refresh."
+    },
+    "listings": {
+      "loading": "Loading listings…",
+      "empty": "No listings yet. List your first item to start selling.",
+      "emptyFiltered": "No listings match these filters.",
+      "error": "Couldn't load listings. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached listings.",
+      "stale": "These listings may be out of date. Pull to refresh."
+    },
+    "inventory": {
+      "loading": "Loading your inventory…",
+      "empty": "No items in your inventory. List an item to get started.",
+      "emptyFiltered": "No items match these filters.",
+      "error": "Couldn't load your inventory. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached inventory.",
+      "stale": "Your inventory may be out of date. Pull to refresh."
+    },
+    "orders": {
+      "loading": "Loading your orders…",
+      "empty": "No orders yet. When you buy or sell something, your orders will show up here.",
+      "emptyFiltered": "No orders match these filters.",
+      "error": "Couldn't load your orders. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached orders.",
+      "stale": "These orders may be out of date. Pull to refresh."
+    },
+    "analytics": {
+      "loading": "Loading your analytics…",
+      "empty": "No analytics data yet. List an item to start tracking performance.",
+      "emptyFiltered": "No data for this period.",
+      "error": "Couldn't load your analytics. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached analytics.",
+      "stale": "This data may be out of date. Pull to refresh."
+    },
+    "wallet": {
+      "loading": "Loading your wallet…",
+      "empty": "No wallet activity yet. Your balance and transactions will appear here.",
+      "emptyFiltered": "No transactions match these filters.",
+      "error": "Couldn't load your wallet. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached wallet data.",
+      "stale": "Your wallet balance may be out of date. Pull to refresh."
+    },
+    "search": {
+      "loading": "Searching…",
+      "empty": "No results found. Try a different search term.",
+      "emptyFiltered": "No results match these filters.",
+      "error": "Search isn't available right now. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Search requires a connection.",
+      "stale": "These results may be out of date. Search again to refresh."
+    },
+    "sellerHub": {
+      "loading": "Loading your seller dashboard…",
+      "empty": "No seller activity yet. List an item to start selling.",
+      "emptyFiltered": "No data for this period.",
+      "error": "Couldn't load your seller dashboard. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached seller data.",
+      "stale": "This data may be out of date. Pull to refresh."
+    },
+    "profile": {
+      "loading": "Loading profile…",
+      "empty": "This profile has no public activity yet.",
+      "emptyFiltered": "No listings match these filters.",
+      "error": "Couldn't load this profile. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached profile data.",
+      "stale": "This profile may be out of date. Pull to refresh."
+    }
+  },
+  "coOwn": {
+    "tradeComposer": {
+      "riskDisclosure": "Fractional ownership is irrevocable. Shares are subject to corporate actions and market volatility. Past performance does not guarantee future returns. You may lose some or all of your investment.",
+      "noGuarantee": "No guaranteed returns",
+      "irrevocable": "Irrevocable commitment"
+    },
+    "detail": {
+      "issuerTrust": "Issuer",
+      "sharePrice": "Share price",
+      "totalValue": "Total asset value",
+      "ownershipPercent": "Your ownership",
+      "distributions": "Distributions"
+    }
+  }
+}

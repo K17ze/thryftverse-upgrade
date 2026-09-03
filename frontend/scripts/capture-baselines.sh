@@ -25,6 +25,7 @@ APP_ID="${APP_ID:-com.thryftverse.app}"
 FLOW=".maestro/flows/visualRegressionMatrix.yaml"
 SCREENSHOTS_DIR=".maestro/screenshots"
 ACTUAL_DIR="src/__tests__/__screenshots__/actual"
+MOCK_MODE="${EXPO_PUBLIC_MOCK_MODE:-fixture-design}"
 
 mkdir -p "$SCREENSHOTS_DIR" "$ACTUAL_DIR"
 
@@ -38,23 +39,69 @@ detect_platform() {
   fi
 }
 
+get_ios_sim_id() {
+  xcrun simctl list devices booted -j | jq -r '.devices[][] | select(.state == "Booted") | .udid' | head -1
+}
+
+get_device_slug() {
+  local platform="$1"
+  if [ "$platform" = "ios" ]; then
+    local sim_id
+    sim_id=$(get_ios_sim_id)
+    xcrun simctl list devices -j | jq -r --arg sid "$sim_id" \
+      '.devices[][] | select(.udid == $sid) | .deviceType // "unknown"' | \
+      sed 's/[^a-zA-Z0-9]//g' | tr '[:upper:]' '[:lower:]'
+  else
+    adb shell getprop ro.product.model | sed 's/[^a-zA-Z0-9]//g' | tr '[:upper:]' '[:lower:]'
+  fi
+}
+
 PLATFORM=$(detect_platform)
+DEVICE_SLUG=$(get_device_slug "$PLATFORM")
 echo "[capture-baselines] Detected platform: $PLATFORM"
+echo "[capture-baselines] Device slug: $DEVICE_SLUG"
+echo "[capture-baselines] Mock mode: $MOCK_MODE"
+
+set_ios_deterministic_state() {
+  local sim_id
+  sim_id=$(get_ios_sim_id)
+
+  # Fixed status bar — 9:41, full wifi, full cellular, charged battery
+  xcrun simctl status_bar "$sim_id" override \
+    --time "9:41" \
+    --dataNetwork wifi \
+    --wifiMode active \
+    --wifiBars 3 \
+    --cellularMode active \
+    --cellularBars 4 \
+    --batteryState charged \
+    --batteryLevel 100
+
+  # Reduce motion — eliminates animation non-determinism
+  xcrun simctl ui "$sim_id" reduce_motion yes
+}
 
 set_ios_theme() {
   local sim_id
-  sim_id=$(xcrun simctl list devices booted -j | jq -r '.devices[][] | select(.state == "Booted") | .udid' | head -1)
+  sim_id=$(get_ios_sim_id)
   xcrun simctl ui "$sim_id" appearance "$1"
 }
 
 set_ios_font_scale() {
   local sim_id
-  sim_id=$(xcrun simctl list devices booted -j | jq -r '.devices[][] | select(.state == "Booted") | .udid' | head -1)
+  sim_id=$(get_ios_sim_id)
   case "$1" in
     100) xcrun simctl ui "$sim_id" content_size default ;;
     130) xcrun simctl ui "$sim_id" content_size extra-extra-large ;;
     200) xcrun simctl ui "$sim_id" content_size accessibility-extra-extra-extra-large ;;
   esac
+}
+
+set_android_deterministic_state() {
+  # Reduce motion + disable window/transition animations
+  adb shell settings put secure reduce_motion 1
+  adb shell settings put secure window_animation_scale 0.0
+  adb shell settings put secure transition_animation_scale 0.0
 }
 
 set_android_theme() {
@@ -78,7 +125,7 @@ set_android_font_scale() {
 capture_variant() {
   local theme="$1"
   local font_scale="$2"
-  local label="${theme}-${font_scale}"
+  local label="${PLATFORM}-${DEVICE_SLUG}-${theme}-${font_scale}"
 
   echo "[capture-baselines] Capturing $label ..."
 
@@ -92,12 +139,25 @@ capture_variant() {
 
   sleep 2
 
+  # NOTE: EXPO_PUBLIC_MOCK_MODE is a build-time env var embedded in the JS
+  # bundle by EAS. It must be set in the eas.json build profile's env block,
+  # not passed as a Maestro --env flag. The "screenshots" profile sets it.
   maestro test "$FLOW" \
     --env APP_ID="$APP_ID" \
+    --env PLATFORM="$PLATFORM" \
+    --env DEVICE="$DEVICE_SLUG" \
     --env THEME="$theme" \
     --env FONT_SCALE="$font_scale" \
+    --env VISUAL_MODE=capture \
     --test-output-dir="$SCREENSHOTS_DIR/$label"
 }
+
+# Set deterministic device state once before the matrix runs
+if [ "$PLATFORM" = "ios" ]; then
+  set_ios_deterministic_state
+elif [ "$PLATFORM" = "android" ]; then
+  set_android_deterministic_state
+fi
 
 capture_variant light 100
 capture_variant dark  100
@@ -108,9 +168,13 @@ echo "[capture-baselines] Resetting device to defaults ..."
 if [ "$PLATFORM" = "ios" ]; then
   set_ios_theme light
   set_ios_font_scale 100
+  xcrun simctl status_bar "$(get_ios_sim_id)" clear || true
 elif [ "$PLATFORM" = "android" ]; then
   set_android_theme light
   set_android_font_scale 100
+  adb shell settings put secure reduce_motion 0
+  adb shell settings put secure window_animation_scale 1.0
+  adb shell settings put secure transition_animation_scale 1.0
 fi
 
 echo "[capture-baselines] Copying screenshots to $ACTUAL_DIR ..."

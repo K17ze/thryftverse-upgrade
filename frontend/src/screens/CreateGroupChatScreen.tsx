@@ -6,11 +6,9 @@ import {
   View,
   ScrollView,
   ActivityIndicator,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -20,15 +18,17 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
 import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
+import { GroupMediaSourceSheet, type GroupMediaSource } from '../components/chat/GroupMediaSourceSheet';
 import { createGroupConversationOnApi } from '../services/chatApi';
 import { searchUsers, UserSearchResult } from '../services/profileApi';
-import { uploadMedia } from '../services/mediaUpload';
 import { parseApiError } from '../lib/apiClient';
 import { createStableId } from '../utils/createStableId';
+import { useGroupMediaUpload } from '../hooks/useGroupMediaUpload';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { Meta, Caption, BodyEmphasis } from '../components/ui/Text';
 import { useHaptic } from '../hooks/useHaptic';
 import { KeyboardAwareStickyAction } from '../platform/keyboard';
@@ -42,8 +42,7 @@ import {
   filterSelfFromResults,
   isSearchQueryValid,
   toggleMemberId,
-  validateGroupTitle,
-} from '../utils/chatGroupHelpers';
+  validateGroupTitle } from '../utils/chatGroupHelpers';
 import type { SelectableUser as HelperSelectableUser, Stage } from '../utils/chatGroupHelpers';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateGroupChat'>;
@@ -76,13 +75,14 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const [searchResults, setSearchResults] = useState<SelectableUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [groupPhoto, setGroupPhoto] = useState<string | null>(null);
-  const [groupPhotoFinalizationId, setGroupPhotoFinalizationId] = useState<string | null>(null);
-  const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
-  const [coverPhotoFinalizationId, setCoverPhotoFinalizationId] = useState<string | null>(null);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [mediaSourceSheet, setMediaSourceSheet] = useState<{ visible: boolean; target: 'avatar' | 'cover' }>({ visible: false, target: 'avatar' });
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Flagship media upload — optimistic preview, client-side compression,
+  // camera+gallery source, retry/revert, stale-operation guard.
+  const groupMedia = useGroupMediaUpload(null, null);
+  const isUploadingPhoto = groupMedia.avatar.status === 'uploading';
+  const isUploadingCover = groupMedia.cover.status === 'uploading';
 
   const idempotencyKeyRef = useRef<string>(createStableId('group'));
   const createAttemptRef = useRef(false);
@@ -107,8 +107,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           id: p.id,
           username: p.username,
           displayName: p.displayName ?? null,
-          avatar: p.avatar ?? null,
-        });
+          avatar: p.avatar ?? null });
       }
       // Also include participantIds without profiles (less ideal but still useful)
       for (const pid of conv.participantIds ?? []) {
@@ -120,8 +119,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
           id: pid,
           username: pid,
           displayName: null,
-          avatar: null,
-        });
+          avatar: null });
       }
     }
     return result.slice(0, 12);
@@ -146,8 +144,7 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         id: sellerId,
         username: profile?.username ?? sellerId,
         displayName: profile?.displayName ?? null,
-        avatar: profile?.avatar ?? null,
-      });
+        avatar: profile?.avatar ?? null });
     }
     return result.slice(0, 8);
   }, [conversations, currentUser?.id, isBlockedUser, recentUsers]);
@@ -163,74 +160,39 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
       .map((u) => ({
         id: u.id,
         displayName: u.displayName ?? u.username,
-        avatar: u.avatar,
-      }));
+        avatar: u.avatar }));
   }, [selectedIds, selectedUsers]);
 
-  const handlePickGroupPhoto = useCallback(async () => {
+  const handlePickGroupPhoto = useCallback(() => {
     if (isUploadingPhoto) return;
     haptic.light();
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: false,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.88,
-      });
-      if (result.canceled || !result.assets?.[0]?.uri) return;
+    setMediaSourceSheet({ visible: true, target: 'avatar' });
+  }, [haptic, isUploadingPhoto]);
 
-      const pickedUri = result.assets[0].uri;
-      setIsUploadingPhoto(true);
-      try {
-        const uploaded = await uploadMedia(pickedUri, 'avatars');
-        setGroupPhoto(uploaded.publicUrl);
-        setGroupPhotoFinalizationId(uploaded.finalizationId);
-        haptic.success();
-        show('Group photo uploaded.', 'success');
-      } catch (uploadErr) {
-        const parsed = parseApiError(uploadErr, 'Could not upload group photo.');
-        show(parsed.message, 'error');
-        // Do not set the avatar — leave the previous photo (or none) so the
-        // user can retry or proceed without a photo.
-      } finally {
-        setIsUploadingPhoto(false);
-      }
-    } catch {
-      show('Could not open photo library.', 'error');
-    }
-  }, [haptic, show, isUploadingPhoto]);
-
-  const handlePickCoverPhoto = useCallback(async () => {
+  const handlePickCoverPhoto = useCallback(() => {
     if (isUploadingCover) return;
     haptic.light();
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsMultipleSelection: false,
-        allowsEditing: true,
-        aspect: [3, 1],
-        quality: 0.88,
-      });
-      if (result.canceled || !result.assets?.[0]?.uri) return;
+    setMediaSourceSheet({ visible: true, target: 'cover' });
+  }, [haptic, isUploadingCover]);
 
-      const pickedUri = result.assets[0].uri;
-      setIsUploadingCover(true);
-      try {
-        const uploaded = await uploadMedia(pickedUri, 'covers');
-        setCoverPhoto(uploaded.publicUrl);
-        setCoverPhotoFinalizationId(uploaded.finalizationId);
-        haptic.success();
-      } catch (uploadErr) {
-        const parsed = parseApiError(uploadErr, 'Could not upload cover photo.');
-        show(parsed.message, 'error');
-      } finally {
-        setIsUploadingCover(false);
-      }
-    } catch {
-      show('Could not open photo library.', 'error');
+  const handleMediaSourceSelect = useCallback((source: GroupMediaSource) => {
+    const target = mediaSourceSheet.target;
+    if (target === 'avatar') {
+      void groupMedia.pickAvatar(source);
+    } else {
+      void groupMedia.pickCover(source);
     }
-  }, [haptic, show, isUploadingCover]);
+  }, [mediaSourceSheet.target, groupMedia]);
+
+  const handleRemoveGroupPhoto = useCallback(() => {
+    haptic.light();
+    groupMedia.removeAvatar();
+  }, [haptic, groupMedia]);
+
+  const handleRemoveCoverPhoto = useCallback(() => {
+    haptic.light();
+    groupMedia.removeCover();
+  }, [haptic, groupMedia]);
 
   const toggleMember = (user: SelectableUser) => {
     haptic.light();
@@ -335,11 +297,10 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
         memberIds: selectedIds,
         idempotencyKey: idempotencyKeyRef.current,
         description: description.trim() || undefined,
-        avatar: groupPhoto ?? undefined,
-        avatarFinalizationId: groupPhotoFinalizationId ?? undefined,
-        coverPhoto: coverPhoto ?? undefined,
-        coverPhotoFinalizationId: coverPhotoFinalizationId ?? undefined,
-      });
+        avatar: groupMedia.avatar.confirmedRemote ?? undefined,
+        avatarFinalizationId: groupMedia.avatar.finalizationId ?? undefined,
+        coverPhoto: groupMedia.cover.confirmedRemote ?? undefined,
+        coverPhotoFinalizationId: groupMedia.cover.finalizationId ?? undefined });
 
       upsertConversation(conversation);
       show('Group chat created.', 'success');
@@ -363,8 +324,8 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
     setDescription('');
     setSelectedIds([]);
     setSelectedUsers(new Map());
-    setGroupPhoto(null);
-    setGroupPhotoFinalizationId(null);
+    groupMedia.removeAvatar();
+    groupMedia.removeCover();
     setStage('select');
   };
 
@@ -457,12 +418,12 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
               pressed && styles.avatarSelectorPressed,
             ]}
             accessibilityRole="button"
-            accessibilityLabel={coverPhoto ? 'Change cover photo' : 'Add cover photo'}
-            accessibilityHint="Opens your photo library to choose a wide cover image"
+            accessibilityLabel={groupMedia.coverDisplayUri ? 'Change cover photo' : 'Add cover photo'}
+            accessibilityHint="Choose a wide cover image from camera or gallery"
           >
-            {coverPhoto ? (
+            {groupMedia.coverDisplayUri ? (
               <CachedImage
-                uri={coverPhoto}
+                uri={groupMedia.coverDisplayUri}
                 style={styles.coverImage}
                 contentFit="cover"
                 priority="high"
@@ -480,6 +441,17 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
                 <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
               </View>
             ) : null}
+            {groupMedia.coverDisplayUri && !isUploadingCover ? (
+              <Pressable
+                style={styles.coverRemoveBtn}
+                onPress={handleRemoveCoverPhoto}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Remove cover photo"
+              >
+                <Ionicons name="close-circle" size={22} color={colors.scrimTextPrimary} />
+              </Pressable>
+            ) : null}
           </Pressable>
 
           <View style={styles.avatarSelectorWrap}>
@@ -492,12 +464,13 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
               ]}
               accessibilityRole="button"
               accessibilityLabel="Set group photo"
-              accessibilityHint="Opens your photo library to choose a group photo"
+              accessibilityHint="Choose a group photo from camera or gallery"
             >
               <GroupAvatarMosaic
                 members={mosaicMembers}
-                groupPhoto={groupPhoto}
+                groupPhoto={groupMedia.avatarDisplayUri}
                 fallbackInitials={title.trim() || 'G'}
+                groupId={idempotencyKeyRef.current}
                 size={Space.xxl + Space.xl}
               />
               {isUploadingPhoto ? (
@@ -513,10 +486,31 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             <Caption color={colors.textMuted} style={styles.avatarHint}>
               {isUploadingPhoto
                 ? 'Uploading photo...'
-                : groupPhoto
+                : groupMedia.avatarDisplayUri
                   ? 'Tap to change photo'
                   : 'Tap to add photo · mosaic auto-generated'}
             </Caption>
+            {groupMedia.avatarDisplayUri && !isUploadingPhoto ? (
+              <Pressable
+                onPress={handleRemoveGroupPhoto}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Remove group photo"
+              >
+                <Caption color={colors.danger} style={styles.removeText}>Remove photo</Caption>
+              </Pressable>
+            ) : null}
+            {groupMedia.avatar.status === 'failed' ? (
+              <View style={styles.mediaErrorRow}>
+                <Ionicons name="warning-outline" size={13} color={colors.danger} />
+                <Text style={[styles.mediaErrorText, { color: colors.danger }]} numberOfLines={2}>
+                  {groupMedia.avatar.error}
+                </Text>
+                <Pressable onPress={() => void groupMedia.retryAvatar()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retry uploading group photo">
+                  <Text style={[styles.retryText, { color: colors.brand }]}>Retry</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.fieldGroup}>
@@ -576,6 +570,12 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             })}
           </View>
         </KeyboardAwareStickyAction>
+        <GroupMediaSourceSheet
+          visible={mediaSourceSheet.visible}
+          onClose={() => setMediaSourceSheet((prev) => ({ ...prev, visible: false }))}
+          onSelect={handleMediaSourceSelect}
+          title={mediaSourceSheet.target === 'avatar' ? 'Group photo' : 'Cover photo'}
+        />
       </FlagshipScreen>
     );
   }
@@ -667,13 +667,21 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
             {recentUsers.length > 0 && (
               <View style={styles.sectionBlock}>
                 <Text style={styles.sectionHeaderText}>Recent</Text>
-                {recentUsers.map((user) => renderMemberRow({ item: user }))}
+                {recentUsers.map((user) => (
+                  <React.Fragment key={user.id}>
+                    {renderMemberRow({ item: user })}
+                  </React.Fragment>
+                ))}
               </View>
             )}
             {suggestedUsers.length > 0 && (
               <View style={styles.sectionBlock}>
                 <Text style={styles.sectionHeaderText}>Suggested</Text>
-                {suggestedUsers.map((user) => renderMemberRow({ item: user }))}
+                {suggestedUsers.map((user) => (
+                  <React.Fragment key={user.id}>
+                    {renderMemberRow({ item: user })}
+                  </React.Fragment>
+                ))}
               </View>
             )}
           </ScrollView>
@@ -736,34 +744,28 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   /* ── Stage 1: Select ── */
   selectRoot: {
-    flex: 1,
-  },
+    flex: 1 },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   searchInputWrap: {
     flex: 1,
     borderWidth: 0,
     backgroundColor: 'transparent',
     minHeight: Control.hit,
-    paddingHorizontal: 0,
-  },
+    paddingHorizontal: 0 },
   searchInput: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textPrimary,
-    paddingVertical: 0,
-  },
+    paddingVertical: 0 },
   selectedRail: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   selectedRailContent: {
     gap: Space.sm,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   selectedChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -773,174 +775,140 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2 + 1,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   selectedChipAvatar: {
     width: Space.smMd,
     height: Space.smMd,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   selectedChipAvatarPlaceholder: {
     width: Space.smMd,
     height: Space.smMd,
     borderRadius: Radius.full,
     backgroundColor: colors.border,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   selectedChipAvatarText: {
-    fontSize: Type.meta.size - 1,
+    fontSize: TypographyV2.meta.size - 1,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   selectedChipText: {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   searchErrorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: `${colors.danger}10`,
+    backgroundColor: colors.dangerSubtle,
     borderRadius: Radius.md,
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   searchErrorText: {
     flex: 1,
     color: colors.danger,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   memberList: {
-    paddingBottom: Space.xxl + 24,
-  },
+    paddingBottom: Space.xxl + 24 },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    minHeight: Space.xl + Space.xl + 8,
-  },
+    minHeight: Space.xl + Space.xl + 8 },
   memberRowPressed: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   memberAvatar: {
     width: Control.hit,
     height: Control.hit,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   memberAvatarPlaceholder: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   memberAvatarText: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypeStyles.title.fontFamily,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   memberTextWrap: {
-    flex: 1,
-  },
+    flex: 1 },
   memberDisplayName: {
-    fontSize: Type.body.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    color: colors.textPrimary },
   memberUsername: {
-    fontSize: Type.caption.size,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted },
   checkCircle: {
     width: Space.lg + 4,
     height: Space.lg + 4,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   checkCircleActive: {
     backgroundColor: colors.brand,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   listWrap: {
     flex: 1,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   skeletonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
   skeletonAvatar: {
     width: Control.hit,
     height: Control.hit,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   skeletonTextWrap: {
     flex: 1,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   skeletonLine: {
     height: Space.xs + 4,
     borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   skeletonLineShort: {
-    width: '40%',
-  },
+    width: '40%' },
   emptyWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xl,
-  },
+    paddingVertical: Space.xl },
   emptyText: {
     textAlign: 'center',
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   recentsScroll: {
-    flex: 1,
-  },
+    flex: 1 },
   recentsContent: {
-    paddingBottom: Space.xxl + 24,
-  },
+    paddingBottom: Space.xxl + 24 },
   sectionBlock: {
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   sectionHeaderText: {
-    fontSize: Type.meta.size,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.textMuted,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xs,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
 
   /* ── Stage 2: Details ── */
   detailsRoot: {
-    flex: 1,
-  },
+    flex: 1 },
   detailsScroll: {
-    flex: 1,
-  },
+    flex: 1 },
   detailsContent: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   avatarSelectorWrap: {
     alignItems: 'center',
     gap: Space.xs,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   // Cover photo
   coverSelector: {
     width: '100%',
@@ -948,37 +916,30 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.lg,
     overflow: 'hidden',
     marginBottom: Space.md,
-    position: 'relative',
-  },
+    position: 'relative' },
   coverImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   coverPlaceholder: {
     width: '100%',
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   coverPlaceholderText: {
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily },
   coverUploadingOverlay: {
     position: 'absolute',
     inset: 0,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   avatarSelectorPressable: {
     position: 'relative',
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   avatarSelectorPressed: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   cameraBadge: {
     position: 'absolute',
     bottom: 2,
@@ -990,8 +951,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: colors.surface,
-  },
+    borderColor: colors.surface },
   avatarUploadingOverlay: {
     position: 'absolute',
     top: 0,
@@ -1001,90 +961,94 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   avatarHint: {
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
+  removeText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    marginTop: Space.xs / 2 },
+  mediaErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    marginTop: Space.xs,
+    paddingHorizontal: Space.sm },
+  mediaErrorText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
+  coverRemoveBtn: {
+    position: 'absolute',
+    top: Space.xs,
+    right: Space.xs,
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center' },
   fieldGroup: {
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   fieldLabel: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: colors.textPrimary,
-    marginBottom: Space.xs + 2,
-  },
+    marginBottom: Space.xs + 2 },
   fieldInputWrap: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     borderRadius: Radius.md,
     minHeight: Space.xxl,
-    paddingHorizontal: Space.sm + 2,
-  },
+    paddingHorizontal: Space.sm + 2 },
   fieldInput: {
-    fontSize: Type.body.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    color: colors.textPrimary },
   fieldInputWrapMultiline: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     borderRadius: Radius.md,
     minHeight: Space.xxl + Space.xl,
-    paddingHorizontal: Space.sm + 2,
-  },
+    paddingHorizontal: Space.sm + 2 },
   fieldInputMultiline: {
-    fontSize: Type.body.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    color: colors.textPrimary },
   charCount: {
     textAlign: 'right',
     marginTop: Space.xs / 2,
-    fontSize: Type.caption.size,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted },
   participantSection: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   participantHeader: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   participantRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   participantAvatar: {
     width: Space.xl + Space.xs,
     height: Space.xl + Space.xs,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   participantAvatarPlaceholder: {
     width: Space.xl + Space.xs,
     height: Space.xl + Space.xs,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   participantAvatarText: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: TypeStyles.title.fontFamily,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   participantTextWrap: {
-    flex: 1,
-  },
+    flex: 1 },
   participantName: {
-    fontSize: Type.body.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    color: colors.textPrimary },
   participantHandle: {
-    fontSize: Type.caption.size,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted },
 
   /* ── Shared ── */
   createErrorBanner: {
@@ -1093,31 +1057,24 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: `${colors.danger}10`,
+    backgroundColor: colors.dangerSubtle,
     borderRadius: Radius.md,
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   createErrorText: {
     flex: 1,
     color: colors.danger,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   retryText: {
     color: colors.brand,
-    fontSize: Type.caption.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily },
   stickyAction: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   createBtn: {
     height: Space.xxl + 2,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   createBtnDisabled: {
-    opacity: 0.5,
-  },
-  });
+    opacity: 0.5 } });
 }

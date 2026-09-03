@@ -93,13 +93,21 @@ export interface IzeQuotePayload {
   izeAmount: number;
   platformFeeRate?: number;
   platformFeeAmount?: number;
+  /** At-par model: the fee in basis points (e.g. 200 = 2%). */
+  feeBps?: number;
+  /** At-par model: the principal amount before fee. */
+  principalAmount?: number;
+  /** At-par model (mint): principal + fee — total the user pays. */
+  totalCost?: number;
+  /** At-par model (burn): principal − fee — net the user receives. */
+  netRedemption?: number;
   ratePerGram: number;
   rateSource: string;
   money: MoneyPayload;
   assetAmount: {
     asset: '1ZE';
     baseUnitAmount: string;
-    baseUnit: 'mg';
+    baseUnit: 'units';
     scale: 3;
   };
 }
@@ -161,12 +169,20 @@ interface CreateIzeMintQuoteResponse {
     netFiatAmount: number;
     platformFeeMinor: number;
     platformFeeAmount: number;
-    izeAmountMg: number;
+    izeAmountUnits: number;
     izeAmount: number;
     ratePerGram: number;
     rateSource: string;
     rateExpiresAt: string;
     paymentIntentId: string;
+    /** At-par model: the principal fiat amount before fee (what becomes 1ZE). */
+    principalAmount?: number;
+    /** At-par model: the fee charged on load (transparent line item). */
+    feeAmount?: number;
+    /** At-par model: the fee in basis points (e.g. 200 = 2%). */
+    feeBps?: number;
+    /** At-par model: principal + fee — the total the user pays. */
+    totalCost?: number;
   };
   intent: PaymentIntentPayload;
   quote: {
@@ -554,6 +570,37 @@ export async function listPayoutRequests(
   return payload.items;
 }
 
+// ── Unknown-outcome reconciliation ──────────────────────────────────
+//
+// When a POST /users/:userId/payout-requests response is lost (network
+// timeout), the client cannot tell whether the payout was created. This
+// lookup resolves the ambiguity by querying the backend by idempotency key.
+//
+// Returns one of three states:
+//   - 'acknowledged': the payout exists, body contains the payout request
+//   - 'processing': the server returned a transient error (retry)
+//   - 'safe_to_retry': no payout with this key exists (may resubmit)
+
+import type { LookupResult } from '../hooks/useUnknownOutcomeReconciliation';
+
+export async function lookupPayoutByIdempotencyKey(
+  userId: string,
+  idempotencyKey: string,
+): Promise<LookupResult<PayoutRequestPayload>> {
+  try {
+    const payload = await fetchJson<{ ok: true; status: 'acknowledged'; payoutRequest: PayoutRequestPayload }>(
+      `/users/${encodeURIComponent(userId)}/payout-requests/lookup-by-key/${encodeURIComponent(idempotencyKey)}`,
+    );
+    return { status: 'acknowledged', value: payload.payoutRequest };
+  } catch (error: unknown) {
+    const status = (error as { status?: number }).status;
+    if (status === 404) {
+      return { status: 'safe_to_retry' };
+    }
+    return { status: 'processing' };
+  }
+}
+
 export async function mintIze(input: {
   userId: string;
   fiatAmount: number;
@@ -641,27 +688,68 @@ export async function getIzePosition(userId: string, fiatCurrency = 'GBP') {
 }
 
 // Convert 1ze to Fiat (for withdrawal)
+//
+// At-par model: 1 1ZE = $1.00 USD with a transparent
+// FX spread disclosed in basis points. The backend returns the full
+// breakdown — principal, fee, net — so the client never hardcodes a fee rate.
+export interface ConvertQuotePayload {
+  izeAmount: number;
+  principalAmount: number;
+  feeAmount: number;
+  feeBps: number;
+  netFiatAmount: number;
+  fiatCurrency: string;
+  rateUsed: number;
+}
+
 interface ConvertIzeToFiatResponse {
   ok: true;
   userId: string;
   wallet: {
-    onezeBalanceMg: number;
+    onezeBalanceUnits: number;
     onezeBalance: number;
     fiatBalanceMinor: number;
     fiatBalance: number;
   };
-  conversion: {
-    izeAmount: number;
-    fiatAmount: number;
-    fiatCurrency: string;
-    rateUsed: number;
-  };
+  conversion: ConvertQuotePayload;
+}
+
+interface ConvertQuoteResponse {
+  ok: true;
+  conversion: ConvertQuotePayload;
+}
+
+/**
+ * Fetch a non-binding preview quote for converting 1ZE → fiat.
+ *
+ * Calls the same `/wallet/convert-1ze-to-fiat` endpoint with a `preview`
+ * flag so no ledger mutation occurs. The returned `conversion` shape is
+ * identical to the real execution response, giving the UI an exact
+ * principal/fee/net breakdown to disclose before confirmation (MiCA EMT
+ * transparent-fee requirement).
+ */
+export async function getConvertQuote(input: {
+  userId: string;
+  izeAmount: number;
+  fiatCurrency?: string;
+}) {
+  return fetchJson<ConvertQuoteResponse>('/wallet/convert-1ze-to-fiat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: input.userId,
+      izeAmount: input.izeAmount,
+      fiatCurrency: input.fiatCurrency ?? 'GBP',
+      preview: true,
+    }),
+  });
 }
 
 export async function convertIzeToFiat(input: {
   userId: string;
   izeAmount: number;
   fiatCurrency?: string;
+  idempotencyKey?: string;
 }) {
   return fetchJson<ConvertIzeToFiatResponse>('/wallet/convert-1ze-to-fiat', {
     method: 'POST',
@@ -670,22 +758,33 @@ export async function convertIzeToFiat(input: {
       userId: input.userId,
       izeAmount: input.izeAmount,
       fiatCurrency: input.fiatCurrency ?? 'GBP',
+      idempotencyKey: input.idempotencyKey,
     }),
   });
 }
 
 // Buy 1ze using Fiat Balance
+//
+// At-par model: the user pays principal + fee and receives principal in 1ZE.
+// The backend returns the transparent breakdown so the UI can disclose the
+// fee in basis points before confirmation (MiCA EMT).
 interface BuyIzeResponse {
   ok: true;
   userId: string;
   wallet: {
-    onezeBalanceMg: number;
+    onezeBalanceUnits: number;
     onezeBalance: number;
     fiatBalanceMinor: number;
     fiatBalance: number;
   };
   purchase: {
     fiatAmount: number;
+    /** Principal fiat amount — the portion that becomes 1ZE at par. */
+    principalFiat: number;
+    /** Fee charged on load (transparent line item). */
+    feeFiat: number;
+    /** Fee in basis points (e.g. 200 = 2%). */
+    feeBps: number;
     fiatCurrency: string;
     izeAmount: number;
     rateUsed: number;
@@ -696,6 +795,7 @@ export async function buyIze(input: {
   userId: string;
   fiatAmount: number;
   fiatCurrency?: string;
+  idempotencyKey?: string;
 }) {
   return fetchJson<BuyIzeResponse>('/wallet/buy-1ze', {
     method: 'POST',
@@ -704,6 +804,7 @@ export async function buyIze(input: {
       userId: input.userId,
       fiatAmount: input.fiatAmount,
       fiatCurrency: input.fiatCurrency ?? 'GBP',
+      idempotencyKey: input.idempotencyKey,
     }),
   });
 }

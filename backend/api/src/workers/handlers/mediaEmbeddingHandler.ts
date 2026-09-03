@@ -46,6 +46,13 @@ import sharp from 'sharp';
 import { db } from '../../db/pool.js';
 import { logger } from '../../lib/logger.js';
 import type { MediaEmbeddingJobData } from '../../lib/queues.js';
+import { safeFetchMediaBuffer } from '../../lib/safeRemoteMediaFetch.js';
+import { computeL2Norm, serialiseEmbedding } from './mediaEmbeddingUtils.js';
+
+// Re-exported for callers / tests. The pure helpers live in
+// mediaEmbeddingUtils.ts so they can be unit-tested without importing
+// this handler (which pulls in `sharp` and the DB pool).
+export { computeL2Norm, serialiseEmbedding } from './mediaEmbeddingUtils.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -79,26 +86,19 @@ interface EmbeddingResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Download an image from a URL with a bounded timeout and size cap.
+ * Download an image from a URL using the SSRF-safe fetcher.
  * Returns the raw buffer or null on any failure.
+ *
+ * Security: delegates to `safeFetchMediaBuffer` for HTTPS enforcement,
+ * DNS/IP validation (SSRF prevention), redirect controls, byte caps, and
+ * content-type/magic-bytes validation. The previous implementation called
+ * `fetch(url, { redirect: 'follow' })` directly — a textbook SSRF vector.
  */
 async function downloadImage(url: string): Promise<Buffer | null> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
-    const response = await fetch(url, {
-      signal: controller.signal,
-      redirect: 'follow',
-    });
-    clearTimeout(timer);
-    if (!response.ok) return null;
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    if (buffer.length === 0 || buffer.length > MAX_IMAGE_BYTES) return null;
-    return buffer;
-  } catch {
-    return null;
-  }
+  const result = await safeFetchMediaBuffer(url, {
+    maxBytes: MAX_IMAGE_BYTES,
+  });
+  return result?.buffer ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -182,20 +182,9 @@ async function generatePlaceholderEmbedding(
 }
 
 // ---------------------------------------------------------------------------
-// Serialisation
+// Serialisation & vector maths live in mediaEmbeddingUtils.ts and are
+// re-exported above. See migration 181 for why the L2 norm is stored.
 // ---------------------------------------------------------------------------
-
-/**
- * Serialise a float32 array into a little-endian BYTEA payload.
- * Each value is written as a 4-byte IEEE 754 float.
- */
-function serialiseEmbedding(vector: number[]): Buffer {
-  const buffer = Buffer.alloc(vector.length * 4);
-  for (let i = 0; i < vector.length; i++) {
-    buffer.writeFloatLE(vector[i], i * 4);
-  }
-  return buffer;
-}
 
 // ---------------------------------------------------------------------------
 // Idempotency check
@@ -306,14 +295,16 @@ export async function processMediaEmbeddingJob(
 
   // ── 6. Serialise and store ───────────────────────────────────────────
   const embeddingBytes = serialiseEmbedding(embeddingResult.vector);
+  const norm = computeL2Norm(embeddingResult.vector);
+  const embeddingStatus: 'placeholder' | 'ready' = embeddingResult.placeholder ? 'placeholder' : 'ready';
 
   try {
     await db.query(
       `INSERT INTO media_embeddings (
          media_asset_id, model_id, model_version, preprocessing_version,
-         checksum_sha256, dimensions, embedding, generated_at, quality_flags
+         checksum_sha256, dimensions, embedding, generated_at, quality_flags, status, norm
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8::jsonb)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8::jsonb, $9, $10)
        ON CONFLICT (media_asset_id, model_id, model_version, preprocessing_version)
        DO NOTHING`,
       [
@@ -325,6 +316,8 @@ export async function processMediaEmbeddingJob(
         embeddingResult.dimensions,
         embeddingBytes,
         JSON.stringify(embeddingResult.qualityFlags),
+        embeddingStatus,
+        norm,
       ],
     );
 
@@ -337,6 +330,8 @@ export async function processMediaEmbeddingJob(
         dimensions: embeddingResult.dimensions,
         checksumPrefix: checksum.slice(0, 12),
         placeholder: embeddingResult.placeholder,
+        status: embeddingStatus,
+        norm,
         byteSize: imageBuffer.length,
       },
       'mediaEmbedding.stored',

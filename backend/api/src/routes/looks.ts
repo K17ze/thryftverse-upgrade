@@ -26,6 +26,14 @@ const createLookBodySchema = z.object({
   mediaFinalizationId: z.string().min(2).max(160).optional(),
   mediaAssetId: z.string().min(2).max(160).optional(),
   mediaType: z.enum(['image', 'video']).default('image'),
+  mediaUrls: z.array(
+    z.object({
+      url: z.string().url(),
+      mediaType: z.enum(['image', 'video']).default('image'),
+      mediaFinalizationId: z.string().optional(),
+      mediaAssetId: z.string().optional(),
+    })
+  ).max(10).optional(),
   compositionDocument: z.unknown().optional(),
   visibility: z.enum(['public', 'followers', 'private']).default('public'),
   tags: z.array(
@@ -55,6 +63,14 @@ const patchLookBodySchema = z.object({
   mediaFinalizationId: z.string().min(2).max(160).optional(),
   mediaAssetId: z.string().min(2).max(160).optional(),
   mediaType: z.enum(['image', 'video']).optional(),
+  mediaUrls: z.array(
+    z.object({
+      url: z.string().url(),
+      mediaType: z.enum(['image', 'video']).default('image'),
+      mediaFinalizationId: z.string().optional(),
+      mediaAssetId: z.string().optional(),
+    })
+  ).max(10).optional(),
   compositionDocument: z.unknown().nullable().optional(),
   visibility: z.enum(['public', 'followers', 'private']).optional(),
   status: z.enum(['draft', 'published', 'archived']).optional(),
@@ -70,6 +86,7 @@ const patchLookBodySchema = z.object({
 const createCommentBodySchema = z.object({
   id: z.string().min(2).max(120),
   body: z.string().trim().min(1).max(1000),
+  parentId: z.string().min(2).max(120).optional(),
 });
 
 type VerifiedLookMedia = {
@@ -243,6 +260,7 @@ type LookRow = {
   updated_at: string;
   creator_username: string | null;
   creator_avatar: string | null;
+  creator_verified: boolean | null;
   source_look_id: string | null;
 };
 
@@ -251,7 +269,13 @@ const LOOK_SELECT_COLUMNS = `
   l.composition_document, l.status, l.visibility,
   l.created_at, l.updated_at, l.source_look_id,
   u.username AS creator_username,
-  u.avatar AS creator_avatar
+  u.avatar AS creator_avatar,
+  EXISTS (
+    SELECT 1 FROM seller_trust_evidence ste
+    WHERE ste.seller_id = l.creator_id
+      AND ste.code IN ('identity_checked', 'trader_verified')
+      AND (ste.expires_at IS NULL OR ste.expires_at > NOW())
+  ) AS creator_verified
 `;
 
 /**
@@ -341,6 +365,27 @@ async function enrichLooks(
     viewerSavesSet = new Set(viewerSavesResult.rows.map((r) => r.look_id));
   }
 
+  // Batch-fetch carousel media (additional slides beyond the primary media_url).
+  const carouselMediaResult = lookIds.length
+    ? await db.query<{
+        look_id: string;
+        media_url: string;
+        media_type: 'image' | 'video';
+      }>(
+        `SELECT look_id, media_url, media_type
+         FROM look_media
+         WHERE look_id = ANY($1)
+         ORDER BY look_id, position ASC`,
+        [lookIds]
+      )
+    : { rows: [] };
+  const carouselMediaByLook = new Map<string, Array<{ url: string; mediaType: 'image' | 'video' }>>();
+  for (const m of carouselMediaResult.rows) {
+    const arr = carouselMediaByLook.get(m.look_id) ?? [];
+    arr.push({ url: m.media_url, mediaType: m.media_type });
+    carouselMediaByLook.set(m.look_id, arr);
+  }
+
   // Batch-fetch source look creator info for repost attribution.
   const sourceLookIds = lookRows
     .map((r) => r.source_look_id)
@@ -377,11 +422,13 @@ async function enrichLooks(
       id: row.creator_id,
       username: row.creator_username,
       avatar: row.creator_avatar,
+      verified: Boolean(row.creator_verified),
     },
     title: row.title,
     caption: row.caption,
     mediaUrl: row.media_url,
     mediaType: row.media_type,
+    mediaUrls: carouselMediaByLook.get(row.id) ?? [],
     compositionDocument: row.composition_document,
     visibility: row.visibility,
     status: row.status,
@@ -579,6 +626,69 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
         lookId: payload.id,
         media: mediaVerification.media,
       });
+
+      // Insert carousel slides (positions 1..N; position 0 is the primary media_url).
+      if (payload.mediaUrls && payload.mediaUrls.length) {
+        const totalSlides = 1 + payload.mediaUrls.length;
+        if (totalSlides > 10) {
+          await client.query('ROLLBACK');
+          reply.code(422);
+          return {
+            ok: false,
+            error: 'A look may have at most 10 media slides (1 primary + 9 carousel)',
+            code: 'TOO_MANY_MEDIA_SLIDES',
+          };
+        }
+
+        for (let i = 0; i < payload.mediaUrls.length; i++) {
+          const slide = payload.mediaUrls[i];
+          const position = i + 1;
+          let resolvedUrl = slide.url;
+          let mediaAssetId = slide.mediaAssetId ?? null;
+
+          if (slide.mediaFinalizationId) {
+            const slideVerification = await verifyLookMedia(client, {
+              actorUserId,
+              lookId: payload.id,
+              mediaUrl: slide.url,
+              mediaType: slide.mediaType,
+              mediaFinalizationId: slide.mediaFinalizationId,
+              mediaAssetId: slide.mediaAssetId,
+            });
+            if (!slideVerification.ok) {
+              await client.query('ROLLBACK');
+              reply.code(slideVerification.status);
+              return {
+                ok: false,
+                error: slideVerification.error,
+                code: slideVerification.code,
+                ...(slideVerification.mediaStatus
+                  ? { mediaStatus: slideVerification.mediaStatus }
+                  : {}),
+              };
+            }
+            resolvedUrl = slideVerification.media.resolvedUrl;
+            mediaAssetId = slideVerification.media.mediaAssetId;
+          }
+
+          await client.query(
+            `INSERT INTO look_media (
+               id, look_id, media_url, media_type, position,
+               media_finalization_id, media_asset_id
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              `lmedia_${crypto.randomUUID()}`,
+              payload.id,
+              resolvedUrl,
+              slide.mediaType,
+              position,
+              slide.mediaFinalizationId ?? null,
+              mediaAssetId,
+            ]
+          );
+        }
+      }
 
       await client.query('COMMIT');
     } catch (error) {
@@ -805,6 +915,71 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       if (verifiedMedia) {
         await bindLookMedia(client, { actorUserId, lookId, media: verifiedMedia });
       }
+
+      // Replace carousel slides when provided. Existing rows are deleted and
+      // re-inserted so the position sequence stays contiguous. Only entries
+      // carrying a mediaFinalizationId are verified (others are treated as
+      // already-published URLs, e.g. copied during a repost).
+      if (payload.mediaUrls !== undefined) {
+        const totalSlides = 1 + payload.mediaUrls.length;
+        if (totalSlides > 10) {
+          await client.query('ROLLBACK');
+          return reply.code(422).send({
+            error: 'A look may have at most 10 media slides (1 primary + 9 carousel)',
+            code: 'TOO_MANY_MEDIA_SLIDES',
+          });
+        }
+
+        await client.query('DELETE FROM look_media WHERE look_id = $1', [lookId]);
+
+        for (let i = 0; i < payload.mediaUrls.length; i++) {
+          const slide = payload.mediaUrls[i];
+          const position = i + 1;
+          let resolvedUrl = slide.url;
+          let mediaAssetId = slide.mediaAssetId ?? null;
+
+          if (slide.mediaFinalizationId) {
+            const slideVerification = await verifyLookMedia(client, {
+              actorUserId,
+              lookId,
+              mediaUrl: slide.url,
+              mediaType: slide.mediaType,
+              mediaFinalizationId: slide.mediaFinalizationId,
+              mediaAssetId: slide.mediaAssetId,
+            });
+            if (!slideVerification.ok) {
+              await client.query('ROLLBACK');
+              return reply.code(slideVerification.status).send({
+                error: slideVerification.error,
+                code: slideVerification.code,
+                ...(slideVerification.mediaStatus
+                  ? { mediaStatus: slideVerification.mediaStatus }
+                  : {}),
+              });
+            }
+            resolvedUrl = slideVerification.media.resolvedUrl;
+            mediaAssetId = slideVerification.media.mediaAssetId;
+          }
+
+          await client.query(
+            `INSERT INTO look_media (
+               id, look_id, media_url, media_type, position,
+               media_finalization_id, media_asset_id
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              `lmedia_${crypto.randomUUID()}`,
+              lookId,
+              resolvedUrl,
+              slide.mediaType,
+              position,
+              slide.mediaFinalizationId ?? null,
+              mediaAssetId,
+            ]
+          );
+        }
+      }
+
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
@@ -1145,23 +1320,60 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       id: string;
       look_id: string;
       author_id: string;
+      parent_id: string | null;
       body: string;
       created_at: string;
       updated_at: string;
+      deleted_at: string | null;
       author_username: string | null;
       author_avatar: string | null;
+      author_verified: boolean;
+      like_count: string;
+      reply_count: string;
+      liked_by_viewer: boolean;
     }>(
       `
-        SELECT c.id, c.look_id, c.author_id, c.body, c.created_at, c.updated_at,
+        SELECT c.id, c.look_id, c.author_id, c.parent_id, c.body, c.created_at, c.updated_at,
+          c.deleted_at,
           u.username AS author_username,
-          u.avatar AS author_avatar
+          u.avatar AS author_avatar,
+          EXISTS (
+            SELECT 1 FROM seller_trust_evidence ste
+            WHERE ste.seller_id = c.author_id
+              AND ste.code IN ('identity_checked', 'trader_verified')
+              AND (ste.expires_at IS NULL OR ste.expires_at > NOW())
+          ) AS author_verified,
+          COALESCE(lc.like_count, '0') AS like_count,
+          COALESCE(rc.reply_count, '0') AS reply_count,
+          COALESCE(lv.liked, false) AS liked_by_viewer
         FROM look_comments c
         LEFT JOIN users u ON u.id = c.author_id
+        LEFT JOIN (
+          SELECT comment_id, COUNT(*)::text AS like_count
+          FROM look_comment_likes GROUP BY comment_id
+        ) lc ON lc.comment_id = c.id
+        LEFT JOIN (
+          SELECT parent_id, COUNT(*)::text AS reply_count
+          FROM look_comments
+          WHERE parent_id IS NOT NULL AND deleted_at IS NULL
+          GROUP BY parent_id
+        ) rc ON rc.parent_id = c.id
+        LEFT JOIN (
+          SELECT comment_id, true AS liked
+          FROM look_comment_likes WHERE user_id = $2
+        ) lv ON lv.comment_id = c.id
         WHERE c.look_id = $1
-        ORDER BY c.created_at ASC
-        LIMIT 200
+          AND (
+            c.deleted_at IS NULL
+            OR EXISTS (
+              SELECT 1 FROM look_comments r
+              WHERE r.parent_id = c.id AND r.deleted_at IS NULL
+            )
+          )
+        ORDER BY c.parent_id NULLS FIRST, c.created_at ASC
+        LIMIT 500
       `,
-      [lookId]
+      [lookId, viewerUserId]
     );
 
     return {
@@ -1169,12 +1381,20 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
         id: row.id,
         lookId: row.look_id,
         authorId: row.author_id,
+        parentId: row.parent_id,
         author: {
           id: row.author_id,
           username: row.author_username,
           avatar: row.author_avatar,
+          verified: Boolean(row.author_verified),
         },
-        body: row.body,
+        // Tombstones never serve their body (privacy) — the UI renders a
+        // "Deleted comment" placeholder so live replies keep their context.
+        body: row.deleted_at ? '' : row.body,
+        deleted: row.deleted_at !== null,
+        likeCount: Number(row.like_count),
+        likedByViewer: row.liked_by_viewer,
+        replyCount: Number(row.reply_count),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       })),
@@ -1192,24 +1412,52 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       return { ok: false, error: 'Look not found' };
     }
 
+    // Validate parentId if provided: must be a live root comment on the same look
+    let resolvedParentId: string | null = null;
+    if (payload.parentId) {
+      const parentResult = await db.query<{ id: string; parent_id: string | null; deleted_at: string | null }>(
+        `SELECT id, parent_id, deleted_at FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
+        [payload.parentId, lookId]
+      );
+      const parent = parentResult.rows[0];
+      if (!parent || parent.deleted_at) {
+        reply.code(404);
+        return { ok: false, error: 'Parent comment not found' };
+      }
+      // Flatten replies-to-replies to the root (Instagram 2-level model)
+      resolvedParentId = parent.parent_id ?? parent.id;
+    }
+
+    // Idempotent insert: replaying the same client-generated id after an
+    // unknown-outcome network drop must never duplicate the comment (§37.7).
     await db.query(
-      `INSERT INTO look_comments (id, look_id, author_id, body) VALUES ($1, $2, $3, $4)`,
-      [payload.id, lookId, actorUserId, payload.body]
+      `INSERT INTO look_comments (id, look_id, author_id, body, parent_id)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (id) DO NOTHING`,
+      [payload.id, lookId, actorUserId, payload.body, resolvedParentId]
     );
 
     const commentResult = await db.query<{
       id: string;
       author_id: string;
+      parent_id: string | null;
       body: string;
       created_at: string;
       updated_at: string;
       author_username: string | null;
       author_avatar: string | null;
+      author_verified: boolean;
     }>(
       `
-        SELECT c.id, c.author_id, c.body, c.created_at, c.updated_at,
+        SELECT c.id, c.author_id, c.parent_id, c.body, c.created_at, c.updated_at,
           u.username AS author_username,
-          u.avatar AS author_avatar
+          u.avatar AS author_avatar,
+          EXISTS (
+            SELECT 1 FROM seller_trust_evidence ste
+            WHERE ste.seller_id = c.author_id
+              AND ste.code IN ('identity_checked', 'trader_verified')
+              AND (ste.expires_at IS NULL OR ste.expires_at > NOW())
+          ) AS author_verified
         FROM look_comments c
         LEFT JOIN users u ON u.id = c.author_id
         WHERE c.id = $1 LIMIT 1
@@ -1223,6 +1471,12 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       return { ok: false, error: 'Failed to create comment' };
     }
 
+    // A conflicting id owned by someone else is a client bug, not a replay.
+    if (row.author_id !== actorUserId) {
+      reply.code(409);
+      return { ok: false, error: 'Comment id already in use' };
+    }
+
     reply.code(201);
     return {
       ok: true,
@@ -1230,12 +1484,18 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
         id: row.id,
         lookId,
         authorId: row.author_id,
+        parentId: row.parent_id,
         author: {
           id: row.author_id,
           username: row.author_username,
           avatar: row.author_avatar,
+          verified: Boolean(row.author_verified),
         },
         body: row.body,
+        deleted: false,
+        likeCount: 0,
+        likedByViewer: false,
+        replyCount: 0,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       },
@@ -1252,13 +1512,13 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       return { ok: false, error: 'Look not found' };
     }
 
-    const commentResult = await db.query<{ author_id: string }>(
-      `SELECT author_id FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
+    const commentResult = await db.query<{ author_id: string; deleted_at: string | null }>(
+      `SELECT author_id, deleted_at FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
       [commentId, lookId]
     );
 
     const comment = commentResult.rows[0];
-    if (!comment) {
+    if (!comment || comment.deleted_at) {
       reply.code(404);
       return { ok: false, error: 'Comment not found' };
     }
@@ -1268,7 +1528,76 @@ export const registerLookRoutes = ({ app, db, resolveAuthenticatedUserId }: Look
       return { ok: false, error: 'Forbidden' };
     }
 
-    await db.query(`DELETE FROM look_comments WHERE id = $1`, [commentId]);
+    // Tombstone model (X/Threads): a deleted comment with live replies keeps
+    // its row so the reply thread survives; leaf comments are hard-deleted.
+    const repliesResult = await db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM look_comments WHERE parent_id = $1 AND deleted_at IS NULL`,
+      [commentId]
+    );
+    const hasLiveReplies = Number(repliesResult.rows[0]?.count ?? 0) > 0;
+
+    if (hasLiveReplies) {
+      await db.query(`UPDATE look_comments SET deleted_at = NOW() WHERE id = $1`, [commentId]);
+    } else {
+      await db.query(`DELETE FROM look_comments WHERE id = $1`, [commentId]);
+    }
     return { ok: true };
+  });
+
+  // ── Comment likes ───────────────────────────────────────────────────
+
+  app.post('/looks/:lookId/comments/:commentId/like', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { lookId, commentId } = commentParamsSchema.parse(request.params);
+
+    const accessRow = await getAccessibleLook(db, lookId, actorUserId);
+    if (!accessRow) {
+      reply.code(404);
+      return { ok: false, error: 'Look not found' };
+    }
+
+    const commentResult = await db.query<{ id: string }>(
+      `SELECT id FROM look_comments WHERE id = $1 AND look_id = $2 LIMIT 1`,
+      [commentId, lookId]
+    );
+    if (!commentResult.rows[0]) {
+      reply.code(404);
+      return { ok: false, error: 'Comment not found' };
+    }
+
+    await db.query(
+      `INSERT INTO look_comment_likes (comment_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [commentId, actorUserId]
+    );
+
+    const countResult = await db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM look_comment_likes WHERE comment_id = $1`,
+      [commentId]
+    );
+
+    return { ok: true, likeCount: Number(countResult.rows[0]?.count ?? 0), likedByViewer: true };
+  });
+
+  app.delete('/looks/:lookId/comments/:commentId/like', async (request, reply) => {
+    const actorUserId = resolveAuthenticatedUserId(request);
+    const { lookId, commentId } = commentParamsSchema.parse(request.params);
+
+    const accessRow = await getAccessibleLook(db, lookId, actorUserId);
+    if (!accessRow) {
+      reply.code(404);
+      return { ok: false, error: 'Look not found' };
+    }
+
+    await db.query(
+      `DELETE FROM look_comment_likes WHERE comment_id = $1 AND user_id = $2`,
+      [commentId, actorUserId]
+    );
+
+    const countResult = await db.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM look_comment_likes WHERE comment_id = $1`,
+      [commentId]
+    );
+
+    return { ok: true, likeCount: Number(countResult.rows[0]?.count ?? 0), likedByViewer: false };
   });
 };

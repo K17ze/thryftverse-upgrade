@@ -9,6 +9,8 @@
 export { processPushQueueJob } from './pushHandler.js';
 export type { PushHandlerDeps } from './pushHandler.js';
 
+export { processPushReceiptReconciliation } from './pushReceiptHandler.js';
+
 export { sweepExpiredAuctions } from './auctionSweepHandler.js';
 export type { AuctionSweepHandlerDeps } from './auctionSweepHandler.js';
 
@@ -33,6 +35,9 @@ export { processModerationTriageJob } from './moderationTriageHandler.js';
 
 export { processImporterExtraction } from './importerExtractionHandler.js';
 export type { ImporterExtractionJobData } from './importerExtractionHandler.js';
+
+export { processExtractionIntelligenceJob } from './extractionIntelligenceHandler.js';
+export type { ExtractionIntelligenceJobData } from './extractionIntelligenceHandler.js';
 
 export { processCatalogImportDiscovery } from './catalogImportDiscoveryHandler.js';
 export type { CatalogImportDiscoveryJobData } from './catalogImportDiscoveryHandler.js';
@@ -66,3 +71,17 @@ export type { SlaEscalationJobData } from './slaEscalationHandler.js';
 
 export { processRetentionSweep } from './retentionSweepHandler.js';
 export type { RetentionSweepJobData } from './retentionSweepHandler.js';
+
+export { aggregateAnalyticsDaily } from './analyticsAggregationHandler.js';
+export type { AnalyticsAggregationHandlerDeps } from './analyticsAggregationHandler.js';
+
+export { sweepScheduledPublications } from './scheduledPublicationHandler.js';
+
+export { processBackupExpiryCheck } from './backupExpiryHandler.js';
+export type { BackupExpiryJobData } from './backupExpiryHandler.js';
+
+export { processMessageEncryptionBackfill } from './messageEncryptionBackfillHandler.js';
+export type { MessageEncryptionBackfillJobData } from './messageEncryptionBackfillHandler.js';
+
+export { processDsarExport, cleanupExpiredDsarExports } from './dsarExportHandler.js';
+export type { DsarExportJobData } from './dsarExportHandler.js';

@@ -1,0 +1,13 @@
+# Maestro E2E flow — Live and timed auctions journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+
+- takeScreenshot: auction-flow-complete

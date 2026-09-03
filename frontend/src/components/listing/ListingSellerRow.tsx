@@ -3,10 +3,13 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import type { ListingSeller } from '../../domain';
 
 interface ListingSellerRowProps {
@@ -20,8 +23,7 @@ export function ListingSellerRow({
   seller,
   sellerId,
   onProfilePress,
-  onMessage,
-}: ListingSellerRowProps) {
+  onMessage }: ListingSellerRowProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   if (seller) {
@@ -46,14 +48,14 @@ export function ListingSellerRow({
             </Text>
             {seller.rating != null && seller.reviewCount != null ? (
               <View style={styles.metaRow}>
-                <Ionicons name="star" size={11} color={colors.brand} />
+                <AppIcon name="star" focused size={IconSize.xs} color="ratingStar" opticalCenter accessible={false} />
                 <Text style={styles.metaText}>
                   {seller.rating} · {seller.reviewCount} reviews
                 </Text>
               </View>
             ) : seller.rating != null ? (
               <View style={styles.metaRow}>
-                <Ionicons name="star" size={11} color={colors.brand} />
+                <AppIcon name="star" focused size={IconSize.xs} color="ratingStar" opticalCenter accessible={false} />
                 <Text style={styles.metaText}>{seller.rating} rating</Text>
               </View>
             ) : seller.reviewCount != null ? (
@@ -62,7 +64,7 @@ export function ListingSellerRow({
               <Text style={styles.metaText} numberOfLines={1}>{seller.location}</Text>
             ) : null}
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
         </AnimatedPressable>
 
         <AppButton
@@ -82,7 +84,7 @@ export function ListingSellerRow({
       <View style={styles.container}>
         <View style={styles.identityTap}>
           <View style={[styles.avatar, styles.avatarFallback]}>
-            <Ionicons name="person" size={18} color={colors.textMuted} />
+            <AppIcon name="profile" size={IconSize.md} color="textMuted" opticalCenter accessible={false} />
           </View>
           <View style={styles.info}>
             <Text style={styles.name}>Seller</Text>
@@ -103,55 +105,44 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   identityTap: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   avatar: {
     width: 40,
     height: 40,
-    borderRadius: Radius.xxl,
-  },
+    borderRadius: Radius.xxl },
   avatarFallback: {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   info: {
-    flex: 1,
-  },
+    flex: 1 },
   name: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   metaText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   messageBtn: {
     minHeight: 34,
     paddingHorizontal: 14,
     borderRadius: Radius.xxl,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   messageBtnText: {
     color: colors.textPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily } });
 }

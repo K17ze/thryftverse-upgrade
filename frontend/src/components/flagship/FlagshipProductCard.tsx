@@ -3,9 +3,11 @@ import { View, StyleSheet, useWindowDimensions, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily, Control, AspectRatio, IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Control, AspectRatio, IconGrammar } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
+import { AnimatedPressable } from '../AnimatedPressable';
 import { isVideoUri, getCategoryFocalPoint } from '../../utils/media';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -37,8 +39,7 @@ export function FlagshipProductCard({
   isWishlisted = false,
   sellerName,
   condition,
-  style,
-}: FlagshipProductCardProps) {
+  style }: FlagshipProductCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
@@ -54,7 +55,7 @@ export function FlagshipProductCard({
     : `${title}, ${price}`;
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       style={[styles.root, { width: cardW }, style]}
       accessibilityRole="button"
@@ -76,8 +77,7 @@ export function FlagshipProductCard({
         {/* Top-right save button — 44pt hit area, transparent by default */}
         {onToggleSave && (
           <Pressable
-            onPress={(e) => {
-              e.stopPropagation();
+            onPress={() => {
               onToggleSave();
             }}
             style={styles.saveBtn}
@@ -134,19 +134,17 @@ export function FlagshipProductCard({
           </Reanimated.Text>
         </View>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
 const createStyles = (colors: any) => StyleSheet.create({
   root: {
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   imageWrap: {
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   saveBtn: {
     position: 'absolute',
     top: Space.sm,
@@ -154,8 +152,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   videoBadge: {
     position: 'absolute',
     top: Space.sm,
@@ -166,46 +163,38 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   metaRow: {
     marginTop: Space.xs,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xxs },
   titleText: {
-    fontSize: Type.body.size,
-    lineHeight: 18,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.medium,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   priceText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: 20,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
     fontFamily: FontFamily.bold,
     color: colors.textPrimary,
-    letterSpacing: -0.2,
-  },
+    letterSpacing: -0.2 },
   sellerText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     lineHeight: 14,
     fontFamily: FontFamily.medium,
     color: colors.textSecondary,
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xxs },
   conditionPill: {
     alignSelf: 'flex-start',
     marginTop: Space.xs,
     backgroundColor: colors.surfaceAlt,
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs / 2,
+    paddingVertical: Space.xxs,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   conditionText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     lineHeight: 14,
     fontFamily: FontFamily.medium,
-    color: colors.textSecondary,
-  },
-});
+    color: colors.textSecondary } });

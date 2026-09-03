@@ -3,8 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -14,10 +13,8 @@ import {
   Space,
   Radius,
   Stroke,
-  Typography,
-  Type,
-  Control,
-} from '../../theme/designTokens';
+  Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { formatRelativeTime } from '../../utils/dateFormat';
 
 export interface SearchHistoryItem {
@@ -42,8 +39,7 @@ export function SearchHistoryManager({
   onClearAll,
   onTogglePin,
   onSelectItem,
-  onDone,
-}: SearchHistoryManagerProps) {
+  onDone }: SearchHistoryManagerProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -182,81 +178,67 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: Space.sm + 2,
-    },
+      marginBottom: Space.sm + 2 },
     headerTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     doneBtn: {
       paddingHorizontal: Space.smMd,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     doneBtnText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.brand },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.sm + 2,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.borderSubtle,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     rowMain: {
-      flex: 1,
-    },
+      flex: 1 },
     rowLeft: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     pinBtn: {
       width: Control.chrome,
       height: Control.chrome,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     rowTextWrap: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     rowTerm: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     rowMeta: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: 0.15,
-    },
+      letterSpacing: 0.15 },
     deleteBtn: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     footer: {
       marginTop: Space.sm + 2,
       paddingTop: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.borderSubtle,
-    },
+      borderTopColor: colors.borderSubtle },
     clearAllBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -265,23 +247,18 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm + 2,
       borderRadius: Radius.lg,
       borderWidth: Stroke.standard,
-      borderColor: colors.danger,
-    },
+      borderColor: colors.danger },
     clearAllText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.danger,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.danger },
     emptyState: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.xl,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emptyText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textMuted } });
 }

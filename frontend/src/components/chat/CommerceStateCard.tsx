@@ -2,11 +2,13 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius, Stroke, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { OrderStatusStepper, OrderStepperStage } from '../orders/OrderStatusStepper';
 import { formatShortDateTime } from '../../utils/dateFormat';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,83 +39,87 @@ export interface CommerceStateCardProps {
 interface StateConfig {
   title: string;
   subtitle: string;
+  badgeLabel?: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
   iconColor: string;
-  iconBg: string;
   stage?: OrderStepperStage;
   isFailure?: boolean;
   failureLabel?: string;
   nextStep?: string;
 }
 
-function getStateConfig(type: CommerceStateType, colors: ThemeColors): StateConfig {
+function getStateConfig(
+  type: CommerceStateType,
+  colors: ThemeColors,
+  t: (key: string, params?: Record<string, unknown>) => string
+): StateConfig {
   switch (type) {
     case 'order_placed':
       return {
-        title: 'Order placed',
-        subtitle: 'The seller has been notified.',
+        title: t('orders.placed'),
+        subtitle: t('orders.placedBody'),
+        badgeLabel: 'PLACED',
         icon: 'receipt-outline',
         iconColor: colors.brand,
-        iconBg: `${colors.brand}15`,
         stage: 'placed',
         nextStep: 'Awaiting payment confirmation',
       };
     case 'payment_confirmed':
       return {
-        title: 'Payment confirmed',
-        subtitle: 'Your payment has been processed.',
+        title: t('orders.paymentConfirmed'),
+        subtitle: t('orders.paymentConfirmedBody'),
+        badgeLabel: 'PAID',
         icon: 'checkmark-circle-outline',
         iconColor: colors.success,
-        iconBg: `${colors.success}15`,
         stage: 'paid',
         nextStep: 'Seller preparing for dispatch',
       };
     case 'order_shipped':
       return {
-        title: 'Order shipped',
-        subtitle: 'The parcel has been dispatched.',
-        icon: 'cube-outline',
+        title: t('orders.shipped'),
+        subtitle: t('orders.shippedBody'),
+        badgeLabel: 'DISPATCHED',
+        icon: 'car-outline',
         iconColor: colors.brand,
-        iconBg: `${colors.brand}15`,
         stage: 'shipped',
         nextStep: 'In carrier transit',
       };
     case 'order_in_transit':
       return {
-        title: 'In transit',
-        subtitle: 'Your parcel is on the way.',
-        icon: 'car-outline',
+        title: t('orders.inTransit'),
+        subtitle: t('orders.inTransitBody'),
+        badgeLabel: 'IN TRANSIT',
+        icon: 'airplane-outline',
         iconColor: colors.brand,
-        iconBg: `${colors.brand}15`,
         stage: 'in_transit',
         nextStep: 'Out for delivery',
       };
     case 'order_delivered':
       return {
-        title: 'Delivered',
-        subtitle: 'Delivery has been confirmed.',
+        title: t('orders.delivered'),
+        subtitle: t('orders.deliveredBody'),
+        badgeLabel: 'DELIVERED',
         icon: 'checkmark-done-circle-outline',
         iconColor: colors.success,
-        iconBg: `${colors.success}15`,
         stage: 'delivered',
       };
     case 'order_cancelled':
       return {
-        title: 'Order cancelled',
-        subtitle: 'This order has been cancelled.',
+        title: t('orders.cancelled'),
+        subtitle: t('orders.cancelledBody'),
+        badgeLabel: 'CANCELLED',
         icon: 'close-circle-outline',
         iconColor: colors.danger,
-        iconBg: `${colors.danger}15`,
         isFailure: true,
         failureLabel: 'Cancelled',
       };
     case 'order_refunded':
       return {
-        title: 'Refunded',
-        subtitle: 'Your payment has been refunded.',
+        title: t('orders.refunded'),
+        subtitle: t('orders.refundedBody'),
+        badgeLabel: 'REFUNDED',
         icon: 'cash-outline',
         iconColor: colors.danger,
-        iconBg: `${colors.danger}15`,
         isFailure: true,
         failureLabel: 'Refunded',
       };
@@ -134,8 +140,9 @@ export function CommerceStateCard({
   onPress,
 }: CommerceStateCardProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const config = useMemo(() => getStateConfig(type, colors), [type, colors]);
+  const config = useMemo(() => getStateConfig(type, colors, t), [type, colors, t]);
 
   const formattedTimestamp = useMemo(() => {
     if (!timestamp) return null;
@@ -143,88 +150,96 @@ export function CommerceStateCard({
     return formatted || null;
   }, [timestamp]);
 
+  const displayOrderTag = orderShortId ? `#${orderShortId}` : `#${orderId.slice(0, 8).toUpperCase()}`;
+
   return (
     <AnimatedPressable
-      style={[
-        styles.container,
-        { borderColor: colors.border, borderLeftColor: config.iconColor },
-      ]}
+      style={styles.container}
       onPress={onPress}
-      activeOpacity={0.85}
+      activeOpacity={0.88}
       scaleValue={0.98}
       hapticFeedback="light"
       accessibilityRole="button"
-      accessibilityLabel={`${config.title}. ${config.subtitle}. ${orderShortId ? `Order ${orderShortId}.` : ''}${formattedTimestamp ? ` ${formattedTimestamp}.` : ''} Tap to view order details.`}
+      accessibilityLabel={`${config.title}. ${config.subtitle}. Order ${displayOrderTag}.${formattedTimestamp ? ` ${formattedTimestamp}.` : ''} Tap to view order details.`}
     >
-      {/* Header row */}
+      {/* Top Header Row — Icon squircle, Title & Status Pill */}
       <View style={styles.headerRow}>
-        <View style={[styles.headerIcon, { backgroundColor: config.iconBg }]}>
-          <Ionicons name={config.icon} size={16} color={config.iconColor} />
+        <View style={[styles.iconSquircle, { backgroundColor: colors.surfaceAlt }]}>
+          <Ionicons name={config.icon} size={18} color={config.iconColor} />
         </View>
         <View style={styles.headerBody}>
-          <Text style={styles.title} numberOfLines={1}>{config.title}</Text>
+          <View style={styles.titleLine}>
+            <Text style={styles.title} numberOfLines={1}>{config.title}</Text>
+            {config.badgeLabel && (
+              <View style={[styles.statusBadge, { backgroundColor: `${config.iconColor}15` }]}>
+                <Text style={[styles.statusBadgeText, { color: config.iconColor }]}>
+                  {config.badgeLabel}
+                </Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.subtitle} numberOfLines={1}>{config.subtitle}</Text>
         </View>
         {formattedTimestamp ? (
           <Text style={styles.timestamp} numberOfLines={1}>
             {formattedTimestamp}
           </Text>
-        ) : (
-          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-        )}
+        ) : null}
       </View>
 
-      {/* Item preview */}
+      {/* Item preview row */}
       {(itemTitle || itemImage) && (
         <View style={styles.itemRow}>
           {itemImage ? (
             <CachedImage uri={itemImage} style={styles.itemImage} contentFit="cover" />
           ) : (
             <View style={[styles.itemImage, styles.itemImageFallback]}>
-              <Ionicons name="shirt-outline" size={14} color={colors.textMuted} />
+              <Ionicons name="shirt-outline" size={16} color={colors.textMuted} />
             </View>
           )}
-          <Text style={styles.itemTitle} numberOfLines={2}>{itemTitle ?? 'Item'}</Text>
+          <View style={styles.itemInfo}>
+            <Text style={styles.itemTitle} numberOfLines={1}>{itemTitle ?? 'Order Item'}</Text>
+            <Text style={styles.orderIdTag}>{displayOrderTag}</Text>
+          </View>
         </View>
       )}
 
-      {/* Visual stepper */}
+      {/* Visual Stepper */}
       {config.stage && (
-        <OrderStatusStepper
-          currentStage={config.stage}
-          isFailure={config.isFailure}
-          failureLabel={config.failureLabel}
-        />
+        <View style={styles.stepperWrap}>
+          <OrderStatusStepper
+            currentStage={config.stage}
+            isFailure={config.isFailure}
+            failureLabel={config.failureLabel}
+          />
+        </View>
       )}
 
-      {/* Next step hint — what happens next in the lifecycle */}
-      {config.nextStep && !config.isFailure ? (
+      {/* Carrier & Tracking Chip */}
+      {(trackingNumber || carrier) && (
+        <View style={styles.trackingChip}>
+          <Ionicons name="cube-outline" size={13} color={colors.textSecondary} />
+          <Text style={styles.trackingText} numberOfLines={1}>
+            {carrier ? `${carrier.toUpperCase()}` : 'TRACKED'}
+            {trackingNumber ? ` · ${trackingNumber}` : ''}
+          </Text>
+        </View>
+      )}
+
+      {/* Next Step Guidance */}
+      {config.nextStep && !config.isFailure && (
         <View style={styles.nextStepRow}>
-          <Ionicons name="hourglass-outline" size={11} color={colors.textMuted} />
+          <Ionicons name="time-outline" size={12} color={colors.textMuted} />
           <Text style={styles.nextStepText} numberOfLines={1}>
             Next: {config.nextStep}
           </Text>
         </View>
-      ) : null}
-
-      {/* Tracking info */}
-      {(trackingNumber || carrier) && (
-        <View style={styles.trackingRow}>
-          <Ionicons name="location-outline" size={12} color={colors.textMuted} />
-          <Text style={styles.trackingText} numberOfLines={1}>
-            {carrier ? `${carrier}` : ''}
-            {carrier && trackingNumber ? ' · ' : ''}
-            {trackingNumber ? trackingNumber : ''}
-          </Text>
-        </View>
       )}
 
-      {/* Order ID footer */}
+      {/* Footer CTA Action */}
       <View style={styles.footerRow}>
-        <Text style={styles.orderIdText}>
-          {orderShortId ? `Order #${orderShortId}` : `Order ${orderId.slice(0, 8)}`}
-        </Text>
-        <Text style={styles.viewDetailsText}>View details</Text>
+        <Text style={styles.viewDetailsText}>{t('orders.viewDetails')}</Text>
+        <Ionicons name="arrow-forward" size={13} color={colors.brand} />
       </View>
     </AnimatedPressable>
   );
@@ -232,119 +247,148 @@ export function CommerceStateCard({
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
-const createStyles = (colors: ThemeColors) => StyleSheet.create({
-  container: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderLeftWidth: 3,
-    backgroundColor: colors.surface,
-    padding: Space.md,
-    gap: Space.sm,
-    maxWidth: 320,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  headerIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  headerBody: {
-    flex: 1,
-    gap: 2,
-  },
-  title: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-    letterSpacing: -0.2,
-  },
-  subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
-  timestamp: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    flexShrink: 0,
-    maxWidth: 80,
-    textAlign: 'right',
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.md,
-    padding: Space.sm,
-  },
-  itemImage: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.sm,
-    flexShrink: 0,
-  },
-  itemImageFallback: {
-    backgroundColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemTitle: {
-    flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-    lineHeight: 17,
-  },
-  trackingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  trackingText: {
-    flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-    letterSpacing: 0.1,
-  },
-  nextStepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: Space.xs,
-  },
-  nextStepText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-    letterSpacing: 0.1,
-  },
-  footerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Space.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  orderIdText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-    letterSpacing: 0.3,
-  },
-  viewDetailsText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.surface,
+      padding: Space.md,
+      gap: Space.sm + 1,
+      width: '100%',
+      maxWidth: 340,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.04,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+    },
+    iconSquircle: {
+      width: 36,
+      height: 36,
+      borderRadius: Radius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    headerBody: {
+      flex: 1,
+      gap: 1,
+    },
+    titleLine: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    title: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary,
+      letterSpacing: -0.2,
+    },
+    statusBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: Radius.sm,
+    },
+    statusBadgeText: {
+      fontSize: 9,
+      fontFamily: FontFamily.bold,
+      letterSpacing: 0.6,
+    },
+    subtitle: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+    },
+    timestamp: {
+      fontSize: 11,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
+      flexShrink: 0,
+      textAlign: 'right',
+    },
+    itemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.md,
+      padding: Space.xs + 2,
+    },
+    itemImage: {
+      width: 44,
+      height: 44,
+      borderRadius: Radius.sm + 2,
+      flexShrink: 0,
+    },
+    itemImageFallback: {
+      backgroundColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    itemInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    itemTitle: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      color: colors.textPrimary,
+    },
+    orderIdTag: {
+      fontSize: 11,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
+      letterSpacing: 0.2,
+    },
+    stepperWrap: {
+      paddingVertical: Space.xs,
+    },
+    trackingChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.surfaceAlt,
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.sm,
+      alignSelf: 'flex-start',
+    },
+    trackingText: {
+      fontSize: 11,
+      fontFamily: FontFamily.medium,
+      color: colors.textSecondary,
+      letterSpacing: 0.3,
+    },
+    nextStepRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+    nextStepText: {
+      fontSize: 11,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+      letterSpacing: 0.1,
+    },
+    footerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingTop: Space.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+    },
+    viewDetailsText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.brand,
+    },
+  });

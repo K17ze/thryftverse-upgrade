@@ -3,22 +3,20 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { LookApiItem } from '../../services/looksApi';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/types';
 
-const { width: SCREEN_W } = Dimensions.get('window');
 const GRID_GAP = 8;
-const TILE_WIDTH = (SCREEN_W - Space.md * 2 - GRID_GAP) / 2;
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -39,9 +37,10 @@ export function ProfileLooksGrid({
   isSelfProfile,
   onRetry,
   onCreateLook,
-  navigation,
-}: ProfileLooksGridProps) {
+  navigation }: ProfileLooksGridProps) {
   const { colors } = useAppTheme();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const tileWidth = (SCREEN_W - Space.md * 2 - GRID_GAP * 2) / 3;
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   if (isLoading && looks.length === 0) {
     return (
@@ -105,7 +104,7 @@ export function ProfileLooksGrid({
         return (
           <AnimatedPressable
             key={look.id}
-            style={[styles.tile, { width: TILE_WIDTH }]}
+            style={[styles.tile, { width: tileWidth }]}
             activeOpacity={0.9}
             onPress={() => navigation.navigate('LookDetail', { lookId: look.id })}
             accessibilityRole="button"
@@ -125,7 +124,7 @@ export function ProfileLooksGrid({
             ) : null}
             <View style={styles.tileMeta}>
               <View style={styles.metaItem}>
-                <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} />
+                <Ionicons name="bag-handle-outline" size={12} color={colors.textMuted} />
                 <Text style={styles.metaText}>{look.tags.length}</Text>
               </View>
               <View style={styles.metaItem}>
@@ -146,84 +145,68 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
-    gap: GRID_GAP,
-  },
+    gap: GRID_GAP },
   tile: {
-    marginBottom: Space.sm + Space.xs,
-  },
+    marginBottom: Space.sm + Space.xs },
   tileImageWrap: {
     width: '100%',
-    aspectRatio: 0.8,
+    aspectRatio: 3 / 4,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   tileImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   tileCaption: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    marginTop: Space.xs + 2,
-  },
+    marginTop: Space.xs + 2 },
   tileMeta: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   metaText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   stateWrap: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.xl * 2,
     paddingHorizontal: Space.md,
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   stateTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textSecondary },
   stateSubtitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   retryBtn: {
     marginTop: Space.xs,
     paddingHorizontal: 20,
     paddingVertical: Space.sm,
     backgroundColor: colors.brand,
-    borderRadius: Radius.xl,
-  },
+    borderRadius: Radius.xl },
   retryBtnText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textInverse },
   createBtn: {
     marginTop: Space.xs,
     paddingHorizontal: 20,
     paddingVertical: Space.sm,
     backgroundColor: colors.brand,
-    borderRadius: Radius.xl,
-  },
+    borderRadius: Radius.xl },
   createBtnText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textInverse } });
 }

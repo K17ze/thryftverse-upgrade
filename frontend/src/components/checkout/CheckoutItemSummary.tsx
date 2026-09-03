@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 
 interface SellerInfo {
@@ -20,14 +21,13 @@ interface Props {
   onPressMessage?: () => void;
 }
 
-export function CheckoutItemSummary({
+function CheckoutItemSummaryBase({
   title,
   imageUrl,
   seller,
   priceLabel,
   onPressSeller,
-  onPressMessage,
-}: Props) {
+  onPressMessage }: Props) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const sellerName = seller.username ?? seller.id.slice(0, 8);
@@ -71,43 +71,39 @@ export function CheckoutItemSummary({
   );
 }
 
+const CheckoutItemSummary = React.memo(CheckoutItemSummaryBase);
+CheckoutItemSummary.displayName = 'CheckoutItemSummary';
+export { CheckoutItemSummary };
+
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     gap: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   image: {
     width: 96,
     height: 120,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   info: {
     flex: 1,
     justifyContent: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   title: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    lineHeight: 21,
-  },
+    lineHeight: 21 },
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   sellerName: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   price: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    marginTop: 2,
-  },
-});
+    marginTop: 2 } });

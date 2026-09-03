@@ -25,7 +25,7 @@
  */
 
 /** Current schema version number. Bumped on every breaking migration. */
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 // ── Drizzle-style table definitions (SQL strings) ──────────────────────
 
@@ -225,6 +225,33 @@ CREATE INDEX IF NOT EXISTS idx_mutation_outbox_state_seq
   WHERE state IN ('pending', 'pushing', 'conflict');
 `;
 
+/**
+ * Moodboard cache — offline-cached moodboard boards and their items.
+ * Used by the moodboard editor for offline-first editing. The mutation
+ * outbox drains moodboard operations to `POST /moodboards/:id/operations`.
+ */
+export const TABLE_MOODBOARD = `
+CREATE TABLE IF NOT EXISTS moodboard (
+  id              TEXT    PRIMARY KEY NOT NULL,
+  title           TEXT    NOT NULL DEFAULT '',
+  description     TEXT    NOT NULL DEFAULT '',
+  theme           TEXT    NOT NULL DEFAULT 'theme-linen',
+  visibility      TEXT    NOT NULL DEFAULT 'private',
+  cover_image     TEXT    NOT NULL DEFAULT '',
+  curator_id      TEXT    NOT NULL DEFAULT '',
+  items_json      TEXT    NOT NULL DEFAULT '[]',
+  server_rev      INTEGER NOT NULL DEFAULT 0,
+  sync_seq        INTEGER NOT NULL DEFAULT 0,
+  is_deleted      INTEGER NOT NULL DEFAULT 0,
+  updated_at      TEXT    NOT NULL DEFAULT ''
+);
+`;
+
+export const INDEX_MOODBOARD_SYNC_SEQ = `
+CREATE INDEX IF NOT EXISTS idx_moodboard_sync_seq
+  ON moodboard (sync_seq DESC);
+`;
+
 // ── Pragmas ─────────────────────────────────────────────────────────────
 
 /**
@@ -262,5 +289,50 @@ export const SCHEMA_VERSION_1 = [
   INDEX_PRODUCT_SELLER,
   INDEX_MUTATION_OUTBOX_STATE,
   `INSERT OR IGNORE INTO schema_version (version, applied_at)
-   VALUES (${CURRENT_SCHEMA_VERSION}, datetime('now'));`,
+   VALUES (1, datetime('now'));`,
 ].join('\n');
+
+/**
+ * Schema v2 — adds the moodboard cache table for offline-first editing.
+ * The mutation outbox already exists from v1; moodboard operations are
+ * enqueued with `entity_type = 'moodboard'` and pushed to the moodboard
+ * operations endpoint by the moodboard outbox drain.
+ */
+export const SCHEMA_VERSION_2 = [
+  TABLE_MOODBOARD,
+  INDEX_MOODBOARD_SYNC_SEQ,
+  `INSERT OR IGNORE INTO schema_version (version, applied_at)
+   VALUES (2, datetime('now'));`,
+].join('\n');
+
+/**
+ * Schema v3 — adds sync-aligned columns to `listing_draft` and `product` so
+ * the sync engine's `applyDeltas` can upsert server deltas without column
+ * mismatches. The backend `/sync/listing_draft` and `/sync/product` endpoints
+ * return `seller_id`, `image_url`, `status`, `category`, `original_price_gbp`,
+ * `shipping_method`, `shipping_payer` — these columns did not exist in the v1
+ * tables. `ALTER TABLE ADD COLUMN` is used so existing databases gain the
+ * columns without recreating the tables.
+ *
+ * The column rename map in `syncEngine.ts` (`DOMAIN_COLUMN_RENAME`) translates
+ * `original_price_gbp` → `original_price` and `category` → `category_id` (for
+ * the product domain) so the backend column names map to the local table
+ * columns.
+ */
+export const SCHEMA_VERSION_3 = [
+  // listing_draft: add columns returned by the /sync/listing_draft endpoint.
+  `ALTER TABLE listing_draft ADD COLUMN seller_id TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE listing_draft ADD COLUMN image_url TEXT`,
+  `ALTER TABLE listing_draft ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`,
+  `ALTER TABLE listing_draft ADD COLUMN category TEXT`,
+  `ALTER TABLE listing_draft ADD COLUMN original_price TEXT`,
+  `ALTER TABLE listing_draft ADD COLUMN shipping_method TEXT`,
+  `ALTER TABLE listing_draft ADD COLUMN shipping_payer TEXT`,
+  // product: add columns returned by the /sync/product endpoint.
+  `ALTER TABLE product ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`,
+  `ALTER TABLE product ADD COLUMN original_price TEXT`,
+  `ALTER TABLE product ADD COLUMN shipping_method TEXT`,
+  `ALTER TABLE product ADD COLUMN shipping_payer TEXT`,
+  `INSERT OR IGNORE INTO schema_version (version, applied_at)
+   VALUES (3, datetime('now'));`,
+].join(';\n');

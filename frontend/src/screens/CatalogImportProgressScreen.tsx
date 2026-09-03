@@ -15,9 +15,7 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  Alert,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
@@ -27,11 +25,10 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   FontFamily,
   Control,
-  DockConstants,
-} from '../theme/designTokens';
+  DockConstants } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
@@ -40,9 +37,9 @@ import { useCatalogImport } from '../hooks/useCatalogImport';
 import {
   fetchPublicationReceipt,
   CatalogImportError,
-  type PublicationReceiptDTO,
-} from '../services/catalogImportApi';
+  type PublicationReceiptDTO } from '../services/catalogImportApi';
 import type { RootStackParamList } from '../navigation/types';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'CatalogImportProgress'>;
 type ProgressRoute = RouteProp<RootStackParamList, 'CatalogImportProgress'>;
@@ -51,8 +48,7 @@ const SOURCE_LABEL: Record<string, string> = {
   seller_package: 'Seller package',
   ebay: 'eBay',
   depop: 'Depop',
-  vinted: 'Vinted',
-};
+  vinted: 'Vinted' };
 
 const PHASE_COPY: Record<string, string> = {
   connecting: 'Connecting…',
@@ -65,8 +61,7 @@ const PHASE_COPY: Record<string, string> = {
   completed: 'Import complete',
   cancelled: 'Import cancelled',
   paused: 'Paused',
-  failed: 'Something went wrong',
-};
+  failed: 'Something went wrong' };
 
 export default function CatalogImportProgressScreen() {
   const insets = useSafeAreaInsets();
@@ -82,6 +77,14 @@ export default function CatalogImportProgressScreen() {
   const [receipt, setReceipt] = useState<PublicationReceiptDTO | null>(null);
   const [receiptError, setReceiptError] = useState<string | null>(null);
   const [actionInFlight, setActionInFlight] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const isMountedRef = useRef(true);
 
   React.useEffect(() => {
@@ -141,19 +144,14 @@ export default function CatalogImportProgressScreen() {
   }, [navigation]);
 
   const handleCancel = useCallback(() => {
-    Alert.alert(
-      'Cancel import?',
-      'The import will stop. Any items already prepared will be discarded.',
-      [
-        { text: 'Keep', style: 'cancel' },
-        {
-          text: 'Cancel import',
-          style: 'destructive',
-          onPress: () => { void cancel(); },
-        },
-      ],
-    );
-  }, [cancel]);
+    setConfirmSheet({
+      visible: true,
+      title: 'Cancel import?',
+      message: 'The import will stop. Any items already prepared will be discarded.',
+      confirmLabel: 'Cancel import',
+      variant: 'danger',
+      onConfirm: () => { void cancel(); } });
+  }, [cancel, setConfirmSheet]);
 
   const enter = reducedMotion ? undefined : FadeIn.duration(300);
 
@@ -204,8 +202,7 @@ export default function CatalogImportProgressScreen() {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingBottom: insets.bottom + DockConstants.singleActionHeight + Space.lg,
-          },
+            paddingBottom: insets.bottom + DockConstants.singleActionHeight + Space.lg },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -289,8 +286,7 @@ export default function CatalogImportProgressScreen() {
           {
             paddingBottom: insets.bottom + Space.sm,
             backgroundColor: colors.background,
-            borderTopColor: colors.borderSubtle,
-          },
+            borderTopColor: colors.borderSubtle },
         ]}
       >
         {isFailed || isPaused ? (
@@ -348,6 +344,16 @@ export default function CatalogImportProgressScreen() {
           </AnimatedPressable>
         ) : null}
       </View>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </View>
   );
 }
@@ -357,8 +363,7 @@ function ReceiptRow({
   count,
   label,
   colors,
-  tone = 'default',
-}: {
+  tone = 'default' }: {
   count: number;
   label: string;
   colors: ThemeColors;
@@ -390,29 +395,24 @@ const createReceiptRowStyles = (colors: ThemeColors) =>
       gap: Space.sm,
       paddingVertical: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.borderSubtle,
-    },
+      borderTopColor: colors.borderSubtle },
     count: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.numericMeta.size,
-      lineHeight: Type.numericMeta.lineHeight,
+      fontSize: TypographyV2.numericMeta.size,
+      lineHeight: TypographyV2.numericMeta.lineHeight,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
-      minWidth: 32,
-    },
+      minWidth: 32 },
     label: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight } });
 
 // ── Back button — transparent 44pt hit, 22pt glyph, no chrome ────────────────
 function BackButton({
   colors,
   styles,
-  onPress,
-}: {
+  onPress }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
   onPress: () => void;
@@ -434,84 +434,70 @@ function BackButton({
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     screen: {
-      flex: 1,
-    },
+      flex: 1 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     backHit: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     loadingWrap: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: Space.smMd,
-    },
+      gap: Space.smMd },
     loadingText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.textSecondary },
     scrollContent: {
       paddingHorizontal: Space.md,
-      flexGrow: 1,
-    },
+      flexGrow: 1 },
     sourceLine: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textSecondary,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     phaseWrap: {
       paddingTop: Space.xl,
       paddingBottom: Space.lg,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     phaseTitle: {
       fontFamily: FontFamily.bold,
-      fontSize: Type.title.size,
-      lineHeight: Type.title.lineHeight,
-      letterSpacing: Type.title.letterSpacing,
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
       color: colors.textPrimary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     phaseCount: {
       marginTop: Space.sm,
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.textSecondary,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     phaseReason: {
       marginTop: Space.sm,
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       color: colors.danger,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     barWrap: {
-      paddingTop: Space.md,
-    },
+      paddingTop: Space.md },
     receiptSummary: {
-      paddingTop: Space.lg,
-    },
+      paddingTop: Space.lg },
     receiptErrorText: {
       fontFamily: FontFamily.regular,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.danger,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.danger },
     dock: {
       position: 'absolute',
       left: 0,
@@ -519,34 +505,27 @@ const createStyles = (colors: ThemeColors) =>
       bottom: 0,
       paddingTop: Space.sm,
       paddingHorizontal: Space.md,
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
+      borderTopWidth: StyleSheet.hairlineWidth },
     dockButton: {
       height: DockConstants.primaryButtonHeight,
       borderRadius: Radius.sm,
       backgroundColor: colors.brand,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     dockButtonDisabled: {
-      opacity: 0.4,
-    },
+      opacity: 0.4 },
     dockButtonText: {
       fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyEmphasis.size,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      color: colors.textInverse },
     cancelButton: {
       alignSelf: 'center',
       paddingVertical: Space.smMd,
       paddingHorizontal: Space.lg,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     cancelText: {
       fontFamily: FontFamily.medium,
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      color: colors.danger,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      color: colors.danger } });

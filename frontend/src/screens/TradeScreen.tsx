@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, Keyboard, AppState, AppStateStatus } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -17,26 +17,28 @@ import {
   sanitizeTradeQuantityInput,
   CO_OWN_FEE_RATE,
   TradeSide,
+  TradeEligibility,
   computeReservation,
   estimateFill,
   computeDepthWithinBand,
-  DEFAULT_FEE_SCHEDULE,
-} from '../utils/tradeFlow';
+  isBookFresh,
+  DEFAULT_FEE_SCHEDULE } from '../utils/tradeFlow';
 import { parseApiError } from '../lib/apiClient';
 import {
   fetchCoOwnAssetById,
   fetchCoOwnHoldings,
   fetchCoOwnOrderBook,
+  fetchCoOwnEligibility,
   previewCoOwnOrder,
   reserveCoOwnOrder,
   type CoOwnOrderBookSnapshot,
-  type MarketCoOwnAsset,
-} from '../services/marketApi';
+  type CoOwnEligibilityResult,
+  type MarketCoOwnAsset } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, FontFamily, DockConstants, LetterSpacing, Numeric } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, LetterSpacing, Numeric, Stroke} from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useHaptic } from '../hooks/useHaptic';
@@ -55,14 +57,16 @@ import {
   CANONICAL_RIGHTS_LABELS,
   type CoOwnRightsRow,
   type CoOwnTicketOrderType,
-  type CoOwnTicketDuration,
-} from '../components/coown';
+  type CoOwnTicketDuration } from '../components/coown';
 import { CoOwnNumericText } from '../components/ui/CoOwnNumericText';
 import { createStableId } from '../utils/createStableId';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
+import { parseGbpToMinor, minorToGbp } from '../utils/money';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { useCoOwnFeatureFlags } from '../hooks/useCoOwnFeatureFlags';
+import { track } from '../analytics/track';
 import { t } from '../i18n';
 
 
@@ -80,6 +84,16 @@ const ORDER_TYPE_OPTIONS: Array<{ value: CoOwnTicketOrderType; label: string; ac
   { value: 'limit', label: t('trade.orderType.limit'), accessibilityLabel: t('trade.orderType.limitA11y') },
 ];
 
+/** P0.8: Prefer exact decimal string from backend, fall back to number.
+ * Routes monetary values through BigInt minor-unit parsing to eliminate
+ * IEEE 754 representation errors introduced by JSON.parse on numbers. */
+function exactGbp(str?: string | null, num?: number): number | undefined {
+  if (str != null && str !== '') {
+    return minorToGbp(parseGbpToMinor(str));
+  }
+  return num;
+}
+
 export default function TradeScreen() {
   useScreenCaptureProtection();
   const navigation = useNavigation<NavT>();
@@ -90,9 +104,13 @@ export default function TradeScreen() {
   const { isVeryCompact: isCompact } = useBreakpoint();
   const scrollBottomPadding = Math.max(insets.bottom, Space.md) + DockConstants.singleActionHeight;
   const { isOffline } = useConnectivity();
+  const featureFlags = useCoOwnFeatureFlags();
 
   const currentUser = useStore((state) => state.currentUser);
-  const checkCoOwnEligibility = useStore((state) => state.checkCoOwnEligibility);
+
+  // Advisory only — the backend re-evaluates eligibility transactionally before any money mutation.
+  // The server is the source of truth; this state only drives the disabled UI + reason copy.
+  const [eligibilityResult, setEligibilityResult] = React.useState<CoOwnEligibilityResult | null>(null);
 
   const [side, setSide] = React.useState<TradeSide>(route.params?.side ?? 'buy');
   const [quantityInput, setQuantityInput] = React.useState('1');
@@ -110,6 +128,9 @@ export default function TradeScreen() {
   const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
+  const [isForegroundStale, setIsForegroundStale] = React.useState(false);
+  const [hasSequenceGap, setHasSequenceGap] = React.useState(false);
+  const lastSequenceRef = useRef<number | null>(null);
 
   const tradeAssetId = route.params?.assetId;
 
@@ -144,6 +165,44 @@ export default function TradeScreen() {
     return () => { cancelled = true; };
   }, [tradeAssetId, currentUser?.id, show]);
 
+  // Fetch server-authoritative eligibility for the loaded asset. The result
+  // is advisory — it powers the disabled state and reason copy. The backend
+  // re-evaluates eligibility transactionally at order placement, so a stale
+  // or tampered value here can never authorise a trade. Re-fetches when the
+  // server-issued expiry lapses while the screen is mounted.
+  React.useEffect(() => {
+    if (!tradeAssetId) return;
+    let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const loadEligibility = () => {
+      fetchCoOwnEligibility(tradeAssetId)
+        .then((result) => {
+          if (cancelled) return;
+          setEligibilityResult(result);
+          const remainingMs = Date.parse(result.expiresAt) - Date.now();
+          // Re-fetch shortly after expiry, with a small floor so we never
+          // spin a tight loop on a malformed timestamp.
+          const nextDelay = Math.max(10_000, Math.min(remainingMs + 2_000, 60 * 60_000));
+          refreshTimer = setTimeout(loadEligibility, nextDelay);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // On failure, fall back to a restrictive local state so the UI
+          // shows a disabled button with a generic reason. The backend
+          // remains the authoritative gate at execution time.
+          setEligibilityResult(null);
+          refreshTimer = setTimeout(loadEligibility, 30_000);
+        });
+    };
+
+    loadEligibility();
+    return () => {
+      cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+    };
+  }, [tradeAssetId]);
+
   // Poll the order book every 10s so traders see fresh depth without
   // manual refresh. Stops when the asset id changes or the screen unmounts.
   React.useEffect(() => {
@@ -158,10 +217,52 @@ export default function TradeScreen() {
     return () => { cancelled = true; clearInterval(intervalId); };
   }, [tradeAssetId]);
 
+  // Foreground revalidation: when the app returns to active, mark the book
+  // stale until a fresh fetch completes, and trigger an immediate re-fetch.
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        setIsForegroundStale(true);
+        if (tradeAssetId) {
+          fetchCoOwnOrderBook(tradeAssetId, { limit: 40 })
+            .then((book) => setOrderBook(book))
+            .catch(() => undefined);
+        }
+      }
+    });
+    return () => subscription?.remove();
+  }, [tradeAssetId]);
+
+  // Clear foreground staleness once a fresh book arrives.
+  React.useEffect(() => {
+    if (orderBook?.serverTimestamp && isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)) {
+      setIsForegroundStale(false);
+    }
+  }, [orderBook?.serverTimestamp, orderBook?.stalenessThresholdSeconds]);
+
+  // Sequence gap detection: snapshots should advance contiguously. A gap or
+  // regression indicates data loss and forces revalidation.
+  React.useEffect(() => {
+    if (orderBook?.snapshotSequence != null) {
+      const seq = orderBook.snapshotSequence;
+      if (lastSequenceRef.current != null) {
+        if (seq > lastSequenceRef.current + 1) {
+          setHasSequenceGap(true);
+        } else if (seq <= lastSequenceRef.current) {
+          return;
+        }
+      }
+      lastSequenceRef.current = seq;
+      setHasSequenceGap(false);
+    }
+  }, [orderBook?.snapshotSequence]);
+
   const marketPrice = asset ? asset.unitPriceGbp : 0;
+  // P0.1: protected_instant is now a distinct order type — NOT mapped to 'market'.
+  // The backend accepts 'protected_market' with maxPriceGbp (buy) / minPriceGbp (sell).
   const orderMode: 'market' | 'limit' = ticketOrderType === 'protected_instant' ? 'market' : 'limit';
-  const bestBid = orderBook?.bids[0]?.unitPriceGbp ?? 0;
-  const bestAsk = orderBook?.asks[0]?.unitPriceGbp ?? 0;
+  const bestBid = exactGbp(orderBook?.bids[0]?.unitPriceGbpStr, orderBook?.bids[0]?.unitPriceGbp) ?? 0;
+  const bestAsk = exactGbp(orderBook?.asks[0]?.unitPriceGbpStr, orderBook?.asks[0]?.unitPriceGbp) ?? 0;
   const protectedReferencePrice = side === 'buy' ? bestAsk : bestBid;
   const protectedLimitPrice = protectedReferencePrice > 0
     ? Number((protectedReferencePrice * (side === 'buy' ? 1.02 : 0.98)).toFixed(4))
@@ -170,6 +271,9 @@ export default function TradeScreen() {
   const effectiveLimitPrice = ticketOrderType === 'protected_instant'
     ? protectedLimitPrice
     : Number.isFinite(enteredLimitPrice) ? enteredLimitPrice : 0;
+  // P0.1: The backend order type for protected_instant is 'protected_market'.
+  // It uses maxPriceGbp (buy) / minPriceGbp (sell), NOT limitPriceGbp.
+  const backendOrderType = ticketOrderType === 'protected_instant' ? 'protected_market' : 'limit';
 
   // Spec 10 §9.3: "TBC only for prelaunch preview; blocks trading on live."
   // If any rights row is TBC, trading is blocked — even if navigated directly.
@@ -182,8 +286,7 @@ export default function TradeScreen() {
       'Distributions': asset.rights?.economicRights ?? null,
       'Voting rights': asset.rights?.votingRights ?? null,
       'Exit & proceeds': asset.rights?.exitRights ?? null,
-      'Operating costs': asset.rights?.feeRights ?? null,
-    };
+      'Operating costs': asset.rights?.feeRights ?? null };
     const rightsRows: CoOwnRightsRow[] = CANONICAL_RIGHTS_LABELS.map((label) => {
       const structured = structuredRightsMap[label] ?? null;
       if (structured) {
@@ -200,15 +303,13 @@ export default function TradeScreen() {
       side,
       quantityInput,
       limitPriceInput: effectiveLimitPrice > 0 ? String(effectiveLimitPrice) : '',
-      marketPrice,
-    }),
+      marketPrice }),
     [effectiveLimitPrice, marketPrice, quantityInput, side]
   );
 
   const visibleBook = React.useMemo(() => ({
-    bids: (orderBook?.bids ?? []).map((level) => ({ price: level.unitPriceGbp, size: level.units })),
-    asks: (orderBook?.asks ?? []).map((level) => ({ price: level.unitPriceGbp, size: level.units })),
-  }), [orderBook]);
+    bids: (orderBook?.bids ?? []).map((level) => ({ price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0, size: level.units })),
+    asks: (orderBook?.asks ?? []).map((level) => ({ price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0, size: level.units })) }), [orderBook]);
 
   const protectionPrice = quote.hasLimitPrice ? quote.limitPrice : 0;
 
@@ -228,8 +329,7 @@ export default function TradeScreen() {
       orderUnits: quote.quantity,
       depthUnits,
       slippageBeyondDepth: fillEstimate.slippageBeyondDepth,
-      midPrice,
-    };
+      midPrice };
   }, [side, visibleBook, quote.quantity, fillEstimate.slippageBeyondDepth]);
 
   const postTradePreview = React.useMemo(() => {
@@ -239,23 +339,41 @@ export default function TradeScreen() {
     return { unitsAfter, ownershipPct, outstandingUnits };
   }, [side, quote.quantity, yourUnits, asset?.totalUnits]);
 
-  const eligibility = asset ? checkCoOwnEligibility(asset.settlementMode) : { ok: false, message: t('trade.error.assetNotFound') };
+  // Advisory only — the backend re-evaluates eligibility transactionally before any money mutation.
+  // Map the server-evidenced result into the TradeEligibility shape consumed by the UI helpers.
+  const eligibility: TradeEligibility = (() => {
+    if (!asset) return { ok: false, message: t('trade.error.assetNotFound') };
+    if (!eligibilityResult) return { ok: false, message: t('trade.error.reconnectToReview') };
+    if (eligibilityResult.eligible) return { ok: true };
+    return { ok: false, message: eligibilityResult.message ?? t('trade.error.notEligible') };
+  })();
+  const bookAgeSeconds = orderBook?.serverTimestamp
+    ? Math.floor((Date.now() - new Date(orderBook.serverTimestamp).getTime()) / 1000)
+    : 0;
   const marketIsAuthoritative = orderBook?.source === 'live'
     && orderBook.reconciliationState === 'reconciled'
-    && Boolean(orderBook.serverTimestamp);
+    && isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)
+    && !isForegroundStale
+    && !hasSequenceGap;
   const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote })
     && !hasIncompleteRights
     && marketIsAuthoritative
     && !isOffline;
   const submitDisabledReason = React.useMemo(() => {
+    if (!featureFlags.canPlaceOrders) return 'Trading temporarily unavailable';
     const tradeReason = getTradeSubmitDisabledReason({ assetFound: !!asset, eligibility, quote, hasIncompleteRights });
     if (tradeReason) return tradeReason;
+    if (featureFlags.maxOrderSize !== null && quote.quantity > featureFlags.maxOrderSize) {
+      return `Maximum ${featureFlags.maxOrderSize} units per order`;
+    }
     if (isOffline) return t('trade.error.reconnectToReview');
+    if (isForegroundStale) return 'Reconnecting to live market…';
+    if (hasSequenceGap) return 'Market data interrupted — refreshing…';
     if (orderBook?.source !== 'live') return t('trade.error.liveDataUnavailable');
     if (orderBook.reconciliationState !== 'reconciled') return t('trade.error.reconciliationInProgress');
-    if (!orderBook.serverTimestamp) return t('trade.error.timestampUnavailable');
+    if (!isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)) return t('trade.error.timestampUnavailable');
     return null;
-  }, [asset, eligibility, hasIncompleteRights, isOffline, orderBook, quote]);
+  }, [asset, eligibility, hasIncompleteRights, isOffline, orderBook, quote, isForegroundStale, hasSequenceGap, featureFlags.canPlaceOrders, featureFlags.maxOrderSize]);
 
   // Thin market: no opposite side → substitute "Review order" with "Request quote"
   const isThinMarket = (side === 'buy' && visibleBook.asks.length === 0)
@@ -268,8 +386,7 @@ export default function TradeScreen() {
 
     const decision = evaluateTradeSubmit({
       orderMode, side, quantityInput, limitPriceInput: String(effectiveLimitPrice), marketPrice,
-      assetFound: !!asset, eligibility, maxSellUnits: yourUnits,
-    });
+      assetFound: !!asset, eligibility, maxSellUnits: yourUnits });
 
     if (!decision.ok) { show(decision.message, 'error'); return; }
     if (!asset) { show(t('trade.error.assetNotFound'), 'error'); return; }
@@ -280,53 +397,74 @@ export default function TradeScreen() {
       return;
     }
 
+    track('coown_trade_started', { asset_id: asset.id, side });
+
     setIsSubmittingOrder(true);
     if (!idempotencyKeyRef.current) {
       idempotencyKeyRef.current = createStableId('reserve');
     }
     const idempotencyKey = idempotencyKeyRef.current;
     try {
+      // P0.1: Send protected_market with maxPriceGbp/minPriceGbp instead of
+      // market + limitPriceGbp (which the backend rejects as contract-invalid).
       const command = {
         userId: currentUser.id,
         side,
         units: quote.quantity,
-        orderType: orderMode,
-        limitPriceGbp: effectiveLimitPrice,
-      } as const;
+        orderType: backendOrderType,
+        ...(backendOrderType === 'protected_market'
+          ? (side === 'buy'
+            ? { maxPriceGbp: effectiveLimitPrice }
+            : { minPriceGbp: effectiveLimitPrice })
+          : { limitPriceGbp: effectiveLimitPrice }) } as const;
       const previewResponse = await previewCoOwnOrder(asset.id, command);
       const preview = previewResponse.preview;
       if (!preview.eligibility.allowed) {
         show(preview.eligibility.message || t('trade.error.notEligible'), 'error');
         return;
       }
+      // P0.8: Route preview monetary values through exact BigInt parsing
+      // to eliminate IEEE 754 representation errors from the wire format.
+      const previewGrossNotional = exactGbp(preview.estimatedFill.grossNotionalGbpStr, preview.estimatedFill.grossNotional) ?? 0;
+      const previewFee = exactGbp(preview.feeGbpStr, preview.fee) ?? 0;
+      const previewTotal = exactGbp(preview.totalGbpStr, preview.total) ?? 0;
+      const previewAvgFillPrice = exactGbp(preview.estimatedFill.avgFillPriceGbpStr, preview.estimatedFill.avgFillPrice) ?? 0;
+      const previewWorstPrice = exactGbp(preview.estimatedFill.worstPriceGbpStr, preview.estimatedFill.worstPrice) ?? 0;
       const reservationResponse = await reserveCoOwnOrder(asset.id, {
         ...command,
-        idempotencyKey,
-      });
+        idempotencyKey });
       const reserved = reservationResponse.reservation;
       haptic.medium();
+      track('coown_order_placed', {
+        asset_id: asset.id,
+        side,
+        units: quote.quantity,
+        price_gbp: effectiveLimitPrice,
+      });
       navigation.navigate('TradeConfirm', {
         assetId: asset.id,
         assetTitle: asset.title,
         assetImageUrl: asset.imageUrl,
         side,
         quantity: quote.quantity,
-        totalValue: preview.estimatedFill.grossNotional,
-        fee: preview.fee,
-        netValue: preview.total,
+        totalValue: previewGrossNotional,
+        fee: previewFee,
+        netValue: previewTotal,
         orderMode,
         ticketOrderType,
+        // P0.1: pass the backend order type and protection price
+        backendOrderType,
         limitPriceGbp: effectiveLimitPrice,
-        averageFillPriceGbp: preview.estimatedFill.avgFillPrice,
-        worstPriceGbp: preview.estimatedFill.worstPrice,
+        protectionPriceGbp: backendOrderType === 'protected_market' ? effectiveLimitPrice : undefined,
+        averageFillPriceGbp: previewAvgFillPrice,
+        worstPriceGbp: previewWorstPrice,
         estimatedFilledUnits: preview.estimatedFill.filledUnits,
         estimatedRemainingUnits: preview.estimatedFill.remainingUnits,
         reservationId: reserved.id,
         reservationExpiresAt: reserved.expiresAt,
         previewValidUntil: preview.validUntil,
-        maxReserved1ze: reserved.reserved1zeMg / 1000,
-        marketDataTimestamp: orderBook.serverTimestamp,
-      });
+        maxReserved1ze: reserved.reserved1zeUnits / 1000,
+        marketDataTimestamp: orderBook.serverTimestamp });
       idempotencyKeyRef.current = null;
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to prepare this order');
@@ -415,8 +553,7 @@ export default function TradeScreen() {
         nav={asset.appraisalValueGbp && asset.totalUnits > 0 ? {
           pricePerUnit: asset.appraisalValueGbp / asset.totalUnits,
           valuedAt: asset.appraisalValuedAt ?? '—',
-          method: asset.appraisalValuer ?? '—',
-        } : undefined}
+          method: asset.appraisalValuer ?? '—' } : undefined}
         premiumPct={asset.appraisalValueGbp && asset.totalUnits > 0
           ? ((asset.unitPriceGbp - (asset.appraisalValueGbp / asset.totalUnits)) / (asset.appraisalValueGbp / asset.totalUnits)) * 100
           : null}
@@ -484,12 +621,20 @@ export default function TradeScreen() {
           </View>
         )}
 
+        {featureFlags.isPaperMode && (
+          <View style={[styles.paperBanner, { backgroundColor: colors.brandSubtle, borderColor: colors.brandBorder }]}>
+            <Ionicons name="school-outline" size={14} color={colors.brand} />
+            <Text style={[styles.paperBannerText, { color: colors.textSecondary }]} numberOfLines={2} maxFontSizeMultiplier={2}>
+              Paper trading — no real money is at risk. Orders simulate the full flow.
+            </Text>
+          </View>
+        )}
+
         <View style={[
           styles.illustrativeBanner,
           {
             backgroundColor: marketIsAuthoritative ? colors.successSubtle : colors.warningSubtle,
-            borderColor: marketIsAuthoritative ? colors.successBorder : colors.warningBorder,
-          },
+            borderColor: marketIsAuthoritative ? colors.successBorder : colors.warningBorder },
         ]}>
           <Ionicons
             name={marketIsAuthoritative ? 'pulse-outline' : 'pause-circle-outline'}
@@ -498,8 +643,12 @@ export default function TradeScreen() {
           />
           <Text style={[styles.illustrativeBannerText, { color: colors.textSecondary }]} numberOfLines={3} maxFontSizeMultiplier={2}>
             {marketIsAuthoritative
-              ? `Live order book · snapshot ${orderBook?.snapshotSequence ?? 0}. A server preview and reservation are required before confirmation.`
-              : 'Trading paused. Displayed depth may be a development fallback and is never treated as an executable quote.'}
+              ? `Live · updated ${bookAgeSeconds}s ago`
+              : isForegroundStale
+                ? 'Updating market…'
+                : hasSequenceGap
+                  ? 'Market data interrupted — refreshing…'
+                  : 'Trading paused. Displayed depth is not an executable quote.'}
           </Text>
         </View>
 
@@ -527,19 +676,19 @@ export default function TradeScreen() {
             protectionPrice={protectionPrice}
             reservation={{
               totalReserve1ZE: reservation.totalReserve1ZE,
-              totalReserveUnits: reservation.totalReserveUnits,
-            }}
+              totalReserveUnits: reservation.totalReserveUnits }}
             fillEstimate={{
               avgFillPrice: fillEstimate.avgFillPrice,
               worstPrice: fillEstimate.worstPrice,
               unitsFilled: fillEstimate.unitsFilled,
               slippageBeyondDepth: fillEstimate.slippageBeyondDepth,
-              gross: fillEstimate.gross,
-            }}
+              gross: fillEstimate.gross }}
             depthContext={depthContext}
             duration={ticketDuration}
             postTradePreview={postTradePreview}
             rightsVersion={asset.rights?.version ? `v${asset.rights.version}` : undefined}
+            // P0.3: Pass the book source so the composer shows truth language
+            bookSource={orderBook?.source ?? 'development-fallback'}
           />
         </View>
 
@@ -652,8 +801,7 @@ export default function TradeScreen() {
                       styles.durationChip,
                       {
                         backgroundColor: ticketDuration === 'GFD' ? colors.brand : colors.surfaceAlt,
-                        borderColor: colors.border,
-                      },
+                        borderColor: colors.border },
                     ]}
                     accessibilityRole="button"
                     accessibilityLabel="Good for day"
@@ -671,8 +819,7 @@ export default function TradeScreen() {
                       styles.durationChip,
                       {
                         backgroundColor: ticketDuration === 'GTC90' ? colors.brand : colors.surfaceAlt,
-                        borderColor: colors.border,
-                      },
+                        borderColor: colors.border },
                     ]}
                     accessibilityRole="button"
                     accessibilityLabel="Good till cancelled, 90 days"
@@ -764,12 +911,10 @@ const styles = StyleSheet.create({
   // feel calm and deliberate, not cramped.
   content: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   // ── Buy/Sell selector — 24pt section spacing after ──
   sideSwitcher: {
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   // ── Alert card — calm, professional warning surface ──
   // Per spec 11_COOWN: "Clean, calm, trustworthy." Alert uses subtle
   // semantic background, not aggressive red. 24pt section spacing.
@@ -777,16 +922,14 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.sheetDialog,
     padding: Space.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   alertRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     marginBottom: Space.xs,
     minWidth: 0,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   // Alert title uses bodyEmphasis (15/21/600) for clear hierarchy.
   alertTitle: {
     fontSize: TypographyV2.bodyStrong.size,
@@ -794,15 +937,27 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     flexShrink: 1,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   // Alert text uses body (14/20/400) for readable explanation.
   alertText: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
+  paperBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: Stroke.standard,
+    marginBottom: Space.sm },
+  paperBannerText: {
+    flex: 1,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Illustrative banner — calm market status indicator ──
   // Per spec 11_COOWN: "Calm presentation." Subtle background, not aggressive.
   // Uses semantic colors (success/warning) only for status truth.
@@ -815,15 +970,13 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: RadiusRoleValue.mediaThumbnail,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   illustrativeBannerText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // ── Unified order ticket — the one dominant panel ──
   // Per AGENTS.md §4: one dominant non-media panel above the fold.
   // Per spec 11_COOWN: "One-dimensional decision surface." Calm, clear,
@@ -834,42 +987,35 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.lg,
     gap: Space.md,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   // ── Ticket divider — hairline separator between sections ──
   // Per AGENTS.md stroke grammar: separators are hairline.
   ticketDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
-  },
+    marginVertical: Space.sm },
   ticketRow: {
     flexDirection: 'row',
-    gap: Space.md,
-  },
+    gap: Space.md },
   ticketFieldWrap: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   // ── Context column — compact market context beside quantity ──
   // Per spec 11_COOWN: "Calm, clear, professional." Context values use
   // Numeric.numericMeta (13/18/600) with tabular-nums for stable alignment.
   ticketContextCol: {
     width: Space.xxl * 2 + Space.xs,
     gap: Space.sm,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   contextItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   // Context labels use captionElevated for quiet hierarchy.
   contextLabel: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // Context values use numericMeta with tabular-nums — per spec 11_COOWN:
   // "Monetary and unit quantities never change width erratically."
   contextValue: {
@@ -877,39 +1023,34 @@ const styles = StyleSheet.create({
     lineHeight: Numeric.numericMeta.lineHeight,
     fontFamily: FontFamily.semibold,
     letterSpacing: Numeric.numericMeta.letterSpacing,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   // ── Input labels — captionElevated for quiet, professional hierarchy ──
-  // Per Design.md: "Labels: Type.caption."
+  // Per Design.md: "Labels: TypographyV2.meta."
   inputLabel: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // ── Limit row — label + capped pill ──
   limitRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     minWidth: 0,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   // Capped pill — semantic truth, not decoration. Shows the order is
   // price-protected, which is a material fact for the user.
   modePill: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: RadiusRoleValue.pillAvatar,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   modePillText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.bold,
     letterSpacing: LetterSpacing.wide + 0.28,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   // Max link — quiet, professional quick-fill action. Tabular-nums.
   maxLink: {
     fontSize: TypographyV2.meta.size,
@@ -917,22 +1058,18 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.meta.letterSpacing,
     alignSelf: 'flex-start',
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   // Market hint — calm, professional explanation text.
   marketHint: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   submitBtn: {
-    flex: 1,
-  },
+    flex: 1 },
   submitDockWrap: {
     width: '100%',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   // ── Submit disabled reason — calm, professional feedback ──
   // Per spec 11_COOWN: "Financial error never resolves via toast alone."
   // Shows the reason inline below the button.
@@ -941,29 +1078,23 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   thinMarketDock: {
-    width: '100%',
-  },
+    width: '100%' },
   // ── Duration selector — calm, professional chips ──
   // Per spec 11_COOWN: "Clean, calm, trustworthy." Selected state uses
   // colors.brand fill, unselected uses surfaceAlt. Tabular-nums for text.
   durationRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   durationChip: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderRadius: RadiusRoleValue.pillAvatar,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   durationText: {
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.body.letterSpacing,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
-});
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] } });

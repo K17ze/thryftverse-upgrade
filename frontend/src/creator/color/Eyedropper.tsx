@@ -67,10 +67,10 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -93,8 +93,7 @@ interface EyedropperProps {
 export function Eyedropper({
   mediaUris,
   onPick,
-  style,
-}: EyedropperProps) {
+  style }: EyedropperProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useEyedropperStyles(colors);
@@ -209,49 +208,39 @@ function useEyedropperStyles(colors: ThemeColors) {
           borderWidth: Stroke.standard,
           borderColor: colors.border,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         panel: {
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         panelHeader: {
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'space-between',
-        },
+          justifyContent: 'space-between' },
         panelTitle: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.caption.size,
-          color: colors.textPrimary,
-        },
+          fontSize: TypographyV2.meta.size,
+          color: colors.textPrimary },
         loadingContainer: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.sm,
-          paddingVertical: Space.sm,
-        },
+          paddingVertical: Space.sm },
         loadingText: {
           fontFamily: Typography.family.regular,
-          fontSize: Type.caption.size,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          color: colors.textSecondary },
         swatchRow: {
           gap: Space.xs,
-          paddingVertical: Space.xs,
-        },
+          paddingVertical: Space.xs },
         swatch: {
           width: 36,
           height: 36,
           borderRadius: Radius.md,
           borderWidth: Stroke.hairline,
-          borderColor: 'rgba(0,0,0,0.1)',
-        },
+          borderColor: 'rgba(0,0,0,0.1)' },
         emptyText: {
           fontFamily: Typography.family.regular,
-          fontSize: Type.caption.size,
-          color: colors.textMuted,
-        },
-      }),
+          fontSize: TypographyV2.meta.size,
+          color: colors.textMuted } }),
     [colors],
   );
 }

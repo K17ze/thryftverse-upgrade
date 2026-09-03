@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { deriveSellerBadges } from '../../platform/product';
 
@@ -14,12 +15,11 @@ interface TrustBadgeConfig {
 }
 
 const TRUST_BADGE_CONFIG: Record<TrustBadgeType, TrustBadgeConfig> = {
-  verified: { icon: 'shield-checkmark', label: 'Verified' },
+  verified: { icon: 'checkmark-circle', label: 'Verified' },
   fastShipper: { icon: 'flash', label: 'Fast shipping' },
   responsive: { icon: 'chatbubble', label: 'Responsive' },
   topRated: { icon: 'star', label: 'Top rated' },
-  trustedSeller: { icon: 'ribbon', label: 'Trusted seller' },
-};
+  trustedSeller: { icon: 'ribbon', label: 'Trusted seller' } };
 
 function deriveTrustBadges(seller: SellerTrustSummary | null): TrustBadgeType[] {
   if (!seller) return [];
@@ -57,8 +57,7 @@ export interface SellerTrustBadgeProps {
 export function SellerTrustBadge({
   seller,
   limit,
-  align = 'left',
-}: SellerTrustBadgeProps) {
+  align = 'left' }: SellerTrustBadgeProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const badges = React.useMemo(() => deriveTrustBadges(seller), [seller]);
@@ -97,28 +96,23 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       flexWrap: 'wrap',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     containerCenter: {
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     badge: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
       paddingHorizontal: Space.sm,
       paddingVertical: 4,
-      backgroundColor: `${colors.success}14`,
+      backgroundColor: colors.successSubtle,
       borderRadius: Radius.sm,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: `${colors.success}33`,
-    },
+      borderColor: colors.successBorder },
     badgeText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.success,
-      letterSpacing: 0.1,
-    },
-  });
+      letterSpacing: 0.1 } });
 }

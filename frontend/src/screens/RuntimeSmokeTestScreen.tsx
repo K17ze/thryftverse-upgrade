@@ -1,12 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
-  StatusBar,
-} from 'react-native';
+  StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,8 +16,10 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DevSettings } from 'react-native';
 import { BodyEmphasis, Caption, Meta } from '../components/ui/Text';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 
-import { Typography, Space, Radius, Type } from '../theme/designTokens';
+import { Typography, Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 type Props = NativeStackScreenProps<RootStackParamList, 'RuntimeSmokeTest'>;
 
 /**
@@ -69,6 +69,14 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
   const { listings } = useBackendData();
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const firstConversation = conversations[0] ?? null;
   const firstGroupConversation =
@@ -138,33 +146,44 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
       if (appKeys.length > 0) {
         await AsyncStorage.multiRemove(appKeys);
       }
-      Alert.alert(
-        'Local State Cleared',
-        `Removed ${appKeys.length} persisted keys. Reload the app to apply.`,
-        [
-          {
-            text: 'Reload Now',
-            onPress: () => {
-              try { DevSettings.reload(); } catch {
-                Alert.alert('Please manually reload the app (shake + Reload)');
-              }
-            },
-          },
-          { text: 'Later', style: 'cancel' },
-        ]
-      );
+      setConfirmSheet({
+        visible: true,
+        title: 'Local State Cleared',
+        message: `Removed ${appKeys.length} persisted keys. Reload the app to apply.`,
+        confirmLabel: 'Reload Now',
+        variant: 'default',
+        onConfirm: () => {
+          try { DevSettings.reload(); } catch {
+            setConfirmSheet({
+              visible: true,
+              title: 'Please manually reload the app',
+              message: 'Shake the device and select Reload.',
+              confirmLabel: 'OK',
+              variant: 'default',
+              onConfirm: () => {} });
+          }
+        } });
     } catch (e) {
-      Alert.alert('Reset Failed', String(e));
+      setConfirmSheet({
+        visible: true,
+        title: 'Reset Failed',
+        message: String(e),
+        confirmLabel: 'OK',
+        variant: 'default',
+        onConfirm: () => {} });
     }
   };
 
   const handlePress = (btn: TestButton) => {
     const params = buildParams(btn);
     if (btn.needsData && !params) {
-      Alert.alert(
-        'No Data Available',
-        `Cannot open ${btn.label}: no ${btn.needsData} found in current store/backend state.`
-      );
+      setConfirmSheet({
+        visible: true,
+        title: 'No Data Available',
+        message: `Cannot open ${btn.label}: no ${btn.needsData} found in current store/backend state.`,
+        confirmLabel: 'OK',
+        variant: 'default',
+        onConfirm: () => {} });
       return;
     }
     safeNavigate(navigation, btn.screen, params);
@@ -263,6 +282,15 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
           })}
         </View>
       </ScrollView>
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
     </SafeAreaView>
   );
 }
@@ -284,27 +312,22 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   scrollContent: {
     padding: Space.md,
-    paddingBottom: Space.xxl + Space.lg,
-  },
+    paddingBottom: Space.xxl + Space.lg },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   headerTitle: {
-    fontSize: Type.title.size,
-    letterSpacing: Type.title.letterSpacing,
-    lineHeight: Type.title.lineHeight,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
+    lineHeight: TypographyV2.screenTitle.lineHeight },
   subtitle: {
     marginBottom: Space.md,
-    lineHeight: Type.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   statsCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
@@ -312,21 +335,17 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   statRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   statValue: {
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: Typography.family.medium },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   tile: {
     width: '30%',
     flexGrow: 1,
@@ -340,25 +359,20 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     minHeight: Space.xxl + Space.lg,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   tileDisabled: {
     backgroundColor: colors.surfaceAlt,
-    borderColor: `${colors.border}60`,
-  },
+    borderColor: colors.borderSubtle },
   tileLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   tileLabelDisabled: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   tileMissing: {
-    fontSize: Type.meta.size,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.danger },
   resetTile: {
     width: '100%',
     backgroundColor: colors.dangerSubtle,
@@ -370,18 +384,14 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.dangerBorder,
     marginBottom: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   resetTileLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.danger,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   resetTileCaption: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    textAlign: 'center',
-  },
-  });
+    textAlign: 'center' } });
 }

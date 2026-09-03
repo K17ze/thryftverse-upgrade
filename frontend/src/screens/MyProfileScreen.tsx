@@ -1,15 +1,14 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   StatusBar,
-  Dimensions,
+  useWindowDimensions,
   Share,
   Pressable,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { EmptyState } from '../components/EmptyState';
 import Reanimated, {
   useSharedValue,
@@ -17,16 +16,16 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  FadeIn,
-} from 'react-native-reanimated';
+  FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, FontFamily, Control, LetterSpacing, Type } from '../theme/designTokens';
+import { Space, FontFamily, Control, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { useStore } from '../store/useStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useNavigation, useScrollToTop, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -47,6 +46,11 @@ import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHe
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
 import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
 import { useSellerTrust, VERIFICATION_TIERS } from '../platform/product';
+import { useSellerReviewsInfinite } from '../platform/server';
+import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/ProfileReviews';
+import { ShopRail, type ShopRailItem } from '../components/profile/ShopRail';
+import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
+import { openProfile } from '../navigation/openProfile';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
@@ -54,11 +58,10 @@ import { fetchPosterHighlights, type PosterHighlight } from '../services/posters
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { FlashList } from '@shopify/flash-list';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // A profile cover is identity media, not a thin toolbar backdrop. At 200pt it
 // retains a useful crop on common phone widths while leaving the avatar/stats
@@ -92,7 +95,9 @@ function formatCompact(n: number): string {
 
 export default function MyProfileScreen() {
   const { colors, isDark } = useAppTheme();
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
+  const { t: tt } = useAppTranslation('myProfile');
 
   // Themed style overrides — color properties extracted from module-level styles
   const t = {
@@ -144,25 +149,23 @@ export default function MyProfileScreen() {
     portfolioPreview: { backgroundColor: colors.surfaceAlt },
     portfolioLabel: { color: colors.textSecondary },
     portfolioHoldingTitle: { color: colors.textPrimary },
-    portfolioHoldingUnits: { color: colors.textMuted },
-  };
+    portfolioHoldingUnits: { color: colors.textMuted } };
   const tMyProfile = {
     awayBanner: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     awayBannerTitle: { color: colors.textPrimary },
-    awayBannerSub: { color: colors.textMuted },
-  };
+    awayBannerSub: { color: colors.textMuted } };
 
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
   const scrollRef = React.useRef<Reanimated.ScrollView>(null);
   useScrollToTop(scrollRef);
-  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'about'>('listings');
+  const [activeTab, setActiveTab] = React.useState<'listings' | 'looks' | 'about' | 'reviews'>('listings');
   const tabContentY = React.useRef(0);
 
   const { show } = useToast();
   const haptic = useHaptic();
 
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
 
   const { listings } = useBackendData();
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
@@ -175,6 +178,18 @@ export default function MyProfileScreen() {
 
   // Seller trust summary — verified badge, response time, dispatch time, completed sales
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
+
+  // Seller reviews — infinite list for the Reviews tab. Only rendered when
+  // the seller has reviews (reviewCount > 0), keeping the tab conditional.
+  const reviewsQuery = useSellerReviewsInfinite(currentUser?.id);
+  const myReviews: SellerReviewItem[] = React.useMemo(() => {
+    const pages = reviewsQuery.data?.pages ?? [];
+    const items: SellerReviewItem[] = [];
+    for (const page of pages) for (const item of page.items) items.push(item);
+    return items;
+  }, [reviewsQuery.data]);
+  const myReviewSummary: SellerReviewSummary | null = reviewsQuery.data?.pages?.[0]?.summary ?? null;
+  const myReviewCount = sellerTrust?.reviewCount ?? myReviewSummary?.reviewCount ?? 0;
 
   // Follow counts — followers/following for the seam row.
   // Status distinguishes loading/error from a real zero so the UI never
@@ -224,18 +239,17 @@ export default function MyProfileScreen() {
               isOpen: a.isOpen,
               yourUnits: h?.units ?? 0,
               avgEntryPriceGBP: h?.avgEntry,
-              realizedProfitGBP: h?.realized,
-            };
+              realizedProfitGBP: h?.realized };
           });
         setCoOwnHoldings(merged);
       })
       .catch((err) => {
         if (cancelled) return;
-        const parsed = parseApiError(err, 'Unable to load portfolio');
+        const parsed = parseApiError(err, tt('toast.portfolioLoadFailed'));
         show(parsed.message, 'error');
       });
     return () => { cancelled = true; };
-  }, [currentUser?.id, show]);
+  }, [currentUser?.id, show, tt]);
 
   const userAvatar = useStore((state) => state.userAvatar);
   const userCover = useStore((state) => state.userCover);
@@ -295,8 +309,7 @@ export default function MyProfileScreen() {
     retryAvatar,
     retryCover,
     revertAvatar,
-    revertCover,
-  } = useProfileMediaUpload(
+    revertCover } = useProfileMediaUpload(
     user?.id,
     confirmedAvatarRemote,
     confirmedCoverRemote,
@@ -319,9 +332,9 @@ export default function MyProfileScreen() {
   const prevCoverStatus = React.useRef(coverState.status);
   React.useEffect(() => {
     if (coverState.status === 'confirmed' && prevCoverStatus.current !== 'confirmed') {
-      show('Cover updated', 'success');
+      show(tt('toast.coverUpdated'), 'success');
     } else if (coverState.status === 'failed' && prevCoverStatus.current !== 'failed') {
-      show('Cover upload failed', 'error');
+      show(tt('toast.coverUploadFailed'), 'error');
     }
     prevCoverStatus.current = coverState.status;
   }, [coverState.status, show]);
@@ -330,9 +343,9 @@ export default function MyProfileScreen() {
   const prevAvatarStatus = React.useRef(avatarState.status);
   React.useEffect(() => {
     if (avatarState.status === 'confirmed' && prevAvatarStatus.current !== 'confirmed') {
-      show('Avatar updated', 'success');
+      show(tt('toast.avatarUpdated'), 'success');
     } else if (avatarState.status === 'failed' && prevAvatarStatus.current !== 'failed') {
-      show('Avatar upload failed', 'error');
+      show(tt('toast.avatarUploadFailed'), 'error');
     }
     prevAvatarStatus.current = avatarState.status;
   }, [avatarState.status, show]);
@@ -367,6 +380,24 @@ export default function MyProfileScreen() {
       });
   }, [listings, profileUserId]);
 
+  // Curated shop window — featured listings for the ShopRail. The rail renders
+  // only when featured items exist (ShopRail returns null for empty input),
+  // keeping the first viewport truthful — no fabricated placeholder content.
+  const shopRailItems = React.useMemo<ShopRailItem[]>(() => {
+    return allOwnedListings
+      .filter((item) => item.featured === true)
+      .slice(0, 10)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        imageUri: item.images?.[0] ?? '',
+        brand: item.brand ?? null,
+        isSold: item.isSold,
+        isPinned: true,
+      }));
+  }, [allOwnedListings]);
+
   // Profile completion — drives the progress prompt. Completion measures ONLY
   // identity fields the user can complete directly: display name, bio, profile
   // photo and cover. Audience growth (followers) and first listing are NOT
@@ -394,12 +425,12 @@ export default function MyProfileScreen() {
   // direct profile field. Listing/audience growth CTAs live in the separate
   // growth-tasks section below the identity hero.
   const completionCta = React.useMemo<{ label: string; focus?: 'avatar' | 'cover' }>(() => {
-    if (!user?.displayName?.trim()) return { label: 'Add name' };
-    if (!user?.bio?.trim()) return { label: 'Add bio' };
-    if (!displayAvatar) return { label: 'Add photo', focus: 'avatar' };
-    if (!displayCover) return { label: 'Add cover', focus: 'cover' };
-    return { label: 'Edit profile' };
-  }, [user?.displayName, user?.bio, displayAvatar, displayCover]);
+    if (!user?.displayName?.trim()) return { label: tt('completionCta.addName') };
+    if (!user?.bio?.trim()) return { label: tt('completionCta.addBio') };
+    if (!displayAvatar) return { label: tt('completionCta.addPhoto'), focus: 'avatar' };
+    if (!displayCover) return { label: tt('completionCta.addCover'), focus: 'cover' };
+    return { label: tt('completionCta.editProfile') };
+  }, [user?.displayName, user?.bio, displayAvatar, displayCover, tt]);
 
   const [completionDismissed, setCompletionDismissed] = React.useState(false);
   // Re-show the prompt when completion improves so progress is celebrated once.
@@ -427,8 +458,7 @@ export default function MyProfileScreen() {
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
-    },
-  });
+    } });
 
   const coverStyle = useAnimatedStyle(() => {
     const translateY = interpolate(
@@ -449,18 +479,15 @@ export default function MyProfileScreen() {
           [0, COVER_HEIGHT],
           [0, -COVER_HEIGHT],
           Extrapolation.CLAMP
-        ),
-      },
-    ],
-  }));
+        ) },
+    ] }));
 
   const topUtilityStyle = useAnimatedStyle(() => {
     const opacity = interpolate(scrollY.value, [0, 80], [1, 0], Extrapolation.CLAMP);
     const translateY = interpolate(scrollY.value, [0, 80], [0, -8], Extrapolation.CLAMP);
     return {
       opacity,
-      transform: [{ translateY }],
-    };
+      transform: [{ translateY }] };
   });
 
   const headerOpacityStyle = useAnimatedStyle(() => {
@@ -478,16 +505,15 @@ export default function MyProfileScreen() {
     haptic.light();
     try {
       await Share.share({
-        message: `Check out @${user.username} on Thryftverse! https://thryftverse.com/@${user.username}`,
+        message: tt('share.message', { username: user.username }),
         url: `https://thryftverse.com/@${user.username}`,
-        title: `${user.displayName || user.username} on Thryftverse`,
-      });
+        title: tt('share.title', { name: user.displayName || user.username }) });
     } catch { /* user cancelled or share unavailable */ }
   };
 
   const wishlistCount = useStore((state) => state.wishlist.length);
   const savedCount = useStore((state) => state.savedProducts.length);
-  const savedProductIds = useStore((state) => state.savedProducts);
+  const savedProductIds = useStore(useShallow((state) => state.savedProducts));
   const savedListings = React.useMemo(
     () => listings.filter((item) => savedProductIds.includes(item.id)),
     [listings, savedProductIds]
@@ -497,50 +523,43 @@ export default function MyProfileScreen() {
     () => [
       {
         icon: 'bag-handle-outline' as const,
-        label: 'Orders',
+        label: tt('utility.orders'),
         onPress: () => { haptic.light(); navigation.navigate('MyOrders'); },
-        accessibilityLabel: 'Orders',
-      },
+        accessibilityLabel: tt('accessibility.orders') },
       {
-        icon: 'pulse-outline' as const,
-        label: 'Analytics',
+        icon: 'stats-chart-outline' as const,
+        label: tt('utility.analytics'),
         onPress: () => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); },
-        accessibilityLabel: 'Creator analytics',
-      },
+        accessibilityLabel: tt('accessibility.creatorAnalytics') },
       {
         icon: 'bookmark-outline' as const,
-        label: 'Closet',
-        value: `${savedCount + wishlistCount} items`,
+        label: tt('utility.closet'),
+        value: tt('utility.itemsCount', { count: savedCount + wishlistCount }),
         onPress: () => { haptic.light(); navigation.navigate('Closet'); },
-        accessibilityLabel: 'Closet',
-      },
+        accessibilityLabel: tt('accessibility.closet') },
       {
         icon: 'wallet-outline' as const,
-        label: 'Wallet',
+        label: tt('utility.wallet'),
         onPress: () => { haptic.light(); navigation.navigate('Wallet'); },
-        accessibilityLabel: 'Wallet',
-      },
+        accessibilityLabel: tt('accessibility.wallet') },
       {
         icon: 'timer-outline' as const,
-        label: 'Auctions',
+        label: tt('utility.auctions'),
         onPress: () => { haptic.light(); navigation.navigate('AuctionHome'); },
-        accessibilityLabel: 'Browse auctions',
-      },
+        accessibilityLabel: tt('accessibility.browseAuctions') },
       {
         icon: 'layers-outline' as const,
-        label: 'Co-own',
-        value: coOwnHoldings.length > 0 ? `${coOwnHoldings.length} assets` : undefined,
+        label: tt('utility.coOwn'),
+        value: coOwnHoldings.length > 0 ? tt('utility.assetsCount', { count: coOwnHoldings.length }) : undefined,
         onPress: () => { haptic.light(); navigation.navigate('CoOwnHub'); },
-        accessibilityLabel: 'Browse co-own market',
-      },
+        accessibilityLabel: tt('accessibility.browseCoOwnMarket') },
       {
         icon: 'storefront-outline' as const,
-        label: 'Seller Hub',
+        label: tt('utility.sellerHub'),
         onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
-        accessibilityLabel: 'Seller Hub',
-      },
+        accessibilityLabel: tt('accessibility.sellerHub') },
     ],
-    [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation]
+    [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation, tt]
   );
 
   if (!user) {
@@ -549,9 +568,9 @@ export default function MyProfileScreen() {
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <EmptyState
           icon="person-outline"
-          title="Not signed in"
-          subtitle="Sign in to view your profile, listings, and wallet."
-          ctaLabel="Sign In"
+          title={tt('common:misc.notSignedIn')}
+          subtitle={tt('notSignedIn.subtitle')}
+          ctaLabel={tt('notSignedIn.signIn')}
           onCtaPress={() => navigation.navigate('Login')}
         />
       </View>
@@ -562,19 +581,75 @@ export default function MyProfileScreen() {
     ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
     : undefined;
 
-  const GRID_GAP = 4;
+  const GRID_GAP = Space.xs;
   const GRID_COLS = 3;
   const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
   const CARD_HEIGHT = CARD_WIDTH * (4 / 3); // 3:4 portrait grid
-  // Hero span — the first listing spans 2 columns as a wide anchor, breaking
-  // the uniform 3-column grid (Instagram/Pinterest mixed-layout pattern).
-  // Only applied when there are 3+ listings so the grid still reads as a grid.
-  const HERO_WIDTH = CARD_WIDTH * 2 + GRID_GAP;
-  const HERO_HEIGHT = CARD_HEIGHT;
-  const showHero = allOwnedListings.length >= 3;
+
+  const renderListingItem = useCallback(
+    ({ item, index }: { item: (typeof allOwnedListings)[number]; index: number }) => {
+      const isFeatured = item.featured === true;
+      const colIndex = index % 3;
+      return (
+        <View
+          style={{
+            paddingLeft: colIndex === 0 ? Space.md : Space.xs / 2,
+            paddingRight: colIndex === 2 ? Space.md : Space.xs / 2,
+            paddingBottom: Space.sm,
+          }}
+        >
+          <AnimatedPressable
+            style={styles.gridCard}
+            onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
+            accessibilityRole="button"
+            accessibilityLabel={`Manage ${item.title}${isFeatured ? ', pinned' : ''}`}
+          >
+            <SharedTransitionView
+              style={[styles.gridImageWrap, { height: CARD_HEIGHT }]}
+              sharedTransitionTag={`image-${item.id}-0`}
+            >
+              <CachedImage
+                uri={item.images?.[0] ?? ''}
+                style={styles.gridImage}
+                containerStyle={{ width: '100%', height: '100%', borderRadius: RadiusRoleValue.compactControl }}
+                contentFit="cover"
+              />
+              {isFeatured ? (
+                <View style={[styles.pinnedBadge, t.pinnedBadge]} pointerEvents="none">
+                  <Ionicons name="pin" size={12} color={colors.scrimTextPrimary} aria-hidden={true} />
+                </View>
+              ) : null}
+              {item.isSold ? (
+                <View style={[styles.soldOverlay, t.soldOverlay]}>
+                  <Text style={[styles.soldText, t.soldText]}>{tt('listings.sold')}</Text>
+                </View>
+              ) : null}
+            </SharedTransitionView>
+            <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
+              {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
+            </Text>
+            {item.brand ? (
+              <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
+            ) : null}
+          </AnimatedPressable>
+        </View>
+      );
+    },
+    [navigation, t, tt, colors, formatFromFiat, currencyCode, CARD_HEIGHT]
+  );
+
+  const tabs = React.useMemo(
+    () => [
+      { key: 'listings', label: tt('tabs.shop'), count: allOwnedListings.length },
+      { key: 'looks', label: tt('tabs.looks'), count: myLooks.length },
+      { key: 'about', label: tt('tabs.about') },
+      ...(myReviewCount > 0 ? [{ key: 'reviews' as const, label: tt('tabs.reviews'), count: myReviewCount }] : []),
+    ],
+    [tt, allOwnedListings.length, myLooks.length, myReviewCount]
+  );
 
   return (
-    <View style={[styles.container, t.container]}>
+    <View testID="profile-screen" style={[styles.container, t.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <OfflineBanner />
@@ -611,9 +686,9 @@ export default function MyProfileScreen() {
           <AnimatedPressable
             style={styles.topUtilityIconBtn}
             onPress={() => { haptic.light(); navigation.navigate('Settings'); }}
-            accessibilityLabel="Open settings"
+            accessibilityLabel={tt('accessibility.openSettings')}
             accessibilityRole="button"
-            accessibilityHint="Opens settings"
+            accessibilityHint={tt('accessibility.openSettingsHint')}
           >
             <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
               <Ionicons name="settings-outline" size={22} color={colors.scrimTextPrimary} aria-hidden={true} />
@@ -624,9 +699,9 @@ export default function MyProfileScreen() {
             <AnimatedPressable
               style={styles.topUtilityIconBtn}
               onPress={handleShare}
-              accessibilityLabel="Share profile"
+              accessibilityLabel={tt('accessibility.shareProfile')}
               accessibilityRole="button"
-              accessibilityHint="Opens the system share sheet to share your profile"
+              accessibilityHint={tt('accessibility.shareProfileHint')}
             >
               <View style={[styles.topUtilityVisible, t.topUtilityVisible]}>
                 <Ionicons name="share-outline" size={18} color={colors.scrimTextPrimary} aria-hidden={true} />
@@ -640,26 +715,26 @@ export default function MyProfileScreen() {
             <View style={styles.coverFailureCopy}>
               <Ionicons name="alert-circle-outline" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
               <Text style={[styles.coverFailureText, t.coverFailureText]} numberOfLines={1}>
-                {coverState.error || 'Cover upload failed'}
+                {coverState.error || tt('cover.uploadFailed')}
               </Text>
             </View>
             <AnimatedPressable
               style={styles.coverFailureAction}
               onPress={retryCover}
               accessibilityRole="button"
-              accessibilityLabel="Retry cover upload"
+              accessibilityLabel={tt('accessibility.retryCoverUpload')}
               hitSlop={5}
             >
-              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>Retry</Text>
+              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>{tt('cover.retry')}</Text>
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.coverFailureAction}
               onPress={revertCover}
               accessibilityRole="button"
-              accessibilityLabel="Cancel cover change"
+              accessibilityLabel={tt('accessibility.cancelCoverChange')}
               hitSlop={5}
             >
-              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>Cancel</Text>
+              <Text style={[styles.coverFailureActionText, t.coverFailureActionText]}>{tt('cover.cancel')}</Text>
             </AnimatedPressable>
           </View>
         ) : (
@@ -671,8 +746,8 @@ export default function MyProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel={
               coverState.status === 'uploading'
-                ? 'Uploading profile cover'
-                : 'Change profile cover'
+                ? tt('accessibility.uploadingCover')
+                : tt('accessibility.changeCover')
             }
             accessibilityState={{ disabled: coverState.status === 'uploading', busy: coverState.status === 'uploading' }}
           >
@@ -732,13 +807,13 @@ export default function MyProfileScreen() {
               style={[myProfileStyles.awayBanner, tMyProfile.awayBanner]}
               onPress={() => navigation.navigate('PrivacySettings')}
               accessibilityRole="button"
-              accessibilityLabel="Holiday mode is on — tap to manage"
+              accessibilityLabel={tt('accessibility.holidayMode')}
             >
               <Ionicons name="pause-circle" size={18} color={colors.textMuted} aria-hidden={true} />
               <View style={myProfileStyles.awayBannerTextWrap}>
-                <Text style={[myProfileStyles.awayBannerTitle, tMyProfile.awayBannerTitle]}>Holiday mode is on</Text>
+                <Text style={[myProfileStyles.awayBannerTitle, tMyProfile.awayBannerTitle]}>{tt('holiday.title')}</Text>
                 <Text style={[myProfileStyles.awayBannerSub, tMyProfile.awayBannerSub]}>
-                  Your shop is paused. Tap to manage.
+                  {tt('holiday.subtitle')}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
@@ -771,15 +846,21 @@ export default function MyProfileScreen() {
           {/* ── 8. COMPACT MARKETPLACE UTILITY RAIL ── */}
           <ProfileUtilityRail items={utilityItems} />
 
+          {/* ── 8b. CURATED SHOP WINDOW ──
+              Horizontal rail of featured listings — the shop's front window.
+              Renders only when featured items exist (ShopRail returns null
+              when empty). Sits between the utility rail and the tab rail so
+              the curated selection leads into the full shop grid. */}
+          <ShopRail
+            items={shopRailItems}
+            onPressItem={(id) => { haptic.light(); navigation.navigate('ManageListing', { itemId: id }); }}
+          />
+
           {/* ── 9. STICKY FLAT TAB RAIL ── */}
           <MyProfileTabRail
-            tabs={[
-              { key: 'listings', label: 'Shop', count: allOwnedListings.length },
-              { key: 'looks', label: 'Looks', count: myLooks.length },
-              { key: 'about', label: 'About' },
-            ]}
+            tabs={tabs}
             activeKey={activeTab}
-            onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about')}
+            onChange={(key) => setActiveTab(key as 'listings' | 'looks' | 'about' | 'reviews')}
           />
         </View>
 
@@ -798,9 +879,9 @@ export default function MyProfileScreen() {
             {allOwnedListings.length === 0 ? (
               <View style={styles.listingsEmpty}>
                 <Ionicons name="bag-add-outline" size={28} color={colors.textSecondary} aria-hidden={true} />
-                <Text style={[styles.listingsEmptyTitle, t.listingsEmptyTitle]}>List your first item</Text>
+                <Text style={[styles.listingsEmptyTitle, t.listingsEmptyTitle]}>{tt('listings.emptyTitle')}</Text>
                 <Text style={[styles.listingsEmptyBody, t.listingsEmptyBody]}>
-                  Photograph an item and publish it when you are ready.
+                  {tt('listings.emptyBody')}
                 </Text>
                 <AnimatedPressable
                   style={[styles.listingsEmptyCta, t.listingsEmptyCta]}
@@ -809,104 +890,41 @@ export default function MyProfileScreen() {
                   accessibilityLabel="Start selling"
                   hitSlop={1}
                 >
-                  <Text style={[styles.listingsEmptyCtaText, t.listingsEmptyCtaText]}>Start selling</Text>
+                  <Text style={[styles.listingsEmptyCtaText, t.listingsEmptyCtaText]}>{tt('listings.startSelling')}</Text>
                 </AnimatedPressable>
                 <AnimatedPressable
                   style={styles.listingsEmptyImportLink}
                   onPress={() => navigation.navigate('CatalogImportStart')}
                   accessibilityRole="button"
-                  accessibilityLabel="Bring over your existing listings"
-                  accessibilityHint="Start a catalogue import from eBay or a file"
+                  accessibilityLabel={tt('listings.bringOverListings')}
+                  accessibilityHint={tt('accessibility.importListingsHint')}
                   hitSlop={8}
                 >
                   <Text style={[styles.listingsEmptyImportText, { color: colors.brand }]}>
-                    Bring over your existing listings
+                    {tt('listings.bringOverListings')}
                   </Text>
                 </AnimatedPressable>
               </View>
             ) : (
               <>
                 <View style={styles.gridHeader}>
-                  <Text style={[styles.gridHeaderCount, t.gridHeaderCount]}>{allOwnedListings.length} listings</Text>
+                  <Text style={[styles.gridHeaderCount, t.gridHeaderCount]}>{tt('listings.listingsCount', { count: allOwnedListings.length })}</Text>
                   <Pressable
                     onPress={() => navigation.navigate('MyListings')}
                     accessibilityRole="button"
                     accessibilityLabel="View all listings"
                     hitSlop={13}
                   >
-                    <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>View All</Text>
+                    <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>{tt('listings.viewAll')}</Text>
                   </Pressable>
                 </View>
-                <View style={styles.grid}>
-                  {allOwnedListings.map((item, index) => {
-                    const isHero = showHero && index === 0;
-                    const isFeatured = item.featured === true;
-                    const cardW = isHero ? HERO_WIDTH : CARD_WIDTH;
-                    const cardH = isHero ? HERO_HEIGHT : CARD_HEIGHT;
-                    return (
-                    <AnimatedPressable
-                      key={item.id}
-                      style={[styles.gridCard, { width: cardW }]}
-                      onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Manage ${item.title}${isFeatured ? ', pinned' : ''}`}
-                    >
-                      <SharedTransitionView
-                        style={[styles.gridImageWrap, { width: cardW, height: cardH }]}
-                        sharedTransitionTag={`image-${item.id}-0`}
-                      >
-                        <CachedImage
-                          uri={item.images?.[0] ?? ''}
-                          style={styles.gridImage}
-                          containerStyle={{ width: '100%', height: '100%', borderRadius: RadiusRoleValue.compactControl }}
-                          contentFit="cover"
-                        />
-                        {isFeatured ? (
-                          <View style={[styles.pinnedBadge, t.pinnedBadge]} pointerEvents="none">
-                            <Ionicons name="pin" size={12} color={colors.scrimTextPrimary} aria-hidden={true} />
-                          </View>
-                        ) : null}
-                        {item.isSold ? (
-                          <View style={[styles.soldOverlay, t.soldOverlay]}>
-                            <Text style={[styles.soldText, t.soldText]}>SOLD</Text>
-                          </View>
-                        ) : null}
-                        {/* Hero card: price overlays on a bottom gradient so the
-                            first viewport is media-dense (Pinterest/Instagram
-                            pattern). Regular cards keep price below the image. */}
-                        {isHero && !item.isSold ? (
-                          <>
-                            <LinearGradient
-                              colors={['transparent', 'rgba(0,0,0,0.55)']}
-                              style={styles.heroPriceGradient}
-                              pointerEvents="none"
-                            />
-                            <View style={styles.heroPriceOverlay} pointerEvents="none">
-                              <Text style={[styles.heroPriceText, { color: colors.scrimTextPrimary }]} numberOfLines={1}>
-                                {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
-                              </Text>
-                              {item.brand ? (
-                                <Text style={[styles.heroBrandText, { color: colors.scrimTextSecondary }]} numberOfLines={1}>{item.brand}</Text>
-                              ) : null}
-                            </View>
-                          </>
-                        ) : null}
-                      </SharedTransitionView>
-                      {/* Regular cards: price + brand below the image */}
-                      {isHero ? null : (
-                        <>
-                          <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
-                            {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
-                          </Text>
-                          {item.brand ? (
-                            <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
-                          ) : null}
-                        </>
-                      )}
-                    </AnimatedPressable>
-                    );
-                  })}
-                </View>
+                <FlashList
+                  data={allOwnedListings}
+                  numColumns={3}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderListingItem}
+                  scrollEnabled={false}
+                />
               </>
             )}
           </Reanimated.View>
@@ -920,7 +938,7 @@ export default function MyProfileScreen() {
             style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
           >
             {looksLoading ? (
-              <View style={{ paddingHorizontal: Space.md, gap: Space.md }} accessibilityLabel="Loading your Looks">
+              <View style={{ paddingHorizontal: Space.md, gap: Space.md }} accessibilityLabel={tt('accessibility.loadingLooks')}>
                 <SkeletonLoader width="100%" height={360} borderRadius={RadiusRoleValue.standalonePanel} />
                 <SkeletonLoader width="100%" height={280} borderRadius={RadiusRoleValue.standalonePanel} />
               </View>
@@ -928,18 +946,18 @@ export default function MyProfileScreen() {
               <EmptyState
                 density="compact"
                 icon="cloud-offline-outline"
-                title="Couldn't load your Looks"
-                subtitle="Check your connection and try again."
-                ctaLabel="Try again"
+                title={tt('looks.errorTitle')}
+                subtitle={tt('looks.errorSubtitle')}
+                ctaLabel={tt('looks.tryAgain')}
                 onCtaPress={() => { void loadMyLooks(); }}
               />
             ) : myLooks.length === 0 ? (
               <EmptyState
                 density="compact"
                 icon="images-outline"
-                title="No Looks yet"
-                subtitle="Create your first Look to showcase your style."
-                ctaLabel="Create Look"
+                title={tt('looks.emptyTitle')}
+                subtitle={tt('looks.emptySubtitle')}
+                ctaLabel={tt('looks.createLook')}
                 onCtaPress={() => navigation.navigate('CreatorStudio', { type: 'look' })}
               />
             ) : (
@@ -972,13 +990,13 @@ export default function MyProfileScreen() {
                 style={[styles.portfolioPreview, t.portfolioPreview]}
                 onPress={() => { haptic.light(); navigation.navigate('CoOwnHub'); }}
                 accessibilityRole="button"
-                accessibilityLabel="View Co-Own portfolio"
-                accessibilityHint="Opens your Co-Own holdings hub"
+                accessibilityLabel={tt('accessibility.viewCoOwnPortfolio')}
+                accessibilityHint={tt('accessibility.viewCoOwnPortfolioHint')}
               >
                 <View style={styles.portfolioHeader}>
-                  <Text style={[styles.portfolioLabel, t.portfolioLabel]}>CO-OWN PORTFOLIO</Text>
+                  <Text style={[styles.portfolioLabel, t.portfolioLabel]}>{tt('about.coOwnPortfolio')}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs / 2 }}>
-                    <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>View all</Text>
+                    <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>{tt('about.viewAll')}</Text>
                     <Ionicons name="chevron-forward" size={12} color={colors.textMuted} aria-hidden={true} />
                   </View>
                 </View>
@@ -999,7 +1017,7 @@ export default function MyProfileScreen() {
                           {h.title}
                         </Text>
                         <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>
-                          {h.yourUnits} {h.yourUnits === 1 ? 'unit' : 'units'}
+                          {h.yourUnits} {h.yourUnits === 1 ? tt('about.unit') : tt('about.units')}
                         </Text>
                       </View>
                     </View>
@@ -1011,7 +1029,7 @@ export default function MyProfileScreen() {
             {user.website ? (
               <View style={styles.aboutContainer}>
                 <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Website</Text>
+                  <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.website')}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xs }}>
                     <Text style={[styles.aboutValue, t.aboutValue, { flexShrink: 1 }]} numberOfLines={1}>{user.website}</Text>
                     <Ionicons name="open-outline" size={12} color={colors.textMuted} aria-hidden={true} />
@@ -1024,41 +1042,88 @@ export default function MyProfileScreen() {
                 Trust badges above show a compact "Replies Xh" pill; this section
                 provides the full policy context without duplicating the badge. */}
             <View style={styles.aboutContainer}>
-              <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>Shop policies</Text>
+              <Text style={[styles.aboutSectionTitle, t.aboutSectionTitle]}>{tt('about.shopPolicies')}</Text>
               <View style={[styles.aboutRow, t.aboutRow]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>Payments</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]}>Secure checkout with buyer protection</Text>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.payments')}</Text>
+                <Text style={[styles.aboutValue, t.aboutValue]}>{tt('about.paymentsValue')}</Text>
               </View>
               <View style={[styles.aboutRow, t.aboutRow]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>Shipping</Text>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.shipping')}</Text>
                 <Text style={[styles.aboutValue, t.aboutValue]}>
                   {sellerTrust?.dispatchTimeLabel
-                    ? `Seller ${sellerTrust.dispatchTimeLabel.toLowerCase()}. Tracking provided on dispatch.`
-                    : 'Tracking provided on dispatch.'}
+                    ? tt('about.shippingSeller', { label: sellerTrust.dispatchTimeLabel.toLowerCase() })
+                    : tt('about.shippingDefault')}
                 </Text>
               </View>
               <View style={[styles.aboutRow, t.aboutRow]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>Returns</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]}>Returns accepted for items not as described.</Text>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.returns')}</Text>
+                <Text style={[styles.aboutValue, t.aboutValue]}>{tt('about.returnsValue')}</Text>
               </View>
               {sellerTrust?.responseRate !== null && sellerTrust?.responseRate !== undefined ? (
                 <View style={[styles.aboutRow, t.aboutRow]}>
-                  <Text style={[styles.aboutLabel, t.aboutLabel]}>Response rate</Text>
+                  <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.responseRate')}</Text>
                   <Text style={[styles.aboutValue, t.aboutValue]}>{sellerTrust.responseRate}%</Text>
                 </View>
               ) : null}
               <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
-                <Text style={[styles.aboutLabel, t.aboutLabel]}>Response</Text>
+                <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.response')}</Text>
                 <Text style={[styles.aboutValue, t.aboutValue]}>
                   {sellerTrust?.responseTimeLabel
-                    ? `Seller typically replies ${sellerTrust.responseTimeLabel.toLowerCase()}.`
-                    : 'Seller aims to respond promptly.'}
+                    ? tt('about.responseSeller', { label: sellerTrust.responseTimeLabel.toLowerCase() })
+                    : tt('about.responseDefault')}
                 </Text>
               </View>
             </View>
 
             {!user.website && !sellerTrust && (
-              <Text style={[styles.aboutEmpty, t.aboutEmpty]}>No additional details available.</Text>
+              <Text style={[styles.aboutEmpty, t.aboutEmpty]}>{tt('about.noDetails')}</Text>
+            )}
+          </Reanimated.View>
+        )}
+
+        {/* REVIEWS TAB — reputation summary + review rows.
+            Only rendered when the seller has reviews (the tab itself is
+            conditional on myReviewCount > 0). Owner can respond to reviews. */}
+        {activeTab === 'reviews' && (
+          <Reanimated.View
+            key="reviews"
+            entering={reducedMotion ? undefined : FadeIn.duration(200)}
+            style={{ backgroundColor: colors.background, paddingBottom: 100, paddingTop: Space.md }}
+          >
+            {myReviewSummary && myReviewCount > 0 ? (
+              <ReviewSummaryBlock summary={myReviewSummary} />
+            ) : null}
+            {reviewsQuery.isLoading && myReviews.length === 0 ? (
+              <View style={{ paddingVertical: Space.xl, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={colors.brand} />
+              </View>
+            ) : reviewsQuery.error && myReviews.length === 0 ? (
+              <EmptyState
+                density="compact"
+                icon="cloud-offline-outline"
+                title="Couldn't load reviews"
+                subtitle="Check your connection and try again."
+                ctaLabel="Try again"
+                onCtaPress={() => { void reviewsQuery.refetch(); }}
+              />
+            ) : myReviews.length === 0 ? (
+              <EmptyState
+                density="compact"
+                icon="chatbubble-ellipses-outline"
+                title="No reviews yet"
+                subtitle="Reviews from completed orders will appear here."
+              />
+            ) : (
+              <View style={{ paddingHorizontal: Space.md }}>
+                {myReviews.map((review) => (
+                  <ProfileReviewRow
+                    key={review.id}
+                    item={review}
+                    onOpenReviewer={(uid) => openProfile(navigation, uid, currentUser?.id)}
+                    onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })}
+                  />
+                ))}
+              </View>
             )}
           </Reanimated.View>
         )}
@@ -1072,16 +1137,17 @@ export default function MyProfileScreen() {
           <View style={[styles.completionCard, t.completionCard]}>
             <View style={styles.completionHead}>
               <View style={styles.completionHeadText}>
-                <Text style={[styles.completionTitle, t.completionTitle]}>Complete your profile</Text>
+                <Text style={[styles.completionTitle, t.completionTitle]}>{tt('completion.title')}</Text>
                 <Text style={[styles.completionPercent, t.completionPercent]}>
-                  {completion.percent}% · {completion.done}/{completion.total}
+                  {tt('completion.progress', { percent: completion.percent, done: completion.done, total: completion.total })}
                 </Text>
               </View>
               <AnimatedPressable
+                // TODO: replace `${colors.textMuted}14` with textMutedSubtle token when available
                 style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
                 onPress={() => { haptic.light(); setCompletionDismissed(true); }}
                 accessibilityRole="button"
-                accessibilityLabel="Dismiss profile completion prompt"
+                accessibilityLabel={tt('accessibility.dismissCompletion')}
               >
                 <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
               </AnimatedPressable>
@@ -1107,12 +1173,13 @@ export default function MyProfileScreen() {
         {showGrowthPrompt ? (
           <View style={[styles.growthCard, t.growthCard]}>
             <View style={styles.growthHead}>
-              <Text style={[styles.growthTitle, t.growthTitle]}>Grow on Thryftverse</Text>
+              <Text style={[styles.growthTitle, t.growthTitle]}>{tt('growth.title')}</Text>
               <AnimatedPressable
+                // TODO: replace `${colors.textMuted}14` with textMutedSubtle token when available
                 style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
                 onPress={() => { haptic.light(); setGrowthDismissed(true); }}
                 accessibilityRole="button"
-                accessibilityLabel="Dismiss growth prompts"
+                accessibilityLabel={tt('accessibility.dismissGrowth')}
               >
                 <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
               </AnimatedPressable>
@@ -1123,13 +1190,13 @@ export default function MyProfileScreen() {
                 style={[styles.growthRow, t.growthRow]}
                 onPress={() => { haptic.light(); navigation.navigate('Sell'); }}
                 accessibilityRole="button"
-                accessibilityLabel="List your first item"
-                accessibilityHint="Opens the sell flow to create your first listing"
+                accessibilityLabel={tt('growth.listFirstItemTitle')}
+                accessibilityHint={tt('accessibility.listFirstItemHint')}
               >
                 <View style={styles.growthRowText}>
-                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>List your first item</Text>
+                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.listFirstItemTitle')}</Text>
                   <Text style={[styles.growthRowSub, t.growthRowSub]}>
-                    Photograph and publish an item to start selling.
+                    {tt('growth.listFirstItemSub')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
@@ -1141,13 +1208,13 @@ export default function MyProfileScreen() {
                 style={[styles.growthRow, t.growthRow, styles.growthRowLast]}
                 onPress={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
                 accessibilityRole="button"
-                accessibilityLabel="Grow your audience"
-                accessibilityHint="Opens creator analytics with audience growth tools"
+                accessibilityLabel={tt('growth.growAudienceTitle')}
+                accessibilityHint={tt('accessibility.growAudienceHint')}
               >
                 <View style={styles.growthRowText}>
-                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>Grow your audience</Text>
+                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.growAudienceTitle')}</Text>
                   <Text style={[styles.growthRowSub, t.growthRowSub]}>
-                    Share your profile and create content to attract followers.
+                    {tt('growth.growAudienceSub')}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
@@ -1170,23 +1237,18 @@ const myProfileStyles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.md - 2,
     borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   awayBannerTextWrap: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   awayBannerTitle: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   awayBannerSub: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    lineHeight: TypographyV2.meta.lineHeight,
-  },
-});
+    lineHeight: TypographyV2.meta.lineHeight } });
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
@@ -1200,8 +1262,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: COVER_HEIGHT,
     zIndex: 0,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   // Cover gradient fades — match the public ProfileHero treatment for control
   // contrast and a premium authored cover. Top fade improves floating button
   // legibility; bottom fade softens the avatar seam.
@@ -1210,100 +1271,84 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 80,
-  },
+    height: 80 },
   coverBottomFade: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 40,
-  },
+    height: 40 },
   coverActionLayer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: COVER_HEIGHT,
-    zIndex: 8,
-  },
+    zIndex: 8 },
   topUtilityRow: {
     position: 'absolute',
     left: Space.md - 2,
     right: Space.md - 2,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   topUtilityRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   topUtilityIconBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // ── Co-Own portfolio preview — flagship elevated card ──
   portfolioPreview: {
     marginHorizontal: Space.md,
     marginTop: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    borderRadius: RadiusRoleValue.sheetDialog,
-  },
+    borderRadius: RadiusRoleValue.sheetDialog },
   portfolioHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   portfolioLabel: {
     fontSize: TypographyV2.label.size,
     fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.label.letterSpacing,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing },
   portfolioHoldings: {
     flexDirection: 'row',
-    gap: Space.md,
-  },
+    gap: Space.md },
   portfolioHoldingCard: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   portfolioHoldingImage: {
     width: 48,
     height: 48,
     borderRadius: RadiusRoleValue.mediaThumbnail,
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   portfolioHoldingInfo: {
     flexShrink: 1,
-    gap: 2,
-  },
+    gap: Space.xxs },
   portfolioHoldingTitle: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    lineHeight: TypographyV2.meta.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   portfolioHoldingUnits: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     lineHeight: TypographyV2.meta.lineHeight,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   topUtilityVisible: {
     width: Space.xl - 2,
     height: Space.xl - 2,
     borderRadius: RadiusRoleValue.standalonePanel,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverEditTarget: {
     position: 'absolute',
     right: Space.md - 2,
@@ -1311,16 +1356,14 @@ const styles = StyleSheet.create({
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverEditVisible: {
     width: Space.xl + 2,
     height: Space.xl + 2,
     borderRadius: RadiusRoleValue.dominantPanel,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverFailure: {
     position: 'absolute',
     left: Space.md - 2,
@@ -1332,31 +1375,26 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.sheetDialog,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   coverFailureCopy: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 3,
-  },
+    gap: Space.xs + 3 },
   coverFailureText: {
     flexShrink: 1,
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.meta.size,
-  },
+    fontSize: TypographyV2.meta.size },
   coverFailureAction: {
     minWidth: Space.xxl + 4,
     minHeight: Space.xl + 2,
     paddingHorizontal: Space.sm,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverFailureActionText: {
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.meta.size,
-  },
+    fontSize: TypographyV2.meta.size },
 
   // Collapsed header
   floatingHeader: {
@@ -1369,13 +1407,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingBottom: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   floatingHeaderTitle: {
     fontSize: TypographyV2.sectionTitle.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.priceList.letterSpacing,
-  },
+    letterSpacing: TypographyV2.priceList.letterSpacing },
 
   // Listings grid
   gridHeader: {
@@ -1383,31 +1419,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   gridHeaderCount: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   gridHeaderAction: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontFamily: FontFamily.semibold },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Space.md,
-    gap: 4,
-  },
+    gap: Space.xs },
   gridCard: {
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   gridImageWrap: {
     borderRadius: RadiusRoleValue.mediaThumbnail,
     overflow: 'hidden',
-    position: 'relative',
-  },
+    position: 'relative' },
   pinnedBadge: {
     position: 'absolute',
     top: 6,
@@ -1416,12 +1446,10 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   gridImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   // Hero card gradient overlay — price sits on a subtle bottom fade so the
   // first viewport is media-dense without a separate text block below.
   heroPriceGradient: {
@@ -1431,46 +1459,38 @@ const styles = StyleSheet.create({
     right: 0,
     height: 56,
     borderBottomLeftRadius: RadiusRoleValue.compactControl,
-    borderBottomRightRadius: RadiusRoleValue.compactControl,
-  },
+    borderBottomRightRadius: RadiusRoleValue.compactControl },
   heroPriceOverlay: {
     position: 'absolute',
-    bottom: 8,
+    bottom: Space.sm,
     left: 10,
-    right: 10,
-  },
+    right: 10 },
   heroPriceText: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.bold,
     letterSpacing: -0.1,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   heroBrandText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    marginTop: 1,
-  },
+    marginTop: 1 },
   soldOverlay: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   soldText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.bold,
-    letterSpacing: LetterSpacing.caps + 0.18,
-  },
+    letterSpacing: LetterSpacing.caps + 0.18 },
   gridPrice: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.bold,
     marginTop: Space.xs + 1,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   gridBrand: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    marginTop: 1,
-  },
+    marginTop: 1 },
 
   // Listings empty state — compact in-grid prompt, not full blank page
   listingsEmpty: {
@@ -1478,81 +1498,65 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Space.xl + Space.sm,
     paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   listingsEmptyTitle: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   listingsEmptyBody: {
     maxWidth: 280,
     fontFamily: FontFamily.regular,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   listingsEmptyCta: {
     marginTop: Space.xs + 2,
-    minHeight: 44,
+    minHeight: Control.hit,
     paddingHorizontal: Space.md + 2,
     justifyContent: 'center',
-    borderRadius: RadiusRoleValue.sheetDialog,
-  },
+    borderRadius: RadiusRoleValue.sheetDialog },
   listingsEmptyCtaText: {
     fontSize: TypographyV2.body.size,
-    fontFamily: FontFamily.semibold,
-  },
+    fontFamily: FontFamily.semibold },
   listingsEmptyImportLink: {
     marginTop: Space.sm,
     minHeight: Control.hit,
     justifyContent: 'center',
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   listingsEmptyImportText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.medium,
-    lineHeight: Type.body.lineHeight,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    lineHeight: TypographyV2.body.lineHeight,
+    letterSpacing: TypographyV2.body.letterSpacing },
 
   // About — flat editorial rows, flagship elevated
   aboutContainer: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   aboutSectionTitle: {
     fontSize: TypographyV2.label.size,
     fontFamily: FontFamily.bold,
     letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
     paddingTop: Space.md + 4,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   aboutRow: {
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   aboutRowLast: {
-    borderBottomWidth: 0,
-  },
+    borderBottomWidth: 0 },
   aboutLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: TypographyV2.label.letterSpacing,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing },
   aboutValue: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
-    lineHeight: TypographyV2.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   aboutEmpty: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular,
     textAlign: 'center',
-    paddingVertical: Space.xl + Space.sm,
-  },
+    paddingVertical: Space.xl + Space.sm },
 
   // Stats row — followers / following / listings / sales
   statsRow: {
@@ -1563,55 +1567,45 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
     paddingVertical: Space.sm + 2,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   statCell: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Space.xs,
-    gap: Space.xs / 4,
-  },
+    gap: Space.xs / 4 },
   statValue: {
     fontSize: TypographyV2.sectionTitle.size,
     fontFamily: FontFamily.semibold,
     lineHeight: TypographyV2.sectionTitle.lineHeight,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-  },
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   statLabel: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-  },
+    fontFamily: FontFamily.regular },
   statDivider: {
     width: StyleSheet.hairlineWidth,
-    height: Space.xl - Space.xs,
-  },
+    height: Space.xl - Space.xs },
 
   // Seller trust badges — horizontal scroll
   trustBadgesScroll: {
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   trustBadgesContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xs / 2,
-  },
+    paddingVertical: Space.xs / 2 },
   trustBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   trustBadgeText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    letterSpacing: 0.1,
-  },
+    letterSpacing: 0.1 },
   trustBadgeSep: {
     width: StyleSheet.hairlineWidth,
-    height: Space.sm + Space.xxs,
-  },
+    height: Space.sm + Space.xxs },
 
   // Profile completion prompt — flagship elevated card
   completionCard: {
@@ -1621,30 +1615,25 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
     borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: Space.md,
-  },
+    gap: Space.md },
   completionHead: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   completionHeadText: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   completionTitle: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   completionPercent: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
     letterSpacing: 0.1,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   completionDismiss: {
     width: 28,
     height: 28,
@@ -1652,31 +1641,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: -Space.xs / 2,
     marginRight: -Space.xs / 2,
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   completionTrack: {
     height: 4,
     borderRadius: RadiusRoleValue.pillAvatar,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   completionFill: {
     height: '100%',
-    borderRadius: RadiusRoleValue.pillAvatar,
-  },
+    borderRadius: RadiusRoleValue.pillAvatar },
   completionCta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
-    minHeight: 44,
+    minHeight: Control.hit,
     borderRadius: RadiusRoleValue.mediaThumbnail,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   completionCtaText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: 0.1,
-  },
+    letterSpacing: 0.1 },
 
   // Growth tasks — optional onboarding prompts (first listing / audience)
   growthCard: {
@@ -1686,45 +1670,36 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
     borderRadius: RadiusRoleValue.sheetDialog,
     borderWidth: StyleSheet.hairlineWidth,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   growthHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   growthTitle: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-  },
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   growthRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.sm,
     paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   growthRowLast: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   growthRowText: {
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   growthRowTitle: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.medium,
     letterSpacing: TypographyV2.body.letterSpacing,
-    lineHeight: TypographyV2.body.lineHeight,
-  },
+    lineHeight: TypographyV2.body.lineHeight },
   growthRowSub: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    lineHeight: TypographyV2.meta.lineHeight,
-  },
-});
+    lineHeight: TypographyV2.meta.lineHeight } });

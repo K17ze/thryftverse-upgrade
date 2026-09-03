@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SkeletonLoader } from '../SkeletonLoader';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 // Mirrors WriteReviewScreen layout: order context card (thumbnail + title + meta),
 // star rating row, text input area, photo upload section, submit button.
@@ -22,17 +23,17 @@ export function WriteReviewSkeleton() {
 
       {/* Rating prompt */}
       <View style={styles.section}>
-        <SkeletonLoader width="70%" height={18} borderRadius={Radius.sm} />
+        <SkeletonLoader width="70%" height={TypographyV2.itemTitle.size} borderRadius={Radius.sm} />
         <View style={styles.starsRow}>
           {Array.from({ length: 5 }).map((_, i) => (
-            <SkeletonLoader key={i} width={44} height={44} borderRadius={Radius.full} />
+            <SkeletonLoader key={i} width={Control.hit} height={Control.hit} borderRadius={Radius.full} />
           ))}
         </View>
       </View>
 
       {/* Detailed review input */}
       <View style={styles.section}>
-        <SkeletonLoader width={180} height={11} borderRadius={Radius.sm} />
+        <SkeletonLoader width={180} height={TypographyV2.meta.size} borderRadius={Radius.sm} />
         <View style={[styles.inputCard, { backgroundColor: colors.surface }]}>
           <SkeletonLoader width="95%" height={13} borderRadius={Radius.sm} />
           <SkeletonLoader width="88%" height={13} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
@@ -42,9 +43,9 @@ export function WriteReviewSkeleton() {
 
       {/* Photo section */}
       <View style={styles.section}>
-        <SkeletonLoader width={140} height={11} borderRadius={Radius.sm} />
+        <SkeletonLoader width={140} height={TypographyV2.meta.size} borderRadius={Radius.sm} />
         <View style={[styles.photoAddBtn, { backgroundColor: colors.surface }]}>
-          <SkeletonLoader width={22} height={22} borderRadius={Radius.full} />
+          <SkeletonLoader width={Control.icon} height={Control.icon} borderRadius={Radius.full} />
           <SkeletonLoader width={100} height={13} borderRadius={Radius.sm} />
         </View>
       </View>
@@ -72,7 +73,7 @@ const styles = StyleSheet.create({
   },
   orderInfo: {
     flex: 1,
-    gap: 4,
+    gap: Space.xs,
   },
   section: {
     gap: Space.sm,
@@ -86,7 +87,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Space.md,
     minHeight: 120,
-    gap: 2,
+    gap: Space.xxs,
   },
   photoAddBtn: {
     flexDirection: 'row',

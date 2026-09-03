@@ -3,16 +3,30 @@
  * conversation. Mirrors the ChatActionSheet presentation pattern (Modal,
  * fade, bottom-anchored sheet) so the chat surface stays consistent.
  *
- * All agents are demo-mode (AGENTS.md §11) — a subtle indicator at the
- * bottom makes that truthful to the user.
+ * Two modes:
+ *  - `__DEV__`: demo catalogue (chatAgentsApi) — mock agents that suggest
+ *    keyword-based replies. A subtle "Demo assistants" indicator is shown.
+ *  - production (`!__DEV__`): real backend deployment state fetched from
+ *    GET /chat/conversations/:conversationId/bots via the store. Shows
+ *    loading, error, empty and populated states truthfully — no fabricated
+ *    agents.
  */
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Modal, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, TypeStyles } from '../../theme/designTokens';
+import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { getAvailableAgents, type ChatAgent } from '../../services/chatAgentsApi';
+import { useStore } from '../../store/useStore';
+import type { ConversationBotDeployment } from '../../domain';
+
+// Stable empty array reference for Zustand selector fallbacks.
+// Returning `[]` inline in a useStore selector creates a new array on
+// every call, which useSyncExternalStore interprets as a state change,
+// causing an infinite re-render loop (Maximum update depth exceeded).
+const EMPTY_DEPLOYMENTS: ConversationBotDeployment[] = [];
 
 interface ChatAgentPickerProps {
   visible: boolean;
@@ -20,6 +34,8 @@ interface ChatAgentPickerProps {
   onDeploy: (agent: ChatAgent) => void;
   /** Ids already deployed — rendered as "Added" (disabled) state. */
   deployedAgentIds?: string[];
+  /** Conversation whose real backend deployment state should be shown in production. */
+  conversationId?: string;
 }
 
 export function ChatAgentPicker({
@@ -27,11 +43,52 @@ export function ChatAgentPicker({
   onClose,
   onDeploy,
   deployedAgentIds = [],
-}: ChatAgentPickerProps) {
+  conversationId }: ChatAgentPickerProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const agents = useMemo(() => getAvailableAgents(), []);
+  const demoAgents = useMemo(() => (__DEV__ ? getAvailableAgents() : []), []);
   const deployedSet = useMemo(() => new Set(deployedAgentIds), [deployedAgentIds]);
+
+  // Real backend deployment state (production only).
+  const loadConversationDeployments = useStore((s) => s.loadConversationDeployments);
+  const deployments = useStore((s) =>
+    conversationId ? s.conversationDeployments[conversationId] ?? EMPTY_DEPLOYMENTS : EMPTY_DEPLOYMENTS,
+  );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!visible || __DEV__ || !conversationId) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    loadConversationDeployments(conversationId)
+      .catch(() => {
+        if (!cancelled) setError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, conversationId, loadConversationDeployments]);
+
+  const productionAgents = useMemo<ChatAgent[]>(
+    () => (!__DEV__ ? deployments.map(deploymentToAgent) : []),
+    [deployments],
+  );
+
+  const agents = __DEV__ ? demoAgents : productionAgents;
+
+  const handleRetry = () => {
+    if (!conversationId) return;
+    setLoading(true);
+    setError(false);
+    loadConversationDeployments(conversationId)
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -50,41 +107,103 @@ export function ChatAgentPicker({
             </Text>
           </View>
 
-          <View style={styles.demoNotice}>
-            <Ionicons name="flask-outline" size={15} color={colors.textMuted} />
-            <Text style={[styles.demoText, { color: colors.textMuted }]}>
-              Demo assistants suggest mock replies
-            </Text>
-          </View>
+          {__DEV__ ? (
+            <View style={styles.demoNotice}>
+              <Ionicons name="flask-outline" size={15} color={colors.textMuted} />
+              <Text style={[styles.demoText, { color: colors.textMuted }]}>
+                Demo assistants suggest mock replies
+              </Text>
+            </View>
+          ) : null}
 
-          <ScrollView
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {agents.map((agent) => {
-              const isDeployed = deployedSet.has(agent.id);
-              return (
-                <AgentRow
-                  key={agent.id}
-                  agent={agent}
-                  deployed={isDeployed}
-                  onAdd={() => onDeploy(agent)}
-                />
-              );
-            })}
-          </ScrollView>
+          {__DEV__ ? (
+            agents.length > 0 ? (
+              <ScrollView
+                style={styles.list}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {agents.map((agent) => {
+                  const isDeployed = deployedSet.has(agent.id);
+                  return (
+                    <AgentRow
+                      key={agent.id}
+                      agent={agent}
+                      deployed={isDeployed}
+                      onAdd={() => onDeploy(agent)}
+                    />
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <EmptyState
+                icon="chatbubble-ellipses-outline"
+                title="No agents available"
+                body="Create an agent from the Agents screen to get started."
+              />
+            )
+          ) : loading ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator size="small" color={colors.brand} />
+              <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+                Loading deployed agents…
+              </Text>
+            </View>
+          ) : error ? (
+            <EmptyState
+              icon="cloud-offline-outline"
+              title="Couldn't load agents"
+              body="We couldn't reach the server. Pull to try again."
+              actionLabel="Retry"
+              onAction={handleRetry}
+            />
+          ) : agents.length > 0 ? (
+            <ScrollView
+              style={styles.list}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {agents.map((agent) => {
+                const isDeployed = deployedSet.has(agent.id);
+                return (
+                  <AgentRow
+                    key={agent.id}
+                    agent={agent}
+                    deployed={isDeployed}
+                    onAdd={() => onDeploy(agent)}
+                  />
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <EmptyState
+              icon="chatbubble-ellipses-outline"
+              title="No agents deployed"
+              body="Install an agent into this conversation from the Agents screen."
+            />
+          )}
         </View>
       </View>
     </Modal>
   );
 }
 
+/** Map a real backend deployment to the ChatAgent shape consumed by onDeploy. */
+function deploymentToAgent(d: ConversationBotDeployment): ChatAgent {
+  return {
+    id: d.botId,
+    type: 'custom',
+    name: d.botName,
+    avatar: 'bulb-outline',
+    description: d.commandHint,
+    capabilities: d.permissionsSnapshot,
+    isDemo: false };
+}
+
 function AgentRow({
   agent,
   deployed,
-  onAdd,
-}: {
+  onAdd }: {
   agent: ChatAgent;
   deployed: boolean;
   onAdd: () => void;
@@ -133,13 +252,51 @@ function AgentRow({
   );
 }
 
+function EmptyState({
+  icon,
+  title,
+  body,
+  actionLabel,
+  onAction }: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  body: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <View style={styles.emptyState}>
+      <View style={[styles.emptyIcon, { backgroundColor: colors.surfaceAlt }]}>
+        <Ionicons name={icon} size={26} color={colors.textMuted} />
+      </View>
+      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>{title}</Text>
+      <Text style={[styles.emptyBody, { color: colors.textMuted }]}>{body}</Text>
+      {actionLabel && onAction ? (
+        <AnimatedPressable
+          style={[styles.retryBtn, { backgroundColor: colors.brand }]}
+          onPress={onAction}
+          activeOpacity={0.7}
+          scaleValue={0.94}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+        >
+          <Text style={[styles.retryBtnText, { color: colors.textInverse }]}>{actionLabel}</Text>
+        </AnimatedPressable>
+      ) : null}
+    </View>
+  );
+}
+
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     overlay: {
       flex: 1,
       backgroundColor: colors.overlay,
-      justifyContent: 'flex-end',
-    },
+      justifyContent: 'flex-end' },
     sheet: {
       borderTopLeftRadius: Radius.xl,
       borderTopRightRadius: Radius.xl,
@@ -147,86 +304,113 @@ const createStyles = (colors: ThemeColors) =>
       paddingTop: Space.sm,
       paddingBottom: Space.xxl,
       gap: Space.sm,
-      maxHeight: '85%',
-    },
+      maxHeight: '85%' },
     handle: {
       width: 36,
       height: 4,
       borderRadius: Radius.full,
       alignSelf: 'center',
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     header: {
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     title: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     subtitle: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: TypeStyles.body.fontFamily,
-      marginTop: 2,
-    },
+      marginTop: 2 },
     list: {
-      flexGrow: 0,
-    },
+      flexGrow: 0 },
     listContent: {
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       minHeight: 68,
       paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
+      borderBottomWidth: StyleSheet.hairlineWidth },
     iconTarget: {
       width: 44,
       height: 44,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     rowText: {
       flex: 1,
-      gap: 1,
-    },
+      gap: 1 },
     rowLabel: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily },
     rowDescription: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: TypeStyles.body.fontFamily,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypeStyles.body.fontFamily },
     addBtn: {
       paddingHorizontal: Space.smMd,
       borderRadius: Radius.full,
       minWidth: 72,
       minHeight: 44,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     addBtnText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily },
     demoNotice: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      minHeight: 32,
-    },
+      minHeight: 32 },
     demoText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypeStyles.body.fontFamily },
+    loadingState: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.xl },
+    loadingText: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypeStyles.body.fontFamily },
+    emptyState: {
+      alignItems: 'center',
+      paddingVertical: Space.xl,
+      paddingHorizontal: Space.md,
+      gap: Space.sm },
+    emptyIcon: {
+      width: Space.xxl,
+      height: Space.xxl,
+      borderRadius: Radius.full,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: Space.xs },
+    emptyTitle: {
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
+    emptyBody: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight + 2,
       fontFamily: TypeStyles.body.fontFamily,
-    },
-  });
+      textAlign: 'center' },
+    retryBtn: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.full,
+      minHeight: 44,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: Space.xs },
+    retryBtnText: {
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily } });

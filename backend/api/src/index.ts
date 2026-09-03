@@ -33,7 +33,7 @@ import {
 
 // Shared Stripe instance for Connect operations
 const stripe = config.stripeSecretKey
-  ? new Stripe(config.stripeSecretKey, { apiVersion: '2024-06-20' })
+  ? new Stripe(config.stripeSecretKey, { apiVersion: '2026-08-26.dahlia' })
   : null;
 import {
   db,
@@ -67,8 +67,9 @@ import {
   createOnezeReconciliationAttestation,
 } from './lib/onezeGovernance.js';
 import {
+  PLATFORM_CONVERT_FEE_BPS,
+  PLATFORM_LOAD_FEE_BPS,
   PRICING_PARAMETER_BOUNDS,
-  findPricingArbitrageViolations,
   getCountryPricingProfile,
   listCountryPricingQuotes,
   pricingTablesAvailable as onezePricingTablesAvailable,
@@ -104,6 +105,10 @@ import {
   type MoneyProvider,
   type ProviderAmountUnit,
 } from './lib/money.js';
+// P0.8: Exact decimal string formatting for Co-Own trading API responses.
+// Avoids IEEE 754 representation error in the JSON wire format by emitting
+// decimal string variants (e.g. "49.2500") alongside legacy number fields.
+import { formatGbp } from './lib/moneyFormat.js';
 import {
   createMobileCustomerSession,
   getOrCreateStripeCustomer,
@@ -124,9 +129,13 @@ import {
   enqueueOutboxDrainJob,
   enqueueReconciliationJob,
   enqueueRetentionSweepJob,
+  enqueueAnalyticsAggregationJob,
+  enqueuePushReceiptReconciliationJob,
+  enqueueScheduledPublicationSweepJob,
   enqueueOnezeWithdrawalExecuteJob,
   enqueuePushNotificationJob,
   enqueueMediaIngestJob,
+  enqueueDsarExportJob,
   startBackgroundWorkers,
 } from './lib/queues.js';
 import {
@@ -153,6 +162,7 @@ import {
   recordBackgroundJobDuration,
   recordPaymentTransition,
   recordPushDelivery,
+  recordPushTicketError,
   renderMetrics,
 } from './lib/metrics.js';
 import {
@@ -161,6 +171,7 @@ import {
   createComplianceId,
   evaluateAmlRisk,
   evaluateMarketEligibility,
+  evaluateWalletCapability,
   getOrCreateComplianceProfile,
   normalizeCountryCode,
   resolveClientIp,
@@ -234,7 +245,10 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerCollectionRoutes } from './routes/collections.js';
 import { registerSearchRoutes } from './routes/search.js';
 import { createKysely } from './lib/kysely.js';
+import { encryptMessageBody, resolveMessageBody } from './lib/messageEncryption.js';
 import { registerCreatorDocumentRoutes } from './routes/creatorDocuments.js';
+import { registerCreatorPublicationRoutes } from './routes/creatorPublications.js';
+import { registerCreatorAnalyticsRoutes } from './routes/creatorAnalytics.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
 import { registerSmsRoutes } from './routes/sms.js';
 import { registerRealtimeRoutes } from './routes/realtime.js';
@@ -245,7 +259,6 @@ import { registerVendorWebhookRoutes } from './routes/vendorWebhooks.js';
 import { registerUploadRoutes } from './routes/uploads.js';
 import { registerMediaAssetRoutes } from './routes/mediaAssets.js';
 import { registerModerationRoutes } from './routes/moderation.js';
-import { registerAppealsRoutes } from './routes/appeals.js';
 import { registerModerationTriageRoutes } from './routes/moderationTriage.js';
 import { moderateListingText } from './lib/moderation/moderationService.js';
 import { processMediaAsset } from './lib/media/pipeline.js';
@@ -260,16 +273,26 @@ import {
   processMediaEmbeddingJob,
   processModerationTriageJob,
   processImporterExtraction,
+  processExtractionIntelligenceJob,
   processRetentionSweep,
+  processPushReceiptReconciliation,
+  sweepScheduledPublications,
+  aggregateAnalyticsDaily,
+  processBackupExpiryCheck,
+  processDsarExport,
 } from './workers/handlers/index.js';
 import {
   evaluatePriceAlertsForListing,
   registerPriceAlertRoutes,
 } from './routes/priceAlerts.js';
 import { registerListingOfferRoutes } from './routes/listingOffers.js';
+import { registerSmartSellPolicyRoutes } from './routes/smartSellPolicy.js';
+import { registerListingIntelligenceRoutes } from './routes/listingIntelligence.js';
 import { registerChatComposerStateRoutes } from './routes/chatComposerState.js';
+import { registerVoiceMessageRoutes } from './routes/voiceMessages.js';
 import { registerAiTruthRoutes } from './routes/aiTruth.js';
 import { registerRecommendationRoutes } from './routes/recommendations.js';
+import { registerRecommendationIntentRoutes } from './routes/recommendationIntent.js';
 import { registerFraudDetectionRoutes } from './routes/fraudDetection.js';
 import { registerAccountSecurityRoutes } from './routes/accountSecurity.js';
 import { registerFraudShadowRoutes } from './routes/fraudShadow.js';
@@ -277,14 +300,17 @@ import { registerComplianceRoutes } from './routes/compliance.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import { registerImpactRoutes } from './routes/impact.js';
 import { registerStreamingRoutes } from './routes/streaming.js';
+import { registerLiveLotEngineRoutes } from './routes/liveLotEngine.js';
 import { registerSecureProfilesRoutes } from './routes/secureProfiles.js';
 import { registerSecureMessagesRoutes } from './routes/secureMessages.js';
+import { registerChatTranslateRoutes } from './routes/chatTranslate.js';
 import { registerAdminAuditRoutes } from './routes/adminAudit.js';
 import { registerRetentionRoutes } from './routes/retention.js';
 import { registerOpsConsoleRoutes } from './routes/opsConsole.js';
 import { registerBotsRoutes } from './routes/bots.js';
 import { registerV2Routes } from './routes/v2.js';
 import { registerSellerRoutes } from './routes/sellers.js';
+import { registerStorefrontRoutes } from './routes/storefronts.js';
 import { registerSellerHubRoutes } from './routes/sellerHub.js';
 import { registerPoliciesRoutes } from './routes/policies.js';
 import { registerFeedRoutes } from './routes/feed.js';
@@ -301,10 +327,15 @@ import { registerTaxonomyRoutes } from './routes/taxonomy.js';
 import { registerCatalogImportRoutes } from './routes/catalogImports.js';
 import { registerModelArtifactRoutes } from './routes/modelArtifacts.js';
 import { registerMediaEmbeddingRoutes } from './routes/mediaEmbeddings.js';
+import { registerMediaEnhancementRoutes } from './routes/mediaEnhancement.js';
 import { registerReturnRoutes } from './routes/returns.js';
 import { registerRefundRoutes } from './routes/refunds.js';
 import { registerExceptionQueueRoutes } from './routes/exceptionQueue.js';
 import { registerImporterExtractionRoutes } from './routes/importerExtraction.js';
+import { registerExtractionIntelligenceRoutes } from './routes/extractionIntelligence.js';
+import { registerAnalyticsRoutes } from './routes/analytics.js';
+import { registerExperimentRoutes } from './routes/experiments.js';
+import { registerFlagRoutes } from './routes/flags.js';
 import { checkFraudNonBlocking } from './lib/fraudDetection.js';
 import { FraudShadowScoringService } from './lib/fraudShadowScoring.js';
 import { evaluateRisk, recordExecution } from './lib/riskDecision.js';
@@ -330,7 +361,7 @@ import {
   getPersistedSellerRiskTier,
 } from './lib/sellerRiskTiering.js';
 import type { SellerRiskTier } from './lib/sellerRiskTiering.js';
-import { COOWN_POLICY } from './lib/commercePolicies.js';
+import { COOWN_POLICY, COMMERCE_POLICY_VERSION } from './lib/commercePolicies.js';
 import { compensateTerminalCommercePayment } from './lib/commerceCheckoutLifecycle.js';
 import {
   appendDomainEvent,
@@ -488,12 +519,14 @@ void app.register(cors, {
   allowedHeaders: [
     'Content-Type',
     'Authorization',
+    'X-Request-Id',
     'X-Service-Token',
     'X-Security-Admin-Token',
     'X-Decision-Service-Token',
     'Stripe-Signature',
   ],
   credentials: false,
+  strictPreflight: false,
   // Expose the correlation-id response header so browser clients can read it
   // for log correlation / support. Set on every response via onRequest + onSend.
   exposedHeaders: ['X-Request-Id'],
@@ -562,8 +595,21 @@ void app.register(rateLimit, {
 // default). This prevents a single compromised account from exhausting
 // API capacity even if it rotates across many IP addresses. The hook is
 // invoked after authentication so request.authUser is available.
+//
+// The INCR + EXPIRE pair is executed atomically via a Lua script. This is
+// critical: a non-atomic INCR followed by a separate EXPIRE can leave the
+// counter without a TTL if the process crashes between the two calls,
+// permanently rate-limiting the user until manual intervention. The Lua
+// script guarantees the TTL is set on the first increment and never lost.
 const USER_RATE_LIMIT_MAX = Number(process.env.USER_RATE_LIMIT_MAX) || 200;
 const USER_RATE_LIMIT_WINDOW = Number(process.env.USER_RATE_LIMIT_WINDOW) || 60;
+const RATE_LIMIT_SCRIPT = `
+  local current = redis.call('INCR', KEYS[1])
+  if current == 1 then
+    redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1]))
+  end
+  return current
+`;
 const userRateLimitHook = async (request: FastifyRequest, reply: FastifyReply) => {
   const userId = request.authUser?.userId;
   if (!userId) return; // Only applies to authenticated requests
@@ -572,10 +618,7 @@ const userRateLimitHook = async (request: FastifyRequest, reply: FastifyReply) =
   const limit = USER_RATE_LIMIT_MAX;
   const window = USER_RATE_LIMIT_WINDOW;
 
-  const current = await redis.incr(key);
-  if (current === 1) {
-    await redis.expire(key, window);
-  }
+  const current = Number(await redis.eval(RATE_LIMIT_SCRIPT, 1, key, window));
   if (current > limit) {
     reply.code(429).send({ error: 'Rate limit exceeded', retryAfter: window });
   }
@@ -818,7 +861,7 @@ const COMMERCE_PLATFORM_CHARGE_MIN_RATE = 0.02;
 const CO_OWN_TRADE_FEE_RATE = 0.01;
 const AUCTION_PLATFORM_FEE_RATE = 0.03;
 const WALLET_TOPUP_PLATFORM_FEE_RATE = 0.01;
-const ONEZE_MG_PER_IZE = 1_000;
+const ONEZE_UNITS_PER_IZE = 1_000;
 const DEFAULT_WALLET_FIAT_CURRENCY = 'INR';
 const ONEZE_MINT_BURN_HALT_REDIS_KEY = 'oneze:mint_burn_halted';
 const PAYOUTS_PAUSED_REDIS_KEY = 'ops:payouts_paused';
@@ -862,17 +905,17 @@ const MINT_OPERATION_TERMINAL_STATES = new Set<string>([
   'RESERVE_UNKNOWN',
 ]);
 
-function onezeAmountToMg(amount: number): number {
-  const mg = Math.round(amount * ONEZE_MG_PER_IZE);
-  if (!Number.isSafeInteger(mg) || mg <= 0) {
-    throw createApiError('IZE_AMOUNT_INVALID', '1ze amount cannot be represented safely in mg units');
+function onezeAmountToUnits(amount: number): number {
+  const units = Math.round(amount * ONEZE_UNITS_PER_IZE);
+  if (!Number.isSafeInteger(units) || units <= 0) {
+    throw createApiError('IZE_AMOUNT_INVALID', '1ze amount cannot be represented safely in minor units');
   }
 
-  return mg;
+  return units;
 }
 
-function mgToOnezeAmount(amountMg: number): number {
-  return Number((amountMg / ONEZE_MG_PER_IZE).toFixed(6));
+function unitsToOnezeAmount(amountUnits: number): number {
+  return Number((amountUnits / ONEZE_UNITS_PER_IZE).toFixed(6));
 }
 
 function getFiatMinorDigits(currency: string): number {
@@ -1545,8 +1588,12 @@ function statusCodeForApiError(code: string): number {
     return 401;
   }
 
-  if (code === 'FORBIDDEN_USER_CONTEXT') {
+  if (code === 'FORBIDDEN_USER_CONTEXT' || code === 'FORBIDDEN_OWNERSHIP') {
     return 403;
+  }
+
+  if (code === 'FILE_TOO_LARGE') {
+    return 413;
   }
 
   if (code === 'ORDER_ACCESS_DENIED' || code === 'REFUND_REQUIRES_OPERATOR') {
@@ -1751,7 +1798,8 @@ type LedgerAccountCode =
   | 'ize_outstanding'
   | 'ize_fiat_received'
   | 'reserve_hold'
-  | 'provider_cash_clearing';
+  | 'provider_cash_clearing'
+  | 'revenue_fx';
 type PaymentIntentStatus =
   | 'requires_payment_method'
   | 'requires_confirmation'
@@ -1761,7 +1809,7 @@ type PaymentIntentStatus =
   | 'cancelled'
   | 'provider_submission_pending';
 type PaymentIntentTerminalStatus = 'succeeded' | 'failed' | 'cancelled';
-type PaymentIntentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal';
+type PaymentIntentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal' | 'oneze_wallet';
 type MintOperationState =
   | 'INITIATED'
   | 'PAYMENT_PENDING'
@@ -1854,7 +1902,7 @@ interface WalletIzeTransferRow {
 interface WalletRow {
   id: string;
   user_id: string;
-  oneze_balance_mg: number | string;
+  oneze_balance_units: number | string;
   fiat_balance_minor: number | string;
   fiat_currency: string;
   version: number | string;
@@ -1864,8 +1912,8 @@ interface WalletRow {
 
 interface WalletSegmentRow {
   wallet_id: string;
-  purchased_balance_mg: number | string;
-  earned_balance_mg: number | string;
+  purchased_balance_units: number | string;
+  earned_balance_units: number | string;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -1901,7 +1949,7 @@ interface WithdrawalRow {
   id: string;
   user_id: string;
   burn_tx_id: string | null;
-  amount_mg: number | string;
+  amount_units: number | string;
   target_currency: string;
   gross_minor: number | string;
   spread_minor: number | string;
@@ -1926,7 +1974,7 @@ interface MintOperationRow {
   fiat_currency: string;
   net_fiat_amount_minor: number | string;
   platform_fee_minor: number | string;
-  ize_amount_mg: number | string;
+  ize_amount_units: number | string;
   rate_per_gram: number | string;
   rate_source: string;
   rate_locked_at: string;
@@ -1948,17 +1996,17 @@ interface JurisdictionPolicyRow {
   country_code: string;
   p2p_send_allowed: boolean;
   p2p_receive_allowed: boolean;
-  p2p_daily_limit_mg: number | string | null;
-  p2p_monthly_limit_mg: number | string | null;
-  p2p_per_tx_limit_mg: number | string | null;
+  p2p_daily_limit_units: number | string | null;
+  p2p_monthly_limit_units: number | string | null;
+  p2p_per_tx_limit_units: number | string | null;
   requires_context: boolean;
   notes: string | null;
 }
 
 interface OnezeReconciliationRow {
   id: string;
-  circulating_mg: number | string;
-  reserve_active_mg: number | string;
+  circulating_units: number | string;
+  reserve_active_units: number | string;
   within_invariant: boolean;
   invariant_hash: string;
   reason: string;
@@ -1968,10 +2016,6 @@ interface OnezeReconciliationRow {
 
 export function createRuntimeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
-}
-
-function directOnezeWithdrawalRoutesDisabled(): boolean {
-  return !config.onezeEnableDirectRedemption;
 }
 
 type ChatConversationType = 'dm' | 'group';
@@ -2191,6 +2235,8 @@ interface ChatMessageRow {
   sender_user_id: string | null;
   sender_bot_id: string | null;
   body: string;
+  body_ciphertext: string | null;
+  key_version: number | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
   client_message_id: string | null;
@@ -2235,21 +2281,72 @@ async function serializeChatMessageRows(
     else byEmoji.set(r.emoji, [r.user_id]);
   }
 
-  return rows.map((row) => ({
-    id: row.id,
-    senderType: row.sender_type,
-    senderUserId: row.sender_user_id,
-    senderBotId: row.sender_bot_id,
-    body: row.body,
-    metadata: row.metadata ?? {},
-    createdAt: row.created_at,
-    clientMessageId: row.client_message_id ?? undefined,
-    replyToMessageId: row.reply_to_message_id ?? undefined,
-    deletedForEveryoneAt: row.deleted_for_everyone_at ?? undefined,
-    editVersion: row.edit_version,
-    editedAt: row.edited_at ?? undefined,
-    reactions: formatReactionsMap(reactionsByMessage, row.id),
-  }));
+  // Voice message binding — load in one batch to avoid N+1. Returns the
+  // canonical voice metadata so the client can render a real waveform (or
+  // an honest progress line when samples are not yet ready) and a duration.
+  const voiceResult = await db.query<{
+    message_id: string;
+    duration_ms: number;
+    bytes: string;
+    container: string;
+    codec: string;
+    waveform_samples: number[] | null;
+    waveform_sample_count: number | null;
+    waveform_algorithm_version: number | null;
+    moderation_state: string;
+  }>(
+    `SELECT message_id, duration_ms, bytes::text, container, codec,
+            waveform_samples, waveform_sample_count, waveform_algorithm_version,
+            moderation_state
+     FROM voice_messages
+     WHERE message_id = ANY($1::text[])`,
+    [messageIds]
+  );
+  const voiceByMessage = new Map<string, {
+    durationMs: number;
+    bytes: number;
+    container: string;
+    codec: string;
+    waveform: number[] | null;
+    waveformSampleCount: number | null;
+    waveformAlgorithmVersion: number | null;
+    moderationState: string;
+  }>();
+  for (const r of voiceResult.rows) {
+    voiceByMessage.set(r.message_id, {
+      durationMs: r.duration_ms,
+      bytes: Number(r.bytes),
+      container: r.container,
+      codec: r.codec,
+      waveform: Array.isArray(r.waveform_samples) ? r.waveform_samples : null,
+      waveformSampleCount: r.waveform_sample_count,
+      waveformAlgorithmVersion: r.waveform_algorithm_version,
+      moderationState: r.moderation_state,
+    });
+  }
+
+  return rows.map((row) => {
+    const baseReturn: Record<string, unknown> = {
+      id: row.id,
+      senderType: row.sender_type,
+      senderUserId: row.sender_user_id,
+      senderBotId: row.sender_bot_id,
+      body: row.body,
+      metadata: row.metadata ?? {},
+      createdAt: row.created_at,
+      clientMessageId: row.client_message_id ?? undefined,
+      replyToMessageId: row.reply_to_message_id ?? undefined,
+      deletedForEveryoneAt: row.deleted_for_everyone_at ?? undefined,
+      editVersion: row.edit_version,
+      editedAt: row.edited_at ?? undefined,
+      reactions: formatReactionsMap(reactionsByMessage, row.id),
+    };
+    const voice = voiceByMessage.get(row.id);
+    if (voice) {
+      baseReturn.voice = voice;
+    }
+    return baseReturn;
+  });
 }
 
 // Single-message serializer — for the create route where only one message
@@ -2300,6 +2397,22 @@ async function appendSystemChatMessage(
   }
 ): Promise<{ id: string; createdAt: string }> {
   const messageId = createRuntimeId('chatmsg');
+  // PII encryption dual-write: encrypt the body before INSERT. On failure,
+  // store plaintext so the backfill worker can encrypt later.
+  let bodyToStore = input.text;
+  let bodyCiphertext: string | null = null;
+  let keyVersion: number | null = null;
+  try {
+    const encrypted = await encryptMessageBody(messageId, input.text);
+    bodyCiphertext = encrypted.ciphertext;
+    keyVersion = encrypted.keyVersion;
+    bodyToStore = '[encrypted]';
+  } catch (err) {
+    logger.warn(
+      { messageId, err: err instanceof Error ? err.message : String(err) },
+      'messageEncryption.encryptFailed — storing plaintext for backfill',
+    );
+  }
   const result = await client.query<{ id: string; created_at: string }>(
     `
       INSERT INTO chat_messages (
@@ -2309,15 +2422,19 @@ async function appendSystemChatMessage(
         sender_user_id,
         sender_bot_id,
         body,
+        body_ciphertext,
+        key_version,
         metadata
       )
-      VALUES ($1, $2, 'system', NULL, NULL, $3, $4::jsonb)
+      VALUES ($1, $2, 'system', NULL, NULL, $3, $4, $5, $6::jsonb)
       RETURNING id, created_at::text
     `,
     [
       messageId,
       input.conversationId,
-      input.text,
+      bodyToStore,
+      bodyCiphertext,
+      keyVersion,
       toJsonString(input.metadata ?? {}),
     ]
   );
@@ -2429,14 +2546,14 @@ function toWalletIzeTransferPayload(row: WalletIzeTransferRow) {
 }
 
 function toWalletPayload(row: WalletRow) {
-  const onezeBalanceMg = Number(row.oneze_balance_mg);
+  const onezeBalanceUnits = Number(row.oneze_balance_units);
   const fiatBalanceMinor = Number(row.fiat_balance_minor);
 
   return {
     id: row.id,
     userId: row.user_id,
-    onezeBalanceMg,
-    onezeBalance: mgToOnezeAmount(onezeBalanceMg),
+    onezeBalanceUnits,
+    onezeBalance: unitsToOnezeAmount(onezeBalanceUnits),
     fiatBalanceMinor,
     fiatBalance: fromFiatMinor(fiatBalanceMinor, row.fiat_currency),
     fiatCurrency: row.fiat_currency,
@@ -2459,9 +2576,9 @@ function toWalletLedgerPayload(row: WalletLedgerRow) {
     txId: row.tx_id,
     asset,
     amount,
-    amountDisplay: asset === '1ZE' ? mgToOnezeAmount(amount) : amount,
+    amountDisplay: asset === '1ZE' ? unitsToOnezeAmount(amount) : amount,
     balanceAfter,
-    balanceAfterDisplay: asset === '1ZE' ? mgToOnezeAmount(balanceAfter) : balanceAfter,
+    balanceAfterDisplay: asset === '1ZE' ? unitsToOnezeAmount(balanceAfter) : balanceAfter,
     kind: row.kind,
     refType: row.ref_type,
     refId: row.ref_id,
@@ -2482,8 +2599,8 @@ function toWithdrawalPayload(row: WithdrawalRow) {
     id: row.id,
     userId: row.user_id,
     burnTxId: row.burn_tx_id,
-    amountMg: Number(row.amount_mg),
-    amountOneze: mgToOnezeAmount(Number(row.amount_mg)),
+    amountUnits: Number(row.amount_units),
+    amountOneze: unitsToOnezeAmount(Number(row.amount_units)),
     targetCurrency: row.target_currency,
     grossMinor,
     gross: fromFiatMinor(grossMinor, row.target_currency),
@@ -2509,7 +2626,7 @@ function toMintOperationPayload(row: MintOperationRow) {
   const fiatAmountMinor = Number(row.fiat_amount_minor);
   const netFiatAmountMinor = Number(row.net_fiat_amount_minor);
   const platformFeeMinor = Number(row.platform_fee_minor);
-  const izeAmountMg = Number(row.ize_amount_mg);
+  const izeAmountUnits = Number(row.ize_amount_units);
 
   return {
     id: row.id,
@@ -2522,8 +2639,8 @@ function toMintOperationPayload(row: MintOperationRow) {
     netFiatAmount: fromFiatMinor(netFiatAmountMinor, row.fiat_currency),
     platformFeeMinor,
     platformFeeAmount: fromFiatMinor(platformFeeMinor, row.fiat_currency),
-    izeAmountMg,
-    izeAmount: mgToOnezeAmount(izeAmountMg),
+    izeAmountUnits,
+    izeAmount: unitsToOnezeAmount(izeAmountUnits),
     ratePerGram: Number(row.rate_per_gram),
     rateSource: row.rate_source,
     rateLockedAt: row.rate_locked_at,
@@ -2596,7 +2713,7 @@ async function loadMintOperationById(
       fiat_currency,
       net_fiat_amount_minor::text,
       platform_fee_minor::text,
-      ize_amount_mg::text,
+      ize_amount_units::text,
       rate_per_gram::text,
       rate_source,
       rate_locked_at::text,
@@ -2636,7 +2753,7 @@ async function loadMintOperationByPaymentIntentId(
       fiat_currency,
       net_fiat_amount_minor::text,
       platform_fee_minor::text,
-      ize_amount_mg::text,
+      ize_amount_units::text,
       rate_per_gram::text,
       rate_source,
       rate_locked_at::text,
@@ -3178,6 +3295,127 @@ async function saveWalletIdempotentResponse(
 // Prevents duplicate order placement on network retry. The client generates
 // a stable idempotency key per order attempt and reuses it across retries.
 
+// ── P0.3: Per-asset market sequence allocation ──
+// Every public book mutation (new order, cancel, partial fill, expiry) must
+// advance this sequence exactly once. The sequence is allocated inside the
+// same transaction as the mutation, guaranteeing atomicity. Snapshot and
+// delta streams share this sequence so clients can detect gaps and reorder.
+async function allocateMarketSequence(
+  client: DbQueryable,
+  assetId: string
+): Promise<number> {
+  // Upsert with RETURNING — atomically allocates the next sequence number.
+  // If the row doesn't exist, it's created with next_sequence=1 and we get 1.
+  // If it exists, next_sequence is incremented and we get the new value.
+  const result = await client.query<{ next_sequence: string }>(
+    `
+      INSERT INTO coown_market_sequences (asset_id, next_sequence)
+      VALUES ($1, 1)
+      ON CONFLICT (asset_id)
+      DO UPDATE SET next_sequence = coown_market_sequences.next_sequence + 1
+      RETURNING next_sequence::text
+    `,
+    [assetId]
+  );
+  return Number(result.rows[0].next_sequence);
+}
+
+// ── P0.6: Reservation idempotency ──
+// Mirrors the order idempotency pattern. The reservation endpoint accepts an
+// idempotency key; this stores the response so a retry returns the original
+// reservation instead of creating a duplicate.
+async function getCoOwnReservationIdempotentResponse(
+  client: DbQueryable,
+  input: {
+    assetId: string;
+    userId: string;
+    idempotencyKey: string;
+    requestHash: string;
+  }
+): Promise<Record<string, unknown> | null> {
+  const result = await client.query<{
+    request_hash: string;
+    response_body: Record<string, unknown>;
+  }>(
+    `
+      SELECT request_hash, response_body
+      FROM coown_reservation_idempotency
+      WHERE asset_id = $1
+        AND user_id = $2
+        AND idempotency_key = $3
+      LIMIT 1
+    `,
+    [input.assetId, input.userId, input.idempotencyKey]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  if (row.request_hash !== input.requestHash) {
+    throw createApiError(
+      'IDEMPOTENCY_KEY_REUSED',
+      'Idempotency key was already used with a different reservation payload'
+    );
+  }
+
+  return row.response_body;
+}
+
+async function saveCoOwnReservationIdempotentResponse(
+  client: DbQueryable,
+  input: {
+    assetId: string;
+    userId: string;
+    idempotencyKey: string;
+    requestHash: string;
+    responseStatus: number;
+    responseBody: Record<string, unknown>;
+  }
+): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO coown_reservation_idempotency (
+        idempotency_key, asset_id, user_id, request_hash,
+        response_status, response_body
+      )
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+      ON CONFLICT (asset_id, user_id, idempotency_key)
+      DO NOTHING
+    `,
+    [
+      input.idempotencyKey,
+      input.assetId,
+      input.userId,
+      input.requestHash,
+      input.responseStatus,
+      toJsonString(input.responseBody),
+    ]
+  );
+}
+
+function hashCoOwnReservationPayload(payload: {
+  side: string;
+  units: number;
+  orderType: string;
+  limitPriceGbp?: number | null;
+  maxPriceGbp?: number | null;
+  minPriceGbp?: number | null;
+}): string {
+  return crypto
+    .createHash('sha256')
+    .update(JSON.stringify({
+      side: payload.side,
+      units: payload.units,
+      orderType: payload.orderType,
+      limitPriceGbp: payload.limitPriceGbp ?? null,
+      maxPriceGbp: payload.maxPriceGbp ?? null,
+      minPriceGbp: payload.minPriceGbp ?? null,
+    }))
+    .digest('hex');
+}
+
 async function getCoOwnOrderIdempotentResponse(
   client: DbQueryable,
   input: {
@@ -3254,6 +3492,8 @@ function hashCoOwnOrderPayload(payload: {
   units: number;
   orderType: string;
   limitPriceGbp?: number | null;
+  maxPriceGbp?: number | null;
+  minPriceGbp?: number | null;
   reservationId?: string | null;
 }): string {
   return crypto
@@ -3263,6 +3503,8 @@ function hashCoOwnOrderPayload(payload: {
       units: payload.units,
       orderType: payload.orderType,
       limitPriceGbp: payload.limitPriceGbp ?? null,
+      maxPriceGbp: payload.maxPriceGbp ?? null,
+      minPriceGbp: payload.minPriceGbp ?? null,
       reservationId: payload.reservationId ?? null,
     }))
     .digest('hex');
@@ -3360,7 +3602,7 @@ async function ensureWallet(
       RETURNING
         id,
         user_id,
-        oneze_balance_mg,
+        oneze_balance_units,
         fiat_balance_minor,
         fiat_currency,
         version,
@@ -3391,11 +3633,11 @@ async function ensureWallet(
   }
 
   const legacyIzeBalance = await getLedgerAccountBalance(client, 'user', userId, 'ize_wallet', 'IZE');
-  const syncedOnezeBalanceMg = Math.max(0, Math.round(legacyIzeBalance * ONEZE_MG_PER_IZE));
+  const syncedOnezeBalanceUnits = Math.max(0, Math.round(legacyIzeBalance * ONEZE_UNITS_PER_IZE));
 
   if (
-    !Number.isSafeInteger(syncedOnezeBalanceMg)
-    || syncedOnezeBalanceMg === Number(wallet.oneze_balance_mg)
+    !Number.isSafeInteger(syncedOnezeBalanceUnits)
+    || syncedOnezeBalanceUnits === Number(wallet.oneze_balance_units)
   ) {
     return wallet;
   }
@@ -3404,21 +3646,21 @@ async function ensureWallet(
     `
       UPDATE wallets
       SET
-        oneze_balance_mg = $2,
+        oneze_balance_units = $2,
         version = version + 1,
         updated_at = NOW()
       WHERE id = $1
       RETURNING
         id,
         user_id,
-        oneze_balance_mg,
+        oneze_balance_units,
         fiat_balance_minor,
         fiat_currency,
         version,
         created_at::text,
         updated_at::text
     `,
-    [wallet.id, syncedOnezeBalanceMg]
+    [wallet.id, syncedOnezeBalanceUnits]
   );
 
   return syncedResult.rows[0] ?? wallet;
@@ -3430,7 +3672,7 @@ async function loadWalletForUpdate(client: DbQueryable, walletId: string): Promi
       SELECT
         id,
         user_id,
-        oneze_balance_mg,
+        oneze_balance_units,
         fiat_balance_minor,
         fiat_currency,
         version,
@@ -3472,7 +3714,7 @@ async function applyWalletLedgerDelta(
 
   const wallet = await loadWalletForUpdate(client, input.walletId);
   const currentBalance = Number(
-    input.asset === '1ZE' ? wallet.oneze_balance_mg : wallet.fiat_balance_minor
+    input.asset === '1ZE' ? wallet.oneze_balance_units : wallet.fiat_balance_minor
   );
   const nextBalance = currentBalance + input.amount;
 
@@ -3490,7 +3732,7 @@ async function applyWalletLedgerDelta(
       `
         UPDATE wallets
         SET
-          oneze_balance_mg = $2,
+          oneze_balance_units = $2,
           version = version + 1,
           updated_at = NOW()
         WHERE id = $1
@@ -3550,14 +3792,14 @@ function normalizeOnezeCountryTag(country: string | null | undefined): string {
 }
 
 async function ensureWalletSegments(client: DbQueryable, wallet: WalletRow): Promise<WalletSegmentRow> {
-  const seededPurchasedMg = Math.max(0, Number(wallet.oneze_balance_mg));
+  const seededPurchasedUnits = Math.max(0, Number(wallet.oneze_balance_units));
 
   const upserted = await client.query<WalletSegmentRow>(
     `
       INSERT INTO oneze_wallet_segments (
         wallet_id,
-        purchased_balance_mg,
-        earned_balance_mg,
+        purchased_balance_units,
+        earned_balance_units,
         metadata
       )
       VALUES ($1, $2, 0, $3::jsonb)
@@ -3565,53 +3807,53 @@ async function ensureWalletSegments(client: DbQueryable, wallet: WalletRow): Pro
       DO UPDATE SET wallet_id = EXCLUDED.wallet_id
       RETURNING
         wallet_id,
-        purchased_balance_mg,
-        earned_balance_mg,
+        purchased_balance_units,
+        earned_balance_units,
         metadata,
         created_at::text,
         updated_at::text
     `,
     [
       wallet.id,
-      seededPurchasedMg,
+      seededPurchasedUnits,
       toJsonString({
-        bootstrapFromWalletMg: seededPurchasedMg,
+        bootstrapFromWalletUnits: seededPurchasedUnits,
       }),
     ]
   );
 
   const segments = upserted.rows[0];
-  const walletBalanceMg = Math.max(0, Number(wallet.oneze_balance_mg));
-  const segmentTotalMg = Number(segments.purchased_balance_mg) + Number(segments.earned_balance_mg);
+  const walletBalanceUnits = Math.max(0, Number(wallet.oneze_balance_units));
+  const segmentTotalUnits = Number(segments.purchased_balance_units) + Number(segments.earned_balance_units);
 
-  if (segmentTotalMg >= walletBalanceMg) {
+  if (segmentTotalUnits >= walletBalanceUnits) {
     return segments;
   }
 
-  const parityDeltaMg = walletBalanceMg - segmentTotalMg;
+  const parityDeltaUnits = walletBalanceUnits - segmentTotalUnits;
   const parityPatched = await client.query<WalletSegmentRow>(
     `
       UPDATE oneze_wallet_segments
       SET
-        purchased_balance_mg = purchased_balance_mg + $2,
+        purchased_balance_units = purchased_balance_units + $2,
         metadata = metadata || $3::jsonb,
         updated_at = NOW()
       WHERE wallet_id = $1
       RETURNING
         wallet_id,
-        purchased_balance_mg,
-        earned_balance_mg,
+        purchased_balance_units,
+        earned_balance_units,
         metadata,
         created_at::text,
         updated_at::text
     `,
     [
       wallet.id,
-      parityDeltaMg,
+      parityDeltaUnits,
       toJsonString({
         paritySync: {
           at: new Date().toISOString(),
-          deltaMg: parityDeltaMg,
+          deltaUnits: parityDeltaUnits,
           reason: 'segment_total_below_wallet_balance',
         },
       }),
@@ -3631,8 +3873,8 @@ async function loadWalletSegmentsForUpdate(
     `
       SELECT
         wallet_id,
-        purchased_balance_mg,
-        earned_balance_mg,
+        purchased_balance_units,
+        earned_balance_units,
         metadata,
         created_at::text,
         updated_at::text
@@ -3660,13 +3902,13 @@ async function appendWalletOriginEvent(
   input: {
     walletId: string;
     txId: string;
-    amountMg: number;
+    amountUnits: number;
     originCountry: string;
     segment: 'purchased' | 'earned';
     metadata?: Record<string, unknown>;
   }
 ): Promise<void> {
-  if (!Number.isSafeInteger(input.amountMg) || input.amountMg === 0) {
+  if (!Number.isSafeInteger(input.amountUnits) || input.amountUnits === 0) {
     return;
   }
 
@@ -3675,7 +3917,7 @@ async function appendWalletOriginEvent(
       INSERT INTO oneze_balance_origin_events (
         wallet_id,
         tx_id,
-        amount_mg,
+        amount_units,
         origin_country,
         segment,
         metadata
@@ -3685,7 +3927,7 @@ async function appendWalletOriginEvent(
     [
       input.walletId,
       input.txId,
-      input.amountMg,
+      input.amountUnits,
       normalizeOnezeCountryTag(input.originCountry),
       input.segment,
       toJsonString(input.metadata ?? {}),
@@ -3698,56 +3940,56 @@ async function creditWalletSegmentBalance(
   input: {
     wallet: WalletRow;
     txId: string;
-    purchasedCreditMg?: number;
-    earnedCreditMg?: number;
+    purchasedCreditUnits?: number;
+    earnedCreditUnits?: number;
     originCountry: string;
     metadata?: Record<string, unknown>;
   }
-): Promise<{ purchasedBalanceMg: number; earnedBalanceMg: number }> {
-  const purchasedCreditMg = input.purchasedCreditMg ?? 0;
-  const earnedCreditMg = input.earnedCreditMg ?? 0;
+): Promise<{ purchasedBalanceUnits: number; earnedBalanceUnits: number }> {
+  const purchasedCreditUnits = input.purchasedCreditUnits ?? 0;
+  const earnedCreditUnits = input.earnedCreditUnits ?? 0;
 
-  if (!Number.isSafeInteger(purchasedCreditMg) || !Number.isSafeInteger(earnedCreditMg)) {
-    throw createApiError('WALLET_SEGMENT_AMOUNT_INVALID', 'Wallet segment credits must be integer mg units');
+  if (!Number.isSafeInteger(purchasedCreditUnits) || !Number.isSafeInteger(earnedCreditUnits)) {
+    throw createApiError('WALLET_SEGMENT_AMOUNT_INVALID', 'Wallet segment credits must be integer minor units');
   }
 
-  if (purchasedCreditMg < 0 || earnedCreditMg < 0) {
+  if (purchasedCreditUnits < 0 || earnedCreditUnits < 0) {
     throw createApiError('WALLET_SEGMENT_AMOUNT_INVALID', 'Wallet segment credits cannot be negative');
   }
 
   const segments = await loadWalletSegmentsForUpdate(client, input.wallet);
-  const nextPurchasedMg = Number(segments.purchased_balance_mg) + purchasedCreditMg;
-  const nextEarnedMg = Number(segments.earned_balance_mg) + earnedCreditMg;
+  const nextPurchasedUnits = Number(segments.purchased_balance_units) + purchasedCreditUnits;
+  const nextEarnedUnits = Number(segments.earned_balance_units) + earnedCreditUnits;
 
   await client.query(
     `
       UPDATE oneze_wallet_segments
       SET
-        purchased_balance_mg = $2,
-        earned_balance_mg = $3,
+        purchased_balance_units = $2,
+        earned_balance_units = $3,
         metadata = metadata || $4::jsonb,
         updated_at = NOW()
       WHERE wallet_id = $1
     `,
     [
       input.wallet.id,
-      nextPurchasedMg,
-      nextEarnedMg,
+      nextPurchasedUnits,
+      nextEarnedUnits,
       toJsonString({
         txId: input.txId,
         operation: 'credit',
-        purchasedCreditMg,
-        earnedCreditMg,
+        purchasedCreditUnits,
+        earnedCreditUnits,
         ...(input.metadata ?? {}),
       }),
     ]
   );
 
-  if (purchasedCreditMg > 0) {
+  if (purchasedCreditUnits > 0) {
     await appendWalletOriginEvent(client, {
       walletId: input.wallet.id,
       txId: input.txId,
-      amountMg: purchasedCreditMg,
+      amountUnits: purchasedCreditUnits,
       originCountry: input.originCountry,
       segment: 'purchased',
       metadata: {
@@ -3757,11 +3999,11 @@ async function creditWalletSegmentBalance(
     });
   }
 
-  if (earnedCreditMg > 0) {
+  if (earnedCreditUnits > 0) {
     await appendWalletOriginEvent(client, {
       walletId: input.wallet.id,
       txId: input.txId,
-      amountMg: earnedCreditMg,
+      amountUnits: earnedCreditUnits,
       originCountry: input.originCountry,
       segment: 'earned',
       metadata: {
@@ -3772,12 +4014,12 @@ async function creditWalletSegmentBalance(
   }
 
   return {
-    purchasedBalanceMg: nextPurchasedMg,
-    earnedBalanceMg: nextEarnedMg,
+    purchasedBalanceUnits: nextPurchasedUnits,
+    earnedBalanceUnits: nextEarnedUnits,
   };
 }
 
-async function getLockedPurchasedBalanceMg(
+async function getLockedPurchasedBalanceUnits(
   client: DbQueryable,
   walletId: string,
   lockHours: number
@@ -3788,11 +4030,11 @@ async function getLockedPurchasedBalanceMg(
 
   const result = await client.query<{ total: string }>(
     `
-      SELECT COALESCE(SUM(amount_mg), 0)::text AS total
+      SELECT COALESCE(SUM(amount_units), 0)::text AS total
       FROM oneze_balance_origin_events
       WHERE wallet_id = $1
         AND segment = 'purchased'
-        AND amount_mg > 0
+        AND amount_units > 0
         AND created_at >= NOW() - make_interval(hours => $2::int)
     `,
     [walletId, Math.round(lockHours)]
@@ -3806,48 +4048,48 @@ async function debitWalletSegmentBalance(
   input: {
     wallet: WalletRow;
     txId: string;
-    amountMg: number;
+    amountUnits: number;
     originCountry: string;
     metadata?: Record<string, unknown>;
     lockHours?: number;
   }
 ): Promise<{
-  purchasedDebitedMg: number;
-  earnedDebitedMg: number;
-  lockedPurchasedMg: number;
-  redeemableMg: number;
-  purchasedBalanceMg: number;
-  earnedBalanceMg: number;
+  purchasedDebitedUnits: number;
+  earnedDebitedUnits: number;
+  lockedPurchasedUnits: number;
+  redeemableUnits: number;
+  purchasedBalanceUnits: number;
+  earnedBalanceUnits: number;
 }> {
-  if (!Number.isSafeInteger(input.amountMg) || input.amountMg <= 0) {
-    throw createApiError('WALLET_SEGMENT_AMOUNT_INVALID', 'Wallet segment debit must be a positive integer mg value');
+  if (!Number.isSafeInteger(input.amountUnits) || input.amountUnits <= 0) {
+    throw createApiError('WALLET_SEGMENT_AMOUNT_INVALID', 'Wallet segment debit must be a positive integer minor unit value');
   }
 
   const segments = await loadWalletSegmentsForUpdate(client, input.wallet);
-  const purchasedMg = Number(segments.purchased_balance_mg);
-  const earnedMg = Number(segments.earned_balance_mg);
-  const lockedPurchasedMg = await getLockedPurchasedBalanceMg(client, input.wallet.id, input.lockHours ?? 0);
-  const redeemablePurchasedMg = Math.max(0, purchasedMg - lockedPurchasedMg);
-  const redeemableMg = earnedMg + redeemablePurchasedMg;
+  const purchasedUnits = Number(segments.purchased_balance_units);
+  const earnedUnits = Number(segments.earned_balance_units);
+  const lockedPurchasedUnits = await getLockedPurchasedBalanceUnits(client, input.wallet.id, input.lockHours ?? 0);
+  const redeemablePurchasedUnits = Math.max(0, purchasedUnits - lockedPurchasedUnits);
+  const redeemableUnits = earnedUnits + redeemablePurchasedUnits;
 
-  if (input.amountMg > redeemableMg) {
+  if (input.amountUnits > redeemableUnits) {
     throw createApiError('WALLET_SEGMENT_REDEEM_LOCKED', 'Requested amount exceeds redeemable segmented balance', {
       walletId: input.wallet.id,
-      amountMg: input.amountMg,
-      redeemableMg,
-      purchasedMg,
-      earnedMg,
-      lockedPurchasedMg,
+      amountUnits: input.amountUnits,
+      redeemableUnits,
+      purchasedUnits,
+      earnedUnits,
+      lockedPurchasedUnits,
       lockHours: input.lockHours ?? 0,
     });
   }
 
-  const earnedDebitedMg = Math.min(earnedMg, input.amountMg);
-  const purchasedDebitedMg = input.amountMg - earnedDebitedMg;
-  const nextPurchasedMg = purchasedMg - purchasedDebitedMg;
-  const nextEarnedMg = earnedMg - earnedDebitedMg;
+  const earnedDebitedUnits = Math.min(earnedUnits, input.amountUnits);
+  const purchasedDebitedUnits = input.amountUnits - earnedDebitedUnits;
+  const nextPurchasedUnits = purchasedUnits - purchasedDebitedUnits;
+  const nextEarnedUnits = earnedUnits - earnedDebitedUnits;
 
-  if (nextPurchasedMg < 0 || nextEarnedMg < 0) {
+  if (nextPurchasedUnits < 0 || nextEarnedUnits < 0) {
     throw createApiError('WALLET_SEGMENT_AMOUNT_INVALID', 'Segment balances cannot go negative');
   }
 
@@ -3855,32 +4097,32 @@ async function debitWalletSegmentBalance(
     `
       UPDATE oneze_wallet_segments
       SET
-        purchased_balance_mg = $2,
-        earned_balance_mg = $3,
+        purchased_balance_units = $2,
+        earned_balance_units = $3,
         metadata = metadata || $4::jsonb,
         updated_at = NOW()
       WHERE wallet_id = $1
     `,
     [
       input.wallet.id,
-      nextPurchasedMg,
-      nextEarnedMg,
+      nextPurchasedUnits,
+      nextEarnedUnits,
       toJsonString({
         txId: input.txId,
         operation: 'debit',
-        purchasedDebitedMg,
-        earnedDebitedMg,
+        purchasedDebitedUnits,
+        earnedDebitedUnits,
         lockHours: input.lockHours ?? 0,
         ...(input.metadata ?? {}),
       }),
     ]
   );
 
-  if (purchasedDebitedMg > 0) {
+  if (purchasedDebitedUnits > 0) {
     await appendWalletOriginEvent(client, {
       walletId: input.wallet.id,
       txId: input.txId,
-      amountMg: -purchasedDebitedMg,
+      amountUnits: -purchasedDebitedUnits,
       originCountry: input.originCountry,
       segment: 'purchased',
       metadata: {
@@ -3890,11 +4132,11 @@ async function debitWalletSegmentBalance(
     });
   }
 
-  if (earnedDebitedMg > 0) {
+  if (earnedDebitedUnits > 0) {
     await appendWalletOriginEvent(client, {
       walletId: input.wallet.id,
       txId: input.txId,
-      amountMg: -earnedDebitedMg,
+      amountUnits: -earnedDebitedUnits,
       originCountry: input.originCountry,
       segment: 'earned',
       metadata: {
@@ -3905,12 +4147,12 @@ async function debitWalletSegmentBalance(
   }
 
   return {
-    purchasedDebitedMg,
-    earnedDebitedMg,
-    lockedPurchasedMg,
-    redeemableMg,
-    purchasedBalanceMg: nextPurchasedMg,
-    earnedBalanceMg: nextEarnedMg,
+    purchasedDebitedUnits,
+    earnedDebitedUnits,
+    lockedPurchasedUnits,
+    redeemableUnits,
+    purchasedBalanceUnits: nextPurchasedUnits,
+    earnedBalanceUnits: nextEarnedUnits,
   };
 }
 
@@ -3960,9 +4202,9 @@ async function resolveJurisdictionPolicy(
         country_code,
         p2p_send_allowed,
         p2p_receive_allowed,
-        p2p_daily_limit_mg,
-        p2p_monthly_limit_mg,
-        p2p_per_tx_limit_mg,
+        p2p_daily_limit_units,
+        p2p_monthly_limit_units,
+        p2p_per_tx_limit_units,
         requires_context,
         notes
       FROM jurisdiction_policies
@@ -3982,9 +4224,9 @@ async function resolveJurisdictionPolicy(
         country_code,
         p2p_send_allowed,
         p2p_receive_allowed,
-        p2p_daily_limit_mg,
-        p2p_monthly_limit_mg,
-        p2p_per_tx_limit_mg,
+        p2p_daily_limit_units,
+        p2p_monthly_limit_units,
+        p2p_per_tx_limit_units,
         requires_context,
         notes
       FROM jurisdiction_policies
@@ -4001,9 +4243,9 @@ async function resolveJurisdictionPolicy(
     country_code: 'GLOBAL',
     p2p_send_allowed: false,
     p2p_receive_allowed: false,
-    p2p_daily_limit_mg: null,
-    p2p_monthly_limit_mg: null,
-    p2p_per_tx_limit_mg: null,
+    p2p_daily_limit_units: null,
+    p2p_monthly_limit_units: null,
+    p2p_per_tx_limit_units: null,
     requires_context: true,
     notes: 'Default deny policy',
   };
@@ -4014,7 +4256,7 @@ async function evaluateP2pPolicyEligibility(
   input: {
     senderUserId: string;
     recipientUserId: string;
-    amountMg: number;
+    amountUnits: number;
     contextType?: string;
     contextId?: string;
   }
@@ -4055,14 +4297,14 @@ async function evaluateP2pPolicyEligibility(
   }
 
   const perTxLimit = Math.min(
-    Number(senderPolicy.p2p_per_tx_limit_mg ?? Number.MAX_SAFE_INTEGER),
-    Number(recipientPolicy.p2p_per_tx_limit_mg ?? Number.MAX_SAFE_INTEGER)
+    Number(senderPolicy.p2p_per_tx_limit_units ?? Number.MAX_SAFE_INTEGER),
+    Number(recipientPolicy.p2p_per_tx_limit_units ?? Number.MAX_SAFE_INTEGER)
   );
 
-  if (input.amountMg > perTxLimit) {
+  if (input.amountUnits > perTxLimit) {
     throw createApiError('P2P_TRANSFER_LIMIT_EXCEEDED', 'Transfer exceeds jurisdiction per-transaction limit', {
-      perTxLimitMg: perTxLimit,
-      requestedMg: input.amountMg,
+      perTxLimitUnits: perTxLimit,
+      requestedUnits: input.amountUnits,
     });
   }
 
@@ -4074,7 +4316,7 @@ async function evaluateP2pPolicyEligibility(
         AND status = 'committed'
         AND created_at >= date_trunc('day', NOW())
     `,
-    [input.senderUserId, ONEZE_MG_PER_IZE]
+    [input.senderUserId, ONEZE_UNITS_PER_IZE]
   );
 
   const monthlyResult = await client.query<{ total: string }>(
@@ -4085,27 +4327,27 @@ async function evaluateP2pPolicyEligibility(
         AND status = 'committed'
         AND created_at >= date_trunc('month', NOW())
     `,
-    [input.senderUserId, ONEZE_MG_PER_IZE]
+    [input.senderUserId, ONEZE_UNITS_PER_IZE]
   );
 
-  const dailySpentMg = Number(dailyResult.rows[0]?.total ?? '0');
-  const monthlySpentMg = Number(monthlyResult.rows[0]?.total ?? '0');
+  const dailySpentUnits = Number(dailyResult.rows[0]?.total ?? '0');
+  const monthlySpentUnits = Number(monthlyResult.rows[0]?.total ?? '0');
 
-  const dailyLimit = Number(senderPolicy.p2p_daily_limit_mg ?? Number.MAX_SAFE_INTEGER);
-  if (dailySpentMg + input.amountMg > dailyLimit) {
+  const dailyLimit = Number(senderPolicy.p2p_daily_limit_units ?? Number.MAX_SAFE_INTEGER);
+  if (dailySpentUnits + input.amountUnits > dailyLimit) {
     throw createApiError('P2P_TRANSFER_DAILY_LIMIT_EXCEEDED', 'Transfer exceeds sender daily P2P limit', {
-      dailyLimitMg: dailyLimit,
-      dailySpentMg,
-      requestedMg: input.amountMg,
+      dailyLimitUnits: dailyLimit,
+      dailySpentUnits,
+      requestedUnits: input.amountUnits,
     });
   }
 
-  const monthlyLimit = Number(senderPolicy.p2p_monthly_limit_mg ?? Number.MAX_SAFE_INTEGER);
-  if (monthlySpentMg + input.amountMg > monthlyLimit) {
+  const monthlyLimit = Number(senderPolicy.p2p_monthly_limit_units ?? Number.MAX_SAFE_INTEGER);
+  if (monthlySpentUnits + input.amountUnits > monthlyLimit) {
     throw createApiError('P2P_TRANSFER_MONTHLY_LIMIT_EXCEEDED', 'Transfer exceeds sender monthly P2P limit', {
-      monthlyLimitMg: monthlyLimit,
-      monthlySpentMg,
-      requestedMg: input.amountMg,
+      monthlyLimitUnits: monthlyLimit,
+      monthlySpentUnits,
+      requestedUnits: input.amountUnits,
     });
   }
 
@@ -4113,7 +4355,7 @@ async function evaluateP2pPolicyEligibility(
     senderCountry,
     recipientCountry,
     requiresTravelRule:
-      senderCountry !== recipientCountry && input.amountMg >= config.onezeTravelRuleThresholdMg,
+      senderCountry !== recipientCountry && input.amountUnits >= config.onezeTravelRuleThresholdUnits,
   };
 }
 
@@ -4147,8 +4389,8 @@ async function resolveOnezeFiatFxRate(
   void options;
   const quote = await resolveCountryPricingQuoteByCurrency(client, currency);
   return {
-    rate: quote.sellPrice,
-    source: `internal_pricing:${quote.countryCode}:sell`,
+    rate: quote.netRedemption,
+    source: `internal_pricing:${quote.countryCode}:withdraw`,
     observedAt: new Date().toISOString(),
   };
 }
@@ -4190,7 +4432,7 @@ async function loadWithdrawalById(
       id,
       user_id,
       burn_tx_id,
-      amount_mg::text,
+      amount_units::text,
       target_currency,
       gross_minor::text,
       spread_minor::text,
@@ -4219,9 +4461,9 @@ interface OnezeReservePolicyState {
   enabled: boolean;
   minRatio: number;
   maxRatio: number;
-  configuredOperationalReserveMg: number;
-  reservedWithdrawalMg: number;
-  operationalLiquidityMg: number;
+  configuredOperationalReserveUnits: number;
+  reservedWithdrawalUnits: number;
+  operationalLiquidityUnits: number;
   configuredReserveRatio: number | null;
   effectiveReserveRatio: number | null;
   withinPolicy: boolean;
@@ -4232,14 +4474,14 @@ interface OnezeRiskDashboardMetrics {
   lookbackHours: number;
   countryFlows: Array<{
     countryCode: string;
-    inflowMg: number;
-    outflowMg: number;
-    netFlowMg: number;
+    inflowUnits: number;
+    outflowUnits: number;
+    netFlowUnits: number;
   }>;
   totals: {
-    inflowMg: number;
-    outflowMg: number;
-    netFlowMg: number;
+    inflowUnits: number;
+    outflowUnits: number;
+    netFlowUnits: number;
   };
   redemption: {
     mintedIze: number;
@@ -4257,28 +4499,28 @@ interface OnezeRiskDashboardMetrics {
     totalCount: number;
   };
   liquidity: {
-    pendingWithdrawalMg: number;
-    operationalLiquidityMg: number;
+    pendingWithdrawalUnits: number;
+    operationalLiquidityUnits: number;
     stressIndex: number | null;
     stressSignal: number;
     stressLevel: 'normal' | 'elevated' | 'high' | 'critical';
   };
   exposure: {
-    circulatingMg: number;
-    reserveActiveMg: number;
-    supplyDeltaMg: number;
-    toleranceMg: number;
+    circulatingUnits: number;
+    reserveActiveUnits: number;
+    supplyDeltaUnits: number;
+    toleranceUnits: number;
     withinSupplyInvariant: boolean;
-    netExposureMg: number;
+    netExposureUnits: number;
     netExposureIze: number;
   };
   reservePolicy: OnezeReservePolicyState;
 }
 
-async function getPendingWithdrawalAmountMg(client: DbQueryable): Promise<number> {
+async function getPendingWithdrawalAmountUnits(client: DbQueryable): Promise<number> {
   const result = await client.query<{ total: string }>(
     `
-      SELECT COALESCE(SUM(amount_mg), 0)::text AS total
+      SELECT COALESCE(SUM(amount_units), 0)::text AS total
       FROM withdrawals
       WHERE status IN ('ACCEPTED', 'RESERVED')
     `
@@ -4288,28 +4530,28 @@ async function getPendingWithdrawalAmountMg(client: DbQueryable): Promise<number
 }
 
 function buildOnezeReservePolicyState(input: {
-  reserveActiveMg: number;
-  reservedWithdrawalMg: number;
+  reserveActiveUnits: number;
+  reservedWithdrawalUnits: number;
 }): OnezeReservePolicyState {
   const minRatio = clampNumber(config.onezeReserveRatioMin, 0, 1);
   const maxRatio = clampNumber(config.onezeReserveRatioMax, minRatio, 1);
-  const configuredOperationalReserveMg = toSafeInteger(config.onezeOperationalReserveMg);
-  const reservedWithdrawalMg = toSafeInteger(input.reservedWithdrawalMg);
-  const operationalLiquidityMg = Math.max(0, configuredOperationalReserveMg - reservedWithdrawalMg);
-  const configuredReserveRatio = ratioOrNull(configuredOperationalReserveMg, input.reserveActiveMg);
-  const effectiveReserveRatio = ratioOrNull(operationalLiquidityMg, input.reserveActiveMg);
+  const configuredOperationalReserveUnits = toSafeInteger(config.onezeOperationalReserveUnits);
+  const reservedWithdrawalUnits = toSafeInteger(input.reservedWithdrawalUnits);
+  const operationalLiquidityUnits = Math.max(0, configuredOperationalReserveUnits - reservedWithdrawalUnits);
+  const configuredReserveRatio = ratioOrNull(configuredOperationalReserveUnits, input.reserveActiveUnits);
+  const effectiveReserveRatio = ratioOrNull(operationalLiquidityUnits, input.reserveActiveUnits);
   const withinPolicy =
     !config.onezeReservePolicyEnabled
-    || input.reserveActiveMg <= 0
+    || input.reserveActiveUnits <= 0
     || (effectiveReserveRatio !== null && effectiveReserveRatio >= minRatio && effectiveReserveRatio <= maxRatio);
 
   return {
     enabled: config.onezeReservePolicyEnabled,
     minRatio,
     maxRatio,
-    configuredOperationalReserveMg,
-    reservedWithdrawalMg,
-    operationalLiquidityMg,
+    configuredOperationalReserveUnits,
+    reservedWithdrawalUnits,
+    operationalLiquidityUnits,
     configuredReserveRatio,
     effectiveReserveRatio,
     withinPolicy,
@@ -4326,17 +4568,17 @@ async function collectOnezeRiskDashboardMetrics(
     operationRows,
     crossBorderTransferRows,
     crossBorderBurnRows,
-    pendingWithdrawalMg,
+    pendingWithdrawalUnits,
     latestSnapshotRows,
     circulatingRows,
     outstandingIze,
   ] = await Promise.all([
-    client.query<{ origin_country: string; inflow_mg: string; outflow_mg: string }>(
+    client.query<{ origin_country: string; inflow_units: string; outflow_units: string }>(
       `
         SELECT
           origin_country,
-          COALESCE(SUM(CASE WHEN amount_mg > 0 THEN amount_mg ELSE 0 END), 0)::text AS inflow_mg,
-          COALESCE(SUM(CASE WHEN amount_mg < 0 THEN -amount_mg ELSE 0 END), 0)::text AS outflow_mg
+          COALESCE(SUM(CASE WHEN amount_units > 0 THEN amount_units ELSE 0 END), 0)::text AS inflow_units,
+          COALESCE(SUM(CASE WHEN amount_units < 0 THEN -amount_units ELSE 0 END), 0)::text AS outflow_units
         FROM oneze_balance_origin_events
         WHERE created_at >= NOW() - make_interval(hours => $1::int)
         GROUP BY origin_country
@@ -4393,17 +4635,17 @@ async function collectOnezeRiskDashboardMetrics(
       `,
       [safeLookbackHours]
     ),
-    getPendingWithdrawalAmountMg(client),
+    getPendingWithdrawalAmountUnits(client),
     client.query<{
-      circulating_mg: string;
-      reserve_active_mg: string;
+      circulating_units: string;
+      reserve_active_units: string;
       within_invariant: boolean;
       metadata: Record<string, unknown>;
     }>(
       `
         SELECT
-          circulating_mg::text,
-          reserve_active_mg::text,
+          circulating_units::text,
+          reserve_active_units::text,
           within_invariant,
           metadata
         FROM oneze_reconciliation_snapshots
@@ -4413,7 +4655,7 @@ async function collectOnezeRiskDashboardMetrics(
     ),
     client.query<{ total: string }>(
       `
-        SELECT COALESCE(SUM(oneze_balance_mg), 0)::text AS total
+        SELECT COALESCE(SUM(oneze_balance_units), 0)::text AS total
         FROM wallets
       `
     ),
@@ -4421,27 +4663,27 @@ async function collectOnezeRiskDashboardMetrics(
   ]);
 
   const countryFlows = flowRows.rows.map((row) => {
-    const inflowMg = Number(row.inflow_mg);
-    const outflowMg = Number(row.outflow_mg);
+    const inflowUnits = Number(row.inflow_units);
+    const outflowUnits = Number(row.outflow_units);
     return {
       countryCode: normalizeOnezeCountryTag(row.origin_country),
-      inflowMg,
-      outflowMg,
-      netFlowMg: inflowMg - outflowMg,
+      inflowUnits,
+      outflowUnits,
+      netFlowUnits: inflowUnits - outflowUnits,
     };
   });
 
   const totals = countryFlows.reduce(
     (accumulator, row) => {
-      accumulator.inflowMg += row.inflowMg;
-      accumulator.outflowMg += row.outflowMg;
-      accumulator.netFlowMg += row.netFlowMg;
+      accumulator.inflowUnits += row.inflowUnits;
+      accumulator.outflowUnits += row.outflowUnits;
+      accumulator.netFlowUnits += row.netFlowUnits;
       return accumulator;
     },
     {
-      inflowMg: 0,
-      outflowMg: 0,
-      netFlowMg: 0,
+      inflowUnits: 0,
+      outflowUnits: 0,
+      netFlowUnits: 0,
     }
   );
 
@@ -4461,39 +4703,39 @@ async function collectOnezeRiskDashboardMetrics(
 
   const latestSnapshot = latestSnapshotRows.rows[0];
   const latestSnapshotMetadata = asObject(latestSnapshot?.metadata);
-  const circulatingMg = latestSnapshot
-    ? Number(latestSnapshot.circulating_mg)
+  const circulatingUnits = latestSnapshot
+    ? Number(latestSnapshot.circulating_units)
     : Number(circulatingRows.rows[0]?.total ?? '0');
-  const reserveActiveMg = latestSnapshot
-    ? Number(latestSnapshot.reserve_active_mg)
-    : Math.max(0, Math.round(outstandingIze * ONEZE_MG_PER_IZE));
-  const supplyDeltaMg =
-    asFiniteNumber(latestSnapshotMetadata.supplyDeltaMg)
-    ?? (circulatingMg - reserveActiveMg);
-  const toleranceMg =
-    asFiniteNumber(latestSnapshotMetadata.toleranceMg)
-    ?? Math.max(0, Math.round(Math.abs(config.onezeSupplyDriftThresholdIze) * ONEZE_MG_PER_IZE));
+  const reserveActiveUnits = latestSnapshot
+    ? Number(latestSnapshot.reserve_active_units)
+    : Math.max(0, Math.round(outstandingIze * ONEZE_UNITS_PER_IZE));
+  const supplyDeltaUnits =
+    asFiniteNumber(latestSnapshotMetadata.supplyDeltaUnits)
+    ?? (circulatingUnits - reserveActiveUnits);
+  const toleranceUnits =
+    asFiniteNumber(latestSnapshotMetadata.toleranceUnits)
+    ?? Math.max(0, Math.round(Math.abs(config.onezeSupplyDriftThresholdIze) * ONEZE_UNITS_PER_IZE));
   const withinSupplyInvariant =
     (typeof latestSnapshotMetadata.withinSupplyInvariant === 'boolean'
       ? latestSnapshotMetadata.withinSupplyInvariant
       : null)
     ?? latestSnapshot?.within_invariant
-    ?? (Math.abs(supplyDeltaMg) <= toleranceMg);
+    ?? (Math.abs(supplyDeltaUnits) <= toleranceUnits);
 
   const reservePolicy = buildOnezeReservePolicyState({
-    reserveActiveMg,
-    reservedWithdrawalMg: pendingWithdrawalMg,
+    reserveActiveUnits,
+    reservedWithdrawalUnits: pendingWithdrawalUnits,
   });
   const stressSignal =
-    reservePolicy.operationalLiquidityMg > 0
-      ? pendingWithdrawalMg / reservePolicy.operationalLiquidityMg
-      : pendingWithdrawalMg > 0
+    reservePolicy.operationalLiquidityUnits > 0
+      ? pendingWithdrawalUnits / reservePolicy.operationalLiquidityUnits
+      : pendingWithdrawalUnits > 0
         ? Number.POSITIVE_INFINITY
         : 0;
   const stressIndex = Number.isFinite(stressSignal) ? roundTo(stressSignal, 6) : null;
   const stressLevel: 'normal' | 'elevated' | 'high' | 'critical' =
     !Number.isFinite(stressSignal)
-      ? (pendingWithdrawalMg > 0 ? 'critical' : 'normal')
+      ? (pendingWithdrawalUnits > 0 ? 'critical' : 'normal')
       : stressSignal >= 1
         ? 'critical'
         : stressSignal >= 0.85
@@ -4502,7 +4744,7 @@ async function collectOnezeRiskDashboardMetrics(
             ? 'elevated'
             : 'normal';
 
-  const netExposureMg = circulatingMg - reservePolicy.configuredOperationalReserveMg;
+  const netExposureUnits = circulatingUnits - reservePolicy.configuredOperationalReserveUnits;
 
   return {
     evaluatedAt: new Date().toISOString(),
@@ -4525,20 +4767,20 @@ async function collectOnezeRiskDashboardMetrics(
       totalCount: transferCount + burnCountCrossBorder,
     },
     liquidity: {
-      pendingWithdrawalMg,
-      operationalLiquidityMg: reservePolicy.operationalLiquidityMg,
+      pendingWithdrawalUnits,
+      operationalLiquidityUnits: reservePolicy.operationalLiquidityUnits,
       stressIndex,
       stressSignal,
       stressLevel,
     },
     exposure: {
-      circulatingMg,
-      reserveActiveMg,
-      supplyDeltaMg,
-      toleranceMg,
+      circulatingUnits,
+      reserveActiveUnits,
+      supplyDeltaUnits,
+      toleranceUnits,
       withinSupplyInvariant,
-      netExposureMg,
-      netExposureIze: mgToOnezeAmount(netExposureMg),
+      netExposureUnits,
+      netExposureIze: unitsToOnezeAmount(netExposureUnits),
     },
     reservePolicy,
   };
@@ -4550,46 +4792,46 @@ async function captureOnezeReconciliationSnapshot(
   metadata?: Record<string, unknown>
 ): Promise<{
   id: string;
-  circulatingMg: number;
-  reserveActiveMg: number;
+  circulatingUnits: number;
+  reserveActiveUnits: number;
   withinInvariant: boolean;
   withinSupplyInvariant: boolean;
   withinReservePolicy: boolean;
   invariantHash: string;
-  supplyDeltaMg: number;
-  toleranceMg: number;
-  operationalLiquidityMg: number;
-  configuredOperationalReserveMg: number;
-  reservedWithdrawalMg: number;
+  supplyDeltaUnits: number;
+  toleranceUnits: number;
+  operationalLiquidityUnits: number;
+  configuredOperationalReserveUnits: number;
+  reservedWithdrawalUnits: number;
   configuredReserveRatio: number | null;
   effectiveReserveRatio: number | null;
   createdAt: string;
 }> {
-  const [circulatingResult, outstandingIze, reservedWithdrawalMg] = await Promise.all([
+  const [circulatingResult, outstandingIze, reservedWithdrawalUnits] = await Promise.all([
     client.query<{ total: string }>(
       `
-        SELECT COALESCE(SUM(oneze_balance_mg), 0)::text AS total
+        SELECT COALESCE(SUM(oneze_balance_units), 0)::text AS total
         FROM wallets
       `
     ),
     getLedgerAccountBalance(client, 'platform', 'platform', 'ize_outstanding', 'IZE'),
-    getPendingWithdrawalAmountMg(client),
+    getPendingWithdrawalAmountUnits(client),
   ]);
 
-  const circulatingMg = Number(circulatingResult.rows[0]?.total ?? '0');
-  const reserveActiveMg = Math.max(0, Math.round(outstandingIze * ONEZE_MG_PER_IZE));
+  const circulatingUnits = Number(circulatingResult.rows[0]?.total ?? '0');
+  const reserveActiveUnits = Math.max(0, Math.round(outstandingIze * ONEZE_UNITS_PER_IZE));
   const reservePolicy = buildOnezeReservePolicyState({
-    reserveActiveMg,
-    reservedWithdrawalMg,
+    reserveActiveUnits,
+    reservedWithdrawalUnits,
   });
-  const operationalLiquidityMg = reservePolicy.operationalLiquidityMg;
-  const supplyDeltaMg = circulatingMg - reserveActiveMg;
-  const toleranceMg = Math.max(0, Math.round(Math.abs(config.onezeSupplyDriftThresholdIze) * ONEZE_MG_PER_IZE));
-  const withinSupplyInvariant = Math.abs(supplyDeltaMg) <= toleranceMg;
+  const operationalLiquidityUnits = reservePolicy.operationalLiquidityUnits;
+  const supplyDeltaUnits = circulatingUnits - reserveActiveUnits;
+  const toleranceUnits = Math.max(0, Math.round(Math.abs(config.onezeSupplyDriftThresholdIze) * ONEZE_UNITS_PER_IZE));
+  const withinSupplyInvariant = Math.abs(supplyDeltaUnits) <= toleranceUnits;
   const withinInvariant = withinSupplyInvariant && reservePolicy.withinPolicy;
   const invariantHash = crypto
     .createHash('sha256')
-    .update(`${circulatingMg}|${reserveActiveMg}|${reason}|${reservePolicy.effectiveReserveRatio ?? 'na'}`)
+    .update(`${circulatingUnits}|${reserveActiveUnits}|${reason}|${reservePolicy.effectiveReserveRatio ?? 'na'}`)
     .digest('hex');
   const snapshotId = createRuntimeId('recon');
 
@@ -4597,8 +4839,8 @@ async function captureOnezeReconciliationSnapshot(
     `
       INSERT INTO oneze_reconciliation_snapshots (
         id,
-        circulating_mg,
-        reserve_active_mg,
+        circulating_units,
+        reserve_active_units,
         within_invariant,
         invariant_hash,
         reason,
@@ -4609,27 +4851,27 @@ async function captureOnezeReconciliationSnapshot(
     `,
     [
       snapshotId,
-      circulatingMg,
-      reserveActiveMg,
+      circulatingUnits,
+      reserveActiveUnits,
       withinInvariant,
       invariantHash,
       reason,
       toJsonString({
         invariantMode: 'closed_loop_supply_parity',
-        supplyDeltaMg,
-        toleranceMg,
+        supplyDeltaUnits,
+        toleranceUnits,
         withinSupplyInvariant,
         reservePolicy: {
           enabled: reservePolicy.enabled,
           minRatio: reservePolicy.minRatio,
           maxRatio: reservePolicy.maxRatio,
-          configuredOperationalReserveMg: reservePolicy.configuredOperationalReserveMg,
-          reservedWithdrawalMg: reservePolicy.reservedWithdrawalMg,
+          configuredOperationalReserveUnits: reservePolicy.configuredOperationalReserveUnits,
+          reservedWithdrawalUnits: reservePolicy.reservedWithdrawalUnits,
           configuredReserveRatio: reservePolicy.configuredReserveRatio,
           effectiveReserveRatio: reservePolicy.effectiveReserveRatio,
           withinPolicy: reservePolicy.withinPolicy,
         },
-        operationalLiquidityMg,
+        operationalLiquidityUnits,
         ...(metadata ?? {}),
       }),
     ]
@@ -4637,17 +4879,17 @@ async function captureOnezeReconciliationSnapshot(
 
   return {
     id: snapshotId,
-    circulatingMg,
-    reserveActiveMg,
+    circulatingUnits,
+    reserveActiveUnits,
     withinInvariant,
     withinSupplyInvariant,
     withinReservePolicy: reservePolicy.withinPolicy,
     invariantHash,
-    supplyDeltaMg,
-    toleranceMg,
-    operationalLiquidityMg,
-    configuredOperationalReserveMg: reservePolicy.configuredOperationalReserveMg,
-    reservedWithdrawalMg: reservePolicy.reservedWithdrawalMg,
+    supplyDeltaUnits,
+    toleranceUnits,
+    operationalLiquidityUnits,
+    configuredOperationalReserveUnits: reservePolicy.configuredOperationalReserveUnits,
+    reservedWithdrawalUnits: reservePolicy.reservedWithdrawalUnits,
     configuredReserveRatio: reservePolicy.configuredReserveRatio,
     effectiveReserveRatio: reservePolicy.effectiveReserveRatio,
     createdAt: inserted.rows[0]?.created_at ?? new Date().toISOString(),
@@ -4666,11 +4908,11 @@ async function executeReservedWithdrawal(
   withdrawal: ReturnType<typeof toWithdrawalPayload>;
   settlement: {
     railRef: string;
-    reserveConsumption: Array<{ lotId: string; consumedMg: number }>;
+    reserveConsumption: Array<{ lotId: string; consumedUnits: number }>;
   } | null;
   wallet: {
     walletId: string;
-    onezeBalanceMg: number;
+    onezeBalanceUnits: number;
     onezeBalance: number;
   } | null;
 }> {
@@ -4697,13 +4939,13 @@ async function executeReservedWithdrawal(
     });
   }
 
-  const amountMg = Number(withdrawal.amount_mg);
+  const amountUnits = Number(withdrawal.amount_units);
   const linkedTxId = withdrawal.burn_tx_id ?? createRuntimeId('wdburn');
-  const reserveConsumption: Array<{ lotId: string; consumedMg: number }> = [];
+  const reserveConsumption: Array<{ lotId: string; consumedUnits: number }> = [];
   const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, withdrawal.target_currency);
 
   const wallet = await ensureWallet(client, withdrawal.user_id, withdrawal.target_currency);
-  const walletBalanceAfterMg = await applyWalletLedgerDelta(client, {
+  const walletBalanceAfterUnits = await applyWalletLedgerDelta(client, {
     walletId: wallet.id,
     txId: linkedTxId,
     asset: '1ZE',
@@ -4735,7 +4977,7 @@ async function executeReservedWithdrawal(
         id,
         user_id,
         burn_tx_id,
-        amount_mg::text,
+        amount_units::text,
         target_currency,
         gross_minor::text,
         spread_minor::text,
@@ -4772,8 +5014,8 @@ async function executeReservedWithdrawal(
     },
     wallet: {
       walletId: wallet.id,
-      onezeBalanceMg: walletBalanceAfterMg,
-      onezeBalance: mgToOnezeAmount(walletBalanceAfterMg),
+      onezeBalanceUnits: walletBalanceAfterUnits,
+      onezeBalance: unitsToOnezeAmount(walletBalanceAfterUnits),
     },
   };
 }
@@ -5467,7 +5709,7 @@ async function postCommerceOrderRefundLedgerReversal(
   orderId: string,
   buyerId: string,
   totalGbp: number,
-  refundRef: string
+  refundRef?: string
 ): Promise<{ reversed: boolean; alreadyReversed: boolean }> {
   if (totalGbp <= 0) {
     return {
@@ -5476,7 +5718,7 @@ async function postCommerceOrderRefundLedgerReversal(
     };
   }
 
-  if (await hasCommerceOrderRefundReversalPosted(client, orderId, refundRef)) {
+  if (refundRef && await hasCommerceOrderRefundReversalPosted(client, orderId, refundRef)) {
     return {
       reversed: false,
       alreadyReversed: true,
@@ -6735,9 +6977,28 @@ async function createGatewayPaymentIntent(input: {
     moneyConversionVersion: providerMoney.trace.conversionVersion,
   };
 
+  // ── 1ZE internal gateway ───────────────────────────────────────────
+  // 1ZE marketplace payment is atomic — no external provider is needed.
+  // The create function only records the intent; the actual 1ZE wallet
+  // debit happens in settlePaymentIntent() when the intent is settled.
+  // This keeps 1ZE flowing through the SAME commerce escrow as card
+  // payments: buyer 1ZE → commerce escrow (GBP) → seller payable.
+  if (input.gatewayId === 'oneze_internal') {
+    const internalRef = `oneze_internal_${input.intentId}`;
+    return {
+      providerIntentRef: internalRef,
+      clientSecret: null,
+      initialStatus: 'requires_confirmation',
+      providerStatus: 'requires_confirmation',
+      nextActionUrl: null,
+      scaExpiresAt: null,
+      ...providerBoundary,
+    };
+  }
+
   if (input.gatewayId === 'stripe_americas' && config.stripeSecretKey) {
     const stripe = new Stripe(config.stripeSecretKey, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2026-08-26.dahlia',
     });
 
     // Build Stripe PaymentIntent params
@@ -6948,6 +7209,25 @@ async function createGatewayPaymentIntent(input: {
     };
   }
 
+  // ── 1ZE internal wallet gateway ────────────────────────────────────
+  // 1ZE is just another payment method at checkout, like Visa or PayPal.
+  // The intent is created as 'succeeded' because the 1ZE debit is atomic —
+  // no external processor round-trip is needed. The actual wallet debit
+  // and escrow credit happen in settlePaymentIntent(), flowing through the
+  // same commerce escrow, dispute resolution, and seller protection as
+  // card payments.
+  if (input.gatewayId === 'oneze_internal') {
+    return {
+      providerIntentRef: `oneze_${input.intentId}`,
+      clientSecret: null,
+      initialStatus: 'succeeded',
+      providerStatus: 'succeeded',
+      nextActionUrl: null,
+      scaExpiresAt: null,
+      ...providerBoundary,
+    };
+  }
+
   if (config.nodeEnv !== 'production' && config.apiEnableMockWebhooks) {
     return {
       providerIntentRef: createRuntimeId(`intent_${input.gatewayId}`),
@@ -7019,7 +7299,7 @@ async function createGatewayRefund(input: {
   // ── Stripe ──────────────────────────────────────────────────────────
   if (input.gatewayId === 'stripe_americas' && config.stripeSecretKey) {
     const stripe = new Stripe(config.stripeSecretKey, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2026-08-26.dahlia',
     });
 
     const created = await stripe.refunds.create(
@@ -7563,6 +7843,102 @@ async function settlePaymentIntent(
 
     const paidOrder = paidOrderResult.rows[0];
     if (paidOrder) {
+      // Compliance gate: verify the buyer is permitted to spend via the
+      // marketplace.  This runs before any ledger entries or shipment
+      // provisioning so a blocked buyer never triggers downstream effects.
+      const spendCapability = await evaluateWalletCapability(
+        client,
+        paidOrder.buyer_id,
+        'spend',
+        {
+          amountUsd: Number(paidOrder.total_gbp),
+          currency: 'GBP',
+          market: 'marketplace',
+        }
+      );
+      if (!spendCapability.allowed) {
+        throw createApiError(
+          spendCapability.code,
+          spendCapability.reason ?? 'Wallet capability check failed',
+          {
+            capability: 'spend',
+            orderId: paidOrder.id,
+            buyerId: paidOrder.buyer_id,
+            restrictions: spendCapability.restrictions,
+          }
+        );
+      }
+
+      // ── 1ZE internal gateway: debit buyer's 1ZE wallet ──────────────
+      // For oneze_internal commerce payments, the buyer pays with 1ZE
+      // from their wallet. The GBP total is converted to 1ZE units using
+      // the at-par pricing engine (GBP → USD → 1ZE, where 1 1ZE = $1).
+      // The debit happens here so the 1ZE flows through the SAME commerce
+      // escrow as card payments: buyer 1ZE → commerce escrow (GBP) →
+      // seller payable.
+      if (updatedIntent.gateway_id === 'oneze_internal') {
+        const onezeArchEnabled = await onezeArchitectureTablesAvailable(client);
+        if (!onezeArchEnabled) {
+          throw createApiError(
+            'PAYMENT_PROVIDER_UNAVAILABLE',
+            '1ZE wallet architecture is not available — cannot settle oneze_internal payment',
+            { gatewayId: updatedIntent.gateway_id, orderId: paidOrder.id }
+          );
+        }
+
+        const totalGbp = roundTo(Number(paidOrder.total_gbp), 2);
+        // At-par pricing: resolve GBP → USD FX rate (1 1ZE = $1 USD).
+        const gbpPricingQuote = await resolveCountryPricingQuoteByCurrency(client, 'GBP');
+        const gbpToUsdRate = gbpPricingQuote.fxRate;
+        if (!Number.isFinite(gbpToUsdRate) || gbpToUsdRate <= 0) {
+          throw createApiError(
+            'PAYMENT_PROVIDER_UNAVAILABLE',
+            'Unable to resolve GBP→USD FX rate for 1ZE debit',
+            { gatewayId: updatedIntent.gateway_id, orderId: paidOrder.id }
+          );
+        }
+
+        // GBP → USD (at par with 1ZE): 1ZE amount = GBP / fxRate
+        const izeAmount = Number((totalGbp / gbpToUsdRate).toFixed(6));
+        if (!Number.isFinite(izeAmount) || izeAmount <= 0) {
+          throw createApiError(
+            'IZE_AMOUNT_INVALID',
+            'Unable to derive a valid 1ZE debit amount from GBP total',
+            { gatewayId: updatedIntent.gateway_id, totalGbp, gbpToUsdRate }
+          );
+        }
+
+        const debitUnits = onezeAmountToUnits(izeAmount);
+        const buyerWallet = await ensureWallet(client, paidOrder.buyer_id, 'GBP');
+        const walletTxId = createRuntimeId('wtx');
+
+        // Debit the buyer's 1ZE wallet. applyWalletLedgerDelta throws
+        // WALLET_INSUFFICIENT_BALANCE if the balance is too low — this
+        // aborts the settlement transaction before any escrow entries
+        // or shipment provisioning occur.
+        await applyWalletLedgerDelta(client, {
+          walletId: buyerWallet.id,
+          txId: walletTxId,
+          asset: '1ZE',
+          amount: -debitUnits,
+          kind: 'PURCHASE',
+          refType: 'commerce_order',
+          refId: paidOrder.id,
+          anchorValueInInr: gbpPricingQuote.anchorValueInInr,
+          metadata: {
+            orderId: paidOrder.id,
+            intentId: updatedIntent.id,
+            gatewayId: updatedIntent.gateway_id,
+            totalGbp,
+            gbpToUsdRate,
+            izeAmount,
+            debitUnits,
+            pricingSource: 'fixed_par:GBP:1ZE',
+            conversionTrace: 'GBP→USD(at-par)→1ZE',
+          },
+        });
+      }
+
       await client.query(
         `INSERT INTO order_events (
            order_id, event_type, actor_id, source, deduplication_key, metadata
@@ -8657,12 +9033,15 @@ const NOTIFICATION_EVENT_TYPES = [
   'order_refunded', 'resolution_opened', 'resolution_status_changed',
   'review_received', 'chat_message', 'payout_processed', 'refund_completed',
   'price_drop', 'offer_accepted',
+  'auction_outbid', 'auction_won', 'auction_ending_soon',
+  'new_follower', 'new_listing_from_followed_seller',
+  'safety_outcome',
   'generic',
 ] as const;
 type NotificationEventType = typeof NOTIFICATION_EVENT_TYPES[number];
 
 const NOTIFICATION_PUSH_CATEGORIES = [
-  'messages', 'offers', 'wishlist', 'followers', 'orderUpdates', 'priceDrops', 'news',
+  'messages', 'offers', 'wishlist', 'followers', 'orderUpdates', 'priceDrops', 'auctionAlerts', 'news',
 ] as const;
 type NotificationPushCategory = typeof NOTIFICATION_PUSH_CATEGORIES[number];
 
@@ -8670,11 +9049,54 @@ function mapEventToPushCategory(eventType: string): NotificationPushCategory | n
   if (eventType === 'chat_message') return 'messages';
   if (eventType === 'offer_accepted') return 'offers';
   if (eventType.startsWith('order_')) return 'orderUpdates';
-  if (eventType === 'review_received') return 'orderUpdates';
   if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orderUpdates';
   if (eventType === 'payout_processed' || eventType === 'refund_completed') return 'orderUpdates';
   if (eventType === 'price_drop') return 'priceDrops';
+  if (eventType === 'auction_outbid' || eventType === 'auction_won' || eventType === 'auction_ending_soon') return 'auctionAlerts';
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller') return 'followers';
+  if (eventType === 'review_received') return 'wishlist';
+  if (eventType === 'generic' || eventType === 'safety_outcome') return 'news';
   return null;
+}
+
+function mapEventTypeToChannelId(eventType: string): string {
+  if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 'orders';
+  if (eventType.startsWith('auction_')) return 'auctions';
+  if (eventType === 'chat_message') return 'messages';
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'review_received') return 'social';
+  if (eventType === 'price_drop' || eventType === 'offer_accepted' || eventType === 'generic' || eventType === 'safety_outcome') return 'news';
+  if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'orders';
+  return 'default';
+}
+
+function mapEventTypeToInterruptionLevel(eventType: string): 'passive' | 'active' | 'timeSensitive' {
+  if (eventType === 'auction_ending_soon' || eventType === 'auction_outbid' || eventType === 'auction_won') return 'timeSensitive';
+  if (eventType === 'order_dispatched' || eventType === 'order_out_for_delivery') return 'timeSensitive';
+  if (eventType === 'resolution_opened' || eventType === 'safety_outcome') return 'timeSensitive';
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'price_drop' || eventType === 'generic' || eventType === 'review_received') return 'passive';
+  return 'active';
+}
+
+function mapEventTypeToRelevanceScore(eventType: string): number {
+  if (eventType === 'auction_won') return 1.0;
+  if (eventType === 'auction_ending_soon' || eventType === 'auction_outbid') return 0.9;
+  if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 0.8;
+  if (eventType === 'resolution_opened' || eventType === 'safety_outcome') return 0.8;
+  if (eventType === 'offer_accepted') return 0.7;
+  if (eventType === 'chat_message') return 0.6;
+  if (eventType === 'price_drop') return 0.4;
+  if (eventType === 'review_received') return 0.3;
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller') return 0.2;
+  return 0.1;
+}
+
+const CRITICAL_EVENT_TYPES_SET = new Set([
+  'auction_won', 'auction_ending_soon', 'auction_outbid',
+  'order_cancelled', 'resolution_opened', 'safety_outcome',
+]);
+
+function isCriticalEventType(eventType: string): boolean {
+  return CRITICAL_EVENT_TYPES_SET.has(eventType);
 }
 
 async function queueUserNotification(input: {
@@ -8748,17 +9170,40 @@ async function queueUserNotification(input: {
       // A durable event may have been inserted just before Redis became
       // unavailable. Retrying the producer repairs that boundary. BullMQ's
       // event-based job ID prevents duplicate queued jobs.
+      //
+      // P0 FIX: Re-evaluate push preference before re-enqueueing. A previously
+      // queued event may have been suppressed by a preference change since the
+      // original insert. Re-enqueueing without re-checking would defeat
+      // suppression — the retry would send a push the user opted out of.
       if (existingEvent?.status === 'queued') {
-        await enqueuePushNotificationJob({
-          eventId: existingEvent.id,
-          userId: existingEvent.user_id,
-          title: existingEvent.title,
-          body: existingEvent.body,
-          payload: existingEvent.payload,
-          eventType: existingEvent.event_type,
-          actorUserId: existingEvent.actor_user_id,
-          route: existingEvent.route,
-        });
+        const retryCategory = mapEventToPushCategory(existingEvent.event_type);
+        let retryShouldPush = false; // fail closed for unmapped types
+        if (retryCategory) {
+          const retryPref = await db.query<{ enabled: boolean }>(
+            `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+            [existingEvent.user_id, retryCategory]
+          );
+          retryShouldPush = !retryPref.rowCount || retryPref.rows[0].enabled;
+        }
+        if (retryShouldPush) {
+          await enqueuePushNotificationJob({
+            eventId: existingEvent.id,
+            userId: existingEvent.user_id,
+            title: existingEvent.title,
+            body: existingEvent.body,
+            payload: existingEvent.payload,
+            eventType: existingEvent.event_type,
+            actorUserId: existingEvent.actor_user_id,
+            route: existingEvent.route,
+          });
+        } else {
+          // Preference now suppresses this event — mark it suppressed
+          await db.query(
+            `UPDATE notification_events SET status = 'suppressed', suppression_reason = 'preference' WHERE id = $1`,
+            [existingEvent.id]
+          );
+          recordPushDelivery({ provider: 'expo', status: 'suppressed' });
+        }
       }
       return existingEvent?.id ?? null;
     }
@@ -8767,16 +9212,54 @@ async function queueUserNotification(input: {
 
   const insertedEventId = insertResult.rows[0].id;
 
-  // Push preference check
+  // Push preference check — fail closed for unknown event types.
+  // Unknown events (mapEventToPushCategory returns null) are in-app only;
+  // they never bypass preferences with shouldPush=true.
   const pushCategory = mapEventToPushCategory(eventType);
-  let shouldPush = true;
-  if (pushCategory) {
+  let shouldPush = false;
+  let suppressionReason: string | null = null;
+  if (!pushCategory) {
+    // Unknown event type — in-app only, no push
+    shouldPush = false;
+    suppressionReason = 'unmapped_event_type';
+  } else {
     const prefResult = await db.query<{ enabled: boolean }>(
       `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
       [input.userId, pushCategory]
     );
     if (prefResult.rowCount && !prefResult.rows[0].enabled) {
       shouldPush = false;
+      suppressionReason = 'preference';
+    } else {
+      shouldPush = true;
+    }
+  }
+
+  // Server-side quiet hours enforcement.
+  // If the user has quiet hours configured and the current time falls within
+  // the quiet window, suppress non-critical push notifications. Critical
+  // event types (auction won, safety, resolution) bypass quiet hours.
+  if (shouldPush && pushCategory && !isCriticalEventType(eventType)) {
+    const qhResult = await db.query<{ quiet_hours: unknown }>(
+      `SELECT quiet_hours FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+      [input.userId, pushCategory]
+    );
+    const qhRaw = qhResult.rows[0]?.quiet_hours;
+    if (qhRaw && typeof qhRaw === 'object') {
+      const qh = qhRaw as { enabled?: boolean; startHour?: number; endHour?: number };
+      if (qh.enabled && typeof qh.startHour === 'number' && typeof qh.endHour === 'number') {
+        const nowUtc = new Date();
+        const currentHour = nowUtc.getUTCHours();
+        const start = qh.startHour;
+        const end = qh.endHour;
+        const inQuietWindow = start <= end
+          ? (currentHour >= start && currentHour < end)
+          : (currentHour >= start || currentHour < end);
+        if (inQuietWindow) {
+          shouldPush = false;
+          suppressionReason = 'quiet_hours';
+        }
+      }
     }
   }
 
@@ -8791,12 +9274,18 @@ async function queueUserNotification(input: {
       actorUserId: input.actorUserId ?? null,
       route: input.route ?? null,
     });
+    recordPushDelivery({
+      provider: 'expo',
+      status: 'queued',
+    });
+  } else {
+    // Mark the event as suppressed with the reason
+    await db.query(
+      `UPDATE notification_events SET status = 'suppressed', suppression_reason = $2 WHERE id = $1`,
+      [insertedEventId, suppressionReason]
+    );
+    recordPushDelivery({ provider: 'expo', status: 'suppressed' });
   }
-
-  recordPushDelivery({
-    provider: 'expo',
-    status: 'queued',
-  });
 
   publishRealtimeEvent({
     topic: `notifications.user:${input.userId}`,
@@ -9131,7 +9620,28 @@ async function processPushQueueJob(job: {
   }
 
   const expoResponses: Array<Record<string, unknown>> = [];
-  let deliveredCount = 0;
+  const ticketIdTokenPairs: Array<{ ticketId: string; token: string }> = [];
+  const tokensToRevoke: string[] = [];
+  let ticketedCount = 0;
+  let ticketErrorCount = 0;
+
+  // Preview policy enforcement — transform title/body based on user preference.
+  let pushTitle = job.title;
+  let pushBody = job.body;
+  const previewCategory = mapEventToPushCategory(job.eventType ?? 'generic');
+  if (previewCategory) {
+    const previewResult = await db.query<{ preview_policy: string }>(
+      `SELECT preview_policy FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+      [job.userId, previewCategory]
+    );
+    const policy = previewResult.rows[0]?.preview_policy ?? 'full';
+    if (policy === 'hidden') {
+      pushTitle = 'New notification';
+      pushBody = 'Tap to view';
+    } else if (policy === 'sender_only') {
+      pushBody = 'New message';
+    }
+  }
 
   for (const device of devicesResult.rows) {
     try {
@@ -9143,9 +9653,11 @@ async function processPushQueueJob(job: {
         },
         body: toJsonString({
           to: device.token,
-          title: job.title,
-          body: job.body,
-          channelId: config.pushDefaultChannel,
+          title: pushTitle,
+          body: pushBody,
+          channelId: mapEventTypeToChannelId(job.eventType ?? 'generic'),
+          interruptionLevel: mapEventTypeToInterruptionLevel(job.eventType ?? 'generic'),
+          relevanceScore: mapEventTypeToRelevanceScore(job.eventType ?? 'generic'),
           data: {
             ...(job.payload ?? {}),
             eventId: job.eventId,
@@ -9156,20 +9668,50 @@ async function processPushQueueJob(job: {
         }),
       });
 
-      const payload = response.ok
-        ? (await response.json() as Record<string, unknown>)
-        : { error: `http_${response.status}` };
+      if (!response.ok) {
+        expoResponses.push({
+          token: device.token,
+          provider: device.provider,
+          platform: device.platform,
+          ok: false,
+          error: `http_${response.status}`,
+        });
+        ticketErrorCount += 1;
+        continue;
+      }
 
-      expoResponses.push({
-        token: device.token,
-        provider: device.provider,
-        platform: device.platform,
-        response: payload,
-        ok: response.ok,
-      });
+      const payload = (await response.json()) as Record<string, unknown>;
+      const tickets = Array.isArray(payload.data) ? payload.data : [payload.data];
 
-      if (response.ok) {
-        deliveredCount += 1;
+      for (const ticket of tickets) {
+        const t = ticket as Record<string, unknown>;
+        const ticketStatus = t.status as string;
+        const ticketId = t.id as string | undefined;
+        const ticketMessage = t.message as string | undefined;
+        const ticketDetails = t.details as Record<string, unknown> | undefined;
+        const ticketError = ticketDetails?.error as string | undefined;
+
+        expoResponses.push({
+          token: device.token,
+          provider: device.provider,
+          platform: device.platform,
+          ticketStatus,
+          ticketId: ticketId ?? null,
+          message: ticketMessage ?? null,
+          error: ticketError ?? null,
+          ok: ticketStatus === 'ok',
+        });
+
+        if (ticketStatus === 'ok' && ticketId) {
+          ticketIdTokenPairs.push({ ticketId, token: device.token });
+          ticketedCount += 1;
+        } else {
+          ticketErrorCount += 1;
+          recordPushTicketError({ provider: 'expo', error: ticketError ?? 'unknown' });
+          if (ticketError === 'DeviceNotRegistered') {
+            tokensToRevoke.push(device.token);
+          }
+        }
       }
     } catch (error) {
       expoResponses.push({
@@ -9179,10 +9721,25 @@ async function processPushQueueJob(job: {
         ok: false,
         error: (error as Error).message,
       });
+      ticketErrorCount += 1;
     }
   }
 
-  const status = deliveredCount > 0 ? 'sent' : 'failed';
+  // Revoke DeviceNotRegistered tokens
+  if (tokensToRevoke.length > 0) {
+    await db.query(
+      `UPDATE notification_devices
+       SET is_active = FALSE, token_status = 'not_registered', last_seen_at = NOW()
+       WHERE token = ANY($1::text[])`,
+      [tokensToRevoke]
+    );
+  }
+
+  // P0 FIX: 'ticketed' means Expo accepted the payload (ticket status=ok).
+  // This is NOT device delivery. The event transitions to 'sent' only after
+  // the receipt reconciler confirms receipt status=ok from APNs/FCM.
+  const status = ticketedCount > 0 ? 'ticketed' : 'failed';
+  const firstTicketId = ticketIdTokenPairs[0]?.ticketId ?? null;
 
   await db.query(
     `
@@ -9191,35 +9748,41 @@ async function processPushQueueJob(job: {
         status = $2,
         sent_at = CASE WHEN $2 = 'sent' THEN NOW() ELSE sent_at END,
         provider_message_id = COALESCE(provider_message_id, $3),
-        provider_error = CASE WHEN $2 = 'failed' THEN $4 ELSE NULL END,
-        metadata = metadata || $5::jsonb
+        provider_ticket_ids = $4::jsonb,
+        provider_error = CASE WHEN $2 = 'failed' THEN $5 ELSE NULL END,
+        metadata = metadata || $6::jsonb
       WHERE id = $1
     `,
     [
       job.eventId,
       status,
-      deliveredCount > 0 ? `expo:${job.eventId}` : null,
-      deliveredCount > 0 ? null : 'delivery_failed',
+      firstTicketId,
+      toJsonString(ticketIdTokenPairs),
+      ticketedCount > 0 ? null : 'delivery_failed',
       toJsonString({
         providerResponses: expoResponses,
+        ticketedCount,
+        ticketErrorCount,
+        tokensRevoked: tokensToRevoke.length,
       }),
     ]
   );
 
   recordPushDelivery({
     provider: 'expo',
-    status: deliveredCount > 0 ? 'sent' : 'failed',
+    status: ticketedCount > 0 ? 'ticketed' : 'failed',
   });
 
   publishRealtimeEvent({
     topic: `notifications.user:${job.userId}`,
-    type: deliveredCount > 0 ? 'notification.sent' : 'notification.failed',
+    type: ticketedCount > 0 ? 'notification.ticketed' : 'notification.failed',
     userId: job.userId,
     payload: {
       id: job.eventId,
       title: job.title,
       body: job.body,
-      deliveredCount,
+      ticketedCount,
+      ticketErrorCount,
     },
   });
 }
@@ -9686,6 +10249,91 @@ function stopRetentionSweepScheduler(): void {
   retentionSweepTimer = null;
 }
 
+let analyticsAggregationTimer: NodeJS.Timeout | null = null;
+
+function startAnalyticsAggregationScheduler(): void {
+  if (analyticsAggregationTimer) {
+    return;
+  }
+
+  const enqueueAggregation = () => {
+    void enqueueAnalyticsAggregationJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling analytics aggregation job');
+    });
+  };
+
+  analyticsAggregationTimer = setInterval(enqueueAggregation, config.analyticsAggregationIntervalMs);
+  analyticsAggregationTimer.unref?.();
+}
+
+function stopAnalyticsAggregationScheduler(): void {
+  if (!analyticsAggregationTimer) {
+    return;
+  }
+  clearInterval(analyticsAggregationTimer);
+  analyticsAggregationTimer = null;
+}
+
+let pushReceiptReconciliationTimer: NodeJS.Timeout | null = null;
+
+function startPushReceiptReconciliationScheduler(): void {
+  if (pushReceiptReconciliationTimer) {
+    return;
+  }
+
+  const enqueueReconciliation = () => {
+    void enqueuePushReceiptReconciliationJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling push receipt reconciliation job');
+    });
+  };
+
+  // Run every 5 minutes. Expo recommends checking receipts 15 minutes after
+  // sending, but we run more frequently to catch receipts as they become
+  // available. The handler only checks events older than 15 seconds.
+  pushReceiptReconciliationTimer = setInterval(enqueueReconciliation, 5 * 60 * 1000);
+  pushReceiptReconciliationTimer.unref?.();
+
+  // Also run once shortly after startup to reconcile any pending tickets
+  setTimeout(enqueueReconciliation, 30_000);
+}
+
+function stopPushReceiptReconciliationScheduler(): void {
+  if (!pushReceiptReconciliationTimer) {
+    return;
+  }
+  clearInterval(pushReceiptReconciliationTimer);
+  pushReceiptReconciliationTimer = null;
+}
+
+let scheduledPublicationSweepTimer: NodeJS.Timeout | null = null;
+
+function startScheduledPublicationSweepScheduler(): void {
+  if (scheduledPublicationSweepTimer) {
+    return;
+  }
+
+  const enqueueSweep = () => {
+    void enqueueScheduledPublicationSweepJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling scheduled publication sweep job');
+    });
+  };
+
+  // Run every 30 seconds — the SLO target is "within 60 seconds of due time".
+  scheduledPublicationSweepTimer = setInterval(enqueueSweep, 30_000);
+  scheduledPublicationSweepTimer.unref?.();
+
+  // Also run once shortly after startup to catch any due schedules.
+  setTimeout(enqueueSweep, 10_000);
+}
+
+function stopScheduledPublicationSweepScheduler(): void {
+  if (!scheduledPublicationSweepTimer) {
+    return;
+  }
+  clearInterval(scheduledPublicationSweepTimer);
+  scheduledPublicationSweepTimer = null;
+}
+
 function startAuctionSweepScheduler(): void {
   if (auctionSweepTimer) {
     return;
@@ -9995,7 +10643,7 @@ async function syncOnezeInternalFxRatesFromProvider(
     await client.query('BEGIN');
 
     const configuredBaseCurrency = config.onezeFxProviderBaseCurrency.trim().toUpperCase();
-    const baseCurrency = configuredBaseCurrency.length === 3 ? configuredBaseCurrency : 'INR';
+    const baseCurrency = configuredBaseCurrency.length === 3 ? configuredBaseCurrency : 'USD';
 
     const activeCurrencies = await listActiveOnezePricingCurrencies(client);
     const quoteCurrencies = Array.from(
@@ -10082,7 +10730,6 @@ function applyAutoAdjustStep(
 
 function resolveAutoAdjustDirection(input: {
   metrics: OnezeRiskDashboardMetrics;
-  violationCount: number;
 }): { direction: OnezeAutoAdjustDirection | null; triggers: string[] } {
   const triggers: string[] = [];
   const highStress = input.metrics.liquidity.stressSignal >= config.onezeAutoAdjustHighStressThreshold;
@@ -10094,10 +10741,6 @@ function resolveAutoAdjustDirection(input: {
     redemptionRate === null
       ? input.metrics.redemption.burnedIze === 0
       : redemptionRate <= config.onezeAutoAdjustLowRedemptionRate;
-
-  if (input.violationCount > 0) {
-    triggers.push('arbitrage_violation');
-  }
 
   if (!input.metrics.reservePolicy.withinPolicy) {
     triggers.push('reserve_policy_violation');
@@ -10118,7 +10761,7 @@ function resolveAutoAdjustDirection(input: {
     };
   }
 
-  if (lowStress && lowRedemption && input.violationCount === 0) {
+  if (lowStress && lowRedemption) {
     return {
       direction: 'relax',
       triggers: ['liquidity_stress_low', 'redemption_rate_low'],
@@ -10143,19 +10786,15 @@ async function runOnezeAutomaticSpreadAdjustment(
   stepBps: number;
   matrixSizeBefore: number;
   matrixSizeAfter: number;
-  violationCountBefore: number;
-  violationCountAfter: number;
   adjustments: Array<{
     country: string;
     before: {
-      markupBps: number;
-      markdownBps: number;
-      crossBorderFeeBps: number;
+      loadFeeBps: number;
+      withdrawFeeBps: number;
     };
     after: {
-      markupBps: number;
-      markdownBps: number;
-      crossBorderFeeBps: number;
+      loadFeeBps: number;
+      withdrawFeeBps: number;
     };
   }>;
   evaluatedAt: string;
@@ -10170,8 +10809,6 @@ async function runOnezeAutomaticSpreadAdjustment(
       stepBps: clampNumber(toSafeInteger(config.onezeAutoAdjustStepBps), 1, 500),
       matrixSizeBefore: 0,
       matrixSizeAfter: 0,
-      violationCountBefore: 0,
-      violationCountAfter: 0,
       adjustments: [],
       evaluatedAt: new Date().toISOString(),
     };
@@ -10190,10 +10827,8 @@ async function runOnezeAutomaticSpreadAdjustment(
 
     const metrics = await collectOnezeRiskDashboardMetrics(client, safeLookbackHours);
     const quotesBefore = await listCountryPricingQuotes(client);
-    const violationsBefore = findPricingArbitrageViolations(quotesBefore);
     const decision = resolveAutoAdjustDirection({
       metrics,
-      violationCount: violationsBefore.length,
     });
 
     if (!decision.direction) {
@@ -10207,8 +10842,6 @@ async function runOnezeAutomaticSpreadAdjustment(
         stepBps,
         matrixSizeBefore: quotesBefore.length,
         matrixSizeAfter: quotesBefore.length,
-        violationCountBefore: violationsBefore.length,
-        violationCountAfter: violationsBefore.length,
         adjustments: [],
         evaluatedAt: metrics.evaluatedAt,
       };
@@ -10217,14 +10850,12 @@ async function runOnezeAutomaticSpreadAdjustment(
     const adjustments: Array<{
       country: string;
       before: {
-        markupBps: number;
-        markdownBps: number;
-        crossBorderFeeBps: number;
+        loadFeeBps: number;
+        withdrawFeeBps: number;
       };
       after: {
-        markupBps: number;
-        markdownBps: number;
-        crossBorderFeeBps: number;
+        loadFeeBps: number;
+        withdrawFeeBps: number;
       };
     }> = [];
 
@@ -10234,47 +10865,37 @@ async function runOnezeAutomaticSpreadAdjustment(
         continue;
       }
 
-      const nextMarkupBps = applyAutoAdjustStep(
-        profile.markupBps,
+      const nextLoadFeeBps = applyAutoAdjustStep(
+        profile.loadFeeBps,
         decision.direction,
         stepBps,
-        PRICING_PARAMETER_BOUNDS.markupBps
+        PRICING_PARAMETER_BOUNDS.platformFeeBps
       );
-      const nextMarkdownBps = applyAutoAdjustStep(
-        profile.markdownBps,
+      const nextWithdrawFeeBps = applyAutoAdjustStep(
+        profile.withdrawFeeBps,
         decision.direction,
         stepBps,
-        PRICING_PARAMETER_BOUNDS.markdownBps
-      );
-      const nextCrossBorderFeeBps = applyAutoAdjustStep(
-        profile.crossBorderFeeBps,
-        decision.direction,
-        stepBps,
-        PRICING_PARAMETER_BOUNDS.crossBorderFeeBps
+        PRICING_PARAMETER_BOUNDS.platformFeeBps
       );
 
       if (
-        nextMarkupBps === profile.markupBps
-        && nextMarkdownBps === profile.markdownBps
-        && nextCrossBorderFeeBps === profile.crossBorderFeeBps
+        nextLoadFeeBps === profile.loadFeeBps
+        && nextWithdrawFeeBps === profile.withdrawFeeBps
       ) {
         continue;
       }
 
       validatePricingProfileInput({
-        markupBps: nextMarkupBps,
-        markdownBps: nextMarkdownBps,
-        crossBorderFeeBps: nextCrossBorderFeeBps,
-        pppFactor: profile.pppFactor,
+        loadFeeBps: nextLoadFeeBps,
+        withdrawFeeBps: nextWithdrawFeeBps,
       });
 
       await upsertCountryPricingProfile(client, {
         countryCode: profile.countryCode,
         currency: profile.currency,
-        markupBps: nextMarkupBps,
-        markdownBps: nextMarkdownBps,
-        crossBorderFeeBps: nextCrossBorderFeeBps,
-        pppFactor: profile.pppFactor,
+        fxFeeBps: profile.fxFeeBps,
+        loadFeeBps: nextLoadFeeBps,
+        withdrawFeeBps: nextWithdrawFeeBps,
         withdrawalLockHours: profile.withdrawalLockHours,
         dailyRedeemLimitIze: profile.dailyRedeemLimitIze,
         weeklyRedeemLimitIze: profile.weeklyRedeemLimitIze,
@@ -10293,31 +10914,17 @@ async function runOnezeAutomaticSpreadAdjustment(
       adjustments.push({
         country: profile.countryCode,
         before: {
-          markupBps: profile.markupBps,
-          markdownBps: profile.markdownBps,
-          crossBorderFeeBps: profile.crossBorderFeeBps,
+          loadFeeBps: profile.loadFeeBps,
+          withdrawFeeBps: profile.withdrawFeeBps,
         },
         after: {
-          markupBps: nextMarkupBps,
-          markdownBps: nextMarkdownBps,
-          crossBorderFeeBps: nextCrossBorderFeeBps,
+          loadFeeBps: nextLoadFeeBps,
+          withdrawFeeBps: nextWithdrawFeeBps,
         },
       });
     }
 
     const quotesAfter = await listCountryPricingQuotes(client);
-    const violationsAfter = findPricingArbitrageViolations(quotesAfter);
-    if (violationsAfter.length > 0) {
-      throw createApiError(
-        'PRICING_ARBITRAGE_VIOLATION',
-        'Automatic spread adjustment introduces guaranteed arbitrage',
-        {
-          reason,
-          triggers: decision.triggers,
-          violations: violationsAfter.slice(0, 10),
-        }
-      );
-    }
 
     await client.query('COMMIT');
 
@@ -10330,8 +10937,6 @@ async function runOnezeAutomaticSpreadAdjustment(
       stepBps,
       matrixSizeBefore: quotesBefore.length,
       matrixSizeAfter: quotesAfter.length,
-      violationCountBefore: violationsBefore.length,
-      violationCountAfter: violationsAfter.length,
       adjustments,
       evaluatedAt: metrics.evaluatedAt,
     };
@@ -10427,7 +11032,7 @@ async function processMintOperationPaymentWebhook(
             fiat_currency,
             net_fiat_amount_minor::text,
             platform_fee_minor::text,
-            ize_amount_mg::text,
+            ize_amount_units::text,
             rate_per_gram::text,
             rate_source,
             rate_locked_at::text,
@@ -10475,7 +11080,7 @@ async function processMintOperationPaymentWebhook(
           fiat_currency,
           net_fiat_amount_minor::text,
           platform_fee_minor::text,
-          ize_amount_mg::text,
+          ize_amount_units::text,
           rate_per_gram::text,
           rate_source,
           rate_locked_at::text,
@@ -10533,7 +11138,7 @@ async function processMintOperationPaymentWebhook(
           fiat_currency,
           net_fiat_amount_minor::text,
           platform_fee_minor::text,
-          ize_amount_mg::text,
+          ize_amount_units::text,
           rate_per_gram::text,
           rate_source,
           rate_locked_at::text,
@@ -10642,7 +11247,7 @@ async function processQueuedOnezeMintReserveAllocation(input: {
             fiat_currency,
             net_fiat_amount_minor::text,
             platform_fee_minor::text,
-            ize_amount_mg::text,
+            ize_amount_units::text,
             rate_per_gram::text,
             rate_source,
             rate_locked_at::text,
@@ -10694,7 +11299,7 @@ async function processQueuedOnezeMintReserveAllocation(input: {
             fiat_currency,
             net_fiat_amount_minor::text,
             platform_fee_minor::text,
-            ize_amount_mg::text,
+            ize_amount_units::text,
             rate_per_gram::text,
             rate_source,
             rate_locked_at::text,
@@ -10728,14 +11333,14 @@ async function processQueuedOnezeMintReserveAllocation(input: {
     if (!mutableOperation.wallet_credit_tx_id) {
       const wallet = await ensureWallet(client, mutableOperation.user_id, mutableOperation.fiat_currency);
       const walletCreditTxId = createRuntimeId('mintcred');
-      const amountMg = Number(mutableOperation.ize_amount_mg);
+      const amountUnits = Number(mutableOperation.ize_amount_units);
       const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, mutableOperation.fiat_currency);
 
       await applyWalletLedgerDelta(client, {
         walletId: wallet.id,
         txId: walletCreditTxId,
         asset: '1ZE',
-        amount: amountMg,
+        amount: amountUnits,
         kind: 'MINT',
         refType: 'mint_operation',
         refId: mutableOperation.id,
@@ -10752,7 +11357,7 @@ async function processQueuedOnezeMintReserveAllocation(input: {
       await creditWalletSegmentBalance(client, {
         wallet,
         txId: walletCreditTxId,
-        purchasedCreditMg: amountMg,
+        purchasedCreditUnits: amountUnits,
         originCountry: normalizeOnezeCountryTag(
           typeof mutableOperation.metadata?.originCountry === 'string'
             ? mutableOperation.metadata.originCountry
@@ -10781,7 +11386,7 @@ async function processQueuedOnezeMintReserveAllocation(input: {
             fiat_currency,
             net_fiat_amount_minor::text,
             platform_fee_minor::text,
-            ize_amount_mg::text,
+            ize_amount_units::text,
             rate_per_gram::text,
             rate_source,
             rate_locked_at::text,
@@ -10915,17 +11520,17 @@ async function processQueuedOnezeWithdrawalExecution(input: {
 
 async function runOnezeReconciliation(reason: 'startup' | 'interval' | 'manual'): Promise<{
   id: string;
-  circulatingMg: number;
-  reserveActiveMg: number;
+  circulatingUnits: number;
+  reserveActiveUnits: number;
   withinInvariant: boolean;
   withinSupplyInvariant: boolean;
   withinReservePolicy: boolean;
   invariantHash: string;
-  supplyDeltaMg: number;
-  toleranceMg: number;
-  operationalLiquidityMg: number;
-  configuredOperationalReserveMg: number;
-  reservedWithdrawalMg: number;
+  supplyDeltaUnits: number;
+  toleranceUnits: number;
+  operationalLiquidityUnits: number;
+  configuredOperationalReserveUnits: number;
+  reservedWithdrawalUnits: number;
   configuredReserveRatio: number | null;
   effectiveReserveRatio: number | null;
   createdAt: string;
@@ -10975,13 +11580,13 @@ async function runOnezeReconciliation(reason: 'startup' | 'interval' | 'manual')
     app.log.error(
       {
         reconciliationId: snapshot.id,
-        circulatingMg: snapshot.circulatingMg,
-        referenceSupplyMg: snapshot.reserveActiveMg,
-        supplyDeltaMg: snapshot.supplyDeltaMg,
-        toleranceMg: snapshot.toleranceMg,
-        operationalLiquidityMg: snapshot.operationalLiquidityMg,
-        configuredOperationalReserveMg: snapshot.configuredOperationalReserveMg,
-        reservedWithdrawalMg: snapshot.reservedWithdrawalMg,
+        circulatingUnits: snapshot.circulatingUnits,
+        referenceSupplyUnits: snapshot.reserveActiveUnits,
+        supplyDeltaUnits: snapshot.supplyDeltaUnits,
+        toleranceUnits: snapshot.toleranceUnits,
+        operationalLiquidityUnits: snapshot.operationalLiquidityUnits,
+        configuredOperationalReserveUnits: snapshot.configuredOperationalReserveUnits,
+        reservedWithdrawalUnits: snapshot.reservedWithdrawalUnits,
         effectiveReserveRatio: snapshot.effectiveReserveRatio,
         reservePolicyViolation: !snapshot.withinReservePolicy,
         haltReason,
@@ -11031,14 +11636,14 @@ async function runOnezeDailyAttestation(reason: 'startup' | 'interval' | 'manual
       reason,
       reconciliation: {
         id: snapshot.id,
-        circulatingMg: snapshot.circulatingMg,
-        referenceSupplyMg: snapshot.reserveActiveMg,
-        reserveActiveMg: snapshot.reserveActiveMg,
-        supplyDeltaMg: snapshot.supplyDeltaMg,
-        toleranceMg: snapshot.toleranceMg,
-        operationalLiquidityMg: snapshot.operationalLiquidityMg,
-        configuredOperationalReserveMg: snapshot.configuredOperationalReserveMg,
-        reservedWithdrawalMg: snapshot.reservedWithdrawalMg,
+        circulatingUnits: snapshot.circulatingUnits,
+        referenceSupplyUnits: snapshot.reserveActiveUnits,
+        reserveActiveUnits: snapshot.reserveActiveUnits,
+        supplyDeltaUnits: snapshot.supplyDeltaUnits,
+        toleranceUnits: snapshot.toleranceUnits,
+        operationalLiquidityUnits: snapshot.operationalLiquidityUnits,
+        configuredOperationalReserveUnits: snapshot.configuredOperationalReserveUnits,
+        reservedWithdrawalUnits: snapshot.reservedWithdrawalUnits,
         configuredReserveRatio: snapshot.configuredReserveRatio,
         effectiveReserveRatio: snapshot.effectiveReserveRatio,
         withinReservePolicy: snapshot.withinReservePolicy,
@@ -12345,7 +12950,10 @@ function toProfilePayload(row: ProfileUserRow) {
   };
 }
 
-function toPublicProfilePayload(row: ProfileUserRow) {
+function toPublicProfilePayload(row: ProfileUserRow & {
+  identity_verified?: boolean | null;
+  seller_verified?: boolean | null;
+}) {
   return {
     id: row.id,
     username: row.username,
@@ -12358,6 +12966,13 @@ function toPublicProfilePayload(row: ProfileUserRow) {
     coverVideo: row.cover_video,
     role: normalizeAuthRole(row.role),
     emailVerified: Boolean(row.email_verified_at),
+    // Identity/KYC verification — distinct from email verification.
+    // Derived from seller_trust_evidence (code='identity_checked', state='active', not expired).
+    // Null when no evidence exists — never defaulted to true.
+    identityVerified: row.identity_verified === true ? true : undefined,
+    // Seller standards verification — distinct from email/identity.
+    // Derived from seller_trust_evidence (code='top_rated' or 'trader_verified', active, not expired).
+    sellerVerified: row.seller_verified === true ? true : undefined,
     createdAt: row.created_at,
   };
 }
@@ -13031,12 +13646,129 @@ app.patch('/users/me', async (request, reply) => {
     location: z.string().trim().max(120).optional(),
     website: z.string().trim().max(255).optional(),
     phone: z.string().trim().max(30).optional(),
-    avatar: z.string().trim().max(2048).optional(),
-    coverPhoto: z.string().trim().max(2048).optional(),
-    coverVideo: z.string().trim().max(2048).optional(),
+    // Media fields accept either a verified asset ID (preferred) or a URL
+    // string (legacy). When an asset ID is provided, the backend verifies
+    // ownership and publishable status before persisting. When a URL string
+    // is provided, it is validated against the user's own upload_finalizations
+    // to prevent binding another user's media or an external URL.
+    avatar: z.union([z.string().trim().max(2048), z.null()]).optional(),
+    coverPhoto: z.union([z.string().trim().max(2048), z.null()]).optional(),
+    coverVideo: z.union([z.string().trim().max(2048), z.null()]).optional(),
+    avatarAssetId: z.string().min(2).max(200).optional(),
+    coverAssetId: z.string().min(2).max(200).optional(),
   });
 
   const payload = bodySchema.parse(request.body ?? {});
+
+  // ── Resolve media URLs from verified assets when asset IDs are provided ──
+  // This is the authoritative path: the backend verifies that the asset
+  // belongs to the user and is in a publishable state, then resolves the
+  // canonical URL. The user cannot bind another owner's asset or an
+  // external URL.
+  let resolvedAvatarUrl: string | null | undefined;
+  let resolvedCoverUrl: string | null | undefined;
+
+  if (payload.avatarAssetId !== undefined) {
+    const assetResult = await db.query<{
+      canonical_url: string | null;
+      original_object_url: string;
+      status: string;
+      media_kind: string;
+    }>(
+      `SELECT canonical_url, original_object_url, status, media_kind
+       FROM media_assets
+       WHERE id = $1 AND owner_id = $2
+       LIMIT 1`,
+      [payload.avatarAssetId, request.authUser.userId]
+    );
+    const asset = assetResult.rows[0];
+    if (!asset) {
+      reply.code(422);
+      return { ok: false, error: 'Avatar asset not found or not owned by you' };
+    }
+    if (asset.media_kind !== 'image') {
+      reply.code(422);
+      return { ok: false, error: 'Avatar must be an image' };
+    }
+    // Accept publishable or published status. For non-gated environments,
+    // integrity_verified is also accepted (the asset exists and is owned).
+    if (asset.status === 'rejected' || asset.status === 'quarantined' || asset.status === 'revoked') {
+      reply.code(422);
+      return { ok: false, error: 'Avatar asset is not in a usable state', code: 'MEDIA_NOT_USABLE' };
+    }
+    resolvedAvatarUrl = asset.canonical_url ?? asset.original_object_url;
+  } else if (payload.avatar !== undefined) {
+    // Legacy URL path: validate the URL belongs to the user's own uploads.
+    // Null clears the avatar. Empty/external URLs are rejected.
+    if (payload.avatar === null) {
+      resolvedAvatarUrl = null;
+    } else {
+      const urlCheck = await db.query<{ id: string }>(
+        `SELECT id FROM upload_finalizations
+         WHERE owner_id = $1 AND (public_url = $2 OR canonical_url = $2)
+         LIMIT 1`,
+        [request.authUser.userId, payload.avatar]
+      );
+      if ((urlCheck.rowCount ?? 0) === 0) {
+        reply.code(422);
+        return {
+          ok: false,
+          error: 'Avatar URL must reference your own uploaded media. Use avatarAssetId for verified binding.',
+          code: 'MEDIA_NOT_OWNED',
+        };
+      }
+      resolvedAvatarUrl = payload.avatar;
+    }
+  }
+
+  if (payload.coverAssetId !== undefined) {
+    const assetResult = await db.query<{
+      canonical_url: string | null;
+      original_object_url: string;
+      status: string;
+      media_kind: string;
+    }>(
+      `SELECT canonical_url, original_object_url, status, media_kind
+       FROM media_assets
+       WHERE id = $1 AND owner_id = $2
+       LIMIT 1`,
+      [payload.coverAssetId, request.authUser.userId]
+    );
+    const asset = assetResult.rows[0];
+    if (!asset) {
+      reply.code(422);
+      return { ok: false, error: 'Cover asset not found or not owned by you' };
+    }
+    if (asset.media_kind !== 'image' && asset.media_kind !== 'video') {
+      reply.code(422);
+      return { ok: false, error: 'Cover must be an image or video' };
+    }
+    if (asset.status === 'rejected' || asset.status === 'quarantined' || asset.status === 'revoked') {
+      reply.code(422);
+      return { ok: false, error: 'Cover asset is not in a usable state', code: 'MEDIA_NOT_USABLE' };
+    }
+    resolvedCoverUrl = asset.canonical_url ?? asset.original_object_url;
+  } else if (payload.coverPhoto !== undefined) {
+    if (payload.coverPhoto === null) {
+      resolvedCoverUrl = null;
+    } else {
+      const urlCheck = await db.query<{ id: string }>(
+        `SELECT id FROM upload_finalizations
+         WHERE owner_id = $1 AND (public_url = $2 OR canonical_url = $2)
+         LIMIT 1`,
+        [request.authUser.userId, payload.coverPhoto]
+      );
+      if ((urlCheck.rowCount ?? 0) === 0) {
+        reply.code(422);
+        return {
+          ok: false,
+          error: 'Cover URL must reference your own uploaded media. Use coverAssetId for verified binding.',
+          code: 'MEDIA_NOT_OWNED',
+        };
+      }
+      resolvedCoverUrl = payload.coverPhoto;
+    }
+  }
 
   const allowed: Record<string, unknown> = {};
   if (payload.displayName !== undefined) allowed.display_name = payload.displayName;
@@ -13045,8 +13777,8 @@ app.patch('/users/me', async (request, reply) => {
   if (payload.location !== undefined) allowed.location = payload.location;
   if (payload.website !== undefined) allowed.website = payload.website;
   if (payload.phone !== undefined) allowed.phone = payload.phone;
-  if (payload.avatar !== undefined) allowed.avatar = payload.avatar;
-  if (payload.coverPhoto !== undefined) allowed.cover_photo = payload.coverPhoto;
+  if (resolvedAvatarUrl !== undefined) allowed.avatar = resolvedAvatarUrl;
+  if (resolvedCoverUrl !== undefined) allowed.cover_photo = resolvedCoverUrl;
   if (payload.coverVideo !== undefined) allowed.cover_video = payload.coverVideo;
 
   if (Object.keys(allowed).length === 0) {
@@ -13065,6 +13797,46 @@ app.patch('/users/me', async (request, reply) => {
     `,
     [request.authUser.userId, ...values]
   );
+
+  // ── Record media bindings for verified assets ──────────────────────
+  // This creates an authoritative binding record in media_bindings, enabling
+  // cache invalidation and lifecycle management (detach old binding when a
+  // new one is set).
+  if (payload.avatarAssetId) {
+    try {
+      await db.query(
+        `INSERT INTO media_bindings (id, media_asset_id, owner_id, target_type, target_ref_id, role, sort_order)
+         VALUES ($1, $2, $3, 'profile', $4, 'avatar', 0)
+         ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
+         DO UPDATE SET removed_at = NULL, sort_order = EXCLUDED.sort_order`,
+        [`mbind_profile_${request.authUser.userId}_avatar`, payload.avatarAssetId, request.authUser.userId, request.authUser.userId]
+      );
+      // Soft-remove any previous avatar bindings from different assets.
+      await db.query(
+        `UPDATE media_bindings SET removed_at = NOW()
+         WHERE target_type = 'profile' AND target_ref_id = $1 AND role = 'avatar'
+           AND media_asset_id <> $2 AND removed_at IS NULL`,
+        [request.authUser.userId, payload.avatarAssetId]
+      );
+    } catch { /* non-fatal — binding is a projection */ }
+  }
+  if (payload.coverAssetId) {
+    try {
+      await db.query(
+        `INSERT INTO media_bindings (id, media_asset_id, owner_id, target_type, target_ref_id, role, sort_order)
+         VALUES ($1, $2, $3, 'profile', $4, 'cover', 0)
+         ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
+         DO UPDATE SET removed_at = NULL, sort_order = EXCLUDED.sort_order`,
+        [`mbind_profile_${request.authUser.userId}_cover`, payload.coverAssetId, request.authUser.userId, request.authUser.userId]
+      );
+      await db.query(
+        `UPDATE media_bindings SET removed_at = NOW()
+         WHERE target_type = 'profile' AND target_ref_id = $1 AND role = 'cover'
+           AND media_asset_id <> $2 AND removed_at IS NULL`,
+        [request.authUser.userId, payload.coverAssetId]
+      );
+    } catch { /* non-fatal — binding is a projection */ }
+  }
 
   const result = await db.query<ProfileUserRow>(
     `
@@ -14537,6 +15309,8 @@ app.get('/users/me/co-own/tax-documents', async (request, reply) => {
 
 registerSellerRoutes({ app, db, readDb });
 
+registerStorefrontRoutes({ app, db, readDb, resolveAuthenticatedUserId });
+
 // Idempotent follow (POST /users/:userId/follow) — creates follow only if absent.
 app.post('/users/:userId/follow', async (request, reply) => {
   if (!request.authUser) {
@@ -14622,15 +15396,22 @@ app.get('/users/:userId/profile', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
 
-  await ensureUserExists(userId);
+  const viewerUserId = request.authUser?.userId ?? null;
 
-  const result = await db.query<ProfileUserRow>(
+  // ── Fetch the target user row with privacy-relevant columns ──────────
+  const result = await db.query<ProfileUserRow & {
+    private_profile: boolean;
+    holiday_mode: boolean;
+    away_message: string | null;
+  }>(
     `
       SELECT
-        id, username, email, display_name, bio, location, website, phone, avatar, cover_photo, cover_video,
-        role, email_verified_at, two_factor_enabled, created_at, updated_at
-      FROM users
-      WHERE id = $1
+        u.id, u.username, u.email, u.display_name, u.bio, u.location, u.website, u.phone,
+        u.avatar, u.cover_photo, u.cover_video, u.role, u.email_verified_at,
+        u.two_factor_enabled, u.created_at, u.updated_at,
+        u.private_profile, u.holiday_mode, u.away_message
+      FROM users u
+      WHERE u.id = $1
       LIMIT 1
     `,
     [userId]
@@ -14642,13 +15423,275 @@ app.get('/users/:userId/profile', async (request, reply) => {
     return { ok: false, error: 'User not found' };
   }
 
+  // ── Block state (both directions) ────────────────────────────────────
+  // If the viewer blocked the target, the viewer chose not to see them —
+  // we still return the profile but with restricted viewer permissions.
+  // If the target blocked the viewer, the target's existence is not
+  // disclosed to the viewer (404) unless the viewer is a moderator/admin.
+  let blockedByViewer = false;
+  let blockedByTarget = false;
+
+  if (viewerUserId && viewerUserId !== userId) {
+    const blockResult = await readDb.query<{ viewer_blocked: boolean; target_blocked: boolean }>(
+      `SELECT
+         EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2) AS viewer_blocked,
+         EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = $2 AND blocked_id = $1) AS target_blocked`,
+      [viewerUserId, userId]
+    );
+    const blockRow = blockResult.rows[0];
+    blockedByViewer = blockRow?.viewer_blocked ?? false;
+    blockedByTarget = blockRow?.target_blocked ?? false;
+  }
+
+  // If the target blocked the viewer, do not disclose the profile.
+  // Return 404 — existence disclosure is not allowed for blocked viewers.
+  if (blockedByTarget) {
+    reply.code(404);
+    return { ok: false, error: 'User not found' };
+  }
+
+  // ── Determine viewer relationship ────────────────────────────────────
+  const isSelf = viewerUserId === userId;
+  let isFollowing = false;
+  if (viewerUserId && !isSelf) {
+    const followResult = await readDb.query<{ id: string }>(
+      `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
+      [viewerUserId, userId]
+    );
+    isFollowing = (followResult.rowCount ?? 0) > 0;
+  }
+
+  // ── Privacy policy: private_profile ──────────────────────────────────
+  // A private profile hides social content (Looks, creations) and detailed
+  // stats from non-followers. Identity, shop listings, and basic counts
+  // remain visible because they are commerce-obligated (DSA traceability).
+  // Self-viewers see everything regardless of the private preference.
+  const isPrivate = user.private_profile === true;
+  const canViewSocialContent = isSelf || !isPrivate || isFollowing;
+  const canViewShop = true; // Shop is always visible (commerce obligation)
+
+  // ── Compute stats ────────────────────────────────────────────────────
+  // Active and sold listing counts are commerce-obligated and always visible.
+  // Follower/following counts are visible unless the profile is private and
+  // the viewer is not following.
+  const statsResult = await readDb.query<{
+    active_listings: string;
+    sold_listings: string;
+    published_looks: string;
+    followers: string;
+    following: string;
+    review_count: string;
+    avg_rating: string | null;
+  }>(
+    `SELECT
+       (SELECT COUNT(*)::text FROM listings WHERE seller_id = $1 AND status = 'active') AS active_listings,
+       (SELECT COUNT(*)::text FROM listings WHERE seller_id = $1 AND status = 'sold') AS sold_listings,
+       (SELECT COUNT(*)::text FROM looks WHERE creator_id = $1 AND status = 'published') AS published_looks,
+       (SELECT COUNT(*)::text FROM user_follows WHERE following_id = $1) AS followers,
+       (SELECT COUNT(*)::text FROM user_follows WHERE follower_id = $1) AS following,
+       (SELECT COUNT(*)::text FROM order_reviews WHERE seller_id = $1) AS review_count,
+       (SELECT AVG(rating)::numeric(3,2) FROM order_reviews WHERE seller_id = $1) AS avg_rating`,
+    [userId]
+  );
+
+  const statsRow = statsResult.rows[0];
+  const activeListingCount = Number(statsRow?.active_listings ?? '0');
+  const soldListingCount = Number(statsRow?.sold_listings ?? '0');
+  const publishedLookCount = canViewSocialContent
+    ? Number(statsRow?.published_looks ?? '0')
+    : 0;
+  const followerCount = canViewSocialContent
+    ? Number(statsRow?.followers ?? '0')
+    : 0;
+  const followingCount = canViewSocialContent
+    ? Number(statsRow?.following ?? '0')
+    : 0;
+  const reviewCount = Number(statsRow?.review_count ?? '0');
+  const ratingAverage = statsRow?.avg_rating ? Number(statsRow.avg_rating) : null;
+
+  // ── Trust evidence (fail-closed) ─────────────────────────────────────
+  // Only active, non-expired evidence rows produce verification flags.
+  // No evidence → undefined (not false, to distinguish "not checked" from
+  // "checked and failed"). The frontend renders nothing for undefined.
+  let identityVerified = false;
+  let sellerVerified = false;
+  // DSA Article 30 trader classification — projected from compliance records.
+  // This is a legally required disclosure: buyers must know whether they are
+  // transacting with a trader (business) or a non-trader (private individual).
+  // The classification is derived from user_compliance_profiles.kyc_status
+  // and the trader_type field, not from self-attestation.
+  let traderClassification: 'trader' | 'non_trader' | null = null;
+  let traderLegalName: string | null = null;
+  let traderContactEmail: string | null = null;
+  let traderRegistrationNumber: string | null = null;
+  let traderAddress: string | null = null;
+  let traderVatNumber: string | null = null;
+
+  if (canViewShop) {
+    const evidenceResult = await readDb.query<{ code: string }>(
+      `SELECT code FROM seller_trust_evidence
+       WHERE seller_id = $1 AND state = 'active'
+         AND (expires_at IS NULL OR expires_at > NOW())`,
+      [userId]
+    );
+    for (const row of evidenceResult.rows) {
+      if (row.code === 'identity_checked') identityVerified = true;
+      if (row.code === 'trader_verified' || row.code === 'top_rated') sellerVerified = true;
+    }
+
+    // ── DSA Article 30: Trader disclosure from compliance records ──────
+    // Only traders (verified businesses) have their legal details disclosed.
+    // Non-traders (private individuals) are classified as such without
+    // exposing any personal details. The classification is authoritative —
+    // derived from KYC verification, not self-attestation.
+    const complianceResult = await readDb.query<{
+      trader_type: string | null;
+      kyc_status: string;
+      legal_name: string | null;
+      contact_email: string | null;
+      registration_number: string | null;
+      business_address: string | null;
+      vat_number: string | null;
+    }>(
+      `SELECT trader_type, kyc_status, legal_name, contact_email,
+              registration_number, business_address, vat_number
+       FROM user_compliance_profiles
+       WHERE user_id = $1
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [userId]
+    );
+    const compliance = complianceResult.rows[0];
+    if (compliance) {
+      // A user is classified as a trader when:
+      // 1. trader_type is explicitly 'business'/'trader', OR
+      // 2. KYC status is 'verified' and trader_type is not 'private'.
+      if (compliance.trader_type === 'business' || compliance.trader_type === 'trader') {
+        traderClassification = 'trader';
+        // Only disclose legal details for verified traders.
+        if (compliance.kyc_status === 'verified') {
+          traderLegalName = compliance.legal_name;
+          traderContactEmail = compliance.contact_email;
+          traderRegistrationNumber = compliance.registration_number;
+          traderAddress = compliance.business_address;
+          traderVatNumber = compliance.vat_number;
+        }
+      } else if (compliance.trader_type === 'private' || compliance.trader_type === 'individual') {
+        traderClassification = 'non_trader';
+      }
+    }
+  }
+
+  // ── Can message? ─────────────────────────────────────────────────────
+  // Can message if: authenticated, not self, not blocked by viewer, and
+  // not blocked by target (already returned 404 above if blocked by target).
+  const canMessage = Boolean(
+    viewerUserId &&
+    !isSelf &&
+    !blockedByViewer &&
+    !blockedByTarget
+  );
+
+  // ── Build the public profile payload ─────────────────────────────────
+  const publicUser = toPublicProfilePayload({
+    ...user,
+    identity_verified: identityVerified,
+    seller_verified: sellerVerified,
+  });
+
   return {
     ok: true,
-    user: toPublicProfilePayload(user),
+    user: publicUser,
+    stats: {
+      activeListingCount,
+      soldListingCount,
+      publishedLookCount,
+      followerCount,
+      followingCount,
+      reviewCount,
+      ratingAverage,
+    },
+    viewer: {
+      isSelf,
+      isFollowing,
+      isBlocked: blockedByViewer,
+      isBlockedByTarget: blockedByTarget,
+      canMessage,
+      canViewSocialContent,
+      canViewShop,
+    },
+    // ── DSA Article 30: Trader disclosure ──────────────────────────────
+    // Legally required disclosure of trader status. 'trader' = business,
+    // 'non_trader' = private individual. Legal details are only disclosed
+    // for verified traders. Null when no compliance record exists.
+    trader: traderClassification
+      ? {
+          classification: traderClassification,
+          legalName: traderLegalName,
+          contactEmail: traderContactEmail,
+          registrationNumber: traderRegistrationNumber,
+          address: traderAddress,
+          vatNumber: traderVatNumber,
+        }
+      : undefined,
+    // Authoritative away state — only present when holiday mode is on.
+    // The frontend uses this to show the away banner with the seller's message.
+    away: user.holiday_mode
+      ? {
+          holidayMode: true,
+          awayMessage: user.away_message ?? null,
+        }
+      : undefined,
+    // ── Storefront summary (published only) ────────────────────────────
+    // Included when the seller has a published storefront. Draft/paused
+    // storefronts are owner-only and never appear in the public projection.
+    // The summary contains the announcement, section titles, and featured
+    // listing IDs — enough for the profile to render the shop module
+    // without a separate /storefronts/:sellerId call.
+    ...(canViewShop ? await loadStorefrontSummary(readDb, userId) : {}),
   };
 });
 
 // ── Follow counts + follower/following lists ─────────────────────────
+
+// Helper: load a published storefront summary for the public profile aggregate.
+// Returns an empty object when no published storefront exists, so the spread
+// in the aggregate return is a no-op.
+async function loadStorefrontSummary(
+  readDb: Pool,
+  sellerId: string
+): Promise<{ storefront?: { announcement: string | null; sections: { kind: string; title: string; sortOrder: number }[]; featuredListingIds: string[] } }> {
+  const sfResult = await readDb.query<{ id: string; announcement: string | null }>(
+    `SELECT id, announcement FROM storefronts
+     WHERE seller_id = $1 AND status = 'published' LIMIT 1`,
+    [sellerId]
+  );
+  if (!sfResult.rowCount) return {};
+
+  const sf = sfResult.rows[0];
+  const sectionsResult = await readDb.query<{ kind: string; title: string; sort_order: number }>(
+    `SELECT kind, title, sort_order FROM storefront_sections
+     WHERE storefront_id = $1 ORDER BY sort_order ASC`,
+    [sf.id]
+  );
+  const featuredResult = await readDb.query<{ listing_id: string }>(
+    `SELECT listing_id FROM storefront_featured_listings
+     WHERE storefront_id = $1 ORDER BY rank ASC`,
+    [sf.id]
+  );
+
+  return {
+    storefront: {
+      announcement: sf.announcement,
+      sections: sectionsResult.rows.map((s) => ({
+        kind: s.kind,
+        title: s.title,
+        sortOrder: s.sort_order,
+      })),
+      featuredListingIds: featuredResult.rows.map((r) => r.listing_id),
+    },
+  };
+}
 
 app.get('/users/:userId/follow-counts', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
@@ -16780,6 +17823,125 @@ app.get('/users/me/export', async (request, reply) => {
   }
 });
 
+// ── Async DSAR export (Art. 12(3) — async delivery for large histories) ──
+
+app.post('/users/me/export/async', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return {
+      ok: false,
+      error: 'Unauthorized',
+    };
+  }
+
+  const userId = request.authUser.userId;
+  const gdprRequestId = createComplianceId('gdpr_export');
+  const ipAddress = resolveRequestIpAddress(request);
+  const userAgent = resolveRequestUserAgent(request);
+
+  try {
+    await db.query(
+      `
+        INSERT INTO gdpr_requests (
+          id, user_id, request_type, status,
+          requested_ip, requested_user_agent, requested_at, payload
+        )
+        VALUES ($1, $2, 'export', 'processing', $3, $4, NOW(), '{}'::jsonb)
+      `,
+      [gdprRequestId, userId, ipAddress, userAgent],
+    );
+
+    await enqueueDsarExportJob({
+      requestId: gdprRequestId,
+      userId,
+      reason: 'manual',
+    });
+
+    await appendComplianceAuditSafe(request, {
+      eventType: 'gdpr.export.async.queued',
+      subjectUserId: userId,
+      payload: { gdprRequestId },
+    });
+
+    return {
+      ok: true,
+      requestId: gdprRequestId,
+      status: 'processing',
+      message: 'Your data export has been queued. You will receive a download link when it is ready.',
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    reply.code(500);
+    return {
+      ok: false,
+      error: 'Failed to queue export',
+      detail: message,
+    };
+  }
+});
+
+app.get('/users/me/export/:requestId', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return {
+      ok: false,
+      error: 'Unauthorized',
+    };
+  }
+
+  const userId = request.authUser.userId;
+  const { requestId } = request.params as { requestId: string };
+
+  const result = await db.query<{
+    id: string;
+    status: string;
+    request_type: string;
+    export_url: string | null;
+    export_expires_at: string | null;
+    completed_at: string | null;
+  }>(
+    `
+      SELECT id, status, request_type, export_url,
+             export_expires_at::text, completed_at::text
+      FROM gdpr_requests
+      WHERE id = $1 AND user_id = $2
+      LIMIT 1
+    `,
+    [requestId, userId],
+  );
+
+  if (result.rows.length === 0) {
+    reply.code(404);
+    return {
+      ok: false,
+      error: 'Export request not found',
+    };
+  }
+
+  const row = result.rows[0];
+
+  if (row.status === 'completed' && row.export_url) {
+    const expiresAt = row.export_expires_at ? new Date(row.export_expires_at) : null;
+    const isExpired = expiresAt ? expiresAt < new Date() : true;
+
+    return {
+      ok: true,
+      requestId: row.id,
+      status: isExpired ? 'expired' : 'completed',
+      downloadUrl: isExpired ? null : row.export_url,
+      expiresAt: row.export_expires_at,
+      completedAt: row.completed_at,
+    };
+  }
+
+  return {
+    ok: true,
+    requestId: row.id,
+    status: row.status,
+    downloadUrl: null,
+  };
+});
+
 app.delete('/users/me', async (request, reply) => {
   if (!request.authUser) {
     reply.code(401);
@@ -16800,6 +17962,8 @@ app.delete('/users/me', async (request, reply) => {
   const userAgent = resolveRequestUserAgent(request);
 
   const client = await db.connect();
+
+  let erasureSideEffects: { listingIds: string[] } = { listingIds: [] };
 
   try {
     await client.query('BEGIN');
@@ -16837,7 +18001,7 @@ app.delete('/users/me', async (request, reply) => {
       ]
     );
 
-    await performUserErasure(client, userId, 'gdpr');
+    erasureSideEffects = await performUserErasure(client, userId, 'gdpr');
 
     await client.query(
       `
@@ -16862,12 +18026,62 @@ app.delete('/users/me', async (request, reply) => {
 
   await revokeAllUserSessions(userId);
 
+  // Remove the user's listings from the search index (post-commit, fire-and-forget).
+  // The erasure flow sets listings.status='deleted' but does not touch the
+  // search index — this cleanup ensures stale/attributable data is removed.
+  for (const listingId of erasureSideEffects.listingIds) {
+    void removeListingFromIndex(listingId).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(
+        { listingId, err: message },
+        'gdpr.erasure.searchIndexRemovalFailed',
+      );
+    });
+  }
+
+  const vendorResults = await propagateUserDeletion(userId, [
+    moderationProvider,
+    aiProvider,
+    pushProvider,
+    analyticsProvider,
+  ]).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(
+      { userId, err: message },
+      'gdpr.erasure.vendorDeletionFailed',
+    );
+    return [];
+  });
+
+  // Redact PII from the compliance audit log. The audit log is immutable
+  // (trigger prevents UPDATE/DELETE), so a SECURITY DEFINER function is
+  // used to temporarily bypass the trigger and redact payloads referencing
+  // the erased user.
+  try {
+    const redactionResult = await db.query<{ redact_audit_log_for_user: number }>(
+      `SELECT redact_audit_log_for_user($1)`,
+      [userId],
+    );
+    const redactedCount = redactionResult.rows[0]?.redact_audit_log_for_user ?? 0;
+    logger.info(
+      { userId, redactedCount },
+      'gdpr.erasure.auditLogRedacted',
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(
+      { userId, err: message },
+      'gdpr.erasure.auditLogRedactionFailed',
+    );
+  }
+
   await appendComplianceAuditSafe(request, {
     eventType: 'gdpr.erasure.completed',
     subjectUserId: userId,
     payload: {
       gdprRequestId,
       reason: payload.reason ?? null,
+      vendorPropagation: vendorResults,
     },
   });
 
@@ -17162,7 +18376,7 @@ app.post('/listings', {
   const payload = bodySchema.parse(request.body);
   if (payload.sellerId !== actorUserId) {
     reply.code(403);
-    return { ok: false, error: 'Seller identity must match the authenticated user' };
+    return { ok: false, error: 'Cannot create listings for another seller', code: 'FORBIDDEN_OWNERSHIP' };
   }
   if (payload.imageUrl && !payload.coverFinalizationId) {
     reply.code(422);
@@ -18910,7 +20124,7 @@ app.delete('/listings/:listingId', async (request, reply) => {
   return { ok: true };
 });
 
-registerSellerHubRoutes({ app, readDb });
+registerSellerHubRoutes({ app, readDb, db });
 
 app.get('/users/:userId/listings', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
@@ -19070,12 +20284,12 @@ app.post('/listing-images', async (request, reply) => {
     if (!listing.rowCount) {
       await client.query('ROLLBACK');
       reply.code(404);
-      return { ok: false, error: 'Listing not found' };
+      return { ok: false, error: 'Listing not found', code: 'LISTING_NOT_FOUND' };
     }
     if (listing.rows[0].seller_id !== actorUserId) {
       await client.query('ROLLBACK');
       reply.code(403);
-      return { ok: false, error: 'Only the seller can attach listing media' };
+      return { ok: false, error: 'Cannot attach media to another seller\'s listing', code: 'FORBIDDEN_OWNERSHIP' };
     }
     if (!['draft', 'active'].includes(listing.rows[0].status)) {
       await client.query('ROLLBACK');
@@ -19359,7 +20573,15 @@ registerMediaEmbeddingRoutes({ app, db, createApiError });
 
 registerImporterExtractionRoutes({ app, db, readDb });
 
+// Extraction Intelligence — converged extraction domain (migration 192).
+// Server-owned model identity, bound media, honest outcomes, revision-checked
+// field decisions that converge into canonical normalised_fields/provenance.
+registerExtractionIntelligenceRoutes({ app, db, readDb });
+
 // registerSecureMessagesRoutes({ app, db, ensureUserExists, queueUserNotification });
+
+// AI-powered chat message translation (WhatsApp/Instagram inline translate pattern)
+registerChatTranslateRoutes({ app, db, ensureUserExists, redisClient: redis });
 
 app.post('/chat/dm', async (request, reply) => {
   const bodySchema = z.object({
@@ -19930,6 +21152,9 @@ app.get('/chat/conversations', async (request) => {
     updated_at: string;
     last_message: string | null;
     last_message_created_at: string | null;
+    last_message_id: string | null;
+    last_message_ciphertext: string | null;
+    last_message_key_version: number | null;
   }>(
     `
       SELECT
@@ -19941,12 +21166,15 @@ app.get('/chat/conversations', async (request) => {
         c.metadata,
         c.updated_at::text,
         lm.body AS last_message,
-        lm.created_at::text AS last_message_created_at
+        lm.created_at::text AS last_message_created_at,
+        lm.id AS last_message_id,
+        lm.body_ciphertext AS last_message_ciphertext,
+        lm.key_version AS last_message_key_version
       FROM chat_conversations c
       INNER JOIN chat_members cm
         ON cm.conversation_id = c.id
       LEFT JOIN LATERAL (
-        SELECT body, created_at
+        SELECT id, body, body_ciphertext, key_version, created_at
         FROM chat_messages
         WHERE conversation_id = c.id
         ORDER BY created_at DESC
@@ -20081,6 +21309,17 @@ app.get('/chat/conversations', async (request) => {
     lastReadByConversation.set(row.conversation_id, row.last_read_at);
   }
 
+  // PII encryption: decrypt last-message preview for each conversation.
+  await Promise.all(conversationsResult.rows.map(async (row) => {
+    if (row.last_message !== null && row.last_message_id) {
+      row.last_message = await resolveMessageBody(
+        row.last_message_id,
+        row.last_message,
+        row.last_message_ciphertext ?? null,
+      );
+    }
+  }));
+
   return {
     ok: true,
     items: conversationsResult.rows.map((row) => {
@@ -20154,6 +21393,8 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
         sender_user_id: string | null;
         sender_bot_id: string | null;
         body: string;
+        body_ciphertext: string | null;
+        key_version: number | null;
         metadata: Record<string, unknown> | null;
         created_at: string;
         client_message_id: string | null;
@@ -20163,6 +21404,7 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
         edited_at: string | null;
       }>(
         `SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+                m.body_ciphertext, m.key_version,
                 m.metadata, m.created_at::text, m.client_message_id,
                 m.reply_to_message_id, m.deleted_for_everyone_at,
                 m.edit_version, m.edited_at::text
@@ -20181,6 +21423,8 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
         sender_user_id: string | null;
         sender_bot_id: string | null;
         body: string;
+        body_ciphertext: string | null;
+        key_version: number | null;
         metadata: Record<string, unknown> | null;
         created_at: string;
         client_message_id: string | null;
@@ -20190,6 +21434,7 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
         edited_at: string | null;
       }>(
         `SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+                m.body_ciphertext, m.key_version,
                 m.metadata, m.created_at::text, m.client_message_id,
                 m.reply_to_message_id, m.deleted_for_everyone_at,
                 m.edit_version, m.edited_at::text
@@ -20204,6 +21449,10 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
       );
       // Combine: older (reversed to ASC) + newer (already ASC)
       const items = [...older.rows.reverse(), ...newer.rows];
+      // PII encryption: decrypt message bodies before serialization.
+      await Promise.all(items.map(async (row) => {
+        row.body = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
+      }));
       return {
         ok: true,
         conversation: {
@@ -20245,6 +21494,8 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
     sender_user_id: string | null;
     sender_bot_id: string | null;
     body: string;
+    body_ciphertext: string | null;
+    key_version: number | null;
     metadata: Record<string, unknown> | null;
     created_at: string;
     client_message_id: string | null;
@@ -20255,6 +21506,7 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
   }>(
     `
       SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
+             m.body_ciphertext, m.key_version,
              m.metadata, m.created_at::text, m.client_message_id,
              m.reply_to_message_id, m.deleted_for_everyone_at,
              m.edit_version, m.edited_at::text
@@ -20277,6 +21529,11 @@ app.get('/chat/conversations/:conversationId/messages', async (request) => {
   // For `before` and default (DESC query), reverse to chronological ASC for display.
   // For `after` (ASC query), keep as-is.
   const items = isAfter ? result.rows : result.rows.reverse();
+
+  // PII encryption: decrypt message bodies before serialization.
+  await Promise.all(items.map(async (row) => {
+    row.body = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
+  }));
 
   return {
     ok: true,
@@ -20317,7 +21574,7 @@ app.post('/chat/conversations/:conversationId/messages', {
     body: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['text', 'image', 'video'] },
+        type: { type: 'string', enum: ['text', 'image', 'video', 'voice'] },
         text: { type: 'string', maxLength: 4000 },
         mediaUri: { type: 'string', minLength: 1, maxLength: 2048 },
         metadata: { type: 'object' },
@@ -20334,9 +21591,12 @@ app.post('/chat/conversations/:conversationId/messages', {
   // P0-MSG-1: Discriminated message payload. Text is required only for
   // `type: 'text'` (or when `type` is absent for backwards compatibility).
   // Image/video messages require a `mediaUri` and may omit the caption.
+  // Voice messages (report 19) require a `mediaUri` plus voice metadata
+  // (durationMs, container, codec) and are never sent without a finalized
+  // audio asset — the client must upload + finalize before sending.
   const bodySchema = z
     .object({
-      type: z.enum(['text', 'image', 'video']).optional(),
+      type: z.enum(['text', 'image', 'video', 'voice']).optional(),
       text: z.string().trim().max(4000).optional(),
       mediaUri: z.string().min(1).max(2048).optional(),
       metadata: z.record(z.unknown()).optional(),
@@ -20345,12 +21605,46 @@ app.post('/chat/conversations/:conversationId/messages', {
     })
     .superRefine((val, ctx) => {
       const isMedia = val.type === 'image' || val.type === 'video';
+      const isVoice = val.type === 'voice';
       if (isMedia) {
         if (!val.mediaUri || val.mediaUri.length < 1) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: 'mediaUri is required for image/video messages',
             path: ['mediaUri'],
+          });
+        }
+      } else if (isVoice) {
+        if (!val.mediaUri || val.mediaUri.length < 1) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'mediaUri is required for voice messages',
+            path: ['mediaUri'],
+          });
+        }
+        const meta = val.metadata ?? {};
+        const durationMs = meta.durationMs ?? meta.duration_ms;
+        if (typeof durationMs !== 'number' || durationMs <= 0 || durationMs > 120_000) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'durationMs must be a positive number up to 120000 (2 minutes)',
+            path: ['metadata', 'durationMs'],
+          });
+        }
+        const container = meta.container ?? meta.audioContainer;
+        if (typeof container !== 'string' || !['m4a', 'ogg', 'webm', 'mp4'].includes(container)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'container must be one of m4a, ogg, webm, mp4',
+            path: ['metadata', 'container'],
+          });
+        }
+        const codec = meta.codec ?? meta.audioCodec;
+        if (typeof codec !== 'string' || !['aac', 'opus', 'mp3'].includes(codec)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'codec must be one of aac, opus, mp3',
+            path: ['metadata', 'codec'],
           });
         }
       } else {
@@ -20370,14 +21664,18 @@ app.post('/chat/conversations/:conversationId/messages', {
   const payload = bodySchema.parse(request.body ?? {});
 
   const isMediaMessage = payload.type === 'image' || payload.type === 'video';
-  // `body` is NOT NULL in chat_messages; media-only messages use an empty
-  // string so the column constraint is satisfied while the media URI lives
-  // in metadata for the read path.
+  const isVoiceMessage = payload.type === 'voice';
+  // `body` is NOT NULL in chat_messages; media-only and voice messages use
+  // an empty string so the column constraint is satisfied while the media
+  // URI lives in metadata for the read path.
   const bodyText = payload.text ?? '';
   const mergedMetadata: Record<string, unknown> = {
     ...(payload.metadata ?? {}),
     ...(isMediaMessage
       ? { mediaUri: payload.mediaUri, mediaType: payload.type }
+      : {}),
+    ...(isVoiceMessage
+      ? { mediaUri: payload.mediaUri, mediaType: 'voice', voiceMessage: true }
       : {}),
   };
 
@@ -20419,13 +21717,15 @@ app.post('/chat/conversations/:conversationId/messages', {
     const existing = await db.query<{
       id: string;
       body: string;
+      body_ciphertext: string | null;
+      key_version: number | null;
       metadata: Record<string, unknown>;
       created_at: string;
       client_message_id: string | null;
       reply_to_message_id: string | null;
     }>(
       `
-        SELECT id, body, metadata, created_at::text, client_message_id, reply_to_message_id
+        SELECT id, body, body_ciphertext, key_version, metadata, created_at::text, client_message_id, reply_to_message_id
         FROM chat_messages
         WHERE conversation_id = $1
           AND sender_user_id = $2
@@ -20437,6 +21737,8 @@ app.post('/chat/conversations/:conversationId/messages', {
 
     if (existing.rowCount && existing.rowCount > 0) {
       const row = existing.rows[0];
+      // PII encryption: resolve body from ciphertext or plaintext fallback.
+      const resolvedBody = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
       reply.code(201);
       return {
         ok: true,
@@ -20445,7 +21747,7 @@ app.post('/chat/conversations/:conversationId/messages', {
           senderType: 'user' as const,
           senderUserId: actorUserId,
           senderBotId: null,
-          body: row.body,
+          body: resolvedBody,
           metadata: row.metadata ?? {},
           createdAt: row.created_at,
           clientMessageId: row.client_message_id ?? undefined,
@@ -20456,6 +21758,22 @@ app.post('/chat/conversations/:conversationId/messages', {
   }
 
   const messageId = createRuntimeId('chatmsg');
+  // PII encryption dual-write: encrypt the body before INSERT. On failure,
+  // store plaintext so the backfill worker can encrypt later.
+  let bodyToStore = bodyText;
+  let bodyCiphertext: string | null = null;
+  let keyVersion: number | null = null;
+  try {
+    const encrypted = await encryptMessageBody(messageId, bodyText);
+    bodyCiphertext = encrypted.ciphertext;
+    keyVersion = encrypted.keyVersion;
+    bodyToStore = '[encrypted]';
+  } catch (err) {
+    logger.warn(
+      { messageId, err: err instanceof Error ? err.message : String(err) },
+      'messageEncryption.encryptFailed — storing plaintext for backfill',
+    );
+  }
   const result = await db.query<{ id: string; created_at: string }>(
     `
       INSERT INTO chat_messages (
@@ -20465,11 +21783,13 @@ app.post('/chat/conversations/:conversationId/messages', {
         sender_user_id,
         sender_bot_id,
         body,
+        body_ciphertext,
+        key_version,
         metadata,
         client_message_id,
         reply_to_message_id
       )
-      VALUES ($1, $2, 'user', $3, NULL, $4, $5::jsonb, $6, $7)
+      VALUES ($1, $2, 'user', $3, NULL, $4, $5, $6, $7::jsonb, $8, $9)
       ON CONFLICT (conversation_id, sender_user_id, client_message_id)
         WHERE client_message_id IS NOT NULL
       DO NOTHING
@@ -20479,7 +21799,9 @@ app.post('/chat/conversations/:conversationId/messages', {
       messageId,
       conversationId,
       actorUserId,
-      bodyText,
+      bodyToStore,
+      bodyCiphertext,
+      keyVersion,
       toJsonString(mergedMetadata),
       payload.clientMessageId ?? null,
       payload.replyToMessageId ?? null,
@@ -20494,13 +21816,15 @@ app.post('/chat/conversations/:conversationId/messages', {
     const existing = await db.query<{
       id: string;
       body: string;
+      body_ciphertext: string | null;
+      key_version: number | null;
       metadata: Record<string, unknown>;
       created_at: string;
       client_message_id: string | null;
       reply_to_message_id: string | null;
     }>(
       `
-        SELECT id, body, metadata, created_at::text, client_message_id, reply_to_message_id
+        SELECT id, body, body_ciphertext, key_version, metadata, created_at::text, client_message_id, reply_to_message_id
         FROM chat_messages
         WHERE conversation_id = $1
           AND sender_user_id = $2
@@ -20512,6 +21836,8 @@ app.post('/chat/conversations/:conversationId/messages', {
 
     if (existing.rowCount && existing.rowCount > 0) {
       const row = existing.rows[0];
+      // PII encryption: resolve body from ciphertext or plaintext fallback.
+      const resolvedBody = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
       reply.code(201);
       return {
         ok: true,
@@ -20520,7 +21846,7 @@ app.post('/chat/conversations/:conversationId/messages', {
           senderType: 'user' as const,
           senderUserId: actorUserId,
           senderBotId: null,
-          body: row.body,
+          body: resolvedBody,
           metadata: row.metadata ?? {},
           createdAt: row.created_at,
           clientMessageId: row.client_message_id ?? undefined,
@@ -20530,7 +21856,7 @@ app.post('/chat/conversations/:conversationId/messages', {
     }
   }
 
-  if (isMediaMessage && payload.mediaUri) {
+  if ((isMediaMessage || isVoiceMessage) && payload.mediaUri) {
     const mediaUri = payload.mediaUri;
     if (mediaUri.includes('/media/')) {
       const assetResult = await db.query<{
@@ -20552,18 +21878,67 @@ app.post('/chat/conversations/:conversationId/messages', {
         reply.code(403);
         return { ok: false, error: 'Media asset does not belong to the sender' };
       }
-      const attachmentKind = asset.media_kind === 'video' ? 'video' : 'image';
+      // Voice messages require an audio-kind asset. Reject if the sender
+      // claims type:'voice' but the asset is not audio — this catches a
+      // misclassified upload (e.g. .m4a filed as image/jpeg) before it
+      // becomes a voice bubble with no playable audio.
+      if (isVoiceMessage && asset.media_kind !== 'audio') {
+        reply.code(422);
+        return {
+          ok: false,
+          error: 'Voice message media asset is not audio-kind. Re-upload with the correct content type.',
+        };
+      }
+      const attachmentKind = isVoiceMessage
+        ? 'audio'
+        : asset.media_kind === 'video'
+          ? 'video'
+          : 'image';
       await db.query(
         `INSERT INTO chat_message_attachments (id, message_id, media_asset_id, kind, canonical_url, created_at)
          VALUES ($1, $2, $3, $4, $5, NOW())`,
         [createRuntimeId('chatatt'), result.rows[0].id, asset.id, attachmentKind, mediaUri],
       );
+
+      // Voice messages get a canonical voice_messages row binding the asset
+      // to the message with duration/container/codec metadata. The waveform
+      // is left NULL — the waveform worker fills it async. The client reads
+      // this row to render a real waveform or an honest progress line.
+      if (isVoiceMessage) {
+        const voiceMeta = payload.metadata ?? {};
+        const durationMs = Number(voiceMeta.durationMs ?? voiceMeta.duration_ms ?? 0);
+        const container = String(voiceMeta.container ?? voiceMeta.audioContainer ?? 'm4a');
+        const codec = String(voiceMeta.codec ?? voiceMeta.audioCodec ?? 'aac');
+        const bytes = Number(voiceMeta.bytes ?? voiceMeta.sizeBytes ?? 0);
+        await db.query(
+          `INSERT INTO voice_messages (
+             id, message_id, conversation_id, media_asset_id, sender_user_id,
+             duration_ms, bytes, container, codec, moderation_state
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')`,
+          [
+            createRuntimeId('voice'),
+            result.rows[0].id,
+            conversationId,
+            asset.id,
+            actorUserId,
+            durationMs,
+            bytes,
+            container,
+            codec,
+          ],
+        );
+      }
     } else {
       request.log.warn(
         { mediaUri, conversationId, actorUserId },
         'Chat message media URI does not match canonical media URL pattern — allowing without ownership check',
       );
-      const attachmentKind = payload.type === 'video' ? 'video' : 'image';
+      const attachmentKind = isVoiceMessage
+        ? 'audio'
+        : payload.type === 'video'
+          ? 'video'
+          : 'image';
       await db.query(
         `INSERT INTO chat_message_attachments (id, message_id, kind, canonical_url, created_at)
          VALUES ($1, $2, $3, $4, NOW())`,
@@ -20742,16 +22117,18 @@ app.post('/chat/conversations/:conversationId/messages', {
   // suspicious content could trigger unwanted side-effects.
   if (!suppressRealtimeAndBots && conversation.type === 'group') {
     try {
-      await executeBotCommand(db, {
+      const { enqueueAgentRun } = await import('./botRuntime/index.js');
+      await enqueueAgentRun(db, {
         conversationId,
         conversationType: conversation.type,
         conversationTitle: conversation.title ?? null,
         actorUserId,
         actorUserName: null,
         messageText: bodyText,
+        triggerMessageId: result.rows[0].id ?? null,
       });
     } catch (err) {
-      request.log.error({ err, conversationId, actorUserId }, 'Bot runtime execution failed');
+      request.log.error({ err, conversationId, actorUserId }, 'Agent run enqueue failed');
     }
   }
 
@@ -22092,9 +23469,9 @@ app.post('/chat/groups/join', async (request, reply) => {
     participantIds = await listChatParticipantIds(client, conversationId);
     botIds = await listChatBotIds(client, conversationId);
 
-    const latestMessageResult = await client.query<{ body: string; created_at: string }>(
+    const latestMessageResult = await client.query<{ id: string; body: string; body_ciphertext: string | null; key_version: number | null; created_at: string }>(
       `
-        SELECT body, created_at::text
+        SELECT id, body, body_ciphertext, key_version, created_at::text
         FROM chat_messages
         WHERE conversation_id = $1
         ORDER BY created_at DESC
@@ -22104,8 +23481,10 @@ app.post('/chat/groups/join', async (request, reply) => {
     );
 
     if (latestMessageResult.rowCount) {
-      lastMessage = latestMessageResult.rows[0].body;
-      lastMessageTime = latestMessageResult.rows[0].created_at;
+      const latestRow = latestMessageResult.rows[0];
+      // PII encryption: resolve body from ciphertext or plaintext fallback.
+      lastMessage = await resolveMessageBody(latestRow.id, latestRow.body, latestRow.body_ciphertext ?? null);
+      lastMessageTime = latestRow.created_at;
     } else {
       lastMessage = `${conversationTitle ?? 'Group'} created.`;
       lastMessageTime = new Date().toISOString();
@@ -22267,46 +23646,41 @@ app.get('/chat/conversations/:conversationId/bots', async (request) => {
   await ensureGroupConversationAccess(db, conversationId, actorUserId);
 
   const result = await db.query<{
-    id: string;
-    slug: string;
-    name: string;
-    description: string;
+    bot_id: string;
+    bot_name: string;
+    bot_slug: string;
+    bot_category: string;
+    bot_type: 'system' | 'custom';
     command_hint: string;
-    category: 'moderation' | 'commerce' | 'automation';
-    type: 'system' | 'custom';
-    status: string;
     runtime_mode: string;
-    is_draft: boolean;
-    permissions: unknown;
-    icon: string | null;
-    owner_id: string | null;
-    installed_at: string;
+    bot_status: string;
     install_status: string;
+    permissions_snapshot: unknown;
+    installed_by: string | null;
+    installed_at: string;
     agent_config: unknown;
   }>(
     `
       SELECT
-        b.id,
-        b.slug,
-        b.name,
-        b.description,
+        b.id AS bot_id,
+        b.name AS bot_name,
+        b.slug AS bot_slug,
+        b.category AS bot_category,
+        b.type AS bot_type,
         b.command_hint,
-        b.category,
-        b.type,
-        b.status,
         b.runtime_mode,
-        b.is_draft,
-        b.permissions,
-        b.icon,
-        b.owner_id,
-        cbi.installed_at::text,
+        b.status AS bot_status,
         cbi.status AS install_status,
+        cbi.permissions_snapshot,
+        cbi.installed_by,
+        cbi.installed_at,
         b.agent_config
       FROM chat_bot_installs cbi
-      INNER JOIN chat_bots b
-        ON b.id = cbi.bot_id
+      JOIN chat_bots b ON b.id = cbi.bot_id
       WHERE cbi.conversation_id = $1
         AND cbi.status = 'active'
+        AND b.is_active = TRUE
+        AND b.status != 'disabled'
       ORDER BY cbi.installed_at ASC
     `,
     [conversationId]
@@ -22316,23 +23690,21 @@ app.get('/chat/conversations/:conversationId/bots', async (request) => {
     ok: true,
     conversationId,
     items: result.rows.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      name: row.name,
-      description: row.description,
+      botId: row.bot_id,
+      botName: row.bot_name,
+      botSlug: row.bot_slug,
+      botCategory: row.bot_category,
+      botType: row.bot_type,
       commandHint: row.command_hint,
-      category: row.category,
-      type: row.type,
-      status: row.status,
       runtimeMode: row.runtime_mode,
-      isDraft: row.is_draft,
-      permissions: row.permissions,
-      icon: row.icon,
-      ownerId: row.owner_id,
-      installedAt: row.installed_at,
+      status: row.bot_status,
       installStatus: row.install_status,
+      permissionsSnapshot: row.permissions_snapshot,
+      runtimeReady: row.runtime_mode !== 'ai' || isAgentRuntimeReady(),
+      runtimeReadinessReason: row.runtime_mode === 'ai' ? agentRuntimeReadinessReason() : null,
+      installedBy: row.installed_by,
+      installedAt: row.installed_at,
       agentConfig: row.runtime_mode === 'ai' ? publicAgentConfig(row.agent_config) : null,
-      ...botRuntimeReadiness(row.runtime_mode),
     })),
   };
 });
@@ -22345,7 +23717,7 @@ app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (reques
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId, botId } = paramsSchema.parse(request.params);
-  await ensureGroupConversationAccess(db, conversationId, actorUserId);
+  await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
 
   const botResult = await db.query<{
     id: string;
@@ -22517,7 +23889,7 @@ app.delete('/chat/conversations/:conversationId/bots/:botId', async (request) =>
 
   const actorUserId = resolveAuthenticatedUserId(request);
   const { conversationId, botId } = paramsSchema.parse(request.params);
-  await ensureGroupConversationAccess(db, conversationId, actorUserId);
+  await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
 
   const botResult = await db.query<{ id: string; name: string }>(
     `
@@ -22622,6 +23994,131 @@ app.delete('/chat/conversations/:conversationId/bots/:botId', async (request) =>
     removed,
     botIds,
   };
+});
+
+// ── Agent runs: durable execution status ───────────────────────────
+
+app.get('/agent-runs', async (request) => {
+  if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const querySchema = z.object({
+    conversationId: z.string().min(2).max(120).optional(),
+    botId: z.string().min(2).max(120).optional(),
+    status: z.string().min(2).max(30).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  });
+  const params = querySchema.parse(request.query);
+
+  let query = `SELECT id, bot_id, conversation_id, actor_user_id, trigger_type, trigger_message_id, status, result_message_id, error_message, input_tokens, output_tokens, total_tokens, created_at, started_at, completed_at FROM agent_runs WHERE actor_user_id = $1`;
+  const values: unknown[] = [actorUserId];
+  let paramIdx = 2;
+
+  if (params.conversationId) {
+    query += ` AND conversation_id = $${paramIdx++}`;
+    values.push(params.conversationId);
+  }
+  if (params.botId) {
+    query += ` AND bot_id = $${paramIdx++}`;
+    values.push(params.botId);
+  }
+  if (params.status) {
+    query += ` AND status = $${paramIdx++}`;
+    values.push(params.status);
+  }
+  query += ` ORDER BY created_at DESC LIMIT $${paramIdx++}`;
+  values.push(params.limit);
+
+  const result = await db.query(query, values);
+  return {
+    ok: true,
+    items: result.rows.map((row) => ({
+      id: row.id,
+      botId: row.bot_id,
+      conversationId: row.conversation_id,
+      actorUserId: row.actor_user_id,
+      triggerType: row.trigger_type,
+      triggerMessageId: row.trigger_message_id,
+      status: row.status,
+      resultMessageId: row.result_message_id,
+      errorMessage: row.error_message,
+      inputTokens: row.input_tokens,
+      outputTokens: row.output_tokens,
+      totalTokens: row.total_tokens,
+      createdAt: row.created_at,
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+    })),
+  };
+});
+
+app.get('/agent-runs/:runId', async (request) => {
+  if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  const paramsSchema = z.object({ runId: z.string().min(2).max(120) });
+  const { runId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{
+    id: string; bot_id: string; conversation_id: string; actor_user_id: string;
+    agent_version_id: string | null; trigger_type: string; trigger_message_id: string | null;
+    status: string; result_message_id: string | null; result_text: string | null;
+    error_message: string | null; input_tokens: number; output_tokens: number;
+    total_tokens: number; metadata: unknown; created_at: string; started_at: string | null;
+    completed_at: string | null;
+  }>(`SELECT * FROM agent_runs WHERE id = $1 LIMIT 1`, [runId]);
+
+  if (!result.rowCount) throw createApiError('NOT_FOUND', 'Run not found', { runId });
+
+  const run = result.rows[0];
+  if (run.actor_user_id !== request.authUser.userId) {
+    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the run actor can view this run');
+  }
+
+  return {
+    ok: true,
+    run: {
+      id: run.id,
+      botId: run.bot_id,
+      conversationId: run.conversation_id,
+      actorUserId: run.actor_user_id,
+      agentVersionId: run.agent_version_id,
+      triggerType: run.trigger_type,
+      triggerMessageId: run.trigger_message_id,
+      status: run.status,
+      resultMessageId: run.result_message_id,
+      resultText: run.result_text,
+      errorMessage: run.error_message,
+      inputTokens: run.input_tokens,
+      outputTokens: run.output_tokens,
+      totalTokens: run.total_tokens,
+      metadata: run.metadata,
+      createdAt: run.created_at,
+      startedAt: run.started_at,
+      completedAt: run.completed_at,
+    },
+  };
+});
+
+app.post('/agent-runs/:runId/cancel', async (request) => {
+  if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
+  const paramsSchema = z.object({ runId: z.string().min(2).max(120) });
+  const { runId } = paramsSchema.parse(request.params);
+
+  const result = await db.query<{ actor_user_id: string; status: string }>(
+    `SELECT actor_user_id, status FROM agent_runs WHERE id = $1 LIMIT 1`, [runId]
+  );
+
+  if (!result.rowCount) throw createApiError('NOT_FOUND', 'Run not found', { runId });
+  if (result.rows[0].actor_user_id !== request.authUser.userId) {
+    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the run actor can cancel');
+  }
+
+  const status = result.rows[0].status;
+  if (status === 'succeeded' || status === 'failed' || status === 'cancelled' || status === 'timed_out') {
+    throw createApiError('AGENT_RUN_TERMINAL', 'Run has already reached a terminal state');
+  }
+
+  await db.query(`UPDATE agent_runs SET status = 'cancelled', completed_at = NOW() WHERE id = $1`, [runId]);
+
+  return { ok: true, runId, status: 'cancelled' };
 });
 
 // ── Bot command execution ──────────────────────────────────────────
@@ -22981,6 +24478,7 @@ app.patch('/chat/conversations/:conversationId', async (request) => {
           title: nextTitle,
           description: responsePayload.conversation.description,
           avatar: responsePayload.conversation.avatar,
+          coverPhoto: responsePayload.conversation.coverPhoto,
           updatedAt: responsePayload.conversation.updatedAt,
         },
       });
@@ -23635,8 +25133,8 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
     let netFiatAmount: number;
     let platformFeeAmount = 0;
     let platformFeeRate = 0;
-    let effectiveRate = countryQuote.buyPrice;
-    let effectiveRateMode: 'buy' | 'sell' | 'cross_border_sell' = 'buy';
+    let effectiveRate = countryQuote.principalAmount;
+    let effectiveRateMode: 'buy' | 'sell' | 'cross_border_sell' | 'at_par_fx' = 'buy';
 
     if (direction === 'mint') {
       const feeBreakdown = calculateWalletTopupFeeBreakdown(payload.fiatAmount ?? 0);
@@ -23649,21 +25147,23 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
         throw createApiError('IZE_MINT_INVALID', 'Top-up amount is too low after platform fee');
       }
 
-      effectiveRate = fiatCurrency === 'GBP' ? 1 : countryQuote.buyPrice;
-      effectiveRateMode = 'buy';
+      // ── At-par model: 1 1ZE = $1.00 USD. Use the raw USD→local FX rate.
+      // The platform fee is already applied above via calculateWalletTopupFeeBreakdown.
+      effectiveRate = countryQuote.fxRate;
+      effectiveRateMode = 'at_par_fx';
       izeAmount = Number((netFiatAmount / effectiveRate).toFixed(6));
     } else {
-      const isCrossBorder =
-        Boolean(payload.originCountry)
-        && Boolean(payload.redeemCountry)
-        && payload.originCountry?.toUpperCase() !== payload.redeemCountry?.toUpperCase();
-
-      effectiveRate = fiatCurrency === 'GBP'
-        ? 1
-        : isCrossBorder ? countryQuote.crossBorderSellPrice : countryQuote.sellPrice;
-      effectiveRateMode = isCrossBorder ? 'cross_border_sell' : 'sell';
-      fiatAmount = Number(((payload.izeAmount ?? 0) * effectiveRate).toFixed(6));
-      netFiatAmount = fiatAmount;
+      // ── At-par model: 1 1ZE = $1.00 USD. Use the raw USD→local FX rate.
+      // The platform withdraw fee is applied as a separate transparent line item.
+      effectiveRate = countryQuote.fxRate;
+      effectiveRateMode = 'at_par_fx';
+      const grossFiat = Number(((payload.izeAmount ?? 0) * effectiveRate).toFixed(6));
+      const withdrawFeeBps = countryQuote.withdrawFeeBps ?? countryQuote.platformFeeBps;
+      const withdrawFee = Number((grossFiat * withdrawFeeBps / 10_000).toFixed(6));
+      fiatAmount = grossFiat;
+      netFiatAmount = Number((grossFiat - withdrawFee).toFixed(6));
+      platformFeeAmount = withdrawFee;
+      platformFeeRate = withdrawFeeBps / 10_000;
       izeAmount = Number((payload.izeAmount ?? 0).toFixed(6));
     }
 
@@ -23682,14 +25182,14 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
         rateSource: fiatCurrency === 'GBP'
           ? 'fixed_par:GBP:1ZE'
           : `internal_pricing:${countryQuote.countryCode}:${effectiveRateMode}`,
-        buyPrice: countryQuote.buyPrice,
-        sellPrice: countryQuote.sellPrice,
-        crossBorderPrice: countryQuote.crossBorderSellPrice,
+        principalAmount: countryQuote.principalAmount,
+        totalCost: countryQuote.totalCost,
+        netRedemption: countryQuote.netRedemption,
         money: moneyFromMinor(fiatCurrency, String(toFiatMinor(fiatAmount, fiatCurrency))),
         assetAmount: {
           asset: '1ZE',
-          baseUnitAmount: String(onezeAmountToMg(izeAmount)),
-          baseUnit: 'mg',
+          baseUnitAmount: String(onezeAmountToUnits(izeAmount)),
+          baseUnit: 'units',
           scale: 3,
         },
       },
@@ -23736,7 +25236,7 @@ app.get('/auctions/1ze-rates', async (request, reply) => {
 
     for (const quote of quotes) {
       rates[quote.currency] = {
-        rate: quote.sellPrice,
+        rate: quote.netRedemption,
         source: quote.source,
         updatedAt: quote.updatedAt,
         settlementSupported: true,
@@ -23811,10 +25311,9 @@ app.post('/update-pricing', async (request, reply) => {
   const bodySchema = z.object({
     country: z.string().min(2).max(3),
     currency: z.string().length(3),
-    markupBps: z.number().int(),
-    markdownBps: z.number().int(),
-    crossBorderFeeBps: z.number().int(),
-    pppFactor: z.number().positive(),
+    fxFeeBps: z.number().int().min(0).max(10000).optional(),
+    loadFeeBps: z.number().int().min(0).max(10000).optional(),
+    withdrawFeeBps: z.number().int().min(0).max(10000).optional(),
     withdrawalLockHours: z.number().int().min(0).max(336).optional(),
     dailyRedeemLimitIze: z.number().positive().optional(),
     weeklyRedeemLimitIze: z.number().positive().optional(),
@@ -23846,10 +25345,9 @@ app.post('/update-pricing', async (request, reply) => {
 
   try {
     validatePricingProfileInput({
-      markupBps: payload.markupBps,
-      markdownBps: payload.markdownBps,
-      crossBorderFeeBps: payload.crossBorderFeeBps,
-      pppFactor: payload.pppFactor,
+      platformFeeBps: payload.fxFeeBps,
+      loadFeeBps: payload.loadFeeBps,
+      withdrawFeeBps: payload.withdrawFeeBps,
     });
   } catch (error) {
     reply.code(400);
@@ -23866,10 +25364,9 @@ app.post('/update-pricing', async (request, reply) => {
     const profile = await upsertCountryPricingProfile(client, {
       countryCode: payload.country,
       currency: payload.currency,
-      markupBps: payload.markupBps,
-      markdownBps: payload.markdownBps,
-      crossBorderFeeBps: payload.crossBorderFeeBps,
-      pppFactor: payload.pppFactor,
+      fxFeeBps: payload.fxFeeBps,
+      loadFeeBps: payload.loadFeeBps,
+      withdrawFeeBps: payload.withdrawFeeBps,
       withdrawalLockHours: payload.withdrawalLockHours,
       dailyRedeemLimitIze: payload.dailyRedeemLimitIze,
       weeklyRedeemLimitIze: payload.weeklyRedeemLimitIze,
@@ -23882,12 +25379,6 @@ app.post('/update-pricing', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'Pricing update introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     const quote = quotes.find((entry) => entry.countryCode === profile.countryCode)
       ?? await resolveCountryPricingQuote(client, profile.countryCode);
@@ -23924,6 +25415,7 @@ app.post('/update-pricing', async (request, reply) => {
 
 app.post('/update-anchor', async (request, reply) => {
   const bodySchema = z.object({
+    anchorCurrency: z.string().length(3).optional(),
     anchorValueInInr: z.number().positive(),
     reason: z.string().max(240).optional(),
     metadata: z.record(z.unknown()).optional(),
@@ -23954,6 +25446,7 @@ app.post('/update-anchor', async (request, reply) => {
     await client.query('BEGIN');
 
     const anchor = await setOnezeAnchorConfig(client, {
+      anchorCurrency: payload.anchorCurrency,
       anchorValue: payload.anchorValueInInr,
       notes: payload.reason,
       metadata: {
@@ -23963,12 +25456,6 @@ app.post('/update-anchor', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'Anchor update introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     await client.query('COMMIT');
     return {
@@ -24045,12 +25532,6 @@ app.post('/admin/1ze/fx-rate', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'FX update introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     await client.query('COMMIT');
     return {
@@ -24088,9 +25569,9 @@ app.post('/admin/1ze/fx-rate', async (request, reply) => {
 app.post('/adjust-spread', async (request, reply) => {
   const bodySchema = z.object({
     country: z.string().min(2).max(3),
-    markupBps: z.number().int().optional(),
-    markdownBps: z.number().int().optional(),
-    crossBorderFeeBps: z.number().int().optional(),
+    fxFeeBps: z.number().int().min(0).max(10000).optional(),
+    loadFeeBps: z.number().int().min(0).max(10000).optional(),
+    withdrawFeeBps: z.number().int().min(0).max(10000).optional(),
     reason: z.string().max(240).optional(),
     metadata: z.record(z.unknown()).optional(),
   });
@@ -24117,14 +25598,14 @@ app.post('/adjust-spread', async (request, reply) => {
   const payload = bodySchema.parse(request.body ?? {});
 
   if (
-    payload.markupBps === undefined
-    && payload.markdownBps === undefined
-    && payload.crossBorderFeeBps === undefined
+    payload.fxFeeBps === undefined
+    && payload.loadFeeBps === undefined
+    && payload.withdrawFeeBps === undefined
   ) {
     reply.code(400);
     return {
       ok: false,
-      error: 'Provide at least one spread field to adjust',
+      error: 'Provide at least one fee field to adjust',
     };
   }
 
@@ -24142,16 +25623,15 @@ app.post('/adjust-spread', async (request, reply) => {
       };
     }
 
-    const nextMarkupBps = payload.markupBps ?? current.markupBps;
-    const nextMarkdownBps = payload.markdownBps ?? current.markdownBps;
-    const nextCrossBorderFeeBps = payload.crossBorderFeeBps ?? current.crossBorderFeeBps;
+    const nextFxFeeBps = payload.fxFeeBps ?? current.fxFeeBps;
+    const nextLoadFeeBps = payload.loadFeeBps ?? current.loadFeeBps;
+    const nextWithdrawFeeBps = payload.withdrawFeeBps ?? current.withdrawFeeBps;
 
     try {
       validatePricingProfileInput({
-        markupBps: nextMarkupBps,
-        markdownBps: nextMarkdownBps,
-        crossBorderFeeBps: nextCrossBorderFeeBps,
-        pppFactor: current.pppFactor,
+        platformFeeBps: nextFxFeeBps,
+        loadFeeBps: nextLoadFeeBps,
+        withdrawFeeBps: nextWithdrawFeeBps,
       });
     } catch (error) {
       throw createApiError('PRICING_PROFILE_INVALID', (error as Error).message);
@@ -24160,10 +25640,9 @@ app.post('/adjust-spread', async (request, reply) => {
     const profile = await upsertCountryPricingProfile(client, {
       countryCode: current.countryCode,
       currency: current.currency,
-      markupBps: nextMarkupBps,
-      markdownBps: nextMarkdownBps,
-      crossBorderFeeBps: nextCrossBorderFeeBps,
-      pppFactor: current.pppFactor,
+      fxFeeBps: nextFxFeeBps,
+      loadFeeBps: nextLoadFeeBps,
+      withdrawFeeBps: nextWithdrawFeeBps,
       withdrawalLockHours: current.withdrawalLockHours,
       dailyRedeemLimitIze: current.dailyRedeemLimitIze,
       weeklyRedeemLimitIze: current.weeklyRedeemLimitIze,
@@ -24176,12 +25655,6 @@ app.post('/adjust-spread', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'Spread adjustment introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     const quote = quotes.find((entry) => entry.countryCode === profile.countryCode)
       ?? await resolveCountryPricingQuote(client, profile.countryCode);
@@ -24237,13 +25710,10 @@ app.get('/admin/1ze/pricing-health', async (request, reply) => {
 
   try {
     const quotes = await listCountryPricingQuotes(db);
-    const violations = findPricingArbitrageViolations(quotes);
 
     return {
       ok: true,
       matrixSize: quotes.length,
-      violationCount: violations.length,
-      violations,
       quotes,
     };
   } catch (error) {
@@ -24299,8 +25769,8 @@ app.get('/admin/1ze/risk-dashboard', async (request, reply) => {
         redemption: metrics.redemption,
         crossBorder: metrics.crossBorder,
         liquidity: {
-          pendingWithdrawalMg: metrics.liquidity.pendingWithdrawalMg,
-          operationalLiquidityMg: metrics.liquidity.operationalLiquidityMg,
+          pendingWithdrawalUnits: metrics.liquidity.pendingWithdrawalUnits,
+          operationalLiquidityUnits: metrics.liquidity.operationalLiquidityUnits,
           stressIndex: metrics.liquidity.stressIndex,
           stressLevel: metrics.liquidity.stressLevel,
         },
@@ -24423,10 +25893,11 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
       }
     }
 
+    // ── At-par model: 1 1ZE = $1.00 USD. Use the raw USD→local FX rate.
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
-    const mintUnitPrice = fiatCurrency === 'GBP' ? 1 : pricingQuote.buyPrice;
+    const mintUnitPrice = pricingQuote.fxRate;
 
-    const amountMg = onezeAmountToMg(
+    const amountUnits = onezeAmountToUnits(
       Number((feeBreakdown.netFiatAmount / mintUnitPrice).toFixed(6))
     );
 
@@ -24468,8 +25939,8 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
       platformFeeMinor: feeAllocation.fee?.minorAmount ?? '0',
       netFiatMinor: feeAllocation.net.minorAmount,
       targetAsset: '1ZE',
-      targetBaseUnit: 'mg',
-      targetBaseUnitAmount: String(amountMg),
+      targetBaseUnit: 'units',
+      targetBaseUnitAmount: String(amountUnits),
       ratePerGram: String(mintUnitPrice),
       rateSource:
         fiatCurrency === 'GBP'
@@ -24488,7 +25959,7 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
           fiat_currency,
           net_fiat_amount_minor,
           platform_fee_minor,
-          ize_amount_mg,
+          ize_amount_units,
           rate_per_gram,
           rate_source,
           rate_locked_at,
@@ -24520,7 +25991,7 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
         fiatCurrency,
         toFiatMinor(feeBreakdown.netFiatAmount, fiatCurrency),
         toFiatMinor(feeBreakdown.platformFeeAmount, fiatCurrency),
-        amountMg,
+        amountUnits,
         mintUnitPrice,
         fiatCurrency === 'GBP' ? 'fixed_par:GBP:1ZE' : `internal_pricing:${pricingQuote.countryCode}:buy`,
         rateLockedAt.toISOString(),
@@ -24536,8 +26007,8 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
           sourceMoney: topupMoney,
           targetAssetAmount: {
             asset: '1ZE',
-            baseUnitAmount: String(amountMg),
-            baseUnit: 'mg',
+            baseUnitAmount: String(amountUnits),
+            baseUnit: 'units',
             scale: 3,
           },
           ...(payload.metadata ?? {}),
@@ -24692,8 +26163,8 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
           canonicalMoney: topupMoney,
           targetAssetAmount: {
             asset: '1ZE',
-            baseUnitAmount: String(amountMg),
-            baseUnit: 'mg',
+            baseUnitAmount: String(amountUnits),
+            baseUnit: 'units',
             scale: 3,
           },
           quoteRateSource: `internal_pricing:${pricingQuote.countryCode}:buy`,
@@ -24719,7 +26190,7 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
           fiat_currency,
           net_fiat_amount_minor::text,
           platform_fee_minor::text,
-          ize_amount_mg::text,
+          ize_amount_units::text,
           rate_per_gram::text,
           rate_source,
           rate_locked_at::text,
@@ -24760,8 +26231,8 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
         sourceMoney: topupMoney,
         targetAssetAmount: {
           asset: '1ZE',
-          baseUnitAmount: String(amountMg),
-          baseUnit: 'mg',
+          baseUnitAmount: String(amountUnits),
+          baseUnit: 'units',
           scale: 3,
         },
       },
@@ -24828,7 +26299,7 @@ app.get('/wallet/1ze/mint/:operationId', async (request, reply) => {
         fiat_currency,
         net_fiat_amount_minor::text,
         platform_fee_minor::text,
-        ize_amount_mg::text,
+        ize_amount_units::text,
         rate_per_gram::text,
         rate_source,
         rate_locked_at::text,
@@ -25073,8 +26544,9 @@ app.post('/wallet/1ze/mint', async (request, reply) => {
     }
 
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
+    // ── At-par model: 1 1ZE = $1.00 USD. Use the raw USD→local FX rate.
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
-    const mintUnitPrice = fiatCurrency === 'GBP' ? 1 : pricingQuote.buyPrice;
+    const mintUnitPrice = pricingQuote.fxRate;
     const izeAmount = Number((feeBreakdown.netFiatAmount / mintUnitPrice).toFixed(6));
 
     if (!Number.isFinite(izeAmount) || izeAmount <= 0) {
@@ -25108,19 +26580,19 @@ app.post('/wallet/1ze/mint', async (request, reply) => {
 
     const architectureEnabled = await onezeArchitectureTablesAvailable(client);
     let architectureWalletId: string | null = null;
-    let architectureWalletBalanceMg: number | null = null;
+    let architectureWalletBalanceUnits: number | null = null;
 
     if (architectureEnabled) {
-      const amountMg = onezeAmountToMg(izeAmount);
+      const amountUnits = onezeAmountToUnits(izeAmount);
       const wallet = await ensureWallet(client, actorUserId, fiatCurrency);
       const walletTxId = createRuntimeId('wtx');
 
       architectureWalletId = wallet.id;
-      architectureWalletBalanceMg = await applyWalletLedgerDelta(client, {
+      architectureWalletBalanceUnits = await applyWalletLedgerDelta(client, {
         walletId: wallet.id,
         txId: walletTxId,
         asset: '1ZE',
-        amount: amountMg,
+        amount: amountUnits,
         kind: 'MINT',
         refType: 'wallet_ize_operation',
         refId: operationId,
@@ -25139,7 +26611,7 @@ app.post('/wallet/1ze/mint', async (request, reply) => {
       await creditWalletSegmentBalance(client, {
         wallet,
         txId: walletTxId,
-        purchasedCreditMg: amountMg,
+        purchasedCreditUnits: amountUnits,
         originCountry: normalizeOnezeCountryTag(
           typeof payload.metadata?.originCountry === 'string'
             ? payload.metadata.originCountry
@@ -25185,11 +26657,11 @@ app.post('/wallet/1ze/mint', async (request, reply) => {
       architecture: architectureEnabled
         ? {
             walletId: architectureWalletId,
-            walletBalanceMg: architectureWalletBalanceMg,
+            walletBalanceUnits: architectureWalletBalanceUnits,
             walletBalanceOneze:
-              architectureWalletBalanceMg === null
+              architectureWalletBalanceUnits === null
                 ? null
-                : mgToOnezeAmount(architectureWalletBalanceMg),
+                : unitsToOnezeAmount(architectureWalletBalanceUnits),
           }
         : null,
     };
@@ -25243,20 +26715,6 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
   const payload = bodySchema.parse(request.body ?? {});
   const actorUserId = resolveAuthenticatedUserId(request, payload.userId);
 
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze burn withdrawals are permanently unavailable in closed-loop mode. Use payout requests funded by completed sale proceeds.',
-      code: 'ONEZE_BURN_DISABLED',
-      details: {
-        actorUserId,
-        fiatCurrency: payload.fiatCurrency.toUpperCase(),
-      },
-    };
-  }
-
   if (!(await onezeTablesAvailable(db))) {
     reply.code(503);
     return {
@@ -25269,6 +26727,18 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
   try {
     await client.query('BEGIN');
     await ensureUserExists(actorUserId);
+
+    // ── Compliance gate: verify user can redeem (burn) 1ZE ──
+    const burnCapability = await evaluateWalletCapability(client, actorUserId, 'redeem', {
+      amountUsd: payload.izeAmount,
+      currency: payload.fiatCurrency,
+    });
+    if (!burnCapability.allowed) {
+      throw createApiError(burnCapability.code, burnCapability.reason ?? 'Wallet capability check failed', {
+        capability: 'redeem',
+        restrictions: burnCapability.restrictions,
+      });
+    }
 
     const idempotencyRequestHash = payload.idempotencyKey
       ? hashWalletIdempotencyPayload({
@@ -25319,7 +26789,7 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
 
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
     const normalizedIzeAmount = Number(payload.izeAmount.toFixed(6));
-    const amountMg = onezeAmountToMg(normalizedIzeAmount);
+    const amountUnits = onezeAmountToUnits(normalizedIzeAmount);
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
     const pricingProfile = await getCountryPricingProfile(client, pricingQuote.countryCode);
 
@@ -25340,12 +26810,15 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
         : redeemCountry
     );
     const isCrossBorder = originCountry !== redeemCountry;
-    const redemptionUnitPrice = fiatCurrency === 'GBP'
-      ? 1
-      : isCrossBorder
-        ? pricingQuote.crossBorderSellPrice
-        : pricingQuote.sellPrice;
-    const fiatAmount = Number((normalizedIzeAmount * redemptionUnitPrice).toFixed(6));
+    // ── At-par model: 1 1ZE = $1.00 USD ──
+    // Convert via the USD→local FX rate. The platform spread is applied as a
+    // separate transparent fee, not baked into the exchange rate.
+    const fxRate = (await resolveInternalFxRate(client, 'USD', fiatCurrency)).rate;
+    const redemptionUnitPrice = fxRate;
+    const principalAmount = Number((normalizedIzeAmount * redemptionUnitPrice).toFixed(6));
+    const feeBps = PLATFORM_CONVERT_FEE_BPS;
+    const feeAmount = Number((principalAmount * feeBps / 10_000).toFixed(6));
+    const fiatAmount = Number((principalAmount - feeAmount).toFixed(6));
 
     const [dailyBurnedIze, weeklyBurnedIze] = await Promise.all([
       getCommittedBurnIzeInWindow(client, actorUserId, 24),
@@ -25404,15 +26877,15 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
 
     const architectureEnabled = await onezeArchitectureTablesAvailable(client);
     let architectureWalletId: string | null = null;
-    let architectureWalletBalanceMg: number | null = null;
+    let architectureWalletBalanceUnits: number | null = null;
     let segmentDebitResult:
       | {
-          purchasedDebitedMg: number;
-          earnedDebitedMg: number;
-          lockedPurchasedMg: number;
-          redeemableMg: number;
-          purchasedBalanceMg: number;
-          earnedBalanceMg: number;
+          purchasedDebitedUnits: number;
+          earnedDebitedUnits: number;
+          lockedPurchasedUnits: number;
+          redeemableUnits: number;
+          purchasedBalanceUnits: number;
+          earnedBalanceUnits: number;
         }
       | null = null;
 
@@ -25421,7 +26894,7 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
       segmentDebitResult = await debitWalletSegmentBalance(client, {
         wallet,
         txId: `seg_${createRuntimeId('ize_burn')}`,
-        amountMg,
+        amountUnits,
         originCountry,
         lockHours: pricingProfile.withdrawalLockHours,
         metadata: {
@@ -25450,6 +26923,11 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
         originCountry,
         redeemCountry,
         isCrossBorder,
+        principalAmount,
+        feeAmount,
+        feeBps,
+        netRedemption: fiatAmount,
+        fxRate: redemptionUnitPrice,
       },
     });
 
@@ -25457,11 +26935,11 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
       const wallet = await ensureWallet(client, actorUserId, fiatCurrency);
       const walletTxId = createRuntimeId('wtx');
 
-      architectureWalletBalanceMg = await applyWalletLedgerDelta(client, {
+      architectureWalletBalanceUnits = await applyWalletLedgerDelta(client, {
         walletId: wallet.id,
         txId: walletTxId,
         asset: '1ZE',
-        amount: -amountMg,
+        amount: -amountUnits,
         kind: 'BURN',
         refType: 'wallet_ize_operation',
         refId: operationId,
@@ -25470,12 +26948,64 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
           operationId,
           userId: actorUserId,
           payoutRequestId: payload.payoutRequestId ?? null,
+          principalAmount,
+          feeAmount,
+          netRedemption: fiatAmount,
           fiatAmount,
           fiatCurrency,
-          pricingReferenceSource: `internal_pricing:${pricingQuote.countryCode}:${isCrossBorder ? 'cross_border_sell' : 'sell'}`,
+          fxRate: redemptionUnitPrice,
+          feeBps,
+          pricingReferenceSource: `at_par:GBP:${isCrossBorder ? 'cross_border' : 'local'}`,
           ...(payload.metadata ?? {}),
         },
       });
+
+      // ── Platform fee ledger entry ──
+      // Record the platform spread as a separate FEE entry so it is transparent
+      // and auditable. The fee is credited to the platform revenue_fx account.
+      if (feeAmount > 0) {
+        const feeAmountMinor = Math.round(feeAmount * 100);
+        await applyWalletLedgerDelta(client, {
+          walletId: wallet.id,
+          txId: walletTxId,
+          asset: 'FIAT',
+          amount: -feeAmountMinor,
+          kind: 'FEE',
+          refType: 'platform_fx_fee',
+          refId: operationId,
+          anchorValueInInr: pricingQuote.anchorValueInInr,
+          metadata: {
+            feeBps,
+            feeType: 'redemption_spread',
+            feeAmount,
+            fiatCurrency,
+            operationId,
+          },
+        });
+
+        // Credit the platform revenue_fx ledger account
+        const revenueFxAccountId = await ensureLedgerAccount(client, 'platform', 'platform', 'revenue_fx', fiatCurrency);
+        const platformFeeGbp = fiatCurrency === 'GBP'
+          ? feeAmount
+          : Number((feeAmount * (await resolveInternalFxRate(client, fiatCurrency, 'GBP')).rate).toFixed(6));
+        await appendLedgerEntry(client, {
+          accountId: revenueFxAccountId,
+          counterpartyAccountId: revenueFxAccountId,
+          direction: 'credit',
+          amountGbp: platformFeeGbp,
+          sourceType: 'burn',
+          sourceId: operationId,
+          lineType: 'redemption_platform_fee',
+          metadata: {
+            feeBps,
+            feeType: 'redemption_spread',
+            feeAmount,
+            feeCurrency: fiatCurrency,
+            userId: actorUserId,
+            operationId,
+          },
+        });
+      }
     }
 
     const [walletBalanceIze, reserveSnapshot] = await Promise.all([
@@ -25489,11 +27019,16 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
         id: operationId,
         type: 'burn',
         userId: actorUserId,
+        principalAmount,
+        feeAmount,
+        feeBps,
+        netRedemption: fiatAmount,
         fiatAmount,
         fiatCurrency,
         izeAmount: normalizedIzeAmount,
         ratePerGram: redemptionUnitPrice,
-        rateSource: `internal_pricing:${pricingQuote.countryCode}:${isCrossBorder ? 'cross_border_sell' : 'sell'}`,
+        fxRate: redemptionUnitPrice,
+        rateSource: `at_par:GBP:${isCrossBorder ? 'cross_border' : 'local'}`,
         country: pricingQuote.countryCode,
         originCountry,
         redeemCountry,
@@ -25516,11 +27051,11 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
       architecture: architectureEnabled
         ? {
             walletId: architectureWalletId,
-            walletBalanceMg: architectureWalletBalanceMg,
+            walletBalanceUnits: architectureWalletBalanceUnits,
             walletBalanceOneze:
-              architectureWalletBalanceMg === null
+              architectureWalletBalanceUnits === null
                 ? null
-                : mgToOnezeAmount(architectureWalletBalanceMg),
+                : unitsToOnezeAmount(architectureWalletBalanceUnits),
             segmentDebit: segmentDebitResult,
           }
         : null,
@@ -25582,72 +27117,205 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     };
   }
 
+  // ── Bug 3 fix: halt check ──
+  try {
+    await assertOnezeMintBurnNotHalted();
+  } catch (error) {
+    const apiError = getApiError(error);
+    if (apiError) {
+      reply.code(statusCodeForApiError(apiError.code));
+      return {
+        ok: false,
+        error: apiError.message,
+        details: apiError.details,
+      };
+    }
+
+    throw error;
+  }
+
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     await ensureUserExists(actorUserId);
 
     const normalizedIzeAmount = Number(payload.izeAmount.toFixed(6));
-    const amountMg = onezeAmountToMg(normalizedIzeAmount);
-
-    // Get pricing for conversion rate
+    const amountUnits = onezeAmountToUnits(normalizedIzeAmount);
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
+
+    // ── Compliance gate: verify user can redeem 1ZE ──
+    const redeemCapability = await evaluateWalletCapability(client, actorUserId, 'redeem', {
+      amountUsd: normalizedIzeAmount,
+      currency: fiatCurrency,
+    });
+    if (!redeemCapability.allowed) {
+      throw createApiError(redeemCapability.code, redeemCapability.reason ?? 'Wallet capability check failed', {
+        capability: 'redeem',
+        restrictions: redeemCapability.restrictions,
+      });
+    }
+
+    // ── Bug 2 fix: idempotency check ──
+    const idempotencyRequestHash = payload.idempotencyKey
+      ? hashWalletIdempotencyPayload({
+          userId: actorUserId,
+          izeAmount: normalizedIzeAmount,
+          fiatCurrency,
+        })
+      : null;
+
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      const idempotentResponse = await getWalletIdempotentResponse(client, {
+        userId: actorUserId,
+        operation: 'convert_1ze_to_fiat',
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: idempotencyRequestHash,
+      });
+
+      if (idempotentResponse) {
+        await client.query('COMMIT');
+        return idempotentResponse;
+      }
+    }
+
+    // ── At-par pricing model ──
+    // 1 1ZE = $1.00 USD. Convert to the target fiat currency via the USD→local
+    // FX rate. The platform spread is applied as a separate transparent fee,
+    // not baked into the exchange rate.
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
-    const onezeAmountFromMg = mgToOnezeAmount(amountMg);
-    const conversionUnitPrice = fiatCurrency === 'GBP' ? 1 : pricingQuote.buyPrice;
-    const fiatAmount = Number((onezeAmountFromMg * conversionUnitPrice).toFixed(6));
+    const onezeAmountFromUnits = unitsToOnezeAmount(amountUnits);
+    const fxRate = (await resolveInternalFxRate(client, 'USD', fiatCurrency)).rate;
+    const principalAmount = Number((onezeAmountFromUnits * fxRate).toFixed(6));
+
+    // ── Charge PLATFORM_CONVERT_FEE_BPS ──
+    const feeBps = PLATFORM_CONVERT_FEE_BPS;
+    const feeAmount = Number((principalAmount * feeBps / 10_000).toFixed(6));
+    const netRedemption = Number((principalAmount - feeAmount).toFixed(6));
 
     // Validate 1ze balance
     const wallet = await ensureWallet(client, actorUserId, fiatCurrency);
-    const currentIzeBalance = Number(wallet.oneze_balance_mg);
+    const currentIzeBalance = Number(wallet.oneze_balance_units);
 
-    if (currentIzeBalance < amountMg) {
+    if (currentIzeBalance < amountUnits) {
       reply.code(400);
       return {
         ok: false,
         error: 'INSUFFICIENT_1ZE_BALANCE',
         message: 'Insufficient 1ze balance for conversion',
-        currentBalanceMg: currentIzeBalance,
-        requestedAmountMg: amountMg,
+        currentBalanceUnits: currentIzeBalance,
+        requestedAmountUnits: amountUnits,
       };
     }
 
     const txId = createRuntimeId('wtx');
+    const operationId = createRuntimeId('ize_convert');
+
+    // ── Bug 1 fix: segment debit ──
+    // Conversion is a withdrawal-like action — debit from the purchased segment.
+    const pricingProfile = await getCountryPricingProfile(client, pricingQuote.countryCode);
+    const redeemCountry = normalizeOnezeCountryTag(pricingQuote.countryCode);
+    await debitWalletSegmentBalance(client, {
+      wallet,
+      txId: `seg_${txId}`,
+      amountUnits,
+      originCountry: redeemCountry,
+      lockHours: pricingProfile?.withdrawalLockHours ?? 0,
+      metadata: {
+        operation: 'convert_1ze_to_fiat',
+        operationId,
+        fiatCurrency,
+      },
+    });
 
     // Burn 1ze from wallet
     await applyWalletLedgerDelta(client, {
       walletId: wallet.id,
       txId,
       asset: '1ZE',
-      amount: -amountMg,
+      amount: -amountUnits,
       kind: 'CONVERT_TO_FIAT',
       refType: '1ze_conversion',
-      refId: txId,
+      refId: operationId,
       anchorValueInInr: pricingQuote.anchorValueInInr,
       metadata: {
         convertedIzeAmount: normalizedIzeAmount,
-        receivedFiatAmount: fiatAmount,
+        principalAmount,
+        feeAmount,
+        netRedemption,
+        receivedFiatAmount: netRedemption,
         fiatCurrency,
-        rateUsed: pricingQuote.buyPrice,
+        fxRate,
+        feeBps,
       },
     });
 
-    // Credit fiat to wallet
-    const fiatAmountMinor = Math.round(fiatAmount * 100);
+    // ── Platform fee ledger entry (Bug 5 fix) ──
+    // Record the platform spread as a separate FEE entry so it is transparent
+    // and auditable. The fee is credited to the platform revenue_fx account.
+    if (feeAmount > 0) {
+      const feeAmountMinor = Math.round(feeAmount * 100);
+      await applyWalletLedgerDelta(client, {
+        walletId: wallet.id,
+        txId,
+        asset: 'FIAT',
+        amount: -feeAmountMinor,
+        kind: 'FEE',
+        refType: 'platform_fx_fee',
+        refId: operationId,
+        anchorValueInInr: pricingQuote.anchorValueInInr,
+        metadata: {
+          feeBps,
+          feeType: 'redemption_spread',
+          feeAmount,
+          fiatCurrency,
+          operationId,
+        },
+      });
+
+      // Credit the platform revenue_fx ledger account
+      const revenueFxAccountId = await ensureLedgerAccount(client, 'platform', 'platform', 'revenue_fx', fiatCurrency);
+      const platformFeeGbp = fiatCurrency === 'GBP'
+        ? feeAmount
+        : Number((feeAmount * (await resolveInternalFxRate(client, fiatCurrency, 'GBP')).rate).toFixed(6));
+      await appendLedgerEntry(client, {
+        accountId: revenueFxAccountId,
+        counterpartyAccountId: revenueFxAccountId,
+        direction: 'credit',
+        amountGbp: platformFeeGbp,
+        sourceType: 'burn',
+        sourceId: operationId,
+        lineType: 'redemption_platform_fee',
+        metadata: {
+          feeBps,
+          feeType: 'redemption_spread',
+          feeAmount,
+          feeCurrency: fiatCurrency,
+          userId: actorUserId,
+          operationId,
+        },
+      });
+    }
+
+    // Credit net fiat to wallet
+    const netFiatAmountMinor = Math.round(netRedemption * 100);
     await applyWalletLedgerDelta(client, {
       walletId: wallet.id,
       txId,
       asset: 'FIAT',
-      amount: fiatAmountMinor,
+      amount: netFiatAmountMinor,
       kind: 'CONVERT_FROM_1ZE',
       refType: '1ze_conversion',
-      refId: txId,
+      refId: operationId,
       anchorValueInInr: pricingQuote.anchorValueInInr,
       metadata: {
         convertedIzeAmount: normalizedIzeAmount,
-        receivedFiatAmount: fiatAmount,
+        principalAmount,
+        feeAmount,
+        netRedemption,
+        receivedFiatAmount: netRedemption,
         fiatCurrency,
-        rateUsed: pricingQuote.buyPrice,
+        fxRate,
+        feeBps,
       },
     });
 
@@ -25656,20 +27324,52 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     // Reload wallet to get updated balances
     const updatedWallet = await ensureWallet(client, actorUserId, fiatCurrency);
 
-    return {
+    const responsePayload: Record<string, unknown> = {
       ok: true,
       userId: actorUserId,
       wallet: toWalletPayload(updatedWallet),
       conversion: {
         izeAmount: normalizedIzeAmount,
-        fiatAmount,
+        principalAmount,
+        feeAmount,
+        feeBps,
+        netRedemption,
+        fiatAmount: netRedemption,
         fiatCurrency,
-        rateUsed: pricingQuote.buyPrice,
+        fxRate,
       },
     };
+
+    // ── Bug 2 fix: save idempotent response ──
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      await saveWalletIdempotentResponse(client, {
+        userId: actorUserId,
+        operation: 'convert_1ze_to_fiat',
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: idempotencyRequestHash,
+        responsePayload,
+      });
+    }
+
+    return responsePayload;
   } catch (error) {
     await client.query('ROLLBACK');
-    throw error;
+    const apiError = getApiError(error);
+    if (apiError) {
+      reply.code(statusCodeForApiError(apiError.code));
+      return {
+        ok: false,
+        error: apiError.message,
+        details: apiError.details,
+      };
+    }
+
+    request.log.error({ err: error, userId: actorUserId }, 'Failed to convert 1ze to fiat');
+    reply.code(500);
+    return {
+      ok: false,
+      error: 'Unable to convert 1ze to fiat',
+    };
   } finally {
     client.release();
   }
@@ -25703,6 +27403,18 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
     const fiatAmountMinor = Math.round(payload.fiatAmount * 100);
 
+    // ── Compliance gate: verify user can issue (load) 1ZE ──
+    const issueCapability = await evaluateWalletCapability(client, actorUserId, 'issue', {
+      amountUsd: payload.fiatAmount,
+      currency: fiatCurrency,
+    });
+    if (!issueCapability.allowed) {
+      throw createApiError(issueCapability.code, issueCapability.reason ?? 'Wallet capability check failed', {
+        capability: 'issue',
+        restrictions: issueCapability.restrictions,
+      });
+    }
+
     // Validate fiat balance
     const wallet = await ensureWallet(client, actorUserId, fiatCurrency);
     const currentFiatBalance = Number(wallet.fiat_balance_minor);
@@ -25721,10 +27433,15 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
     // Get pricing for conversion rate
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
 
-    // Calculate 1ze amount (1 GBP = 1000 1ze, or use pricing quote)
-    const purchaseUnitPrice = fiatCurrency === 'GBP' ? 1 : pricingQuote.buyPrice;
-    const izeAmount = payload.fiatAmount * (1 / purchaseUnitPrice);
-    const amountMg = onezeAmountToMg(izeAmount);
+    // ── At-par pricing model ──
+    // 1 1ZE = $1.00 USD. For any fiat currency, convert via the USD→local FX
+    // rate. The platform spread is applied as a separate transparent fee.
+    const fxRate = (await resolveInternalFxRate(client, 'USD', fiatCurrency)).rate;
+    const feeBps = PLATFORM_LOAD_FEE_BPS;
+    const principalFiat = Number((payload.fiatAmount / (1 + feeBps / 10_000)).toFixed(6));
+    const feeFiat = Number((payload.fiatAmount - principalFiat).toFixed(6));
+    const izeAmount = Number((principalFiat / fxRate).toFixed(6));
+    const amountUnits = onezeAmountToUnits(izeAmount);
 
     const txId = createRuntimeId('wtx');
 
@@ -25740,9 +27457,12 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
       anchorValueInInr: pricingQuote.anchorValueInInr,
       metadata: {
         spentFiatAmount: payload.fiatAmount,
+        principalFiat,
+        feeFiat,
+        feeBps,
         receivedIzeAmount: izeAmount,
         fiatCurrency,
-        rateUsed: purchaseUnitPrice,
+        rateUsed: fxRate,
       },
     });
 
@@ -25751,16 +27471,19 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
       walletId: wallet.id,
       txId,
       asset: '1ZE',
-      amount: amountMg,
+      amount: amountUnits,
       kind: 'BUY_1ZE',
       refType: '1ze_purchase',
       refId: txId,
       anchorValueInInr: pricingQuote.anchorValueInInr,
       metadata: {
         spentFiatAmount: payload.fiatAmount,
+        principalFiat,
+        feeFiat,
+        feeBps,
         receivedIzeAmount: izeAmount,
         fiatCurrency,
-        rateUsed: pricingQuote.buyPrice,
+        rateUsed: fxRate,
       },
     });
 
@@ -25775,9 +27498,12 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
       wallet: toWalletPayload(updatedWallet),
       purchase: {
         fiatAmount: payload.fiatAmount,
+        principalFiat,
+        feeFiat,
+        feeBps,
         fiatCurrency,
         izeAmount,
-        rateUsed: pricingQuote.buyPrice,
+        rateUsed: fxRate,
       },
     };
   } catch (error) {
@@ -25803,15 +27529,17 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
 
   const payload = bodySchema.parse(request.body ?? {});
 
-  // 1ze Context Restrictions: Only allow co-own trading and platform rewards
-  // Marketplace sales must use fiat escrow (Stripe Connect), not 1ze
+  // 1ze Context Restrictions: P2P transfer is for co-own trading and platform
+  // rewards ONLY. Marketplace purchases must use the commerce checkout flow
+  // (PaymentIntent with gateway oneze_internal) so they go through escrow,
+  // refunds, disputes, cancellation, seller reserves, and buyer protection.
   const ALLOWED_1ZE_CONTEXTS = ['coOwn_trade', 'platform_reward'] as const;
   if (!ALLOWED_1ZE_CONTEXTS.includes(payload.contextType as typeof ALLOWED_1ZE_CONTEXTS[number])) {
     reply.code(400);
     return {
       ok: false,
       error: 'IZE_TRANSFER_INVALID_CONTEXT',
-      message: '1ze can only be transferred for co-own trading or platform rewards. For marketplace sales, use fiat escrow (commerce payment).',
+      message: 'Marketplace purchases must use the commerce checkout flow (PaymentIntent with gateway oneze_internal), not P2P transfer. For co-own trading, use coOwn_trade context.',
       allowedContexts: ALLOWED_1ZE_CONTEXTS,
       providedContext: payload.contextType,
     };
@@ -25847,18 +27575,43 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
     await ensureUserExists(senderUserId);
     await ensureUserExists(recipientUserId);
 
+    // ── Compliance gates: verify both sender and recipient are permitted ──
+    const sendCapability = await evaluateWalletCapability(client, senderUserId, 'p2p_send', {
+      amountUsd: payload.izeAmount,
+      currency: payload.fiatCurrency,
+      counterpartyUserId: recipientUserId,
+    });
+    if (!sendCapability.allowed) {
+      throw createApiError(sendCapability.code, sendCapability.reason ?? 'Wallet capability check failed', {
+        capability: 'p2p_send',
+        restrictions: sendCapability.restrictions,
+      });
+    }
+
+    const receiveCapability = await evaluateWalletCapability(client, recipientUserId, 'p2p_receive', {
+      amountUsd: payload.izeAmount,
+      currency: payload.fiatCurrency,
+      counterpartyUserId: senderUserId,
+    });
+    if (!receiveCapability.allowed) {
+      throw createApiError(receiveCapability.code, receiveCapability.reason ?? 'Wallet capability check failed', {
+        capability: 'p2p_receive',
+        restrictions: receiveCapability.restrictions,
+      });
+    }
+
     const normalizedIzeAmount = Number(payload.izeAmount.toFixed(6));
     if (!Number.isFinite(normalizedIzeAmount) || normalizedIzeAmount <= 0) {
       throw createApiError('P2P_TRANSFER_INVALID', 'Unable to derive a valid 1ze amount for transfer');
     }
 
-    const amountMg = onezeAmountToMg(normalizedIzeAmount);
+    const amountUnits = onezeAmountToUnits(normalizedIzeAmount);
 
     const idempotencyRequestHash = payload.idempotencyKey
       ? hashWalletIdempotencyPayload({
         senderUserId,
         recipientUserId,
-        amountMg,
+        amountUnits,
         fiatCurrency: payload.fiatCurrency.toUpperCase(),
         contextType: payload.contextType ?? null,
         contextId: payload.contextId ?? null,
@@ -25884,15 +27637,15 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
     const fxToGbp = await resolveInternalFxRate(client, fiatCurrency, 'GBP');
 
-    const onezeAmountFromMg = mgToOnezeAmount(amountMg);
-    const fiatAmount = Number((onezeAmountFromMg * pricingQuote.buyPrice).toFixed(6));
+    const onezeAmountFromUnits = unitsToOnezeAmount(amountUnits);
+    const fiatAmount = Number((onezeAmountFromUnits * pricingQuote.principalAmount).toFixed(6));
     const amountGbp = Number((fiatAmount * fxToGbp.rate).toFixed(6));
     const eligibilityAmountGbp = roundTo(amountGbp, 2);
 
     const policyDecision = await evaluateP2pPolicyEligibility(client, {
       senderUserId,
       recipientUserId,
-      amountMg,
+      amountUnits,
       contextType: payload.contextType,
       contextId: payload.contextId,
     });
@@ -25947,7 +27700,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
           izeAmount: normalizedIzeAmount,
           fiatAmount,
           fiatCurrency,
-          ratePerGram: pricingQuote.buyPrice,
+          ratePerGram: pricingQuote.principalAmount,
         },
         assessment: amlAssessment,
       });
@@ -25969,7 +27722,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
       izeAmount: normalizedIzeAmount,
       fiatAmount,
       fiatCurrency,
-      ratePerGram: pricingQuote.buyPrice,
+      ratePerGram: pricingQuote.principalAmount,
       eligibilityCode: 'ALLOWED',
       amlRiskScore: amlAssessment.riskScore,
       amlRiskLevel: amlAssessment.riskLevel,
@@ -25978,7 +27731,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
       recipientCountry: policyDecision.recipientCountry,
       travelRulePayload: policyDecision.requiresTravelRule
         ? {
-          thresholdMg: config.onezeTravelRuleThresholdMg,
+          thresholdUnits: config.onezeTravelRuleThresholdUnits,
           originator: {
             userId: senderUserId,
             country: policyDecision.senderCountry,
@@ -25995,7 +27748,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
         note: payload.note,
         contextType: payload.contextType ?? null,
         contextId: payload.contextId ?? null,
-        amountMg,
+        amountUnits,
         ...(payload.metadata ?? {}),
       },
     });
@@ -26004,12 +27757,12 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
     const recipientWallet = await ensureWallet(client, recipientUserId, fiatCurrency);
     const walletTxId = createRuntimeId('wtx');
 
-    const [senderBalanceAfterMg, recipientBalanceAfterMg] = await Promise.all([
+    const [senderBalanceAfterUnits, recipientBalanceAfterUnits] = await Promise.all([
       applyWalletLedgerDelta(client, {
         walletId: senderWallet.id,
         txId: walletTxId,
         asset: '1ZE',
-        amount: -amountMg,
+        amount: -amountUnits,
         kind: 'TRANSFER_SEND',
         refType: payload.contextType ?? 'p2p_transfer',
         refId: payload.contextId ?? transferId,
@@ -26025,7 +27778,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
         walletId: recipientWallet.id,
         txId: walletTxId,
         asset: '1ZE',
-        amount: amountMg,
+        amount: amountUnits,
         kind: 'TRANSFER_RECEIVE',
         refType: payload.contextType ?? 'p2p_transfer',
         refId: payload.contextId ?? transferId,
@@ -26042,7 +27795,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
     await debitWalletSegmentBalance(client, {
       wallet: senderWallet,
       txId: walletTxId,
-      amountMg,
+      amountUnits,
       originCountry: policyDecision.senderCountry,
       metadata: {
         operation: 'transfer_send',
@@ -26054,7 +27807,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
     await creditWalletSegmentBalance(client, {
       wallet: recipientWallet,
       txId: walletTxId,
-      earnedCreditMg: amountMg,
+      earnedCreditUnits: amountUnits,
       originCountry: policyDecision.senderCountry,
       metadata: {
         operation: 'transfer_receive',
@@ -26074,12 +27827,12 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
         id: transferId,
         senderUserId,
         recipientUserId,
-        amountMg,
-        izeAmount: onezeAmountFromMg,
+        amountUnits,
+        izeAmount: onezeAmountFromUnits,
         fiatAmount,
         fiatCurrency,
         amountGbp: eligibilityAmountGbp,
-        ratePerGram: pricingQuote.buyPrice,
+        ratePerGram: pricingQuote.principalAmount,
         rateSource: `internal_pricing:${pricingQuote.countryCode}:buy`,
         fxRateToGbp: fxToGbp.rate,
         fxSourceToGbp: fxToGbp.source,
@@ -26096,10 +27849,10 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
       balances: {
         senderIze: senderIzeBalance,
         recipientIze: recipientIzeBalance,
-        senderWalletMg: senderBalanceAfterMg,
-        senderWalletOneze: mgToOnezeAmount(senderBalanceAfterMg),
-        recipientWalletMg: recipientBalanceAfterMg,
-        recipientWalletOneze: mgToOnezeAmount(recipientBalanceAfterMg),
+        senderWalletUnits: senderBalanceAfterUnits,
+        senderWalletOneze: unitsToOnezeAmount(senderBalanceAfterUnits),
+        recipientWalletUnits: recipientBalanceAfterUnits,
+        recipientWalletOneze: unitsToOnezeAmount(recipientBalanceAfterUnits),
       },
     };
 
@@ -26126,7 +27879,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
         fiatAmount,
         fiatCurrency,
         amountGbp: eligibilityAmountGbp,
-        amountMg,
+        amountUnits,
         senderCountry: policyDecision.senderCountry,
         recipientCountry: policyDecision.recipientCountry,
         contextType: payload.contextType ?? null,
@@ -26165,7 +27918,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
 app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
   const bodySchema = z.object({
     userId: z.string().min(2).optional(),
-    amountMg: z.number().int().positive().optional(),
+    amountUnits: z.number().int().positive().optional(),
     amountOneze: z.number().positive().optional(),
     targetCurrency: z.string().length(3).default('INR'),
     payoutDestination: z.record(z.unknown()).optional(),
@@ -26177,25 +27930,12 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
   const payload = bodySchema.parse(request.body ?? {});
   const actorUserId = resolveAuthenticatedUserId(request, payload.userId);
 
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze withdrawal quotes are permanently unavailable in closed-loop mode. Withdrawals must be created from completed sale proceeds via payout requests.',
-      code: 'ONEZE_WITHDRAWAL_DISABLED',
-      details: {
-        actorUserId,
-      },
-    };
-  }
-
-  const providedAmountCount = Number(payload.amountMg !== undefined) + Number(payload.amountOneze !== undefined);
+  const providedAmountCount = Number(payload.amountUnits !== undefined) + Number(payload.amountOneze !== undefined);
   if (providedAmountCount !== 1) {
     reply.code(400);
     return {
       ok: false,
-      error: 'Provide exactly one of amountMg or amountOneze',
+      error: 'Provide exactly one of amountUnits or amountOneze',
     };
   }
 
@@ -26228,16 +27968,16 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
     await client.query('BEGIN');
     await ensureUserExists(actorUserId);
 
-    const amountMg = payload.amountMg ?? onezeAmountToMg(Number((payload.amountOneze ?? 0).toFixed(6)));
-    if (!Number.isSafeInteger(amountMg) || amountMg <= 0) {
-      throw createApiError('WITHDRAWAL_AMOUNT_INVALID', 'Withdrawal amount cannot be represented safely in mg');
+    const amountUnits = payload.amountUnits ?? onezeAmountToUnits(Number((payload.amountOneze ?? 0).toFixed(6)));
+    if (!Number.isSafeInteger(amountUnits) || amountUnits <= 0) {
+      throw createApiError('WITHDRAWAL_AMOUNT_INVALID', 'Withdrawal amount cannot be represented safely in minor units');
     }
 
     const targetCurrency = payload.targetCurrency.toUpperCase();
     const idempotencyRequestHash = payload.idempotencyKey
       ? hashWalletIdempotencyPayload({
           userId: actorUserId,
-          amountMg,
+          amountUnits,
           targetCurrency,
           payoutDestination: payload.payoutDestination ?? {},
         })
@@ -26268,11 +28008,17 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
       forceRefresh: payload.forceRefresh,
     });
 
-    const amountOneze = mgToOnezeAmount(amountMg);
+    const amountOneze = unitsToOnezeAmount(amountUnits);
     const grossMinor = toFiatMinor(amountOneze * fxRate.rate, targetCurrency);
-    const spreadMinor = Math.round((grossMinor * Number(corridor.spread_bps)) / 10_000);
+    // ── Platform fee (transparent, separate line item) ──
+    // The platform spread is applied as a separate fee on the raw FX rate,
+    // not baked into the exchange rate. This prevents the double-fee problem
+    // (markdown + corridor spread).
+    const platformFeeBps = PLATFORM_CONVERT_FEE_BPS;
+    const platformFeeMinor = Math.round((grossMinor * platformFeeBps) / 10_000);
+    const corridorSpreadMinor = Math.round((grossMinor * Number(corridor.spread_bps)) / 10_000);
     const networkFeeMinor = Number(corridor.network_fee_minor);
-    const netMinor = grossMinor - spreadMinor - networkFeeMinor;
+    const netMinor = grossMinor - platformFeeMinor - corridorSpreadMinor - networkFeeMinor;
     const minAmountMinor = Number(corridor.min_amount_minor);
     const maxAmountMinor = Number(corridor.max_amount_minor);
 
@@ -26293,7 +28039,8 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
       throw createApiError('WITHDRAWAL_NET_AMOUNT_INVALID', 'Withdrawal net payout must be positive', {
         targetCurrency,
         grossMinor,
-        spreadMinor,
+        platformFeeMinor,
+        corridorSpreadMinor,
         networkFeeMinor,
         netMinor,
       });
@@ -26307,7 +28054,7 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
           id,
           user_id,
           burn_tx_id,
-          amount_mg,
+          amount_units,
           target_currency,
           gross_minor,
           spread_minor,
@@ -26343,7 +28090,7 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
           id,
           user_id,
           burn_tx_id,
-          amount_mg::text,
+          amount_units::text,
           target_currency,
           gross_minor::text,
           spread_minor::text,
@@ -26362,10 +28109,10 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
       [
         withdrawalId,
         actorUserId,
-        amountMg,
+        amountUnits,
         targetCurrency,
         grossMinor,
-        spreadMinor,
+        platformFeeMinor + corridorSpreadMinor,
         networkFeeMinor,
         netMinor,
         fxRate.rate,
@@ -26376,6 +28123,9 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
           quoteSource: fxRate.source,
           quoteObservedAt: fxRate.observedAt,
           quoteValidForSeconds: config.onezeWithdrawalQuoteTtlSeconds,
+          platformFeeBps,
+          platformFeeMinor,
+          corridorSpreadMinor,
           corridor: {
             currency: targetCurrency,
             rail: corridor.rail,
@@ -26395,6 +28145,11 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
         validForSeconds: config.onezeWithdrawalQuoteTtlSeconds,
         expiresAt: withdrawal.rateExpiresAt,
         source: fxRate.source,
+        fxRate: fxRate.rate,
+        principalMinor: grossMinor,
+        feeAmount: platformFeeMinor / 100,
+        feeBps: platformFeeBps,
+        netMinor,
       },
       corridor: {
         currency: targetCurrency,
@@ -26456,20 +28211,6 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
   const { withdrawalId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
   const actorUserId = resolveAuthenticatedUserId(request, payload.userId);
-
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze withdrawal accepts are permanently unavailable in closed-loop mode. Withdrawals must be created from completed sale proceeds via payout requests.',
-      code: 'ONEZE_WITHDRAWAL_DISABLED',
-      details: {
-        actorUserId,
-        withdrawalId,
-      },
-    };
-  }
 
   if (!(await onezeArchitectureTablesAvailable(db))) {
     reply.code(503);
@@ -26570,17 +28311,17 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
       });
     }
 
-    const amountMg = Number(withdrawal.amount_mg);
-    const requiresQueuedExecution = amountMg > config.onezeWithdrawalInstantLimitMg;
+    const amountUnits = Number(withdrawal.amount_units);
+    const requiresQueuedExecution = amountUnits > config.onezeWithdrawalInstantLimitUnits;
     const wallet = await ensureWallet(client, withdrawal.user_id, withdrawal.target_currency);
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, withdrawal.target_currency);
     const burnTxId = withdrawal.burn_tx_id ?? createRuntimeId('wdburn');
 
-    const walletBalanceAfterMg = await applyWalletLedgerDelta(client, {
+    const walletBalanceAfterUnits = await applyWalletLedgerDelta(client, {
       walletId: wallet.id,
       txId: burnTxId,
       asset: '1ZE',
-      amount: -amountMg,
+      amount: -amountUnits,
       kind: 'WITHDRAWAL_RESERVED',
       refType: 'withdrawal',
       refId: withdrawal.id,
@@ -26606,7 +28347,7 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
           id,
           user_id,
           burn_tx_id,
-          amount_mg::text,
+          amount_units::text,
           target_currency,
           gross_minor::text,
           spread_minor::text,
@@ -26639,13 +28380,13 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
       withdrawal: toWithdrawalPayload(updatedWithdrawal),
       wallet: {
         walletId: wallet.id,
-        onezeBalanceMg: walletBalanceAfterMg,
-        onezeBalance: mgToOnezeAmount(walletBalanceAfterMg),
+        onezeBalanceUnits: walletBalanceAfterUnits,
+        onezeBalance: unitsToOnezeAmount(walletBalanceAfterUnits),
       },
       execution: {
         mode: requiresQueuedExecution ? 'queued' : 'manual',
         queued: requiresQueuedExecution,
-        instantLimitMg: config.onezeWithdrawalInstantLimitMg,
+        instantLimitUnits: config.onezeWithdrawalInstantLimitUnits,
       },
     };
 
@@ -26721,20 +28462,6 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/execute', async (request, reply)
 
   const { withdrawalId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
-
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze withdrawal execution is permanently unavailable in closed-loop mode. Withdrawals must be created from completed sale proceeds via payout requests.',
-      code: 'ONEZE_WITHDRAWAL_DISABLED',
-      details: {
-        withdrawalId,
-        railRef: payload.railRef ?? null,
-      },
-    };
-  }
 
   if (!(await onezeArchitectureTablesAvailable(db))) {
     reply.code(503);
@@ -26814,20 +28541,6 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/fail', async (request, reply) =>
   const { withdrawalId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
 
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze withdrawal failure/reversal is permanently unavailable in closed-loop mode. Withdrawals must be created from completed sale proceeds via payout requests.',
-      code: 'ONEZE_WITHDRAWAL_DISABLED',
-      details: {
-        withdrawalId,
-        reason: payload.reason ?? null,
-      },
-    };
-  }
-
   if (!(await onezeArchitectureTablesAvailable(db))) {
     reply.code(503);
     return {
@@ -26861,18 +28574,18 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/fail', async (request, reply) =>
       });
     }
 
-    const amountMg = Number(withdrawal.amount_mg);
-    let walletInfo: { walletId: string; onezeBalanceMg: number; onezeBalance: number } | null = null;
+    const amountUnits = Number(withdrawal.amount_units);
+    let walletInfo: { walletId: string; onezeBalanceUnits: number; onezeBalance: number } | null = null;
 
     if (withdrawal.status === 'RESERVED') {
       const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, withdrawal.target_currency);
 
       const wallet = await ensureWallet(client, withdrawal.user_id, withdrawal.target_currency);
-      const walletBalanceAfterMg = await applyWalletLedgerDelta(client, {
+      const walletBalanceAfterUnits = await applyWalletLedgerDelta(client, {
         walletId: wallet.id,
         txId: withdrawal.burn_tx_id ?? createRuntimeId('wdburn'),
         asset: '1ZE',
-        amount: amountMg,
+        amount: amountUnits,
         kind: 'WITHDRAWAL_REVERSED',
         refType: 'withdrawal',
         refId: withdrawal.id,
@@ -26887,8 +28600,8 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/fail', async (request, reply) =>
 
       walletInfo = {
         walletId: wallet.id,
-        onezeBalanceMg: walletBalanceAfterMg,
-        onezeBalance: mgToOnezeAmount(walletBalanceAfterMg),
+        onezeBalanceUnits: walletBalanceAfterUnits,
+        onezeBalance: unitsToOnezeAmount(walletBalanceAfterUnits),
       };
     }
 
@@ -26904,7 +28617,7 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/fail', async (request, reply) =>
           id,
           user_id,
           burn_tx_id,
-          amount_mg::text,
+          amount_units::text,
           target_currency,
           gross_minor::text,
           spread_minor::text,
@@ -26975,21 +28688,6 @@ app.get('/wallet/1ze/:userId/withdrawals', async (request, reply) => {
   const { status, limit } = querySchema.parse(request.query);
   resolveAuthenticatedUserId(request, userId);
 
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze withdrawal history is permanently unavailable in closed-loop mode. Use payout request history for sale-proceeds withdrawals.',
-      code: 'ONEZE_WITHDRAWAL_DISABLED',
-      details: {
-        userId,
-        status,
-        limit,
-      },
-    };
-  }
-
   if (!(await onezeArchitectureTablesAvailable(db))) {
     reply.code(503);
     return {
@@ -27004,7 +28702,7 @@ app.get('/wallet/1ze/:userId/withdrawals', async (request, reply) => {
         id,
         user_id,
         burn_tx_id,
-        amount_mg::text,
+        amount_units::text,
         target_currency,
         gross_minor::text,
         spread_minor::text,
@@ -27067,14 +28765,14 @@ app.get('/wallet/1ze/:userId/balance', async (request, reply) => {
         : Promise.resolve(0),
       client.query<{
         id: string;
-        circulating_mg: string;
-        reserve_active_mg: string;
+        circulating_units: string;
+        reserve_active_units: string;
         within_invariant: boolean;
         metadata: Record<string, unknown>;
         created_at: string;
       }>(
         `
-          SELECT id, circulating_mg::text, reserve_active_mg::text, within_invariant, metadata, created_at::text
+          SELECT id, circulating_units::text, reserve_active_units::text, within_invariant, metadata, created_at::text
           FROM oneze_reconciliation_snapshots
           ORDER BY created_at DESC
           LIMIT 1
@@ -27086,9 +28784,9 @@ app.get('/wallet/1ze/:userId/balance', async (request, reply) => {
 
     const latestSnapshot = latestReconciliation.rows[0];
     const latestSnapshotMetadata = asObject(latestSnapshot?.metadata);
-    const computedSupplyDeltaMg =
+    const computedSupplyDeltaUnits =
       latestSnapshot
-        ? Number(latestSnapshot.circulating_mg) - Number(latestSnapshot.reserve_active_mg)
+        ? Number(latestSnapshot.circulating_units) - Number(latestSnapshot.reserve_active_units)
         : null;
     return {
       ok: true,
@@ -27098,18 +28796,18 @@ app.get('/wallet/1ze/:userId/balance', async (request, reply) => {
       reconciliation: latestSnapshot
         ? {
             id: latestSnapshot.id,
-            circulatingMg: Number(latestSnapshot.circulating_mg),
-            referenceSupplyMg: Number(latestSnapshot.reserve_active_mg),
-            supplyDeltaMg:
-              asFiniteNumber(latestSnapshotMetadata.supplyDeltaMg)
-              ?? computedSupplyDeltaMg,
-            toleranceMg: asFiniteNumber(latestSnapshotMetadata.toleranceMg),
-            operationalLiquidityMg: asFiniteNumber(latestSnapshotMetadata.operationalLiquidityMg),
-            configuredOperationalReserveMg: asFiniteNumber(
-              asObject(latestSnapshotMetadata.reservePolicy).configuredOperationalReserveMg
+            circulatingUnits: Number(latestSnapshot.circulating_units),
+            referenceSupplyUnits: Number(latestSnapshot.reserve_active_units),
+            supplyDeltaUnits:
+              asFiniteNumber(latestSnapshotMetadata.supplyDeltaUnits)
+              ?? computedSupplyDeltaUnits,
+            toleranceUnits: asFiniteNumber(latestSnapshotMetadata.toleranceUnits),
+            operationalLiquidityUnits: asFiniteNumber(latestSnapshotMetadata.operationalLiquidityUnits),
+            configuredOperationalReserveUnits: asFiniteNumber(
+              asObject(latestSnapshotMetadata.reservePolicy).configuredOperationalReserveUnits
             ),
-            reservedWithdrawalMg: asFiniteNumber(
-              asObject(latestSnapshotMetadata.reservePolicy).reservedWithdrawalMg
+            reservedWithdrawalUnits: asFiniteNumber(
+              asObject(latestSnapshotMetadata.reservePolicy).reservedWithdrawalUnits
             ),
             configuredReserveRatio: asFiniteNumber(
               asObject(latestSnapshotMetadata.reservePolicy).configuredReserveRatio
@@ -27129,7 +28827,7 @@ app.get('/wallet/1ze/:userId/balance', async (request, reply) => {
               typeof latestSnapshotMetadata.withinSupplyInvariant === 'boolean'
                 ? (latestSnapshotMetadata.withinSupplyInvariant as boolean)
                 : latestSnapshot.within_invariant,
-            reserveActiveMg: Number(latestSnapshot.reserve_active_mg),
+            reserveActiveUnits: Number(latestSnapshot.reserve_active_units),
             withinInvariant: latestSnapshot.within_invariant,
             createdAt: latestSnapshot.created_at,
           }
@@ -27326,9 +29024,9 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
     resolveCountryPricingQuoteByCurrency(db, fiatCurrency),
     getLedgerAccountBalance(db, 'user', userId, 'ize_wallet', 'IZE'),
     getPlatformIzeReserveSnapshot(db),
-    db.query<{ reserved_1ze_mg: string }>(
+    db.query<{ reserved_1ze_units: string }>(
       `
-        SELECT COALESCE(SUM(reserved_1ze_mg), 0)::text AS reserved_1ze_mg
+        SELECT COALESCE(SUM(reserved_1ze_units), 0)::text AS reserved_1ze_units
         FROM coown_order_reservations
         WHERE user_id = $1 AND status IN ('active', 'placed')
       `,
@@ -27360,13 +29058,13 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
     ),
     getOnezeMintBurnHaltState(),
   ]);
-  const reservedForOrdersMg = Number(reservedResult.rows[0]?.reserved_1ze_mg ?? 0);
-  const reservedForOrders = reservedForOrdersMg / 1000;
+  const reservedForOrdersUnits = Number(reservedResult.rows[0]?.reserved_1ze_units ?? 0);
+  const reservedForOrders = reservedForOrdersUnits / 1000;
   const redemptionInProgress = Number(redemptionResult.rows[0]?.redemption_ize ?? 0);
   const availableIze = Math.max(0, userIze - reservedForOrders);
   const settledCustomerClaim = userIze + redemptionInProgress;
   const serverTimestamp = new Date().toISOString();
-  const positionRate = fiatCurrency.toUpperCase() === 'GBP' ? 1 : pricingQuote.sellPrice;
+  const positionRate = fiatCurrency.toUpperCase() === 'GBP' ? 1 : pricingQuote.netRedemption;
 
   // ── WS4: Wallet safeguarding (backend-backed, no longer hardcoded) ──
   // Query the user's safeguarding profile. Default to safeguarded=false
@@ -27571,8 +29269,8 @@ registerMediaAssetRoutes({
   resolveAuthenticatedUserId,
   authorizeInternalServiceRequest,
 });
+registerMediaEnhancementRoutes({ app, db, resolveAuthenticatedUserId });
 registerModerationRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
-registerAppealsRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 registerModerationTriageRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
 registerRecommendationRoutes({
   app,
@@ -27581,6 +29279,36 @@ registerRecommendationRoutes({
   decisionServiceUrl: config.decisionServiceUrl,
   decisionServiceTimeoutMs: config.decisionServiceTimeoutMs,
   decisionServiceToken: config.decisionServiceToken,
+  resolveAuthenticatedUserId,
+});
+
+registerRecommendationIntentRoutes({
+  app,
+  db,
+  redis,
+  resolveAuthenticatedUserId,
+});
+
+registerAnalyticsRoutes({
+  app,
+  db,
+  redis,
+  createApiError,
+  resolveAuthenticatedUserId,
+});
+
+registerExperimentRoutes({
+  app,
+  db,
+  createApiError,
+  resolveAuthenticatedUserId,
+});
+
+registerFlagRoutes({
+  app,
+  db,
+  redis,
+  createApiError,
   resolveAuthenticatedUserId,
 });
 
@@ -29273,6 +31001,71 @@ app.get('/users/:userId/payout-requests/:requestId', async (request, reply) => {
   return {
     ok: true,
     payoutRequest: toPayoutRequestPayload(payoutRequest),
+  };
+});
+
+// ── Unknown-outcome reconciliation for payout requests ──────────────
+//
+// GET /users/:userId/payout-requests/lookup-by-key/:idempotencyKey
+//
+// When a client sends POST /users/:userId/payout-requests but the response
+// is lost (network timeout), the outcome is ambiguous — the payout may or
+// may not have been created. This endpoint resolves the ambiguity by looking
+// up the payout request by its idempotency key. Returns:
+//   - 200 { ok: true, status: 'acknowledged', payoutRequest }
+//   - 404 { ok: false, status: 'safe_to_retry' }
+app.get('/users/:userId/payout-requests/lookup-by-key/:idempotencyKey', async (request, reply) => {
+  const paramsSchema = z.object({
+    userId: z.string().min(2),
+    idempotencyKey: z.string().min(2).max(200),
+  });
+
+  const { userId, idempotencyKey } = paramsSchema.parse(request.params);
+  resolveAuthenticatedUserId(request, userId);
+
+  if (!(await paymentTablesAvailable(db))) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: 'Payment settlement tables are unavailable. Run migrations first.',
+    };
+  }
+
+  const result = await db.query<PayoutRequestRow>(
+    `
+      SELECT
+        id,
+        user_id,
+        payout_account_id,
+        amount_gbp,
+        amount_currency,
+        amount_minor,
+        currency_exponent,
+        money_registry_version,
+        money_conversion_trace,
+        money_quarantined,
+        status,
+        provider_payout_ref,
+        failure_reason,
+        metadata,
+        created_at,
+        updated_at
+      FROM payout_requests
+      WHERE user_id = $1 AND idempotency_key = $2
+      LIMIT 1
+    `,
+    [userId, idempotencyKey]
+  );
+
+  if (!result.rowCount) {
+    reply.code(404);
+    return { ok: false, status: 'safe_to_retry' as const };
+  }
+
+  return {
+    ok: true as const,
+    status: 'acknowledged' as const,
+    payoutRequest: toPayoutRequestPayload(result.rows[0]),
   };
 });
 
@@ -32746,7 +34539,7 @@ app.post('/payments/disputes/:disputeId/evidence', async (request, reply) => {
     // Submit evidence to the provider when supported.
     if (payload.submitToProvider && dispute.gateway_id === 'stripe_americas' && config.stripeSecretKey) {
       const stripe = new Stripe(config.stripeSecretKey, {
-        apiVersion: '2024-06-20',
+        apiVersion: '2026-08-26.dahlia',
       });
       try {
         const evidenceResponse = await stripe.disputes.update(
@@ -39163,6 +40956,114 @@ app.get('/co-own/policy', async () => ({
   policy: COOWN_POLICY,
 }));
 
+// ── Co-Own eligibility (authoritative, server-evidenced) ──
+// GET /co-own/eligibility/:assetId
+//
+// Returns a server-side eligibility decision for the authenticated user
+// against a specific Co-Own asset. This is the source of truth for the
+// frontend's disabled-state UI. It is ADVISORY for the UI only — every
+// money-mutating endpoint (order placement, buyout, reservation) re-runs
+// `evaluateMarketEligibility` transactionally inside its own DB transaction
+// and rejects on failure, so a tampered or stale client response can never
+// authorise a trade.
+//
+// The decision is short-lived (TTL below) so the frontend must re-fetch
+// before showing the trade ticket after the window expires.
+const CO_OWN_ELIGIBILITY_TTL_MS = 5 * 60_000; // 5 minutes
+
+app.get('/co-own/eligibility/:assetId', async (request, reply) => {
+  if (!request.authUser) {
+    reply.code(401);
+    return { ok: false, error: 'Unauthorized' };
+  }
+
+  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
+  const { assetId } = paramsSchema.parse(request.params);
+  const userId = request.authUser.userId;
+
+  const evaluatedAt = new Date();
+  const expiresAt = new Date(evaluatedAt.getTime() + CO_OWN_ELIGIBILITY_TTL_MS);
+
+  // Listing-status checks are server-owned and cannot be derived from
+  // client state. A missing or closed asset is never eligible.
+  const assetResult = await db.query<{ id: string; is_open: boolean; listing_tier: string }>(
+    `SELECT id, is_open, listing_tier FROM coOwn_assets WHERE id = $1`,
+    [assetId]
+  );
+  const asset = assetResult.rows[0];
+  if (!asset) {
+    return {
+      ok: true,
+      eligible: false,
+      reasonCodes: ['ASSET_NOT_FOUND'],
+      policyVersion: COMMERCE_POLICY_VERSION,
+      evaluatedAt: evaluatedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    };
+  }
+
+  const reasonCodes: string[] = [];
+  if (!asset.is_open) {
+    reasonCodes.push('ASSET_CLOSED');
+  }
+
+  // Compliance / jurisdiction / KYC / sanctions / limits. orderNotionalGbp
+  // is 0 for the standalone eligibility probe — per-order notional limits
+  // are re-evaluated transactionally at order placement time.
+  const decision = await evaluateMarketEligibility(db, {
+    userId,
+    market: 'co-own',
+    orderNotionalGbp: 0,
+  });
+
+  if (!decision.allowed) {
+    reasonCodes.push(decision.code);
+  }
+
+  // Prior-ownership check: a user who already holds 100% of the asset
+  // cannot buy more units (the backend enforces this at order time too).
+  if (asset.is_open && decision.allowed) {
+    const holdingsResult = await db.query<{ units_owned: string; total_units: number }>(
+      `SELECT h.units_owned::text AS units_owned, a.total_units
+         FROM coOwn_holdings h
+         JOIN coOwn_assets a ON a.id = h.asset_id
+        WHERE h.asset_id = $1 AND h.user_id = $2`,
+      [assetId, userId]
+    );
+    const held = Number(holdingsResult.rows[0]?.units_owned ?? 0);
+    const total = Math.max(1, holdingsResult.rows[0]?.total_units ?? 1);
+    if (held >= total) {
+      reasonCodes.push('ALREADY_FULL_OWNER');
+    }
+  }
+
+  // Build a UI-facing message from the first applicable reason. The
+  // authoritative message at execution time comes from the transactional
+  // re-evaluation, so this is purely for the disabled-state copy.
+  let message: string | undefined;
+  if (reasonCodes.length > 0) {
+    if (reasonCodes.includes('ASSET_NOT_FOUND')) {
+      message = 'Co-Own asset not found.';
+    } else if (reasonCodes.includes('ASSET_CLOSED')) {
+      message = 'Co-Own asset is closed for trading.';
+    } else if (reasonCodes.includes('ALREADY_FULL_OWNER')) {
+      message = 'You already own 100% of this asset.';
+    } else if (!decision.allowed) {
+      message = decision.message;
+    }
+  }
+
+  return {
+    ok: true,
+    eligible: reasonCodes.length === 0,
+    reasonCodes,
+    policyVersion: COMMERCE_POLICY_VERSION,
+    evaluatedAt: evaluatedAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    message,
+  };
+});
+
 app.get('/co-own/assets', async (request) => {
   const querySchema = z.object({
     openOnly: z.union([z.string(), z.boolean()]).optional(),
@@ -39269,7 +41170,7 @@ app.post('/co-own/assets', async (request, reply) => {
     totalUnits: z.number().int().min(1).max(COOWN_POLICY.maxIssuanceUnits),
     unitPriceGbp: z.number().positive(),
     unitPriceStable: z.number().positive(),
-    settlementMode: z.enum(['GBP', 'TVUSD', 'HYBRID', 'ONEZE']).default('ONEZE'),
+    settlementMode: z.literal('ONEZE'),
     issuerJurisdiction: z.string().min(2).max(10).optional(),
     // ── Trust profile (WS1) ──
     // legal_vehicle_type is required for new issuance (equity-market pattern:
@@ -39719,25 +41620,25 @@ async function applyCoOwnTransfer(
   // ── Atomic DvP settlement (1ZE payment side) ──
   // Delivery (units, above) and payment (1ZE, below) happen in the same
   // transaction. If either fails, the whole trade rolls back.
-  // 1ZE amounts are in milligrams (mg). 1 1ZE = 1000 mg.
+  // 1ZE amounts are in minor units. 1 1ZE = 1000 minor units.
   // Conversion: 1ZE ≈ 1 GBP (canonical rate per spec 10 §2).
-  const buyerPays1zeMg = Math.ceil(roundTo(notionalGbp + input.feeGbp, 4) * 1000);
-  const sellerReceives1zeMg = Math.floor(roundTo(Math.max(0, notionalGbp - input.feeGbp), 4) * 1000);
+  const buyerPays1zeUnits = Math.ceil(roundTo(notionalGbp + input.feeGbp, 4) * 1000);
+  const sellerReceives1zeUnits = Math.floor(roundTo(Math.max(0, notionalGbp - input.feeGbp), 4) * 1000);
 
-  if (buyerPays1zeMg > 0) {
+  if (buyerPays1zeUnits > 0) {
     // Debit buyer's wallet
-    const buyerWalletResult = await client.query<{ id: string; oneze_balance_mg: string }>(
-      `SELECT id, oneze_balance_mg::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
+    const buyerWalletResult = await client.query<{ id: string; oneze_balance_units: string }>(
+      `SELECT id, oneze_balance_units::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
       [input.buyerId]
     );
     const buyerWallet = buyerWalletResult.rows[0];
     if (!buyerWallet) {
       throw createApiError('WALLET_NOT_FOUND', 'Buyer wallet not found', { buyerId: input.buyerId });
     }
-    const buyerBalanceMg = Number(buyerWallet.oneze_balance_mg);
+    const buyerBalanceUnits = Number(buyerWallet.oneze_balance_units);
     const otherBuyReservationsResult = await client.query<{ total: string }>(
       `
-        SELECT COALESCE(SUM(reserved_1ze_mg), 0)::text AS total
+        SELECT COALESCE(SUM(reserved_1ze_units), 0)::text AS total
         FROM coown_order_reservations
         WHERE user_id = $1
           AND status IN ('active', 'placed')
@@ -39745,25 +41646,25 @@ async function applyCoOwnTransfer(
       `,
       [input.buyerId, input.buyOrderId ?? null]
     );
-    const protectedForOtherOrdersMg = Number(otherBuyReservationsResult.rows[0]?.total ?? 0);
-    const buyerAvailableMg = buyerBalanceMg - protectedForOtherOrdersMg;
-    if (buyerAvailableMg < buyerPays1zeMg) {
+    const protectedForOtherOrdersUnits = Number(otherBuyReservationsResult.rows[0]?.total ?? 0);
+    const buyerAvailableUnits = buyerBalanceUnits - protectedForOtherOrdersUnits;
+    if (buyerAvailableUnits < buyerPays1zeUnits) {
       throw createApiError(
         'INSUFFICIENT_1ZE_BALANCE',
         'Buyer has insufficient 1ZE balance for settlement',
         {
           buyerId: input.buyerId,
-          required1zeMg: buyerPays1zeMg,
-          available1zeMg: buyerAvailableMg,
+          required1zeUnits: buyerPays1zeUnits,
+          available1zeUnits: buyerAvailableUnits,
         }
       );
     }
 
-    const buyerBalanceAfter = buyerBalanceMg - buyerPays1zeMg;
+    const buyerBalanceAfter = buyerBalanceUnits - buyerPays1zeUnits;
     const tradeTxId = `coown_trade_${input.buyOrderId ?? 'x'}_${input.sellOrderId ?? 'x'}_${Date.now()}`;
 
     await client.query(
-      `UPDATE wallets SET oneze_balance_mg = $2, version = version + 1, updated_at = NOW() WHERE id = $1`,
+      `UPDATE wallets SET oneze_balance_units = $2, version = version + 1, updated_at = NOW() WHERE id = $1`,
       [buyerWallet.id, buyerBalanceAfter]
     );
 
@@ -39775,7 +41676,7 @@ async function applyCoOwnTransfer(
       [
         buyerWallet.id,
         tradeTxId,
-        -buyerPays1zeMg,
+        -buyerPays1zeUnits,
         buyerBalanceAfter,
         String(input.buyOrderId ?? ''),
         JSON.stringify({ assetId: input.assetId, units, side: 'buy', notionalGbp, feeGbp: input.feeGbp }),
@@ -39784,9 +41685,9 @@ async function applyCoOwnTransfer(
 
     // Credit the seller or issuing vehicle. Primary issuance must never debit
     // the buyer without a corresponding vehicle-side settlement credit.
-    if (sellerReceives1zeMg > 0) {
-      const sellerWalletResult = await client.query<{ id: string; oneze_balance_mg: string }>(
-        `SELECT id, oneze_balance_mg::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
+    if (sellerReceives1zeUnits > 0) {
+      const sellerWalletResult = await client.query<{ id: string; oneze_balance_units: string }>(
+        `SELECT id, oneze_balance_units::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
         [input.sellerId]
       );
       const sellerWallet = sellerWalletResult.rows[0];
@@ -39795,9 +41696,9 @@ async function applyCoOwnTransfer(
           sellerId: input.sellerId,
         });
       }
-      const sellerBalanceAfter = Number(sellerWallet.oneze_balance_mg) + sellerReceives1zeMg;
+      const sellerBalanceAfter = Number(sellerWallet.oneze_balance_units) + sellerReceives1zeUnits;
       await client.query(
-        `UPDATE wallets SET oneze_balance_mg = $2, version = version + 1, updated_at = NOW() WHERE id = $1`,
+        `UPDATE wallets SET oneze_balance_units = $2, version = version + 1, updated_at = NOW() WHERE id = $1`,
         [sellerWallet.id, sellerBalanceAfter]
       );
 
@@ -39809,7 +41710,7 @@ async function applyCoOwnTransfer(
         [
           sellerWallet.id,
           tradeTxId,
-          sellerReceives1zeMg,
+          sellerReceives1zeUnits,
           sellerBalanceAfter,
           String(input.sellOrderId ?? ''),
           JSON.stringify({ assetId: input.assetId, units, side: 'sell', notionalGbp, feeGbp: input.feeGbp }),
@@ -40144,8 +42045,18 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
     }>(
       `
         SELECT
-          COALESCE((SELECT MAX(id) FROM coOwn_orders WHERE asset_id = $1), 0)::text AS snapshot_sequence,
-          COALESCE((SELECT MAX(id) FROM coOwn_trades WHERE asset_id = $1), 0)::text AS event_sequence,
+          -- P0.3: Use the per-asset market_sequence instead of MAX(order.id).
+          -- MAX(order.id) does not advance on cancel, partial fill, or expiry,
+          -- so clients cannot detect book mutations that don't create new rows.
+          -- The market_sequence advances on EVERY book mutation.
+          COALESCE(
+            (SELECT next_sequence - 1 FROM coown_market_sequences WHERE asset_id = $1),
+            0
+          )::text AS snapshot_sequence,
+          COALESCE(
+            (SELECT MAX(market_sequence) FROM coOwn_trades WHERE asset_id = $1),
+            0
+          )::text AS event_sequence,
           (SELECT MAX(created_at)::text FROM coOwn_trades WHERE asset_id = $1) AS last_execution_timestamp
       `,
       [assetId]
@@ -40165,7 +42076,11 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
   return {
     ok: true,
     snapshotSequence: Number(sequencing?.snapshot_sequence ?? 0),
+    // P0.8: exact decimal string — sequences can exceed 2^53.
+    snapshotSequenceStr: String(sequencing?.snapshot_sequence ?? 0),
     eventSequence: Number(sequencing?.event_sequence ?? 0),
+    // P0.8: exact decimal string — sequences can exceed 2^53.
+    eventSequenceStr: String(sequencing?.event_sequence ?? 0),
     serverTimestamp: new Date().toISOString(),
     lastExecutionTimestamp: sequencing?.last_execution_timestamp ?? null,
     stalenessThresholdSeconds: 15,
@@ -40175,6 +42090,8 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
       .map((row) => ({
         side: row.side,
         unitPriceGbp: Number(row.unit_price_gbp),
+        // P0.8: exact decimal string from the DB NUMERIC value.
+        unitPriceGbpStr: formatGbp(row.unit_price_gbp),
         units: Number(row.units),
         orderCount: Number(row.order_count),
       })),
@@ -40183,6 +42100,8 @@ app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
       .map((row) => ({
         side: row.side,
         unitPriceGbp: Number(row.unit_price_gbp),
+        // P0.8: exact decimal string from the DB NUMERIC value.
+        unitPriceGbpStr: formatGbp(row.unit_price_gbp),
         units: Number(row.units),
         orderCount: Number(row.order_count),
       })),
@@ -40291,8 +42210,36 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
     userId: z.string().min(2),
     side: z.enum(['buy', 'sell']),
     units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
-    orderType: z.enum(['market', 'limit']).default('market'),
+    orderType: z.enum(['market', 'limit', 'protected_market']).default('market'),
     limitPriceGbp: z.number().positive().optional(),
+    // P0.1: protected_market uses maxPriceGbp (buy) or minPriceGbp (sell) as
+    // the protection cap — never limitPriceGbp, which is for resting limits.
+    maxPriceGbp: z.number().positive().optional(),
+    minPriceGbp: z.number().positive().optional(),
+  }).superRefine((value, ctx) => {
+    if (value.orderType === 'limit' && !value.limitPriceGbp) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'limitPriceGbp is required for limit orders',
+        path: ['limitPriceGbp'],
+      });
+    }
+    if (value.orderType === 'protected_market') {
+      if (value.side === 'buy' && !value.maxPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'maxPriceGbp is required for protected_market buy orders',
+          path: ['maxPriceGbp'],
+        });
+      }
+      if (value.side === 'sell' && !value.minPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'minPriceGbp is required for protected_market sell orders',
+          path: ['minPriceGbp'],
+        });
+      }
+    }
   });
 
   const { assetId } = paramsSchema.parse(request.params);
@@ -40326,13 +42273,32 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
   }
 
   const referencePriceGbp = Number(asset.unit_price_gbp);
+  // P0.1: protected_market uses the protection cap price (maxPriceGbp for
+  // buys, minPriceGbp for sells) as the worst acceptable price. The order
+  // walks the book like a market order but will not fill beyond this cap.
+  // If the cap cannot be honored, the remainder is cancelled (never uncapped).
+  const protectionCapGbp =
+    payload.orderType === 'protected_market'
+      ? payload.side === 'buy'
+        ? (payload.maxPriceGbp ?? null)
+        : (payload.minPriceGbp ?? null)
+      : null;
   const orderPriceGbp =
     payload.orderType === 'limit'
       ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
-      : referencePriceGbp;
+      : payload.orderType === 'protected_market' && protectionCapGbp
+        ? roundTo(protectionCapGbp, 4)
+        : referencePriceGbp;
 
-  // Query the real order book for the opposite side
+  // Query the real order book for the opposite side.
+  // For protected_market, the cap filters which resting orders are eligible:
+  //   buy  → only asks ≤ maxPriceGbp
+  //   sell → only bids ≥ minPriceGbp
   const oppositeSide = payload.side === 'buy' ? 'sell' : 'buy';
+  const priceFilter =
+    payload.orderType === 'limit'
+      ? (payload.limitPriceGbp ?? null)
+      : protectionCapGbp;
   const restingOrders = await db.query<{
     units: number;
     remaining_units: number;
@@ -40354,7 +42320,7 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
         CASE WHEN $4 = 'sell' THEN unit_price_gbp END DESC,
         id ASC
     `,
-    [assetId, oppositeSide, payload.orderType === 'limit' ? payload.limitPriceGbp : null, payload.side]
+    [assetId, oppositeSide, priceFilter, payload.side]
   );
 
   // Walk the book to estimate fill
@@ -40378,12 +42344,16 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
     filledUnits += fillUnits;
   }
 
-  // For buy market orders, also check primary issuance (issuer inventory)
+  // For buy market/protected_market orders, also check primary issuance
+  // (issuer inventory). For protected_market, the cap must be ≥ reference
+  // price for primary issuance to be eligible.
   if (
     payload.side === 'buy'
     && remainingUnits > 0
     && asset.available_units > 0
-    && (payload.orderType === 'market' || (payload.limitPriceGbp ?? 0) >= referencePriceGbp)
+    && (payload.orderType === 'market'
+      || (payload.orderType === 'protected_market' && (protectionCapGbp ?? 0) >= referencePriceGbp)
+      || (payload.orderType === 'limit' && (payload.limitPriceGbp ?? 0) >= referencePriceGbp))
   ) {
     const primaryFillUnits = Math.min(remainingUnits, asset.available_units);
     grossNotional = roundTo(grossNotional + primaryFillUnits * referencePriceGbp, 4);
@@ -40421,18 +42391,30 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
       units: payload.units,
       orderType: payload.orderType,
       limitPriceGbp: payload.limitPriceGbp ?? null,
+      // P0.1: return the protection cap for protected_market orders
+      protectionPriceGbp: protectionCapGbp ?? null,
+      // P0.8: exact decimal string variants of the monetary fields above.
+      protectionPriceGbpStr: protectionCapGbp != null ? formatGbp(protectionCapGbp) : null,
       referencePriceGbp,
+      referencePriceGbpStr: formatGbp(referencePriceGbp),
       orderPriceGbp,
+      orderPriceGbpStr: formatGbp(orderPriceGbp),
       estimatedFill: {
         filledUnits,
         remainingUnits: Math.max(0, remainingUnits),
         avgFillPrice,
+        // P0.8: exact decimal string variants of the estimated fill fields.
+        avgFillPriceStr: formatGbp(avgFillPrice),
         worstPrice,
+        worstPriceStr: formatGbp(worstPrice),
         grossNotional,
+        grossNotionalStr: formatGbp(grossNotional),
         slippageBeyondDepth,
       },
       fee,
+      feeStr: formatGbp(fee),
       total,
+      totalStr: formatGbp(total),
       feeRate: CO_OWN_TRADE_FEE_RATE,
       availableUnits: asset.available_units,
       totalUnits: asset.total_units,
@@ -40462,14 +42444,62 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
     userId: z.string().min(2),
     side: z.enum(['buy', 'sell']),
     units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
-    orderType: z.enum(['market', 'limit']).default('market'),
+    orderType: z.enum(['market', 'limit', 'protected_market']).default('market'),
     limitPriceGbp: z.number().positive().optional(),
+    // P0.1: protected_market protection cap
+    maxPriceGbp: z.number().positive().optional(),
+    minPriceGbp: z.number().positive().optional(),
     idempotencyKey: z.string().min(8).max(140).optional(),
+  }).superRefine((value, ctx) => {
+    if (value.orderType === 'protected_market') {
+      if (value.side === 'buy' && !value.maxPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'maxPriceGbp is required for protected_market buy orders',
+          path: ['maxPriceGbp'],
+        });
+      }
+      if (value.side === 'sell' && !value.minPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'minPriceGbp is required for protected_market sell orders',
+          path: ['minPriceGbp'],
+        });
+      }
+    }
   });
 
   const { assetId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body);
   await ensureUserExists(payload.userId);
+
+  // P0.6: Reservation idempotency — if a key is supplied, check for a prior
+  // response. A replayed request with the same key + same payload returns the
+  // original reservation. A replayed request with the same key but different
+  // payload is rejected as a key-reuse conflict.
+  const reservationIdempotencyHash = payload.idempotencyKey
+    ? hashCoOwnReservationPayload({
+        side: payload.side,
+        units: payload.units,
+        orderType: payload.orderType,
+        limitPriceGbp: payload.limitPriceGbp ?? null,
+        maxPriceGbp: payload.maxPriceGbp ?? null,
+        minPriceGbp: payload.minPriceGbp ?? null,
+      })
+    : null;
+
+  if (payload.idempotencyKey && reservationIdempotencyHash) {
+    const idempotentResponse = await getCoOwnReservationIdempotentResponse(db, {
+      assetId,
+      userId: payload.userId,
+      idempotencyKey: payload.idempotencyKey,
+      requestHash: reservationIdempotencyHash,
+    });
+    if (idempotentResponse) {
+      reply.code(200);
+      return idempotentResponse;
+    }
+  }
 
   const client = await db.connect();
   try {
@@ -40508,27 +42538,37 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
     }
 
     const referencePriceGbp = Number(asset.unit_price_gbp);
+    // P0.1: protected_market uses the protection cap as the worst-case price
+    // for reservation purposes. We reserve enough to cover the cap × units + fee.
+    const protectionCapGbp =
+      payload.orderType === 'protected_market'
+        ? payload.side === 'buy'
+          ? (payload.maxPriceGbp ?? null)
+          : (payload.minPriceGbp ?? null)
+        : null;
     const orderPriceGbp =
       payload.orderType === 'limit'
         ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
-        : referencePriceGbp;
+        : payload.orderType === 'protected_market' && protectionCapGbp
+          ? roundTo(protectionCapGbp, 4)
+          : referencePriceGbp;
     const grossNotional = roundTo(payload.units * orderPriceGbp, 4);
     const fee = roundTo(grossNotional * CO_OWN_TRADE_FEE_RATE, 4);
     const total = payload.side === 'buy' ? roundTo(grossNotional + fee, 4) : roundTo(Math.max(0, grossNotional - fee), 4);
 
-    let reserved1zeMg = 0;
+    let reserved1zeUnits = 0;
     let reservedUnits = 0;
 
     if (payload.side === 'buy') {
-      // Reserve 1ZE from the wallet (convert GBP notional to 1ZE mg)
+      // Reserve 1ZE from the wallet (convert GBP notional to 1ZE minor units)
       // 1ZE = 1000mg, and we use the asset's stable price for 1ZE conversion
       // For now, use the reference price as the 1ZE/GBP rate (1 1ZE ≈ 1 GBP)
       const reserve1ze = roundTo(total, 4); // 1ZE amount
-      reserved1zeMg = Math.ceil(reserve1ze * 1000); // convert to mg
+      reserved1zeUnits = Math.ceil(reserve1ze * 1000); // convert to minor units
 
       // Check wallet balance
-      const walletResult = await client.query<{ oneze_balance_mg: string }>(
-        `SELECT oneze_balance_mg::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
+      const walletResult = await client.query<{ oneze_balance_units: string }>(
+        `SELECT oneze_balance_units::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
         [payload.userId]
       );
       const wallet = walletResult.rows[0];
@@ -40541,21 +42581,21 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
       // Compute currently-reserved amount from other active reservations
       const otherReservedResult = await client.query<{ total: string }>(
         `
-          SELECT COALESCE(SUM(reserved_1ze_mg), 0)::text AS total
+          SELECT COALESCE(SUM(reserved_1ze_units), 0)::text AS total
           FROM coown_order_reservations
           WHERE user_id = $1 AND status IN ('active', 'placed') AND id <> $2
         `,
         [payload.userId, '']
       );
-      const otherReservedMg = Number(otherReservedResult.rows[0]?.total ?? 0);
-      const availableMg = Number(wallet.oneze_balance_mg) - otherReservedMg;
+      const otherReservedUnits = Number(otherReservedResult.rows[0]?.total ?? 0);
+      const availableUnits = Number(wallet.oneze_balance_units) - otherReservedUnits;
 
-      if (availableMg < reserved1zeMg) {
+      if (availableUnits < reserved1zeUnits) {
         await client.query('ROLLBACK');
         reply.code(409);
         return {
           ok: false,
-          error: `Insufficient 1ZE balance. Required: ${(reserved1zeMg / 1000).toFixed(2)} 1ZE, available: ${(availableMg / 1000).toFixed(2)} 1ZE`,
+          error: `Insufficient 1ZE balance. Required: ${(reserved1zeUnits / 1000).toFixed(2)} 1ZE, available: ${(availableUnits / 1000).toFixed(2)} 1ZE`,
           code: 'INSUFFICIENT_1ZE',
         };
       }
@@ -40599,7 +42639,7 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
       `
         INSERT INTO coown_order_reservations (
           id, user_id, asset_id, side,
-          reserved_1ze_mg, reserved_units,
+          reserved_1ze_units, reserved_units,
           reference_price_gbp, estimated_total_gbp, estimated_fee_gbp,
           expires_at, status
         )
@@ -40610,7 +42650,7 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
         payload.userId,
         assetId,
         payload.side,
-        reserved1zeMg,
+        reserved1zeUnits,
         reservedUnits,
         referencePriceGbp,
         total,
@@ -40619,25 +42659,49 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
       ]
     );
 
-    await client.query('COMMIT');
-
+    // P0.6: Build the response body before commit so the idempotent receipt
+    // can be saved atomically in the same transaction.
     reply.code(201);
-    return {
+    const reservationResponseBody = {
       ok: true,
       reservation: {
         id: reservationId,
         assetId,
         userId: payload.userId,
         side: payload.side,
-        reserved1zeMg,
+        reserved1zeUnits,
+        // P0.8: exact decimal string — 1ZE minor unit is an integer but can be large.
+        reserved1zeUnitsStr: String(reserved1zeUnits),
         reservedUnits,
         referencePriceGbp,
+        // P0.8: exact decimal string variants of the monetary estimates.
+        referencePriceGbpStr: formatGbp(referencePriceGbp),
         estimatedTotalGbp: total,
+        estimatedTotalGbpStr: formatGbp(total),
         estimatedFeeGbp: fee,
+        estimatedFeeGbpStr: formatGbp(fee),
         expiresAt: expiresAt.toISOString(),
         status: 'active',
       },
     };
+
+    // P0.6: Save the idempotent response inside the transaction — atomic with
+    // the reservation commit. A crash after COMMIT but before a post-commit
+    // save would leave a committed reservation without a dedupe receipt.
+    if (payload.idempotencyKey && reservationIdempotencyHash) {
+      await saveCoOwnReservationIdempotentResponse(client, {
+        assetId,
+        userId: payload.userId,
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: reservationIdempotencyHash,
+        responseStatus: 201,
+        responseBody: reservationResponseBody,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    return reservationResponseBody;
   } catch (error) {
     await client.query('ROLLBACK');
     reply.code(500);
@@ -40651,6 +42715,8 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
 });
 
 // Cancel a reservation (release the held funds/units)
+// P0.5: Owner-bound — only the reservation owner can cancel. The actor is
+// derived from request.authUser, never from the request body or URL.
 app.delete('/co-own/assets/:assetId/orders/reserve/:reservationId', async (request, reply) => {
   const paramsSchema = z.object({
     assetId: z.string().min(2),
@@ -40658,17 +42724,35 @@ app.delete('/co-own/assets/:assetId/orders/reserve/:reservationId', async (reque
   });
   const { assetId, reservationId } = paramsSchema.parse(request.params);
 
+  // P0.5: Derive the actor from the auth token. If not authenticated, reject.
+  const actorUserId = request.authUser?.userId;
+  if (!actorUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required to cancel a reservation' };
+  }
+
+  // P0.5: Bind cancellation to the owner. Only the user who created the
+  // reservation can cancel it — prevents reservation theft/cancel by another user.
   const result = await db.query(
     `
       UPDATE coown_order_reservations
       SET status = 'cancelled', updated_at = NOW()
-      WHERE id = $1 AND asset_id = $2 AND status = 'active'
+      WHERE id = $1 AND asset_id = $2 AND user_id = $3 AND status = 'active'
       RETURNING id
     `,
-    [reservationId, assetId]
+    [reservationId, assetId, actorUserId]
   );
 
   if (result.rows.length === 0) {
+    // Check if the reservation exists at all but belongs to another user
+    const existing = await db.query<{ user_id: string; status: string }>(
+      `SELECT user_id, status FROM coown_order_reservations WHERE id = $1 AND asset_id = $2`,
+      [reservationId, assetId]
+    );
+    if (existing.rows[0] && existing.rows[0].user_id !== actorUserId) {
+      reply.code(403);
+      return { ok: false, error: 'Only the reservation owner can cancel it' };
+    }
     reply.code(404);
     return { ok: false, error: 'Reservation not found or already released' };
   }
@@ -40683,8 +42767,11 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     userId: z.string().min(2),
     side: z.enum(['buy', 'sell']),
     units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
-    orderType: z.enum(['market', 'limit']).default('market'),
+    orderType: z.enum(['market', 'limit', 'protected_market']).default('market'),
     limitPriceGbp: z.number().positive().optional(),
+    // P0.1: protected_market protection cap
+    maxPriceGbp: z.number().positive().optional(),
+    minPriceGbp: z.number().positive().optional(),
     reservationId: z.string().min(8).max(160),
     idempotencyKey: z.string().min(8).max(140).optional(),
   }).superRefine((value, ctx) => {
@@ -40703,6 +42790,32 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         path: ['limitPriceGbp'],
       });
     }
+
+    // P0.1: protected_market must not carry limitPriceGbp; the cap lives
+    // in maxPriceGbp (buy) / minPriceGbp (sell).
+    if (value.orderType === 'protected_market') {
+      if (value.limitPriceGbp !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'protected_market orders use maxPriceGbp/minPriceGbp, not limitPriceGbp',
+          path: ['limitPriceGbp'],
+        });
+      }
+      if (value.side === 'buy' && !value.maxPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'maxPriceGbp is required for protected_market buy orders',
+          path: ['maxPriceGbp'],
+        });
+      }
+      if (value.side === 'sell' && !value.minPriceGbp) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'minPriceGbp is required for protected_market sell orders',
+          path: ['minPriceGbp'],
+        });
+      }
+    }
   });
 
   const { assetId } = paramsSchema.parse(request.params);
@@ -40720,6 +42833,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         units: payload.units,
         orderType: payload.orderType,
         limitPriceGbp: payload.limitPriceGbp ?? null,
+        maxPriceGbp: payload.maxPriceGbp ?? null,
+        minPriceGbp: payload.minPriceGbp ?? null,
         reservationId: payload.reservationId,
       })
     : null;
@@ -40750,6 +42865,63 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
   let amlAlert: { alertId: string; status: string } | null = null;
   try {
     await client.query('BEGIN');
+
+    // ── Command lifecycle: insert PENDING row for unknown-result lookup ──
+    // The coown_order_commands table tracks the pending→acknowledged
+    // lifecycle so the lookup-by-key endpoint can tell a client whether
+    // their order is still processing or has been committed. The row is
+    // written inside this transaction so it rolls back if the order fails
+    // and is atomically promoted to 'acknowledged' before COMMIT.
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      const commandInsert = await client.query<{ id: string; status: string }>(
+        `
+          INSERT INTO coown_order_commands (asset_id, actor_id, idempotency_key, request_hash, status)
+          VALUES ($1, $2, $3, $4, 'pending')
+          ON CONFLICT (asset_id, idempotency_key) DO NOTHING
+          RETURNING id, status
+        `,
+        [assetId, payload.userId, payload.idempotencyKey, idempotencyRequestHash]
+      );
+
+      if (commandInsert.rows.length === 0) {
+        // A concurrent command with the same key already exists. Inspect
+        // its status to decide how to respond without double-processing.
+        const existingCommand = await client.query<{
+          status: string;
+          order_id: string | null;
+          response_code: number | null;
+          response_body: Record<string, unknown> | null;
+        }>(
+          `
+            SELECT status, order_id, response_code, response_body
+            FROM coown_order_commands
+            WHERE asset_id = $1 AND idempotency_key = $2
+            LIMIT 1
+          `,
+          [assetId, payload.idempotencyKey]
+        );
+
+        const existing = existingCommand.rows[0];
+        if (existing && (existing.status === 'acknowledged' || existing.status === 'completed')) {
+          // The command was already completed — replay the stored response.
+          await client.query('ROLLBACK');
+          reply.code(existing.response_code ?? 200);
+          return {
+            ok: true,
+            status: 'acknowledged',
+            ...(existing.response_body as Record<string, unknown> ?? {}),
+          };
+        }
+
+        if (existing && existing.status === 'pending') {
+          // Another request is actively handling this key — tell the
+          // client to poll.
+          await client.query('ROLLBACK');
+          reply.code(202);
+          return { ok: true, status: 'processing' };
+        }
+      }
+    }
 
     const assetResult = await client.query<{
       id: string;
@@ -40798,7 +42970,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       user_id: string;
       asset_id: string;
       side: 'buy' | 'sell';
-      reserved_1ze_mg: string;
+      reserved_1ze_units: string;
       reserved_units: number;
       expires_at: string;
       status: string;
@@ -40809,7 +42981,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           user_id,
           asset_id,
           side,
-          reserved_1ze_mg::text,
+          reserved_1ze_units::text,
           reserved_units,
           expires_at::text,
           status
@@ -40837,16 +43009,26 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     }
 
     const referencePriceGbp = Number(asset.unit_price_gbp);
+    // P0.1: protected_market uses the protection cap as the worst-case price
+    // for reservation sufficiency checking.
+    const protectionCapGbp =
+      payload.orderType === 'protected_market'
+        ? payload.side === 'buy'
+          ? (payload.maxPriceGbp ?? null)
+          : (payload.minPriceGbp ?? null)
+        : null;
     const proposedUnitPrice =
       payload.orderType === 'limit'
         ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
-        : referencePriceGbp;
+        : payload.orderType === 'protected_market' && protectionCapGbp
+          ? roundTo(protectionCapGbp, 4)
+          : referencePriceGbp;
     const proposedNotionalGbp = roundTo(Math.max(0, payload.units) * proposedUnitPrice, 2);
-    const requiredBuyReservationMg = Math.ceil(
+    const requiredBuyReservationUnits = Math.ceil(
       roundTo(proposedNotionalGbp * (1 + CO_OWN_TRADE_FEE_RATE), 4) * 1000
     );
     const reservationIsInsufficient = payload.side === 'buy'
-      ? Number(reservation.reserved_1ze_mg) < requiredBuyReservationMg
+      ? Number(reservation.reserved_1ze_units) < requiredBuyReservationUnits
       : Number(reservation.reserved_units) < payload.units;
     if (reservationIsInsufficient) {
       await client.query('ROLLBACK');
@@ -40886,6 +43068,38 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         ok: false,
         error: eligibility.message,
         code: eligibility.code,
+      };
+    }
+
+    // Compliance gate: verify the user is permitted to settle a co-own trade.
+    const settlementCapability = await evaluateWalletCapability(client, payload.userId, 'settlement', {
+      amountUsd: proposedNotionalGbp,
+      currency: 'GBP',
+      market: 'co-own',
+    });
+    if (!settlementCapability.allowed) {
+      await client.query('ROLLBACK');
+
+      await appendComplianceAuditSafe(request, {
+        eventType: 'co-own.order.blocked.wallet_capability',
+        subjectUserId: payload.userId,
+        payload: {
+          assetId,
+          side: payload.side,
+          units: payload.units,
+          orderType: payload.orderType,
+          orderNotionalGbp: proposedNotionalGbp,
+          capability: 'settlement',
+          code: settlementCapability.code,
+          reason: settlementCapability.reason,
+        },
+      });
+
+      reply.code(403);
+      return {
+        ok: false,
+        error: settlementCapability.reason ?? 'Wallet capability check failed',
+        code: settlementCapability.code,
       };
     }
 
@@ -40958,7 +43172,20 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     }
 
     const orderPriceGbp =
-      payload.orderType === 'limit' ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4) : referencePriceGbp;
+      payload.orderType === 'limit'
+        ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
+        : payload.orderType === 'protected_market' && protectionCapGbp
+          ? roundTo(protectionCapGbp, 4)
+          : referencePriceGbp;
+
+    // P0.3: Allocate a market sequence for this book mutation (new order).
+    const orderMarketSeq = await allocateMarketSequence(client, assetId);
+
+    // Phase 2: Track touched price levels for the book delta emission.
+    // Matched resting orders sit on the opposing side; we collect their
+    // price levels so the aggregate state can be queried after the match.
+    const touchedOpposingLevels = new Map<string, { side: 'buy' | 'sell'; price: number }>();
+    let lastMarketSeq = orderMarketSeq;
 
     const orderResult = await client.query<{
       id: number;
@@ -40978,6 +43205,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           side,
           order_type,
           limit_price_gbp,
+          protection_price_gbp,
           units,
           remaining_units,
           filled_units,
@@ -40985,9 +43213,10 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           fee_gbp,
           total_gbp,
           updated_at,
-          status
+          status,
+          market_sequence
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $6, 0, $7, 0, 0, NOW(), 'open')
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $7, 0, $8, 0, 0, NOW(), 'open', $9)
         RETURNING id, side, units, remaining_units, filled_units, unit_price_gbp::text, fee_gbp::text, total_gbp::text, created_at
       `,
       [
@@ -40996,8 +43225,11 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         payload.side,
         payload.orderType,
         payload.orderType === 'limit' ? payload.limitPriceGbp : null,
+        // P0.1: protected_market stores the cap in protection_price_gbp
+        payload.orderType === 'protected_market' ? (protectionCapGbp ?? null) : null,
         payload.units,
         orderPriceGbp,
+        orderMarketSeq,
       ]
     );
 
@@ -41044,6 +43276,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           AND side = $2
           AND status IN ('open', 'partially_filled')
           AND id <> $3
+          -- P0: STP — skip own orders to prevent wash trades
+          AND user_id <> $6
           AND (
             $4::numeric IS NULL
             OR (
@@ -41063,8 +43297,15 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         assetId,
         payload.side === 'buy' ? 'sell' : 'buy',
         incomingOrderId,
-        payload.orderType === 'limit' ? payload.limitPriceGbp : null,
+        // P0.1: protected_market uses the protection cap as the price filter
+        payload.orderType === 'limit'
+          ? (payload.limitPriceGbp ?? null)
+          : payload.orderType === 'protected_market'
+            ? (protectionCapGbp ?? null)
+            : null,
         payload.side,
+        // P0: STP — skip own orders to prevent wash trades
+        payload.userId,
       ]
     );
 
@@ -41128,6 +43369,12 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       const restingTotalAfter = roundTo(Number(resting.total_gbp) + restingTradeNet, 4);
       const restingFeeAfter = roundTo(Number(resting.fee_gbp) + tradeFee, 4);
 
+      // P0.3: Each fill is a book mutation — advance the market sequence.
+      const fillMarketSeq = await allocateMarketSequence(client, assetId);
+      const restingPrice = Number(resting.unit_price_gbp);
+      touchedOpposingLevels.set(`${resting.side}:${restingPrice}`, { side: resting.side, price: restingPrice });
+      lastMarketSeq = fillMarketSeq;
+
       await client.query(
         `
           UPDATE coOwn_orders
@@ -41137,7 +43384,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
             fee_gbp = $4,
             total_gbp = $5,
             status = $6,
-            updated_at = NOW()
+            updated_at = NOW(),
+            market_sequence = $7
           WHERE id = $1
         `,
         [
@@ -41147,27 +43395,30 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
           restingFeeAfter,
           restingTotalAfter,
           restingStatus,
+          fillMarketSeq,
         ]
       );
 
-      const restingReserve1zeMg = resting.side === 'buy'
+      const restingReserve1zeUnits = resting.side === 'buy'
         ? Math.ceil(roundTo(restingRemainingAfter * Number(resting.unit_price_gbp) * (1 + CO_OWN_TRADE_FEE_RATE), 4) * 1000)
         : 0;
       const restingReserveUnits = resting.side === 'sell' ? Math.max(0, restingRemainingAfter) : 0;
       await client.query(
         `
           UPDATE coown_order_reservations
-          SET reserved_1ze_mg = $2, reserved_units = $3, updated_at = NOW()
+          SET reserved_1ze_units = $2, reserved_units = $3, updated_at = NOW()
           WHERE placed_order_id = $1 AND status = 'placed'
         `,
-        [resting.id, restingReserve1zeMg, restingReserveUnits]
+        [resting.id, restingReserve1zeUnits, restingReserveUnits]
       );
     }
 
     if (
       payload.side === 'buy'
       && remainingUnits > 0
-      && (payload.orderType === 'market' || (payload.limitPriceGbp ?? 0) >= referencePriceGbp)
+      && (payload.orderType === 'market'
+        || (payload.orderType === 'protected_market' && (protectionCapGbp ?? 0) >= referencePriceGbp)
+        || (payload.orderType === 'limit' && (payload.limitPriceGbp ?? 0) >= referencePriceGbp))
       && nextAvailableUnits > 0
     ) {
       const primaryFillUnits = Math.min(remainingUnits, nextAvailableUnits);
@@ -41201,9 +43452,20 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     let orderStatus: CoOwnOrderStatus;
     let persistedRemainingUnits = Math.max(0, remainingUnits);
 
-    if (payload.orderType === 'market') {
-      orderStatus = filledUnits > 0 ? 'filled' : 'rejected';
-      persistedRemainingUnits = 0;
+    // P0.1: protected_market behaves like market for status purposes —
+    // it fills what it can within the cap and cancels the remainder.
+    // It never rests on the book as an open order.
+    if (payload.orderType === 'market' || payload.orderType === 'protected_market') {
+      if (filledUnits > 0 && remainingUnits > 0) {
+        orderStatus = 'partially_filled';
+        persistedRemainingUnits = 0; // remainder cancelled, not resting
+      } else if (filledUnits > 0) {
+        orderStatus = 'filled';
+        persistedRemainingUnits = 0;
+      } else {
+        orderStatus = 'rejected';
+        persistedRemainingUnits = 0;
+      }
     } else if (filledUnits === 0) {
       orderStatus = 'open';
     } else if (remainingUnits > 0) {
@@ -41240,18 +43502,81 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       [incomingOrderId, persistedRemainingUnits, filledUnits, tradedFeeGbp, orderTotalGbp, orderStatus]
     );
 
-    const incomingReserve1zeMg = payload.side === 'buy'
+    const incomingReserve1zeUnits = payload.side === 'buy'
       ? Math.ceil(roundTo(persistedRemainingUnits * orderPriceGbp * (1 + CO_OWN_TRADE_FEE_RATE), 4) * 1000)
       : 0;
     const incomingReserveUnits = payload.side === 'sell' ? persistedRemainingUnits : 0;
     await client.query(
       `
         UPDATE coown_order_reservations
-        SET reserved_1ze_mg = $2, reserved_units = $3, updated_at = NOW()
+        SET reserved_1ze_units = $2, reserved_units = $3, updated_at = NOW()
         WHERE id = $1 AND placed_order_id = $4 AND status = 'placed'
       `,
-      [payload.reservationId, incomingReserve1zeMg, incomingReserveUnits, incomingOrderId]
+      [payload.reservationId, incomingReserve1zeUnits, incomingReserveUnits, incomingOrderId]
     );
+
+    // Phase 2: Build the book delta changes for realtime emission.
+    // The incoming order rests on its side if it has remaining units and
+    // an open/partially_filled status. Matched opposing levels are queried
+    // for their aggregate state so clients receive accurate level totals.
+    const bookDeltaChanges: Array<{
+      side: 'buy' | 'sell';
+      priceGbp: number;
+      priceGbpStr: string;
+      units: number;
+      orderCount: number;
+    }> = [];
+
+    if (persistedRemainingUnits > 0 && (orderStatus === 'open' || orderStatus === 'partially_filled')) {
+      bookDeltaChanges.push({
+        side: payload.side,
+        priceGbp: orderPriceGbp,
+        priceGbpStr: formatGbp(orderPriceGbp),
+        units: persistedRemainingUnits,
+        orderCount: 1,
+      });
+    }
+
+    if (touchedOpposingLevels.size > 0) {
+      const opposingSide = payload.side === 'buy' ? 'sell' : 'buy';
+      const touchedPrices = Array.from(touchedOpposingLevels.values()).map((l) => l.price);
+      const levelResult = await client.query<{
+        side: 'buy' | 'sell';
+        unit_price_gbp: string;
+        units: string;
+        order_count: string;
+      }>(
+        `
+          SELECT side, unit_price_gbp::text, SUM(remaining_units)::text AS units, COUNT(*)::text AS order_count
+          FROM coOwn_orders
+          WHERE asset_id = $1 AND side = $2 AND status IN ('open', 'partially_filled') AND remaining_units > 0
+            AND unit_price_gbp = ANY($3::numeric[])
+          GROUP BY side, unit_price_gbp
+        `,
+        [assetId, opposingSide, touchedPrices]
+      );
+      for (const row of levelResult.rows) {
+        bookDeltaChanges.push({
+          side: row.side,
+          priceGbp: Number(row.unit_price_gbp),
+          priceGbpStr: row.unit_price_gbp,
+          units: Number(row.units),
+          orderCount: Number(row.order_count),
+        });
+      }
+      // Emit drained levels (no remaining orders) as zero so clients remove them.
+      for (const level of touchedOpposingLevels.values()) {
+        if (!levelResult.rows.some((r) => Number(r.unit_price_gbp) === level.price)) {
+          bookDeltaChanges.push({
+            side: level.side,
+            priceGbp: level.price,
+            priceGbpStr: formatGbp(level.price),
+            units: 0,
+            orderCount: 0,
+          });
+        }
+      }
+    }
 
     const marketStatsResult = await client.query<{
       volume_24h_gbp: string;
@@ -41343,6 +43668,84 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       });
     }
 
+    // P0.7: Construct the response body BEFORE commit so the idempotent
+    // response can be saved atomically in the same transaction. This
+    // eliminates the post-commit gap where a crash could commit the order
+    // but lose the dedupe receipt, leaving a retry without a response.
+    reply.code(201);
+    const responseBody = {
+      ok: true,
+      order: {
+        id: incomingOrder.rows[0].id,
+        assetId,
+        userId: payload.userId,
+        side: payload.side,
+        orderType: payload.orderType,
+        limitPriceGbp: payload.limitPriceGbp ?? null,
+        // P0.1: return the protection cap for protected_market orders
+        protectionPriceGbp: payload.orderType === 'protected_market' ? (protectionCapGbp ?? null) : null,
+        units: payload.units,
+        filledUnits: incomingOrder.rows[0].filled_units,
+        remainingUnits: incomingOrder.rows[0].remaining_units,
+        unitPriceGbp: orderPriceGbp,
+        // P0.8: exact decimal string variants of the order monetary fields.
+        unitPriceGbpStr: formatGbp(orderPriceGbp),
+        feeGbp: tradedFeeGbp,
+        feeGbpStr: formatGbp(tradedFeeGbp),
+        totalGbp: orderTotalGbp,
+        totalGbpStr: formatGbp(orderTotalGbp),
+        status: incomingOrder.rows[0].status,
+        createdAt: incomingOrder.rows[0].created_at,
+        updatedAt: incomingOrder.rows[0].updated_at,
+      },
+      asset: {
+        id: updatedAssetResult.rows[0].id,
+        availableUnits: updatedAssetResult.rows[0].available_units,
+        holders: updatedAssetResult.rows[0].holders,
+        volume24hGbp: updatedAssetResult.rows[0].volume_24h_gbp == null ? null : Number(updatedAssetResult.rows[0].volume_24h_gbp),
+        unitPriceGbp: Number(updatedAssetResult.rows[0].unit_price_gbp),
+        unitPriceStable: Number(updatedAssetResult.rows[0].unit_price_stable),
+        marketMovePct24h: updatedAssetResult.rows[0].market_move_pct_24h == null ? null : Number(updatedAssetResult.rows[0].market_move_pct_24h),
+        updatedAt: updatedAssetResult.rows[0].updated_at,
+      },
+      aml: amlAlert
+        ? {
+          alertId: amlAlert.alertId,
+          status: amlAlert.status,
+        }
+        : null,
+    };
+
+    // P0.7: Save idempotent response INSIDE the transaction — atomic with
+    // the order commit. A crash after COMMIT but before the old post-commit
+    // save would leave a committed order without a dedupe receipt. Now the
+    // receipt and the order commit or roll back together.
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      await saveCoOwnOrderIdempotentResponse(client, {
+        assetId,
+        userId: payload.userId,
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: idempotencyRequestHash,
+        responseStatus: 201,
+        responseBody,
+      });
+    }
+
+    // ── Command lifecycle: mark command as ACKNOWLEDGED ──
+    // Atomically with the order commit, transition the command row from
+    // pending → acknowledged so the lookup-by-key endpoint stops returning
+    // 202 and can replay the stored response on future lookups.
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      await client.query(
+        `
+          UPDATE coown_order_commands
+          SET status = 'acknowledged', order_id = $2, response_code = 200, response_body = $3, completed_at = NOW()
+          WHERE asset_id = $1 AND idempotency_key = $4
+        `,
+        [assetId, String(incomingOrder.rows[0].id), JSON.stringify(responseBody), payload.idempotencyKey]
+      );
+    }
+
     await client.query('COMMIT');
 
     // ── GAP 1 fix: Write market audit event for the order ──
@@ -41410,6 +43813,30 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       });
     }
 
+    // Phase 2: Emit book delta for realtime orderbook subscribers.
+    // Clients subscribed to co-own.asset:{assetId} receive sequenced
+    // level changes and can apply them incrementally instead of re-fetching
+    // the full snapshot after every trade.
+    if (bookDeltaChanges.length > 0) {
+      try {
+        await publishRealtimeEvent({
+          topic: `co-own.asset:${assetId}`,
+          type: 'co-own.book-delta',
+          payload: {
+            type: 'co-own.book-delta',
+            assetId,
+            sequence: lastMarketSeq,
+            changes: bookDeltaChanges,
+            serverTimestamp: new Date().toISOString(),
+          },
+          seq: true,
+          version: 1,
+        });
+      } catch {
+        // Delta emission is best-effort — don't fail the order if WS broadcast fails.
+      }
+    }
+
     await appendComplianceAuditSafe(request, {
       eventType: 'co-own.order.created',
       subjectUserId: payload.userId,
@@ -41425,57 +43852,6 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         amlAlertId: amlAlert?.alertId ?? null,
       },
     });
-
-    reply.code(201);
-    const responseBody = {
-      ok: true,
-      order: {
-        id: incomingOrder.rows[0].id,
-        assetId,
-        userId: payload.userId,
-        side: payload.side,
-        orderType: payload.orderType,
-        limitPriceGbp: payload.limitPriceGbp ?? null,
-        units: payload.units,
-        filledUnits: incomingOrder.rows[0].filled_units,
-        remainingUnits: incomingOrder.rows[0].remaining_units,
-        unitPriceGbp: orderPriceGbp,
-        feeGbp: tradedFeeGbp,
-        totalGbp: orderTotalGbp,
-        status: incomingOrder.rows[0].status,
-        createdAt: incomingOrder.rows[0].created_at,
-        updatedAt: incomingOrder.rows[0].updated_at,
-      },
-      asset: {
-        id: updatedAssetResult.rows[0].id,
-        availableUnits: updatedAssetResult.rows[0].available_units,
-        holders: updatedAssetResult.rows[0].holders,
-        volume24hGbp: updatedAssetResult.rows[0].volume_24h_gbp == null ? null : Number(updatedAssetResult.rows[0].volume_24h_gbp),
-        unitPriceGbp: Number(updatedAssetResult.rows[0].unit_price_gbp),
-        unitPriceStable: Number(updatedAssetResult.rows[0].unit_price_stable),
-        marketMovePct24h: updatedAssetResult.rows[0].market_move_pct_24h == null ? null : Number(updatedAssetResult.rows[0].market_move_pct_24h),
-        updatedAt: updatedAssetResult.rows[0].updated_at,
-      },
-      aml: amlAlert
-        ? {
-          alertId: amlAlert.alertId,
-          status: amlAlert.status,
-        }
-        : null,
-    };
-
-    // Save idempotent response so a network retry with the same key returns
-    // this original result instead of placing a duplicate order.
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await saveCoOwnOrderIdempotentResponse(client, {
-        assetId,
-        userId: payload.userId,
-        idempotencyKey: payload.idempotencyKey,
-        requestHash: idempotencyRequestHash,
-        responseStatus: 201,
-        responseBody,
-      });
-    }
 
     return responseBody;
   } catch (error) {
@@ -41499,6 +43875,74 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
   } finally {
     client.release();
   }
+});
+
+// ── P0.7: Unknown-result lookup ──
+// After a network error during order submission, the client may not know
+// whether the order was placed. This endpoint lets the client look up the
+// result by idempotency key to recover gracefully.
+//   200 — order acknowledged (body contains the original response)
+//   202 — order still processing (lock held, poll with backoff)
+//   404 — no record found (safe to retry the original POST with the same key)
+app.get('/co-own/assets/:assetId/orders/lookup-by-key/:idempotencyKey', async (request, reply) => {
+  const paramsSchema = z.object({
+    assetId: z.string().min(2),
+    idempotencyKey: z.string().min(8).max(140),
+  });
+  const { assetId, idempotencyKey } = paramsSchema.parse(request.params);
+
+  const actorUserId = request.authUser?.userId;
+  if (!actorUserId) {
+    reply.code(401);
+    return { ok: false, error: 'Authentication required to look up an order' };
+  }
+
+  // Check the order idempotency table for a completed response
+  const idempotentResult = await db.query<{
+    response_status: number;
+    response_body: Record<string, unknown>;
+  }>(
+    `
+      SELECT response_status, response_body
+      FROM coown_order_idempotency
+      WHERE asset_id = $1
+        AND user_id = $2
+        AND idempotency_key = $3
+      LIMIT 1
+    `,
+    [assetId, actorUserId, idempotencyKey]
+  );
+
+  if (idempotentResult.rows[0]) {
+    reply.code(200);
+    return {
+      ok: true,
+      status: 'acknowledged',
+      ...idempotentResult.rows[0].response_body as Record<string, unknown>,
+    };
+  }
+
+  // Check the order commands table for a pending command
+  const commandResult = await db.query<{ status: string }>(
+    `
+      SELECT status
+      FROM coown_order_commands
+      WHERE asset_id = $1
+        AND actor_id = $2
+        AND idempotency_key = $3
+      LIMIT 1
+    `,
+    [assetId, actorUserId, idempotencyKey]
+  );
+
+  if (commandResult.rows[0] && commandResult.rows[0].status === 'pending') {
+    reply.code(202);
+    return { ok: true, status: 'processing' };
+  }
+
+  // No record found — safe to retry
+  reply.code(404);
+  return { ok: false, status: 'safe_to_retry' };
 });
 
 app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply) => {
@@ -41545,18 +43989,21 @@ app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply
       return { ok: false, error: `A ${order.status} order cannot be cancelled` };
     }
 
+    // P0.3: Cancellation is a book mutation — advance the market sequence.
+    const cancelMarketSeq = await allocateMarketSequence(client, assetId);
+
     await client.query(
       `
         UPDATE coOwn_orders
-        SET remaining_units = 0, status = 'cancelled', updated_at = NOW()
+        SET remaining_units = 0, status = 'cancelled', updated_at = NOW(), market_sequence = $2
         WHERE id = $1
       `,
-      [orderId]
+      [orderId, cancelMarketSeq]
     );
     await client.query(
       `
         UPDATE coown_order_reservations
-        SET reserved_1ze_mg = 0, reserved_units = 0, status = 'cancelled', updated_at = NOW()
+        SET reserved_1ze_units = 0, reserved_units = 0, status = 'cancelled', updated_at = NOW()
         WHERE placed_order_id = $1 AND status = 'placed'
       `,
       [orderId]
@@ -44510,7 +46957,10 @@ const start = async () => {
           await processModerationTriageJob(job);
         },
         handleImporterExtractionJob: async (job) => {
-          await processImporterExtraction(job);
+          // Route to the new extraction intelligence handler. The job data
+          // shape (runId/modelBundle) is the converged format; the old
+          // handler is retained for legacy rows only.
+          await processExtractionIntelligenceJob(job as unknown as Parameters<typeof processExtractionIntelligenceJob>[0]);
         },
         handleCatalogImportDiscoveryJob: async ({ batchId }) => {
           await processCatalogImportDiscovery({ batchId });
@@ -44536,6 +46986,25 @@ const start = async () => {
         handleRetentionSweepJob: async ({ reason }) => {
           await processRetentionSweep({ reason });
         },
+        handlePushReceiptReconciliationJob: async () => {
+          await processPushReceiptReconciliation();
+        },
+        handleScheduledPublicationSweepJob: async ({ reason }) => {
+          await sweepScheduledPublications(reason);
+        },
+        handleAnalyticsAggregationJob: async () => {
+          await aggregateAnalyticsDaily();
+        },
+        handleBackupExpiryJob: async ({ reason }) => {
+          await processBackupExpiryCheck({ reason });
+        },
+        handleDsarExportJob: async ({ requestId, userId, reason }) => {
+          await processDsarExport({ requestId, userId, reason });
+        },
+        handleAgentRunJob: async ({ runId }) => {
+          const { processAgentRun } = await import('./botRuntime/index.js');
+          await processAgentRun(db, runId);
+        },
       });
     } else {
       app.log.info('[api] background workers disabled — running in separate container');
@@ -44544,6 +47013,9 @@ const start = async () => {
     startAuctionSweepScheduler();
     startDomainOutboxScheduler();
     startRetentionSweepScheduler();
+    startAnalyticsAggregationScheduler();
+    startPushReceiptReconciliationScheduler();
+    startScheduledPublicationSweepScheduler();
     startPlatformReconciliationScheduler();
     startPlatformRevenueSweepScheduler();
     startOpsAlertingScheduler();
@@ -44624,6 +47096,15 @@ const start = async () => {
 registerSupportReviewRoutes({ app, db, createApiError, queueUserNotification });
 registerSupportRoutes({ app, db, createApiError, queueUserNotification });
 registerOperatorSupportRoutes({ app, db, createApiError, queueUserNotification });
+
+// ── Returns domain (Gate 8+9) ──────────────────────────────────────
+registerReturnRoutes({ app, db, resolveAuthenticatedUserId, ensureUserExists });
+
+// ── Refund execution with maker-checker (Gate 10+12) ───────────────
+registerRefundRoutes({ app, db, resolveAuthenticatedUserId, postCommerceOrderRefundLedgerReversal });
+
+// ── Exception queue infrastructure (Gate 13) ───────────────────────
+registerExceptionQueueRoutes({ app, db, resolveAuthenticatedUserId });
 registerVendorWebhookRoutes({
   app,
   db,
@@ -44874,6 +47355,8 @@ async function enrichPosterStory(
     expiresAt: storyRow.expires_at,
     createdAt: storyRow.created_at,
     compositionDocument: storyRow.composition_document ?? undefined,
+    contentType: (storyRow as Record<string, unknown>).content_type ?? 'media',
+    moodboardId: (storyRow as Record<string, unknown>).moodboard_id ?? null,
     frames,
     seenByViewer: viewedFrameCount > 0,
     viewedFrameCount,
@@ -44883,6 +47366,82 @@ async function enrichPosterStory(
 }
 
 // ── Poster Stories API ──────────────────────────────────────────────
+
+// POST /poster-stories/moodboard — publish a moodboard as a poster story
+app.post('/poster-stories/moodboard', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const bodySchema = z.object({
+    moodboardId: z.string().min(2).max(120),
+    caption: z.string().max(2200).default(''),
+    expiresInHours: z.number().int().min(1).max(168).default(24),
+  });
+  const payload = bodySchema.parse(request.body);
+
+  // Validate the moodboard exists, is not deleted, and the actor has access
+  const boardResult = await db.query<{ id: string; creator_id: string; deleted_at: string | null }>(
+    `SELECT id, creator_id, deleted_at FROM moodboards WHERE id = $1 LIMIT 1`,
+    [payload.moodboardId]
+  );
+  if (!boardResult.rowCount || boardResult.rows[0].deleted_at) {
+    reply.code(404);
+    return { ok: false, error: 'Moodboard not found' };
+  }
+  const board = boardResult.rows[0];
+
+  // Check membership: creator or active member can publish
+  const isCreator = board.creator_id === actorUserId;
+  let isMember = isCreator;
+  if (!isCreator) {
+    const memberResult = await db.query<{ role: string }>(
+      `SELECT role FROM moodboard_members WHERE board_id = $1 AND user_id = $2 AND state = 'active'`,
+      [payload.moodboardId, actorUserId]
+    );
+    isMember = (memberResult.rowCount ?? 0) > 0;
+  }
+  if (!isMember) {
+    reply.code(403);
+    return { ok: false, error: 'Forbidden: not a member of this moodboard' };
+  }
+
+  const storyId = `ps_mb_${payload.moodboardId}_${Date.now()}`;
+  const frameId = `frame_mb_${payload.moodboardId}_${Date.now()}`;
+  const posterId = `poster_mb_${payload.moodboardId}_${Date.now()}`;
+  const expiresAt = new Date(Date.now() + payload.expiresInHours * 3600_000).toISOString();
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Create the story with moodboard content type
+    await client.query(
+      `INSERT INTO poster_stories (id, creator_id, audience, allow_replies, allow_reactions, status, expires_at, content_type, moodboard_id)
+       VALUES ($1, $2, 'public', true, true, 'active', $3, 'moodboard', $4)`,
+      [storyId, actorUserId, expiresAt, payload.moodboardId]
+    );
+
+    // Create a single frame that references the moodboard
+    await client.query(
+      `INSERT INTO posters (id, creator_id, story_id, media_url, caption, media_type, layout, status, expiry_hours, content_type, moodboard_id)
+       VALUES ($1, $2, $3, '', $4, 'text', 'single', 'published', $5, 'moodboard', $6)`,
+      [posterId, actorUserId, storyId, payload.caption, payload.expiresInHours, payload.moodboardId]
+    );
+
+    // Link the moodboard to the published poster
+    await client.query(
+      `UPDATE moodboards SET published_poster_id = $1 WHERE id = $2`,
+      [posterId, payload.moodboardId]
+    );
+
+    await client.query('COMMIT');
+    reply.code(201);
+    return { ok: true, storyId };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
 
 // POST /poster-stories — create story with frames and stickers in one transaction
 app.post('/poster-stories', async (request, reply) => {
@@ -45276,9 +47835,11 @@ app.get('/poster-stories', async (request) => {
     creator_username: string | null;
     creator_avatar: string | null;
     composition_document: unknown | null;
+    content_type: string;
+    moodboard_id: string | null;
   }>(
     `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
-       ps.composition_document,
+       ps.composition_document, ps.content_type, ps.moodboard_id,
        u.username AS creator_username, u.avatar AS creator_avatar
      FROM poster_stories ps
      LEFT JOIN users u ON u.id = ps.creator_id
@@ -45340,9 +47901,11 @@ app.get('/poster-stories/:storyId', async (request, reply) => {
     creator_username: string | null;
     creator_avatar: string | null;
     composition_document: unknown | null;
+    content_type: string;
+    moodboard_id: string | null;
   }>(
     `SELECT ps.id, ps.creator_id, ps.audience, ps.allow_replies, ps.allow_reactions, ps.status, ps.expires_at, ps.created_at,
-       ps.composition_document,
+       ps.composition_document, ps.content_type, ps.moodboard_id,
        u.username AS creator_username, u.avatar AS creator_avatar
      FROM poster_stories ps
      LEFT JOIN users u ON u.id = ps.creator_id
@@ -46173,146 +48736,13 @@ app.delete('/poster-highlights/:highlightId/frames/:frameId', async (request, re
 
 registerCreatorDocumentRoutes({ app, db, resolveAuthenticatedUserId });
 
-// ── Creator analytics ─────────────────────────────────────────────────────
+// ── Creator publication orchestrator (P0 fix — creates real projections) ──
 
-const ANALYTICS_CONTENT_TYPES = new Set(['look', 'poster', 'story', 'document']);
-const ANALYTICS_EVENT_TYPES = new Set([
-  'view', 'like', 'save', 'comment', 'share', 'product_click', 'profile_visit',
-]);
+registerCreatorPublicationRoutes({ app, db, resolveAuthenticatedUserId });
 
-// POST /creator/analytics/events — log an analytics event
-app.post('/creator/analytics/events', async (request, reply) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
+// ── Creator analytics (v2 — versioned, ownership-resolved) ────────────────
 
-  const bodySchema = z.object({
-    content_type: z.string(),
-    content_id: z.string().min(1).max(200),
-    event_type: z.string(),
-    metadata: z.record(z.unknown()).optional(),
-  });
-  const payload = bodySchema.parse(request.body);
-
-  if (!ANALYTICS_CONTENT_TYPES.has(payload.content_type)) {
-    throw createApiError('ANALYTICS_CONTENT_TYPE_INVALID', 'Invalid content_type');
-  }
-  if (!ANALYTICS_EVENT_TYPES.has(payload.event_type)) {
-    throw createApiError('ANALYTICS_EVENT_TYPE_INVALID', 'Invalid event_type');
-  }
-
-  const result = await db.query<{ id: string }>(
-    `INSERT INTO creator_analytics_events (creator_id, content_type, content_id, event_type, viewer_id, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id`,
-    [
-      actorUserId,
-      payload.content_type,
-      payload.content_id,
-      payload.event_type,
-      actorUserId,
-      JSON.stringify(payload.metadata ?? {}),
-    ]
-  );
-
-  reply.code(201);
-  return { ok: true, eventId: result.rows[0].id };
-});
-
-// GET /creator/analytics/summary — overall stats for the authenticated creator
-app.get('/creator/analytics/summary', async (request) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-
-  const result = await db.query<{
-    views: string;
-    likes: string;
-    saves: string;
-    comments: string;
-    shares: string;
-    product_clicks: string;
-    profile_visits: string;
-  }>(
-    `SELECT
-       COUNT(*) FILTER (WHERE event_type = 'view')          AS views,
-       COUNT(*) FILTER (WHERE event_type = 'like')          AS likes,
-       COUNT(*) FILTER (WHERE event_type = 'save')          AS saves,
-       COUNT(*) FILTER (WHERE event_type = 'comment')       AS comments,
-       COUNT(*) FILTER (WHERE event_type = 'share')         AS shares,
-       COUNT(*) FILTER (WHERE event_type = 'product_click') AS product_clicks,
-       COUNT(*) FILTER (WHERE event_type = 'profile_visit') AS profile_visits
-     FROM creator_analytics_events
-     WHERE creator_id = $1`,
-    [actorUserId]
-  );
-
-  const row = result.rows[0] ?? {};
-  const views = Number(row.views ?? 0);
-  const engagement =
-    Number(row.likes ?? 0) +
-    Number(row.saves ?? 0) +
-    Number(row.comments ?? 0) +
-    Number(row.shares ?? 0) +
-    Number(row.product_clicks ?? 0);
-
-  return {
-    views,
-    likes: Number(row.likes ?? 0),
-    saves: Number(row.saves ?? 0),
-    comments: Number(row.comments ?? 0),
-    shares: Number(row.shares ?? 0),
-    productClicks: Number(row.product_clicks ?? 0),
-    profileVisits: Number(row.profile_visits ?? 0),
-    engagementRate: views > 0 ? Number((engagement / views).toFixed(4)) : 0,
-  };
-});
-
-// GET /creator/analytics/timeline — daily time-series for the authenticated creator
-app.get('/creator/analytics/timeline', async (request) => {
-  const actorUserId = resolveAuthenticatedUserId(request);
-
-  const querySchema = z.object({
-    days: z.coerce.number().int().min(1).max(365).default(30),
-  });
-  const { days } = querySchema.parse(request.query ?? {});
-
-  const result = await db.query<{
-    date: string;
-    views: string;
-    likes: string;
-    saves: string;
-    comments: string;
-    shares: string;
-    product_clicks: string;
-    profile_visits: string;
-  }>(
-    `SELECT
-       date_trunc('day', created_at)::date AS date,
-       COUNT(*) FILTER (WHERE event_type = 'view')          AS views,
-       COUNT(*) FILTER (WHERE event_type = 'like')          AS likes,
-       COUNT(*) FILTER (WHERE event_type = 'save')          AS saves,
-       COUNT(*) FILTER (WHERE event_type = 'comment')       AS comments,
-       COUNT(*) FILTER (WHERE event_type = 'share')         AS shares,
-       COUNT(*) FILTER (WHERE event_type = 'product_click') AS product_clicks,
-       COUNT(*) FILTER (WHERE event_type = 'profile_visit') AS profile_visits
-     FROM creator_analytics_events
-     WHERE creator_id = $1
-       AND created_at >= NOW() - ($2 || ' days')::INTERVAL
-     GROUP BY date_trunc('day', created_at)::date
-     ORDER BY date ASC`,
-    [actorUserId, days]
-  );
-
-  return {
-    items: result.rows.map((row) => ({
-      date: row.date,
-      views: Number(row.views),
-      likes: Number(row.likes),
-      saves: Number(row.saves),
-      comments: Number(row.comments),
-      shares: Number(row.shares),
-      productClicks: Number(row.product_clicks),
-      profileVisits: Number(row.profile_visits),
-    })),
-  };
-});
+registerCreatorAnalyticsRoutes({ app, db, createApiError, resolveAuthenticatedUserId, resolveRequestIpAddress });
 
 // ── Creator content scheduling ────────────────────────────────────────────
 
@@ -46323,10 +48753,17 @@ app.patch('/creator/documents/:documentId/schedule', async (request, reply) => {
   const paramsSchema = z.object({ documentId: z.string().min(2).max(120) });
   const { documentId } = paramsSchema.parse(request.params);
 
+  // Accept both snake_case (scheduled_for — server contract) and camelCase
+  // (scheduledFor — native client contract). The casing mismatch was a P0
+  // bug identified in the publishing-lifecycle research report (23): the
+  // frontend sent scheduledFor while the server expected scheduled_for.
+  // Both are now accepted; scheduled_for remains the canonical server field.
   const bodySchema = z.object({
-    scheduled_for: z.string().datetime().nullable(),
+    scheduled_for: z.string().datetime().nullable().optional(),
+    scheduledFor: z.string().datetime().nullable().optional(),
   });
-  const { scheduled_for } = bodySchema.parse(request.body);
+  const parsed = bodySchema.parse(request.body);
+  const scheduled_for = parsed.scheduled_for ?? parsed.scheduledFor ?? null;
 
   const ownerResult = await db.query<{ creator_id: string }>(
     `SELECT creator_id FROM creator_documents WHERE id = $1 LIMIT 1`,
@@ -46363,11 +48800,67 @@ registerListingOfferRoutes({
   calculatePlatformChargeGbp: calculateCommercePlatformChargeGbp,
   authorizeInternalServiceRequest,
   enqueueOutboxDrain: () => enqueueOutboxDrainJob('after_commit'),
+  triggerSmartSellEvaluation: (offerId: string) => {
+    // Fire-and-forget: check if the listing has an active Smart Sell policy
+    // and evaluate the offer. This is non-blocking — the offer is already
+    // durable when this is called. The evaluation is idempotent: if the
+    // policy is paused or doesn't exist, the evaluate endpoint skips.
+    void (async () => {
+      try {
+        const offerResult = await db.query<{ listing_id: string }>(
+          `SELECT listing_id FROM listing_offers WHERE id = $1 LIMIT 1`,
+          [offerId],
+        );
+        if (!offerResult.rowCount) return;
+        const policyResult = await db.query<{ id: string }>(
+          `SELECT id FROM smart_sell_policies WHERE listing_id = $1 AND status = 'active' LIMIT 1`,
+          [offerResult.rows[0].listing_id],
+        );
+        if (!policyResult.rowCount) return;
+        // Make an internal HTTP call to the evaluate endpoint.
+        // Using the app's internal inject method avoids network round-trip.
+        await app.inject({
+          method: 'POST',
+          url: '/smart-sell/evaluate',
+          headers: {
+            'x-internal-service-token': config.apiInternalServiceToken,
+          },
+          payload: { offerId },
+        });
+      } catch (error) {
+        app.log.error({ err: error, offerId }, 'Smart Sell evaluation trigger failed');
+      }
+    })();
+  },
+});
+
+registerSmartSellPolicyRoutes({
+  app,
+  db,
+  resolveAuthenticatedUserId,
+  calculatePlatformChargeGbp: calculateCommercePlatformChargeGbp,
+  authorizeInternalServiceRequest,
+  enqueueOutboxDrain: () => enqueueOutboxDrainJob('after_commit'),
+});
+
+registerListingIntelligenceRoutes({
+  app,
+  db,
+  resolveAuthenticatedUserId,
 });
 
 registerChatComposerStateRoutes({ app, db, resolveAuthenticatedUserId });
+registerVoiceMessageRoutes({ app, db, resolveAuthenticatedUserId });
 
 registerStreamingRoutes({ app, db, createApiError, resolveAuthenticatedUserId });
+
+registerLiveLotEngineRoutes({
+  app,
+  db,
+  createApiError,
+  resolveAuthenticatedUserId,
+  calculateCommercePlatformChargeGbp,
+});
 
 registerAiTruthRoutes({
   app,
@@ -46403,6 +48896,10 @@ const shutdown = async () => {
 
   stopAuctionSweepScheduler();
   stopDomainOutboxScheduler();
+  stopRetentionSweepScheduler();
+  stopAnalyticsAggregationScheduler();
+  stopPushReceiptReconciliationScheduler();
+  stopScheduledPublicationSweepScheduler();
   stopPlatformReconciliationScheduler();
   stopPlatformRevenueSweepScheduler();
   stopOpsAlertingScheduler();
@@ -46454,6 +48951,15 @@ process.on('uncaughtException', (err) => {
     return;
   }
   logger.error({ err }, '[uncaughtException] Fatal');
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  if (reason instanceof Error && reason.message === 'Connection is closed.') {
+    logger.warn({ err: reason.message }, '[unhandledRejection] Redis connection closed (suppressed)');
+    return;
+  }
+  logger.error({ reason }, '[unhandledRejection] Fatal — unhandled promise rejection');
   process.exit(1);
 });
 

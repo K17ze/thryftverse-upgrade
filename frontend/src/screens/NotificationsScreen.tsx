@@ -5,8 +5,7 @@ import {
   StyleSheet,
   RefreshControl,
   Pressable,
-  Animated,
-} from 'react-native';
+  Animated } from 'react-native';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -32,8 +31,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   deleteNotificationEvent,
-  upgradeToV2,
-} from '../services/notificationsApi';
+  upgradeToV2 } from '../services/notificationsApi';
 import { resolveNotificationRoute } from '../utils/notificationRouting';
 import { haptics } from '../utils/haptics';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -47,10 +45,10 @@ import {
   CommerceNotificationRow,
   AuctionNotificationRow,
   FinancialNotificationRow,
-  SystemNotificationRow,
-} from '../components/notifications';
+  SystemNotificationRow } from '../components/notifications';
 
-import { Typography, Radius, Type, Space, Stroke, Control } from '../theme/designTokens';
+import { Typography, Radius, Space, Stroke, Control, FontFamily } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type NotificationCardType = 'new_item' | 'like' | 'review' | 'order' | 'price' | 'resolution' | 'auction' | 'generic';
@@ -86,6 +84,8 @@ type NotificationCard = {
   aggregatedActors?: string[];
   /** V2 structured event — passed to role-specific row presenters. */
   v2Event: NotificationEventV2;
+  /** Delivery status from the push pipeline — drives the status indicator. */
+  deliveryStatus: 'queued' | 'ticketed' | 'sent' | 'failed' | 'suppressed';
 };
 
 /**
@@ -111,6 +111,10 @@ const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'price', label: 'Prices' },
   { key: 'auction', label: 'Auctions' },
 ];
+
+// No per-filter icons — the label is the object (AGENTS.md §4 anti
+// label-everything). The filter sheet is a selection list, not a settings
+// catalogue: label + count + checkmark is the complete grammar.
 
 // Primary pill-style filter tabs — always visible at the top of the list.
 // The most useful commerce/social filters get direct one-tap access; the
@@ -223,8 +227,7 @@ function formatRelativeTime(value: string): string {
 
   return parsed.toLocaleDateString(undefined, {
     month: 'short',
-    day: 'numeric',
-  });
+    day: 'numeric' });
 }
 
 function mapEventToCard(event: NotificationEvent): NotificationCard {
@@ -253,7 +256,7 @@ function mapEventToCard(event: NotificationEvent): NotificationCard {
     attention: v2.attention,
     objectRef: v2.objectRef,
     v2Event: v2,
-  };
+    deliveryStatus: event.status };
 }
 
 /**
@@ -315,8 +318,7 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
     const actionVerbByType: Record<string, string> = {
       like: 'liked',
       price: 'dropped the price on',
-      new_item: 'listed',
-    };
+      new_item: 'listed' };
     const action = actionVerbByType[primary.type] ?? 'interacted with';
 
     // Use the V2 registry's structured object label — never regex-parse body text.
@@ -333,9 +335,7 @@ function aggregateNotifications(notifications: NotificationCard[]): Notification
       read: group.every((n) => n.read),
       v2Event: {
         ...primary.v2Event,
-        readAt: group.every((n) => n.read) ? primary.v2Event.readAt : null,
-      },
-    });
+        readAt: group.every((n) => n.read) ? primary.v2Event.readAt : null } });
   }
 
   result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -351,8 +351,7 @@ const NOTIFICATION_GROUP_LABELS: Record<NotificationGroupKey, string> = {
   attention: 'Needs attention',
   today: 'Today',
   yesterday: 'Yesterday',
-  earlier: 'Earlier',
-};
+  earlier: 'Earlier' };
 
 function getNotificationGroupKey(createdAt: string): NotificationGroupKey {
   const now = new Date();
@@ -372,8 +371,7 @@ function groupNotifications(notifications: NotificationCard[]) {
     attention: [],
     today: [],
     yesterday: [],
-    earlier: [],
-  };
+    earlier: [] };
 
   notifications.forEach((notification) => {
     // Action-required events go into the "Needs attention" section,
@@ -405,6 +403,10 @@ export default function NotificationsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
+  // Tab/app badge propagation (§37.6): mark-as-read must update the global
+  // unread count immediately, not wait for the next app-state poll.
+  const notificationCount = useStore((state) => state.notificationCount);
+  const setNotificationCount = useStore((state) => state.setNotificationCount);
   const { isOffline } = useConnectivity();
   const { quietHours } = useSettingsPreferences();
   const { colors } = useAppTheme();
@@ -418,6 +420,20 @@ export default function NotificationsScreen() {
   const [activeFilter, setActiveFilter] = React.useState<NotificationFilter>('all');
   const [overflowVisible, setOverflowVisible] = React.useState(false);
   const swipeableRefs = React.useRef<Record<string, Swipeable | null>>({});
+
+  // Clean up stale Swipeable refs on unmount. When FlashList recycles items,
+  // the Swipeable component's ref callback fires with null, but the ref map
+  // can retain stale entries. Clearing on unmount prevents gesture handler
+  // leaks that contribute to the RetryableMountingLayerException crash.
+  React.useEffect(() => {
+    return () => {
+      // Close any open swipe actions before the screen unmounts.
+      for (const id of Object.keys(swipeableRefs.current)) {
+        swipeableRefs.current[id]?.close();
+      }
+      swipeableRefs.current = {};
+    };
+  }, []);
 
   const quietActive = isQuietHoursActive(quietHours);
   const unreadCount = React.useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
@@ -513,8 +529,7 @@ export default function NotificationsScreen() {
         sectionTitle: section.title,
         unreadCount: section.unreadCount,
         isAttention: !!section.isAttention,
-        itemCount: section.data.length,
-      });
+        itemCount: section.data.length });
       for (const card of section.data) {
         items.push({ type: 'item', card });
       }
@@ -578,8 +593,7 @@ export default function NotificationsScreen() {
         : progress.interpolate({
             inputRange: [0, 1],
             outputRange: [0.8, 1.0],
-            extrapolate: 'clamp',
-          });
+            extrapolate: 'clamp' });
       return (
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeReadAction}>
@@ -603,8 +617,7 @@ export default function NotificationsScreen() {
         : progress.interpolate({
             inputRange: [0, 1],
             outputRange: [0.8, 1.0],
-            extrapolate: 'clamp',
-          });
+            extrapolate: 'clamp' });
       return (
         <View style={styles.swipeActionContainer}>
           <View style={styles.swipeDeleteAction}>
@@ -643,12 +656,13 @@ export default function NotificationsScreen() {
     setNotifications((previous) => previous.map((item) => ({ ...item, read: true })));
     try {
       await markAllNotificationsRead();
+      setNotificationCount(0);
       show('Marked all notifications as read', 'success');
     } catch {
       setNotifications(previousNotifications);
       show('Failed to mark all as read', 'error');
     }
-  }, [hasUnread, notifications, show]);
+  }, [hasUnread, notifications, show, setNotificationCount]);
 
   const handleOpenNotification = React.useCallback(
     async (notification: NotificationCard) => {
@@ -659,6 +673,7 @@ export default function NotificationsScreen() {
         );
         try {
           await markNotificationRead(notification.id);
+          setNotificationCount(Math.max(0, notificationCount - 1));
         } catch {
           setNotifications((previous) =>
             previous.map((item) => (item.id === notification.id ? { ...item, read: previousRead } : item))
@@ -679,7 +694,7 @@ export default function NotificationsScreen() {
 
       show('No linked destination for this notification yet.', 'info');
     },
-    [navigation, show]
+    [navigation, show, notifications, setNotifications, notificationCount, setNotificationCount]
   );
 
   const renderNotificationRow = useCallback(
@@ -920,27 +935,20 @@ export default function NotificationsScreen() {
         })}
       </View>
 
-      {/* Unread summary + quiet hours indicator */}
-      {unreadCount > 0 || quietActive ? (
+      {/* Quiet hours indicator — the only persistent meta row. The unread
+          count already lives in the Unread filter pill and section headers;
+          restating it here duplicates the heading (AGENTS.md §4). */}
+      {quietActive ? (
         <View style={styles.summaryBannerRow}>
-          {unreadCount > 0 ? (
-            <View style={styles.unreadSummaryBadge}>
-              <Text style={styles.unreadSummaryText}>
-                {unreadCount > 99 ? '99+' : unreadCount} unread {unreadCount === 1 ? 'notification' : 'notifications'}
-              </Text>
-            </View>
-          ) : null}
-          {quietActive ? (
-            <Pressable
-              style={styles.quietHoursBadge}
-              onPress={() => navigation.navigate('PushNotifications')}
-              accessibilityRole="button"
-              accessibilityLabel="Quiet hours active. Tap to manage."
-            >
-              <Ionicons name="moon" size={12} color={colors.textMuted} />
-              <Text style={styles.quietHoursText}>Quiet hours on</Text>
-            </Pressable>
-          ) : null}
+          <Pressable
+            style={styles.quietHoursBadge}
+            onPress={() => navigation.navigate('PushNotifications')}
+            accessibilityRole="button"
+            accessibilityLabel="Quiet hours active. Tap to manage."
+          >
+            <Ionicons name="moon" size={12} color={colors.textMuted} />
+            <Text style={styles.quietHoursText}>Quiet hours on</Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -995,7 +1003,7 @@ export default function NotificationsScreen() {
             <View style={styles.notificationSkeletonList} accessibilityLabel="Loading notifications">
               {[0, 1, 2, 3, 4].map((index) => (
                 <View key={index} style={styles.notificationSkeletonRow}>
-                  <SkeletonLoader width={52} height={52} borderRadius={Radius.md} />
+                  <SkeletonLoader width={40} height={40} borderRadius={Radius.md} />
                   <View style={styles.notificationSkeletonCopy}>
                     <SkeletonLoader width={index % 2 === 0 ? '58%' : '44%'} height={13} borderRadius={Radius.sm} />
                     <SkeletonLoader width={index % 2 === 0 ? '88%' : '76%'} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
@@ -1027,8 +1035,7 @@ export default function NotificationsScreen() {
               density="compact"
               graphic={
                 <View style={styles.caughtUpGraphic}>
-                  <View style={styles.caughtUpRing} />
-                  <Ionicons name="checkmark" size={30} color={colors.brand} style={styles.caughtUpCheck} />
+                  <Ionicons name="checkmark-circle" size={40} color={colors.brand} />
                 </View>
               }
               title="You're all caught up"
@@ -1045,7 +1052,7 @@ export default function NotificationsScreen() {
             <View accessibilityLabel="Loading more notifications">
               {[0, 1].map((index) => (
                 <View key={index} style={styles.notificationSkeletonRow}>
-                  <SkeletonLoader width={52} height={52} borderRadius={Radius.md} />
+                  <SkeletonLoader width={40} height={40} borderRadius={Radius.md} />
                   <View style={styles.notificationSkeletonCopy}>
                     <SkeletonLoader width={index % 2 === 0 ? '58%' : '44%'} height={13} borderRadius={Radius.sm} />
                     <SkeletonLoader width={index % 2 === 0 ? '88%' : '76%'} height={11} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
@@ -1062,54 +1069,64 @@ export default function NotificationsScreen() {
       <BottomSheet
         visible={overflowVisible}
         onDismiss={() => setOverflowVisible(false)}
-        snapPoint={0.5}
+        snapPoint={0.65}
       >
         <View style={styles.overflowSheetContent}>
-          <Text style={styles.overflowSheetTitle}>Filter notifications</Text>
-          {OVERFLOW_FILTERS.map((filter) => {
-            const isActive = activeFilter === filter.key;
-            const count = filterCounts[filter.key] ?? 0;
-            return (
-              <AnimatedPressable
-                key={filter.key}
-                style={[
-                  styles.overflowRow,
-                  isActive && { backgroundColor: `${colors.brand}0A` },
-                ]}
-                onPress={() => {
-                  haptics.tap();
-                  setActiveFilter(filter.key);
-                  setOverflowVisible(false);
-                }}
-                activeOpacity={0.7}
-                scaleValue={0.96}
-                hapticFeedback="light"
-                accessibilityRole="button"
-                accessibilityLabel={`Filter: ${filter.label}${count > 0 ? `, ${count} items` : ''}`}
-                accessibilityState={{ selected: isActive }}
-              >
-                <Text
+          <View style={styles.overflowSheetHeader}>
+            <Text style={styles.overflowSheetTitle}>Filter notifications</Text>
+            <AnimatedPressable
+              onPress={() => setOverflowVisible(false)}
+              style={styles.overflowCloseBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close filter sheet"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
+            </AnimatedPressable>
+          </View>
+          <View style={styles.overflowList}>
+            {OVERFLOW_FILTERS.map((filter) => {
+              const isActive = activeFilter === filter.key;
+              const count = filterCounts[filter.key] ?? 0;
+              return (
+                <AnimatedPressable
+                  key={filter.key}
                   style={[
-                    styles.overflowRowText,
-                    { color: isActive ? colors.brand : colors.textPrimary },
-                    isActive && { fontFamily: Typography.family.semibold },
+                    styles.overflowRow,
+                    isActive && styles.overflowRowActive,
                   ]}
+                  onPress={() => {
+                    haptics.tap();
+                    setActiveFilter(filter.key);
+                    setOverflowVisible(false);
+                  }}
+                  activeOpacity={0.7}
+                  scaleValue={0.985}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Filter: ${filter.label}${count > 0 ? `, ${count} items` : ''}`}
+                  accessibilityState={{ selected: isActive }}
                 >
-                  {filter.label}
-                </Text>
-                <View style={styles.overflowRowRight}>
-                  {count > 0 ? (
-                    <Text style={[styles.overflowRowCount, { color: colors.textMuted }]}>
-                      {count}
-                    </Text>
-                  ) : null}
-                  {isActive ? (
-                    <Ionicons name="checkmark" size={18} color={colors.brand} />
-                  ) : null}
-                </View>
-              </AnimatedPressable>
-            );
-          })}
+                  <Text
+                    style={[
+                      styles.overflowRowText,
+                      isActive && styles.overflowRowTextActive,
+                    ]}
+                  >
+                    {filter.label}
+                  </Text>
+                  <View style={styles.overflowRowRight}>
+                    {count > 0 ? (
+                      <Text style={styles.overflowCountText}>{count}</Text>
+                    ) : null}
+                    {isActive ? (
+                      <Ionicons name="checkmark" size={16} color={colors.brand} />
+                    ) : null}
+                  </View>
+                </AnimatedPressable>
+              );
+            })}
+          </View>
         </View>
       </BottomSheet>
     </FlagshipScreen>
@@ -1122,14 +1139,12 @@ function createStyles(colors: ThemeColors) {
 
   headerActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   headerAction: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
 
   filterTabRow: {
     flexDirection: 'row',
@@ -1137,8 +1152,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm + 2,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   filterTab: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1147,68 +1161,66 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm + 4,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
+  // Active filter tab uses a solid brand fill, not brandSubtle (a 6% grey
+  // wash). A solid fill creates a clear visual anchor at the top of the
+  // screen and makes the selected state unmistakable at thumbnail scale.
   filterTabActive: {
-    backgroundColor: colors.surfaceAlt,
-    borderColor: colors.border,
-  },
+    backgroundColor: colors.brand,
+    borderColor: 'transparent' },
   filterTabText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   filterTabTextActive: {
     fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    color: colors.textInverse },
   filterTabCount: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   filterTabCountActive: {
-    color: colors.brand,
-  },
+    color: colors.textInverse,
+    opacity: 0.7 },
 
   swipeActionContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     width: Space.xxl + Space.xl,
-    marginBottom: Space.sm + 2,
-  },
+    marginBottom: Space.sm + 2 },
   swipeReadAction: {
     flex: 1,
     width: Space.xxl + Space.xl,
     borderRadius: Radius.xxl,
-    backgroundColor: `${colors.success}20`,
+    backgroundColor: colors.successSubtle,
     borderWidth: Stroke.standard,
-    borderColor: `${colors.success}40`,
+    borderColor: colors.successBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   swipeReadText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.success,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.success },
   swipeDeleteAction: {
     alignItems: 'center',
     justifyContent: 'center',
     width: Space.xxl + Space.xxl + Space.xs,
     height: '100%',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   swipeDeleteText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
 
-  listContent: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xxl + Space.xxl + Space.lg },
+  // No horizontal padding on the list content — each row already has its
+  // own paddingHorizontal: Space.md in NotificationRowBase. Adding list-level
+  // padding double-indents the rows, creating a wide flat margin of
+  // background colour that reads as "grey slop". Rows extend edge-to-edge
+  // with their internal padding providing the inset.
+  listContent: { paddingHorizontal: 0, paddingTop: Space.xs, paddingBottom: Space.xxl + Space.xxl + Space.lg },
 
   summaryBannerRow: {
     flexDirection: 'row',
@@ -1216,84 +1228,47 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm + 2,
-    paddingBottom: Space.xs,
-  },
-  unreadSummaryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 1,
-    minHeight: Control.chromeCompact,
-  },
-  unreadSummaryDot: {
-    width: Space.xs + 2,
-    height: Space.xs + 2,
-    borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-  },
-  unreadSummaryText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    paddingBottom: Space.xs },
   quietHoursBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs + 1,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    gap: Space.xs + 1 },
   quietHoursText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
 
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,
-    marginTop: Space.md + 4,
+    marginTop: Space.sm + 4,
     marginBottom: Space.sm,
     marginLeft: Space.xs,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   sectionHeaderRowAttention: {
-    backgroundColor: colors.dangerSubtle,
-    paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs + 2,
-    marginLeft: 0,
-  },
+    marginLeft: 0 },
   sectionAttentionLeading: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   sectionAttentionHint: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginLeft: Space.xs,
-  },
+    marginLeft: Space.xs },
   sectionTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.caption.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   sectionTitleAttention: {
     color: colors.danger,
-    fontSize: Type.caption.size,
-    textTransform: 'none',
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   sectionCountBadge: {
     minWidth: Space.md + 4,
     height: Space.md + 4,
@@ -1303,89 +1278,87 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: 'transparent',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   sectionCountBadgeAttention: {
     backgroundColor: colors.danger,
-    borderColor: 'transparent',
-  },
+    borderColor: 'transparent' },
   sectionCountText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   sectionCountTextAttention: {
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
 
-  // Crafted "all caught up" graphic — a ring with a checkmark, authored
-  // rather than a generic outline icon in a grey circle.
   caughtUpGraphic: {
-    width: 64,
-    height: 64,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.sm,
-  },
-  caughtUpRing: {
-    position: 'absolute',
-    width: 64,
-    height: 64,
-    borderRadius: Radius.full,
-    borderWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-    opacity: 0.5,
-  },
-  caughtUpCheck: {
-    marginTop: 2,
-  },
+    marginBottom: Space.sm },
 
   notificationSkeletonList: {
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   notificationSkeletonRow: {
-    minHeight: Space.xxl + Space.xl + Space.xs,
+    minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   notificationSkeletonCopy: {
-    flex: 1,
-  },
+    flex: 1 },
   overflowSheetContent: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingTop: Space.xs,
+    paddingBottom: Space.xl },
+  overflowSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Space.md,
+    paddingHorizontal: Space.xs },
   overflowSheetTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-    marginBottom: Space.sm,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: FontFamily.bold,
+    color: colors.textPrimary },
+  overflowCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  overflowList: {
+    gap: Space.xs },
+  // Selection row — the row IS the 44pt touch target. No icon container,
+  // no count pill: label left, count + checkmark right (Telegram/Instagram
+  // filter-sheet grammar). Count is quiet tabular metadata, not a badge.
   overflowRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    minHeight: Control.hit,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: Radius.lg,
+    backgroundColor: 'transparent' },
+  overflowRowActive: {
+    backgroundColor: colors.surfaceAlt },
   overflowRowText: {
-    fontSize: Type.body.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
+    color: colors.textPrimary },
+  overflowRowTextActive: {
+    fontFamily: FontFamily.semibold,
+    color: colors.brand },
   overflowRowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  overflowRowCount: {
-    fontSize: Type.meta.size,
+    gap: Space.xs },
+  overflowCountText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
     color: colors.textMuted,
-    marginRight: Space.sm,
-  },
+    fontVariant: ['tabular-nums'] },
   });
 }

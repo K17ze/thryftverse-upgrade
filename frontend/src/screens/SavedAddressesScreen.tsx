@@ -3,11 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   RefreshControl,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -19,12 +16,14 @@ import { parseApiError } from '../lib/apiClient';
 import {
   listUserAddresses,
   deleteUserAddress,
-  CommerceAddress,
-} from '../services/commerceApi';
+  CommerceAddress } from '../services/commerceApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { FlashList } from '@shopify/flash-list';
 
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { t } from '../i18n';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SavedAddresses'>;
@@ -60,6 +59,15 @@ export default function SavedAddressesScreen({ navigation }: Props) {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   const fetchAddresses = useCallback(
     async (isRefresh = false) => {
@@ -86,8 +94,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
             postalCode: defaultAddr.postalCode,
             countryCode: defaultAddr.countryCode,
             country: defaultAddr.country,
-            isDefault: defaultAddr.isDefault,
-          });
+            isDefault: defaultAddr.isDefault });
         } else if (items.length === 0) {
           clearSavedAddress();
         }
@@ -116,57 +123,52 @@ export default function SavedAddressesScreen({ navigation }: Props) {
 
   const handleDelete = useCallback(
     (address: CommerceAddress) => {
-      Alert.alert(
-        'Remove address?',
-        `The address for ${address.name} will be removed from your saved addresses.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: async () => {
-              const userId = currentUser?.id;
-              if (!userId || address.id === undefined) {
-                show('Unable to remove this address right now.', 'error');
-                return;
+      setConfirmSheet({
+        visible: true,
+        title: 'Remove address?',
+        message: `The address for ${address.name} will be removed from your saved addresses.`,
+        confirmLabel: 'Remove',
+        cancelLabel: 'Cancel',
+        onConfirm: async () => {
+          const userId = currentUser?.id;
+          if (!userId || address.id === undefined) {
+            show('Unable to remove this address right now.', 'error');
+            return;
+          }
+          setDeletingId(address.id);
+          try {
+            await deleteUserAddress(userId, address.id);
+            haptic.medium();
+            const remaining = addresses.filter((a) => a.id !== address.id);
+            setAddresses(remaining);
+            if (remaining.length === 0) {
+              clearSavedAddress();
+              setLoadState('empty');
+            } else if (savedAddress?.id === address.id) {
+              const newDefault = remaining.find((a) => a.isDefault) ?? remaining[0];
+              if (newDefault) {
+                saveAddress({
+                  id: newDefault.id,
+                  name: newDefault.name,
+                  streetAddress: newDefault.streetAddress,
+                  apartment: newDefault.apartment,
+                  city: newDefault.city,
+                  region: newDefault.region,
+                  postalCode: newDefault.postalCode,
+                  countryCode: newDefault.countryCode,
+                  country: newDefault.country,
+                  isDefault: newDefault.isDefault });
               }
-              setDeletingId(address.id);
-              try {
-                await deleteUserAddress(userId, address.id);
-                haptic.medium();
-                const remaining = addresses.filter((a) => a.id !== address.id);
-                setAddresses(remaining);
-                if (remaining.length === 0) {
-                  clearSavedAddress();
-                  setLoadState('empty');
-                } else if (savedAddress?.id === address.id) {
-                  const newDefault = remaining.find((a) => a.isDefault) ?? remaining[0];
-                  if (newDefault) {
-                    saveAddress({
-                      id: newDefault.id,
-                      name: newDefault.name,
-                      streetAddress: newDefault.streetAddress,
-                      apartment: newDefault.apartment,
-                      city: newDefault.city,
-                      region: newDefault.region,
-                      postalCode: newDefault.postalCode,
-                      countryCode: newDefault.countryCode,
-                      country: newDefault.country,
-                      isDefault: newDefault.isDefault,
-                    });
-                  }
-                }
-                show('Address removed', 'success');
-              } catch (error) {
-                const parsed = parseApiError(error, 'Could not remove address.');
-                show(parsed.message, 'error');
-              } finally {
-                setDeletingId(null);
-              }
-            },
-          },
-        ]
-      );
+            }
+            show('Address removed', 'success');
+          } catch (error) {
+            const parsed = parseApiError(error, 'Could not remove address.');
+            show(parsed.message, 'error');
+          } finally {
+            setDeletingId(null);
+          }
+        },
+        variant: 'danger' });
     },
     [addresses, currentUser?.id, savedAddress?.id, clearSavedAddress, saveAddress, show, haptic]
   );
@@ -184,8 +186,7 @@ export default function SavedAddressesScreen({ navigation }: Props) {
         postalCode: address.postalCode,
         countryCode: address.countryCode,
         country: address.country,
-        isDefault: address.isDefault,
-      });
+        isDefault: address.isDefault });
       navigation.navigate('AddressForm', { mode: 'edit', source: 'postage' });
     },
     [navigation, saveAddress]
@@ -195,67 +196,75 @@ export default function SavedAddressesScreen({ navigation }: Props) {
     navigation.navigate('AddressForm', { mode: 'add', source: 'postage' });
   }, [navigation]);
 
-  const renderAddressCard = (address: CommerceAddress, index: number) => {
-    const isDefault = address.isDefault;
-    const isDeleting = deletingId === address.id;
-    const detail = formatAddressDetail(address);
-    return (
-      <View key={address.id}>
-        <View style={[styles.addressCard, { backgroundColor: colors.surface, borderColor: colors.border }, isDefault && { borderColor: colors.brand, borderWidth: Stroke.emphasis }]}>
-          <View style={styles.addressCardHeader}>
-            <View style={styles.addressCardHeaderLeft}>
-              {isDefault ? (
-                <View style={[styles.defaultBadge, { backgroundColor: `${colors.brand}15` }]}>
-                  <Ionicons name="star" size={11} color={colors.brand} />
-                  <Text style={[styles.defaultBadgeText, { color: colors.brand }]}>DEFAULT</Text>
-                </View>
+  const renderAddressCard = useCallback(
+    (address: CommerceAddress, index: number) => {
+      const isDefault = address.isDefault;
+      const isDeleting = deletingId === address.id;
+      const detail = formatAddressDetail(address);
+      return (
+        <View key={address.id}>
+          <View style={[styles.addressCard, { backgroundColor: colors.surface, borderColor: colors.border }, isDefault && { borderColor: colors.brand, borderWidth: Stroke.emphasis }]}>
+            <View style={styles.addressCardHeader}>
+              <View style={styles.addressCardHeaderLeft}>
+                {isDefault ? (
+                  <View style={[styles.defaultBadge, { backgroundColor: colors.brandSubtle }]}>
+                    <Ionicons name="checkmark-circle-outline" size={11} color={colors.brand} />
+                    <Text style={[styles.defaultBadgeText, { color: colors.brand }]}>DEFAULT</Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.addressCardActions}>
+                <AnimatedPressable
+                  onPress={() => handleEdit(address)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  scaleValue={0.95}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit address for ${address.name}`}
+                >
+                  <Text style={[styles.editAction, { color: colors.brand }]}>Edit</Text>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  onPress={() => handleDelete(address)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  scaleValue={0.95}
+                  hapticFeedback="light"
+                  disabled={isDeleting}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove address for ${address.name}`}
+                >
+                  {isDeleting ? (
+                    <ActivityIndicator size="small" color={colors.danger} />
+                  ) : (
+                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                  )}
+                </AnimatedPressable>
+              </View>
+            </View>
+            <View style={styles.addressCardBody}>
+              <Text style={[styles.addressName, { color: colors.textPrimary }]} numberOfLines={1}>
+                {address.name}
+              </Text>
+              <Text style={[styles.addressLine, { color: colors.textSecondary }]} numberOfLines={2}>
+                {formatAddressLine(address)}
+              </Text>
+              {detail ? (
+                <Text style={[styles.addressDetail, { color: colors.textMuted }]} numberOfLines={1}>
+                  {detail}
+                </Text>
               ) : null}
             </View>
-            <View style={styles.addressCardActions}>
-              <AnimatedPressable
-                onPress={() => handleEdit(address)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                scaleValue={0.95}
-                hapticFeedback="light"
-                accessibilityRole="button"
-                accessibilityLabel={`Edit address for ${address.name}`}
-              >
-                <Text style={[styles.editAction, { color: colors.brand }]}>Edit</Text>
-              </AnimatedPressable>
-              <AnimatedPressable
-                onPress={() => handleDelete(address)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                scaleValue={0.95}
-                hapticFeedback="light"
-                disabled={isDeleting}
-                accessibilityRole="button"
-                accessibilityLabel={`Remove address for ${address.name}`}
-              >
-                {isDeleting ? (
-                  <ActivityIndicator size="small" color={colors.danger} />
-                ) : (
-                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                )}
-              </AnimatedPressable>
-            </View>
-          </View>
-          <View style={styles.addressCardBody}>
-            <Text style={[styles.addressName, { color: colors.textPrimary }]} numberOfLines={1}>
-              {address.name}
-            </Text>
-            <Text style={[styles.addressLine, { color: colors.textSecondary }]} numberOfLines={2}>
-              {formatAddressLine(address)}
-            </Text>
-            {detail ? (
-              <Text style={[styles.addressDetail, { color: colors.textMuted }]} numberOfLines={1}>
-                {detail}
-              </Text>
-            ) : null}
           </View>
         </View>
-      </View>
-    );
-  };
+      );
+    },
+    [colors, deletingId, handleEdit, handleDelete]
+  );
+
+  const renderItem = useCallback(
+    ({ item, index }: { item: CommerceAddress; index: number }) => renderAddressCard(item, index),
+    [renderAddressCard]
+  );
 
   return (
     <FlagshipScreen
@@ -285,8 +294,10 @@ export default function SavedAddressesScreen({ navigation }: Props) {
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
-      <ScrollView
-        style={{ flex: 1 }}
+      <FlashList
+        data={loadState === 'populated' ? addresses : []}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={renderItem}
         contentContainerStyle={{ paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.xl }}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -296,60 +307,70 @@ export default function SavedAddressesScreen({ navigation }: Props) {
             tintColor={colors.textMuted}
           />
         }
-      >
-        {loadState === 'loading' ? (
-          <View style={styles.skeletonWrap}>
-            {[0, 1].map((i) => (
-              <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={[styles.skeletonLine, { width: '30%', backgroundColor: colors.surfaceAlt }]} />
-                <View style={{ height: 8 }} />
-                <View style={[styles.skeletonLine, { width: '90%', backgroundColor: colors.surfaceAlt }]} />
-                <View style={{ height: 6 }} />
-                <View style={[styles.skeletonLine, { width: '60%', backgroundColor: colors.surfaceAlt }]} />
-              </View>
-            ))}
-          </View>
-        ) : loadState === 'empty' ? (
-          <FlagshipState
-            variant="empty"
-            icon="location-outline"
-            title="No saved addresses"
-            subtitle="Add a delivery address for faster checkout. Add multiple addresses and choose a default."
-            actionLabel="Add address"
-            onAction={handleAdd}
-          />
-        ) : loadState === 'error' ? (
-          <FlagshipState
-            variant="error"
-            title="Could not load addresses"
-            subtitle="Check your connection and try again."
-            actionLabel="Retry"
-            onAction={() => void fetchAddresses()}
-          />
-        ) : (
-          <View style={styles.listWrap}>
-              <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.heroRow}>
-                  <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                    <Ionicons name="location" size={18} color={colors.textInverse} />
-                  </View>
-                  <View style={styles.heroText}>
-                    <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                      {addresses.length} address{addresses.length === 1 ? '' : 'es'}
-                    </Text>
-                    <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                      {addresses.find((a) => a.isDefault) ? `${addresses.find((a) => a.isDefault)?.name} is default` : 'No default set'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            {addresses.map((address, index) => renderAddressCard(address, index))}
+        ListHeaderComponent={
+          loadState === 'populated' ? (
+            <View style={styles.postureSummary}>
+              <Text style={[styles.postureTitle, { color: colors.textPrimary }]}>
+                {addresses.length} address{addresses.length === 1 ? '' : 'es'}
+              </Text>
+              <Text style={[styles.postureSubtitle, { color: colors.textSecondary }]}>
+                {addresses.find((a) => a.isDefault) ? `${addresses.find((a) => a.isDefault)?.name} is default` : 'No default set'}
+              </Text>
+            </View>
+          ) : null
+        }
+        ListFooterComponent={
+          loadState === 'populated' ? (
             <Text style={[styles.listFootnote, { color: colors.textMuted }]}>
               Addresses are used at checkout and for delivery. The default address is selected automatically.
             </Text>
-          </View>
-        )}
-      </ScrollView>
+          ) : null
+        }
+        ListEmptyComponent={
+          loadState === 'loading' ? (
+            <View style={styles.skeletonWrap}>
+              {[0, 1].map((i) => (
+                <View key={i} style={[styles.skeletonCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View style={[styles.skeletonLine, { width: '30%', backgroundColor: colors.surfaceAlt }]} />
+                  <View style={{ height: 8 }} />
+                  <View style={[styles.skeletonLine, { width: '90%', backgroundColor: colors.surfaceAlt }]} />
+                  <View style={{ height: 6 }} />
+                  <View style={[styles.skeletonLine, { width: '60%', backgroundColor: colors.surfaceAlt }]} />
+                </View>
+              ))}
+            </View>
+          ) : loadState === 'empty' ? (
+            <FlagshipState
+              variant="empty"
+              icon="location-outline"
+              title="No saved addresses"
+              subtitle="Add a delivery address for faster checkout. Add multiple addresses and choose a default."
+              actionLabel="Add address"
+              onAction={handleAdd}
+            />
+          ) : loadState === 'error' ? (
+            <FlagshipState
+              variant="error"
+              title="Could not load addresses"
+              subtitle="Check your connection and try again."
+              actionLabel="Retry"
+              onAction={() => void fetchAddresses()}
+            />
+          ) : null
+        }
+        ItemSeparatorComponent={loadState === 'populated' ? () => <View style={{ height: Space.md }} /> : undefined}
+      />
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }
@@ -361,122 +382,86 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroCard: {
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-  },
-  heroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-  },
-  heroIcon: {
-    width: Space.xl + Space.sm,
-    height: Space.xl + Space.sm,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroText: { flex: 1 },
-  heroTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
-  heroSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    marginTop: Space.xs / 2,
-  },
+    justifyContent: 'center' },
+  postureSummary: {
+    paddingVertical: Space.sm },
+  postureTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
+  postureSubtitle: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs / 2 },
   skeletonWrap: {
     paddingTop: Space.sm,
-    gap: Space.md,
-  },
+    gap: Space.md },
   skeletonCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-  },
+    padding: Space.md },
   skeletonLine: {
     height: Space.md,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   listWrap: {
     paddingTop: Space.sm,
-    gap: Space.md,
-  },
+    gap: Space.md },
   addressCard: {
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.md,
-  },
+    padding: Space.md },
   addressCardBody: {
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   addressCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   addressCardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   addressCardActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   defaultBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     paddingHorizontal: Space.sm - 2,
     paddingVertical: Space.xs - 1,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   defaultBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
   editAction: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   addressName: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
-    marginBottom: Space.xs / 2,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    marginBottom: Space.xs / 2 },
   addressLine: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.body.lineHeight + 2,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    letterSpacing: TypographyV2.body.letterSpacing },
   addressDetail: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-    marginTop: Space.xs / 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    marginTop: Space.xs / 2 },
   listFootnote: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight + 2,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textAlign: 'center',
     marginTop: Space.sm,
-    paddingHorizontal: Space.md,
-  },
-});
+    paddingHorizontal: Space.md } });

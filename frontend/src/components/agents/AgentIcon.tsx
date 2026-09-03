@@ -7,16 +7,16 @@ function resolveAgentIcon(category?: string, name?: string): AgentIconName {
   const identity = `${category || ''} ${name || ''}`.toLowerCase();
 
   if (identity.includes('guard') || identity.includes('moderation')) {
-    return 'shield-checkmark-outline';
+    return 'checkmark-circle-outline';
   }
   if (identity.includes('trade') || identity.includes('market')) {
-    return 'pulse-outline';
+    return 'trending-up-outline';
   }
   if (identity.includes('brief') || identity.includes('digest')) {
     return 'newspaper-outline';
   }
   if (identity.includes('deal') || identity.includes('commerce')) {
-    return 'pricetags-outline';
+    return 'bag-handle-outline';
   }
   if (identity.includes('safety') || identity.includes('scam')) {
     return 'lock-closed-outline';

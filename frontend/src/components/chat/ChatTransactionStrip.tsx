@@ -20,11 +20,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useStore } from '../../store/useStore';
 import { listUserOrders, type CommerceUserOrder } from '../../services/commerceApi';
 import { normaliseOrderStatus, humaniseStatus, isTerminalStatus, needsAction } from '../orders/orderCapabilities';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 // ── Props ─────────────────────────────────────────────────────────────
 
@@ -37,6 +39,7 @@ export interface ChatTransactionStripProps {
 
 export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const currentUser = useStore((state) => state.currentUser);
@@ -53,8 +56,7 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
     async function fetchOrder(userId: string) {
       try {
         const result = await listUserOrders(userId, {
-          limit: 20,
-        });
+          limit: 20 });
         if (cancelled) return;
         // Find the most recent order for this listing
         const matching = result.items.find((o) => o.listingId === listingId);
@@ -91,23 +93,23 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
   // ETA for buyer
   const etaWindow = order.fulfilmentSnapshot?.etaMinDays != null && order.fulfilmentSnapshot?.etaMaxDays != null
     ? (order.fulfilmentSnapshot.etaMinDays !== order.fulfilmentSnapshot.etaMaxDays
-        ? `${order.fulfilmentSnapshot.etaMinDays}–${order.fulfilmentSnapshot.etaMaxDays} days`
-        : `${order.fulfilmentSnapshot.etaMinDays} day${order.fulfilmentSnapshot.etaMinDays === 1 ? '' : 's'}`)
+        ? t('orders.etaWindow', { min: order.fulfilmentSnapshot.etaMinDays, max: order.fulfilmentSnapshot.etaMaxDays })
+        : t('orders.etaDay', { count: order.fulfilmentSnapshot.etaMinDays }))
     : null;
 
   // Determine the contextual CTA
   const cta = (() => {
     if (terminal) return null;
     if (isSeller && normalised === 'paid') {
-      return { label: 'Dispatch item', icon: 'cube-outline' as const, screen: 'SellerFulfilment', params: { orderId: order.id } };
+      return { label: t('orders.dispatchItem'), icon: 'car-outline' as const, screen: 'SellerFulfilment', params: { orderId: order.id } };
     }
     if (!isSeller && (normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery')) {
-      return { label: 'Track parcel', icon: 'navigate-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
+      return { label: t('orders.trackParcel'), icon: 'navigate-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
     }
     if (!isSeller && normalised === 'delivered') {
-      return { label: 'Check item', icon: 'shield-checkmark-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
+      return { label: t('orders.checkItem'), icon: 'checkmark-circle-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
     }
-    return { label: 'View order', icon: 'receipt-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
+    return { label: t('orders.viewOrder'), icon: 'receipt-outline' as const, screen: 'OrderDetail', params: { orderId: order.id } };
   })();
 
   // Deadline/ETA label
@@ -117,10 +119,10 @@ export function ChatTransactionStrip({ listingId }: ChatTransactionStripProps) {
       if (shipByOverdue) return 'Overdue — dispatch now';
       if (shipByDaysLeft === 0) return 'Dispatch today';
       if (shipByDaysLeft === 1) return 'Ship tomorrow';
-      return `Ship by ${new Date(shipByDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+      return t('orders.shipBy', { date: new Date(shipByDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) });
     }
     if (!isSeller && etaWindow && (normalised === 'shipped' || normalised === 'in transit' || normalised === 'out for delivery')) {
-      return `ETA ${etaWindow}`;
+      return t('orders.eta', { window: etaWindow });
     }
     return null;
   })();
@@ -184,31 +186,24 @@ function createStyles(colors: ThemeColors) {
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
       backgroundColor: colors.background,
-      minHeight: 44,
-    },
+      minHeight: 44 },
     stripPressed: {
-      opacity: 0.7,
-    },
+      opacity: 0.7 },
     stripNeedsAction: {
-      backgroundColor: `${colors.brand}06`,
-    },
+      backgroundColor: colors.brandSubtle },
     statusDot: {
       width: 8,
       height: 8,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     stripContent: {
       flex: 1,
-      gap: 1,
-    },
+      gap: 1 },
     statusLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     deadline: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     ctaBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -216,11 +211,8 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 1,
       borderRadius: Radius.full,
-      borderWidth: StyleSheet.hairlineWidth,
-    },
+      borderWidth: StyleSheet.hairlineWidth },
     ctaText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily } });
 }

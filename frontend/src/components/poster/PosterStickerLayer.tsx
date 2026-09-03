@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ViewStyle, AccessibilityInfo, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, AccessibilityInfo, Pressable, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
@@ -7,11 +7,12 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withSequence,
-  runOnJS,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+  runOnJS } from 'react-native-reanimated';
+import { Space, Radius, Typography, Stroke, Control, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import type { PosterSticker as ApiPosterSticker } from '../../services/postersApi';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useHaptic } from '../../hooks/useHaptic';
@@ -77,10 +78,10 @@ export function PosterStickerLayer({
   onToggleBorder,
   containerWidth,
   containerHeight,
-  style,
-}: PosterStickerLayerProps) {
+  style }: PosterStickerLayerProps) {
   const reducedMotion = useReducedMotion();
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const knownIdsRef = React.useRef<Set<string>>(new Set());
   const mountedRef = React.useRef(false);
 
@@ -219,8 +220,7 @@ function DraggableSticker({
   onToggleBorder,
   onContextMenu,
   reducedMotion = false,
-  shouldSpawn = false,
-}: DraggableStickerProps) {
+  shouldSpawn = false }: DraggableStickerProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -315,13 +315,11 @@ function DraggableSticker({
   }, [hasBorder, reducedMotion, borderOpacity]);
 
   const selectionBorderStyle = useAnimatedStyle(() => ({
-    opacity: selectionOpacity.value,
-  }));
+    opacity: selectionOpacity.value }));
 
   const handleAnimatedStyle = useAnimatedStyle(() => ({
     opacity: selectionOpacity.value,
-    transform: [{ scale: handleScale.value }],
-  }));
+    transform: [{ scale: handleScale.value }] }));
 
   // Combined animated style: spawn + grab + user transforms
   const animatedStyle = useAnimatedStyle(() => {
@@ -335,13 +333,11 @@ function DraggableSticker({
         { rotate: `${combinedRotation}deg` },
       ],
       shadowOpacity: 0.25 * spawnShadow.value + grabShadowOpacity.value,
-      shadowRadius: 6 * spawnShadow.value + grabShadowRadius.value,
-    };
+      shadowRadius: 6 * spawnShadow.value + grabShadowRadius.value };
   });
 
   const borderAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: borderOpacity.value,
-  }));
+    opacity: borderOpacity.value }));
 
   const handlePositionCommit = useCallback(
     (finalX: number, finalY: number) => {
@@ -631,6 +627,7 @@ function DraggableSticker({
 
 function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   switch (sticker.type) {
     case 'text':
@@ -646,11 +643,11 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
           <Text
             style={[
               styles.textSticker,
-              { color: sticker.payload.textColor ?? '#ffffff' },
-              sticker.payload.textStyle === 'editorial' && { fontFamily: Typography.family.bold, fontSize: Type.title.size },
-              sticker.payload.textStyle === 'minimal' && { fontFamily: Typography.family.light, fontSize: Type.body.size },
-              sticker.payload.textStyle === 'label' && { fontFamily: Typography.family.semibold, fontSize: Type.caption.size, letterSpacing: 0.5 },
-              sticker.payload.textStyle === 'outline' && { fontFamily: Typography.family.medium, fontSize: Type.body.size },
+              { color: sticker.payload.textColor ?? colors.scrimTextPrimary },
+              sticker.payload.textStyle === 'editorial' && { fontFamily: TypographyV2.screenTitle.fontFamily, fontSize: TypographyV2.screenTitle.size },
+              sticker.payload.textStyle === 'minimal' && { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size },
+              sticker.payload.textStyle === 'label' && { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, letterSpacing: 0.5 },
+              sticker.payload.textStyle === 'outline' && { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size },
             ]}
           >
             {sticker.payload.text}
@@ -669,15 +666,18 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
       return (
         <View style={styles.listingWrap}>
           {sticker.payload.snapshotImageUrl ? (
-            <Text style={styles.listingTitle}>{sticker.payload.snapshotTitle ?? 'View listing'}</Text>
-          ) : (
-            <View style={styles.listingRow}>
-              <Ionicons name="pricetag" size={14} color="#fff" />
-              <Text style={styles.listingTitle}>{sticker.payload.snapshotTitle ?? 'Listing'}</Text>
-            </View>
-          )}
+            <Image
+              source={{ uri: sticker.payload.snapshotImageUrl }}
+              style={styles.listingImage}
+              resizeMode="cover"
+            />
+          ) : null}
+          <View style={styles.listingRow}>
+            <Ionicons name="bag-handle-outline" size={14} color={colors.scrimTextPrimary} />
+            <Text style={styles.listingTitle}>{sticker.payload.snapshotTitle ?? 'Listing'}</Text>
+          </View>
           {sticker.payload.snapshotPriceGbp !== undefined && (
-            <Text style={styles.listingPrice}>£{sticker.payload.snapshotPriceGbp.toFixed(0)}</Text>
+            <Text style={styles.listingPrice}>{currencySymbol}{sticker.payload.snapshotPriceGbp.toFixed(0)}</Text>
           )}
         </View>
       );
@@ -685,7 +685,7 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
     case 'look':
       return (
         <View style={styles.lookWrap}>
-          <Ionicons name="shirt-outline" size={14} color="#fff" />
+          <Ionicons name="shirt-outline" size={14} color={colors.scrimTextPrimary} />
           <Text style={styles.lookText}>{sticker.payload.snapshotCaption ?? 'View look'}</Text>
         </View>
       );
@@ -769,96 +769,75 @@ function StickerContent({ sticker }: { sticker: ApiPosterSticker }) {
   }
 }
 
-function createStyles(colors: any) {
+function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
   stickerBase: {
-    position: 'absolute',
-  },
+    position: 'absolute' },
   stickerInner: {
     minWidth: 44,
     minHeight: 44,
     justifyContent: 'center',
     // Subtle drop shadow so stickers feel like they're floating above the
     // media, not pasted on — Instagram-style sticker depth.
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  // Bounding box — 1pt blue dashed border (enhanced selection visual)
+    ...Elevation.modal },
+  // Bounding box — 1pt dashed border (enhanced selection visual)
   selectedWrap: {
     borderWidth: Stroke.standard,
-    borderColor: '#3B82F6',
+    borderColor: colors.brand,
     borderRadius: Radius.sm,
-    borderStyle: 'dashed',
-  },
+    borderStyle: 'dashed' },
   // Die-cut white border — 2pt white stroke around sticker
   dieCutBorder: {
     borderWidth: Stroke.emphasis,
-    borderColor: '#FFFFFF',
-    borderRadius: Radius.sm,
-  },
+    borderColor: colors.scrimTextPrimary,
+    borderRadius: Radius.sm },
   selectionHandle: {
     position: 'absolute',
     width: 16,
     height: 16,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   handleTopLeft: {
     top: -8,
-    left: -8,
-  },
+    left: -8 },
   handleTopRight: {
     top: -8,
-    right: -8,
-  },
+    right: -8 },
   handleBottomLeft: {
     bottom: -8,
-    left: -8,
-  },
+    left: -8 },
   handleBottomRight: {
     bottom: -8,
-    right: -8,
-  },
-  // Corner dots — 8pt blue accent circles
+    right: -8 },
+  // Corner dots — 8pt accent circles
   cornerDot: {
     width: 8,
     height: 8,
     borderRadius: Radius.full,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.brand,
     borderWidth: Stroke.standard,
-    borderColor: '#FFFFFF',
-  },
+    borderColor: colors.scrimTextPrimary },
   // Rotation handle above top-center (24pt with connecting line)
   rotationHandleWrap: {
     position: 'absolute',
     top: -32,
     left: 0,
     right: 0,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   rotationConnectLine: {
     width: Stroke.standard,
     height: 12,
-    backgroundColor: '#3B82F6',
-  },
+    backgroundColor: colors.brand },
   rotationHandleDot: {
     width: 24,
     height: 24,
     borderRadius: Radius.full,
-    backgroundColor: '#3B82F6',
+    backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: Stroke.standard,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
+    borderColor: colors.scrimTextPrimary,
+    ...Elevation.modal },
   // Delete handle below bottom-center (24pt trash icon)
   deleteHandle: {
     position: 'absolute',
@@ -874,186 +853,146 @@ function createStyles(colors: any) {
     alignSelf: 'center',
     marginLeft: 'auto',
     marginRight: 'auto',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
+    ...Elevation.modal },
   textWrap: {
     alignItems: 'center',
     paddingHorizontal: Space.sm + Space.xs,
     paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   textSticker: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
+    textShadowRadius: 3 },
   mentionWrap: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.smMd,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   mentionText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   listingWrap: {
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.md,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.sm,
-    gap: 2,
-  },
+    gap: 2 },
+  listingImage: {
+    width: 56,
+    height: 56,
+    borderRadius: Radius.sm,
+    marginBottom: 2 },
   listingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
+    gap: 4 },
   listingTitle: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   listingPrice: {
     color: colors.brand,
     fontFamily: Typography.family.bold,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   lookWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 2,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   lookText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   voteWrap: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     gap: 6,
-    minWidth: 160,
-  },
+    minWidth: 160 },
   voteQuestion: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    textAlign: 'center' },
   voteOption: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.glassBorder,
     borderRadius: Radius.full,
     paddingVertical: 6,
     paddingHorizontal: Space.sm,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   voteOptionText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   // Poll sticker — tokenized padding/radius/typography per flagship spec
   pollWrap: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     gap: 6,
     minWidth: 160,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
-  },
+    ...Elevation.modal },
   pollQuestion: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    textAlign: 'center' },
   // Quiz sticker — tokenized padding/radius/typography per flagship spec
   quizWrap: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     gap: 6,
     minWidth: 160,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
-  },
+    ...Elevation.modal },
   quizQuestion: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    textAlign: 'center' },
   // Question sticker — tokenized padding/typography per flagship spec
   questionWrap: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
-  },
+    ...Elevation.modal },
   questionText: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    textAlign: 'center' },
   // Countdown sticker — tokenized padding/typography per flagship spec
   countdownWrap: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     alignItems: 'center',
     gap: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
-  },
+    ...Elevation.modal },
   countdownLabel: {
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.scrimTextSecondary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    textAlign: 'center' },
   countdownTime: {
-    color: '#fff',
+    color: colors.scrimTextPrimary,
     fontFamily: Typography.family.bold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight } });
 }

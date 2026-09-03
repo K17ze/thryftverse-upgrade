@@ -24,6 +24,23 @@ browse merely to make the work look researched.
 
 ## 1. Repository evidence first
 
+This workflow operationalizes the mandatory research-to-implementation protocol
+(AGENTS.md §25). The binding 6-stage sequence is:
+
+```text
+1. CODEBASE RESEARCH     → understand the current implementation end-to-end
+2. REFERENCE RESEARCH    → study supplied reference images / apps deeply
+3. ONLINE RESEARCH       → find the maximum best current practices and patterns
+4. FLAGSHIP SYNTHESIS    → combine codebase + references + best practices into a target
+5. IMPLEMENT             → write the change in the production TSX/files
+6. VERIFY + CRITIQUE     → render, criticise, correct, render again
+```
+
+Skipping a stage is a process failure, even if the output looks reasonable. Stage 3
+(online research) is the stage agents most often skip — do not. Verify current library
+APIs and platform guidance against online sources; they drift. Cite the source when it
+changes a decision.
+
 Capture the workspace root, Git root, remote, branch, HEAD, dirty paths, and
 applicable `AGENTS.md`. Preserve unrelated work. Then trace the target in both
 directions:
@@ -67,6 +84,23 @@ Maintain this compact ledger in the task notes or dated report:
 
 Reject a recommendation when it cannot identify an observable user, reliability,
 security, accessibility, performance, or operability outcome.
+
+### Research pack routing (AGENTS.md §28)
+
+The flagship research library is a reference corpus, not a prompt to load wholesale.
+When supplied research conflicts, resolve in this priority order:
+
+```text
+user requirement (explicit, current task)
+  → screen-specific research (department report for this surface)
+    → component research (primitive-level report)
+      → generic research (cross-cutting principles)
+```
+
+A higher tier overrides a lower tier. Generic research never overrides a
+screen-specific finding. A finding about feed masonry does not apply to a settings
+screen; a finding about media focal points does not apply to a text-only confirmation
+sheet.
 
 ## 4. Translate psychology into mechanics
 

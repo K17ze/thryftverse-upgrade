@@ -5,14 +5,12 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   NotificationRowBase,
   NotificationThumbnail,
-  NotificationStatusIcon,
-} from './NotificationRowBase';
+  NotificationStatusIcon } from './NotificationRowBase';
 import {
   Space,
   Radius,
-  Type,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { NotificationEventV2 } from '../../services/notificationsApi';
 
 // ---------------------------------------------------------------------------
@@ -40,31 +38,29 @@ export interface CommerceNotificationRowProps {
 interface CommerceVisual {
   icon: keyof typeof Ionicons.glyphMap;
   accentKey: 'success' | 'warning' | 'danger' | 'brand' | 'commerceTrust';
-  /** Matching subtle tint token key for the status icon background. */
-  accentSubtleKey: 'successSubtle' | 'warningSubtle' | 'dangerSubtle' | 'brandSubtle' | 'commerceTrustSubtle';
   statusLabel: string;
 }
 
 function resolveCommerceVisual(eventType: NotificationEventV2['eventType']): CommerceVisual {
   switch (eventType) {
     case 'order_created':
-      return { icon: 'bag-outline', accentKey: 'brand', accentSubtleKey: 'brandSubtle', statusLabel: 'New order' };
+      return { icon: 'bag-outline', accentKey: 'brand', statusLabel: 'New order' };
     case 'order_paid':
-      return { icon: 'card-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', statusLabel: 'Paid' };
+      return { icon: 'card-outline', accentKey: 'success', statusLabel: 'Paid' };
     case 'order_dispatched':
-      return { icon: 'cube-outline', accentKey: 'commerceTrust', accentSubtleKey: 'commerceTrustSubtle', statusLabel: 'Dispatched' };
+      return { icon: 'car-outline', accentKey: 'commerceTrust', statusLabel: 'Dispatched' };
     case 'order_in_transit':
-      return { icon: 'airplane-outline', accentKey: 'commerceTrust', accentSubtleKey: 'commerceTrustSubtle', statusLabel: 'In transit' };
+      return { icon: 'airplane-outline', accentKey: 'commerceTrust', statusLabel: 'In transit' };
     case 'order_out_for_delivery':
-      return { icon: 'bicycle-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', statusLabel: 'Out for delivery' };
+      return { icon: 'bicycle-outline', accentKey: 'warning', statusLabel: 'Out for delivery' };
     case 'order_delivered':
-      return { icon: 'checkmark-circle-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', statusLabel: 'Delivered' };
+      return { icon: 'checkmark-circle-outline', accentKey: 'success', statusLabel: 'Delivered' };
     case 'order_cancelled':
-      return { icon: 'close-circle-outline', accentKey: 'danger', accentSubtleKey: 'dangerSubtle', statusLabel: 'Cancelled' };
+      return { icon: 'close-circle-outline', accentKey: 'danger', statusLabel: 'Cancelled' };
     case 'order_refunded':
-      return { icon: 'cash-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', statusLabel: 'Refunded' };
+      return { icon: 'cash-outline', accentKey: 'warning', statusLabel: 'Refunded' };
     default:
-      return { icon: 'bag-outline', accentKey: 'brand', accentSubtleKey: 'brandSubtle', statusLabel: 'Order update' };
+      return { icon: 'bag-outline', accentKey: 'brand', statusLabel: 'Order update' };
   }
 }
 
@@ -78,8 +74,7 @@ const LIFECYCLE_LABELS: Record<LifecycleStep, string> = {
   placed: 'Placed',
   paid: 'Paid',
   shipped: 'Shipped',
-  delivered: 'Delivered',
-};
+  delivered: 'Delivered' };
 
 /** Resolve the current lifecycle step for an event. Terminal/cancelled states return null. */
 function resolveLifecycleStep(eventType: NotificationEventV2['eventType']): LifecycleStep | null {
@@ -99,12 +94,13 @@ function resolveLifecycleStep(eventType: NotificationEventV2['eventType']): Life
   }
 }
 
-/** Compact 4-segment progress strip. Completed segments fill; the active one uses the accent. */
+/** Compact 4-segment progress strip. Completed segments are filled dots;
+ *  incomplete segments are hollow dots; the active segment shows the accent
+ *  colour plus its label. Only the current step is labelled, reducing height. */
 function OrderLifecycleStrip({
   currentStep,
   accentColor,
-  colors,
-}: {
+  colors }: {
   currentStep: LifecycleStep;
   accentColor: string;
   colors: ThemeColors;
@@ -126,16 +122,14 @@ function OrderLifecycleStrip({
                 isActive && { backgroundColor: accentColor },
               ]}
             />
-            <Text
-              style={[
-                styles.label,
-                (isComplete || isActive) && styles.labelActive,
-                isActive && { color: accentColor, fontFamily: FontFamily.semibold },
-              ]}
-              numberOfLines={1}
-            >
-              {LIFECYCLE_LABELS[step]}
-            </Text>
+            {isActive ? (
+              <Text
+                style={[styles.label, { color: accentColor, fontFamily: FontFamily.semibold }]}
+                numberOfLines={1}
+              >
+                {LIFECYCLE_LABELS[step]}
+              </Text>
+            ) : null}
           </View>
         );
       })}
@@ -148,14 +142,12 @@ export function CommerceNotificationRow({
   time,
   aggregatedCount,
   inAttentionSection = false,
-  onPress,
-}: CommerceNotificationRowProps) {
+  onPress }: CommerceNotificationRowProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const visual = useMemo(() => resolveCommerceVisual(event.eventType), [event.eventType]);
   const accentColor = colors[visual.accentKey] ?? colors.brand;
-  const accentSubtle = colors[visual.accentSubtleKey];
   const isUnread = !event.readAt;
 
   const objectLabel = event.objectRef?.label ?? 'your order';
@@ -171,16 +163,14 @@ export function CommerceNotificationRow({
     <NotificationStatusIcon
       icon={visual.icon}
       accentColor={accentColor}
-      accentSubtle={accentSubtle}
-      colors={colors}
-      size={44}
+      size={24}
     />
   );
 
   const trailing = event.objectRef ? (
     <NotificationThumbnail
       uri={objectImage}
-      fallbackIcon="cube-outline"
+      fallbackIcon="bag-handle-outline"
       size={40}
       colors={colors}
     />
@@ -217,23 +207,19 @@ export function CommerceNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyLarge.lineHeight,
-      paddingRight: Space.xxl + Space.sm,
-    },
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      flexShrink: 1 },
     titleUnread: {
       color: colors.textPrimary,
-      fontFamily: FontFamily.semibold,
-    },
+      fontFamily: FontFamily.semibold },
     body: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      lineHeight: TypographyV2.body.lineHeight } });
 }
 
 function createStripStyles(colors: ThemeColors) {
@@ -242,28 +228,20 @@ function createStripStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       marginTop: Space.xs + 1,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     segment: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     bar: {
-      height: 3,
+      height: 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     barComplete: {
-      backgroundColor: colors.textMuted,
-    },
+      backgroundColor: colors.textMuted },
     label: {
-      fontSize: Type.meta.size - 1,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
       letterSpacing: 0.1,
-    },
-    labelActive: {
-      color: colors.textSecondary,
-    },
-  });
+      marginTop: Space.xs / 2 } });
 }

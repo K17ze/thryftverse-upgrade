@@ -6,10 +6,7 @@ import {
   Image,
   ScrollView,
   TextInput,
-  RefreshControl,
-  Animated as RNAnimated,
-  Easing,
-} from 'react-native';
+  RefreshControl } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
@@ -20,7 +17,8 @@ import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
-import { Space, Radius, Type, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { EmptyState } from '../components/EmptyState';
@@ -34,14 +32,15 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import type { Listing } from '../domain';
 import { visualSearch } from '../services/listingsApi';
 import VisualSearchCamera from '../components/VisualSearchCamera';
-import { Motion } from '../theme/motionTokens';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VisualSearch'>;
 
-type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error';
+type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error' | 'offline' | 'partial';
 
 export default function VisualSearchScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -65,52 +64,23 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   const [resultNote, setResultNote] = useState<string | undefined>(undefined);
   const [refreshing, setRefreshing] = useState(false);
 
-  // ── Instagram-style scanning animation ──────────────────────────────
-  // When a photo is captured/selected, an animated scanline sweeps across
-  // the thumbnail to communicate AI analysis is in progress.
-  const scanLineAnim = useRef(new RNAnimated.Value(0)).current;
-  const scanOpacityAnim = useRef(new RNAnimated.Value(0)).current;
-
-  // Guard against async state updates after the component unmounts.
-  // runSearch awaits a network call and then calls setState; without
-  // this guard those calls would fire on an unmounted component.
+  // ── Request sequencing ──────────────────────────────────────────────
+  // Monotonic sequence counter ensures a newer crop/filter/refresh request
+  // can never be overwritten by a stale response from an older one. Each
+  // runSearch increments the counter and captures its sequence number; only
+  // the response matching the latest sequence is applied to state.
+  // An AbortController cancels the in-flight HTTP request when a newer
+  // search starts, so stale fetches don't consume bandwidth or race.
+  const requestSequenceRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   useEffect(() => {
     isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
+    return () => {
+      isMountedRef.current = false;
+      abortRef.current?.abort();
+    };
   }, []);
-
-  useEffect(() => {
-    if (status === 'loading') {
-      scanOpacityAnim.setValue(1);
-      const loop = RNAnimated.loop(
-        RNAnimated.sequence([
-          RNAnimated.timing(scanLineAnim, {
-            toValue: 1,
-            duration: Motion.duration.crawl,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-          RNAnimated.timing(scanLineAnim, {
-            toValue: 0,
-            duration: Motion.duration.slower,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-        ]),
-      );
-      loop.start();
-      return () => loop.stop();
-    } else {
-      const fadeOut = RNAnimated.timing(scanOpacityAnim, {
-        toValue: 0,
-        duration: Motion.duration.slow,
-        useNativeDriver: false,
-      });
-      fadeOut.start();
-      return () => fadeOut.stop();
-    }
-  }, [status, scanLineAnim, scanOpacityAnim]);
 
   // Derive available categories from listings for refinement chips.
   const availableCategories = useMemo(() => {
@@ -165,8 +135,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.92,
-      });
+        quality: 0.92 });
       if (!result.canceled && result.assets?.[0]?.uri) {
         haptic.light();
         setPreviewFailed(false);
@@ -189,6 +158,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     setMinPrice('');
     setMaxPrice('');
   }, [haptic]);
+
   const buildFilterPayload = useCallback(() => {
     const minPriceNum = minPrice.trim() ? Number(minPrice) : undefined;
     const maxPriceNum = maxPrice.trim() ? Number(maxPrice) : undefined;
@@ -199,8 +169,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       minPrice: typeof minPriceNum === 'number' && !Number.isNaN(minPriceNum) ? minPriceNum : undefined,
       maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined,
       sort: 'similarity' as const,
-      limit: 48,
-    };
+      limit: 48 };
   }, [description, selectedCategory, brand, minPrice, maxPrice]);
 
   // Client-side fallback filter over cached listings — mirrors BrowseScreen logic.
@@ -242,40 +211,72 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     }
     try {
       return await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+        encoding: FileSystem.EncodingType.Base64 });
     } catch {
       return null;
     }
   }, []);
 
   // Run the visual search: prefer the backend, fall back to cached listings.
+  // Uses a monotonic sequence + AbortController so a newer request never gets
+  // overwritten by a stale response from an older one. Sets 'error' state
+  // when the backend call fails AND the client-side fallback also produces
+  // nothing — the error state was previously unreachable.
   const runSearch = useCallback(async () => {
     if (!imageUri) return;
+    // Cancel any in-flight request from a previous search.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const mySequence = ++requestSequenceRef.current;
     setStatus('loading');
     const payload = buildFilterPayload();
 
-    // Send the captured image to the backend so it can run real colour-feature
-    // similarity scoring. Local file URIs are base64-encoded; remote URLs are
-    // forwarded via imageUrl.
     const isRemote = /^https?:/i.test(imageUri);
     const imageBase64 = isRemote ? null : await readImageAsBase64(imageUri);
-    const apiResult = await visualSearch({
-      ...payload,
-      imageBase64: imageBase64 ?? undefined,
-      imageUrl: isRemote ? imageUri : undefined,
-    });
-    if (!isMountedRef.current) return;
+    let apiResult;
+    try {
+      apiResult = await visualSearch({
+        ...payload,
+        imageBase64: imageBase64 ?? undefined,
+        imageUrl: isRemote ? imageUri : undefined,
+        signal: controller.signal });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (!isMountedRef.current || mySequence !== requestSequenceRef.current) return;
+      // Network/parse failure — try cached listings before declaring error.
+      const cached = filterCachedListings(payload);
+      if (cached.length > 0) {
+        setResults(cached);
+        setVisualMatching(false);
+        setSimilarityMethod('filter_only');
+        setResultNote('Showing matches from your filters (offline).');
+        setStatus('offline');
+      } else {
+        setStatus('error');
+      }
+      return;
+    }
+
+    // Drop stale responses — a newer crop/filter/refresh may have started.
+    if (!isMountedRef.current || mySequence !== requestSequenceRef.current) return;
+
     let items: Listing[] = apiResult.listings;
     let usedFallback = apiResult.source === 'fallback';
 
     if (apiResult.source === 'fallback' || items.length === 0) {
-      // Try client-side filtering over cached listings before declaring empty.
       const cached = filterCachedListings(payload);
       if (cached.length > 0) {
         items = cached;
         usedFallback = true;
       }
+    }
+
+    // If the backend returned an explicit error AND no items AND the cached
+    // fallback also produced nothing, show the error state — not empty.
+    if (apiResult.error && items.length === 0 && !usedFallback) {
+      setStatus('error');
+      return;
     }
 
     setResults(items);
@@ -286,7 +287,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         ? 'Showing matches from your category, brand, and description filters.'
         : apiResult.note
     );
-    setStatus(items.length > 0 ? 'populated' : 'empty');
+    const isPartial = usedFallback && (!!apiResult.error || apiResult.source === 'fallback');
+    setStatus(items.length > 0 ? (isPartial ? 'partial' : 'populated') : 'empty');
   }, [imageUri, buildFilterPayload, filterCachedListings, readImageAsBase64]);
 
   // Auto-run search once a photo is selected (initial coarse result set).
@@ -297,7 +299,6 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageUri]);
 
-  // Re-run when refinement inputs change (debounced via the user's explicit "Apply").
   const handleApplyFilters = useCallback(() => {
     haptic.medium();
     if (imageUri) void runSearch();
@@ -318,7 +319,6 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     setMinPrice('');
     setMaxPrice('');
     if (imageUri) {
-      // Re-run with cleared filters on next tick to flush state.
       setTimeout(() => void runSearch(), 0);
     }
   }, [haptic, imageUri, runSearch]);
@@ -338,7 +338,12 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     [navigation]
   );
 
-  // Save-search: mirrors BrowseScreen/GlobalSearchScreen truthfully.
+  // Save-search: stores text/facet filters truthfully. Visual query images
+  // are not yet persisted as a durable query representation, so alerts are
+  // disabled — enabling alerts on a visual search with no retained image
+  // would be deceptive (the alert would match on text/facets only, not the
+  // photo). When a retained visual-query contract exists, this can be
+  // upgraded to alertsEnabled: true with a clear disclosure.
   const saveSearchLabel = useMemo(() => {
     const parts: string[] = [];
     if (description.trim()) parts.push(description.trim());
@@ -370,11 +375,9 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         sort: 'Newest',
         category: selectedCategory ?? undefined,
         minPrice: typeof minPriceNum === 'number' && !Number.isNaN(minPriceNum) ? minPriceNum : undefined,
-        maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined,
-      },
-      alertsEnabled: true,
-    });
-    show('Search saved with alerts enabled', 'success');
+        maxPrice: typeof maxPriceNum === 'number' && !Number.isNaN(maxPriceNum) ? maxPriceNum : undefined },
+      alertsEnabled: false });
+    show('Search saved (alerts off)', 'success');
   }, [imageUri, saveSearchLabel, brand, selectedCategory, minPrice, maxPrice, addSavedSearch, show, haptic]);
 
   const hasActiveFilters =
@@ -385,6 +388,10 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     maxPrice.trim().length > 0;
 
   // ── Visual-query header (photo selected) ──────────────────────────────
+  // No scanline animation or corner brackets — the backend is a colour
+  // heuristic, not AI. A loading indicator on the thumbnail would imply
+  // ML analysis that isn't happening. The honest loading state is a
+  // progress label on the results section, not AI theatre on the photo.
   const renderVisualQueryHeader = () => (
     <View style={styles.queryHeader}>
       <View style={styles.queryThumbWrap}>
@@ -402,32 +409,6 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
             accessibilityRole="image"
           />
         )}
-        {/* Instagram-style scanning overlay — animated scanline + corner brackets */}
-        <RNAnimated.View
-          style={[
-            styles.scanOverlay,
-            { opacity: scanOpacityAnim },
-          ]}
-          pointerEvents="none"
-        >
-          <RNAnimated.View
-            style={[
-              styles.scanLine,
-              {
-                transform: [{
-                  translateY: scanLineAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, 64],
-                  }),
-                }],
-              },
-            ]}
-          />
-          <View style={styles.scanBracketTL} />
-          <View style={styles.scanBracketTR} />
-          <View style={styles.scanBracketBL} />
-          <View style={styles.scanBracketBR} />
-        </RNAnimated.View>
         <AnimatedPressable
           style={styles.queryThumbRemove}
           onPress={handleRemoveImage}
@@ -513,11 +494,11 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           >
             <Text style={[styles.categoryPillText, !selectedCategory && styles.categoryPillTextActive]}>All</Text>
           </AnimatedPressable>
-          {availableCategories.map(({ category, count }) => {
+          {availableCategories.map(({ category, count }, idx) => {
             const active = selectedCategory === category;
             return (
               <AnimatedPressable
-                key={category}
+                key={`vscat-${idx}-${category}`}
                 style={[styles.categoryPill, active && styles.categoryPillActive]}
                 onPress={() => { haptic.selection(); setSelectedCategory(active ? null : category); }}
                 activeOpacity={0.85}
@@ -549,7 +530,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           />
         </View>
         <View style={styles.filterInputWrap}>
-          <Text style={styles.filterInputLabel}>Min £</Text>
+          <Text style={styles.filterInputLabel}>Min {currencySymbol}</Text>
           <TextInput
             style={styles.filterInput}
             value={minPrice}
@@ -563,7 +544,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           />
         </View>
         <View style={styles.filterInputWrap}>
-          <Text style={styles.filterInputLabel}>Max £</Text>
+          <Text style={styles.filterInputLabel}>Max {currencySymbol}</Text>
           <TextInput
             style={styles.filterInput}
             value={maxPrice}
@@ -676,9 +657,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         ? {
             suggestedActions: availableCategories.slice(0, 4).map(({ category }) => ({
               label: category,
-              onPress: () => handleBrowseCategory(category, category),
-            })),
-          }
+              onPress: () => handleBrowseCategory(category, category) })) }
         : {})}
     />
   );
@@ -702,11 +681,27 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   );
 
   // ── Results section ───────────────────────────────────────────────────
+  // Loading kicker says "Matching colours" — honest about the heuristic
+  // method, never "Analyzing image" which implies AI/ML analysis.
+  const renderOfflineBanner = () => (
+    <View style={styles.offlineBanner}>
+      <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} />
+      <Text style={styles.offlineBannerText}>Offline — showing cached results</Text>
+    </View>
+  );
+
+  const renderPartialIndicator = () => (
+    <View style={styles.partialIndicator}>
+      <Ionicons name="save-outline" size={14} color={colors.textMuted} />
+      <Text style={styles.partialIndicatorText}>Some results from your saved data</Text>
+    </View>
+  );
+
   const renderResults = () => {
     if (status === 'loading') {
       return (
         <View style={styles.resultsSection}>
-          <DiscoverySectionHeader title="Results" kicker="Analyzing image…" />
+          <DiscoverySectionHeader title="Results" kicker="Matching colours…" />
           {renderSkeletonGrid()}
         </View>
       );
@@ -724,6 +719,64 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
         <View style={styles.resultsSection}>
           <DiscoverySectionHeader title="Results" kicker="Error" />
           {renderErrorState()}
+        </View>
+      );
+    }
+    if (status === 'offline' && results.length > 0) {
+      return (
+        <View style={styles.resultsSection}>
+          <DiscoverySectionHeader
+            title="Results"
+            kicker={`${results.length} item${results.length === 1 ? '' : 's'}`}
+            actionLabel={isCurrentSaved ? 'Saved' : 'Save search'}
+            onAction={isCurrentSaved ? undefined : handleSaveSearch}
+          />
+          {renderOfflineBanner()}
+          {renderHonestNote()}
+          <PinterestMasonryGrid
+            items={results}
+            onPressItem={handlePressItem}
+            numColumns={2}
+            showSaveButton
+            horizontalPadding={Space.md}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={colors.brand}
+                colors={[colors.brand]}
+              />
+            }
+          />
+        </View>
+      );
+    }
+    if (status === 'partial' && results.length > 0) {
+      return (
+        <View style={styles.resultsSection}>
+          <DiscoverySectionHeader
+            title="Results"
+            kicker={`${results.length} item${results.length === 1 ? '' : 's'}`}
+            actionLabel={isCurrentSaved ? 'Saved' : 'Save search'}
+            onAction={isCurrentSaved ? undefined : handleSaveSearch}
+          />
+          {renderPartialIndicator()}
+          {renderHonestNote()}
+          <PinterestMasonryGrid
+            items={results}
+            onPressItem={handlePressItem}
+            numColumns={2}
+            showSaveButton
+            horizontalPadding={Space.md}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={colors.brand}
+                colors={[colors.brand]}
+              />
+            }
+          />
         </View>
       );
     }
@@ -805,75 +858,15 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   queryThumbWrap: {
     width: Space.xxl + Space.xxl + Space.xs,
     height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
-    position: 'relative',
-  },
+    position: 'relative' },
   queryThumb: { width: '100%', height: '100%' },
-  // ── Scanning animation overlay ────────────────────────────────────────
-  scanOverlay: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
-  scanLine: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: Space.xs / 2,
-    backgroundColor: colors.brand,
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  scanBracketTL: {
-    position: 'absolute',
-    top: Space.xs + 2,
-    left: Space.xs + 2,
-    width: Space.sm + Space.xs,
-    height: Space.sm + Space.xs,
-    borderTopWidth: Stroke.emphasis,
-    borderLeftWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-  },
-  scanBracketTR: {
-    position: 'absolute',
-    top: Space.xs + 2,
-    right: Space.xs + 2,
-    width: Space.sm + Space.xs,
-    height: Space.sm + Space.xs,
-    borderTopWidth: Stroke.emphasis,
-    borderRightWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-  },
-  scanBracketBL: {
-    position: 'absolute',
-    bottom: Space.xs + 2,
-    left: Space.xs + 2,
-    width: Space.sm + Space.xs,
-    height: Space.sm + Space.xs,
-    borderBottomWidth: Stroke.emphasis,
-    borderLeftWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-  },
-  scanBracketBR: {
-    position: 'absolute',
-    bottom: Space.xs + 2,
-    right: Space.xs + 2,
-    width: Space.sm + Space.xs,
-    height: Space.sm + Space.xs,
-    borderBottomWidth: Stroke.emphasis,
-    borderRightWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-  },
   queryThumbRemove: {
     position: 'absolute',
     top: Space.xs,
@@ -883,8 +876,7 @@ function createStyles(colors: ThemeColors) {
     width: Control.icon,
     height: Control.icon,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   queryActions: { flexDirection: 'row', gap: Space.sm },
   queryActionBtn: {
     flexDirection: 'row',
@@ -895,13 +887,11 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   queryActionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
 
   // ── Refinement bar ────────────────────────────────────────────────────
   refinementWrap: {
@@ -911,15 +901,13 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   refinementLabel: {
-    fontSize: Type.label.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.label.size,
+    fontFamily: TypographyV2.label.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase' },
   textInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -929,16 +917,14 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   textInputIcon: { marginRight: 2 },
   textInput: {
     flex: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    padding: 0,
-  },
+    padding: 0 },
 
   // ── Category rail ─────────────────────────────────────────────────────
   categoryRail: { marginHorizontal: -Space.xs },
@@ -949,30 +935,25 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   categoryPillActive: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   categoryPillText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   categoryPillTextActive: {
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
 
   // ── Filter row ────────────────────────────────────────────────────────
   filterRow: { flexDirection: 'row', gap: Space.sm },
   filterInputWrap: { flex: 1, gap: Space.xs },
   filterInputLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: LetterSpacing.wide + 0.18,
-  },
+    letterSpacing: LetterSpacing.wide + 0.18 },
   filterInput: {
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs + 2,
@@ -980,29 +961,25 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
 
   // ── Brand suggestions ─────────────────────────────────────────────────
   suggestionRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Space.xs + 2 },
   suggestionLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   suggestionChip: {
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   suggestionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
 
   // ── Refinement actions ────────────────────────────────────────────────
   refinementActions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.xs },
@@ -1011,13 +988,11 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
     borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   clearBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
 
   // ── Honest note ───────────────────────────────────────────────────────
   honestNote: {
@@ -1028,27 +1003,51 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs + 2,
     marginBottom: Space.sm,
     backgroundColor: colors.surface,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   honestNoteText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.size + 3,
-  },
+    lineHeight: TypographyV2.meta.size + 3 },
+
+  // ── Offline / partial banners ─────────────────────────────────────────
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 2,
+    marginBottom: Space.sm,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border },
+  offlineBannerText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
+  partialIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: Space.xs,
+    marginBottom: Space.sm },
+  partialIndicatorText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
 
   // ── Results ───────────────────────────────────────────────────────────
   resultsSection: { flex: 1, marginTop: Space.lg },
   skeletonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   skeletonTile: {
     width: '48%',
-    flexGrow: 1,
-  },
+    flexGrow: 1 },
 
   // ── Empty / error ─────────────────────────────────────────────────────
   emptyState: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.xl, paddingHorizontal: Space.md },
@@ -1059,29 +1058,25 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   emptyTitle: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   emptyText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: Type.caption.size + 4,
-  },
+    lineHeight: TypographyV2.meta.size + 4 },
   emptyAction: { marginTop: Space.xs },
 
   // ── Category chips (capture surface) ──────────────────────────────────
   categoryChipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1091,17 +1086,13 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xxl,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   categoryChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   categoryChipCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted } });
 }

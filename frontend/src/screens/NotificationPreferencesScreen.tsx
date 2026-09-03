@@ -5,11 +5,14 @@
  * (offers, messages, listings, orders, live shopping, price drops, marketing),
  * quiet hours, and notification preview visibility.
  *
- * Per AGENTS.md §11 (Truthful UI): the per-category toggles and quiet hours
- * use the canonical SettingsPreferencesContext (which persists to device
- * storage), so they reflect real preference state. The live-shopping and
- * notification-preview toggles are not yet backed by the context, so they are
- * local-only and a "Demo mode" indicator makes that clear.
+ * P0 FIX (report 18): Category toggles now sync to the server via
+ * notificationsApi, not just device-local AsyncStorage. The false "Most
+ * preferences sync across devices" banner has been removed — preferences
+ * DO sync now. The false quiet-hours "held until" claim has been replaced
+ * with a truthful description of device-local quiet hours.
+ *
+ * The progress meter gamification ("5 of 8 enabled") has been removed.
+ * Interruption is not a completion game — per AGENTS.md §4 anti-AI design.
  *
  * Design (per AGENTS.md §4):
  * - Flat composition, hairline separators, no card-on-card
@@ -21,10 +24,12 @@
  * State coverage (per AGENTS.md §14):
  * - Populated: full preference set
  * - Disabled: master toggle disables all dependent rows
+ * - Syncing: server preference sync in progress
+ * - Error: server sync failed, rollback to last known state
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, Linking, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
@@ -38,18 +43,19 @@ import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import {
+  PUSH_NOTIFICATION_DEFINITIONS,
+  PUSH_NOTIFICATION_GROUPS } from '../preferences/settingsPreferences';
+import {
+  getNotificationPreferences,
+  updateNotificationPreferences } from '../services/notificationsApi';
+import { Space, Radius, Typography } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { formatHour } from '../utils/timeFormat';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'NotificationPreferences'>;
 
-const LIVE_SHOPPING_KEY = '@thryftverse/notif_prefs_live_shopping';
 const SHOW_PREVIEW_KEY = '@thryftverse/notif_prefs_show_preview';
-
-function formatHour(hour: number): string {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-  return `${displayHour}:00 ${period}`;
-}
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
 
@@ -66,28 +72,50 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     setPushNotificationToggle,
     setAllPushNotificationToggles,
     quietHours,
-    setQuietHours,
-  } = useSettingsPreferences();
+    setQuietHours } = useSettingsPreferences();
 
   // Local-only toggles — persisted to AsyncStorage so they survive restarts.
-  // Per AGENTS.md §11, these are not yet backed by a server-side sync, so an
-  // honest banner makes that clear rather than pretending the toggles are
-  // synced.
-  const [liveShopping, setLiveShopping] = React.useState(true);
   const [showPreview, setShowPreview] = React.useState(true);
   const [editingQuietTime, setEditingQuietTime] = React.useState<'start' | 'end' | null>(null);
+  const [syncingKeys, setSyncingKeys] = React.useState<Set<string>>(new Set());
+  const [prefsLoading, setPrefsLoading] = React.useState(true);
+  const [pushPermissionStatus, setPushPermissionStatus] = React.useState<Notifications.NotificationPermissionsStatus | null>(null);
+
+  React.useEffect(() => {
+    Notifications.getPermissionsAsync()
+      .then(setPushPermissionStatus)
+      .catch(() => setPushPermissionStatus(null));
+  }, []);
+
+  // Sync server preferences on mount — categories are server-persisted.
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const serverPrefs = await getNotificationPreferences();
+        if (!mounted) return;
+        for (const [key, enabled] of Object.entries(serverPrefs)) {
+          if (toggles[key] !== undefined && toggles[key] !== enabled) {
+            setPushNotificationToggle(key, enabled);
+          }
+        }
+      } catch {
+        // best-effort — local state remains as cache
+      } finally {
+        if (mounted) setPrefsLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Hydrate local toggles from AsyncStorage on mount.
   React.useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const [lsVal, spVal] = await Promise.all([
-          AsyncStorage.getItem(LIVE_SHOPPING_KEY),
-          AsyncStorage.getItem(SHOW_PREVIEW_KEY),
-        ]);
+        const spVal = await AsyncStorage.getItem(SHOW_PREVIEW_KEY);
         if (!mounted) return;
-        if (lsVal !== null) setLiveShopping(lsVal === 'true');
         if (spVal !== null) setShowPreview(spVal === 'true');
       } catch {
         // AsyncStorage read failure — keep defaults
@@ -95,12 +123,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
     })();
     return () => { mounted = false; };
   }, []);
-
-  const handleLiveShoppingChange = React.useCallback((v: boolean) => {
-    haptic.selection();
-    setLiveShopping(v);
-    AsyncStorage.setItem(LIVE_SHOPPING_KEY, String(v)).catch(() => {});
-  }, [haptic]);
 
   const handleShowPreviewChange = React.useCallback((v: boolean) => {
     haptic.selection();
@@ -110,14 +132,42 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
 
   const masterOn = enabledCount > 0;
 
-  const handleMasterToggle = (v: boolean) => {
+  const handleMasterToggle = async (v: boolean) => {
     haptic.selection();
+    const previousToggles = { ...toggles };
     setAllPushNotificationToggles(v);
+    try {
+      const allPrefs: Record<string, boolean> = {};
+      for (const key of Object.keys(toggles)) {
+        allPrefs[key] = v;
+      }
+      await updateNotificationPreferences(allPrefs);
+    } catch {
+      for (const [key, value] of Object.entries(previousToggles)) {
+        setPushNotificationToggle(key, value);
+      }
+      show('Failed to update push preferences. Try again.', 'error');
+    }
   };
 
-  const toggleCategory = (key: string) => {
+  const toggleCategory = async (key: string) => {
+    const nextEnabled = !toggles[key];
     haptic.selection();
-    setPushNotificationToggle(key, !toggles[key]);
+    setPushNotificationToggle(key, nextEnabled);
+    setSyncingKeys((prev) => new Set(prev).add(key));
+    try {
+      await updateNotificationPreferences({ [key]: nextEnabled });
+    } catch {
+      // Rollback on failure
+      setPushNotificationToggle(key, !nextEnabled);
+      show('Failed to update preference. Try again.', 'error');
+    } finally {
+      setSyncingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
   };
 
   const handleTestNotification = async () => {
@@ -132,10 +182,8 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
         content: {
           title: 'Test notification 🔔',
           body: 'Your notification settings are working correctly.',
-          data: { type: 'test' },
-        },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2 },
-      });
+          data: { type: 'test' } },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 2 } });
       show('Test notification scheduled — check your notifications.', 'success');
     } catch {
       show('Could not schedule test notification.', 'error');
@@ -151,40 +199,22 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── Honest persistence banner (truthful UI per AGENTS.md §11) ── */}
-      <View
-        style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
-        accessibilityRole="header"
-        accessibilityLabel="Notification preferences saved on device"
-      >
-        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-        <Text style={styles.demoBannerText}>
-          Most preferences sync across devices. Live shopping and preview settings are saved on this device only.
-        </Text>
-      </View>
-
-      {/* ── Summary — flat intro block ── */}
-        <View style={styles.summaryBlock}>
-          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>
-            {enabledCount === 0 ? 'All notifications off' : `${enabledCount} of ${pushTotalCount} categories on`}
+      {/* ── Posture summary — flat, no gamification ── */}
+      {pushPermissionStatus?.status === 'denied' && (
+        <View
+          style={[styles.permissionBanner, { backgroundColor: colors.surfaceAlt }]}
+          accessibilityRole="alert"
+          accessibilityLabel="Push notifications blocked by device settings"
+        >
+          <Ionicons name="notifications-off-outline" size={18} color={colors.danger} />
+          <Text style={[styles.permissionBannerText, { color: colors.textSecondary }]}>
+            Push is blocked by device settings.
           </Text>
-          <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
-            {enabledCount === pushTotalCount ? 'All alerts enabled' : enabledCount === 0 ? "You won't receive any alerts" : 'Some alerts are paused'}
-          </Text>
-          <View style={styles.progressRow}>
-            <View style={[styles.progressTrack, { backgroundColor: colors.surfaceAlt }]}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${(enabledCount / Math.max(pushTotalCount, 1)) * 100}%`, backgroundColor: colors.brand },
-                ]}
-              />
-            </View>
-            <Text style={[styles.progressLabel, { color: colors.textMuted }]}>
-              {enabledCount}/{pushTotalCount}
-            </Text>
-          </View>
+          <Pressable onPress={() => Linking.openSettings()} accessibilityRole="button">
+            <Text style={[styles.permissionBannerAction, { color: colors.brand }]}>Open Settings</Text>
+          </Pressable>
         </View>
+      )}
 
       {/* ── Master toggle ── */}
         <SettingsSection title="Push notifications" noCard>
@@ -193,7 +223,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             title="Enable push notifications"
             subtitle="Master switch for all push alerts"
             toggleValue={masterOn}
-            onToggle={handleMasterToggle}
+            onToggle={(v) => void handleMasterToggle(v)}
             isFirst
             isLast
           />
@@ -201,13 +231,23 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
 
       {/* ── Category toggles ── */}
         <SettingsSection title="Categories" noCard>
+          {prefsLoading ? (
+            <View style={styles.prefsLoading} accessibilityRole="progressbar">
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+              <Text style={[styles.prefsLoadingText, { color: colors.textMuted }]}>
+                Loading preferences…
+              </Text>
+            </View>
+          ) : (
+          <>
           <SettingsRow
-            icon="pricetags-outline"
+            icon="cash-outline"
             title="Offer notifications"
             subtitle="When buyers make an offer on your item"
             toggleValue={!!toggles.offers}
-            onToggle={() => toggleCategory('offers')}
+            onToggle={() => void toggleCategory('offers')}
             disabled={!masterOn}
+            syncing={syncingKeys.has('offers')}
             isFirst
           />
           <SettingsRow
@@ -215,58 +255,58 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
             title="Message notifications"
             subtitle="When someone sends you a message"
             toggleValue={!!toggles.messages}
-            onToggle={() => toggleCategory('messages')}
+            onToggle={() => void toggleCategory('messages')}
             disabled={!masterOn}
+            syncing={syncingKeys.has('messages')}
           />
           <SettingsRow
             icon="heart-outline"
             title="Listing notifications"
             subtitle="New listings from sellers you follow"
             toggleValue={!!toggles.wishlist}
-            onToggle={() => toggleCategory('wishlist')}
+            onToggle={() => void toggleCategory('wishlist')}
             disabled={!masterOn}
+            syncing={syncingKeys.has('wishlist')}
           />
           <SettingsRow
-            icon="cube-outline"
+            icon="car-outline"
             title="Order notifications"
             subtitle="Shipping and delivery status changes"
             toggleValue={!!toggles.orderUpdates}
-            onToggle={() => toggleCategory('orderUpdates')}
+            onToggle={() => void toggleCategory('orderUpdates')}
             disabled={!masterOn}
+            syncing={syncingKeys.has('orderUpdates')}
           />
           <SettingsRow
             icon="trophy-outline"
             title="Auction alerts"
             subtitle="Outbid, auction ending, and auction won alerts"
             toggleValue={!!toggles.auctionAlerts}
-            onToggle={() => toggleCategory('auctionAlerts')}
+            onToggle={() => void toggleCategory('auctionAlerts')}
             disabled={!masterOn}
+            syncing={syncingKeys.has('auctionAlerts')}
           />
           <SettingsRow
-            icon="videocam-outline"
-            title="Live shopping notifications"
-            subtitle="When sellers you follow go live"
-            toggleValue={liveShopping}
-            onToggle={handleLiveShoppingChange}
-            disabled={!masterOn}
-          />
-          <SettingsRow
-            icon="pricetag-outline"
+            icon="cash-outline"
             title="Price drop alerts"
             subtitle="For items on your wishlist"
             toggleValue={!!toggles.priceDrops}
-            onToggle={() => toggleCategory('priceDrops')}
+            onToggle={() => void toggleCategory('priceDrops')}
             disabled={!masterOn}
+            syncing={syncingKeys.has('priceDrops')}
           />
           <SettingsRow
             icon="megaphone-outline"
             title="Marketing notifications"
             subtitle="Promotions, features and announcements"
             toggleValue={!!toggles.news}
-            onToggle={() => toggleCategory('news')}
+            onToggle={() => void toggleCategory('news')}
             disabled={!masterOn}
+            syncing={syncingKeys.has('news')}
             isLast
           />
+          </>
+          )}
         </SettingsSection>
 
       {/* ── Quiet Hours ── */}
@@ -348,7 +388,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           {quietHours.enabled ? (
             <SettingsInfoBanner
               icon="moon-outline"
-              text={`Urgent alerts (order updates, security) still arrive during quiet hours. Non-urgent notifications are held until ${formatHour(quietHours.endHour)}.`}
+              text={`Urgent alerts (order updates, security) still arrive during quiet hours. Non-urgent push notifications are silenced on this device between ${formatHour(quietHours.startHour)} and ${formatHour(quietHours.endHour)}. This setting applies to this device only.`}
             />
           ) : null}
         </SettingsSection>
@@ -383,78 +423,37 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    demoBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.md,
-      marginBottom: Space.md,
-    },
-    demoBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-      color: colors.textSecondary,
-      flex: 1,
-    },
-    summaryBlock: {
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
-      marginBottom: Space.md,
-      marginHorizontal: Space.md,
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      backgroundColor: colors.surface,
-    },
-    summaryTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
-    summarySubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-    progressRow: {
+    permissionBanner: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      marginTop: Space.md,
-    },
-    progressTrack: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border },
+    permissionBannerText: {
       flex: 1,
-      height: Space.xs + 2,
-      borderRadius: Radius.sm,
-      backgroundColor: colors.border,
-      overflow: 'hidden',
-    },
-    progressFill: {
-      height: '100%',
-      borderRadius: Radius.sm,
-      backgroundColor: colors.brand,
-    },
-    progressLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textSecondary,
-      letterSpacing: Type.caption.letterSpacing,
-      minWidth: Space.xl + Space.xs,
-      textAlign: 'right',
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
+    permissionBannerAction: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
+    prefsLoading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.md + Space.sm },
+    prefsLoadingText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     quietHoursRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     quietTimePicker: {
       flex: 1,
       flexDirection: 'row',
@@ -464,38 +463,31 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
-      minHeight: Space.xxl,
-    },
+      minHeight: Space.xxl },
     quietTimePickerPressed: {
       opacity: 0.7,
-      transform: [{ scale: 0.98 }],
-    },
+      transform: [{ scale: 0.98 }] },
     quietTimeLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     quietTimeValue: {
       flex: 1,
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     quietHoursPickerSheet: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     quietHoursPickerTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     quietHoursPickerGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.xs + 2,
-    },
+      gap: Space.xs + 2 },
     quietHourCell: {
       paddingHorizontal: Space.sm + Space.xs,
       paddingVertical: Space.sm + 2,
@@ -503,23 +495,17 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceAlt,
       minHeight: Space.xl + Space.sm,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     quietHourCellActive: {
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     quietHourCellPressed: {
       opacity: 0.7,
-      transform: [{ scale: 0.96 }],
-    },
+      transform: [{ scale: 0.96 }] },
     quietHourCellText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textPrimary },
     quietHourCellTextActive: {
       color: colors.textInverse,
-      fontFamily: Typography.family.bold,
-    },
-  });
+      fontFamily: Typography.family.bold } });
 }

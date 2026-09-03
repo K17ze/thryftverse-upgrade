@@ -14,7 +14,6 @@ import {
   resolveCountryPricingQuote,
   resolveCountryPricingQuoteByCurrency,
   resolveInternalFxRate,
-  findPricingArbitrageViolations,
   listCountryPricingQuotes,
   setInternalFxRate,
   getOnezeAnchorConfig,
@@ -45,6 +44,7 @@ import {
   createAmlAlert,
   evaluateAmlRisk,
   evaluateMarketEligibility,
+  evaluateWalletCapability,
 } from '../lib/compliance.js';
 import type { AuthenticatedUser } from '../lib/auth.js';
 
@@ -88,7 +88,7 @@ interface ApiError extends Error {
 
 type DbQueryable = Pick<PoolClient, 'query'>;
 
-type PaymentIntentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal';
+type PaymentIntentChannel = 'commerce' | 'co-own' | 'wallet_topup' | 'wallet_withdrawal' | 'oneze_wallet';
 type PaymentIntentStatus = 'requires_payment_method' | 'requires_confirmation' | 'processing' | 'succeeded' | 'failed' | 'cancelled';
 
 interface PaymentIntentRow {
@@ -318,7 +318,6 @@ type WalletRouteDependencies = {
   onezeAmountToMg: (amount: number) => number;
   mgToOnezeAmount: (amountMg: number) => number;
   normalizeOnezeCountryTag: (country: string | null | undefined) => string;
-  directOnezeWithdrawalRoutesDisabled: () => boolean;
   assertOnezeMintBurnNotHalted: () => Promise<void>;
   getOnezeMintBurnHaltState: () => Promise<any>;
   captureOnezeReconciliationSnapshot: (client: DbQueryable, source: string, metadata?: Record<string, unknown>) => Promise<any>;
@@ -382,7 +381,6 @@ export const registerWalletRoutes = ({
   onezeAmountToMg,
   mgToOnezeAmount,
   normalizeOnezeCountryTag,
-  directOnezeWithdrawalRoutesDisabled,
   assertOnezeMintBurnNotHalted,
   getOnezeMintBurnHaltState,
   captureOnezeReconciliationSnapshot,
@@ -661,13 +659,11 @@ app.get('/price', async (request, reply) => {
       quote: {
         country: quote.countryCode,
         currency: quote.currency,
-        buyPrice: quote.buyPrice,
-        sellPrice: quote.sellPrice,
-        crossBorderPrice: quote.crossBorderSellPrice,
-        markupBps: quote.markupBps,
-        markdownBps: quote.markdownBps,
-        crossBorderFeeBps: quote.crossBorderFeeBps,
-        pppFactor: quote.pppFactor,
+        buyPrice: quote.totalCost,
+        sellPrice: quote.netRedemption,
+        crossBorderPrice: quote.netRedemption,
+        loadFeeBps: quote.loadFeeBps,
+        withdrawFeeBps: quote.withdrawFeeBps,
         source: quote.source,
       },
     };
@@ -721,8 +717,8 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
     let netFiatAmount: number;
     let platformFeeAmount = 0;
     let platformFeeRate = 0;
-    let effectiveRate = countryQuote.buyPrice;
-    let effectiveRateMode: 'buy' | 'sell' | 'cross_border_sell' = 'buy';
+    let effectiveRate = countryQuote.principalAmount;
+    let effectiveRateMode: 'load' | 'withdraw' | 'cross_border_withdraw' = 'load';
 
     if (direction === 'mint') {
       const feeBreakdown = calculateWalletTopupFeeBreakdown(payload.fiatAmount ?? 0);
@@ -735,8 +731,8 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
         throw createApiError('IZE_MINT_INVALID', 'Top-up amount is too low after platform fee');
       }
 
-      effectiveRate = fiatCurrency === 'GBP' ? 1 : countryQuote.buyPrice;
-      effectiveRateMode = 'buy';
+      effectiveRate = fiatCurrency === 'GBP' ? 1 : countryQuote.totalCost;
+      effectiveRateMode = 'load';
       izeAmount = Number((netFiatAmount / effectiveRate).toFixed(6));
     } else {
       const isCrossBorder =
@@ -746,8 +742,8 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
 
       effectiveRate = fiatCurrency === 'GBP'
         ? 1
-        : isCrossBorder ? countryQuote.crossBorderSellPrice : countryQuote.sellPrice;
-      effectiveRateMode = isCrossBorder ? 'cross_border_sell' : 'sell';
+        : isCrossBorder ? countryQuote.netRedemption : countryQuote.netRedemption;
+      effectiveRateMode = isCrossBorder ? 'cross_border_withdraw' : 'withdraw';
       fiatAmount = Number(((payload.izeAmount ?? 0) * effectiveRate).toFixed(6));
       netFiatAmount = fiatAmount;
       izeAmount = Number((payload.izeAmount ?? 0).toFixed(6));
@@ -768,9 +764,9 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
         rateSource: fiatCurrency === 'GBP'
           ? 'fixed_par:GBP:1ZE'
           : `internal_pricing:${countryQuote.countryCode}:${effectiveRateMode}`,
-        buyPrice: countryQuote.buyPrice,
-        sellPrice: countryQuote.sellPrice,
-        crossBorderPrice: countryQuote.crossBorderSellPrice,
+        buyPrice: countryQuote.totalCost,
+        sellPrice: countryQuote.netRedemption,
+        crossBorderPrice: countryQuote.netRedemption,
         money: moneyFromMinor(fiatCurrency, String(toFiatMinor(fiatAmount, fiatCurrency))),
         assetAmount: {
           asset: '1ZE',
@@ -822,7 +818,7 @@ app.get('/auctions/1ze-rates', async (request, reply) => {
 
     for (const quote of quotes) {
       rates[quote.currency] = {
-        rate: quote.sellPrice,
+        rate: quote.netRedemption,
         source: quote.source,
         updatedAt: quote.updatedAt,
         settlementSupported: true,
@@ -897,10 +893,9 @@ app.post('/update-pricing', async (request, reply) => {
   const bodySchema = z.object({
     country: z.string().min(2).max(3),
     currency: z.string().length(3),
-    markupBps: z.number().int(),
-    markdownBps: z.number().int(),
-    crossBorderFeeBps: z.number().int(),
-    pppFactor: z.number().positive(),
+    loadFeeBps: z.number().int(),
+    withdrawFeeBps: z.number().int(),
+    fxFeeBps: z.number().int(),
     withdrawalLockHours: z.number().int().min(0).max(336).optional(),
     dailyRedeemLimitIze: z.number().positive().optional(),
     weeklyRedeemLimitIze: z.number().positive().optional(),
@@ -932,10 +927,9 @@ app.post('/update-pricing', async (request, reply) => {
 
   try {
     validatePricingProfileInput({
-      markupBps: payload.markupBps,
-      markdownBps: payload.markdownBps,
-      crossBorderFeeBps: payload.crossBorderFeeBps,
-      pppFactor: payload.pppFactor,
+      loadFeeBps: payload.loadFeeBps,
+      withdrawFeeBps: payload.withdrawFeeBps,
+      fxFeeBps: payload.fxFeeBps,
     });
   } catch (error) {
     reply.code(400);
@@ -952,10 +946,9 @@ app.post('/update-pricing', async (request, reply) => {
     const profile = await upsertCountryPricingProfile(client, {
       countryCode: payload.country,
       currency: payload.currency,
-      markupBps: payload.markupBps,
-      markdownBps: payload.markdownBps,
-      crossBorderFeeBps: payload.crossBorderFeeBps,
-      pppFactor: payload.pppFactor,
+      loadFeeBps: payload.loadFeeBps,
+      withdrawFeeBps: payload.withdrawFeeBps,
+      fxFeeBps: payload.fxFeeBps,
       withdrawalLockHours: payload.withdrawalLockHours,
       dailyRedeemLimitIze: payload.dailyRedeemLimitIze,
       weeklyRedeemLimitIze: payload.weeklyRedeemLimitIze,
@@ -968,12 +961,6 @@ app.post('/update-pricing', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'Pricing update introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     const quote = quotes.find((entry) => entry.countryCode === profile.countryCode)
       ?? await resolveCountryPricingQuote(client, profile.countryCode);
@@ -1049,12 +1036,6 @@ app.post('/update-anchor', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'Anchor update introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     await client.query('COMMIT');
     return {
@@ -1131,12 +1112,6 @@ app.post('/admin/1ze/fx-rate', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'FX update introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     await client.query('COMMIT');
     return {
@@ -1174,9 +1149,9 @@ app.post('/admin/1ze/fx-rate', async (request, reply) => {
 app.post('/adjust-spread', async (request, reply) => {
   const bodySchema = z.object({
     country: z.string().min(2).max(3),
-    markupBps: z.number().int().optional(),
-    markdownBps: z.number().int().optional(),
-    crossBorderFeeBps: z.number().int().optional(),
+    loadFeeBps: z.number().int().optional(),
+    withdrawFeeBps: z.number().int().optional(),
+    fxFeeBps: z.number().int().optional(),
     reason: z.string().max(240).optional(),
     metadata: z.record(z.unknown()).optional(),
   });
@@ -1203,9 +1178,9 @@ app.post('/adjust-spread', async (request, reply) => {
   const payload = bodySchema.parse(request.body ?? {});
 
   if (
-    payload.markupBps === undefined
-    && payload.markdownBps === undefined
-    && payload.crossBorderFeeBps === undefined
+    payload.loadFeeBps === undefined
+    && payload.withdrawFeeBps === undefined
+    && payload.fxFeeBps === undefined
   ) {
     reply.code(400);
     return {
@@ -1228,16 +1203,14 @@ app.post('/adjust-spread', async (request, reply) => {
       };
     }
 
-    const nextMarkupBps = payload.markupBps ?? current.markupBps;
-    const nextMarkdownBps = payload.markdownBps ?? current.markdownBps;
-    const nextCrossBorderFeeBps = payload.crossBorderFeeBps ?? current.crossBorderFeeBps;
+    const nextLoadFeeBps = payload.loadFeeBps ?? current.loadFeeBps;
+    const nextWithdrawFeeBps = payload.withdrawFeeBps ?? current.withdrawFeeBps;
+    const nextFxFeeBps = payload.fxFeeBps ?? current.fxFeeBps;
 
     try {
       validatePricingProfileInput({
-        markupBps: nextMarkupBps,
-        markdownBps: nextMarkdownBps,
-        crossBorderFeeBps: nextCrossBorderFeeBps,
-        pppFactor: current.pppFactor,
+        loadFeeBps: nextLoadFeeBps,
+        withdrawFeeBps: nextWithdrawFeeBps,
       });
     } catch (error) {
       throw createApiError('PRICING_PROFILE_INVALID', (error as Error).message);
@@ -1246,10 +1219,9 @@ app.post('/adjust-spread', async (request, reply) => {
     const profile = await upsertCountryPricingProfile(client, {
       countryCode: current.countryCode,
       currency: current.currency,
-      markupBps: nextMarkupBps,
-      markdownBps: nextMarkdownBps,
-      crossBorderFeeBps: nextCrossBorderFeeBps,
-      pppFactor: current.pppFactor,
+      loadFeeBps: nextLoadFeeBps,
+      withdrawFeeBps: nextWithdrawFeeBps,
+      fxFeeBps: nextFxFeeBps,
       withdrawalLockHours: current.withdrawalLockHours,
       dailyRedeemLimitIze: current.dailyRedeemLimitIze,
       weeklyRedeemLimitIze: current.weeklyRedeemLimitIze,
@@ -1262,12 +1234,6 @@ app.post('/adjust-spread', async (request, reply) => {
     });
 
     const quotes = await listCountryPricingQuotes(client);
-    const violations = findPricingArbitrageViolations(quotes);
-    if (violations.length > 0) {
-      throw createApiError('PRICING_ARBITRAGE_VIOLATION', 'Spread adjustment introduces guaranteed arbitrage', {
-        violations: violations.slice(0, 10),
-      });
-    }
 
     const quote = quotes.find((entry) => entry.countryCode === profile.countryCode)
       ?? await resolveCountryPricingQuote(client, profile.countryCode);
@@ -1323,13 +1289,10 @@ app.get('/admin/1ze/pricing-health', async (request, reply) => {
 
   try {
     const quotes = await listCountryPricingQuotes(db);
-    const violations = findPricingArbitrageViolations(quotes);
 
     return {
       ok: true,
       matrixSize: quotes.length,
-      violationCount: violations.length,
-      violations,
       quotes,
     };
   } catch (error) {
@@ -1467,6 +1430,19 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
     await ensureUserExists(actorUserId);
 
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
+
+    // Compliance gate: verify the user is permitted to issue (mint) 1ZE.
+    const issueCapability = await evaluateWalletCapability(client, actorUserId, 'issue', {
+      amountUsd: payload.fiatAmount,
+      currency: fiatCurrency,
+    });
+    if (!issueCapability.allowed) {
+      throw createApiError(issueCapability.code, issueCapability.reason ?? 'Wallet capability check failed', {
+        capability: 'issue',
+        restrictions: issueCapability.restrictions,
+      });
+    }
+
     const topupMoney = moneyFromMinor(
       fiatCurrency,
       String(toFiatMinor(payload.fiatAmount, fiatCurrency))
@@ -1510,7 +1486,7 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
     }
 
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
-    const mintUnitPrice = fiatCurrency === 'GBP' ? 1 : pricingQuote.buyPrice;
+    const mintUnitPrice = fiatCurrency === 'GBP' ? 1 : pricingQuote.totalCost;
 
     const amountMg = onezeAmountToMg(
       Number((feeBreakdown.netFiatAmount / mintUnitPrice).toFixed(6))
@@ -2153,7 +2129,7 @@ app.post('/wallet/1ze/mint', async (request, reply) => {
 
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
-    const mintUnitPrice = fiatCurrency === 'GBP' ? 1 : pricingQuote.buyPrice;
+    const mintUnitPrice = fiatCurrency === 'GBP' ? 1 : pricingQuote.totalCost;
     const izeAmount = Number((feeBreakdown.netFiatAmount / mintUnitPrice).toFixed(6));
 
     if (!Number.isFinite(izeAmount) || izeAmount <= 0) {
@@ -2322,20 +2298,6 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
   const payload = bodySchema.parse(request.body ?? {});
   const actorUserId = resolveAuthenticatedUserId(request, payload.userId);
 
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze burn withdrawals are permanently unavailable in closed-loop mode. Use payout requests funded by completed sale proceeds.',
-      code: 'ONEZE_BURN_DISABLED',
-      details: {
-        actorUserId,
-        fiatCurrency: payload.fiatCurrency.toUpperCase(),
-      },
-    };
-  }
-
   if (!(await onezeTablesAvailable(db))) {
     reply.code(503);
     return {
@@ -2422,9 +2384,21 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
     const redemptionUnitPrice = fiatCurrency === 'GBP'
       ? 1
       : isCrossBorder
-        ? pricingQuote.crossBorderSellPrice
-        : pricingQuote.sellPrice;
+        ? pricingQuote.netRedemption
+        : pricingQuote.netRedemption;
     const fiatAmount = Number((normalizedIzeAmount * redemptionUnitPrice).toFixed(6));
+
+    // Compliance gate: verify the user is permitted to redeem (burn) 1ZE.
+    const redeemCapability = await evaluateWalletCapability(client, actorUserId, 'redeem', {
+      amountUsd: fiatAmount,
+      currency: fiatCurrency,
+    });
+    if (!redeemCapability.allowed) {
+      throw createApiError(redeemCapability.code, redeemCapability.reason ?? 'Wallet capability check failed', {
+        capability: 'redeem',
+        restrictions: redeemCapability.restrictions,
+      });
+    }
 
     const [dailyBurnedIze, weeklyBurnedIze] = await Promise.all([
       getCommittedBurnIzeInWindow(client, actorUserId, 24),
@@ -2661,6 +2635,8 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     };
   }
 
+  await assertOnezeMintBurnNotHalted();
+
   const client = await db.connect();
   try {
     await client.query('BEGIN');
@@ -2669,12 +2645,49 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     const normalizedIzeAmount = Number(payload.izeAmount.toFixed(6));
     const amountMg = onezeAmountToMg(normalizedIzeAmount);
 
-    // Get pricing for conversion rate
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
     const onezeAmountFromMg = mgToOnezeAmount(amountMg);
-    const conversionUnitPrice = fiatCurrency === 'GBP' ? 1 : pricingQuote.buyPrice;
-    const fiatAmount = Number((onezeAmountFromMg * conversionUnitPrice).toFixed(6));
+
+    // At-par model: principal at FX rate, fee = principal * feeBps, net = principal - fee
+    const principalAmount = fiatCurrency === 'GBP'
+      ? onezeAmountFromMg
+      : Number((onezeAmountFromMg * pricingQuote.fxRate).toFixed(6));
+    const feeAmount = Number((principalAmount * (pricingQuote.platformFeeBps / 10_000)).toFixed(6));
+    const netFiatAmount = Number((principalAmount - feeAmount).toFixed(6));
+
+    // Compliance gate
+    const redeemCapability = await evaluateWalletCapability(client, actorUserId, 'redeem', {
+      amountUsd: netFiatAmount,
+      currency: fiatCurrency,
+    });
+    if (!redeemCapability.allowed) {
+      throw createApiError(redeemCapability.code, redeemCapability.reason ?? 'Wallet capability check failed', {
+        capability: 'redeem',
+        restrictions: redeemCapability.restrictions,
+      });
+    }
+
+    // Idempotency
+    const idempotencyRequestHash = payload.idempotencyKey
+      ? hashWalletIdempotencyPayload({
+          userId: actorUserId,
+          izeAmount: normalizedIzeAmount,
+          fiatCurrency,
+          operation: 'convert-1ze-to-fiat',
+        })
+      : null;
+
+    if (idempotencyRequestHash) {
+      const idempotentResponse = await getWalletIdempotentResponse(client, {
+        userId: actorUserId,
+        requestHash: idempotencyRequestHash,
+      });
+      if (idempotentResponse) {
+        await client.query('COMMIT');
+        return idempotentResponse.response;
+      }
+    }
 
     // Validate 1ze balance
     const wallet = await ensureWallet(client, actorUserId, fiatCurrency);
@@ -2705,47 +2718,74 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
       anchorValueInInr: pricingQuote.anchorValueInInr,
       metadata: {
         convertedIzeAmount: normalizedIzeAmount,
-        receivedFiatAmount: fiatAmount,
+        principalAmount,
+        feeAmount,
+        netFiatAmount,
         fiatCurrency,
-        rateUsed: pricingQuote.buyPrice,
+        rateUsed: pricingQuote.fxRate,
+        feeBps: pricingQuote.platformFeeBps,
       },
     });
 
-    // Credit fiat to wallet
-    const fiatAmountMinor = Math.round(fiatAmount * 100);
+    // Debit segment balance (purchased first, then earned)
+    await debitWalletSegmentBalance(client, {
+      walletId: wallet.id,
+      amountMg,
+      lockHours: 0,
+      reason: 'convert_to_fiat',
+      refId: txId,
+    });
+
+    // Credit fiat to wallet (net of fee)
+    const netFiatAmountMinor = Math.round(netFiatAmount * 100);
     await applyWalletLedgerDelta(client, {
       walletId: wallet.id,
       txId,
       asset: 'FIAT',
-      amount: fiatAmountMinor,
+      amount: netFiatAmountMinor,
       kind: 'CONVERT_FROM_1ZE',
       refType: '1ze_conversion',
       refId: txId,
       anchorValueInInr: pricingQuote.anchorValueInInr,
       metadata: {
         convertedIzeAmount: normalizedIzeAmount,
-        receivedFiatAmount: fiatAmount,
+        principalAmount,
+        feeAmount,
+        netFiatAmount,
         fiatCurrency,
-        rateUsed: pricingQuote.buyPrice,
+        rateUsed: pricingQuote.fxRate,
+        feeBps: pricingQuote.platformFeeBps,
       },
     });
 
     await client.query('COMMIT');
 
-    // Reload wallet to get updated balances
     const updatedWallet = await ensureWallet(client, actorUserId, fiatCurrency);
 
-    return {
+    const response = {
       ok: true,
       userId: actorUserId,
       wallet: toWalletPayload(updatedWallet),
       conversion: {
         izeAmount: normalizedIzeAmount,
-        fiatAmount,
+        principalAmount,
+        feeAmount,
+        feeBps: pricingQuote.platformFeeBps,
+        netFiatAmount,
         fiatCurrency,
-        rateUsed: pricingQuote.buyPrice,
+        rateUsed: pricingQuote.fxRate,
       },
     };
+
+    if (idempotencyRequestHash) {
+      await saveWalletIdempotentResponse(client, {
+        userId: actorUserId,
+        requestHash: idempotencyRequestHash,
+        response,
+      });
+    }
+
+    return response;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -2782,6 +2822,18 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
     const fiatAmountMinor = Math.round(payload.fiatAmount * 100);
 
+    // Compliance gate: verify the user is permitted to issue (buy) 1ZE.
+    const issueCapability = await evaluateWalletCapability(client, actorUserId, 'issue', {
+      amountUsd: payload.fiatAmount,
+      currency: fiatCurrency,
+    });
+    if (!issueCapability.allowed) {
+      throw createApiError(issueCapability.code, issueCapability.reason ?? 'Wallet capability check failed', {
+        capability: 'issue',
+        restrictions: issueCapability.restrictions,
+      });
+    }
+
     // Validate fiat balance
     const wallet = await ensureWallet(client, actorUserId, fiatCurrency);
     const currentFiatBalance = Number(wallet.fiat_balance_minor);
@@ -2797,17 +2849,22 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
       };
     }
 
-    // Get pricing for conversion rate
+    // Get pricing for conversion rate (at-par model)
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
 
-    // Calculate 1ze amount (1 GBP = 1000 1ze, or use pricing quote)
-    const purchaseUnitPrice = fiatCurrency === 'GBP' ? 1 : pricingQuote.buyPrice;
-    const izeAmount = payload.fiatAmount * (1 / purchaseUnitPrice);
+    // At-par: user pays totalCost = principal + fee, receives principal in 1ZE
+    const principalFiat = fiatCurrency === 'GBP'
+      ? payload.fiatAmount
+      : Number((payload.fiatAmount / (1 + pricingQuote.platformFeeBps / 10_000)).toFixed(6));
+    const feeFiat = Number((payload.fiatAmount - principalFiat).toFixed(6));
+    const izeAmount = fiatCurrency === 'GBP'
+      ? principalFiat
+      : Number((principalFiat / pricingQuote.fxRate).toFixed(6));
     const amountMg = onezeAmountToMg(izeAmount);
 
     const txId = createRuntimeId('wtx');
 
-    // Debit fiat from wallet
+    // Debit fiat from wallet (total cost including fee)
     await applyWalletLedgerDelta(client, {
       walletId: wallet.id,
       txId,
@@ -2819,13 +2876,16 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
       anchorValueInInr: pricingQuote.anchorValueInInr,
       metadata: {
         spentFiatAmount: payload.fiatAmount,
+        principalFiat,
+        feeFiat,
         receivedIzeAmount: izeAmount,
         fiatCurrency,
-        rateUsed: purchaseUnitPrice,
+        rateUsed: pricingQuote.fxRate,
+        feeBps: pricingQuote.platformFeeBps,
       },
     });
 
-    // Mint 1ze to wallet
+    // Mint 1ze to wallet (principal only)
     await applyWalletLedgerDelta(client, {
       walletId: wallet.id,
       txId,
@@ -2837,9 +2897,12 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
       anchorValueInInr: pricingQuote.anchorValueInInr,
       metadata: {
         spentFiatAmount: payload.fiatAmount,
+        principalFiat,
+        feeFiat,
         receivedIzeAmount: izeAmount,
         fiatCurrency,
-        rateUsed: pricingQuote.buyPrice,
+        rateUsed: pricingQuote.fxRate,
+        feeBps: pricingQuote.platformFeeBps,
       },
     });
 
@@ -2854,14 +2917,325 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
       wallet: toWalletPayload(updatedWallet),
       purchase: {
         fiatAmount: payload.fiatAmount,
+        principalFiat,
+        feeFiat,
+        feeBps: pricingQuote.platformFeeBps,
         fiatCurrency,
         izeAmount,
-        rateUsed: pricingQuote.buyPrice,
+        rateUsed: pricingQuote.fxRate,
       },
     };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
+  } finally {
+    client.release();
+  }
+});
+
+// ── 1ze marketplace checkout ─────────────────────────────────────────
+// Settles a marketplace order by debiting 1ze from the buyer's wallet and
+// crediting the seller, marking the order as paid.  Uses the at-par pricing
+// model so that for GBP orders 1 1ZE == 1 GBP; for other currencies the
+// pricing engine fxRate is used to derive the 1ZE amount from the fiat total.
+app.post('/wallet/1ze/checkout', async (request, reply) => {
+  const bodySchema = z.object({
+    orderId: z.string().min(2).max(140),
+    idempotencyKey: z.string().min(8).max(140).optional(),
+  });
+
+  const payload = bodySchema.parse(request.body ?? {});
+
+  await assertOnezeMintBurnNotHalted();
+
+  if (
+    !(await onezeTablesAvailable(db))
+    || !(await onezeP2pTablesAvailable(db))
+    || !(await onezeArchitectureTablesAvailable(db))
+  ) {
+    reply.code(503);
+    return {
+      ok: false,
+      error: '1ze wallet architecture tables are unavailable. Run migrations first.',
+    };
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Load the order from the orders table.
+    const orderResult = await client.query<{
+      buyer_id: string;
+      seller_id: string;
+      total_gbp: number | string;
+      status: string;
+    }>(
+      `SELECT buyer_id, seller_id, total_gbp, status
+       FROM orders
+       WHERE id = $1
+       LIMIT 1`,
+      [payload.orderId]
+    );
+
+    const order = orderResult.rows[0];
+    if (!order) {
+      throw createApiError('ORDER_NOT_FOUND', `Order ${payload.orderId} was not found`, {
+        orderId: payload.orderId,
+      });
+    }
+
+    const buyerId = order.buyer_id;
+    const sellerId = order.seller_id;
+    const totalGbp = Number(order.total_gbp);
+
+    if (buyerId === sellerId) {
+      throw createApiError('CHECKOUT_INVALID_PARTIES', 'Buyer and seller must be different users', {
+        orderId: payload.orderId,
+      });
+    }
+
+    if (order.status === 'paid') {
+      // Already paid — return idempotent success.
+      await client.query('COMMIT');
+      return {
+        ok: true,
+        orderId: payload.orderId,
+        alreadyPaid: true,
+      };
+    }
+
+    await ensureUserExists(buyerId);
+    await ensureUserExists(sellerId);
+
+    // 2. Evaluate wallet capability for the buyer (spend).
+    const spendCapability = await evaluateWalletCapability(client, buyerId, 'spend', {
+      amountUsd: totalGbp,
+      currency: 'GBP',
+      market: 'marketplace',
+    });
+    if (!spendCapability.allowed) {
+      throw createApiError(spendCapability.code, spendCapability.reason ?? 'Wallet capability check failed', {
+        capability: 'spend',
+        restrictions: spendCapability.restrictions,
+      });
+    }
+
+    // 3. Derive the 1ze amount from the GBP total using the at-par model.
+    //    For GBP, 1 1ZE == 1 GBP at par.  For other currencies the pricing
+    //    engine fxRate would be used, but orders are stored in GBP so we
+    //    use the GBP quote directly.
+    const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, 'GBP');
+    const izeAmount = totalGbp;
+    const amountMg = onezeAmountToMg(izeAmount);
+
+    if (!Number.isFinite(amountMg) || amountMg <= 0) {
+      throw createApiError('CHECKOUT_INVALID_AMOUNT', 'Unable to derive a valid 1ze amount for checkout', {
+        totalGbp,
+        izeAmount,
+      });
+    }
+
+    // 4. Idempotency: check for a previously-saved response.
+    const idempotencyRequestHash = payload.idempotencyKey
+      ? hashWalletIdempotencyPayload({
+        orderId: payload.orderId,
+        buyerId,
+        sellerId,
+        amountMg,
+        izeAmount,
+        totalGbp,
+      })
+      : null;
+
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      const idempotentResponse = await getWalletIdempotentResponse(client, {
+        userId: buyerId,
+        operation: '1ze_checkout',
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: idempotencyRequestHash,
+      });
+
+      if (idempotentResponse) {
+        await client.query('COMMIT');
+        return idempotentResponse;
+      }
+    }
+
+    // 5. Load buyer wallet and check 1ze balance.
+    const buyerWallet = await ensureWallet(client, buyerId, 'GBP');
+    const buyerIzeBalanceMg = await getLedgerAccountBalance(client, 'user', buyerId, 'ize_wallet', 'IZE');
+    if (buyerIzeBalanceMg < amountMg) {
+      throw createApiError('INSUFFICIENT_1ZE_BALANCE', 'Insufficient 1ze balance to complete checkout', {
+        currentBalanceMg: buyerIzeBalanceMg,
+        requiredMg: amountMg,
+        currentBalanceOneze: mgToOnezeAmount(buyerIzeBalanceMg),
+        requiredOneze: izeAmount,
+      });
+    }
+
+    const sellerWallet = await ensureWallet(client, sellerId, 'GBP');
+
+    // 6. Debit 1ze from buyer (marketplace purchase).
+    const walletTxId = createRuntimeId('wtx');
+    const transferId = createRuntimeId('ize_checkout');
+
+    const [buyerBalanceAfterMg, sellerBalanceAfterMg] = await Promise.all([
+      applyWalletLedgerDelta(client, {
+        walletId: buyerWallet.id,
+        txId: walletTxId,
+        asset: '1ZE',
+        amount: -amountMg,
+        kind: 'MARKETPLACE_PURCHASE',
+        refType: 'marketplace_order',
+        refId: payload.orderId,
+        anchorValueInInr: pricingQuote.anchorValueInInr,
+        metadata: {
+          orderId: payload.orderId,
+          sellerId,
+          izeAmount,
+          totalGbp,
+          rateUsed: pricingQuote.fxRate,
+        },
+      }),
+      applyWalletLedgerDelta(client, {
+        walletId: sellerWallet.id,
+        txId: walletTxId,
+        asset: '1ZE',
+        amount: amountMg,
+        kind: 'MARKETPLACE_SALE',
+        refType: 'marketplace_order',
+        refId: payload.orderId,
+        anchorValueInInr: pricingQuote.anchorValueInInr,
+        metadata: {
+          orderId: payload.orderId,
+          buyerId,
+          izeAmount,
+          totalGbp,
+          rateUsed: pricingQuote.fxRate,
+        },
+      }),
+    ]);
+
+    // 7. Update the order status to 'paid'.
+    await client.query(`UPDATE orders SET status = 'paid', updated_at = NOW() WHERE id = $1`, [
+      payload.orderId,
+    ]);
+
+    // 8. Debit segment balance for buyer, credit segment balance for seller (earned).
+    await debitWalletSegmentBalance(client, {
+      wallet: buyerWallet,
+      txId: walletTxId,
+      amountMg,
+      originCountry: normalizeOnezeCountryTag(null),
+      metadata: {
+        operation: 'marketplace_purchase',
+        orderId: payload.orderId,
+        counterpartyUserId: sellerId,
+      },
+    });
+
+    await creditWalletSegmentBalance(client, {
+      wallet: sellerWallet,
+      txId: walletTxId,
+      earnedCreditMg: amountMg,
+      originCountry: normalizeOnezeCountryTag(null),
+      metadata: {
+        operation: 'marketplace_sale',
+        orderId: payload.orderId,
+        counterpartyUserId: buyerId,
+      },
+    });
+
+    // 9. Record the 1ze transfer for audit / reconciliation.
+    await recordIzeTransfer(client, {
+      transferId,
+      senderUserId: buyerId,
+      recipientUserId: sellerId,
+      izeAmount,
+      fiatAmount: totalGbp,
+      fiatCurrency: 'GBP',
+      ratePerGram: pricingQuote.principalAmount,
+      eligibilityCode: 'ALLOWED',
+      amlRiskScore: 0,
+      amlRiskLevel: 'low',
+      amlAlertId: null,
+      senderCountry: normalizeOnezeCountryTag(null),
+      recipientCountry: normalizeOnezeCountryTag(null),
+      travelRulePayload: {},
+      metadata: {
+        contextType: 'marketplace_sale',
+        contextId: payload.orderId,
+        amountMg,
+        orderId: payload.orderId,
+      },
+    });
+
+    // 10. Build the response payload.
+    const responsePayload: Record<string, unknown> = {
+      ok: true,
+      orderId: payload.orderId,
+      buyerWallet: toWalletPayload(await ensureWallet(client, buyerId, 'GBP')),
+      sellerWallet: toWalletPayload(await ensureWallet(client, sellerId, 'GBP')),
+      payment: {
+        izeAmount,
+        fiatAmount: totalGbp,
+        rateUsed: pricingQuote.fxRate,
+      },
+      balances: {
+        buyerIzeMg: buyerBalanceAfterMg,
+        buyerIzeOneze: mgToOnezeAmount(buyerBalanceAfterMg),
+        sellerIzeMg: sellerBalanceAfterMg,
+        sellerIzeOneze: mgToOnezeAmount(sellerBalanceAfterMg),
+      },
+    };
+
+    if (payload.idempotencyKey && idempotencyRequestHash) {
+      await saveWalletIdempotentResponse(client, {
+        userId: buyerId,
+        operation: '1ze_checkout',
+        idempotencyKey: payload.idempotencyKey,
+        requestHash: idempotencyRequestHash,
+        responsePayload,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    await appendComplianceAuditSafe(request, {
+      eventType: 'wallet.ize.checkout.committed',
+      subjectUserId: buyerId,
+      payload: {
+        orderId: payload.orderId,
+        buyerId,
+        sellerId,
+        izeAmount,
+        totalGbp,
+        amountMg,
+        rateUsed: pricingQuote.fxRate,
+      },
+    });
+
+    reply.code(201);
+    return responsePayload;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    const apiError = getApiError(error);
+    if (apiError) {
+      reply.code(statusCodeForApiError(apiError.code));
+      return {
+        ok: false,
+        error: apiError.message,
+        details: apiError.details,
+      };
+    }
+
+    request.log.error({ err: error, orderId: payload.orderId }, 'Failed to execute 1ze marketplace checkout');
+    reply.code(500);
+    return {
+      ok: false,
+      error: 'Failed to execute 1ze marketplace checkout',
+    };
   } finally {
     client.release();
   }
@@ -2882,15 +3256,14 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
 
   const payload = bodySchema.parse(request.body ?? {});
 
-  // 1ze Context Restrictions: Only allow co-own trading and platform rewards
-  // Marketplace sales must use fiat escrow (Stripe Connect), not 1ze
-  const ALLOWED_1ZE_CONTEXTS = ['coOwn_trade', 'platform_reward'] as const;
+  // 1ze Context: marketplace checkout, co-own trading, and platform rewards
+  const ALLOWED_1ZE_CONTEXTS = ['marketplace_sale', 'coOwn_trade', 'platform_reward'] as const;
   if (!ALLOWED_1ZE_CONTEXTS.includes(payload.contextType as typeof ALLOWED_1ZE_CONTEXTS[number])) {
     reply.code(400);
     return {
       ok: false,
       error: 'IZE_TRANSFER_INVALID_CONTEXT',
-      message: '1ze can only be transferred for co-own trading or platform rewards. For marketplace sales, use fiat escrow (commerce payment).',
+      message: '1ze can only be transferred for marketplace sales, co-own trading, or platform rewards.',
       allowedContexts: ALLOWED_1ZE_CONTEXTS,
       providedContext: payload.contextType,
     };
@@ -2964,7 +3337,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
     const fxToGbp = await resolveInternalFxRate(client, fiatCurrency, 'GBP');
 
     const onezeAmountFromMg = mgToOnezeAmount(amountMg);
-    const fiatAmount = Number((onezeAmountFromMg * pricingQuote.buyPrice).toFixed(6));
+    const fiatAmount = Number((onezeAmountFromMg * pricingQuote.principalAmount).toFixed(6));
     const amountGbp = Number((fiatAmount * fxToGbp.rate).toFixed(6));
     const eligibilityAmountGbp = roundTo(amountGbp, 2);
 
@@ -3001,6 +3374,30 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
       });
     }
 
+    // Wallet capability gates for P2P transfer
+    const [senderWalletCap, recipientWalletCap] = await Promise.all([
+      evaluateWalletCapability(client, senderUserId, 'p2p_send', {
+        amountUsd: eligibilityAmountGbp,
+        counterpartyUserId: recipientUserId,
+      }),
+      evaluateWalletCapability(client, recipientUserId, 'p2p_receive', {
+        amountUsd: eligibilityAmountGbp,
+        counterpartyUserId: senderUserId,
+      }),
+    ]);
+    if (!senderWalletCap.allowed) {
+      throw createApiError(senderWalletCap.code, senderWalletCap.reason ?? 'Wallet capability check failed', {
+        capability: 'p2p_send',
+        restrictions: senderWalletCap.restrictions,
+      });
+    }
+    if (!recipientWalletCap.allowed) {
+      throw createApiError(recipientWalletCap.code, recipientWalletCap.reason ?? 'Wallet capability check failed', {
+        capability: 'p2p_receive',
+        restrictions: recipientWalletCap.restrictions,
+      });
+    }
+
     const transferId = createRuntimeId('ize_transfer');
     const amlAssessment = await evaluateAmlRisk(client, {
       userId: senderUserId,
@@ -3026,7 +3423,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
           izeAmount: normalizedIzeAmount,
           fiatAmount,
           fiatCurrency,
-          ratePerGram: pricingQuote.buyPrice,
+          ratePerGram: pricingQuote.principalAmount,
         },
         assessment: amlAssessment,
       });
@@ -3048,7 +3445,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
       izeAmount: normalizedIzeAmount,
       fiatAmount,
       fiatCurrency,
-      ratePerGram: pricingQuote.buyPrice,
+      ratePerGram: pricingQuote.principalAmount,
       eligibilityCode: 'ALLOWED',
       amlRiskScore: amlAssessment.riskScore,
       amlRiskLevel: amlAssessment.riskLevel,
@@ -3057,7 +3454,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
       recipientCountry: policyDecision.recipientCountry,
       travelRulePayload: policyDecision.requiresTravelRule
         ? {
-          thresholdMg: config.onezeTravelRuleThresholdMg,
+          thresholdMg: config.onezeTravelRuleThresholdUnits,
           originator: {
             userId: senderUserId,
             country: policyDecision.senderCountry,
@@ -3158,7 +3555,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
         fiatAmount,
         fiatCurrency,
         amountGbp: eligibilityAmountGbp,
-        ratePerGram: pricingQuote.buyPrice,
+        ratePerGram: pricingQuote.principalAmount,
         rateSource: `internal_pricing:${pricingQuote.countryCode}:buy`,
         fxRateToGbp: fxToGbp.rate,
         fxSourceToGbp: fxToGbp.source,
@@ -3255,19 +3652,6 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
 
   const payload = bodySchema.parse(request.body ?? {});
   const actorUserId = resolveAuthenticatedUserId(request, payload.userId);
-
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze withdrawal quotes are permanently unavailable in closed-loop mode. Withdrawals must be created from completed sale proceeds via payout requests.',
-      code: 'ONEZE_WITHDRAWAL_DISABLED',
-      details: {
-        actorUserId,
-      },
-    };
-  }
 
   const providedAmountCount = Number(payload.amountMg !== undefined) + Number(payload.amountOneze !== undefined);
   if (providedAmountCount !== 1) {
@@ -3474,6 +3858,11 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
         validForSeconds: config.onezeWithdrawalQuoteTtlSeconds,
         expiresAt: withdrawal.rateExpiresAt,
         source: fxRate.source,
+        // At-par transparent fee breakdown
+        principalMinor: grossMinor - spreadMinor,
+        feeMinor: spreadMinor,
+        feeBps: Number(corridor.spread_bps),
+        netMinor,
       },
       corridor: {
         currency: targetCurrency,
@@ -3535,20 +3924,6 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
   const { withdrawalId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
   const actorUserId = resolveAuthenticatedUserId(request, payload.userId);
-
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze withdrawal accepts are permanently unavailable in closed-loop mode. Withdrawals must be created from completed sale proceeds via payout requests.',
-      code: 'ONEZE_WITHDRAWAL_DISABLED',
-      details: {
-        actorUserId,
-        withdrawalId,
-      },
-    };
-  }
 
   if (!(await onezeArchitectureTablesAvailable(db))) {
     reply.code(503);
@@ -3650,10 +4025,22 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
     }
 
     const amountMg = Number(withdrawal.amount_mg);
-    const requiresQueuedExecution = amountMg > config.onezeWithdrawalInstantLimitMg;
+    const requiresQueuedExecution = amountMg > config.onezeWithdrawalInstantLimitUnits;
     const wallet = await ensureWallet(client, withdrawal.user_id, withdrawal.target_currency);
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, withdrawal.target_currency);
     const burnTxId = withdrawal.burn_tx_id ?? createRuntimeId('wdburn');
+
+    // Compliance gate: verify the user is permitted to redeem (withdraw) 1ZE.
+    const redeemCapability = await evaluateWalletCapability(client, withdrawal.user_id, 'redeem', {
+      amountUsd: Number(withdrawal.net_minor) / 100,
+      currency: withdrawal.target_currency,
+    });
+    if (!redeemCapability.allowed) {
+      throw createApiError(redeemCapability.code, redeemCapability.reason ?? 'Wallet capability check failed', {
+        capability: 'redeem',
+        restrictions: redeemCapability.restrictions,
+      });
+    }
 
     const walletBalanceAfterMg = await applyWalletLedgerDelta(client, {
       walletId: wallet.id,
@@ -3671,6 +4058,15 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
         pricingSource: `internal_pricing:${pricingQuote.countryCode}:sell`,
         ...(payload.metadata ?? {}),
       },
+    });
+
+    // Debit segment balance (purchased first, then earned)
+    await debitWalletSegmentBalance(client, {
+      walletId: wallet.id,
+      amountMg,
+      lockHours: 0,
+      reason: 'withdrawal_reserved',
+      refId: withdrawal.id,
     });
 
     const updatedResult = await client.query<WithdrawalRow>(
@@ -3724,7 +4120,7 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/accept', async (request, reply) 
       execution: {
         mode: requiresQueuedExecution ? 'queued' : 'manual',
         queued: requiresQueuedExecution,
-        instantLimitMg: config.onezeWithdrawalInstantLimitMg,
+        instantLimitMg: config.onezeWithdrawalInstantLimitUnits,
       },
     };
 
@@ -3800,20 +4196,6 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/execute', async (request, reply)
 
   const { withdrawalId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
-
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze withdrawal execution is permanently unavailable in closed-loop mode. Withdrawals must be created from completed sale proceeds via payout requests.',
-      code: 'ONEZE_WITHDRAWAL_DISABLED',
-      details: {
-        withdrawalId,
-        railRef: payload.railRef ?? null,
-      },
-    };
-  }
 
   if (!(await onezeArchitectureTablesAvailable(db))) {
     reply.code(503);
@@ -3892,20 +4274,6 @@ app.post('/wallet/1ze/withdrawals/:withdrawalId/fail', async (request, reply) =>
 
   const { withdrawalId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
-
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze withdrawal failure/reversal is permanently unavailable in closed-loop mode. Withdrawals must be created from completed sale proceeds via payout requests.',
-      code: 'ONEZE_WITHDRAWAL_DISABLED',
-      details: {
-        withdrawalId,
-        reason: payload.reason ?? null,
-      },
-    };
-  }
 
   if (!(await onezeArchitectureTablesAvailable(db))) {
     reply.code(503);
@@ -4053,21 +4421,6 @@ app.get('/wallet/1ze/:userId/withdrawals', async (request, reply) => {
   const { userId } = paramsSchema.parse(request.params);
   const { status, limit } = querySchema.parse(request.query);
   resolveAuthenticatedUserId(request, userId);
-
-  if (directOnezeWithdrawalRoutesDisabled()) {
-    reply.code(410);
-    return {
-      ok: false,
-      error:
-        'Direct 1ze withdrawal history is permanently unavailable in closed-loop mode. Use payout request history for sale-proceeds withdrawals.',
-      code: 'ONEZE_WITHDRAWAL_DISABLED',
-      details: {
-        userId,
-        status,
-        limit,
-      },
-    };
-  }
 
   if (!(await onezeArchitectureTablesAvailable(db))) {
     reply.code(503);
@@ -4445,7 +4798,7 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
   const availableIze = Math.max(0, userIze - reservedForOrders);
   const settledCustomerClaim = userIze + redemptionInProgress;
   const serverTimestamp = new Date().toISOString();
-  const positionRate = fiatCurrency.toUpperCase() === 'GBP' ? 1 : pricingQuote.sellPrice;
+  const positionRate = fiatCurrency.toUpperCase() === 'GBP' ? 1 : pricingQuote.netRedemption;
 
   // â”€â”€ WS4: Wallet safeguarding (backend-backed, no longer hardcoded) â”€â”€
   // Query the user's safeguarding profile. Default to safeguarded=false

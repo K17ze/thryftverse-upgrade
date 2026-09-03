@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Type, FontFamily, Space, Stroke } from '../theme/designTokens';
+import { FontFamily, Space, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 /**
  * DataFreshnessStrip — a thin data-freshness indicator for financial surfaces.
@@ -53,8 +54,7 @@ export function DataFreshnessStrip({
   lastUpdatedMs,
   isOffline,
   isStale = false,
-  label = 'Updated',
-}: DataFreshnessStripProps) {
+  label = 'Updated' }: DataFreshnessStripProps) {
   const { colors } = useAppTheme();
   const [, setTick] = useState(0);
 
@@ -105,27 +105,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Space.xs,
     paddingHorizontal: Space.md,
-    borderBottomWidth: Stroke.hairline,
-  },
+    borderBottomWidth: Stroke.hairline },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: Space.xs,
-  },
+    marginRight: Space.xs },
   text: {
     fontFamily: FontFamily.medium,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontWeight: Type.meta.weight,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontWeight: TypographyV2.meta.weight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   cached: {
     fontFamily: FontFamily.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    marginLeft: Space.xxs,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    marginLeft: Space.xxs } });
 
 export default DataFreshnessStrip;

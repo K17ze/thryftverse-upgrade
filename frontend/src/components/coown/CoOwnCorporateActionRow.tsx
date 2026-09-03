@@ -16,7 +16,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export type CoOwnCorporateActionType =
   | 'distribution'
@@ -61,8 +62,8 @@ const ACTION_CONFIG: Record<CoOwnCorporateActionType, { label: string; icon: Rea
   buyback: { label: 'Buyback', icon: 'arrow-undo-circle-outline' },
   compulsory_buyout: { label: 'Compulsory buyout', icon: 'exit-outline' },
   revaluation: { label: 'Revaluation', icon: 'trending-up-outline' },
-  insurance_proceeds: { label: 'Insurance proceeds', icon: 'shield-checkmark-outline' },
-  liquidation: { label: 'Liquidation', icon: 'cube-outline' },
+  insurance_proceeds: { label: 'Insurance proceeds', icon: 'checkmark-circle-outline' },
+  liquidation: { label: 'Liquidation', icon: 'cash-outline' },
   vote: { label: 'Vote', icon: 'ribbon-outline' },
 };
 
@@ -106,9 +107,7 @@ export function CoOwnCorporateActionRow({
       accessibilityLabel={`${actionCfg.label}, ${statusCfg.label}, ${dateLabel}. ${effectLabel}${amountLabel ? `, ${amountLabel}` : ''}${recordDateLabel ? `, ${recordDateLabel}` : ''}${paymentDateLabel ? `, ${paymentDateLabel}` : ''}`}
     >
       {/* Icon */}
-      <View style={[styles.iconWrap, { backgroundColor: colors.brandSubtle }]}>
-        <Ionicons name={actionCfg.icon} size={16} color={colors.brand} />
-      </View>
+      <Ionicons name={actionCfg.icon} size={20} color={colors.brand} />
 
       {/* Body */}
       <View style={styles.body}>
@@ -172,14 +171,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
   },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
   body: {
     flex: 1,
     gap: 3,
@@ -193,23 +184,23 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
   },
   date: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     flexShrink: 0,
   },
   effect: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 1,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 1,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   datesRow: {
     flexDirection: 'row',
@@ -217,10 +208,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   dateLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
   },
   rightCol: {
     alignItems: 'flex-end',
@@ -229,10 +220,10 @@ const styles = StyleSheet.create({
     minWidth: 60,
   },
   amount: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   statusPill: {
@@ -241,7 +232,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
   statusText: {
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
     letterSpacing: 0.3,
   },

@@ -83,3 +83,7 @@ frontend/src/__tests__/__screenshots__/diff/
 
 # Maestro screenshot capture output
 frontend/.maestro/screenshots/
+
+# Local agent skill packs (third-party tooling data: csv catalogs, py scripts, md refs)
+# Kept on disk for local agent tooling; not tracked in the repo
+.agents/

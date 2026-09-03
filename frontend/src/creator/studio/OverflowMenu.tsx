@@ -12,23 +12,53 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography, IconGrammar } from '../../theme/designTokens';
+import { Space, Radius, Typography, IconGrammar, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
+import { CreatorGlyph, type CreatorGlyphName } from '../controls/CreatorGlyph';
+
+import { AppIcon } from '../../components/common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 // ── Overflow menu item ─────────────────────────────────────────────
+// Canonical overflow row used by the Studio overflow menu, the Poster
+// composer overflow sheet, and the Look composer overflow menu.
+// Supports both Ionicons (icon) and CreatorGlyph (glyph) so creative
+// tools that use custom SVG glyphs in the rail also show their glyph
+// in the overflow menu — not a silently-dropped fallback.
+// When `colors` is provided, text/icon use theme tokens; otherwise the
+// row renders white-on-dark (poster/look full-bleed chrome).
 
-interface OverflowItemProps {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+export interface OverflowItemProps {
+  icon: string;
+  glyph?: CreatorGlyphName;
   label: string;
-  colors: ThemeColors;
+  colors?: ThemeColors;
   onPress: () => void;
   disabled?: boolean;
+  danger?: boolean;
+  selected?: boolean;
 }
 
-const OverflowItem = React.memo(function OverflowItem({ icon, label, colors, onPress, disabled }: OverflowItemProps) {
+export const OverflowItem = React.memo(function OverflowItem({
+  icon,
+  glyph,
+  label,
+  colors: propColors,
+  onPress,
+  disabled = false,
+  danger = false,
+  selected = false }: OverflowItemProps) {
   const haptic = useHaptic();
+  const { colors: themeColors } = useAppTheme();
+  const colors = propColors ?? themeColors;
+  const contentColor = disabled
+    ? colors.textMuted
+    : danger
+      ? colors.danger
+      : colors.textPrimary;
   return (
     <PressScale
       onPress={() => {
@@ -39,22 +69,21 @@ const OverflowItem = React.memo(function OverflowItem({ icon, label, colors, onP
       disabled={disabled}
       style={[styles.overflowItem, disabled ? { opacity: 0.4 } : {}]}
       accessibilityLabel={label}
-      accessibilityState={{ disabled }}
+      accessibilityRole="menuitem"
+      accessibilityState={selected ? { selected: true } : disabled ? { disabled: true } : undefined}
       hitSlop={12}
     >
-      <Ionicons
-        name={icon}
-        size={IconGrammar.standard}
-        color={disabled ? colors.textMuted : colors.textPrimary}
-      />
-      <Text
-        style={[
-          styles.overflowItemText,
-          { color: disabled ? colors.textMuted : colors.textPrimary },
-        ]}
-      >
+      {glyph ? (
+        <CreatorGlyph name={glyph} size={IconSize.lg} color={contentColor} />
+      ) : (
+        <AppIcon name={icon} size={IconSize.lg} color={contentColor} opticalCenter={true} accessible={false} />
+      )}
+      <Text style={[styles.overflowItemText, { color: contentColor }]}>
         {label}
       </Text>
+      {selected && (
+        <AppIcon name="check" size={IconSize.md} color={contentColor} opticalCenter={true} accessible={false} />
+      )}
     </PressScale>
   );
 });
@@ -103,8 +132,7 @@ export function OverflowMenu({
   onDrafts,
   onSettings,
   safeZoneVisible,
-  onToggleSafeZone,
-}: OverflowMenuProps) {
+  onToggleSafeZone }: OverflowMenuProps) {
   const { colors } = useAppTheme();
 
   if (!visible) return null;
@@ -115,6 +143,7 @@ export function OverflowMenu({
       onPress={onClose}
       accessibilityLabel="Close menu"
       accessibilityRole="button"
+      accessibilityHint="Double-tap to dismiss menu"
     >
       <View
         style={[
@@ -123,9 +152,10 @@ export function OverflowMenu({
             backgroundColor: colors.surfaceElevated,
             borderColor: colors.border,
             top,
-            right: 12,
-          },
+            right: 12 },
         ]}
+        accessibilityViewIsModal
+        accessibilityRole="menu"
       >
         <OverflowItem
           icon="arrow-undo"
@@ -212,34 +242,25 @@ export default OverflowMenu;
 const styles = StyleSheet.create({
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,
-    zIndex: 200,
-  },
+    zIndex: 200 },
   overflowMenu: {
     position: 'absolute',
     minWidth: 220,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Space.xs,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
+    ...Elevation.modal },
   overflowItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
-    minHeight: 48,
-  },
+    minHeight: 48 },
   overflowItemText: {
+    flex: 1,
     fontFamily: Typography.family.medium,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   overflowDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.xs,
-  },
-});
+    marginVertical: Space.xs } });

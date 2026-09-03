@@ -15,8 +15,10 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../theme/motionTokens';
 import { markInteractive } from '../platform/monitoring';
+import { track } from '../analytics';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
-import { Type, Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
   loginWithPassword,
   loginWithAppleIdentityToken,
@@ -25,8 +27,7 @@ import {
   requestMagicLink,
   verifyEmailOtp,
   type LoginWithPasswordError,
-  type OtpVerificationError,
-} from '../services/authApi';
+  type OtpVerificationError } from '../services/authApi';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -74,8 +75,7 @@ export default function LoginScreen() {
     clientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || 'dev-client-id-placeholder',
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_IOS_CLIENT_ID,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID || 'dev-android-client-id-placeholder',
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID,
-  });
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_OAUTH_WEB_CLIENT_ID });
 
   // Handle Google OAuth response for login
   useEffect(() => {
@@ -95,6 +95,7 @@ export default function LoginScreen() {
       try {
         const result = await loginWithGoogleIdToken(idToken);
         login(result.storeUser);
+        track('user_logged_in', { method: 'google' });
         setTwoFactorEnabled(result.user.twoFactorEnabled);
         navigation.replace('MainTabs');
         markInteractive({ surface: 'login_complete_google' });
@@ -137,11 +138,11 @@ export default function LoginScreen() {
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
+        ] });
       if (!credential.identityToken) throw new Error('Missing Apple identity token');
       const result = await loginWithAppleIdentityToken(credential.identityToken);
       login(result.storeUser);
+      track('user_logged_in', { method: 'apple' });
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
       markInteractive({ surface: 'login_complete_apple' });
@@ -180,7 +181,7 @@ export default function LoginScreen() {
 
   const statusEnterAnimation = reducedMotionEnabled
     ? undefined
-    : FadeInUp.springify().damping(20).duration(400);
+    : FadeInUp.springify().damping(20);
   const statusExitAnimation = reducedMotionEnabled ? undefined : FadeOutUp;
   const layoutAnimation = reducedMotionEnabled ? undefined : Layout.springify();
 
@@ -227,10 +228,10 @@ export default function LoginScreen() {
         email: normalizedEmail,
         password,
         twoFactorCode: recoveryCode.trim() ? undefined : twoFactorCode.trim() || undefined,
-        recoveryCode: recoveryCode.trim() || undefined,
-      });
+        recoveryCode: recoveryCode.trim() || undefined });
 
       login(result.storeUser);
+      track('user_logged_in', { method: 'email' });
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
       // EAS Observe: login has completed and the user is being routed into the
@@ -358,10 +359,10 @@ export default function LoginScreen() {
     try {
       const result = await verifyEmailOtp({
         challengeId: otpChallengeId,
-        code: normalizedCode,
-      });
+        code: normalizedCode });
 
       login(result.storeUser);
+      track('user_logged_in', { method: 'email' });
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
       // EAS Observe: OTP login has completed and the user is being routed
@@ -430,10 +431,10 @@ export default function LoginScreen() {
         challengeId: otpChallengeId,
         code: otpCode.trim(),
         twoFactorCode: otpUseRecovery ? undefined : twoFactorCode,
-        recoveryCode: otpUseRecovery ? recoveryCode : undefined,
-      });
+        recoveryCode: otpUseRecovery ? recoveryCode : undefined });
 
       login(result.storeUser);
+      track('user_logged_in', { method: 'email' });
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
       markInteractive({ surface: 'login_complete_otp' });
@@ -527,7 +528,7 @@ export default function LoginScreen() {
                 <View style={styles.twoFactorGroup}>
                   <View style={styles.twoFactorHeader}>
                     <View style={[styles.twoFactorIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
-                      <Ionicons name="shield-checkmark-outline" size={16} color={colors.commerceTrust} />
+                      <Ionicons name="checkmark-circle-outline" size={16} color={colors.commerceTrust} />
                     </View>
                     <Text style={styles.twoFactorTitle} maxFontSizeMultiplier={1.3}>Two-factor authentication</Text>
                   </View>
@@ -735,7 +736,7 @@ export default function LoginScreen() {
                     <View style={styles.otpTwoFactorGroup}>
                       <View style={styles.twoFactorHeader}>
                         <View style={[styles.twoFactorIcon, { backgroundColor: colors.commerceTrustSubtle }]}>
-                          <Ionicons name="shield-checkmark-outline" size={16} color={colors.commerceTrust} />
+                          <Ionicons name="checkmark-circle-outline" size={16} color={colors.commerceTrust} />
                         </View>
                         <Text style={styles.twoFactorTitle} maxFontSizeMultiplier={1.3}>Two-factor authentication</Text>
                       </View>
@@ -884,40 +885,35 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'space-between',
     paddingHorizontal: Space.lg,
     paddingTop: Space.sm,
-    paddingBottom: Space.lg,
-  },
-  title: { fontSize: Type.display.size, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.display.lineHeight, letterSpacing: Type.display.letterSpacing },
-  subtitle: { marginTop: Space.sm, fontSize: Type.body.size, lineHeight: Type.body.lineHeight, color: colors.textSecondary, fontFamily: Typography.family.regular, marginBottom: Space.md },
+    paddingBottom: Space.lg },
+  title: { fontSize: TypographyV2.display.size, fontFamily: TypographyV2.display.fontFamily, color: colors.textPrimary, lineHeight: TypographyV2.display.lineHeight, letterSpacing: TypographyV2.display.letterSpacing },
+  subtitle: { marginTop: Space.sm, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight, color: colors.textSecondary, fontFamily: TypographyV2.body.fontFamily, marginBottom: Space.md },
 
   form: { marginBottom: Space.lg },
   inputGroup: { marginBottom: Space.md },
 
   forgotBtn: { alignSelf: 'flex-start', marginTop: Space.sm },
-  forgotText: { color: colors.textSecondary, fontSize: Type.body.size, fontFamily: Typography.family.medium, textDecorationLine: 'underline' },
+  forgotText: { color: colors.textSecondary, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, textDecorationLine: 'underline' },
   primaryBtn: { backgroundColor: colors.brand, minHeight: Space.xxl + Space.sm, borderRadius: Radius.xxl + 4, borderWidth: 0, marginTop: Space.md + 2 },
   socialDivider: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + 2,
     marginTop: Space.md + 2,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   socialDividerLine: {
     flex: 1,
     height: Stroke.hairline,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
   socialDividerText: {
     color: colors.textMuted,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps,
-  },
+    letterSpacing: LetterSpacing.caps },
   socialGroup: {
     gap: Space.sm + 2,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   socialFullBtn: {
     flexDirection: 'row',
     height: Space.xxl + Space.xl + 4,
@@ -927,160 +923,133 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm + 2,
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   socialFullText: {
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.1,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: 0.1 },
   socialBtnDisabled: { opacity: 0.7 },
   dividerRow: {
     marginTop: Space.md + 2,
     marginBottom: Space.smMd,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   dividerLine: {
     flex: 1,
     height: Stroke.standard,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
   dividerText: {
     color: colors.textMuted,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps,
-  },
+    letterSpacing: LetterSpacing.caps },
   otpRequestBtn: {
     minHeight: Control.hit + 2,
     borderRadius: Radius.xxl,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
+    backgroundColor: colors.surface },
   otpRequestText: {
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   otpGroup: {
     marginTop: Space.sm + 6,
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   twoFactorGroup: {
     marginBottom: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   twoFactorHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   twoFactorIcon: {
     width: Control.chrome,
     height: Control.chrome,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   twoFactorTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
   twoFactorHint: {
     color: colors.textMuted,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    marginBottom: Space.xs / 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginBottom: Space.xs / 2 },
   magicLinkBtn: {
     minHeight: Control.hit - 2,
     borderRadius: Radius.xxl,
     borderWidth: 0,
     backgroundColor: 'transparent',
-    marginTop: Space.sm + 2,
-  },
+    marginTop: Space.sm + 2 },
   magicLinkText: {
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    textDecorationLine: 'underline',
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textDecorationLine: 'underline' },
   otpVerifyBtn: {
     minHeight: Space.xxl,
     borderRadius: Radius.xxl,
     borderWidth: 0,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   otpVerifyText: {
     color: colors.textInverse,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   otpTwoFactorGroup: {
     marginTop: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   otpTwoFactorBody: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    lineHeight: Type.caption.size + 4,
-  },
+    lineHeight: TypographyV2.meta.size + 4 },
   otpTwoFactorToggle: {
     alignSelf: 'flex-start',
     paddingVertical: Space.xs,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   otpTwoFactorToggleText: {
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    textDecorationLine: 'underline',
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textDecorationLine: 'underline' },
   otpTwoFactorCancel: {
     alignSelf: 'center',
     paddingVertical: Space.xs,
     paddingHorizontal: Space.md,
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   otpTwoFactorCancelText: {
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   footer: { paddingTop: Space.sm, position: 'relative' },
-  infoText: { color: colors.success, fontSize: Type.caption.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
-  errorText: { color: colors.danger, fontSize: Type.caption.size, fontFamily: Typography.family.medium, textAlign: 'center', marginBottom: Space.md - 4 },
+  infoText: { color: colors.success, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, textAlign: 'center', marginBottom: Space.md - 4 },
+  errorText: { color: colors.danger, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, textAlign: 'center', marginBottom: Space.md - 4 },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryText: { color: colors.textInverse, fontSize: Type.body.size, fontFamily: Typography.family.semibold },
+  primaryText: { color: colors.textInverse, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily },
   switchRow: {
     marginTop: Space.sm + 6,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   switchText: {
     color: colors.textSecondary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   switchLink: {
     color: colors.textPrimary,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    textDecorationLine: 'underline',
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    textDecorationLine: 'underline' } });
 }

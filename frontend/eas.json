@@ -44,6 +44,20 @@
         "simulator": true
       }
     },
+    "screenshots": {
+      "extends": "development",
+      "ios": {
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api-dev.thryftverse.com",
+        "EXPO_PUBLIC_ENVIRONMENT": "development",
+        "EXPO_PUBLIC_MOCK_MODE": "fixture-design"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "channel": "preview",

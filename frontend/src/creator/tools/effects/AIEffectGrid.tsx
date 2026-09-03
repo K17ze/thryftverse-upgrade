@@ -18,26 +18,27 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Space, Radius, Stroke, FontFamily, FontSize, Control, Type } from '../../../theme/designTokens';
+import { Space, Radius, Stroke, FontFamily, FontSize, Control } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import { EffectPreviewThumb } from './EffectPreviewThumb';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 import {
   type AIEffectCategory,
   type AIEffectDefinition,
   type CapabilityClass,
   AI_EFFECT_CATEGORIES,
-  isMLAvailable,
-} from './AIEffectRegistry';
+  isMLAvailable } from './AIEffectRegistry';
 import {
   type EffectPreset,
   type EffectPresetCategory,
   type EffectNode,
   type MatrixNode,
-  IDENTITY_MATRIX,
-} from './EffectTypes';
+  IDENTITY_MATRIX } from './EffectTypes';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -112,8 +113,7 @@ function aiEffectToPreset(effect: AIEffectDefinition): EffectPreset {
     nodes: effect.render(1),
     intensity: 1,
     thumbnailMatrix: extractThumbnailMatrix(effect),
-    version: 1,
-  };
+    version: 1 };
 }
 
 // ── Capability badge ───────────────────────────────────────────────────
@@ -159,8 +159,7 @@ function getCapabilityBadge(
         label: 'Filter',
         emphasized: false,
         pill: false,
-        hint: 'On-device ML is unavailable; using a deterministic filter fallback.',
-      };
+        hint: 'On-device ML is unavailable; using a deterministic filter fallback.' };
     case 'generative':
       if (mlAvailable) {
         return { label: 'AI', emphasized: true, pill: true };
@@ -169,8 +168,7 @@ function getCapabilityBadge(
         label: 'Filter',
         emphasized: false,
         pill: false,
-        hint: 'On-device generative model is unavailable; using a deterministic filter fallback.',
-      };
+        hint: 'On-device generative model is unavailable; using a deterministic filter fallback.' };
   }
 }
 
@@ -184,7 +182,7 @@ interface TabMeta {
 
 const TAB_META: TabMeta[] = [
   { key: 'all', label: 'All', icon: 'apps-outline' },
-  { key: 'ml', label: 'ML', icon: 'hardware-chip-outline' },
+  { key: 'ml', label: 'ML', icon: 'bulb-outline' },
   { key: 'portrait', label: 'Portrait', icon: 'person-outline' },
   { key: 'creative', label: 'Creative', icon: 'color-palette-outline' },
   { key: 'color', label: 'Color', icon: 'color-filter-outline' },
@@ -200,8 +198,7 @@ export function AIEffectGrid({
   effects,
   selectedId,
   onSelect,
-  sourceImageUri,
-}: AIEffectGridProps): React.ReactElement {
+  sourceImageUri }: AIEffectGridProps): React.ReactElement {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -266,16 +263,18 @@ export function AIEffectGrid({
               accessibilityLabel={`${tab.label} effects`}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               style={[
                 styles.tab,
                 isActive && { borderColor: colors.brand, backgroundColor: colors.brandSubtle },
               ]}
             >
-              <Ionicons
+              <AppIcon
                 name={tab.icon}
-                size={IconGrammar.badge}
-                color={isActive ? colors.brand : colors.textSecondary}
+                size={IconSize.xs}
+                color={isActive ? 'brand' : 'textSecondary'}
+                opticalCenter={true}
+                accessible={false}
               />
               <Text
                 style={[
@@ -339,7 +338,7 @@ export function AIEffectGrid({
         contentContainerStyle={styles.gridContent}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Ionicons name="bulb-outline" size={IconGrammar.hero} color={colors.textMuted} />
+            <AppIcon name="sparkles" size={IconSize.hero} color="textMuted" opticalCenter={true} accessible={false} />
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
               {activeTab === 'ml'
                 ? 'ML effects require an on-device model'
@@ -364,14 +363,12 @@ function useGridStyles(colors: ThemeColors) {
     () =>
       StyleSheet.create({
         container: {
-          flex: 1,
-        } as ViewStyle,
+          flex: 1 } as ViewStyle,
         tabBar: {
           flexDirection: 'row',
           gap: Space.xs,
           paddingHorizontal: Space.md,
-          paddingBottom: Space.sm,
-        } as ViewStyle,
+          paddingBottom: Space.sm } as ViewStyle,
         tab: {
           flexDirection: 'row',
           alignItems: 'center',
@@ -380,62 +377,49 @@ function useGridStyles(colors: ThemeColors) {
           height: 32,
           borderRadius: Radius.full,
           borderWidth: Stroke.hairline,
-          borderColor: colors.border,
-        } as ViewStyle,
+          borderColor: colors.border } as ViewStyle,
         tabLabel: {
           fontFamily: FontFamily.medium,
-          fontSize: FontSize.caption,
-        } as ViewStyle,
+          fontSize: FontSize.caption } as ViewStyle,
         gridContent: {
           paddingHorizontal: Space.md,
-          paddingBottom: Space.lg,
-        } as ViewStyle,
+          paddingBottom: Space.lg } as ViewStyle,
         row: {
           gap: Space.sm,
-          justifyContent: 'flex-start',
-        } as ViewStyle,
+          justifyContent: 'flex-start' } as ViewStyle,
         cell: {
           flex: 1,
           alignItems: 'center',
-          minHeight: Control.hit,
-        } as ViewStyle,
+          minHeight: Control.hit } as ViewStyle,
         thumbStack: {
           // Wrapper so the capability badge can overlay the thumbnail.
-          alignItems: 'center',
-        } as ViewStyle,
+          alignItems: 'center' } as ViewStyle,
         capBadge: {
           position: 'absolute',
           bottom: 18, // sits over the lower edge of the 92pt thumbnail
           paddingHorizontal: Space.xs,
           paddingVertical: 1,
           borderRadius: Radius.sm,
-          alignSelf: 'center',
-        } as ViewStyle,
+          alignSelf: 'center' } as ViewStyle,
         capBadgeText: {
           fontFamily: FontFamily.medium,
-          fontSize: Type.meta.size,
-          lineHeight: Type.meta.lineHeight,
-          letterSpacing: Type.meta.letterSpacing,
-        } as ViewStyle,
+          fontSize: TypographyV2.meta.size,
+          lineHeight: TypographyV2.meta.lineHeight,
+          letterSpacing: TypographyV2.meta.letterSpacing } as ViewStyle,
         rowSeparator: {
-          height: Space.sm,
-        } as ViewStyle,
+          height: Space.sm } as ViewStyle,
         emptyState: {
           alignItems: 'center',
           justifyContent: 'center',
           paddingVertical: Space.xl,
-          gap: Space.sm,
-        } as ViewStyle,
+          gap: Space.sm } as ViewStyle,
         emptyTitle: {
           fontFamily: FontFamily.semibold,
-          fontSize: FontSize.body,
-        } as ViewStyle,
+          fontSize: FontSize.body } as ViewStyle,
         emptyHint: {
           fontFamily: FontFamily.regular,
           fontSize: FontSize.caption,
-          textAlign: 'center',
-        } as ViewStyle,
-      }),
+          textAlign: 'center' } as ViewStyle }),
     [colors],
   );
 }

@@ -3,10 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  Alert,
   Pressable,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -16,22 +14,23 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, AspectRatio, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, AspectRatio, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { BodyEmphasis, Caption } from '../components/ui/Text';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageCollectionItems'>;
 
 export default function ManageCollectionItemsScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
-  const { collectionId } = route.params;
+  const { collectionId } = route.params ?? {};
   const haptic = useHaptic();
   const { show } = useToast();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
 
   const collections = useStore((state) => state.collections);
   const removeFromCollectionOnApi = useStore((state) => state.removeFromCollectionOnApi);
@@ -64,40 +63,46 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
 
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
+
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleRemove = useCallback((itemId: string, itemTitle: string) => {
     haptic.medium();
-    Alert.alert(
-      'Remove item?',
-      `Remove "${itemTitle}" from this collection?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setRemovingIds((prev) => new Set(prev).add(itemId));
-            // Optimistic removal
-            removeFromCollection(collectionId, itemId);
-            try {
-              await removeFromCollectionOnApi(collectionId, itemId);
-              show('Item removed', 'info');
-            } catch {
-              // Rollback: re-add the item since API call failed
-              addToCollection(collectionId, itemId);
-              show('Failed to remove item. Try again.', 'error');
-            } finally {
-              setRemovingIds((prev) => {
-                const next = new Set(prev);
-                next.delete(itemId);
-                return next;
-              });
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove item?',
+      message: `Remove "${itemTitle}" from this collection?`,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      onConfirm: async () => {
+        setRemovingIds((prev) => new Set(prev).add(itemId));
+        // Optimistic removal
+        removeFromCollection(collectionId, itemId);
+        try {
+          await removeFromCollectionOnApi(collectionId, itemId);
+          show('Item removed', 'info');
+        } catch {
+          // Rollback: re-add the item since API call failed
+          addToCollection(collectionId, itemId);
+          show('Failed to remove item. Try again.', 'error');
+        } finally {
+          setRemovingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(itemId);
+            return next;
+          });
+        }
+      } });
   }, [collectionId, haptic, addToCollection, removeFromCollection, removeFromCollectionOnApi, show]);
 
   const handleAdd = useCallback(async (itemId: string) => {
@@ -147,7 +152,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
         onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}`}
+        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}`}
       >
         {item.images?.[0] ? (
           <CachedImage uri={item.images[0]} style={styles.thumb} contentFit="cover" />
@@ -161,7 +166,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           <Caption color={colors.textMuted}>{item.brand}</Caption>
         </View>
         <Text style={styles.rowPrice} numberOfLines={1}>
-          {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+          {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
         </Text>
         <AnimatedPressable
           style={styles.removeBtn}
@@ -186,7 +191,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           style={styles.availableInfo}
           onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
           accessibilityRole="button"
-          accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`}
+          accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}`}
         >
           {item.images?.[0] ? (
             <CachedImage uri={item.images[0]} style={styles.thumb} contentFit="cover" />
@@ -201,7 +206,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           </View>
         </Pressable>
         <Text style={styles.rowPrice} numberOfLines={1}>
-          {formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}
+          {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
         </Text>
         <AnimatedPressable
           style={[styles.addBtn, isAdding && styles.addBtnLoading]}
@@ -275,6 +280,17 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           </View>
         )}
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }
@@ -287,58 +303,48 @@ function createStyles(colors: ThemeColors) {
   const THUMB_H = Math.round(THUMB_W / AspectRatio.portrait); // ~75pt
   return StyleSheet.create({
     scroll: {
-      flex: 1,
-    },
+      flex: 1 },
     scrollContent: {
-      paddingBottom: Space.xxl,
-    },
+      paddingBottom: Space.xxl },
     sectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     sectionTitle: {
-      fontSize: Type.label.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.label.size,
+      fontFamily: TypographyV2.label.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: Type.label.letterSpacing,
-    },
+      letterSpacing: TypographyV2.label.letterSpacing },
     sectionCount: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     listContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.lg,
-    },
+      paddingBottom: Space.lg },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
       paddingVertical: Space.smMd,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     rowRemoving: {
-      opacity: 0.5,
-    },
+      opacity: 0.5 },
     availableInfo: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.md,
-      flex: 1,
-    },
+      flex: 1 },
     thumb: {
       width: THUMB_W,
       height: THUMB_H,
       borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     thumbEmpty: {
       width: THUMB_W,
       height: THUMB_H,
@@ -347,45 +353,36 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       alignItems: 'center',
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     rowBody: {
       flex: 1,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     rowPrice: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing },
     removeBtn: {
       width: Space.xl + Space.sm,
       height: Space.xl + Space.sm,
       borderRadius: Radius.md,
       backgroundColor: 'transparent',
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     addBtn: {
       width: Space.xl + Space.sm,
       height: Space.xl + Space.sm,
       borderRadius: Radius.md,
       backgroundColor: 'transparent',
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     addBtnLoading: {
-      opacity: 0.5,
-    },
+      opacity: 0.5 },
     separator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginLeft: THUMB_W + Space.md,
-    },
+      marginLeft: THUMB_W + Space.md },
     availableSection: {
       paddingTop: Space.lg,
-      flex: 1,
-    },
-  });
+      flex: 1 } });
 }

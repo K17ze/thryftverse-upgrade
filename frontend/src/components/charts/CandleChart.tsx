@@ -30,15 +30,14 @@ import {
   Candlestick,
   useChartPressState,
   type ChartBounds,
-  type PointsArray,
-} from 'victory-native';
+  type PointsArray } from 'victory-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   type CandleData,
   type ChartPadding,
-  type ChartTheme,
-} from './types';
+  type ChartTheme } from './types';
 import { ChartTooltip, buildCandleTooltipLines } from './ChartTooltip';
 
 // ============================================================================
@@ -64,6 +63,8 @@ export interface CandleChartProps {
   error?: string | null;
   /** Optional empty-state message override. */
   emptyMessage?: string;
+  /** Screen-reader summary of the chart data (e.g. "Candlestick chart, 24 candles, open £12.40 close £13.10, high £13.50 low £12.20"). Required for WCAG 1.1.1 — the Skia canvas is invisible to assistive tech. */
+  accessibilitySummary?: string;
 }
 
 // ============================================================================
@@ -78,8 +79,7 @@ const DEFAULT_PADDING: ChartPadding = {
   top: 16,
   right: 56,
   bottom: 28,
-  left: 8,
-};
+  left: 8 };
 
 // ============================================================================
 // THEME RESOLVER
@@ -99,8 +99,7 @@ function useChartTheme(): ChartTheme {
       positive: colors.coownUp,
       negative: colors.coownDown,
       gridLine: colors.borderSubtle,
-      axisLine: colors.border,
-    }),
+      axisLine: colors.border }),
     [colors],
   );
 }
@@ -113,8 +112,7 @@ function defaultPriceFormat(value: number): string {
   if (Math.abs(value) >= 1000) {
     return value.toLocaleString('en-GB', {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
+      maximumFractionDigits: 0 });
   }
   return value.toFixed(2);
 }
@@ -126,13 +124,11 @@ function defaultTimeFormat(timestamp: number): string {
   if (sameDay) {
     return date.toLocaleTimeString('en-GB', {
       hour: '2-digit',
-      minute: '2-digit',
-    });
+      minute: '2-digit' });
   }
   return date.toLocaleDateString('en-GB', {
     day: '2-digit',
-    month: 'short',
-  });
+    month: 'short' });
 }
 
 // ============================================================================
@@ -147,8 +143,7 @@ function CrosshairLine({
   xPosition,
   chartBounds,
   color,
-  isActive,
-}: {
+  isActive }: {
   xPosition: SharedValue<number>;
   chartBounds: ChartBounds;
   color: string;
@@ -185,8 +180,7 @@ function VolumeBars({
   openPoints,
   closePoints,
   positiveColor,
-  negativeColor,
-}: {
+  negativeColor }: {
   volumePoints: PointsArray;
   chartBounds: ChartBounds;
   openPoints: PointsArray;
@@ -252,7 +246,7 @@ export function CandleChart({
   loading = false,
   error = null,
   emptyMessage = 'No trades in this range',
-}: CandleChartProps): React.ReactElement {
+  accessibilitySummary }: CandleChartProps): React.ReactElement {
   const appTheme = useChartTheme();
   const theme = useMemo(
     () => ({ ...appTheme, ...themeOverride }),
@@ -275,8 +269,7 @@ export function CandleChart({
   // Chart press state for crosshair interaction.
   const { state: pressState, isActive } = useChartPressState({
     x: data.length > 0 ? data[0].timestamp : 0,
-    y: { open: 0, high: 0, low: 0, close: 0, volume: 0 },
-  });
+    y: { open: 0, high: 0, low: 0, close: 0, volume: 0 } });
 
   // Transform CandleData[] into Victory Native data rows.
   const chartData = useMemo(() => {
@@ -286,8 +279,7 @@ export function CandleChart({
       high: c.high,
       low: c.low,
       close: c.close,
-      volume: c.volume ?? 0,
-    }));
+      volume: c.volume ?? 0 }));
   }, [data]);
 
   // Derive tooltip lines from the press state (runs on UI thread).
@@ -363,6 +355,13 @@ export function CandleChart({
       style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
       onLayout={onLayout}
     >
+      {/* Off-screen text for screen readers — the Skia canvas is invisible
+          to VoiceOver/TalkBack, so we expose a textual summary (WCAG 1.1.1). */}
+      <Text
+        accessibilityLabel={accessibilitySummary ?? `${chartData.length} candles`}
+        accessibilityRole="text"
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+      />
       <CartesianChart
         data={chartData}
         xKey="timestamp"
@@ -377,8 +376,7 @@ export function CandleChart({
           labelColor,
           labelOffset: 6,
           formatXLabel: (label: number) => defaultTimeFormat(label),
-          tickCount: 5,
-        }}
+          tickCount: 5 }}
         yAxis={[
           {
             yKeys: ['open', 'high', 'low', 'close'],
@@ -388,13 +386,11 @@ export function CandleChart({
             labelOffset: 4,
             formatYLabel: (value: number) => priceFormat(value),
             tickCount: 5,
-            axisSide: 'right',
-          },
+            axisSide: 'right' },
         ]}
         frame={{
           lineColor: axisColor,
-          lineWidth: StyleSheet.hairlineWidth,
-        }}
+          lineWidth: StyleSheet.hairlineWidth }}
         renderOutside={({ chartBounds }) =>
           isActive ? (
             <>
@@ -430,8 +426,7 @@ export function CandleChart({
               candleColors={{
                 positive: theme.positive,
                 negative: theme.negative,
-                neutral: theme.textSecondary,
-              }}
+                neutral: theme.textSecondary }}
               animate={{ type: 'timing', duration: 300 }}
             />
             {showVolume && (
@@ -460,34 +455,27 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.sm,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   skeletonBar: {
     height: 12,
     width: '80%',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   errorText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    textAlign: 'center' },
   emptyTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    textAlign: 'center' },
   emptySubtext: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
-    paddingHorizontal: Space.lg,
-  },
-});
+    paddingHorizontal: Space.lg } });
 
 export default CandleChart;

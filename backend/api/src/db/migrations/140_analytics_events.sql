@@ -56,7 +56,7 @@ DECLARE
 BEGIN
   start_date := DATE_TRUNC('month', NOW())::DATE;
   FOR i IN 0..3 LOOP
-    PERFORM create_partition_if_not_exists('analytics_events', start_date + (i || ' month')::INTERVAL);
+    PERFORM create_partition_if_not_exists('analytics_events', (start_date + (i || ' month')::INTERVAL)::DATE);
   END LOOP;
 
   CREATE TABLE IF NOT EXISTS analytics_events_default

@@ -6,11 +6,11 @@ import {
   Pressable,
   ScrollView,
   TextInput,
-  Switch,
-} from 'react-native';
+  Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
@@ -112,37 +112,34 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
           />
 
           {/* Shared: Accessibility description */}
-          <Text style={styles.sectionLabel}>Accessibility Description</Text>
+          <Text style={styles.sectionLabel}>Alt Text</Text>
           <TextInput
             style={[inputStyle('accessibility'), styles.textArea]}
             value={accessibilityDesc}
             onChangeText={setAccessibilityDesc}
             onFocus={() => setFocusedField('accessibility')}
             onBlur={() => { setFocusedField(null); handleSaveAccessibility(); }}
-            placeholder="Describe this content for screen readers..."
+            placeholder="Describe for screen readers…"
             placeholderTextColor={colors.textMuted}
             multiline
             accessibilityLabel="Accessibility description"
           />
 
-          {/* Shared: Remix attribution */}
+          {/* Shared: Recreate attribution — shows the source composition this
+              look was recreated from. Internal metadata key remains
+              sourceDocumentId; the user-facing label is "Recreate Source". */}
           {document.metadata.sourceDocumentId && (
             <>
-              <Text style={styles.sectionLabel}>Remix Attribution</Text>
+              <Text style={styles.sectionLabel}>Recreate Source</Text>
               <View style={styles.attributionBox}>
                 <Ionicons name="git-branch-outline" size={IconGrammar.metadata} color={colors.textSecondary} />
                 <View style={styles.attributionContent}>
                   <Text style={styles.attributionText}>
-                    Remixed from another {document.type}
+                    Recreated from a {document.type}
                   </Text>
                   <Text style={styles.attributionDetail}>
                     Source: {document.metadata.sourceDocumentId}
                   </Text>
-                  {document.metadata.sourceCreatorId && (
-                    <Text style={styles.attributionDetail}>
-                      Original creator: {document.metadata.sourceCreatorId}
-                    </Text>
-                  )}
                 </View>
               </View>
             </>
@@ -162,14 +159,14 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
                 />
               </View>
 
-              <Text style={styles.sectionLabel}>Remix Permission</Text>
+              <Text style={styles.sectionLabel}>Recreate Permission</Text>
               <View style={styles.row}>
-                <Text style={styles.rowLabel}>Allow others to remix</Text>
+                <Text style={styles.rowLabel}>Allow recreate</Text>
                 <Switch
                   value={document.metadata.allowRemix ?? false}
                   onValueChange={(v) => updateMetadata({ allowRemix: v })}
                   trackColor={{ false: colors.border, true: colors.brand }}
-                  accessibilityLabel="Allow remix"
+                  accessibilityLabel="Allow recreate"
                 />
               </View>
             </>
@@ -191,7 +188,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
 
               <Text style={styles.sectionLabel}>Allow Replies</Text>
               <View style={styles.row}>
-                <Text style={styles.rowLabel}>Enable replies</Text>
+                <Text style={styles.rowLabel}>Replies</Text>
                 <Switch
                   value={document.metadata.allowReplies ?? true}
                   onValueChange={(v) => updateMetadata({ allowReplies: v })}
@@ -202,7 +199,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
 
               <Text style={styles.sectionLabel}>Allow Reactions</Text>
               <View style={styles.row}>
-                <Text style={styles.rowLabel}>Enable reactions</Text>
+                <Text style={styles.rowLabel}>Reactions</Text>
                 <Switch
                   value={document.metadata.allowReactions ?? true}
                   onValueChange={(v) => updateMetadata({ allowReactions: v })}
@@ -328,7 +325,7 @@ export function CreatorSettingsSheet({ visible, onClose }: CreatorSettingsSheetP
               accessibilityRole="button"
             >
               <Ionicons name="save-outline" size={IconGrammar.metadata} color={colors.surface} />
-              <Text style={styles.saveBtnText}>Save Draft</Text>
+              <Text style={styles.saveBtnText}>Save</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -370,69 +367,55 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-  },
+    fontSize: TypographyV2.sectionTitle.size },
   closeBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   scrollBody: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   scrollContent: {
     paddingBottom: Space.xl,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   sectionLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
     marginTop: Space.sm,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   input: {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   inputFocused: {
     borderColor: colors.brand,
-    borderWidth: Stroke.emphasis,
-  },
+    borderWidth: Stroke.emphasis },
   textArea: {
     minHeight: 80,
-    textAlignVertical: 'top',
-  },
+    textAlignVertical: 'top' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   rowLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    color: colors.textPrimary },
   ratioRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
   ratioBtn: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -442,50 +425,40 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     gap: Space.xs,
     minWidth: 72,
-    minHeight: 72,
-  },
+    minHeight: 72 },
   ratioPreview: {
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   ratioBtnText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   labelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   charCount: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   draftSection: {
     marginTop: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   autosaveRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   autosaveLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted },
   retryBtn: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   retryText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.brand },
   saveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -494,16 +467,13 @@ function createStyles(colors: ThemeColors) {
     minHeight: 50,
     paddingVertical: Space.md,
     borderRadius: Radius.lg,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   saveBtnDisabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   saveBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    color: colors.surface,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    color: colors.surface },
   attributionBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -512,45 +482,36 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     borderRadius: Radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   attributionContent: {
     flex: 1,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   attributionText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.textSecondary },
   attributionDetail: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted },
   // ── Background picker ──
   bgScroll: {
-    marginHorizontal: -Space.md,
-  },
+    marginHorizontal: -Space.md },
   bgScrollContent: {
     paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   bgTileWrap: {
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   bgTile: {
     width: 64,
     height: 80,
     borderRadius: Radius.lg,
     borderWidth: Stroke.emphasis,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   bgTileFill: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   bgCheckOverlay: {
     position: 'absolute',
     top: Space.xs,
@@ -560,12 +521,9 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   bgTileLabel: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-    letterSpacing: 0.1,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    letterSpacing: 0.1 } });
 }

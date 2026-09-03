@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "updatedAt": "2026-09-02T01:12:00Z",
+  "targetPlatforms": ["ios", "android"],
+  "viewports": {
+    "compactHandset": {
+      "width": 375,
+      "height": 812,
+      "scale": 3,
+      "label": "iPhone 13 mini / SE"
+    },
+    "standardPhone": {
+      "width": 390,
+      "height": 844,
+      "scale": 3,
+      "label": "iPhone 15 / Galaxy S24"
+    },
+    "largePhone": {
+      "width": 430,
+      "height": 932,
+      "scale": 3,
+      "label": "iPhone 16 Pro Max / Pixel 9 Pro XL"
+    },
+    "tablet": {
+      "width": 820,
+      "height": 1180,
+      "scale": 2,
+      "label": "iPad Air / Galaxy Tab"
+    }
+  },
+  "themeModes": ["light", "dark"],
+  "accessibilityModes": ["standard", "reducedMotion", "dynamicType200"],
+  "goldenRoutes": [
+    {
+      "id": "golden-home",
+      "department": "Discovery",
+      "screen": "DiscoverScene",
+      "file": "src/scenes/discovery/DiscoverScene.tsx",
+      "baselinePrefix": "golden-home",
+      "threshold": 0.01
+    },
+    {
+      "id": "golden-search",
+      "department": "Search",
+      "screen": "VisualSearchScreen",
+      "file": "src/screens/VisualSearchScreen.tsx",
+      "baselinePrefix": "golden-search",
+      "threshold": 0.01
+    },
+    {
+      "id": "golden-pdp",
+      "department": "Commerce",
+      "screen": "ItemDetailScreen",
+      "file": "src/screens/ItemDetailScreen.tsx",
+      "baselinePrefix": "golden-pdp",
+      "threshold": 0.01
+    },
+    {
+      "id": "golden-sell",
+      "department": "Selling",
+      "screen": "SellScreen",
+      "file": "src/screens/SellScreen.tsx",
+      "baselinePrefix": "golden-sell",
+      "threshold": 0.01
+    },
+    {
+      "id": "golden-profile",
+      "department": "Identity",
+      "screen": "ProfileScreen",
+      "file": "src/screens/ProfileScreen.tsx",
+      "baselinePrefix": "golden-profile",
+      "threshold": 0.01
+    },
+    {
+      "id": "golden-settings",
+      "department": "Settings",
+      "screen": "SettingsScreen",
+      "file": "src/screens/SettingsScreen.tsx",
+      "baselinePrefix": "golden-settings",
+      "threshold": 0.01
+    },
+    {
+      "id": "golden-inbox",
+      "department": "Messaging",
+      "screen": "InboxScreen",
+      "file": "src/screens/InboxScreen.tsx",
+      "baselinePrefix": "golden-inbox",
+      "threshold": 0.01
+    },
+    {
+      "id": "golden-chat",
+      "department": "Messaging",
+      "screen": "ChatScreen",
+      "file": "src/screens/ChatScreen.tsx",
+      "baselinePrefix": "golden-chat",
+      "threshold": 0.01
+    },
+    {
+      "id": "golden-auction",
+      "department": "Auction",
+      "screen": "AuctionHomeScreen",
+      "file": "src/screens/AuctionHomeScreen.tsx",
+      "baselinePrefix": "golden-auction",
+      "threshold": 0.01
+    },
+    {
+      "id": "golden-seller-hub",
+      "department": "SellerOS",
+      "screen": "SellerHubScreen",
+      "file": "src/screens/SellerHubScreen.tsx",
+      "baselinePrefix": "golden-seller-hub",
+      "threshold": 0.01
+    },
+    {
+      "id": "golden-coown",
+      "department": "Financial",
+      "screen": "CoOwnAssetDetailScreen",
+      "file": "src/screens/CoOwnAssetDetailScreen.tsx",
+      "baselinePrefix": "golden-coown",
+      "threshold": 0.01
+    },
+    {
+      "id": "golden-poster",
+      "department": "Creator",
+      "screen": "PosterViewerScreen",
+      "file": "src/creator/poster/PosterViewerScreen.tsx",
+      "baselinePrefix": "golden-poster",
+      "threshold": 0.01
+    }
+  ]
+}

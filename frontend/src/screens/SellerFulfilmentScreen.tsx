@@ -7,16 +7,16 @@ import {
   Pressable,
   TextInput,
   ActivityIndicator,
-  Alert,
-  Linking,
-} from 'react-native';
+  Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Typography, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { getOrder, shipOrder, assertHandoff, type CommerceOrder } from '../services/commerceApi';
+import { getOrderReview } from '../services/reviewApi';
 import { parseApiError } from '../lib/apiClient';
 import { fetchJson } from '../lib/apiClient';
 import { CachedImage } from '../components/CachedImage';
@@ -24,16 +24,15 @@ import {
   normaliseOrderStatus,
   humaniseStatus,
   resolveCapabilities,
-  type FulfilmentSnapshot,
-} from '../components/orders/orderCapabilities';
+  type FulfilmentSnapshot } from '../components/orders/orderCapabilities';
 import {
   classifyShippingError,
   SHIPPING_ERROR_RECOVERY,
   getDropOffUrl,
-  type ShippingProviderErrorCode,
-} from '../services/shippingProviderRegistry';
+  type ShippingProviderErrorCode } from '../services/shippingProviderRegistry';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { haptics } from '../utils/haptics';
 import { t } from '../i18n';
 
@@ -89,12 +88,22 @@ export default function SellerFulfilmentScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const { orderId } = route.params;
+  const { orderId } = route.params ?? {};
 
   const [order, setOrder] = useState<CommerceOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasReview, setHasReview] = useState(false);
   const [isDispatching, setIsDispatching] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    cancelLabel: string;
+    onConfirm: () => void;
+    variant: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
   // Manual shipping form state
   const [trackingNumber, setTrackingNumber] = useState('');
@@ -125,6 +134,16 @@ export default function SellerFulfilmentScreen() {
       if (fetched.trackingNumber) setTrackingNumber(fetched.trackingNumber);
       if (fetched.shippingProvider) setShippingProvider(fetched.shippingProvider);
       if (fetched.shippingLabelUrl) setGeneratedLabelUrl(fetched.shippingLabelUrl);
+
+      // Fetch review state to correctly gate review/inspect capabilities.
+      try {
+        const review = await getOrderReview(orderId);
+        if (!isMountedRef.current) return;
+        setHasReview(review !== null);
+      } catch {
+        if (!isMountedRef.current) return;
+        setHasReview(false);
+      }
     } catch (error) {
       if (!isMountedRef.current) return;
       setLoadError('Order could not be loaded. Check your connection and try again.');
@@ -148,11 +167,10 @@ export default function SellerFulfilmentScreen() {
       status: order.status,
       role: isSeller ? 'seller' : 'buyer',
       hasOpenResolution: false,
-      hasReview: false,
+      hasReview,
       hasTracking: Boolean(order.trackingNumber),
-      fulfilmentSnapshot: order.fulfilmentSnapshot ?? null,
-    });
-  }, [order, isSeller]);
+      fulfilmentSnapshot: order.fulfilmentSnapshot ?? null });
+  }, [order, isSeller, hasReview]);
   const canDispatch = capabilities?.canDispatch ?? false;
 
   // Determine shipping mode from the immutable fulfilment snapshot.
@@ -217,8 +235,7 @@ export default function SellerFulfilmentScreen() {
     navigation.navigate('ChatMediaPreview', {
       mediaUri: generatedLabelUrl,
       mediaType: 'image',
-      senderLabel: 'Shipping label / QR code',
-    });
+      senderLabel: 'Shipping label / QR code' });
   }, [generatedLabelUrl, navigation]);
 
   const handleFindDropOff = useCallback(() => {
@@ -252,8 +269,7 @@ export default function SellerFulfilmentScreen() {
     try {
       await shipOrder(orderId, {
         trackingNumber: tn,
-        shippingProvider: carrier,
-      });
+        shippingProvider: carrier });
       show('Item dispatched. The buyer will be notified.', 'success');
       navigation.goBack();
     } catch (error) {
@@ -277,8 +293,7 @@ export default function SellerFulfilmentScreen() {
       await assertHandoff(orderId, {
         trackingNumber: trackingNumber.trim() || undefined,
         shippingProvider: serviceName ?? undefined,
-        labelUrl: generatedLabelUrl ?? undefined,
-      });
+        labelUrl: generatedLabelUrl ?? undefined });
       show('Handoff recorded. Waiting for carrier scan to confirm tracking.', 'success');
       navigation.goBack();
     } catch (error) {
@@ -358,6 +373,7 @@ export default function SellerFulfilmentScreen() {
               }}
               accessibilityRole="button"
               accessibilityLabel={`Select ${carrier}`}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Text style={[
                 styles.carrierOptionText,
@@ -445,8 +461,7 @@ export default function SellerFulfilmentScreen() {
                     ? colors.danger
                     : shipByUrgent
                       ? colors.warning
-                      : colors.textSecondary,
-                },
+                      : colors.textSecondary },
               ]}
             >
               {shipByLabel
@@ -503,6 +518,7 @@ export default function SellerFulfilmentScreen() {
 
               <Pressable
                 style={styles.findLocationLink}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 onPress={handleFindDropOff}
                 accessibilityRole="link"
                 accessibilityLabel="Find a drop-off location"
@@ -592,18 +608,25 @@ export default function SellerFulfilmentScreen() {
           <Pressable
             style={[styles.dispatchBtn, isDispatching && styles.dispatchBtnDisabled]}
             onPress={() => {
-              Alert.alert(
-                'Confirm dispatch?',
-                trackingNumber.trim()
-                  ? `The order will be dispatched with ${shippingProvider} tracking number ${trackingNumber.trim()}. The buyer will be notified.`
-                  : 'Enter a tracking number and carrier to confirm dispatch.',
-                [
-                  { text: 'Not yet', style: 'cancel' },
-                  ...(trackingNumber.trim() && shippingProvider.trim()
-                    ? [{ text: 'Confirm dispatch', style: 'default' as const, onPress: handleManualDispatch }]
-                    : []),
-                ]
-              );
+              if (trackingNumber.trim() && shippingProvider.trim()) {
+                setConfirmSheet({
+                  visible: true,
+                  title: 'Confirm dispatch?',
+                  message: `The order will be dispatched with ${shippingProvider} tracking number ${trackingNumber.trim()}. The buyer will be notified.`,
+                  confirmLabel: 'Confirm dispatch',
+                  cancelLabel: 'Not yet',
+                  onConfirm: handleManualDispatch,
+                  variant: 'default' });
+              } else {
+                setConfirmSheet({
+                  visible: true,
+                  title: 'Confirm dispatch?',
+                  message: 'Enter a tracking number and carrier to confirm dispatch.',
+                  confirmLabel: 'OK',
+                  cancelLabel: 'Not yet',
+                  onConfirm: () => {},
+                  variant: 'default' });
+              }
             }}
             disabled={isDispatching}
             accessibilityRole="button"
@@ -617,6 +640,17 @@ export default function SellerFulfilmentScreen() {
           </Pressable>
         </View>
       )}
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel}
+        cancelLabel={confirmSheet.cancelLabel}
+        onConfirm={confirmSheet.onConfirm}
+        variant={confirmSheet.variant}
+      />
     </FlagshipScreen>
   );
 }
@@ -625,65 +659,54 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.md,
-    },
+      paddingTop: Space.md },
     // ─── A. Item-dominant header ───
     itemHeader: {
       flexDirection: 'row',
       gap: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     itemImage: {
       width: 64,
       height: 64,
-      borderRadius: Radius.md,
-    },
+      borderRadius: Radius.md },
     itemImagePlaceholder: {
       backgroundColor: colors.surface,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     itemInfo: {
       flex: 1,
       gap: Space.xs / 2,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     itemTitle: {
-      fontSize: Type.itemTitle.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.itemTitle.size,
+      fontFamily: TypographyV2.itemTitle.fontFamily,
       color: colors.textPrimary,
-      lineHeight: Type.itemTitle.lineHeight,
-    },
+      lineHeight: TypographyV2.itemTitle.lineHeight },
     shipByLine: {
-      fontSize: Type.captionElevated.size,
-      fontFamily: Typography.family.medium,
-      lineHeight: Type.captionElevated.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight },
     serviceLine: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      lineHeight: Type.caption.lineHeight,
-    },
+      lineHeight: TypographyV2.meta.lineHeight },
     // ─── D. Escrow footnote ───
     escrowFootnote: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       marginTop: Space.xs,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     // ─── B. One next action ───
     actionSection: {
       marginTop: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     actionContext: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     // Dominant button — the single next action
     dominantBtn: {
       alignItems: 'center',
@@ -691,37 +714,31 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.md,
       borderRadius: Radius.lg,
       backgroundColor: colors.brand,
-      minHeight: Control.hit + Space.sm,
-    },
+      minHeight: Control.hit + Space.sm },
     dominantBtnDisabled: {
-      opacity: 0.6,
-    },
+      opacity: 0.6 },
     dominantBtnText: {
-      fontSize: Type.bodyEmphasis.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textInverse },
     // Label error — attached to the label action, not a separate banner
     labelErrorInline: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.xs,
-      paddingVertical: Space.xs + 2,
-    },
+      paddingVertical: Space.xs + 2 },
     labelErrorText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.danger,
-      lineHeight: Type.caption.size + 4,
-    },
+      lineHeight: TypographyV2.meta.size + 4 },
     manualAltHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      lineHeight: Type.caption.size + 4,
-      marginBottom: Space.xs,
-    },
+      lineHeight: TypographyV2.meta.size + 4,
+      marginBottom: Space.xs },
     // QR / label preview (replaces the get-label button)
     qrPreview: {
       alignItems: 'center',
@@ -731,59 +748,49 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      minHeight: Control.hit + Space.lg,
-    },
+      minHeight: Control.hit + Space.lg },
     qrPreviewText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     dropOffLine: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     findLocationLink: {
       minHeight: Control.hit,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     findLocationText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.brand },
     waitingLine: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textPrimary,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     waitingHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      lineHeight: Type.caption.size + 4,
-    },
+      lineHeight: TypographyV2.meta.size + 4 },
     // Recovery — quiet text link, not a footer panel
     recoveryLink: {
       minHeight: Control.hit,
       justifyContent: 'center',
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     recoveryLinkText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      textDecorationLine: 'underline',
-    },
+      textDecorationLine: 'underline' },
     // ─── Manual shipping form ───
     inputLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textSecondary,
       marginBottom: Space.xs + 2,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     carrierSelector: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -791,72 +798,61 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       height: Control.hit,
       borderRadius: Radius.lg,
-      backgroundColor: colors.surface,
-    },
+      backgroundColor: colors.surface },
     carrierSelectorText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     placeholderText: {
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     carrierDropdown: {
       marginTop: Space.xs,
       borderRadius: Radius.lg,
       backgroundColor: colors.surface,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      overflow: 'hidden',
-    },
+      overflow: 'hidden' },
     carrierOption: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     carrierOptionText: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textSecondary },
     carrierOptionTextActive: {
       color: colors.textPrimary,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     textInput: {
       paddingHorizontal: Space.md,
       height: Control.hit,
       borderRadius: Radius.lg,
       backgroundColor: colors.surface,
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary },
     hintText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       marginTop: Space.xs,
-      lineHeight: Type.caption.size + 5,
-    },
+      lineHeight: TypographyV2.meta.size + 5 },
     // ─── Warning (cannot dispatch) ───
     warningInline: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.xs + 2,
       marginTop: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     warningText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.danger,
-      lineHeight: Type.caption.size + 4,
-    },
+      lineHeight: TypographyV2.meta.size + 4 },
     // ─── Footer ───
     footer: {
       position: 'absolute',
@@ -867,23 +863,18 @@ function createStyles(colors: ThemeColors) {
       paddingTop: Space.md,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     dispatchBtn: {
       paddingVertical: Space.md,
       borderRadius: Radius.lg,
       backgroundColor: colors.brand,
       alignItems: 'center',
       justifyContent: 'center',
-      minHeight: Control.hit + Space.sm,
-    },
+      minHeight: Control.hit + Space.sm },
     dispatchBtnDisabled: {
-      opacity: 0.6,
-    },
+      opacity: 0.6 },
     dispatchBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textInverse,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textInverse } });
 }

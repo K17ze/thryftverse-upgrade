@@ -9,13 +9,13 @@ import {
   ActivityIndicator,
   Share,
   Clipboard,
-  Platform,
-} from 'react-native';
+  Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Typography, Radius, Type, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -25,7 +25,6 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { normaliseOrderStatus, humaniseStatus, isTerminalStatus } from '../components/orders/orderCapabilities';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { haptics } from '../utils/haptics';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import { t } from '../i18n';
 
 
@@ -39,27 +38,26 @@ function formatReceiptDate(iso: string): string {
     month: 'long',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit',
-  });
+    minute: '2-digit' });
 }
 
 export default function OrderReceiptScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<OrderReceiptRoute>();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const { colors, isDark } = useAppTheme();
 
   // Theme-aware color overrides for the static styles.
-  const t = React.useMemo(() => ({
+  const themed = React.useMemo(() => ({
     container: { backgroundColor: colors.background },
     loadingText: { color: colors.textMuted },
     errorTitle: { color: colors.textPrimary },
     retryBtn: { backgroundColor: colors.brand },
     retryBtnText: { color: colors.textInverse },
-    successIconWrap: { backgroundColor: `${colors.success}15` },
+    successIconWrap: { backgroundColor: colors.successSubtle },
     successTitle: { color: colors.textPrimary },
     successSubtitle: { color: colors.textMuted },
     receiptTitle: { color: colors.textPrimary },
@@ -72,16 +70,15 @@ export default function OrderReceiptScreen() {
     totalValue: { color: colors.textPrimary },
     immutableText: { color: colors.textMuted },
     pendingText: { color: colors.textMuted },
-    nextStepsCard: { borderTopColor: colors.border, backgroundColor: `${colors.brand}08` },
+    nextStepsCard: { borderTopColor: colors.border },
     nextStepsTitle: { color: colors.textPrimary },
     nextStepDotActive: { backgroundColor: colors.brand },
     nextStepDotPending: { backgroundColor: colors.border },
     nextStepText: { color: colors.textPrimary },
     nextStepTextMuted: { color: colors.textMuted },
-    viewDetailBtnText: { color: colors.brand },
-  }), [colors]);
+    viewDetailBtnText: { color: colors.brand } }), [colors]);
 
-  const { orderId } = route.params;
+  const { orderId } = route.params ?? {};
 
   const [order, setOrder] = useState<CommerceOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -119,13 +116,12 @@ export default function OrderReceiptScreen() {
     if (!order) return;
     haptics.tap();
     const shortId = order.id.slice(0, 8).toUpperCase();
-    const total = formatFromFiat(order.totalGbp, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' });
+    const total = formatFromFiat(order.totalGbp, currencyCode, { displayMode: 'fiat' });
     const status = humaniseStatus(order.status);
     const date = formatReceiptDate(order.createdAt);
     try {
       await Share.share({
-        message: `Thryftverse Order #${shortId}\n${status}\n${date}\nTotal: ${total}`,
-      });
+        message: `Thryftverse Order #${shortId}\n${status}\n${date}\nTotal: ${total}` });
     } catch {
       show('Could not share receipt', 'error');
     }
@@ -153,7 +149,7 @@ export default function OrderReceiptScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, t.container]}>
+      <View style={[styles.container, themed.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <ScreenHeader
           title="Receipt"
@@ -187,7 +183,7 @@ export default function OrderReceiptScreen() {
 
   if (loadError || !order) {
     return (
-      <View style={[styles.container, t.container]}>
+      <View style={[styles.container, themed.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <ScreenHeader
           title="Receipt"
@@ -196,9 +192,9 @@ export default function OrderReceiptScreen() {
         />
         <View style={styles.errorContainer}>
           <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
-          <Text style={[styles.errorTitle, t.errorTitle]}>Receipt could not be loaded</Text>
-          <Pressable style={({ pressed }) => [styles.retryBtn, t.retryBtn, pressed && styles.retryBtnPressed]} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
-            <Text style={[styles.retryBtnText, t.retryBtnText]}>Retry</Text>
+          <Text style={[styles.errorTitle, themed.errorTitle]}>Receipt could not be loaded</Text>
+          <Pressable style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && styles.retryBtnPressed]} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
+            <Text style={[styles.retryBtnText, themed.retryBtnText]}>Retry</Text>
           </Pressable>
         </View>
       </View>
@@ -207,7 +203,7 @@ export default function OrderReceiptScreen() {
 
   if (!isBuyer && !isSeller) {
     return (
-      <View style={[styles.container, t.container]}>
+      <View style={[styles.container, themed.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
         <ScreenHeader
           title="Receipt"
@@ -216,7 +212,7 @@ export default function OrderReceiptScreen() {
         />
         <View style={styles.errorContainer}>
           <Ionicons name="lock-closed-outline" size={36} color={colors.textMuted} />
-          <Text style={[styles.errorTitle, t.errorTitle]}>You do not have access to this receipt</Text>
+          <Text style={[styles.errorTitle, themed.errorTitle]}>You do not have access to this receipt</Text>
         </View>
       </View>
     );
@@ -228,10 +224,10 @@ export default function OrderReceiptScreen() {
   const isReceiptFinal = isTerminalStatus(normalisedStatus);
 
   const fiatOpts = { displayMode: 'fiat' as const };
-  const subtotal = formatFromFiat(order.subtotalGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
-  const platformCharge = formatFromFiat(order.platformChargeGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
-  const postage = formatFromFiat(order.postageFeeGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
-  const total = formatFromFiat(order.totalGbp, DEFAULT_CURRENCY_CODE, fiatOpts);
+  const subtotal = formatFromFiat(order.subtotalGbp, currencyCode, fiatOpts);
+  const platformCharge = formatFromFiat(order.platformChargeGbp, currencyCode, fiatOpts);
+  const postage = formatFromFiat(order.postageFeeGbp, currencyCode, fiatOpts);
+  const total = formatFromFiat(order.totalGbp, currencyCode, fiatOpts);
   const buyerProtectionFee = order.buyerProtectionFeeGbp;
   const hasBuyerProtection = buyerProtectionFee != null && buyerProtectionFee !== 0;
 
@@ -240,7 +236,7 @@ export default function OrderReceiptScreen() {
   const counterpartyName = counterparty?.username ?? 'Unknown';
 
   return (
-    <View style={[styles.container, t.container]}>
+    <View style={[styles.container, themed.container]}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       <ScreenHeader
@@ -274,19 +270,19 @@ export default function OrderReceiptScreen() {
         {/* Success header for completed orders */}
         {isReceiptFinal && normalisedStatus !== 'cancelled' && normalisedStatus !== 'refunded' ? (
           <View style={styles.successHeader}>
-            <View style={[styles.successIconWrap, t.successIconWrap]}>
+            <View style={[styles.successIconWrap, themed.successIconWrap]}>
               <Ionicons name="checkmark" size={28} color={colors.success} />
             </View>
-            <Text style={[styles.successTitle, t.successTitle]}>
+            <Text style={[styles.successTitle, themed.successTitle]}>
               {isBuyer ? 'Order complete' : 'Payment received'}
             </Text>
-            <Text style={[styles.successSubtitle, t.successSubtitle]}>Receipt #{shortOrderId}</Text>
+            <Text style={[styles.successSubtitle, themed.successSubtitle]}>Receipt #{shortOrderId}</Text>
           </View>
         ) : null}
 
         <View style={styles.receiptCard}>
           <View style={styles.receiptHeader}>
-            <Text style={[styles.receiptTitle, t.receiptTitle]}>Order Receipt</Text>
+            <Text style={[styles.receiptTitle, themed.receiptTitle]}>Order Receipt</Text>
             <Pressable
               onPress={handleCopyOrderId}
               hitSlop={{ top: 8, bottom: 8 }}
@@ -294,7 +290,7 @@ export default function OrderReceiptScreen() {
               accessibilityLabel={`Copy order ID ${shortOrderId}`}
             >
               <View style={styles.orderIdRow}>
-                <Text style={[styles.orderIdLabel, t.orderIdLabel]}>#{shortOrderId}</Text>
+                <Text style={[styles.orderIdLabel, themed.orderIdLabel]}>#{shortOrderId}</Text>
                 <Ionicons name="copy-outline" size={14} color={colors.textMuted} />
               </View>
             </Pressable>
@@ -306,11 +302,11 @@ export default function OrderReceiptScreen() {
             <ReceiptRow label={counterpartyRole} value={`@${counterpartyName}`} />
           </View>
 
-          <View style={[styles.receiptDivider, t.receiptDivider]} />
+          <View style={[styles.receiptDivider, themed.receiptDivider]} />
 
           {/* Itemized item — image + title + price for visual verification */}
           <View style={styles.receiptSection}>
-            <Text style={[styles.sectionLabel, t.sectionLabel]}>Item</Text>
+            <Text style={[styles.sectionLabel, themed.sectionLabel]}>Item</Text>
             <View style={styles.itemizedRow}>
               {order.listingImageUrl ? (
                 <CachedImage
@@ -334,27 +330,27 @@ export default function OrderReceiptScreen() {
             </View>
           </View>
 
-          <View style={[styles.receiptDivider, t.receiptDivider]} />
+          <View style={[styles.receiptDivider, themed.receiptDivider]} />
 
           <View style={styles.receiptSection}>
-            <Text style={[styles.sectionLabel, t.sectionLabel]}>Transaction breakdown</Text>
+            <Text style={[styles.sectionLabel, themed.sectionLabel]}>Transaction breakdown</Text>
             <ReceiptRow label="Item" value={subtotal} />
             {hasBuyerProtection && (
-              <ReceiptRow label="Buyer protection" value={formatFromFiat(buyerProtectionFee!, DEFAULT_CURRENCY_CODE, fiatOpts)} />
+              <ReceiptRow label="Buyer protection" value={formatFromFiat(buyerProtectionFee!, currencyCode, fiatOpts)} />
             )}
             <ReceiptRow label="Platform charge" value={platformCharge} />
             <ReceiptRow label="Delivery" value={postage} />
             <View style={styles.totalRow}>
-              <Text style={[styles.totalLabel, t.totalLabel]}>Total</Text>
-              <Text style={[styles.totalValue, t.totalValue]}>{total}</Text>
+              <Text style={[styles.totalLabel, themed.totalLabel]}>Total</Text>
+              <Text style={[styles.totalValue, themed.totalValue]}>{total}</Text>
             </View>
           </View>
 
           {order.trackingNumber && (
             <>
-              <View style={[styles.receiptDivider, t.receiptDivider]} />
+              <View style={[styles.receiptDivider, themed.receiptDivider]} />
               <View style={styles.receiptSection}>
-                <Text style={[styles.sectionLabel, t.sectionLabel]}>Shipping</Text>
+                <Text style={[styles.sectionLabel, themed.sectionLabel]}>Shipping</Text>
                 {order.shippingProvider && (
                   <ReceiptRow label="Carrier" value={order.shippingProvider} />
                 )}
@@ -369,11 +365,11 @@ export default function OrderReceiptScreen() {
             </>
           )}
 
-          <View style={[styles.receiptDivider, t.receiptDivider]} />
+          <View style={[styles.receiptDivider, themed.receiptDivider]} />
 
           <View style={styles.immutableNotice}>
             <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
-            <Text style={[styles.immutableText, t.immutableText]}>
+            <Text style={[styles.immutableText, themed.immutableText]}>
               This receipt is an immutable record of the transaction at the time of the order.
             </Text>
           </View>
@@ -381,7 +377,7 @@ export default function OrderReceiptScreen() {
           {!isReceiptFinal && (
             <View style={styles.pendingNotice}>
               <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-              <Text style={[styles.pendingText, t.pendingText]}>
+              <Text style={[styles.pendingText, themed.pendingText]}>
                 This order is still in progress. The receipt will update as the order progresses.
               </Text>
             </View>
@@ -389,19 +385,19 @@ export default function OrderReceiptScreen() {
 
           {/* What happens next — contextual next-step hint for pending orders */}
           {!isReceiptFinal && isBuyer && (
-            <View style={[styles.nextStepsCard, t.nextStepsCard]}>
-              <Text style={[styles.nextStepsTitle, t.nextStepsTitle]}>What happens next</Text>
+            <View style={[styles.nextStepsCard, themed.nextStepsCard]}>
+              <Text style={[styles.nextStepsTitle, themed.nextStepsTitle]}>What happens next</Text>
               <View style={styles.nextStepItem}>
-                <View style={[styles.nextStepDot, t.nextStepDotActive]} />
-                <Text style={[styles.nextStepText, t.nextStepText]}>Seller prepares and dispatches your item</Text>
+                <View style={[styles.nextStepDot, themed.nextStepDotActive]} />
+                <Text style={[styles.nextStepText, themed.nextStepText]}>Seller prepares and dispatches your item</Text>
               </View>
               <View style={styles.nextStepItem}>
-                <View style={[styles.nextStepDot, t.nextStepDotPending]} />
-                <Text style={[styles.nextStepTextMuted, t.nextStepTextMuted]}>Carrier delivers to your address</Text>
+                <View style={[styles.nextStepDot, themed.nextStepDotPending]} />
+                <Text style={[styles.nextStepTextMuted, themed.nextStepTextMuted]}>Carrier delivers to your address</Text>
               </View>
               <View style={styles.nextStepItem}>
-                <View style={[styles.nextStepDot, t.nextStepDotPending]} />
-                <Text style={[styles.nextStepTextMuted, t.nextStepTextMuted]}>You confirm receipt and can leave a review</Text>
+                <View style={[styles.nextStepDot, themed.nextStepDotPending]} />
+                <Text style={[styles.nextStepTextMuted, themed.nextStepTextMuted]}>You confirm receipt and can leave a review</Text>
               </View>
             </View>
           )}
@@ -414,7 +410,7 @@ export default function OrderReceiptScreen() {
           accessibilityRole="button"
           accessibilityLabel="View order details"
         >
-          <Text style={[styles.viewDetailBtnText, t.viewDetailBtnText]}>View order details</Text>
+          <Text style={[styles.viewDetailBtnText, themed.viewDetailBtnText]}>View order details</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.brand} />
         </Pressable>
 
@@ -426,7 +422,7 @@ export default function OrderReceiptScreen() {
           accessibilityLabel="Save or share receipt"
         >
           <Ionicons name="download-outline" size={18} color={colors.brand} />
-          <Text style={[styles.saveBtnText, t.viewDetailBtnText]}>Save or share receipt</Text>
+          <Text style={[styles.saveBtnText, themed.viewDetailBtnText]}>Save or share receipt</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -437,8 +433,7 @@ function ReceiptRow({ label, value }: { label: string; value: string }) {
   const { colors } = useAppTheme();
   const rowThemed = React.useMemo(() => ({
     label: { color: colors.textSecondary },
-    value: { color: colors.textPrimary },
-  }), [colors]);
+    value: { color: colors.textPrimary } }), [colors]);
   return (
     <View style={styles.receiptRow}>
       <Text style={[styles.receiptRowLabel, rowThemed.label]}>{label}</Text>
@@ -449,234 +444,188 @@ function ReceiptRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   headerBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   headerBtnPressed: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   retryBtnPressed: {
     opacity: 0.85,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: 0.97 }] },
   viewDetailBtnPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   headerRight: {
     flexDirection: 'row',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   loadingText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   skeletonContainer: {
     flex: 1,
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    gap: Space.md,
-  },
+    gap: Space.md },
   skeletonItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   skeletonTxRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   errorContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.xl,
-    gap: Space.md,
-  },
+    gap: Space.md },
   errorTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    textAlign: 'center' },
   retryBtn: {
     paddingVertical: Space.md + 2,
     paddingHorizontal: Space.xl,
     borderRadius: Radius.lg,
     minHeight: Space.xxl,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   retryBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   scrollContent: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   successHeader: {
     alignItems: 'center',
     paddingVertical: Space.lg,
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   successIconWrap: {
     width: Space.xxl + Space.xxl + Space.xs,
     height: Space.xxl + Space.xxl + Space.xs,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   successTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   successSubtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   receiptCard: {
-    padding: Space.md,
-  },
+    padding: Space.md },
   receiptHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   receiptTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   orderIdRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   orderIdLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   receiptSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   sectionLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps + 0.38,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   receiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Space.xs,
-    gap: Space.md,
-  },
+    gap: Space.md },
   receiptRowLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   receiptRowValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'right',
-    flex: 1,
-  },
+    flex: 1 },
   receiptDivider: {
     height: StyleSheet.hairlineWidth,
-    marginVertical: Space.md,
-  },
+    marginVertical: Space.md },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   totalLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   totalValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   immutableNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   immutableText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   pendingNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs + 2,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   pendingText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   nextStepsCard: {
     marginTop: Space.md,
     paddingTop: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   nextStepsTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginBottom: Space.sm,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   nextStepItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   nextStepDot: {
     width: Space.sm,
     height: Space.sm,
-    borderRadius: Radius.sm,
-  },
-  nextStepDotActive: {
-  },
-  nextStepDotPending: {
-  },
+    borderRadius: Radius.sm },
+  nextStepDotActive: {},
+  nextStepDotPending: {},
   nextStepText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   nextStepTextMuted: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight },
   viewDetailBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -684,41 +633,33 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingVertical: Space.md,
     marginTop: Space.md,
-    minHeight: Space.xxl,
-  },
+    minHeight: Space.xxl },
   viewDetailBtnText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   // ── Itemized item row ──
   itemizedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-  },
+    gap: Space.md },
   itemThumb: {
     width: 56,
     height: 56,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemThumbPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   itemizedInfo: {
     flex: 1,
-    gap: Space.xs - 2,
-  },
+    gap: Space.xs - 2 },
   itemizedTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight },
   itemizedPrice: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   // ── Save / share button ──
   saveBtn: {
     flexDirection: 'row',
@@ -726,13 +667,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     paddingVertical: Space.md - 2,
-    minHeight: Space.xxl - Space.sm,
-  },
+    minHeight: Space.xxl - Space.sm },
   saveBtnPressed: {
-    opacity: 0.6,
-  },
+    opacity: 0.6 },
   saveBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily } });

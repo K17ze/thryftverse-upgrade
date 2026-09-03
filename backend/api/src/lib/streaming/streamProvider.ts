@@ -117,6 +117,7 @@ export class LiveKitStreamProvider implements LiveStreamProvider {
   private readonly apiUrl: string;
   private readonly apiKey: string;
   private readonly apiSecret: string;
+  private roomServiceClient: import('livekit-server-sdk').RoomServiceClient | null = null;
 
   constructor(config: { apiUrl: string; apiKey: string; apiSecret: string }) {
     this.apiUrl = config.apiUrl.replace(/^ws/, 'http').replace(/^wss/, 'https');
@@ -124,34 +125,39 @@ export class LiveKitStreamProvider implements LiveStreamProvider {
     this.apiSecret = config.apiSecret;
   }
 
+  /**
+   * Lazily create a RoomServiceClient. The SDK signs each request with a
+   * proper JWT (HS256) using the API secret, which is the only auth mechanism
+   * LiveKit's RoomService accepts. The previous base64 placeholder was not a
+   * valid token and every RoomService call silently failed.
+   */
+  private async getRoomServiceClient(): Promise<import('livekit-server-sdk').RoomServiceClient> {
+    if (this.roomServiceClient) return this.roomServiceClient;
+    const { RoomServiceClient } = await import('livekit-server-sdk');
+    this.roomServiceClient = new RoomServiceClient(this.apiUrl, this.apiKey, this.apiSecret);
+    return this.roomServiceClient;
+  }
+
   async createStream(request: CreateStreamRequest): Promise<StreamRoom> {
     const roomId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    const authHeader = this.generateAuthHeader('POST', '/twirp/livekit.RoomService/CreateRoom');
+    const svc = await this.getRoomServiceClient();
 
-    const body = {
-      name: roomId,
-      empty_timeout: 300, // 5 minutes
-      max_participants: request.maxViewers ?? 0,
-      metadata: JSON.stringify({
-        title: request.title,
-        hostUserId: request.hostUserId,
-        recordingEnabled: request.recordingEnabled ?? true,
-        ...request.metadata,
-      }),
-    };
-
-    const response = await fetch(`${this.apiUrl}/twirp/livekit.RoomService/CreateRoom`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authHeader,
-      },
-      body: JSON.stringify(body),
+    const createdAt = new Date().toISOString();
+    const metadata = JSON.stringify({
+      title: request.title,
+      hostUserId: request.hostUserId,
+      recordingEnabled: request.recordingEnabled ?? true,
+      status: 'created',
+      createdAt,
+      ...request.metadata,
     });
 
-    if (!response.ok) {
-      throw new Error(`LiveKit CreateRoom failed: ${response.status} ${await response.text()}`);
-    }
+    await svc.createRoom({
+      name: roomId,
+      emptyTimeout: 300, // 5 minutes
+      maxParticipants: request.maxViewers ?? 0,
+      metadata,
+    });
 
     return {
       roomId,
@@ -160,61 +166,79 @@ export class LiveKitStreamProvider implements LiveStreamProvider {
       status: 'created',
       roomUrl: this.apiUrl.replace(/^http/, 'ws').replace(/^https/, 'wss'),
       viewerCount: 0,
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
   }
 
   async startStream(roomId: string): Promise<StreamRoom> {
-    // In LiveKit, the stream "starts" when the host publishes.
-    // We update metadata to mark it as live.
-    const authHeader = this.generateAuthHeader('POST', '/twirp/livekit.RoomService/UpdateRoomMetadata');
+    const svc = await this.getRoomServiceClient();
 
-    const response = await fetch(`${this.apiUrl}/twirp/livekit.RoomService/UpdateRoomMetadata`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authHeader,
-      },
-      body: JSON.stringify({
-        room: roomId,
-        metadata: JSON.stringify({ status: 'live', startedAt: new Date().toISOString() }),
-      }),
-    });
+    // UpdateRoomMetadata replaces the entire metadata field, so fetch the
+    // current room first and merge to avoid clobbering title/hostUserId/
+    // recordingEnabled that were written at createStream time.
+    const rooms = await svc.listRooms([roomId]);
+    const existing = rooms.find((r) => r.name === roomId);
+    if (!existing) throw new Error(`Stream ${roomId} not found`);
 
-    if (!response.ok) {
-      throw new Error(`LiveKit UpdateRoomMetadata failed: ${response.status}`);
+    let existingMeta: Record<string, unknown> = {};
+    try {
+      existingMeta = existing.metadata ? JSON.parse(existing.metadata) : {};
+    } catch {
+      // Malformed metadata — start from a clean slate
     }
 
-    const stream = await this.getStream(roomId);
-    if (!stream) throw new Error(`Stream ${roomId} not found after start`);
-    return { ...stream, status: 'live', startedAt: new Date().toISOString() };
+    const startedAt = new Date().toISOString();
+    const mergedMetadata = JSON.stringify({
+      ...existingMeta,
+      status: 'live',
+      startedAt,
+    });
+
+    await svc.updateRoomMetadata(roomId, mergedMetadata);
+
+    return {
+      roomId: existing.name,
+      title: (existingMeta.title as string) ?? '',
+      hostUserId: (existingMeta.hostUserId as string) ?? '',
+      status: 'live',
+      roomUrl: this.apiUrl.replace(/^http/, 'ws').replace(/^https/, 'wss'),
+      viewerCount: Math.max(0, existing.numParticipants - 1), // Exclude host
+      createdAt: (existingMeta.createdAt as string) ?? new Date().toISOString(),
+      startedAt,
+    };
   }
 
   async endStream(roomId: string): Promise<StreamRoom> {
-    const authHeader = this.generateAuthHeader('POST', '/twirp/livekit.RoomService/DeleteRoom');
+    const svc = await this.getRoomServiceClient();
 
-    await fetch(`${this.apiUrl}/twirp/livekit.RoomService/DeleteRoom`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authHeader,
-      },
-      body: JSON.stringify({ room: roomId }),
-    });
+    // Capture room metadata before deletion — DeleteRoom is irreversible and
+    // the room is gone immediately after, so querying it would always return
+    // null. Build the ended state from the metadata we just read.
+    const rooms = await svc.listRooms([roomId]);
+    const existing = rooms.find((r) => r.name === roomId);
 
-    const stream = await this.getStream(roomId).catch(() => null);
+    let meta: Record<string, unknown> = {};
+    if (existing) {
+      try {
+        meta = existing.metadata ? JSON.parse(existing.metadata) : {};
+      } catch {
+        // Malformed metadata — fall back to empty
+      }
+    }
+
+    await svc.deleteRoom(roomId);
+
+    const endedAt = new Date().toISOString();
     return {
-      ...(stream ?? {
-        roomId,
-        title: '',
-        hostUserId: '',
-        status: 'ended',
-        roomUrl: '',
-        viewerCount: 0,
-        createdAt: new Date().toISOString(),
-      }),
+      roomId,
+      title: (meta.title as string) ?? '',
+      hostUserId: (meta.hostUserId as string) ?? '',
       status: 'ended',
-      endedAt: new Date().toISOString(),
+      roomUrl: this.apiUrl.replace(/^http/, 'ws').replace(/^https/, 'wss'),
+      viewerCount: 0,
+      createdAt: (meta.createdAt as string) ?? new Date().toISOString(),
+      startedAt: meta.startedAt as string | undefined,
+      endedAt,
     };
   }
 
@@ -258,22 +282,11 @@ export class LiveKitStreamProvider implements LiveStreamProvider {
   }
 
   async getStream(roomId: string): Promise<StreamRoom | null> {
-    const authHeader = this.generateAuthHeader('POST', '/twirp/livekit.RoomService/ListRooms');
+    const svc = await this.getRoomServiceClient();
 
     try {
-      const response = await fetch(`${this.apiUrl}/twirp/livekit.RoomService/ListRooms`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: authHeader,
-        },
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) return null;
-
-      const data = (await response.json()) as { rooms?: Array<{ name: string; num_participants: number; metadata?: string }> };
-      const room = data.rooms?.find((r) => r.name === roomId);
+      const rooms = await svc.listRooms([roomId]);
+      const room = rooms.find((r) => r.name === roomId);
       if (!room) return null;
 
       let metadata: Record<string, unknown> = {};
@@ -289,7 +302,7 @@ export class LiveKitStreamProvider implements LiveStreamProvider {
         hostUserId: (metadata.hostUserId as string) ?? '',
         status: (metadata.status as StreamRoom['status']) ?? 'created',
         roomUrl: this.apiUrl.replace(/^http/, 'ws').replace(/^https/, 'wss'),
-        viewerCount: Math.max(0, room.num_participants - 1), // Exclude host
+        viewerCount: Math.max(0, room.numParticipants - 1), // Exclude host
         createdAt: (metadata.createdAt as string) ?? new Date().toISOString(),
         startedAt: metadata.startedAt as string | undefined,
         endedAt: metadata.endedAt as string | undefined,
@@ -300,23 +313,18 @@ export class LiveKitStreamProvider implements LiveStreamProvider {
   }
 
   async listActiveStreams(limit = 50): Promise<StreamRoom[]> {
-    const authHeader = this.generateAuthHeader('POST', '/twirp/livekit.RoomService/ListRooms');
+    const svc = await this.getRoomServiceClient();
 
-    const response = await fetch(`${this.apiUrl}/twirp/livekit.RoomService/ListRooms`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authHeader,
-      },
-      body: JSON.stringify({}),
-    });
+    let rooms: Awaited<ReturnType<typeof svc.listRooms>>;
+    try {
+      rooms = await svc.listRooms();
+    } catch {
+      return [];
+    }
 
-    if (!response.ok) return [];
-
-    const data = (await response.json()) as { rooms?: Array<{ name: string; num_participants: number; metadata?: string }> };
     const streams: StreamRoom[] = [];
 
-    for (const room of data.rooms ?? []) {
+    for (const room of rooms) {
       if (!room.name.startsWith('stream_')) continue;
 
       let metadata: Record<string, unknown> = {};
@@ -332,7 +340,7 @@ export class LiveKitStreamProvider implements LiveStreamProvider {
         hostUserId: (metadata.hostUserId as string) ?? '',
         status: (metadata.status as StreamRoom['status']) ?? 'live',
         roomUrl: this.apiUrl.replace(/^http/, 'ws').replace(/^https/, 'wss'),
-        viewerCount: Math.max(0, room.num_participants - 1),
+        viewerCount: Math.max(0, room.numParticipants - 1),
         createdAt: (metadata.createdAt as string) ?? new Date().toISOString(),
         startedAt: metadata.startedAt as string | undefined,
       });
@@ -341,26 +349,6 @@ export class LiveKitStreamProvider implements LiveStreamProvider {
     }
 
     return streams;
-  }
-
-  /**
-   * Generate a LiveKit Server API auth header.
-   * This is a simplified SHA-256 HMAC signature.
-   * For production, use the livekit-server-sdk's APIKeyAccessor.
-   */
-  private generateAuthHeader(method: string, path: string): string {
-    // In production, this should use the livekit-server-sdk's
-    // RoomServiceClient which handles auth automatically.
-    // This manual implementation is a fallback for when the SDK
-    // is not yet installed.
-    const token = this.generateSimpleToken();
-    return `Bearer ${token}`;
-  }
-
-  private generateSimpleToken(): string {
-    // Simplified token — in production, use livekit-server-sdk AccessToken
-    // This is a placeholder that should be replaced with proper JWT signing
-    return Buffer.from(`${this.apiKey}:${Date.now()}`).toString('base64');
   }
 }
 

@@ -9,6 +9,7 @@ import {
   resolveListingCategoryPolicy,
   type ListingFieldKey,
 } from '../contracts/listingCategoryPolicy';
+import { CONDITION_NAMES } from '../contracts/taxonomy';
 
 /**
  * Canonical backend listing → frontend Listing view-model mapper.
@@ -51,6 +52,9 @@ export interface BackendListingRow {
   engagement?: ListingEngagementSummaryApi | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */
   featured?: boolean | null;
+  sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
+  materialComposition?: string | null;
+  weightKg?: number | null;
 }
 
 /**
@@ -76,13 +80,6 @@ export type DisplayReadyListing = Listing & {
   createdAt?: string;
 };
 
-const VALID_CONDITIONS: readonly ListingCondition[] = [
-  'New with tags',
-  'Very good',
-  'Good',
-  'Satisfactory',
-];
-
 function toFinitePrice(value: unknown): number | null {
   if (value == null || value === '') return null;
   const n = typeof value === 'string' ? Number(value) : Number(value);
@@ -97,9 +94,9 @@ function toFiniteOriginalPrice(value: unknown): number | undefined {
 
 function normalizeCondition(value: unknown): ListingCondition | null {
   if (typeof value === 'string' && value.length > 0) {
-    const match = VALID_CONDITIONS.find(
+    const match = CONDITION_NAMES.find(
       (c) => c.toLowerCase() === value.toLowerCase()
-    );
+    ) as ListingCondition | undefined;
     if (match) return match;
   }
   return null;
@@ -197,6 +194,9 @@ export function mapBackendListingToListing(row: BackendListingRow): Listing {
     shippingPayer: row.shippingPayer ?? null,
     engagement: row.engagement ?? null,
     featured: row.featured === true ? true : null,
+    sustainabilityGrade: row.sustainabilityGrade ?? null,
+    materialComposition: row.materialComposition ?? null,
+    weightKg: row.weightKg ?? null,
   };
 }
 

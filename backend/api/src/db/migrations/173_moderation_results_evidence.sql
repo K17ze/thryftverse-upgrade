@@ -7,7 +7,7 @@
 -- access-restricted evidence hashes for all scan types.
 
 CREATE TABLE IF NOT EXISTS moderation_results (
-  id TEXT PRIMARY KEY DEFAULT gen_random_id()::TEXT,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
   request_id TEXT,
   content_ref TEXT NOT NULL,
   content_hash TEXT,
@@ -30,7 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_moderation_results_purpose ON moderation_results(
 CREATE INDEX IF NOT EXISTS idx_moderation_results_created ON moderation_results(created_at DESC);
 
 CREATE TABLE IF NOT EXISTS moderation_evidence (
-  id TEXT PRIMARY KEY DEFAULT gen_random_id()::TEXT,
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
   result_id TEXT NOT NULL REFERENCES moderation_results(id) ON DELETE CASCADE,
   content_hash TEXT,
   raw_response_hash TEXT,

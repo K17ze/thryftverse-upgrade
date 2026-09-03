@@ -6,8 +6,7 @@ import {
   Text,
   Pressable,
   NativeSyntheticEvent,
-  NativeScrollEvent,
-} from 'react-native';
+  NativeScrollEvent } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,11 +19,12 @@ import type {
   LookFeedUnit,
   MoodboardFeedUnit,
   PosterFeedUnit,
-  RecommendationBreakFeedUnit,
-} from '../../contracts/discoveryFeedUnit';
+  RecommendationBreakFeedUnit } from '../../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../../contracts/DiscoveryListingSummary';
-import { ProductDiscoveryTile } from '../ProductCardV2';
-import { Space, Type, Typography, Radius } from '../../theme/designTokens';
+import { mapListingToDiscoverySummary } from '../../contracts/DiscoveryListingSummary';
+import { ProductDiscoveryTile } from '../ProductCard';
+import { Space, Typography, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { typographyV2Style } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -122,6 +122,9 @@ interface Props {
    * id instead of brittle coordinate taps (P0.6).
    */
   testIDPrefix?: string;
+  /** Explicit testID for the first card (index 0). When provided, overrides
+   *  the prefix-derived testID so Maestro flows can tapOn by an exact id. */
+  firstItemTestID?: string;
   /** Pull-to-refresh control — passed through to FlashList. */
   refreshControl?: React.ReactElement<any>;
   /**
@@ -185,11 +188,11 @@ export function PinterestMasonryGrid({
   gap = Space.sm,
   horizontalPadding = Space.md,
   testIDPrefix,
+  firstItemTestID,
   refreshControl,
   onScroll,
   scrollRef,
-  listHeaderComponent,
-}: Props) {
+  listHeaderComponent }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
@@ -245,15 +248,15 @@ export function PinterestMasonryGrid({
           gap,
           colWidth,
           testIDPrefix,
+          firstItemTestID,
           onListingPress: handleUnitPress,
           onListingSaveToggle: onItemSaveToggle,
           isListingSaved: isItemSaved,
           onLookPress,
           onPosterPress,
-          onMoodboardPress,
-        });
+          onMoodboardPress });
       }
-      // Legacy listing path — unchanged single-column tile.
+      // Legacy listing path — single-column tile with optional save button.
       return (
         <View style={{ paddingHorizontal: gap / 2, paddingBottom: gap, width: '100%' }}>
           <ProductDiscoveryTile
@@ -261,12 +264,14 @@ export function PinterestMasonryGrid({
             onPress={() => handleListingPress(item)}
             aspectRatio={resolveListingMediaAspectRatio(item)}
             downscaleWidth={colWidth}
-            testID={testIDPrefix && index === 0 ? `${testIDPrefix}-first` : undefined}
+            testID={index === 0 ? (firstItemTestID ?? (testIDPrefix ? `${testIDPrefix}-first` : undefined)) : undefined}
+            isSaved={isItemSaved?.(item.id)}
+            onSaveToggle={onItemSaveToggle ? () => onItemSaveToggle(mapListingToDiscoverySummary(item)) : undefined}
           />
         </View>
       );
     },
-    [gap, colWidth, testIDPrefix, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, isItemSaved, onLookPress, onPosterPress, onMoodboardPress],
+    [gap, colWidth, testIDPrefix, firstItemTestID, handleListingPress, handleUnitPress, numColumns, onItemSaveToggle, isItemSaved, onLookPress, onPosterPress, onMoodboardPress],
   );
 
   // overrideItemLayout — span is decided here from the unit's declared span
@@ -371,6 +376,7 @@ interface UnitRenderContext {
   gap: number;
   colWidth: number;
   testIDPrefix?: string;
+  firstItemTestID?: string;
   onListingPress: (listing: DiscoveryListingSummary) => void;
   onListingSaveToggle?: (listing: DiscoveryListingSummary) => void;
   isListingSaved?: (listingId: string) => boolean;
@@ -393,8 +399,7 @@ function renderUnit(
           style={{
             paddingHorizontal: ctx.gap / 2,
             paddingBottom: ctx.gap,
-            width: '100%',
-          }}
+            width: '100%' }}
         >
           <ProductDiscoveryTile
             item={u.listing}
@@ -403,7 +408,7 @@ function renderUnit(
             // Hero (full-width) units request a wider derivative; single-
             // column units request the column width.
             downscaleWidth={isHero ? ctx.colWidth * ctx.numColumns + ctx.gap : ctx.colWidth}
-            testID={ctx.testIDPrefix && index === 0 ? `${ctx.testIDPrefix}-first` : undefined}
+            testID={index === 0 ? (ctx.firstItemTestID ?? (ctx.testIDPrefix ? `${ctx.testIDPrefix}-first` : undefined)) : undefined}
             isSaved={ctx.isListingSaved?.(u.listing.id)}
             onSaveToggle={ctx.onListingSaveToggle ? () => ctx.onListingSaveToggle!(u.listing) : undefined}
           />
@@ -450,13 +455,13 @@ function renderUnit(
 
 function LookDiscoveryTile({
   unit,
-  onPress,
-}: {
+  onPress }: {
   unit: LookFeedUnit;
   onPress?: (lookId: string) => void;
 }) {
   const { colors } = useAppTheme();
   const creator = unit.look.creator.username ?? 'creator';
+  const creatorVerified = unit.look.creator.verified === true;
   const tile = (
     <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
         <ExpoImage
@@ -468,29 +473,44 @@ function LookDiscoveryTile({
           transition={160}
         />
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.56)']}
+          colors={['transparent', 'rgba(0,0,0,0.6)']}
           locations={[0.48, 1]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd }}>
-          <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight }} numberOfLines={2}>
             {unit.title}
           </Text>
-          <Text style={{ color: 'rgba(255,255,255,0.82)', fontFamily: Typography.family.regular, fontSize: Type.meta.size, lineHeight: Type.meta.lineHeight }} numberOfLines={1}>
-            @{creator}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.xxs, marginTop: 2 }}>
+            <Text style={{ color: colors.scrimTextPrimary, fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.caption.size, lineHeight: 16 }} numberOfLines={1}>
+              @{creator}
+            </Text>
+            {creatorVerified && (
+              <Ionicons
+                name="checkmark-circle"
+                size={14}
+                color={colors.brand}
+                accessibilityLabel="Verified creator"
+              />
+            )}
+          </View>
         </View>
         {unit.itemIds.length > 0 ? (
           <View style={{ position: 'absolute', top: Space.sm, right: Space.sm }}>
-            <Ionicons name="pricetag" size={15} color="#FFFFFF" />
+            <Ionicons
+              name="bag-handle-outline"
+              size={15}
+              color={colors.scrimTextPrimary}
+              style={{ textShadowColor: colors.mediaOverlayScrim, textShadowRadius: 3, textShadowOffset: { width: 0, height: 0 } }}
+            />
           </View>
         ) : null}
     </View>
   );
   if (!onPress) {
     return (
-      <View accessible accessibilityRole="image" accessibilityLabel={`${unit.title}, look by ${creator}`}>
+      <View accessible accessibilityRole="image" accessibilityLabel={`${unit.title}, look by ${creator}${creatorVerified ? ', verified creator' : ''}`}>
         {tile}
       </View>
     );
@@ -499,7 +519,7 @@ function LookDiscoveryTile({
     <Pressable
       onPress={() => onPress(unit.look.id)}
       accessibilityRole="button"
-      accessibilityLabel={`${unit.title}, look by ${creator}`}
+      accessibilityLabel={`${unit.title}, look by ${creator}${creatorVerified ? ', verified creator' : ''}`}
       accessibilityHint="Opens the look"
       style={({ pressed }) => ({ opacity: pressed ? 0.86 : 1 })}
     >
@@ -510,13 +530,13 @@ function LookDiscoveryTile({
 
 function PosterDiscoveryTile({
   unit,
-  onPress,
-}: {
+  onPress }: {
   unit: PosterFeedUnit;
   onPress?: (storyId: string) => void;
 }) {
   const { colors } = useAppTheme();
   const creator = unit.story.creator.username ?? 'creator';
+  const creatorVerified = unit.story.creator.isVerified === true;
   const tile = (
     <View style={{ aspectRatio: unit.aspectRatio, borderRadius: Radius.lg, overflow: 'hidden', backgroundColor: colors.surfaceAlt }}>
         <ExpoImage
@@ -528,23 +548,33 @@ function PosterDiscoveryTile({
           transition={160}
         />
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.5)']}
-          locations={[0.55, 1]}
+          colors={['transparent', 'rgba(0,0,0,0.6)']}
+          locations={[0.5, 1]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
-        <Ionicons name="play" size={16} color="#FFFFFF" style={{ position: 'absolute', top: Space.sm, right: Space.sm }} />
-        <Text
-          style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd, color: '#FFFFFF', fontFamily: Typography.family.semibold, fontSize: Type.captionElevated.size, lineHeight: Type.captionElevated.lineHeight }}
-          numberOfLines={1}
-        >
-          @{creator}
-        </Text>
+        <Ionicons name="play" size={16} color={colors.scrimTextPrimary} style={{ position: 'absolute', top: Space.sm, right: Space.sm }} />
+        <View style={{ position: 'absolute', left: Space.smMd, right: Space.smMd, bottom: Space.smMd, flexDirection: 'row', alignItems: 'center', gap: Space.xxs }}>
+          <Text
+            style={{ color: colors.scrimTextPrimary, fontFamily: Typography.family.semibold, fontSize: TypographyV2.caption.size, lineHeight: 16 }}
+            numberOfLines={1}
+          >
+            @{creator}
+          </Text>
+          {creatorVerified && (
+            <Ionicons
+              name="checkmark-circle"
+              size={14}
+              color={colors.brand}
+              accessibilityLabel="Verified creator"
+            />
+          )}
+        </View>
     </View>
   );
   if (!onPress) {
     return (
-      <View accessible accessibilityRole="image" accessibilityLabel={`Poster by ${creator}`}>
+      <View accessible accessibilityRole="image" accessibilityLabel={`Poster by ${creator}${creatorVerified ? ', verified creator' : ''}`}>
         {tile}
       </View>
     );
@@ -553,7 +583,7 @@ function PosterDiscoveryTile({
     <Pressable
       onPress={() => onPress(unit.story.id)}
       accessibilityRole="button"
-      accessibilityLabel={`Poster by ${creator}`}
+      accessibilityLabel={`Poster by ${creator}${creatorVerified ? ', verified creator' : ''}`}
       accessibilityHint="Opens the poster"
       style={({ pressed }) => ({ opacity: pressed ? 0.86 : 1 })}
     >
@@ -564,8 +594,7 @@ function PosterDiscoveryTile({
 
 function MoodboardDiscoveryTile({
   unit,
-  onPress,
-}: {
+  onPress }: {
   unit: MoodboardFeedUnit;
   onPress?: (moodboardId: string) => void;
 }) {
@@ -605,10 +634,10 @@ function MoodboardDiscoveryTile({
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.md, right: Space.md, bottom: Space.smMd }}>
-          <Text style={{ color: '#FFFFFF', fontFamily: Typography.family.bold, fontSize: Type.subtitle.size, lineHeight: Type.subtitle.lineHeight }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: TypographyV2.sectionTitle.fontFamily, fontSize: TypographyV2.sectionTitle.size, lineHeight: TypographyV2.sectionTitle.lineHeight }} numberOfLines={1}>
             {unit.moodboard.title}
           </Text>
-          <Text style={{ color: 'rgba(255,255,255,0.82)', fontFamily: Typography.family.regular, fontSize: Type.caption.size, lineHeight: Type.caption.lineHeight }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextSecondary, fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, lineHeight: TypographyV2.meta.lineHeight }} numberOfLines={1}>
             {unit.moodboard.curator} · {unit.moodboard.items.length} pieces
           </Text>
         </View>
@@ -644,13 +673,15 @@ const BREAK_HAIRLINE_WIDTH = 24;
 function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) {
   const { colors } = useAppTheme();
   // TypographyV2 has no dedicated `eyebrow` role; `label` is the canonical
-  // uppercase role (11/14/600, letterSpacing 0.5) and is the closest semantic
-  // match for a quiet section-divider eyebrow.
+  // role (11/14/600, letterSpacing 0.5). We override the uppercase transform
+  // to keep the break label in sentence case — per anti-AI design policy,
+  // uppercase eyebrows above self-evident sections are label-everything disease.
   const eyebrowStyle = React.useMemo(
     () => ({
       ...typographyV2Style('label'),
-      color: colors.textSecondary,
-    }),
+      textTransform: 'none' as const,
+      letterSpacing: 0.2,
+      color: colors.textSecondary }),
     [colors.textSecondary],
   );
   return (
@@ -661,8 +692,7 @@ function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) 
         paddingHorizontal: 0,
         paddingTop: Space.lg,
         paddingBottom: Space.xs,
-        width: '100%',
-      }}
+        width: '100%' }}
       accessibilityRole="header"
     >
       <View
@@ -670,8 +700,7 @@ function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) 
           flexDirection: 'row',
           alignItems: 'center',
           marginLeft: gap / 2,
-          gap: Space.xs,
-        }}
+          gap: Space.xs }}
       >
         {/* Subtle decorative hairline before the text — a quiet visual
             marker that separates chapters without fabricated media. */}
@@ -679,8 +708,7 @@ function RecommendationBreakRow({ label, gap }: { label: string; gap: number }) 
           style={{
             width: BREAK_HAIRLINE_WIDTH,
             height: StyleSheet.hairlineWidth,
-            backgroundColor: colors.borderSubtle,
-          }}
+            backgroundColor: colors.borderSubtle }}
         />
         <Text style={eyebrowStyle} numberOfLines={1}>
           {label}
@@ -694,32 +722,25 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   footer: {
     paddingVertical: Space.md,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   footerSkeletonRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   endOfList: {
     alignItems: 'center',
     paddingVertical: Space.lg,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   endOfListHairline: {
     width: 40,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-  },
+    backgroundColor: colors.borderSubtle },
   endOfListText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   empty: {
     flex: 1,
-    paddingHorizontal: Space.md,
-  },
-  });
+    paddingHorizontal: Space.md } });
 }

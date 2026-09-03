@@ -201,6 +201,16 @@ vi.mock('react-native-reanimated', () => {
     withSequence: (...args: any[]) => args,
     withDelay: (_d: any, v: any) => v,
     runOnJS: (fn: any) => fn,
+    useReducedMotion: () => false,
+    Easing: {
+      inOut: (f: any) => f,
+      out: (f: any) => f,
+      in: (f: any) => f,
+      ease: (t: any) => t,
+      cubic: (t: any) => t,
+      bezier: () => (t: any) => t,
+      linear: (t: any) => t,
+    },
   };
 });
 
@@ -286,6 +296,7 @@ vi.mock('expo-modules-core', () => {
       addListener: () => ({ remove: () => {} }),
       removeListener: () => {},
     }),
+    requireOptionalNativeModule: () => null,
     requireNativeViewManager: (name: string) =>
       React.forwardRef((props: any, ref: any) =>
         React.createElement(name, { ref, ...props })

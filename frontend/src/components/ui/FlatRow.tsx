@@ -27,18 +27,14 @@ import {
   Text,
   StyleSheet,
   Image,
-  type TextStyle,
-} from 'react-native';
+  type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import {
-  Space,
-  Type,
-  FontFamily,
-  Control,
-  Radius,
-} from '../../theme/designTokens';
+import { Space, FontFamily, Control, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -141,8 +137,7 @@ export function FlatRow({
   accessibilityHint,
   children,
   minHeight = Control.hit,
-  style,
-}: FlatRowProps) {
+  style }: FlatRowProps) {
   const { colors } = useAppTheme();
   const isTappable = !!onPress && !disabled;
   const resolvedShowChevron =
@@ -201,10 +196,12 @@ export function FlatRow({
           />
         ) : icon ? (
           <View style={styles.iconWrap}>
-            <Ionicons
+            <AppIcon
               name={icon}
-              size={IconGrammar.metadata}
-              color={iconColor ?? (danger ? colors.danger : colors.textSecondary)}
+              size={IconSize.md}
+              color={iconColor ?? (danger ? 'danger' : 'textSecondary')}
+              opticalCenter={true}
+              accessible={false}
             />
           </View>
         ) : null}
@@ -227,7 +224,7 @@ export function FlatRow({
           ) : null}
         </View>
 
-        {/* Trailing badge / value / chevron / custom node */}
+        {/* Trailing slot: custom trailing takes precedence over badge/value/chevron */}
         {trailing ? (
           <View style={styles.trailing}>{trailing}</View>
         ) : (
@@ -250,10 +247,12 @@ export function FlatRow({
               </Text>
             ) : null}
             {resolvedShowChevron ? (
-              <Ionicons
-                name="chevron-forward"
-                size={16}
-                color={colors.textMuted}
+              <AppIcon
+                name="forward"
+                size={IconSize.sm}
+                color="textMuted"
+                opticalCenter={true}
+                accessible={false}
               />
             ) : null}
           </View>
@@ -307,8 +306,7 @@ export function FlatRow({
 // ---------------------------------------------------------------------------
 
 const IconGrammar = {
-  metadata: 18,
-} as const;
+  metadata: 18 } as const;
 
 const styles = StyleSheet.create({
   pressable: {
@@ -317,74 +315,59 @@ const styles = StyleSheet.create({
   inner: {
     paddingVertical: Space.sm + Space.xs,
     paddingHorizontal: Space.md,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm + Space.xs,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   iconWrap: {
     width: Control.iconCompact + Space.xs,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   image: {
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   thumbnail: {
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   textWrap: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
-    gap: Space.xs / 4,
-  },
+    gap: Space.xs / 4 },
   label: {
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    lineHeight: Type.bodyStrong.lineHeight,
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    lineHeight: TypographyV2.bodyStrong.lineHeight },
   secondary: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    lineHeight: Type.caption.lineHeight,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    lineHeight: TypographyV2.meta.lineHeight },
   trailing: {
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 1,
     gap: Space.xs,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   badge: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs / 2 + 1,
     borderRadius: Radius.sm,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   badgeText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   value: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    letterSpacing: Type.caption.letterSpacing,
-    textAlign: 'right',
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'right' },
   children: {
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   separator: {
     height: StyleSheet.hairlineWidth,
-    marginTop: Space.sm + Space.xs,
-  },
-});
+    marginTop: Space.sm + Space.xs } });

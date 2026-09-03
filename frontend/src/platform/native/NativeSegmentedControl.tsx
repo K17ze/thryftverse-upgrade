@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, View, Text, Pressable, StyleProp, ViewStyle } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Radius, Type } from '../../theme/designTokens';
+import { Typography, Radius, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface NativeSegmentedControlOption<T extends string> {
   value: T;
@@ -21,8 +22,7 @@ export function NativeSegmentedControl<T extends string>({
   value,
   onChange,
   style,
-  testID,
-}: NativeSegmentedControlProps<T>) {
+  testID }: NativeSegmentedControlProps<T>) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -56,32 +56,22 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.lg,
     padding: 3,
-    gap: 2,
-  },
+    gap: 2 },
   option: {
     flex: 1,
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   optionActive: {
     backgroundColor: colors.surface,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
+    ...Elevation.card },
   optionText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   optionTextActive: {
     color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
-  });
+    fontFamily: Typography.family.semibold } });
 }

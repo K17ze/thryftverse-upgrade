@@ -5,8 +5,7 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  Linking,
-} from 'react-native';
+  Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, { useAnimatedStyle, interpolate, Extrapolation } from 'react-native-reanimated';
@@ -14,10 +13,13 @@ import type { SharedValue } from 'react-native-reanimated';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Typography, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import { FlagshipProfileMedia } from '../flagship';
 import { isVideoUri } from '../../utils/media';
-import type { PublicProfileStats, PublicProfileViewer } from '../../services/profileApi';
+import type { PublicProfileStats, PublicProfileViewer, PublicProfileTrader } from '../../services/profileApi';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -43,6 +45,8 @@ interface ProfileHeroProps {
   memberSince?: string;
   /** Seller trust summary from /sellers/:id — provides verified badge, response time, dispatch time. */
   sellerTrust?: SellerTrustSummary | null;
+  /** DSA Article 30 trader classification from the profile aggregate. */
+  traderClassification?: PublicProfileTrader | null;
   followPending: boolean;
   isBlocked: boolean;
   scrollY: SharedValue<number>;
@@ -51,9 +55,8 @@ interface ProfileHeroProps {
   onMessage: () => void;
   onMore: () => void;
   onEditProfile?: () => void;
-  onShare: () => void;
   onOpenConnections: (segment: 'followers' | 'following') => void;
-  onTabSelect: (tab: 'Shop' | 'Reviews') => void;
+  onTabSelect: (tab: 'Listings' | 'Reviews') => void;
   onShopSegmentSelect: (segment: 'forsale' | 'sold') => void;
 }
 
@@ -115,6 +118,7 @@ export function ProfileHero({
   reviewCount,
   memberSince,
   sellerTrust,
+  traderClassification,
   followPending,
   isBlocked,
   scrollY,
@@ -123,11 +127,9 @@ export function ProfileHero({
   onMessage,
   onMore,
   onEditProfile,
-  onShare,
   onOpenConnections,
   onTabSelect,
-  onShopSegmentSelect,
-}: ProfileHeroProps) {
+  onShopSegmentSelect }: ProfileHeroProps) {
   const { colors } = useAppTheme();
   const reducedMotionHook = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -156,6 +158,10 @@ export function ProfileHero({
   if (soldCount > 0) trustParts.push(`${soldCount} sold`);
   if (memberSince) trustParts.push(`Joined ${memberSince}`);
   if (sellerTrust?.responseTimeLabel) trustParts.push(`Replies ${sellerTrust.responseTimeLabel}`);
+  // DSA Article 30 trader classification — factual, not decorative.
+  if (traderClassification) {
+    trustParts.push(traderClassification.classification === 'trader' ? 'Business' : 'Private');
+  }
   const trustLine = trustParts.join(' · ');
 
   return (
@@ -224,7 +230,7 @@ export function ProfileHero({
             <View style={styles.seamStats}>
               <Pressable
                 style={({ pressed }) => [styles.seamStat, pressed && { opacity: 0.55 }]}
-                onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('forsale'); }}
+                onPress={() => { onTabSelect('Listings'); onShopSegmentSelect('forsale'); }}
                 accessibilityRole="button"
                 accessibilityLabel={`${formatFullCount(activeCount)} for sale — view shop`}
               >
@@ -295,37 +301,48 @@ export function ProfileHero({
             </Pressable>
           ) : null}
 
-          {/* Seller trust line — compact, no badge container */}
+          {/* Seller trust header — rating row + joined caption on separate lines.
+              The rating is part of the identity block, not a lonely chip: star +
+              score + review count give the 5.0 context. Joined date is a less
+              prominent caption below, not equal weight to the rating. */}
           {trustLine ? (
-            <View style={styles.trustRow}>
-              {hasRating ? (
-                <Pressable
-                  onPress={() => onTabSelect('Reviews')}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Rating ${ratingValue!.toFixed(1)} out of 5, ${reviewCount} reviews. View reviews.`}
-                  style={({ pressed }) => [styles.trustRatingWrap, pressed && { opacity: 0.6 }]}
-                >
-                  <Text style={styles.trustLink}>{ratingValue!.toFixed(1)}</Text>
-                  <Ionicons name="star" size={12} color={colors.warning} aria-hidden={true} />
-                </Pressable>
-              ) : null}
-              {hasRating && soldCount > 0 ? <Text style={styles.trustDot}> · </Text> : null}
-              {soldCount > 0 ? (
-                <Pressable
-                  onPress={() => { onTabSelect('Shop'); onShopSegmentSelect('sold'); }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${soldCount} sold — view sold items`}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
-                >
-                  <Text style={styles.trustLink}>{soldCount} sold</Text>
-                </Pressable>
-              ) : null}
-              {(hasRating || soldCount > 0) && memberSince ? <Text style={styles.trustDot}> · </Text> : null}
-              {memberSince ? <Text style={styles.trustStatic}>Joined {memberSince}</Text> : null}
-              {(hasRating || soldCount > 0 || memberSince) && sellerTrust?.responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
-              {sellerTrust?.responseTimeLabel ? (
-                <Text style={styles.trustResponse}>Replies {sellerTrust.responseTimeLabel}</Text>
-              ) : null}
+            <View style={styles.trustBlock}>
+              {/* Rating row — star + score + review count (or "No reviews yet").
+                  Secondary trust signals (sold, response time) stay on this row
+                  separated by dots; they are marketplace proof, not identity. */}
+              <View style={styles.trustRatingRow}>
+                {hasRating ? (
+                  <Pressable
+                    onPress={() => onTabSelect('Reviews')}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Rating ${ratingValue!.toFixed(1)} out of 5, ${reviewCount} reviews. View reviews.`}
+                    style={({ pressed }) => [styles.trustRatingWrap, pressed && { opacity: 0.6 }]}
+                  >
+                    <AppIcon name="star" focused size={IconSize.sm} color="ratingStar" opticalCenter accessible={false} />
+                    <Text style={styles.trustRatingValue}>{ratingValue!.toFixed(1)}</Text>
+                    <Text style={styles.trustReviewCount}>({reviewCount} {reviewCount === 1 ? 'review' : 'reviews'})</Text>
+                  </Pressable>
+                ) : (
+                  <Text style={styles.trustNoReviews}>No reviews yet</Text>
+                )}
+                {soldCount > 0 ? <Text style={styles.trustDot}> · </Text> : null}
+                {soldCount > 0 ? (
+                  <Pressable
+                    onPress={() => { onTabSelect('Listings'); onShopSegmentSelect('sold'); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${soldCount} sold — view sold items`}
+                    style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  >
+                    <Text style={styles.trustLink}>{soldCount} sold</Text>
+                  </Pressable>
+                ) : null}
+                {sellerTrust?.responseTimeLabel ? <Text style={styles.trustDot}> · </Text> : null}
+                {sellerTrust?.responseTimeLabel ? (
+                  <Text style={styles.trustResponse}>Replies {sellerTrust.responseTimeLabel}</Text>
+                ) : null}
+              </View>
+              {/* Joined — less prominent caption on its own line, no dot separator */}
+              {memberSince ? <Text style={styles.trustJoined}>Joined {memberSince}</Text> : null}
             </View>
           ) : null}
 
@@ -391,15 +408,6 @@ export function ProfileHero({
               <Ionicons name="create-outline" size={15} color={colors.textPrimary} />
               <Text style={styles.editProfileBtnText}>Edit profile</Text>
             </AnimatedPressable>
-            <AnimatedPressable
-              style={styles.moreBtn}
-              onPress={onShare}
-              activeOpacity={0.88}
-              accessibilityRole="button"
-              accessibilityLabel="Share profile"
-            >
-              <Ionicons name="share-outline" size={18} color={colors.textPrimary} />
-            </AnimatedPressable>
           </View>
         ) : null}
       </View>
@@ -420,61 +428,52 @@ function createStyles(colors: ThemeColors) {
     width: '100%',
     height: COVER_HEIGHT,
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   coverTopFade: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 80,
-  },
+    height: 80 },
   coverBottomFade: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 40,
-  },
+    height: 40 },
 
   // Hero root
   heroRoot: {
     position: 'relative',
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
 
   // Avatar — absolutely positioned at the exact cover/canvas seam
   avatarAbsolute: {
     position: 'absolute',
     top: -AVATAR_OVERLAP,
     left: Space.md,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   avatar: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     borderWidth: 3,
-    borderColor: colors.background,
-  },
+    borderColor: colors.background },
   avatarMonogram: {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   monogramText: {
-    fontSize: Type.priceHero.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceHero.size,
+    fontFamily: TypographyV2.priceHero.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: -0.5,
-  },
+    letterSpacing: -0.5 },
 
   // Identity canvas — no top padding; seamRow reserves avatar overlap space
   identityCanvas: {
     paddingHorizontal: Space.md,
     paddingTop: 0,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
 
   // Seam row — begins immediately at canvas boundary, reserves avatar overlap height.
   // The seam is the cover/canvas boundary; the row holds the avatar (left,
@@ -483,12 +482,10 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: AVATAR_OVERLAP + Space.sm,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   seamSpacer: {
     // Reserves horizontal space for the avatar so stats don't overlap it.
-    width: AVATAR_SIZE + Space.sm,
-  },
+    width: AVATAR_SIZE + Space.sm },
   seamStats: {
     flex: 1,
     flexDirection: 'row',
@@ -496,135 +493,130 @@ function createStyles(colors: ThemeColors) {
     // Per 2026 research: spacing gaps (not bordered cards) between stats.
     // justifyContent space-around gives equal breathing room without
     // enclosing each stat in a container — the modern minimal trend.
-    justifyContent: 'space-around',
-  },
+    justifyContent: 'space-around' },
   seamStat: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   // Stat value — bold, tabular numerals for digit alignment across stats.
   // Type.subtitle (17/24/600) matches Instagram's stat value weight.
   seamStatValue: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
     letterSpacing: -0.3,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   // Stat label — muted, regular weight, tight spacing.
   // Type.caption (12/16/400) is the industry standard for stat labels.
   seamStatLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: 1,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // Subtle vertical divider between stats — provides visual rhythm without
   // enclosing each stat in a bordered card. Hairline width, muted color.
   seamStatDivider: {
     width: StyleSheet.hairlineWidth,
     height: Space.lg,
-    backgroundColor: colors.borderSubtle,
-  },
+    backgroundColor: colors.borderSubtle },
 
   // Identity — full-width, left-aligned
   displayNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   displayName: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
     color: colors.textPrimary,
     letterSpacing: -0.4,
     marginBottom: 2,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   verifiedBadge: {
     flexShrink: 0,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   username: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
 
   // Biography
   bio: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.body.lineHeight,
-    marginBottom: Space.xs,
-  },
+    lineHeight: TypographyV2.body.lineHeight,
+    marginBottom: Space.xs },
   bioLink: {
     color: colors.brand,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: Typography.family.medium },
   bioSeeMore: {
     color: colors.textSecondary,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
 
   // Context line — no icons
   contextLine: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
 
   // Website
   websiteLink: {
     paddingVertical: 2,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   websiteText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    textDecorationLine: 'underline',
-  },
+    textDecorationLine: 'underline' },
 
-  // Seller trust line — compact, no badge container
-  trustRow: {
+  // Seller trust header — rating row + joined caption on separate lines
+  trustBlock: {
+    paddingVertical: 2,
+    marginBottom: Space.xs },
+  trustRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    paddingVertical: 2,
-    marginBottom: Space.xs,
-  },
-  trustLink: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    flexWrap: 'wrap' },
   trustRatingWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-  },
-  trustStatic: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    gap: 3 },
+  trustRatingValue: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary,
+    letterSpacing: -0.1 },
+  trustReviewCount: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
+  trustNoReviews: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
+  trustLink: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
+  trustJoined: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-  },
+    marginTop: 2 },
   trustResponse: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   trustDot: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
 
   // Actions — flat 11pt radius, restrained
   actionRow: {
@@ -633,22 +625,19 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   followBtn: {
     flex: 1,
     height: ACTION_HEIGHT,
     borderRadius: ACTION_RADIUS,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   followBtnActive: { backgroundColor: colors.brand },
   followingBtn: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  followBtnText: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold },
+    backgroundColor: colors.background },
+  followBtnText: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily },
   followActiveBtnText: { color: colors.textInverse },
   followingBtnText: { color: colors.textPrimary },
   messageBtn: {
@@ -661,9 +650,8 @@ function createStyles(colors: ThemeColors) {
     borderRadius: ACTION_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  messageBtnText: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
+    backgroundColor: colors.background },
+  messageBtnText: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary },
   moreBtn: {
     width: ACTION_HEIGHT,
     height: ACTION_HEIGHT,
@@ -672,8 +660,7 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.background,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   editProfileBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -684,9 +671,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: ACTION_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  editProfileBtnText: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  btnDisabled: { opacity: 0.5 },
-  });
+    backgroundColor: colors.background },
+  editProfileBtnText: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary },
+  btnDisabled: { opacity: 0.5 } });
 }

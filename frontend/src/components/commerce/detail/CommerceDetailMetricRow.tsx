@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { useAppTheme } from '../../../theme/ThemeContext';
-import { Space, Type, Typography } from '../../../theme/designTokens';
+import { Space, Typography } from '../../../theme/designTokens';
+import { TypographyV2, typographyV2Style } from '../../../theme/typography.v2';
 
 /**
  * Compact metric row — a label/value pair laid out for tabular numerals.
@@ -30,6 +31,11 @@ export interface CommerceDetailMetricRowProps {
    * Type.priceHero for total, right-aligned, tabular alignment for
    * numbers." Used for the estimated-total row in cost breakdowns. */
   emphasis?: boolean;
+  /** When true alongside `emphasis`, the value uses `Type.priceLarge`
+   * (28px / TypographyV2.priceHero) instead of `Type.priceList` (20px).
+   * Per Design.md: checkout totals are the dominant number and must
+   * use the larger price scale. */
+  large?: boolean;
   /** When true, a hairline separator is drawn above the row. Used to
    * detach a summary total from the line items above it. */
   separated?: boolean;
@@ -42,8 +48,8 @@ export function CommerceDetailMetricRow({
   trailing,
   subLabel,
   emphasis = false,
-  separated = false,
-}: CommerceDetailMetricRowProps) {
+  large = false,
+  separated = false }: CommerceDetailMetricRowProps) {
   const { colors } = useAppTheme();
 
   return (
@@ -68,7 +74,7 @@ export function CommerceDetailMetricRow({
           <Text
             style={[
               styles.value,
-              emphasis && styles.valueEmphasis,
+              emphasis && (large ? styles.valueLarge : styles.valueEmphasis),
               { color: muted ? colors.textMuted : colors.textPrimary },
             ]}
             numberOfLines={2}
@@ -94,51 +100,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.sm,
     paddingVertical: Space.sm,
-  },
+    minHeight: 52 },
   // Hairline detaching a summary total from the line items above it.
   // Per Design.md stroke grammar: separators are hairline.
   rowSeparated: {
     borderTopWidth: StyleSheet.hairlineWidth,
     marginTop: Space.xs,
-    paddingTop: Space.sm + Space.xs,
-  },
+    paddingTop: Space.sm + Space.xs },
   label: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     flex: 1,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   labelEmphasis: {
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   valueCluster: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: Space.xs,
     maxWidth: '56%',
     flexShrink: 1,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
+  // Canonical numeric role (numericMeta): tabular figures, right-aligned
+  // so comparable values keep a stable column.
   value: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    fontVariant: ['tabular-nums'],
+    ...typographyV2Style('numericMeta'),
     flexShrink: 1,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   // Per Design.md checkout summary spec: the total is the dominant
   // number in a cost breakdown.
   valueEmphasis: {
-    fontSize: Type.priceList.size,
-    lineHeight: Type.priceList.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.priceList.letterSpacing,
-  },
+    ...typographyV2Style('priceList') },
+  // Per Design.md: checkout totals use the hero price scale.
+  valueLarge: {
+    ...typographyV2Style('priceHero') },
   subLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily } });

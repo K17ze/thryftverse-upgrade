@@ -3,22 +3,23 @@ import {
   View,
   Text,
   StyleSheet,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
+import { Image as ExpoImage } from 'expo-image';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, TypeStyles, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
-import { SkeletonLoader } from '../components/SkeletonLoader';
 import { isVideoUri } from '../utils/media';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SharedConversationMedia'>;
 
@@ -26,6 +27,8 @@ const GAP = 2;
 const COLS = 3;
 const FILTER_THRESHOLD = 6;
 const CHECK_SIZE = 22;
+const VIDEO_PLAY_BADGE = 40;
+const VIDEO_PLAY_ICON = 22;
 
 type MediaItem = {
   id: string;
@@ -33,15 +36,24 @@ type MediaItem = {
   isVideo: boolean;
   senderLabel: string;
   timestamp?: string;
+  /**
+   * Optional poster/thumbnail URL for video items. The current Message
+   * contract (domain/conversation.ts) only carries `mediaUri`/`mediaType`,
+   * so this is undefined today — mapped here so the tile renders a real
+   * thumbnail the moment a poster field is added upstream, instead of
+   * regressing to a placeholder play-icon tile (AGENTS.md §4).
+   */
+  thumbnailUri?: string;
 };
 
 type Filter = 'all' | 'photos' | 'videos';
 
 export default function SharedConversationMediaScreen({ navigation, route }: Props) {
-  const { conversationId } = route.params as { conversationId: string };
+  const { conversationId } = (route.params as { conversationId: string }) ?? {};
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const { width } = useWindowDimensions();
+  const { t } = useAppTranslation('messaging');
   const thumbSize = (width - Space.md * 2 - GAP * (COLS - 1)) / COLS;
 
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -53,7 +65,6 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
     [conversations, conversationId]
   );
 
-  const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -68,7 +79,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
         isVideo: m.mediaType === 'video' || isVideoUri(m.mediaUri!),
         senderLabel: m.senderId === 'me' ? 'You' : 'Thryft user',
         timestamp: m.timestamp,
-      }));
+        thumbnailUri: undefined as string | undefined }));
   }, [conversation]);
 
   const photos = useMemo(() => allMedia.filter((m) => !m.isVideo), [allMedia]);
@@ -89,8 +100,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       mediaUri: item.mediaUri,
       mediaType: item.isVideo ? 'video' : 'image',
       senderLabel: item.senderLabel,
-      timestamp: item.timestamp,
-    });
+      timestamp: item.timestamp });
   };
 
   const enterSelectionMode = (item: MediaItem) => {
@@ -140,25 +150,8 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
 
   const subtitle =
     allMedia.length > 0
-      ? `${photos.length} photo${photos.length === 1 ? '' : 's'} · ${videos.length} video${videos.length === 1 ? '' : 's'}`
+      ? t('sharedMedia.summary', { photoCount: photos.length, photoPlural: photos.length === 1 ? '' : 's', videoCount: videos.length, videoPlural: videos.length === 1 ? '' : 's' })
       : undefined;
-
-  const renderSkeleton = () => {
-    const count = COLS * 4;
-    return (
-      <View style={styles.grid}>
-        {Array.from({ length: count }).map((_, i) => (
-          <SkeletonLoader
-            key={i}
-            width={thumbSize}
-            height={thumbSize}
-            borderRadius={Radius.sm}
-            style={styles.skeletonTile}
-          />
-        ))}
-      </View>
-    );
-  };
 
   const renderItem = ({ item }: { item: MediaItem }) => {
     const selected = selectedIds.has(item.id);
@@ -193,7 +186,16 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       >
         {item.isVideo ? (
           <View style={[styles.thumb, styles.videoTile, { width: thumbSize, height: thumbSize }]}>
-            <Ionicons name="videocam" size={24} color={colors.textSecondary} />
+            {item.thumbnailUri ? (
+              <ExpoImage
+                source={{ uri: item.thumbnailUri }}
+                style={[styles.thumb, { width: thumbSize, height: thumbSize }]}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                recyclingKey={item.thumbnailUri}
+                accessibilityLabel={t('sharedMedia.videoThumbnail')}
+              />
+            ) : null}
           </View>
         ) : (
           <CachedImage
@@ -204,7 +206,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
         )}
         {item.isVideo && !selectionMode && (
           <View style={styles.videoBadge}>
-            <Ionicons name="play" size={12} color={colors.scrimTextPrimary} />
+            <Ionicons name="play" size={VIDEO_PLAY_ICON} color={colors.scrimTextPrimary} />
           </View>
         )}
         {selectionMode && (
@@ -233,7 +235,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
 
   const selectionHeader = (
     <FlagshipHeader
-      title={`${selectedIds.size} selected`}
+      title={t('sharedMedia.selectedCount', { count: selectedIds.size })}
       onBack={exitSelectionMode}
       backIcon="close"
       rightAction={
@@ -242,8 +244,8 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
           disabled={selectedIds.size === 0}
           style={styles.deleteBtn}
           accessibilityRole="button"
-          accessibilityLabel="Delete selected media"
-          accessibilityHint={`Removes ${selectedIds.size} selected item${selectedIds.size === 1 ? '' : 's'}`}
+          accessibilityLabel={t('sharedMedia.deleteSelected')}
+          accessibilityHint={t('sharedMedia.removeSelectedHint', { count: selectedIds.size, plural: selectedIds.size === 1 ? '' : 's' })}
           scaleValue={0.96}
           hapticFeedback="medium"
           activeOpacity={0.7}
@@ -265,7 +267,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
           selectionHeader
         ) : (
           <FlagshipHeader
-            title="Shared media"
+            title={t('sharedMedia.title')}
             subtitle={subtitle}
             onBack={() => navigation.goBack()}
           />
@@ -273,7 +275,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
       }
       scrollEnabled={false}
     >
-      {showFilter && !loading && !selectionMode && (
+      {showFilter && !selectionMode && (
         <View style={styles.filterRow}>
           {(['all', 'photos', 'videos'] as Filter[]).map((f) => {
             const active = filter === f;
@@ -291,7 +293,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
                 scaleValue={0.96}
                 hapticFeedback="selection"
                 accessibilityRole="tab"
-                accessibilityLabel={`${label} filter`}
+                accessibilityLabel={t('sharedMedia.filter', { label })}
                 accessibilityState={{ selected: active }}
               >
                 <Text style={[styles.filterText, active && styles.filterTextActive]}>
@@ -303,13 +305,11 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
         </View>
       )}
 
-      {loading ? (
-        renderSkeleton()
-      ) : filteredMedia.length === 0 ? (
+      {filteredMedia.length === 0 ? (
         <EmptyState
           icon="images-outline"
-          title="No shared media yet"
-          subtitle="Photos and videos shared in this conversation will appear here."
+          title={t('sharedMedia.noMedia')}
+          subtitle={t('sharedMedia.noMediaSubtitle')}
           ctaLabel="Back"
           onCtaPress={() => navigation.goBack()}
         />
@@ -333,25 +333,12 @@ function createStyles(colors: ThemeColors) {
     listContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xxl,
-    },
-    grid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-      gap: GAP,
-    },
-    skeletonTile: {
-      marginRight: GAP,
-      marginBottom: GAP,
-    },
+      paddingBottom: Space.xxl },
     filterRow: {
       flexDirection: 'row',
       gap: Space.sm,
       paddingHorizontal: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     filterChip: {
       minHeight: Control.chrome,
       paddingHorizontal: Space.md,
@@ -360,54 +347,45 @@ function createStyles(colors: ThemeColors) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     filterChipActive: {
       backgroundColor: colors.textPrimary,
-      borderColor: colors.textPrimary,
-    },
+      borderColor: colors.textPrimary },
     filterText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      color: colors.textSecondary,
-    },
+      color: colors.textSecondary },
     filterTextActive: {
-      color: colors.textInverse,
-    },
+      color: colors.textInverse },
     thumbWrap: {
       borderRadius: Radius.sm,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
       marginRight: GAP,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     thumbSelected: {
       borderColor: colors.brand,
       borderWidth: Stroke.emphasis,
-      opacity: 0.7,
-    },
+      opacity: 0.7 },
     thumb: {
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     videoTile: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.surfaceAlt,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     videoBadge: {
       position: 'absolute',
       top: '50%',
       left: '50%',
-      marginTop: -(Space.lg + 4) / 2,
-      marginLeft: -(Space.lg + 4) / 2,
-      width: Space.lg + 4,
-      height: Space.lg + 4,
-      borderRadius: Radius.xl,
+      marginTop: -VIDEO_PLAY_BADGE / 2,
+      marginLeft: -VIDEO_PLAY_BADGE / 2,
+      width: VIDEO_PLAY_BADGE,
+      height: VIDEO_PLAY_BADGE,
+      borderRadius: Radius.full,
       backgroundColor: colors.overlay,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     checkOverlay: {
       position: 'absolute',
       top: Space.xs,
@@ -415,29 +393,23 @@ function createStyles(colors: ThemeColors) {
       width: CHECK_SIZE,
       height: CHECK_SIZE,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     checkCircle: {
       width: CHECK_SIZE,
       height: CHECK_SIZE,
       borderRadius: Radius.full,
       justifyContent: 'center',
       alignItems: 'center',
-      borderWidth: Stroke.standard,
-    },
+      borderWidth: Stroke.standard },
     checkCircleEmpty: {
       backgroundColor: colors.overlay,
-      borderColor: colors.scrimTextPrimary,
-    },
+      borderColor: colors.scrimTextPrimary },
     checkCircleFilled: {
       backgroundColor: colors.brand,
-      borderColor: colors.brand,
-    },
+      borderColor: colors.brand },
     deleteBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
-  });
+      alignItems: 'center' } });
 }

@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
   getBackendDiagnostics,
   subscribeToBackendDiagnostics,
   probeBackendReachability,
-  type BackendDiagnosticsState,
-} from '../lib/backendDiagnostics';
+  type BackendDiagnosticsState } from '../lib/backendDiagnostics';
 
 /**
  * Dev-only backend connection diagnostics overlay.
@@ -116,8 +116,7 @@ function DiagRow({
   label,
   value,
   valueColor,
-  styles,
-}: {
+  styles }: {
   label: string;
   value: string;
   valueColor?: string;
@@ -146,90 +145,74 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 6,
       borderRadius: Radius.full,
       backgroundColor: colors.overlay,
-      zIndex: 40,
-    },
+      zIndex: 40 },
     chipDot: {
       width: 8,
       height: 8,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     chipText: {
       color: colors.surfaceElevated,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: 0.4,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: 0.4 },
     backdrop: {
       flex: 1,
       backgroundColor: colors.overlay,
       justifyContent: 'center',
       alignItems: 'center',
-      padding: Space.lg,
-    },
+      padding: Space.lg },
     sheet: {
       width: '100%',
       maxWidth: 420,
       backgroundColor: colors.surface,
       borderRadius: Radius.lg,
       padding: Space.md,
-      maxHeight: '80%',
-    },
+      maxHeight: '80%' },
     sheetHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     sheetTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      color: colors.textPrimary },
     sheetBody: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     row: {
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-      gap: 2,
-    },
+      gap: 2 },
     rowLabel: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: 0.6,
-    },
+      letterSpacing: 0.6 },
     rowValue: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     probeBtn: {
       marginTop: Space.md,
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       borderRadius: Radius.md,
       backgroundColor: colors.textPrimary,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     probeBtnBusy: {
-      opacity: 0.6,
-    },
+      opacity: 0.6 },
     probeBtnText: {
       color: colors.background,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     footnote: {
       marginTop: Space.md,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      textAlign: 'center',
-    },
-  });
+      textAlign: 'center' } });
 }
 
 export default BackendDiagnosticsOverlay;

@@ -26,8 +26,8 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  useWindowDimensions,
-} from 'react-native';
+  ScrollView,
+  useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -41,16 +41,17 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { useForYouFeed } from '../hooks/useForYouFeed';
 import { useBackendData } from '../context/BackendDataContext';
 
-import { Space, Radius, Type, FontFamily, Control } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Control, AspectRatio } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { MasonrySkeleton } from '../components/skeletons/MasonrySkeleton';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { HorizontalRail } from '../components/HorizontalRail';
-import { PremiumSkeletonTile } from '../components/discover/PremiumSkeletonTile';
 
 import { assembleDiscoveryFeed } from '../utils/discoveryFeedAssembly';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
@@ -62,8 +63,7 @@ import {
   fetchFeaturedAssets,
   type GalleriaCollection,
   type GalleriaEditorial,
-  type GalleriaFeaturedAsset,
-} from '../services/galleriaApi';
+  type GalleriaFeaturedAsset } from '../services/galleriaApi';
 import { searchListingsFromApi } from '../services/feedApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { buildListingFeedUnit, type DiscoveryFeedUnit } from '../contracts/discoveryFeedUnit';
@@ -187,10 +187,18 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
                 likes: 0,
                 sellerId: item.sellerId,
                 category: item.category ?? '',
-                createdAt: item.createdAt,
-              },
+                createdAt: item.createdAt },
               item.imageUrl ?? '',
-              1, // Search API doesn't return aspect ratio; default to square
+              // The Search API does not currently return media dimensions or
+              // an aspect ratio. Most fashion marketplace imagery is portrait,
+              // so 4:5 (marketplace standard) is the correct fallback rather
+              // than 1:1 square, which would crop portrait items awkwardly.
+              // When the API later exposes aspectRatio or mediaWidth/
+              // mediaHeight, those real values are preferred here.
+              item.aspectRatio ??
+                (item.mediaWidth && item.mediaHeight
+                  ? item.mediaWidth / item.mediaHeight
+                  : AspectRatio.marketplace),
             )));
           }
         })
@@ -277,8 +285,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const handleLookPress = useCallback((lookId: string) => {
     navigation.navigate('MainTabs', {
       screen: 'Home',
-      params: { screen: 'LookDetail', params: { lookId } },
-    });
+      params: { screen: 'LookDetail', params: { lookId } } });
   }, [navigation]);
 
   const handlePosterPress = useCallback((storyId: string) => {
@@ -303,6 +310,15 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const showLoadingSkeleton = !hasAnyContent && (isDiscoveryLoading || forYouFeed.isLoading || (isSyncing && !lastError));
   const showError = !hasAnyContent && Boolean(lastError) && !isSyncing && !isDiscoveryLoading && !forYouFeed.isLoading;
   const showEmpty = !hasAnyContent && !isSyncing && !lastError && !isDiscoveryLoading && !forYouFeed.isLoading;
+  // Filtered-empty: a category pill is selected but returns 0 listings. This
+  // is distinct from the generic empty state (no data at all) — here we have
+  // data, just none matching the selected category. Takes precedence over
+  // showEmpty so the user gets a contextual message + "Browse all" action.
+  const showFilteredEmpty =
+    activeCategory !== 'All' &&
+    personalisedListings.length === 0 &&
+    !showLoadingSkeleton &&
+    !showError;
 
   // ── Search bar header — back button + search bar + camera, all in the
   //  header so the search bar sits right below the status bar with no
@@ -338,8 +354,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             returnKeyType: 'search',
             onFocus: () => setIsSearchFocused(true),
             onBlur: () => setIsSearchFocused(false),
-            onSubmitEditing: handleSubmitSearch,
-          }}
+            onSubmitEditing: handleSubmitSearch }}
         />
       </View>
     </View>
@@ -372,6 +387,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             isLoading={showLoadingSkeleton}
             showError={showError}
             showEmpty={showEmpty}
+            showFilteredEmpty={showFilteredEmpty}
             isOffline={isOffline}
             greeting={greeting}
             firstName={firstName}
@@ -407,6 +423,7 @@ function DiscoveryFeedView({
   isLoading,
   showError,
   showEmpty,
+  showFilteredEmpty,
   isOffline,
   greeting,
   firstName,
@@ -425,12 +442,12 @@ function DiscoveryFeedView({
   scrollRef,
   colors,
   styles,
-  windowWidth,
-}: {
+  windowWidth }: {
   units: DiscoveryFeedUnit[];
   isLoading: boolean;
   showError: boolean;
   showEmpty: boolean;
+  showFilteredEmpty: boolean;
   isOffline: boolean;
   greeting: string;
   firstName: string;
@@ -467,12 +484,27 @@ function DiscoveryFeedView({
     );
   }
 
+  if (showFilteredEmpty) {
+    return (
+      <View style={styles.stateWrap}>
+        <EmptyState
+          density="compact"
+          icon="bag-handle-outline"
+          title={`No ${activeCategory.toLowerCase()} items yet`}
+          subtitle="Try another category or check back soon."
+          ctaLabel="Browse all"
+          onCtaPress={() => onCategoryChange('All')}
+        />
+      </View>
+    );
+  }
+
   if (showEmpty) {
     return (
       <View style={styles.stateWrap}>
         <EmptyState
           density="compact"
-          icon="compass-outline"
+          icon="search-outline"
           title="Nothing to explore yet"
           subtitle="New items are uploaded every day. Check back soon."
           ctaLabel="Refresh"
@@ -495,28 +527,36 @@ function DiscoveryFeedView({
         </Text>
       </View>
 
-      {/* Category pills — horizontal scroll, pill = filter not decoration */}
+      {/* Category pills — horizontal scroll, pill = filter not decoration.
+          Wrapped in a ScrollView so 8+ pills scroll on narrow screens with a
+          partial next pill visible at the edge (paddingRight: Space.md). */}
       <View style={styles.categoryBar}>
-        {(CATEGORY_PILLS as readonly CategoryPill[]).map((pill) => (
-          <Pressable
-            key={pill}
-            onPress={() => onCategoryChange(pill)}
-            style={[
-              styles.categoryPill,
-              activeCategory === pill && styles.categoryPillActive,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={`Filter by ${pill}`}
-            accessibilityState={{ selected: activeCategory === pill }}
-          >
-            <Text style={[
-              styles.categoryPillText,
-              activeCategory === pill && styles.categoryPillTextActive,
-            ]}>
-              {pill}
-            </Text>
-          </Pressable>
-        ))}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryBarContent}
+        >
+          {(CATEGORY_PILLS as readonly CategoryPill[]).map((pill) => (
+            <Pressable
+              key={pill}
+              onPress={() => onCategoryChange(pill)}
+              style={[
+                styles.categoryPill,
+                activeCategory === pill && styles.categoryPillActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Filter by ${pill}`}
+              accessibilityState={{ selected: activeCategory === pill }}
+            >
+              <Text style={[
+                styles.categoryPillText,
+                activeCategory === pill && styles.categoryPillTextActive,
+              ]}>
+                {pill}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
 
       {/* Hero editorial — full-width media object, no decorative chrome */}
@@ -570,28 +610,13 @@ function DiscoveryFeedView({
     </>
   );
 
-  // Loading skeleton
+  // Loading skeleton — use the shared MasonrySkeleton so the loading frame
+  // matches the final FlashList masonry layout (no loading→final geometry
+  // shift). AGENTS.md §4 / §14: skeletons should resemble the final layout.
   if (isLoading) {
     return (
       <View style={styles.skeletonWrap}>
-        <PremiumSkeletonTile width="100%" height={200} borderRadius={Radius.lg} />
-        <View style={{ height: Space.md }} />
-        <View style={styles.skeletonRail}>
-          {Array.from({ length: 3 }).map((_, i) => (
-            <PremiumSkeletonTile key={i} width={160} height={200} borderRadius={Radius.lg} />
-          ))}
-        </View>
-        <View style={{ height: Space.lg }} />
-        <View style={styles.skeletonMasonry}>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <PremiumSkeletonTile
-              key={i}
-              width="48%"
-              height={200 + (i % 2) * 60}
-              borderRadius={Radius.lg}
-            />
-          ))}
-        </View>
+        <MasonrySkeleton numColumns={2} itemCount={8} />
       </View>
     );
   }
@@ -629,8 +654,7 @@ function SearchResultsView({
   onMoodboardPress,
   colors,
   styles,
-  navigation,
-}: {
+  navigation }: {
   units: DiscoveryFeedUnit[];
   isSearching: boolean;
   isSearchingPeople: boolean;
@@ -738,8 +762,7 @@ function SearchResultsView({
 
 function CollectionRailCard({
   collection,
-  onPress,
-}: {
+  onPress }: {
   collection: GalleriaCollection;
   onPress: () => void;
 }) {
@@ -765,13 +788,13 @@ function CollectionRailCard({
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.sm, right: Space.sm, bottom: Space.sm }} pointerEvents="none">
-          <Text style={{ color: '#FFFFFF', fontFamily: FontFamily.semibold, fontSize: Type.meta.size, letterSpacing: 0.5 }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.semibold, fontSize: TypographyV2.meta.size, letterSpacing: 0.5 }} numberOfLines={1}>
             {collection.theme.toUpperCase()}
           </Text>
-          <Text style={{ color: '#FFFFFF', fontFamily: FontFamily.bold, fontSize: Type.body.size, lineHeight: Type.body.lineHeight }} numberOfLines={2}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.bold, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight }} numberOfLines={2}>
             {collection.title}
           </Text>
-          <Text style={{ color: 'rgba(255,255,255,0.75)', fontFamily: FontFamily.regular, fontSize: Type.caption.size }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextSecondary, fontFamily: FontFamily.regular, fontSize: TypographyV2.meta.size }} numberOfLines={1}>
             {collection.curator}
           </Text>
         </View>
@@ -788,8 +811,7 @@ function PeopleResultRow({
   user,
   onPress,
   colors,
-  styles,
-}: {
+  styles }: {
   user: UserSearchResult;
   onPress: () => void;
   colors: ThemeColors;
@@ -838,182 +860,143 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     stateWrap: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: Space.lg,
-    },
+      paddingHorizontal: Space.lg },
     searchingWrap: {
       flex: 1,
       justifyContent: 'center',
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     headerBtn: {
       width: Control.hit,
       height: Control.hit,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     // Header search bar — sits right below the back/camera row
     headerWrap: {
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     headerSearchWrap: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     searchBar: {
-      flex: 1,
-    },
+      flex: 1 },
     // Greeting
     greetingWrap: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     greetingText: {
-      fontSize: Type.title.size,
+      fontSize: TypographyV2.screenTitle.size,
       fontFamily: FontFamily.bold,
       color: colors.textPrimary,
-      lineHeight: Type.title.lineHeight,
-    },
+      lineHeight: TypographyV2.screenTitle.lineHeight },
     // Category pills
     categoryBar: {
+      paddingVertical: Space.xs },
+    categoryBarContent: {
       flexDirection: 'row',
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
+      paddingRight: Space.md,
       gap: Space.xs,
-    },
+      alignItems: 'center' },
     categoryPill: {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     categoryPillActive: {
-      backgroundColor: colors.textPrimary,
-    },
+      backgroundColor: colors.textPrimary },
     categoryPillText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
-      color: colors.textSecondary,
-    },
+      color: colors.textSecondary },
     categoryPillTextActive: {
-      color: colors.textInverse,
-    },
+      color: colors.textInverse },
     // Hero editorial
     heroWrap: {
       width: '100%',
       height: 280,
       marginVertical: Space.sm,
-      position: 'relative',
-    },
+      position: 'relative' },
     heroImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     heroGradient: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
-      height: '60%',
-    },
+      height: '60%' },
     heroOverlay: {
       position: 'absolute',
       left: Space.md,
       right: Space.md,
-      bottom: Space.md,
-    },
+      bottom: Space.md },
     heroEyebrow: {
-      color: '#FFFFFF',
+      color: colors.scrimTextPrimary,
       fontFamily: FontFamily.semibold,
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       letterSpacing: 1,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     heroTitle: {
-      color: '#FFFFFF',
+      color: colors.scrimTextPrimary,
       fontFamily: FontFamily.bold,
-      fontSize: Type.subtitle.size + 2,
-      lineHeight: Type.subtitle.lineHeight + 4,
-      marginBottom: Space.xs / 2,
-    },
+      fontSize: TypographyV2.sectionTitle.size + 2,
+      lineHeight: TypographyV2.sectionTitle.lineHeight + 4,
+      marginBottom: Space.xs / 2 },
     heroMeta: {
-      color: 'rgba(255,255,255,0.78)',
+      color: colors.scrimTextSecondary,
       fontFamily: FontFamily.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     // Collections rail
     collectionsSection: {
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     sectionTitle: {
       paddingHorizontal: Space.md,
-      fontSize: Type.body.size + 2,
+      fontSize: TypographyV2.body.size + 2,
       fontFamily: FontFamily.bold,
       color: colors.textPrimary,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     railContent: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     // Feed label
     feedLabelWrap: {
       paddingHorizontal: Space.md,
       paddingTop: Space.md,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     feedLabel: {
-      fontSize: Type.body.size + 2,
+      fontSize: TypographyV2.body.size + 2,
       fontFamily: FontFamily.bold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     // Skeleton
     skeletonWrap: {
       flex: 1,
       paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-    },
-    skeletonRail: {
-      flexDirection: 'row',
-      gap: Space.sm,
-    },
-    skeletonMasonry: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Space.sm,
-      justifyContent: 'space-between',
-    },
+      paddingTop: Space.sm },
     // Search results
     searchResultsWrap: {
-      flex: 1,
-    },
+      flex: 1 },
     scopeBar: {
       flexDirection: 'row',
       paddingHorizontal: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     scopeTab: {
       flex: 1,
       paddingVertical: Space.sm + 2,
       alignItems: 'center',
-      position: 'relative',
-    },
+      position: 'relative' },
     scopeTabActive: {},
     scopeTabText: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.medium,
-      color: colors.textMuted,
-    },
+      color: colors.textMuted },
     scopeTabTextActive: {
       color: colors.textPrimary,
-      fontFamily: FontFamily.semibold,
-    },
+      fontFamily: FontFamily.semibold },
     scopeIndicator: {
       position: 'absolute',
       bottom: 0,
@@ -1021,46 +1004,37 @@ function createStyles(colors: ThemeColors) {
       right: '25%',
       height: 2,
       backgroundColor: colors.textPrimary,
-      borderRadius: 1,
-    },
+      borderRadius: 1 },
     // People results
     peopleList: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     peopleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     peopleAvatar: {
       width: 44,
       height: 44,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     peopleAvatarFallback: {
       width: 44,
       height: 44,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     peopleInfo: {
       flex: 1,
-      gap: 2,
-    },
+      gap: 2 },
     peopleName: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.semibold,
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     peopleUsername: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
-      color: colors.textMuted,
-    },
-  });
+      color: colors.textMuted } });
 }

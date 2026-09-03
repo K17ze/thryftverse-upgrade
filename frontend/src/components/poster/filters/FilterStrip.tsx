@@ -12,7 +12,8 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Typography, Radius, Space, Stroke } from '../../../theme/designTokens';
+import { Typography, Radius, Space, Stroke, Elevation } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import {
   View,
   StyleSheet,
@@ -41,6 +42,7 @@ import Reanimated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
+import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { AnimatedPressable } from '../../AnimatedPressable';
 import { useMotionConfig } from '../../../hooks/useMotionConfig';
 import { useHaptic } from '../../../hooks/useHaptic';
@@ -82,6 +84,8 @@ export function FilterStrip({
   const haptic = useHaptic();
   const { spring, isEnabled } = useMotionConfig();
   const reduceMotion = useReducedMotion();
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Intensity as a 0..1 shared value so the slider and previews stay in sync
   const intensitySV = useSharedValue(filterIntensity / 100);
@@ -291,6 +295,8 @@ interface IntensitySliderProps {
 }
 
 function IntensitySlider({ visible, intensitySV, onChange, spring, reduceMotion, label }: IntensitySliderProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const translateY = useSharedValue(reduceMotion ? 0 : 60);
   const opacity = useSharedValue(0);
   const [trackLayout, setTrackLayout] = React.useState({ width: 0, x: 0 });
@@ -394,6 +400,8 @@ interface FilterNameOverlayProps {
 }
 
 function FilterNameOverlay({ opacitySV, scaleSV, label }: FilterNameOverlayProps) {
+  const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
   const animStyle = useAnimatedStyle(() => ({
     opacity: opacitySV.value,
     transform: [{ scale: scaleSV.value }],
@@ -409,104 +417,102 @@ function FilterNameOverlay({ opacitySV, scaleSV, label }: FilterNameOverlayProps
 }
 
 // ── Styles ─────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    bottom: 96,
-    left: 0,
-    right: 0,
-    zIndex: 25,
-  },
-  strip: {
-    gap: THUMB_GAP,
-    paddingHorizontal: STRIP_PADDING,
-    paddingVertical: Space.sm,
-    alignItems: 'center',
-  },
-  // Intensity slider
-  sliderContainer: {
-    marginTop: Space.sm,
-    marginHorizontal: Space.lg,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.hairline,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  sliderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  sliderLabel: {
-    fontSize: 11,
-    fontFamily: Typography.family.semibold,
-    color: 'rgba(255,255,255,0.8)',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  sliderValue: {
-    fontSize: 12,
-    fontFamily: Typography.family.bold,
-    color: '#fff',
-    fontVariant: ['tabular-nums'],
-  },
-  sliderTrackWrap: {
-    height: 28,
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  sliderTrack: {
-    height: 4,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    overflow: 'hidden',
-  },
-  sliderFill: {
-    height: 4,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-  },
-  sliderThumb: {
-    position: 'absolute',
-    top: '50%',
-    left: 0,
-    marginTop: -10,
-    marginLeft: -10,
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    backgroundColor: '#fff',
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(0,0,0,0.1)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  // Filter name overlay
-  overlayWrap: {
-    position: 'absolute',
-    top: -180,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 24,
-  },
-  overlayBlur: {
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.sm,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
-  overlayText: {
-    fontSize: Typography.size.title,
-    fontFamily: Typography.family.bold,
-    color: '#fff',
-    letterSpacing: 0.5,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      position: 'absolute',
+      bottom: 96,
+      left: 0,
+      right: 0,
+      zIndex: 25,
+    },
+    strip: {
+      gap: THUMB_GAP,
+      paddingHorizontal: STRIP_PADDING,
+      paddingVertical: Space.sm,
+      alignItems: 'center',
+    },
+    // Intensity slider
+    sliderContainer: {
+      marginTop: Space.sm,
+      marginHorizontal: Space.lg,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + 2,
+      backgroundColor: colors.overlay,
+      borderRadius: Radius.lg,
+      borderWidth: Stroke.hairline,
+      borderColor: colors.glassBorder,
+    },
+    sliderHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 6,
+    },
+    sliderLabel: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: Typography.family.semibold,
+      color: colors.scrimTextSecondary,
+      letterSpacing: 0.4,
+      textTransform: 'uppercase',
+    },
+    sliderValue: {
+      fontSize: TypographyV2.caption.size,
+      fontFamily: Typography.family.bold,
+      color: colors.scrimTextPrimary,
+      fontVariant: ['tabular-nums'],
+    },
+    sliderTrackWrap: {
+      height: 28,
+      justifyContent: 'center',
+      position: 'relative',
+    },
+    sliderTrack: {
+      height: 4,
+      borderRadius: Radius.full,
+      backgroundColor: colors.glassBg,
+      overflow: 'hidden',
+    },
+    sliderFill: {
+      height: 4,
+      borderRadius: Radius.full,
+      overflow: 'hidden',
+    },
+    sliderThumb: {
+      position: 'absolute',
+      top: '50%',
+      left: 0,
+      marginTop: -10,
+      marginLeft: -10,
+      width: 20,
+      height: 20,
+      borderRadius: Radius.full,
+      backgroundColor: colors.scrimTextPrimary,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
+      ...Elevation.modal,
+    },
+    // Filter name overlay
+    overlayWrap: {
+      position: 'absolute',
+      top: -180,
+      left: 0,
+      right: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 24,
+    },
+    overlayBlur: {
+      paddingHorizontal: Space.lg,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.lg,
+      overflow: 'hidden',
+    },
+    overlayText: {
+      fontSize: Typography.size.title,
+      fontFamily: Typography.family.bold,
+      color: colors.scrimTextPrimary,
+      letterSpacing: 0.5,
+    },
+  });
+}

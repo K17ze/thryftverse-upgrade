@@ -13,45 +13,36 @@
  * duration display) are truthfully disabled until a library track is
  * selected — which is not possible today because the library is empty.
  *
- * The slider is a self-contained PanResponder-based control so this module
- * introduces no new dependencies (the codebase has no slider library).
- *
- * Per AGENTS.md §4: authored composition, clear hierarchy, restraint.
- * Per AGENTS.md §13: 44pt touch targets for interactive controls.
+ * The slider uses the shared CreatorSlider control.
  */
-import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   ScrollView,
-  PanResponder,
   LayoutAnimation,
-  type LayoutChangeEvent,
-  type GestureResponderEvent,
-  type PanResponderGestureState,
-} from 'react-native';
+  TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Space,
   Radius,
-  Type,
   Typography,
   FontFamily,
   Control,
-  Stroke,
-} from '../../../theme/designTokens';
+  Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
+import { CreatorSlider } from '../../controls/CreatorSlider';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
 import {
   type AudioConfig,
   type AudioTrack,
-  DEFAULT_AUDIO_CONFIG,
-} from './AudioTypes';
+  DEFAULT_AUDIO_CONFIG } from './AudioTypes';
 import { WaveformTrack } from '../../poster/timeline/WaveformTrack';
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -69,7 +60,7 @@ type TabKey = 'library' | 'original';
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'library', label: 'Library' },
-  { key: 'original', label: 'Original Audio' },
+  { key: 'original', label: 'Original' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -98,8 +89,7 @@ export function AudioBrowserSheet({
   onClose,
   onConfirm,
   initialConfig,
-  hasOriginalAudio = false,
-}: AudioBrowserSheetProps) {
+  hasOriginalAudio = false }: AudioBrowserSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -138,8 +128,7 @@ export function AudioBrowserSheet({
     if (!reducedMotion) haptic.light();
     setConfig((prev) => ({
       ...prev,
-      originalVolume: prev.originalVolume > 0 ? 0 : DEFAULT_AUDIO_CONFIG.originalVolume,
-    }));
+      originalVolume: prev.originalVolume > 0 ? 0 : DEFAULT_AUDIO_CONFIG.originalVolume }));
   }, [haptic, reducedMotion]);
 
   const handleVolumeChange = useCallback((v: number) => {
@@ -153,22 +142,19 @@ export function AudioBrowserSheet({
   const handleStartOffsetChange = useCallback((v: number) => {
     setConfig((prev) => ({
       ...prev,
-      startOffsetMs: clamp(v, 0, selectedTrack?.durationMs ?? 0),
-    }));
+      startOffsetMs: clamp(v, 0, selectedTrack?.durationMs ?? 0) }));
   }, [selectedTrack]);
 
   const handleFadeInChange = useCallback((v: number) => {
     setConfig((prev) => ({
       ...prev,
-      fadeInMs: clamp(v, 0, selectedTrack?.durationMs ?? 0),
-    }));
+      fadeInMs: clamp(v, 0, selectedTrack?.durationMs ?? 0) }));
   }, [selectedTrack]);
 
   const handleFadeOutChange = useCallback((v: number) => {
     setConfig((prev) => ({
       ...prev,
-      fadeOutMs: clamp(v, 0, selectedTrack?.durationMs ?? 0),
-    }));
+      fadeOutMs: clamp(v, 0, selectedTrack?.durationMs ?? 0) }));
   }, [selectedTrack]);
 
   const handleTrimStartChange = useCallback((v: number) => {
@@ -180,8 +166,7 @@ export function AudioBrowserSheet({
       return {
         ...prev,
         trimStartMs: clampedStart,
-        trimEndMs: Math.max(clampedStart + 100, currentEnd),
-      };
+        trimEndMs: Math.max(clampedStart + 100, currentEnd) };
     });
   }, [selectedTrack]);
 
@@ -193,8 +178,7 @@ export function AudioBrowserSheet({
       return {
         ...prev,
         trimStartMs: Math.min(currentStart, clampedEnd - 100),
-        trimEndMs: clampedEnd,
-      };
+        trimEndMs: clampedEnd };
     });
   }, [selectedTrack]);
 
@@ -223,7 +207,6 @@ export function AudioBrowserSheet({
       >
         {/* ── Header ──────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Audio</Text>
           <PressScale
             onPress={handleClose}
             style={styles.closeBtn}
@@ -232,6 +215,17 @@ export function AudioBrowserSheet({
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+          </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Music</Text>
+          <PressScale
+            onPress={handleConfirm}
+            style={styles.doneBtn}
+            accessibilityLabel="Done"
+            accessibilityRole="button"
+            accessibilityHint="Applies the audio configuration and closes the sheet"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
           </PressScale>
         </View>
 
@@ -279,7 +273,11 @@ export function AudioBrowserSheet({
 
         {/* ── Tab body ────────────────────────────────────────────── */}
         {activeTab === 'library' ? (
-          <LibraryTabBody colors={colors} />
+          <LibraryTabBody
+            colors={colors}
+            selectedTrack={selectedTrack}
+            onSelectTrack={(track) => setSelectedTrack(track)}
+          />
         ) : (
           <OriginalAudioTabBody
             colors={colors}
@@ -295,10 +293,6 @@ export function AudioBrowserSheet({
         <View style={styles.sectionDivider} />
 
         <View style={styles.trackControls}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Selected Track
-          </Text>
-
           {hasSelectedTrack && selectedTrack ? (
             <>
               <View style={styles.trackMetaRow}>
@@ -312,13 +306,13 @@ export function AudioBrowserSheet({
                     </Text>
                   ) : null}
                 </View>
-                <Text style={[styles.durationText, { color: colors.textSecondary }]}>
+                <Text style={[styles.trackDuration, { color: colors.textMuted }]}>
                   {formatDuration(selectedTrack.durationMs)}
                 </Text>
               </View>
 
               <SliderRow
-                label="Track Volume"
+                label="Volume"
                 valueText={formatPercent(config.volume)}
                 min={0}
                 max={1}
@@ -333,7 +327,7 @@ export function AudioBrowserSheet({
               />
 
               <SliderRow
-                label="Start Offset"
+                label="Start"
                 valueText={formatDuration(config.startOffsetMs)}
                 min={0}
                 max={selectedTrack.durationMs}
@@ -349,14 +343,11 @@ export function AudioBrowserSheet({
 
               {/* ── Waveform visualization ── */}
               <View style={styles.waveformSection}>
-                <Text style={[styles.waveformLabel, { color: colors.textSecondary }]}>
-                  Waveform
-                </Text>
                 <WaveformTrack
                   samples={selectedTrack.waveform}
                   audioUri={selectedTrack.uri}
                   trackWidth={280}
-                  color={colors.antiqueGold}
+                  color={colors.brand}
                   height={36}
                 />
               </View>
@@ -394,13 +385,13 @@ export function AudioBrowserSheet({
 
               {/* ── Trim controls (timeline integration) ── */}
               <SliderRow
-                label="Trim Start"
+                label="Trim In"
                 valueText={formatDuration(config.trimStartMs ?? 0)}
                 min={0}
                 max={selectedTrack.durationMs}
                 value={config.trimStartMs ?? 0}
                 trackColor={colors.border}
-                fillColor={colors.antiqueGold}
+                fillColor={colors.brand}
                 thumbColor={colors.textPrimary}
                 labelColor={colors.textPrimary}
                 valueColor={colors.textMuted}
@@ -409,13 +400,13 @@ export function AudioBrowserSheet({
               />
 
               <SliderRow
-                label="Trim End"
+                label="Trim Out"
                 valueText={formatDuration(config.trimEndMs ?? selectedTrack.durationMs)}
                 min={0}
                 max={selectedTrack.durationMs}
                 value={config.trimEndMs ?? selectedTrack.durationMs}
                 trackColor={colors.border}
-                fillColor={colors.antiqueGold}
+                fillColor={colors.brand}
                 thumbColor={colors.textPrimary}
                 labelColor={colors.textPrimary}
                 valueColor={colors.textMuted}
@@ -433,38 +424,50 @@ export function AudioBrowserSheet({
           ) : (
             <View style={styles.noTrackState}>
               <Text style={[styles.noTrackText, { color: colors.textMuted }]}>
-                No track selected
+                No track
               </Text>
             </View>
           )}
         </View>
 
-        {/* ── Done ────────────────────────────────────────────────── */}
-        <View style={styles.footer}>
-          <Pressable
-            onPress={handleConfirm}
-            style={[styles.doneBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Done"
-            accessibilityRole="button"
-            accessibilityHint="Applies the audio configuration and closes the sheet"
-          >
-            <Text style={[styles.doneBtnText, { color: colors.textInverse }]}>Done</Text>
-          </Pressable>
-        </View>
       </ScrollView>
     </SheetContainer>
   );
 }
 
-// ── Library tab body (truthful empty state) ─────────────────────────
+// ── Library tab body ─────────────────────────────────────────────────
 
-function LibraryTabBody({ colors }: { colors: ThemeColors }) {
+interface LibraryTabBodyProps {
+  colors: ThemeColors;
+  selectedTrack: AudioTrack | null;
+  onSelectTrack: (track: AudioTrack) => void;
+}
+
+function LibraryTabBody({ colors, selectedTrack, onSelectTrack }: LibraryTabBodyProps) {
   const styles = useSheetStyles(colors);
+  const [query, setQuery] = useState('');
+
   return (
-    <View style={styles.emptyBody}>
-      <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>
-        No sounds available
-      </Text>
+    <View>
+      <View style={[styles.searchBar, { backgroundColor: colors.surfaceAlt }]}>
+        <Ionicons name="search" size={IconGrammar.metadata} color={colors.textMuted} style={styles.searchIcon} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.textPrimary }]}
+          placeholder="Search"
+          placeholderTextColor={colors.textMuted}
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+          underlineColorAndroid="transparent"
+          accessibilityLabel="Search songs"
+        />
+      </View>
+      <View style={styles.emptyBody}>
+        <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>
+          No songs
+        </Text>
+      </View>
     </View>
   );
 }
@@ -486,8 +489,7 @@ function OriginalAudioTabBody({
   hasOriginalAudio,
   originalVolume,
   onToggleOriginal,
-  onVolumeChange,
-}: OriginalAudioTabBodyProps) {
+  onVolumeChange }: OriginalAudioTabBodyProps) {
   const styles = useSheetStyles(colors);
   if (!hasOriginalAudio) {
     return (
@@ -511,7 +513,7 @@ function OriginalAudioTabBody({
       >
         <View style={styles.toggleTextWrap}>
           <Text style={[styles.toggleTitle, { color: colors.textPrimary }]}>
-            Keep Original Audio
+            Keep Original
           </Text>
         </View>
         <View
@@ -519,8 +521,7 @@ function OriginalAudioTabBody({
             styles.switchTrack,
             {
               backgroundColor: keepOriginal ? colors.brand : colors.surfaceAlt,
-              borderColor: keepOriginal ? colors.brand : colors.border,
-            },
+              borderColor: keepOriginal ? colors.brand : colors.border },
           ]}
         >
           <View
@@ -528,8 +529,7 @@ function OriginalAudioTabBody({
               styles.switchThumb,
               {
                 backgroundColor: keepOriginal ? colors.textInverse : colors.textSecondary,
-                transform: [{ translateX: keepOriginal ? 22 : 2 }],
-              },
+                transform: [{ translateX: keepOriginal ? 22 : 2 }] },
             ]}
           />
         </View>
@@ -537,7 +537,7 @@ function OriginalAudioTabBody({
 
       {keepOriginal ? (
         <SliderRow
-          label="Original Volume"
+          label="Volume"
           valueText={formatPercent(originalVolume)}
           min={0}
           max={1}
@@ -608,7 +608,7 @@ function PreviewButton({ colors, disabled, haptic, reducedMotion }: PreviewButto
   );
 }
 
-// ── Slider row (PanResponder-based, no new deps) ───────────────────
+// ── Slider row (delegates track to shared CreatorSlider) ───────────
 
 interface SliderRowProps {
   label: string;
@@ -631,54 +631,12 @@ function SliderRow({
   min,
   max,
   value,
-  trackColor,
-  fillColor,
-  thumbColor,
   labelColor,
   valueColor,
   onChange,
-  disabled = false,
-}: SliderRowProps) {
+  disabled = false }: SliderRowProps) {
   const { colors } = useAppTheme();
   const styles = useSheetStyles(colors);
-  const trackWidthRef = useRef(0);
-  const [trackWidth, setTrackWidth] = useState(0);
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    trackWidthRef.current = e.nativeEvent.layout.width;
-    setTrackWidth(e.nativeEvent.layout.width);
-  }, []);
-
-  const range = max - min;
-  const clamped = clamp(value, min, max);
-  const ratio = range === 0 ? 0 : (clamped - min) / range;
-  const trackLayoutWidth = trackWidth > 0 ? trackWidth : 1;
-  const thumbPosition = ratio * trackLayoutWidth;
-
-  const valueToPosition = useCallback(
-    (x: number) => {
-      const r = Math.min(1, Math.max(0, x / trackLayoutWidth));
-      return min + r * range;
-    },
-    [trackLayoutWidth, min, range],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => !disabled,
-        onMoveShouldSetPanResponder: () => !disabled,
-        onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-          const next = valueToPosition(thumbPosition + g.dx);
-          onChange(Math.round(next * 1000) / 1000);
-        },
-        onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false,
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [thumbPosition, valueToPosition, onChange, disabled],
-  );
-
   const opacity = disabled ? 0.4 : 1;
 
   return (
@@ -691,31 +649,16 @@ function SliderRow({
           {valueText}
         </Text>
       </View>
-      <View
-        style={styles.trackWrap}
-        onLayout={handleLayout}
-        {...panResponder.panHandlers}
-      >
-        <View style={[styles.track, { backgroundColor: trackColor }]} />
-        <View
-          style={[
-            styles.fill,
-            {
-              width: thumbPosition,
-              backgroundColor: fillColor,
-            },
-          ]}
-        />
-        <View
-          style={[
-            styles.thumb,
-            {
-              left: thumbPosition,
-              backgroundColor: thumbColor,
-            },
-          ]}
-        />
-      </View>
+      <CreatorSlider
+        value={value}
+        min={min}
+        max={max}
+        step={0}
+        onValueChange={onChange}
+        onCommit={onChange}
+        disabled={disabled}
+        accessibilityLabel={label}
+      />
     </View>
   );
 }
@@ -726,25 +669,30 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     content: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
+      flex: 1,
+      textAlign: 'center',
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-    },
+      fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      alignItems: 'center' },
+    doneBtn: {
+      width: Control.hit,
+      height: Control.hit,
+      justifyContent: 'center',
+      alignItems: 'center' },
+    doneBtnText: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size },
     // ── Tabs ──
     tabBar: {
       flexDirection: 'row',
@@ -752,168 +700,126 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xs,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     tab: {
       alignItems: 'center',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     tabLabel: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.body.size },
     tabLabelActive: {
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     tabUnderline: {
       height: Stroke.emphasis,
       borderRadius: Stroke.emphasis / 2,
       width: 24,
-      marginTop: Space.xxs,
-    },
+      marginTop: Space.xxs },
     // ── Empty / original bodies ──
     emptyBody: {
       paddingVertical: Space.xl,
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emptyTitle: {
-      fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.bodyStrong.size },
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      height: 36,
+      borderRadius: Radius.sm,
+      paddingHorizontal: Space.sm,
+      marginBottom: Space.md },
+    searchIcon: {
+      marginRight: Space.xs },
+    searchInput: {
+      flex: 1,
+      fontFamily: FontFamily.regular,
+      fontSize: TypographyV2.captionElevated.size,
+      padding: 0 },
     originalBody: {
       paddingVertical: Space.sm,
-      gap: Space.md,
-    },
+      gap: Space.md },
     // ── Toggle ──
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: Space.sm,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     toggleTextWrap: {
       flex: 1,
       paddingRight: Space.md,
-      gap: 2,
-    },
+      gap: 2 },
     toggleTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     switchTrack: {
       width: 46,
       height: 28,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     switchThumb: {
       position: 'absolute',
       width: 22,
       height: 22,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     // ── Track controls ──
     sectionDivider: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
-      marginVertical: Space.md,
-    },
+      marginVertical: Space.md },
     trackControls: {
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     sectionTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      fontSize: TypographyV2.bodyStrong.size },
     trackMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     trackMetaInfo: {
       flex: 1,
       gap: 2,
-      paddingRight: Space.md,
-    },
+      paddingRight: Space.md },
     trackTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     trackArtist: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
-    durationText: {
+      fontSize: TypographyV2.meta.size },
+    trackDuration: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.caption.size,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontVariant: ['tabular-nums'] },
     // ── Waveform ──
     waveformSection: {
       gap: Space.xxs,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     waveformLabel: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     noTrackState: {
       paddingVertical: Space.lg,
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     noTrackText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
+      fontSize: TypographyV2.body.size },
     // ── Slider ──
     sliderRow: {
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     sliderHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     sliderLabel: {
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     sliderValue: {
-      fontSize: Type.caption.size,
-      fontVariant: ['tabular-nums'],
-    },
-    trackWrap: {
-      height: Control.hit,
-      justifyContent: 'center',
-      position: 'relative',
-    },
-    track: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      height: 3,
-      borderRadius: Radius.full,
-    },
-    fill: {
-      position: 'absolute',
-      left: 0,
-      height: 3,
-      borderRadius: Radius.full,
-    },
-    thumb: {
-      position: 'absolute',
-      width: 16,
-      height: 16,
-      borderRadius: Radius.full,
-      marginLeft: -8,
-      borderWidth: Stroke.standard,
-      borderColor: 'rgba(0,0,0,0)',
-    },
+      fontSize: TypographyV2.meta.size,
+      fontVariant: ['tabular-nums'] },
     // ── Preview ──
     previewBtn: {
       flexDirection: 'row',
@@ -924,27 +830,10 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
       marginTop: Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     previewBtnText: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.body.size,
-    },
-    // ── Footer ──
-    footer: {
-      paddingTop: Space.lg,
-    },
-    doneBtn: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: 50,
-      borderRadius: Radius.lg,
-    },
-    doneBtnText: {
-      fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
-  });
+      fontSize: TypographyV2.body.size } });
 }
 
 // Memoised style factory keyed to colors so re-renders only rebuild when

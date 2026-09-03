@@ -297,6 +297,121 @@ const minimalLayout: LayoutDefinition = {
   },
 };
 
+const splitScreenLayout: LayoutDefinition = {
+  id: 'split-screen',
+  name: 'Split Screen',
+  minAssets: 2,
+  maxAssets: 2,
+  computeTransforms: (assetCount) => {
+    const h = 0.49;
+    const transforms: AssetTransform[] = [];
+    for (let i = 0; i < Math.min(assetCount, 2); i++) {
+      transforms.push({
+        x: 0,
+        y: i === 0 ? 0 : 0.51,
+        width: 1,
+        height: h,
+        rotation: 0,
+        zIndex: i + 1,
+      });
+    }
+    return transforms;
+  },
+};
+
+const polaroidLayout: LayoutDefinition = {
+  id: 'polaroid',
+  name: 'Polaroid',
+  minAssets: 2,
+  maxAssets: 4,
+  computeTransforms: (assetCount) => {
+    const w = 0.4;
+    const h = 0.5;
+    const offsets = [
+      { x: 0.08, y: 0.1 },
+      { x: 0.52, y: 0.18 },
+      { x: 0.16, y: 0.48 },
+      { x: 0.5, y: 0.42 },
+    ];
+    const rotations = [-5, 4, -3, 5];
+    const transforms: AssetTransform[] = [];
+    for (let i = 0; i < Math.min(assetCount, 4); i++) {
+      transforms.push({
+        x: offsets[i].x,
+        y: offsets[i].y,
+        width: w,
+        height: h,
+        rotation: rotations[i],
+        zIndex: i + 1,
+      });
+    }
+    return transforms;
+  },
+};
+
+const verticalStripLayout: LayoutDefinition = {
+  id: 'vertical-strip',
+  name: 'Vertical Strip',
+  minAssets: 2,
+  maxAssets: 4,
+  computeTransforms: (assetCount) => {
+    const n = Math.min(assetCount, 4);
+    const gap = 0.02;
+    const cellH = (1 - gap * (n - 1)) / n;
+    const transforms: AssetTransform[] = [];
+    for (let i = 0; i < n; i++) {
+      transforms.push({
+        x: 0,
+        y: i * (cellH + gap),
+        width: 1,
+        height: cellH,
+        rotation: 0,
+        zIndex: i + 1,
+      });
+    }
+    return transforms;
+  },
+};
+
+const mosaicLayout: LayoutDefinition = {
+  id: 'mosaic',
+  name: 'Mosaic',
+  minAssets: 3,
+  maxAssets: 5,
+  computeTransforms: (assetCount) => {
+    const transforms: AssetTransform[] = [];
+    if (assetCount === 0) return transforms;
+
+    const heroW = 0.6;
+    transforms.push({
+      x: 0,
+      y: 0,
+      width: heroW,
+      height: 1,
+      rotation: 0,
+      zIndex: 1,
+    });
+
+    const remaining = Math.min(assetCount - 1, 4);
+    if (remaining > 0) {
+      const colX = heroW + GAP;
+      const colW = 1 - colX - GAP;
+      const slotH = (1 - GAP * (remaining - 1)) / remaining;
+      for (let i = 0; i < remaining; i++) {
+        transforms.push({
+          x: colX,
+          y: i * (slotH + GAP),
+          width: colW,
+          height: slotH,
+          rotation: 0,
+          zIndex: i + 2,
+        });
+      }
+    }
+    return transforms;
+  },
+};
+
 // ── Registry ────────────────────────────────────────────────────────
 
 export const LAYOUT_DEFINITIONS: Record<LayoutId, LayoutDefinition> = {
@@ -308,6 +423,10 @@ export const LAYOUT_DEFINITIONS: Record<LayoutId, LayoutDefinition> = {
   stack: stackLayout,
   magazine: magazineLayout,
   minimal: minimalLayout,
+  'split-screen': splitScreenLayout,
+  polaroid: polaroidLayout,
+  'vertical-strip': verticalStripLayout,
+  mosaic: mosaicLayout,
 };
 
 /** Order used when generating alternatives. */
@@ -320,12 +439,19 @@ const ALL_LAYOUT_IDS: LayoutId[] = [
   'scatter',
   'stack',
   'minimal',
+  'split-screen',
+  'polaroid',
+  'vertical-strip',
+  'mosaic',
 ];
 
 function layoutFits(layout: LayoutDefinition, assetCount: number): boolean {
   if (assetCount < layout.minAssets) return false;
-  if (assetCount > layout.maxAssets) return false;
   return true;
+}
+
+export function computeOverflow(totalAssets: number, maxAssets: number): number {
+  return Math.max(0, totalAssets - maxAssets);
 }
 
 function buildPreview(
@@ -335,7 +461,21 @@ function buildPreview(
   canvasHeight: number,
 ): LayoutPreview {
   const def = LAYOUT_DEFINITIONS[id];
-  const transforms = def.computeTransforms(assetCount, canvasWidth, canvasHeight);
+  const cappedCount = Math.min(assetCount, def.maxAssets);
+  const transforms = def.computeTransforms(cappedCount, canvasWidth, canvasHeight);
+  const overflow = computeOverflow(assetCount, def.maxAssets);
+  if (overflow > 0 && transforms.length > 0) {
+    const last = transforms[transforms.length - 1];
+    transforms.push({
+      x: last.x,
+      y: last.y,
+      width: last.width,
+      height: last.height,
+      rotation: last.rotation,
+      zIndex: last.zIndex + 1,
+      overflowCount: overflow,
+    });
+  }
   return {
     id,
     name: def.name,
@@ -367,7 +507,18 @@ function buildPreview(
 const TARGET_ASPECT = 0.8;
 
 /** Layouts that intentionally overlap — overlap is not penalised. */
-const OVERLAP_LAYOUTS: LayoutId[] = ['scatter', 'stack'];
+const OVERLAP_LAYOUTS: LayoutId[] = ['scatter', 'stack', 'polaroid'];
+
+/**
+ * Layouts whose cell shapes are an intentional design choice rather than a
+ * 4:5 portrait fit. These receive a fixed aspect sub-score so the generic
+ * aspect-fit penalty doesn't mis-rank them.
+ */
+const ASPECT_OVERRIDE: Partial<Record<LayoutId, number>> = {
+  'split-screen': 0.9,
+  'vertical-strip': 0.85,
+  mosaic: 0.85,
+};
 
 function scoreLayout(
   transforms: AssetTransform[],
@@ -375,34 +526,40 @@ function scoreLayout(
   _canvasWidth: number,
   _canvasHeight: number,
 ): number {
-  if (transforms.length === 0) return 0;
+  const scoringTransforms = transforms.filter((t) => t.overflowCount === undefined);
+  if (scoringTransforms.length === 0) return 0;
 
   // ── Aspect fit (0.30) ──
   // Each cell's aspect ratio (w/h) should be close to the target 4:5.
   // Square cells are acceptable; extreme aspect ratios are penalised.
-  let aspectScore = 0;
-  for (const t of transforms) {
-    const cellAspect = t.width / t.height;
-    const diff = Math.abs(cellAspect - TARGET_ASPECT);
-    // 0 diff = 1.0, 0.5 diff = 0.5, 1.0+ diff = 0
-    aspectScore += Math.max(0, 1 - diff * 2);
+  let aspectScore: number;
+  if (ASPECT_OVERRIDE[layoutId] !== undefined) {
+    aspectScore = ASPECT_OVERRIDE[layoutId]!;
+  } else {
+    aspectScore = 0;
+    for (const t of scoringTransforms) {
+      const cellAspect = t.width / t.height;
+      const diff = Math.abs(cellAspect - TARGET_ASPECT);
+      // 0 diff = 1.0, 0.5 diff = 0.5, 1.0+ diff = 0
+      aspectScore += Math.max(0, 1 - diff * 2);
+    }
+    aspectScore /= scoringTransforms.length;
   }
-  aspectScore /= transforms.length;
 
   // ── Overlap (0.25) ──
   // For non-overlap layouts, penalise any intersection between cells.
-  // For overlap layouts (scatter, stack), this sub-score is neutral (0.75).
+  // For overlap layouts (scatter, stack, polaroid), this sub-score is neutral (0.75).
   let overlapScore: number;
   if (OVERLAP_LAYOUTS.includes(layoutId)) {
     overlapScore = 0.75; // neutral — overlap is intentional
   } else {
     let totalOverlap = 0;
     let totalArea = 0;
-    for (let i = 0; i < transforms.length; i++) {
-      const a = transforms[i];
+    for (let i = 0; i < scoringTransforms.length; i++) {
+      const a = scoringTransforms[i];
       totalArea += a.width * a.height;
-      for (let j = i + 1; j < transforms.length; j++) {
-        const b = transforms[j];
+      for (let j = i + 1; j < scoringTransforms.length; j++) {
+        const b = scoringTransforms[j];
         const ox = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
         const oy = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
         totalOverlap += ox * oy;
@@ -417,7 +574,7 @@ function scoreLayout(
   // Reward layouts that use 60–90% of the canvas area. Too sparse (<40%)
   // or too crammed (>95%) are penalised.
   let totalCoverage = 0;
-  for (const t of transforms) {
+  for (const t of scoringTransforms) {
     totalCoverage += t.width * t.height;
   }
   const coverage = Math.min(1, totalCoverage); // cap at 100%
@@ -439,7 +596,7 @@ function scoreLayout(
   // media cell. Penalise cells where the bottom 15% of the cell is
   // clipped by the canvas boundary (y + height > 0.95).
   let labelSafetyScore = 0;
-  for (const t of transforms) {
+  for (const t of scoringTransforms) {
     const bottomEdge = t.y + t.height;
     if (bottomEdge <= 0.95) {
       labelSafetyScore += 1.0;
@@ -449,7 +606,7 @@ function scoreLayout(
       labelSafetyScore += Math.max(0, 1 - clipAmount);
     }
   }
-  labelSafetyScore /= transforms.length;
+  labelSafetyScore /= scoringTransforms.length;
 
   // Weighted sum.
   return (

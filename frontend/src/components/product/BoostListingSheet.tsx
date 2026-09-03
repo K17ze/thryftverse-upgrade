@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { BottomSheet } from '../BottomSheet';
 import { AppButton } from '../ui/AppButton';
 import { haptics } from '../../utils/haptics';
@@ -41,9 +43,9 @@ export function BoostListingSheet({
   listing,
   currentBoostedUntil,
   onClose,
-  onBoost,
-}: BoostListingSheetProps) {
+  onBoost }: BoostListingSheetProps) {
   const { colors } = useAppTheme();
+  const { formatFromFiat } = useFormattedPrice();
   const [selectedTierId, setSelectedTierId] = useState<string>(BOOST_TIERS[1].id);
 
   const selectedTier = BOOST_TIERS.find((t) => t.id === selectedTierId) ?? BOOST_TIERS[1];
@@ -71,7 +73,7 @@ export function BoostListingSheet({
         showsVerticalScrollIndicator={false}
       >
         {isCurrentlyBoosted && (
-          <View style={[styles.activeBoostBanner, { backgroundColor: `${colors.brand}12` }]}>
+          <View style={[styles.activeBoostBanner, { backgroundColor: colors.brandSubtle }]}>
             <Ionicons name="trending-up-outline" size={16} color={colors.brand} />
             <Text style={[styles.activeBoostText, { color: colors.brand }]}>
               Currently boosted until {formatFullDate(currentBoostedUntil!)}
@@ -98,7 +100,7 @@ export function BoostListingSheet({
               ]}
               accessibilityRole="radio"
               accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`${tier.label} boost for £${tier.priceGbp.toFixed(2)}`}
+              accessibilityLabel={`${tier.label} boost for ${formatFromFiat(tier.priceGbp)}`}
             >
               <View style={styles.tierInfo}>
                 <View style={styles.tierHeader}>
@@ -106,7 +108,7 @@ export function BoostListingSheet({
                     {tier.label}
                   </Text>
                   <Text style={[styles.tierPrice, { color: colors.brand }]}>
-                    £{tier.priceGbp.toFixed(2)}
+                    {formatFromFiat(tier.priceGbp)}
                   </Text>
                 </View>
                 <Text style={[styles.tierDescription, { color: colors.textSecondary }]}>
@@ -125,12 +127,12 @@ export function BoostListingSheet({
 
       <View style={styles.footer}>
         <AppButton
-          title={`Boost for £${selectedTier.priceGbp.toFixed(2)}`}
+          title={`Boost for ${formatFromFiat(selectedTier.priceGbp)}`}
           variant="primary"
           size="lg"
           style={styles.boostBtn}
           onPress={handleBoost}
-          accessibilityLabel={`Confirm boost for ${selectedTier.label} at £${selectedTier.priceGbp.toFixed(2)}`}
+          accessibilityLabel={`Confirm boost for ${selectedTier.label} at ${formatFromFiat(selectedTier.priceGbp)}`}
           hapticFeedback="light"
         />
       </View>
@@ -140,25 +142,22 @@ export function BoostListingSheet({
 
 const styles = StyleSheet.create({
   title: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
     textAlign: 'center',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   subtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     paddingHorizontal: Space.lg,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   listContent: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   activeBoostBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -166,51 +165,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   activeBoostText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Tier rows — flat, hairline separators ──
   tierRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.md,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   tierInfo: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   tierHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   tierLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   tierPrice: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.bold,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontVariant: ['tabular-nums'] },
   tierDescription: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   footer: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   boostBtn: {
-    width: '100%',
-  },
-});
+    width: '100%' } });

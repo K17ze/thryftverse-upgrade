@@ -2,13 +2,13 @@
  * SustainabilityPreferencesScreen — personal sustainability goals & preferences.
  *
  * Lets the user set carbon-saving targets, a secondhand ratio goal, preferred
- * shipping/packaging, and toggle sustainability badges, impact tracking and
- * local-first prioritisation.
+ * packaging, and toggle sustainability badges, impact tracking and local-first
+ * prioritisation. Real impact data is fetched from the backend ledger; when no
+ * completed purchases exist yet, an honest empty state is shown.
  *
- * Per AGENTS.md §11 (Truthful UI): impact data is not yet available from a
- * backend service, so an honest empty state is shown instead of fabricated
- * figures. User preferences are persisted locally and will be used to
- * personalize the experience once real impact data exists.
+ * Per EU Directive 2024/825, the "Carbon-neutral shipping" toggle has been
+ * removed — no verified carbon-neutral shipping option exists, so offering the
+ * preference would be a greenwashing claim.
  *
  * Design (per AGENTS.md §4):
  * - Flat composition, hairline separators, no card-on-card
@@ -18,13 +18,13 @@
  * - All colors via useAppTheme(), all geometry via design tokens
  *
  * State coverage (per AGENTS.md §14):
- * - Populated: full preference set with honest empty-state for impact
- * - Disabled: master toggle disables dependent rows
+ * - Loading: impact and preferences fetch in flight
+ * - Empty: no completed purchases yet
+ * - Populated: real impact figures and full preference set
  */
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -33,110 +33,124 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
-import { Space, Radius, Type, Typography, Control } from '../theme/designTokens';
+import { Space, Radius, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import {
+  fetchMyImpactLedger,
+  fetchSustainabilityPreferences,
+  updateSustainabilityPreferences,
+  type ImpactLedgerResponse,
+  type SustainabilityPreferences } from '../services/impactApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SustainabilityPreferences'>;
 
-// Carbon-saving target options (kg CO2 per year).
-const CARBON_TARGETS = [10, 25, 50, 100, 250];
+// Carbon-saving target options (kg CO2 per year). null = no target.
+const CARBON_TARGETS: (number | null)[] = [null, 10, 25, 50, 100, 250];
 
-// Secondhand ratio goal options (percentage of purchases that are secondhand).
-const RATIO_TARGETS = [25, 50, 75, 100];
+// Secondhand ratio goal options (percentage of purchases that are secondhand). null = no target.
+const RATIO_TARGETS: (number | null)[] = [null, 25, 50, 75, 100];
 
-const SUSTAINABILITY_PREFS_KEY = '@thryftverse/sustainability_prefs';
-
-interface SustainabilityPrefs {
-  carbonTarget: number;
-  ratioTarget: number;
-  carbonNeutralShipping: boolean;
-  plasticFreePackaging: boolean;
-  showBadges: boolean;
-  trackImpact: boolean;
-  localFirst: boolean;
-}
-
-const DEFAULT_PREFS: SustainabilityPrefs = {
-  carbonTarget: 50,
-  ratioTarget: 50,
-  carbonNeutralShipping: true,
-  plasticFreePackaging: true,
-  showBadges: true,
-  trackImpact: true,
-  localFirst: false,
-};
+const METHODOLOGY_TEXT =
+  'ThryftVerse calculates net avoided emissions using verified emissions factors (DEFRA 2024, Higg MSI v3.7). We subtract resale shipping and packaging emissions from the avoided production and end-of-life emissions, applying a displacement rate and rebound effect based on WRAP/Vestiaire methodology.';
 
 export default function SustainabilityPreferencesScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  // Preference state — persisted to AsyncStorage so it survives app restarts.
-  // The backend account-preferences endpoint does not yet support sustainability
-  // fields, so these are device-local (truthful per AGENTS.md §11).
-  const [carbonTarget, setCarbonTarget] = React.useState(DEFAULT_PREFS.carbonTarget);
-  const [ratioTarget, setRatioTarget] = React.useState(DEFAULT_PREFS.ratioTarget);
-  const [carbonNeutralShipping, setCarbonNeutralShipping] = React.useState(DEFAULT_PREFS.carbonNeutralShipping);
-  const [plasticFreePackaging, setPlasticFreePackaging] = React.useState(DEFAULT_PREFS.plasticFreePackaging);
-  const [showBadges, setShowBadges] = React.useState(DEFAULT_PREFS.showBadges);
-  const [trackImpact, setTrackImpact] = React.useState(DEFAULT_PREFS.trackImpact);
-  const [localFirst, setLocalFirst] = React.useState(DEFAULT_PREFS.localFirst);
-  const [hydrated, setHydrated] = React.useState(false);
+  const [impactLedger, setImpactLedger] = useState<ImpactLedgerResponse | null>(null);
+  const [impactLoading, setImpactLoading] = useState(true);
+  const [prefsLoading, setPrefsLoading] = useState(true);
+  const [carbonTarget, setCarbonTarget] = useState<number | null>(null);
+  const [ratioTarget, setRatioTarget] = useState<number | null>(null);
+  const [plasticFreePackaging, setPlasticFreePackaging] = useState(true);
+  const [showBadges, setShowBadges] = useState(true);
+  const [trackImpact, setTrackImpact] = useState(true);
+  const [localFirst, setLocalFirst] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [methodologyOpen, setMethodologyOpen] = useState(false);
 
-  // Hydrate from AsyncStorage on mount.
-  React.useEffect(() => {
+  // Fetch impact ledger + preferences on mount.
+  useEffect(() => {
     let mounted = true;
+
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(SUSTAINABILITY_PREFS_KEY);
-        if (!mounted || !raw) return;
-        const parsed = JSON.parse(raw) as Partial<SustainabilityPrefs>;
-        if (typeof parsed.carbonTarget === 'number') setCarbonTarget(parsed.carbonTarget);
-        if (typeof parsed.ratioTarget === 'number') setRatioTarget(parsed.ratioTarget);
-        if (typeof parsed.carbonNeutralShipping === 'boolean') setCarbonNeutralShipping(parsed.carbonNeutralShipping);
-        if (typeof parsed.plasticFreePackaging === 'boolean') setPlasticFreePackaging(parsed.plasticFreePackaging);
-        if (typeof parsed.showBadges === 'boolean') setShowBadges(parsed.showBadges);
-        if (typeof parsed.trackImpact === 'boolean') setTrackImpact(parsed.trackImpact);
-        if (typeof parsed.localFirst === 'boolean') setLocalFirst(parsed.localFirst);
+        const ledger = await fetchMyImpactLedger();
+        if (mounted) setImpactLedger(ledger);
       } catch {
-        // AsyncStorage read failure — keep defaults
+        // Keep null — empty state will render.
       } finally {
-        if (mounted) setHydrated(true);
+        if (mounted) setImpactLoading(false);
       }
     })();
+
+    (async () => {
+      try {
+        const prefs = await fetchSustainabilityPreferences();
+        if (!mounted) return;
+        setCarbonTarget(prefs.carbonTargetKg);
+        setRatioTarget(prefs.ratioTargetPct);
+        setPlasticFreePackaging(prefs.plasticFreePackaging);
+        setShowBadges(prefs.showBadges);
+        setTrackImpact(prefs.trackImpact);
+        setLocalFirst(prefs.localFirst);
+      } catch {
+        // Keep defaults — user can still interact; persistence will retry.
+      } finally {
+        if (mounted) {
+          setHydrated(true);
+          setPrefsLoading(false);
+        }
+      }
+    })();
+
     return () => { mounted = false; };
   }, []);
 
-  // Persist to AsyncStorage whenever preferences change (after hydration).
-  React.useEffect(() => {
+  // Debounced persistence of changed preferences to the backend.
+  const prefsRef = useRef({ carbonTarget, ratioTarget, plasticFreePackaging, showBadges, trackImpact, localFirst });
+  prefsRef.current = { carbonTarget, ratioTarget, plasticFreePackaging, showBadges, trackImpact, localFirst };
+
+  useEffect(() => {
     if (!hydrated) return;
-    AsyncStorage.setItem(
-      SUSTAINABILITY_PREFS_KEY,
-      JSON.stringify({
-        carbonTarget,
-        ratioTarget,
-        carbonNeutralShipping,
-        plasticFreePackaging,
-        showBadges,
-        trackImpact,
-        localFirst,
-      } satisfies SustainabilityPrefs),
-    ).catch(() => {});
-  }, [hydrated, carbonTarget, ratioTarget, carbonNeutralShipping, plasticFreePackaging, showBadges, trackImpact, localFirst]);
+    const handle = setTimeout(() => {
+      const p = prefsRef.current;
+      const patch: Partial<SustainabilityPreferences> = {
+        carbonTargetKg: p.carbonTarget,
+        ratioTargetPct: p.ratioTarget,
+        plasticFreePackaging: p.plasticFreePackaging,
+        showBadges: p.showBadges,
+        trackImpact: p.trackImpact,
+        localFirst: p.localFirst };
+      updateSustainabilityPreferences(patch).catch((err) => {
+        console.warn('[sustainability] persist failed', err);
+      });
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [hydrated, carbonTarget, ratioTarget, plasticFreePackaging, showBadges, trackImpact, localFirst]);
 
   const toggleWithHaptic = (setter: React.Dispatch<React.SetStateAction<boolean>>) => (v: boolean) => {
     haptic.selection();
     setter(v);
   };
 
-  const selectCarbonTarget = (value: number) => {
+  const selectCarbonTarget = (value: number | null) => {
     haptic.selection();
     setCarbonTarget(value);
   };
 
-  const selectRatioTarget = (value: number) => {
+  const selectRatioTarget = (value: number | null) => {
     haptic.selection();
     setRatioTarget(value);
   };
+
+  const showMethodology = () => {
+    haptic.selection();
+    setMethodologyOpen((v) => !v);
+  };
+
+  const hasImpact = !impactLoading && impactLedger && impactLedger.itemCount > 0;
 
   return (
     <FlagshipScreen
@@ -147,121 +161,158 @@ export default function SustainabilityPreferencesScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── Impact summary — honest empty state (fail-closed per AGENTS.md §11) ── */}
-        <View style={styles.summaryBlock}>
-          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>Your impact</Text>
-          <View style={[styles.emptyStateWrap, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="leaf-outline" size={20} color={colors.textSecondary} />
-            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
-              Impact tracking is being calibrated. Your sustainability preferences are saved and will be used to personalize your experience once impact data is available.
+      {/* ── Impact summary — dominant hero panel ── */}
+      <View style={styles.summaryBlock}>
+        <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>Your impact</Text>
+
+        {impactLoading ? (
+          <View style={[styles.heroPanel, { backgroundColor: colors.surfaceAlt }]}>
+            <Text style={[styles.heroStat, { color: colors.textSecondary }]}>
+              Loading your impact…
             </Text>
           </View>
-        </View>
+        ) : hasImpact ? (
+          <View style={[styles.heroPanel, { backgroundColor: colors.surfaceAlt }]}>
+            <Text style={[styles.heroStat, { color: colors.textPrimary }]}>
+              {impactLedger!.totalCo2eAvoidedKg.toLocaleString()} kg CO₂e avoided
+            </Text>
+            <Text style={[styles.heroSecondary, { color: colors.textSecondary }]}>
+              {impactLedger!.itemCount} {impactLedger!.itemCount === 1 ? 'item' : 'items'} kept in circulation
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.heroPanel, { backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name="leaf-outline" size={20} color={colors.textSecondary} />
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>
+              No completed purchases yet. Your impact will appear here once you buy your first pre-owned item.
+            </Text>
+          </View>
+        )}
+      </View>
 
       {/* ── Sustainability goals ── */}
-        <SettingsSection title="Sustainability goals" noCard>
-          <View style={styles.goalRow}>
-            <Text style={[styles.goalLabel, { color: colors.textPrimary }]}>Carbon saving target</Text>
-            <Text style={[styles.goalHint, { color: colors.textMuted }]}>kg CO₂ per year</Text>
-            <View style={styles.chipRow}>
-              {CARBON_TARGETS.map((target) => {
-                const selected = carbonTarget === target;
-                return (
-                  <Pressable
-                    key={target}
-                    style={[
-                      styles.chip,
-                      { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
-                      selected && { backgroundColor: colors.success, borderColor: colors.success },
-                    ]}
-                    onPress={() => selectCarbonTarget(target)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Set carbon saving target to ${target} kilograms`}
-                    accessibilityState={{ selected }}
-                  >
-                    <Text style={[styles.chipText, { color: colors.textPrimary }, selected && { color: colors.textInverse }]}>
-                      {target}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+      <SettingsSection title="Sustainability goals" noCard>
+        <View style={styles.goalRow}>
+          <Text style={[styles.goalLabel, { color: colors.textPrimary }]}>Carbon saving target</Text>
+          <Text style={[styles.goalHint, { color: colors.textMuted }]}>kg CO₂ per year</Text>
+          <View style={styles.chipRow}>
+            {CARBON_TARGETS.map((target) => {
+              const selected = carbonTarget === target;
+              const label = target === null ? 'None' : String(target);
+              return (
+                <Pressable
+                  key={label}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                    selected && { backgroundColor: colors.success, borderColor: colors.success },
+                  ]}
+                  onPress={() => selectCarbonTarget(target)}
+                  accessibilityRole="button"
+                  accessibilityLabel={target === null ? 'Clear carbon saving target' : `Set carbon saving target to ${target} kilograms`}
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={[styles.chipText, { color: colors.textPrimary }, selected && { color: colors.textInverse }]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
-          <View style={[styles.goalRow, styles.goalRowLast]}>
-            <Text style={[styles.goalLabel, { color: colors.textPrimary }]}>Secondhand ratio goal</Text>
-            <Text style={[styles.goalHint, { color: colors.textMuted }]}>share of purchases that are secondhand</Text>
-            <View style={styles.chipRow}>
-              {RATIO_TARGETS.map((target) => {
-                const selected = ratioTarget === target;
-                return (
-                  <Pressable
-                    key={target}
-                    style={[
-                      styles.chip,
-                      { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
-                      selected && { backgroundColor: colors.success, borderColor: colors.success },
-                    ]}
-                    onPress={() => selectRatioTarget(target)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Set secondhand ratio goal to ${target} percent`}
-                    accessibilityState={{ selected }}
-                  >
-                    <Text style={[styles.chipText, { color: colors.textPrimary }, selected && { color: colors.textInverse }]}>
-                      {target}%
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+        </View>
+        <View style={[styles.goalRow, styles.goalRowLast]}>
+          <Text style={[styles.goalLabel, { color: colors.textPrimary }]}>Secondhand ratio goal</Text>
+          <Text style={[styles.goalHint, { color: colors.textMuted }]}>share of purchases that are secondhand</Text>
+          <View style={styles.chipRow}>
+            {RATIO_TARGETS.map((target) => {
+              const selected = ratioTarget === target;
+              const label = target === null ? 'None' : `${target}%`;
+              return (
+                <Pressable
+                  key={label}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                    selected && { backgroundColor: colors.success, borderColor: colors.success },
+                  ]}
+                  onPress={() => selectRatioTarget(target)}
+                  accessibilityRole="button"
+                  accessibilityLabel={target === null ? 'Clear secondhand ratio goal' : `Set secondhand ratio goal to ${target} percent`}
+                  accessibilityState={{ selected }}
+                >
+                  <Text style={[styles.chipText, { color: colors.textPrimary }, selected && { color: colors.textInverse }]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
-        </SettingsSection>
+        </View>
+      </SettingsSection>
 
       {/* ── Shipping & packaging ── */}
-        <SettingsSection title="Shipping & packaging" noCard>
-          <SettingsRow
-            icon="bicycle-outline"
-            title="Carbon-neutral shipping"
-            subtitle="Prefer sellers offering carbon-neutral delivery"
-            toggleValue={carbonNeutralShipping}
-            onToggle={toggleWithHaptic(setCarbonNeutralShipping)}
-            isFirst
-          />
-          <SettingsRow
-            icon="cube-outline"
-            title="Plastic-free packaging"
-            subtitle="Prefer sellers using plastic-free packaging"
-            toggleValue={plasticFreePackaging}
-            onToggle={toggleWithHaptic(setPlasticFreePackaging)}
-            isLast
-          />
-        </SettingsSection>
+      <SettingsSection title="Shipping & packaging" noCard>
+        <SettingsRow
+          icon="leaf-outline"
+          title="Plastic-free packaging"
+          subtitle="Prefer sellers using plastic-free packaging"
+          toggleValue={plasticFreePackaging}
+          onToggle={toggleWithHaptic(setPlasticFreePackaging)}
+          isFirst
+          isLast
+        />
+      </SettingsSection>
 
       {/* ── Display & tracking ── */}
-        <SettingsSection title="Display & tracking" noCard>
-          <SettingsRow
-            icon="ribbon-outline"
-            title="Sustainability badges"
-            subtitle="Show sustainability badges on listings"
-            toggleValue={showBadges}
-            onToggle={toggleWithHaptic(setShowBadges)}
-            isFirst
+      <SettingsSection title="Display & tracking" noCard>
+        <SettingsRow
+          icon="ribbon-outline"
+          title="Sustainability badges"
+          subtitle="Show sustainability badges on listings"
+          toggleValue={showBadges}
+          onToggle={toggleWithHaptic(setShowBadges)}
+          isFirst
+        />
+        <SettingsRow
+          icon="leaf-outline"
+          title="Impact tracking"
+          subtitle="Track your personal sustainability impact"
+          toggleValue={trackImpact}
+          onToggle={toggleWithHaptic(setTrackImpact)}
+        />
+        <SettingsRow
+          icon="navigate-outline"
+          title="Local first"
+          subtitle="Prioritise local listings in search and feed"
+          toggleValue={localFirst}
+          onToggle={toggleWithHaptic(setLocalFirst)}
+          isLast
+        />
+      </SettingsSection>
+
+      {/* ── Methodology disclosure ── */}
+      <View style={styles.footer}>
+        <Pressable
+          style={styles.methodologyToggle}
+          onPress={showMethodology}
+          accessibilityRole="button"
+          accessibilityLabel="How we calculate impact"
+        >
+          <Text style={[styles.methodologyLink, { color: colors.textSecondary }]}>
+            How we calculate impact
+          </Text>
+          <Ionicons
+            name={methodologyOpen ? 'chevron-up-outline' : 'chevron-down-outline'}
+            size={16}
+            color={colors.textSecondary}
           />
-          <SettingsRow
-            icon="analytics-outline"
-            title="Impact tracking"
-            subtitle="Track your personal sustainability impact"
-            toggleValue={trackImpact}
-            onToggle={toggleWithHaptic(setTrackImpact)}
-          />
-          <SettingsRow
-            icon="navigate-outline"
-            title="Local first"
-            subtitle="Prioritise local listings in search and feed"
-            toggleValue={localFirst}
-            onToggle={toggleWithHaptic(setLocalFirst)}
-            isLast
-          />
-        </SettingsSection>
+        </Pressable>
+        {methodologyOpen && (
+          <Text style={[styles.methodologyText, { color: colors.textMuted }]}>
+            {METHODOLOGY_TEXT}
+          </Text>
+        )}
+      </View>
     </FlagshipScreen>
   );
 }
@@ -272,54 +323,56 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
       paddingBottom: Space.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     summaryTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    emptyStateWrap: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
+    heroPanel: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: Space.sm,
       borderRadius: Radius.lg,
-      paddingVertical: Space.md,
+      paddingVertical: Space.md + Space.xs,
       paddingHorizontal: Space.md,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
+    heroStat: {
+      fontSize: TypographyV2.bodyStrong.size + 4,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      flex: 1 },
+    heroSecondary: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs / 2,
+      flex: 1 },
     emptyStateText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-      flex: 1,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      flex: 1 },
     goalRow: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm + 2,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     goalRowLast: {
-      borderBottomWidth: 0,
-    },
+      borderBottomWidth: 0 },
     goalLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     goalHint: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       marginTop: Space.xs / 2,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     chipRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: Space.xs,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     chip: {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.xs + 2,
@@ -327,12 +380,27 @@ function createStyles(colors: ThemeColors) {
       borderWidth: StyleSheet.hairlineWidth,
       minHeight: Control.chromeCompact,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     chipText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
+    footer: {
+      paddingHorizontal: Space.md,
+      paddingTop: Space.md,
+      paddingBottom: Space.lg },
+    methodologyToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Space.sm },
+    methodologyLink: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
+    methodologyText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginTop: Space.xs } });
 }

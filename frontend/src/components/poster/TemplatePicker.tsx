@@ -4,8 +4,7 @@ import {
   StyleSheet,
   Text,
   ScrollView,
-  Dimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
@@ -15,20 +14,17 @@ import Reanimated, {
   withTiming,
   withDelay,
   interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 import { POSTER_TEMPLATES, PosterTemplate } from '../../data/posters';
-import { Typography, Radius, Type, Space, Stroke } from '../../theme/designTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { Radius, Space, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Motion } from '../../theme/motionTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { GradientRing } from './shared/GradientRing';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
-
-const { height: SCREEN_H } = Dimensions.get('window');
-const DRAWER_HEIGHT = SCREEN_H * 0.5;
 
 export type TemplateCategory = 'all' | 'drop' | 'auction' | 'coown' | 'sale' | 'general';
 
@@ -69,11 +65,11 @@ const TemplateCard = React.memo(function TemplateCard({
   reducedMotion,
   staggerDelay,
   onSelect,
-  onClose,
-}: TemplateCardProps) {
+  onClose }: TemplateCardProps) {
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
   const { colors } = useAppTheme();
+  const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Per-card entrance: stagger by index using Motion.stagger.normal (60ms).
   // Spring-based scale 0.8 → 1.0 entrance with opacity fade-in.
@@ -106,8 +102,7 @@ const TemplateCard = React.memo(function TemplateCard({
     );
     return {
       transform: [{ scale }],
-      opacity,
-    };
+      opacity };
   });
 
   // Selection scale lift — subtle spring pop when becoming active.
@@ -120,8 +115,7 @@ const TemplateCard = React.memo(function TemplateCard({
   const selectionStyle = useAnimatedStyle(() => {
     'worklet';
     return {
-      transform: [{ scale: selectionScale.value }],
-    };
+      transform: [{ scale: selectionScale.value }] };
   });
 
   const handleSelect = React.useCallback(() => {
@@ -154,10 +148,10 @@ const TemplateCard = React.memo(function TemplateCard({
                 isActive && styles.thumbActive,
               ]}
             >
-              <Ionicons name={template.icon} size={28} color="#fff" />
+              <Ionicons name={template.icon} size={28} color={colors.scrimTextPrimary} />
               {isActive && (
                 <View style={[styles.checkBadge, { backgroundColor: colors.success }]}>
-                  <Ionicons name="checkmark" size={12} color="#fff" />
+                  <Ionicons name="checkmark" size={12} color={colors.scrimTextPrimary} />
                 </View>
               )}
             </View>
@@ -178,15 +172,18 @@ export default function TemplatePicker({
   visible,
   onClose,
   onSelect,
-  currentTemplateId,
-}: TemplatePickerProps) {
+  currentTemplateId }: TemplatePickerProps) {
   const [category, setCategory] = React.useState<TemplateCategory>('all');
   const reducedMotion = useReducedMotion();
   const { spring, stagger } = useMotionConfig();
   const haptic = useHaptic();
+  const { colors } = useAppTheme();
+  const { height: SCREEN_H } = useWindowDimensions();
+  const drawerHeight = SCREEN_H * 0.5;
+  const styles = React.useMemo(() => createStyles(colors, drawerHeight), [colors, drawerHeight]);
 
   // Drawer slide-up + backdrop fade (Reanimated 4)
-  const translateY = useSharedValue(DRAWER_HEIGHT);
+  const translateY = useSharedValue(drawerHeight);
   const backdropOpacity = useSharedValue(0);
   const contentOpacity = useSharedValue(0);
 
@@ -211,28 +208,25 @@ export default function TemplatePicker({
       }
     } else {
       if (reducedMotion) {
-        translateY.value = DRAWER_HEIGHT;
+        translateY.value = drawerHeight;
         backdropOpacity.value = 0;
         contentOpacity.value = 0;
       } else {
-        translateY.value = withSpring(DRAWER_HEIGHT, spring.entrance);
+        translateY.value = withSpring(drawerHeight, spring.entrance);
         backdropOpacity.value = withTiming(0, { duration: Motion.duration.fast });
         contentOpacity.value = withTiming(0, { duration: Motion.duration.fast });
       }
     }
-  }, [visible, reducedMotion, spring.entrance, translateY, backdropOpacity, contentOpacity]);
+  }, [visible, reducedMotion, spring.entrance, translateY, backdropOpacity, contentOpacity, drawerHeight]);
 
   const drawerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
+    opacity: backdropOpacity.value }));
 
   const contentStyle = useAnimatedStyle(() => ({
-    opacity: contentOpacity.value,
-  }));
+    opacity: contentOpacity.value }));
 
   const handleClose = React.useCallback(() => {
     haptic.light();
@@ -349,111 +343,93 @@ export default function TemplatePicker({
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  drawer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: DRAWER_HEIGHT,
-    backgroundColor: 'rgba(18,18,22,0.98)',
-    borderTopLeftRadius: Radius.xxl,
-    borderTopRightRadius: Radius.xxl,
-    overflow: 'hidden',
-    paddingBottom: Space.lg,
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 6,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: Radius.sm,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  title: {
-    fontSize: 18,
-    fontFamily: Typography.family.bold,
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: Space.md,
-  },
-  tabRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: Space.md,
-    paddingBottom: 10,
-  },
-  tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: Radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  tabActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  tabText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: 'rgba(255,255,255,0.6)',
-  },
-  tabTextActive: {
-    color: '#fff',
-  },
-  gridWrapper: {
-    flex: 1,
-  },
-  gridContent: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.lg,
-  },
-  gridItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: Space.xs,
-    paddingVertical: Space.xs,
-  },
-  card: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  thumb: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: Radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.15)',
-    overflow: 'hidden',
-  },
-  thumbActive: {
-    borderColor: 'transparent',
-  },
-  checkBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 18,
-    height: 18,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
-  },
-  cardLabelActive: {
-    color: '#fff',
-  },
-});
+function createStyles(colors: ThemeColors, drawerHeight: number = 0) {
+  return StyleSheet.create({
+    backdrop: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: colors.overlay },
+    drawer: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: drawerHeight,
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: Radius.xxl,
+      borderTopRightRadius: Radius.xxl,
+      overflow: 'hidden',
+      paddingBottom: Space.lg },
+    handleRow: {
+      alignItems: 'center',
+      paddingTop: 10,
+      paddingBottom: 6 },
+    handle: {
+      width: 36,
+      height: 4,
+      borderRadius: Radius.sm,
+      backgroundColor: colors.glassBorder },
+    title: {
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      color: colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: Space.md },
+    tabRow: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: Space.md,
+      paddingBottom: 10 },
+    tab: {
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: Radius.lg,
+      backgroundColor: colors.glassBorder },
+    tabActive: {
+      backgroundColor: colors.glassBorder },
+    tabText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
+    tabTextActive: {
+      color: colors.textPrimary },
+    gridWrapper: {
+      flex: 1 },
+    gridContent: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.lg },
+    gridItem: {
+      flex: 1,
+      alignItems: 'center',
+      paddingHorizontal: Space.xs,
+      paddingVertical: Space.xs },
+    card: {
+      alignItems: 'center',
+      gap: 6 },
+    thumb: {
+      width: THUMB_SIZE,
+      height: THUMB_SIZE,
+      borderRadius: Radius.xl,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: Stroke.standard,
+      borderColor: colors.glassBorder,
+      overflow: 'hidden' },
+    thumbActive: {
+      borderColor: 'transparent' },
+    checkBadge: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      width: 18,
+      height: 18,
+      borderRadius: Radius.lg,
+      alignItems: 'center',
+      justifyContent: 'center' },
+    cardLabel: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+      textAlign: 'center' },
+    cardLabelActive: {
+      color: colors.textPrimary } });
+}

@@ -1,17 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, AspectRatio, PressScale } from '../../theme/designTokens';
+import { Typography, Space, Radius, AspectRatio, PressScale } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const CARD_W = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
-// 3:4 portrait cover — media-first, matches the closet mosaic geometry
-const COVER_H = CARD_W / AspectRatio.portrait;
 const COLLAGE_GAP = 2;
 
 interface ClosetBoardCardProps {
@@ -53,10 +50,13 @@ export function ClosetBoardCard({
   updatedAt,
   isPrivate,
   onPress,
-  index = 0,
-}: ClosetBoardCardProps) {
+  index = 0 }: ClosetBoardCardProps) {
   const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const cardW = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
+  // 3:4 portrait cover — media-first, matches the closet mosaic geometry
+  const coverH = cardW / AspectRatio.portrait;
+  const styles = React.useMemo(() => createStyles(colors, cardW, coverH), [colors, cardW, coverH]);
   const hasCovers = covers.length > 0;
 
   return (
@@ -76,7 +76,7 @@ export function ClosetBoardCard({
                 uri={covers[0]}
                 style={styles.coverImg}
                 contentFit="cover"
-                downscaleWidth={CARD_W}
+                downscaleWidth={cardW}
                 emptyLabel={title}
                 emptyIcon="image-outline"
               />
@@ -97,7 +97,7 @@ export function ClosetBoardCard({
                         uri={uri}
                         style={styles.coverImg}
                         contentFit="cover"
-                        downscaleWidth={CARD_W / 2}
+                        downscaleWidth={cardW / 2}
                         emptyIcon="image-outline"
                       />
                     </View>
@@ -145,59 +145,50 @@ export function ClosetBoardCard({
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, cardW: number, coverH: number) {
   return StyleSheet.create({
   card: {
-    width: CARD_W,
-    height: COVER_H + 8,
+    width: cardW,
+    height: coverH + 8,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
-    position: 'relative',
-  },
+    position: 'relative' },
   collage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   gridCollage: {
     width: '100%',
     height: '100%',
     flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
   collageCell: {
     width: '50%',
     height: '50%',
     overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   collageCellEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   coverImg: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   emptyCollage: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   textOverlay: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     padding: Space.sm + 2,
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   privacyBadge: {
     width: 18,
     height: 18,
@@ -205,43 +196,36 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   title: {
     flexShrink: 1,
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyStrong.size,
+    fontSize: TypographyV2.bodyStrong.size,
     color: colors.scrimTextPrimary,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
+    textShadowRadius: 3 },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    marginTop: 2,
-  },
+    marginTop: 2 },
   meta: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.scrimTextSecondary,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
+    textShadowRadius: 2 },
   metaDot: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.meta.size,
-    color: colors.scrimTextTertiary,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.scrimTextTertiary },
   metaUpdated: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.scrimTextSecondary,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  });
+    textShadowRadius: 2 } });
 }

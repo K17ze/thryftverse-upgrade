@@ -2,22 +2,20 @@ import React, { useMemo } from 'react';
 import { Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import {
   NotificationRowBase,
   NotificationThumbnail,
   NotificationStatusIcon,
-  NotificationActionButton,
-} from './NotificationRowBase';
+  NotificationActionButton } from './NotificationRowBase';
 import {
   Space,
-  Type,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   readPayloadNumber,
   readPayloadString,
-  type NotificationEventV2,
-} from '../../services/notificationsApi';
+  type NotificationEventV2 } from '../../services/notificationsApi';
 
 // ---------------------------------------------------------------------------
 // AuctionNotificationRow — auction lifecycle events (action-required)
@@ -39,7 +37,6 @@ export interface AuctionNotificationRowProps {
 interface AuctionVisual {
   icon: keyof typeof Ionicons.glyphMap;
   accentKey: 'danger' | 'success' | 'warning';
-  accentSubtleKey: 'dangerSubtle' | 'successSubtle' | 'warningSubtle';
   urgencyLabel: string;
   actionLabel: string;
 }
@@ -47,13 +44,13 @@ interface AuctionVisual {
 function resolveAuctionVisual(eventType: NotificationEventV2['eventType']): AuctionVisual {
   switch (eventType) {
     case 'auction_outbid':
-      return { icon: 'trending-up-outline', accentKey: 'danger', accentSubtleKey: 'dangerSubtle', urgencyLabel: 'Outbid', actionLabel: 'Bid again' };
+      return { icon: 'trending-up-outline', accentKey: 'danger', urgencyLabel: 'Outbid', actionLabel: 'Bid again' };
     case 'auction_won':
-      return { icon: 'trophy-outline', accentKey: 'success', accentSubtleKey: 'successSubtle', urgencyLabel: 'Auction won', actionLabel: 'Complete purchase' };
+      return { icon: 'trophy-outline', accentKey: 'success', urgencyLabel: 'Auction won', actionLabel: 'Complete purchase' };
     case 'auction_ending_soon':
-      return { icon: 'time-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', urgencyLabel: 'Ending soon', actionLabel: 'Place bid' };
+      return { icon: 'time-outline', accentKey: 'warning', urgencyLabel: 'Ending soon', actionLabel: 'Place bid' };
     default:
-      return { icon: 'flag-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', urgencyLabel: 'Auction update', actionLabel: 'View auction' };
+      return { icon: 'flag-outline', accentKey: 'warning', urgencyLabel: 'Auction update', actionLabel: 'View auction' };
   }
 }
 
@@ -63,14 +60,13 @@ export function AuctionNotificationRow({
   aggregatedCount,
   inAttentionSection = false,
   onPress,
-  onAction,
-}: AuctionNotificationRowProps) {
+  onAction }: AuctionNotificationRowProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const visual = useMemo(() => resolveAuctionVisual(event.eventType), [event.eventType]);
   const accentColor = colors[visual.accentKey] ?? colors.brand;
-  const accentSubtle = colors[visual.accentSubtleKey];
   const isUnread = !event.readAt;
 
   const objectLabel = event.objectRef?.label ?? 'this auction';
@@ -79,36 +75,49 @@ export function AuctionNotificationRow({
   // Structured bid data from the payload — never from prose text.
   const currentBid = readPayloadNumber(event.payload, 'currentBidGbp') ?? readPayloadNumber(event.payload, 'currentBid');
   const minimumNextBid = readPayloadNumber(event.payload, 'minimumNextBidGbp') ?? readPayloadNumber(event.payload, 'minimumNextBid');
-  const currency = readPayloadString(event.payload, 'currency') ?? '£';
+  const currency = readPayloadString(event.payload, 'currency') ?? currencySymbol;
 
-  const bidText = currentBid != null
-    ? `Current bid ${currency}${currentBid.toFixed(2)}`
+  const bidAmount = currentBid != null
+    ? `${currency}${currentBid.toFixed(2)}`
     : minimumNextBid != null
-      ? `Next bid ${currency}${minimumNextBid.toFixed(2)}`
+      ? `${currency}${minimumNextBid.toFixed(2)}`
       : null;
+  const bidPrefix = currentBid != null ? 'Current bid' : minimumNextBid != null ? 'Next bid' : null;
 
-  const description = bidText ? `${visual.urgencyLabel} · ${objectLabel} · ${bidText}` : `${visual.urgencyLabel} · ${objectLabel}`;
+  // Deduplicate title vs body: Avoid repeating "Auction won" in both lines.
+  const titleText = event.title || visual.urgencyLabel;
+  const rawBody = event.body?.trim();
+  const description = rawBody && rawBody !== titleText
+    ? rawBody
+    : objectLabel && objectLabel !== 'this auction'
+      ? objectLabel
+      : event.objectRef?.label ?? 'Auction update';
 
-  const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${event.requiresAction ? 'Action required. ' : ''}${visual.urgencyLabel} on ${objectLabel}${bidText ? `. ${bidText}` : ''}. ${time}. Button: ${visual.actionLabel}`;
+  const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${event.requiresAction ? 'Action required. ' : ''}${titleText} on ${objectLabel}${bidAmount ? `. ${bidPrefix} ${bidAmount}` : ''}. ${time}${event.requiresAction ? `. Button: ${visual.actionLabel}` : ''}`;
 
   const leading = (
     <NotificationStatusIcon
       icon={visual.icon}
       accentColor={accentColor}
-      accentSubtle={accentSubtle}
-      colors={colors}
-      size={44}
+      size={24}
     />
   );
 
-  const trailing = (
+  const trailing = event.requiresAction ? (
     <NotificationActionButton
       label={visual.actionLabel}
       onPress={onAction ?? onPress}
       colors={colors}
       variant="primary"
     />
-  );
+  ) : objectImage ? (
+    <NotificationThumbnail
+      uri={objectImage}
+      colors={colors}
+      fallbackIcon="trophy-outline"
+      size={44}
+    />
+  ) : undefined;
 
   return (
     <NotificationRowBase
@@ -122,11 +131,16 @@ export function AuctionNotificationRow({
       accessibilityLabel={accessibilityLabel}
     >
       <Text style={[styles.title, isUnread && styles.titleUnread]} numberOfLines={1}>
-        {event.title || visual.urgencyLabel}
+        {titleText}
       </Text>
       <Text style={styles.body} numberOfLines={2}>
         {description}
       </Text>
+      {bidAmount ? (
+        <Text style={styles.bidAmount} numberOfLines={1}>
+          {bidPrefix} {bidAmount}
+        </Text>
+      ) : null}
     </NotificationRowBase>
   );
 }
@@ -134,21 +148,24 @@ export function AuctionNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyLarge.lineHeight,
-      paddingRight: Space.xxl + Space.sm,
-    },
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      flexShrink: 1 },
     titleUnread: {
       color: colors.textPrimary,
-      fontFamily: FontFamily.semibold,
-    },
+      fontFamily: FontFamily.semibold },
     body: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      lineHeight: TypographyV2.body.lineHeight },
+    bidAmount: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontVariant: ['tabular-nums'],
+      marginTop: Space.xs / 2 } });
 }

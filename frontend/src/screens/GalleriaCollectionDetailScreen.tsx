@@ -3,18 +3,16 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   RefreshControl,
   ImageStyle,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
+  Extrapolation } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -23,7 +21,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
@@ -37,23 +36,17 @@ import {
   fetchCollectionDetail,
   type GalleriaCollection,
   type GalleriaFeaturedAsset,
-  type GalleriaCollectionDetail,
-} from '../services/galleriaApi';
+  type GalleriaCollectionDetail } from '../services/galleriaApi';
 import { openProductDetail } from '../platform/product/openProductDetail';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GalleriaCollectionDetail'>;
 
 // ── Layout constants ──
-const { width: SCREEN_W } = Dimensions.get('window');
-const HERO_HEIGHT = Math.round(SCREEN_W * 0.62);
 const MASONRY_GAP = Space.sm;
 // Two columns balance visual richness with per-tile legibility on phone widths;
 // more columns would shrink art below a useful size, one column wastes horizontal space.
 const MASONRY_COLUMN_COUNT = 2;
 const MASONRY_PADDING = Space.md;
-const MASONRY_COL_WIDTH =
-  (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
-  MASONRY_COLUMN_COUNT;
 
 // Skeleton height variation communicates loading without inventing media geometry.
 // The ratios mirror common asset aspect ratios so the loading-to-populated transition is minimal.
@@ -62,12 +55,12 @@ const SKELETON_ASPECT_RATIOS = [1.25, 1.0, 1.32, 0.92] as const;
 // ---------------------------------------------------------------------------
 // Masonry layout — true Pinterest-style column assignment by shortest height
 // ---------------------------------------------------------------------------
-function buildMasonryColumns(items: GalleriaFeaturedAsset[]): GalleriaFeaturedAsset[][] {
+function buildMasonryColumns(items: GalleriaFeaturedAsset[], colWidth: number): GalleriaFeaturedAsset[][] {
   const cols: GalleriaFeaturedAsset[][] = Array.from({ length: MASONRY_COLUMN_COUNT }, () => []);
   const heights = Array.from({ length: MASONRY_COLUMN_COUNT }, () => 0);
 
   items.forEach((item) => {
-    const imgHeight = Math.round(MASONRY_COL_WIDTH * item.aspectRatio);
+    const imgHeight = Math.round(colWidth * item.aspectRatio);
     const metaHeight = 72;
     const itemHeight = imgHeight + metaHeight + MASONRY_GAP;
 
@@ -92,14 +85,17 @@ function buildMasonryColumns(items: GalleriaFeaturedAsset[]): GalleriaFeaturedAs
 const CollectionItemCard = React.memo(function CollectionItemCard({
   asset,
   onPress,
-  sharedTag,
-}: {
+  sharedTag }: {
   asset: GalleriaFeaturedAsset;
   onPress: () => void;
   sharedTag?: string;
 }) {
   const styles = useStyles();
   const { formatFromFiat } = useFormattedPrice();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   const imageHeight = Math.round(MASONRY_COL_WIDTH * asset.aspectRatio);
 
   return (
@@ -137,11 +133,14 @@ const CollectionItemCard = React.memo(function CollectionItemCard({
 // ---------------------------------------------------------------------------
 function MasonrySkeleton() {
   const styles = useStyles();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   const skeletonItems = Array.from({ length: 6 }).map((_, i) => ({
     id: `skel-${i}`,
-    aspectRatio: SKELETON_ASPECT_RATIOS[i % SKELETON_ASPECT_RATIOS.length],
-  }));
-  const columns = buildMasonryColumns(skeletonItems as GalleriaFeaturedAsset[]);
+    aspectRatio: SKELETON_ASPECT_RATIOS[i % SKELETON_ASPECT_RATIOS.length] }));
+  const columns = buildMasonryColumns(skeletonItems as GalleriaFeaturedAsset[], MASONRY_COL_WIDTH);
 
   return (
     <View style={styles.masonryGrid}>
@@ -176,6 +175,11 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
   const { formatFromFiat } = useFormattedPrice();
   const { isOffline } = useConnectivity();
   const insets = useSafeAreaInsets();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const HERO_HEIGHT = Math.round(SCREEN_W * 0.62);
+  const MASONRY_COL_WIDTH =
+    (SCREEN_W - MASONRY_PADDING * 2 - MASONRY_GAP * (MASONRY_COLUMN_COUNT - 1)) /
+    MASONRY_COLUMN_COUNT;
   const styles = useStyles();
 
   const collectionId = route.params?.collectionId;
@@ -234,8 +238,7 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
         referenceKind: 'co_own',
         canonicalId: asset.id,
         sourceSurface: 'GalleriaCollectionDetail',
-        sourceItemId: asset.id,
-      });
+        sourceItemId: asset.id });
     },
     [haptic, navigation],
   );
@@ -244,8 +247,7 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollY.value = event.contentOffset.y;
-    },
-  });
+    } });
 
   // Hero parallax — image translates slower than scroll for depth
   const heroImageStyle = useAnimatedStyle(() => {
@@ -262,8 +264,7 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
       Extrapolation.CLAMP,
     );
     return {
-      transform: [{ translateY }, { scale }],
-    };
+      transform: [{ translateY }, { scale }] };
   });
 
   // Header background fade-in as hero scrolls under
@@ -273,8 +274,7 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
       [0, HERO_HEIGHT - 80],
       [0, 1],
       Extrapolation.CLAMP,
-    ),
-  }));
+    ) }));
 
   // Hero content fade-out as it scrolls away
   const heroContentStyle = useAnimatedStyle(() => ({
@@ -283,12 +283,11 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
       [0, HERO_HEIGHT * 0.5],
       [1, 0],
       Extrapolation.CLAMP,
-    ),
-  }));
+    ) }));
 
   const collection = detail?.collection ?? null;
   const items = detail?.items ?? [];
-  const masonryColumns = useMemo(() => buildMasonryColumns(items), [items]);
+  const masonryColumns = useMemo(() => buildMasonryColumns(items, MASONRY_COL_WIDTH), [items, MASONRY_COL_WIDTH]);
   const sharedTag = collection ? `galleria-collection-${collection.id}` : undefined;
 
   // ── Error state ──
@@ -457,7 +456,7 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
           ) : items.length === 0 ? (
             <EmptyState
               density="compact"
-              icon="cube-outline"
+              icon="albums-outline"
               title="No pieces in this collection yet"
               subtitle="The curator hasn't added any items to this collection."
               ctaLabel="Refresh"
@@ -492,23 +491,22 @@ export default function GalleriaCollectionDetailScreen({ route }: Props) {
 // ---------------------------------------------------------------------------
 function useStyles() {
   const { colors } = useAppTheme();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const HERO_HEIGHT = Math.round(SCREEN_W * 0.62);
   return React.useMemo(
     () =>
       StyleSheet.create({
         container: {
           flex: 1,
-          backgroundColor: colors.background,
-        },
+          backgroundColor: colors.background },
         stateContainer: {
           flex: 1,
           backgroundColor: colors.background,
           justifyContent: 'center',
           alignItems: 'center',
-          paddingHorizontal: Space.lg,
-        },
+          paddingHorizontal: Space.lg },
         listContent: {
-          paddingBottom: Space.xxl,
-        },
+          paddingBottom: Space.xxl },
         // ── Floating header ──
         floatingHeader: {
           position: 'absolute',
@@ -518,178 +516,149 @@ function useStyles() {
           zIndex: 10,
           backgroundColor: colors.background,
           borderBottomWidth: Stroke.hairline,
-          borderBottomColor: colors.border,
-        },
+          borderBottomColor: colors.border },
         headerInner: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: Space.sm,
           paddingBottom: Space.sm,
-          minHeight: Space.xxl + Space.xs,
-        },
+          minHeight: Space.xxl + Space.xs },
         floatingTitle: {
           flex: 1,
-          fontSize: Type.subtitle.size,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.sectionTitle.size,
+          fontFamily: TypographyV2.sectionTitle.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.subtitle.letterSpacing,
+          letterSpacing: TypographyV2.sectionTitle.letterSpacing,
           textAlign: 'center',
-          marginHorizontal: Space.xs,
-        },
+          marginHorizontal: Space.xs },
         // ── Back buttons ──
         absoluteBack: {
           position: 'absolute',
           top: 0,
           left: 0,
           zIndex: 20,
-          paddingTop: 0,
-        },
+          paddingTop: 0 },
         backBtnAbsolute: {
           position: 'absolute',
           top: 0,
           left: 0,
-          zIndex: 20,
-        },
+          zIndex: 20 },
         backBtn: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         backBtnDark: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         backBtnOverlay: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
           justifyContent: 'center',
-          marginTop: 0,
-        },
+          marginTop: 0 },
         // ── Parallax hero ──
         heroWrap: {
           width: SCREEN_W,
           height: HERO_HEIGHT,
           overflow: 'hidden',
-          backgroundColor: colors.surfaceAlt,
-        },
+          backgroundColor: colors.surfaceAlt },
         heroImage: {
           width: SCREEN_W,
-          height: HERO_HEIGHT,
-        } as ImageStyle,
+          height: HERO_HEIGHT } as ImageStyle,
         heroGradient: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          height: '70%',
-        },
+          height: '70%' },
         heroContent: {
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
           padding: Space.md,
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         heroTheme: {
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textInverse,
           opacity: 0.85,
-          letterSpacing: Type.label.letterSpacing,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing },
         heroTitle: {
-          fontSize: Type.title.size,
-          lineHeight: Type.title.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.screenTitle.size,
+          lineHeight: TypographyV2.screenTitle.lineHeight,
+          fontFamily: TypographyV2.screenTitle.fontFamily,
           color: colors.textInverse,
-          letterSpacing: Type.title.letterSpacing,
-        },
+          letterSpacing: TypographyV2.screenTitle.letterSpacing },
         heroSubtitle: {
-          fontSize: Type.body.size,
-          lineHeight: Type.body.lineHeight,
-          fontFamily: Typography.family.regular,
+          fontSize: TypographyV2.body.size,
+          lineHeight: TypographyV2.body.lineHeight,
+          fontFamily: TypographyV2.body.fontFamily,
           color: colors.textInverse,
-          opacity: 0.85,
-        },
+          opacity: 0.85 },
         heroCuratorRow: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
-          marginTop: Space.xs,
-        },
+          marginTop: Space.xs },
         heroCuratorAvatar: {
           width: Control.icon,
           height: Control.icon,
-          borderRadius: Radius.full,
-        } as ImageStyle,
+          borderRadius: Radius.full } as ImageStyle,
         heroCuratorName: {
           flex: 1,
-          fontSize: Type.caption.size,
-          fontFamily: Typography.family.medium,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textInverse,
-          opacity: 0.9,
-        },
+          opacity: 0.9 },
         // ── Items section ──
         itemsSection: {
-          paddingTop: Space.lg,
-        },
+          paddingTop: Space.lg },
         itemsSectionEyebrow: {
           paddingHorizontal: Space.md,
           paddingBottom: Space.sm,
-          fontSize: Type.meta.size,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
-          letterSpacing: Type.label.letterSpacing,
-        },
+          letterSpacing: TypographyV2.label.letterSpacing },
         // ── Masonry ──
         masonryGrid: {
           flexDirection: 'row',
           justifyContent: 'center',
           paddingHorizontal: MASONRY_PADDING,
-          gap: MASONRY_GAP,
-        },
+          gap: MASONRY_GAP },
         masonryColumn: {
           flexDirection: 'column',
-          gap: MASONRY_GAP,
-        },
+          gap: MASONRY_GAP },
         assetCard: {
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         assetImageWrap: {
           width: '100%',
           borderRadius: Radius.lg,
           overflow: 'hidden',
-          backgroundColor: colors.surfaceAlt,
-        },
+          backgroundColor: colors.surfaceAlt },
         assetImage: {
           width: '100%',
-          height: '100%',
-        } as ImageStyle,
+          height: '100%' } as ImageStyle,
         assetMeta: {
-          gap: Space.xs / 2,
-        },
+          gap: Space.xs / 2 },
         assetTitle: {
-          fontSize: Type.bodyStrong.size,
-          lineHeight: Type.bodyStrong.lineHeight,
-          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.bodyStrong.size,
+          lineHeight: TypographyV2.bodyStrong.lineHeight,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: Type.body.letterSpacing,
-        },
+          letterSpacing: TypographyV2.body.letterSpacing },
         assetValuation: {
-          fontSize: Type.body.size,
-          lineHeight: Type.body.lineHeight,
-          fontFamily: Typography.family.bold,
+          fontSize: TypographyV2.body.size,
+          lineHeight: TypographyV2.body.lineHeight,
+          fontFamily: TypographyV2.body.fontFamily,
           color: colors.textPrimary,
           fontVariant: ['tabular-nums'],
-          letterSpacing: Type.body.letterSpacing,
-        },
-      }),
-    [colors],
+          letterSpacing: TypographyV2.body.letterSpacing } }),
+    [colors, SCREEN_W, HERO_HEIGHT],
   );
 }

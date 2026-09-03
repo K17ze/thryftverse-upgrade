@@ -1,22 +1,24 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, RefreshControl, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, RefreshControl, ScrollView } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type , Typography, Stroke  } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { AppButton } from '../components/ui/AppButton';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize, type SemanticIconName } from '../theme/iconTokens';
 import {
   fetchActiveSessions,
   revokeSession,
   revokeOtherSessions,
-  type SessionInfo,
-} from '../services/accountApi';
+  type SessionInfo } from '../services/accountApi';
 import { haptics } from '../utils/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ActiveSessions'>;
@@ -36,11 +38,10 @@ function formatLastActive(iso: string | null): string {
   return date.toLocaleDateString();
 }
 
-function platformIcon(platform: string): React.ComponentProps<typeof Ionicons>['name'] {
-  if (platform === 'iOS') return 'phone-portrait-outline';
-  if (platform === 'Android') return 'phone-portrait-outline';
-  if (platform === 'Web') return 'desktop-outline';
-  return 'hardware-chip-outline';
+function platformIcon(platform: string): SemanticIconName {
+  if (platform === 'iOS' || platform === 'Android') return 'phone';
+  if (platform === 'Web') return 'desktop';
+  return 'desktop';
 }
 
 export default function ActiveSessionsScreen({ navigation }: Props) {
@@ -54,6 +55,14 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokingOthers, setRevokingOthers] = useState(false);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const loadSessions = useCallback(async () => {
     try {
@@ -79,30 +88,25 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
   }, [loadSessions]);
 
   const handleEndSession = useCallback((session: SessionInfo) => {
-    Alert.alert(
-      'End this session?',
-      `This will sign out "${session.deviceName}" immediately.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'End session',
-          style: 'destructive',
-          onPress: async () => {
-            setRevokingId(session.id);
-            try {
-              await revokeSession(session.id);
-              haptics.success();
-              show('Session ended', 'success');
-              setSessions((prev) => prev.filter((s) => s.id !== session.id));
-            } catch (err) {
-              show(err instanceof Error ? err.message : 'Failed to end session', 'error');
-            } finally {
-              setRevokingId(null);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'End this session?',
+      message: `This will sign out "${session.deviceName}" immediately.`,
+      confirmLabel: 'End session',
+      variant: 'danger',
+      onConfirm: async () => {
+        setRevokingId(session.id);
+        try {
+          await revokeSession(session.id);
+          haptics.success();
+          show('Session ended', 'success');
+          setSessions((prev) => prev.filter((s) => s.id !== session.id));
+        } catch (err) {
+          show(err instanceof Error ? err.message : 'Failed to end session', 'error');
+        } finally {
+          setRevokingId(null);
+        }
+      } });
   }, [show]);
 
   const handleEndAllOthers = useCallback(() => {
@@ -111,30 +115,25 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
       show('No other sessions to end', 'info');
       return;
     }
-    Alert.alert(
-      'End all other sessions?',
-      `This will sign you out of ${otherCount} other device${otherCount > 1 ? 's' : ''}.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'End all others',
-          style: 'destructive',
-          onPress: async () => {
-            setRevokingOthers(true);
-            try {
-              const count = await revokeOtherSessions();
-              haptics.success();
-              show(`${count} session${count !== 1 ? 's' : ''} ended`, 'success');
-              await loadSessions();
-            } catch (err) {
-              show(err instanceof Error ? err.message : 'Failed to end sessions', 'error');
-            } finally {
-              setRevokingOthers(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'End all other sessions?',
+      message: `This will sign you out of ${otherCount} other device${otherCount > 1 ? 's' : ''}.`,
+      confirmLabel: 'End all others',
+      variant: 'danger',
+      onConfirm: async () => {
+        setRevokingOthers(true);
+        try {
+          const count = await revokeOtherSessions();
+          haptics.success();
+          show(`${count} session${count !== 1 ? 's' : ''} ended`, 'success');
+          await loadSessions();
+        } catch (err) {
+          show(err instanceof Error ? err.message : 'Failed to end sessions', 'error');
+        } finally {
+          setRevokingOthers(false);
+        }
+      } });
   }, [sessions, show, loadSessions]);
 
   const currentSessions = sessions.filter((s) => s.isCurrent);
@@ -156,7 +155,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         {/* Security overview */}
           <View style={[styles.trustSurface, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.trustHeader}>
-              <Ionicons name="checkmark-done-outline" size={20} color={colors.success} />
+              <AppIcon name="lock" focused size={IconSize.md} color="success" opticalCenter accessible={false} />
               <Text style={styles.trustTitle}>
                 {loading ? 'Checking your sessions…' : otherSessions.length === 0 ? 'Your account is secure' : `${otherSessions.length} other active session${otherSessions.length > 1 ? 's' : ''}`}
               </Text>
@@ -172,7 +171,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
 
         {error && (
             <View style={[styles.errorBanner, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
-              <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+              <AppIcon name="warning" size={IconSize.sm} color="danger" opticalCenter accessible={false} />
               <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
             </View>
         )}
@@ -187,7 +186,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
                   currentSessions.map((session) => (
                     <View key={session.id} style={styles.sessionRow}>
                       <View style={styles.deviceIcon}>
-                        <Ionicons name={platformIcon(session.platform)} size={22} color={colors.brand} />
+                        <AppIcon name={platformIcon(session.platform)} size={IconSize.lg} color="brand" opticalCenter accessible={false} />
                       </View>
                       <View style={styles.sessionText}>
                         <Text style={styles.sessionName}>{session.deviceName}</Text>
@@ -200,7 +199,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
                   ))
                 ) : (
                   <View style={styles.emptyGroup}>
-                    <Ionicons name="help-circle-outline" size={32} color={colors.textMuted} />
+                    <AppIcon name="help" size={IconSize.hero} color="textMuted" opticalCenter accessible={false} />
                     <Text style={styles.emptyTitle}>Could not identify this device</Text>
                     <Text style={styles.emptyBody}>
                       Pull to refresh to try again.
@@ -213,7 +212,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
               <SettingsSection title="Other devices" noCard>
                 {otherSessions.length === 0 ? (
                   <View style={styles.emptyGroup}>
-                    <Ionicons name="desktop-outline" size={32} color={colors.textMuted} />
+                    <AppIcon name="desktop" size={IconSize.hero} color="textMuted" opticalCenter accessible={false} />
                     <Text style={styles.emptyTitle}>No other active sessions</Text>
                     <Text style={styles.emptyBody}>
                       When you sign in on another device, it will appear here so you can review it.
@@ -229,7 +228,7 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
                       ]}
                     >
                       <View style={styles.deviceIcon}>
-                        <Ionicons name={platformIcon(session.platform)} size={22} color={colors.textSecondary} />
+                        <AppIcon name={platformIcon(session.platform)} size={IconSize.lg} color="textSecondary" opticalCenter accessible={false} />
                       </View>
                       <View style={styles.sessionText}>
                         <Text style={styles.sessionName}>{session.deviceName}</Text>
@@ -264,6 +263,16 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
           </>
         )}
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }
@@ -271,100 +280,84 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   scrollContent: {
-    paddingBottom: Space.xxl,
-  },
+    paddingBottom: Space.xxl },
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd,
     padding: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-  },
+    borderBottomColor: colors.borderSubtle },
   sessionRowLast: {
-    borderBottomWidth: 0,
-  },
+    borderBottomWidth: 0 },
   deviceIcon: {
     width: Space.xxl,
     height: Space.xxl,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   sessionText: {
-    flex: 1,
-  },
+    flex: 1 },
   sessionName: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   sessionMeta: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     marginTop: Space.xs / 2,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   currentBadge: {
     backgroundColor: colors.successSubtle,
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   currentBadgeText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.success,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   emptyGroup: {
     alignItems: 'center',
     paddingVertical: Space.xl,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   emptyTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   emptyBody: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: Type.caption.lineHeight,
-    paddingHorizontal: Space.md,
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    paddingHorizontal: Space.md },
   trustSurface: {
     borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.lg,
     marginHorizontal: Space.md,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   trustHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   trustTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-    flex: 1,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing,
+    flex: 1 },
   trustBody: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -373,16 +366,12 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     padding: Space.md,
     marginHorizontal: Space.md,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   errorText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    flex: 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    flex: 1 },
   endAllContainer: {
     paddingHorizontal: Space.md,
-    marginTop: Space.md,
-  },
-});
+    marginTop: Space.md } });
 }

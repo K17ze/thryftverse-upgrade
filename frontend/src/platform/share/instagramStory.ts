@@ -12,9 +12,9 @@
  * Design principles:
  *   - `react-native-share` is `require()`d lazily — a missing or unlinked
  *     native module never crashes the app.
- *   - When Instagram is not installed, the error is caught and a
- *     user-friendly message is shown via `Alert.alert`. The caller's
- *     flow is never broken.
+ *   - When Instagram is not installed, an `InstagramShareError` with a
+ *     user-friendly message is thrown. The caller catches it and surfaces
+ *     a toast/sheet — this module never renders UI itself.
  *   - User cancellation resolves silently (no error thrown).
  *   - No `any` types — the library's own types are imported type-only.
  *
@@ -25,7 +25,7 @@
  * share that drives taps and a share that gets swiped past.
  */
 
-import { Alert, Linking, Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 // Type-only imports — erased at runtime, so a missing native module does
 // not break the bundle. Only the public union type `ShareSingleOptions` is
@@ -175,28 +175,43 @@ async function isInstagramInstalled(): Promise<boolean> {
 // ──────────────────────────────────────────────────────────────────────────
 
 /**
- * Shows a user-friendly alert when Instagram is not installed.
+ * Error thrown by the Instagram Story share flow when the share cannot
+ * proceed for a user-facing reason (Instagram not installed, native module
+ * unavailable, Instagram refused the asset, image download failed, etc.).
+ *
+ * `userMessage` is a pre-written, user-friendly string the caller can show
+ * directly in a toast or sheet — the utility no longer renders any UI
+ * itself (it has no access to the toast/sheet surface). User cancellation
+ * is never thrown; it resolves silently.
+ */
+export class InstagramShareError extends Error {
+  readonly userMessage: string;
+  constructor(userMessage: string) {
+    super(userMessage);
+    this.name = 'InstagramShareError';
+    this.userMessage = userMessage;
+  }
+}
+
+/** User-facing message for the Instagram-not-installed case. */
+const INSTAGRAM_NOT_INSTALLED_MESSAGE =
+  'Install Instagram from the App Store or Google Play to share to your Story.';
+
+/**
+ * Throws an {@link InstagramShareError} when Instagram is not installed.
  * Kept as a standalone function so callers can reuse the same message.
  */
-function showInstagramNotInstalledAlert(): void {
-  Alert.alert(
-    'Instagram not installed',
-    'Install Instagram from the App Store or Google Play to share to your Story.',
-    [{ text: 'OK' }],
-  );
+function throwInstagramNotInstalled(): never {
+  throw new InstagramShareError(INSTAGRAM_NOT_INSTALLED_MESSAGE);
 }
 
 /**
- * Shows a user-friendly alert when the share fails for a non-cancellation
- * reason (e.g. the native module is unavailable or Instagram refused the
- * asset).
+ * Throws an {@link InstagramShareError} when the share fails for a
+ * non-cancellation reason (e.g. the native module is unavailable or
+ * Instagram refused the asset).
  */
-function showShareFailedAlert(detail?: string): void {
-  Alert.alert(
-    'Could not share to Instagram',
-    detail ?? 'Please try again later.',
-    [{ text: 'OK' }],
-  );
+function throwShareFailed(detail?: string): never {
+  throw new InstagramShareError(detail ?? 'Please try again later.');
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -235,8 +250,8 @@ function isCancellation(message: string): boolean {
  *   - Recommended background size: 1080x1920 (9:16).
  *   - Recommended sticker size: 640x480.
  *
- * When Instagram is not installed, shows a user-friendly alert and resolves
- * without throwing. User cancellation resolves silently.
+ * When Instagram is not installed, throws an {@link InstagramShareError}
+ * with a user-friendly message. User cancellation resolves silently.
  *
  * @param options - Background image, optional sticker, and attribution link.
  */
@@ -247,17 +262,15 @@ export async function shareToInstagramStory(
 
   // ── Native module unavailable ──
   if (!rns) {
-    showShareFailedAlert(
+    throwShareFailed(
       'Sharing to Instagram Stories is not available on this device.',
     );
-    return;
   }
 
   // ── Instagram not installed ──
   const installed = await isInstagramInstalled();
   if (!installed) {
-    showInstagramNotInstalledAlert();
-    return;
+    throwInstagramNotInstalled();
   }
 
   // The Instagram Stories share uses a dedicated variant of
@@ -281,11 +294,11 @@ export async function shareToInstagramStory(
     await rns.shareSingle(storyOptions);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    // User cancellation is a normal outcome — do not surface an alert.
+    // User cancellation is a normal outcome — do not surface an error.
     if (isCancellation(message)) {
       return;
     }
-    showShareFailedAlert(message);
+    throwShareFailed(message);
   }
 }
 
@@ -474,8 +487,8 @@ async function composeSticker(
  *   3. Calls {@link shareToInstagramStory} with the background + sticker.
  *
  * If the image download or sticker composition fails, the share still
- * proceeds with whatever assets are available (background-only, or a
- * user-friendly alert if no background could be obtained).
+ * proceeds with whatever assets are available, or throws an
+ * {@link InstagramShareError} if no background could be obtained.
  *
  * @param product - Product image, name, formatted price, and deep link.
  */
@@ -484,10 +497,9 @@ export async function shareProductToInstagramStory(
 ): Promise<void> {
   const backgroundPath = await downloadImageToLocal(product.imageUri);
   if (!backgroundPath) {
-    showShareFailedAlert(
+    throwShareFailed(
       'Could not load the product image for sharing. Please try again.',
     );
-    return;
   }
 
   const stickerPath = await composeSticker(product.name, product.price);
@@ -521,10 +533,9 @@ export async function shareLookToInstagramStory(
 ): Promise<void> {
   const backgroundPath = await downloadImageToLocal(look.imageUri);
   if (!backgroundPath) {
-    showShareFailedAlert(
+    throwShareFailed(
       'Could not load the look image for sharing. Please try again.',
     );
-    return;
   }
 
   const stickerPath = await composeSticker(look.title, 'Thryftverse');

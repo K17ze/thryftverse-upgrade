@@ -6,13 +6,13 @@ import {
   Pressable,
   useWindowDimensions,
   ScrollView,
-  Image as RNImage,
-} from 'react-native';
+  Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type, FontFamily, Stroke } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Typography } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
@@ -32,8 +32,7 @@ import Reanimated, {
   interpolate,
   Extrapolation,
   Easing,
-  cancelAnimation,
-} from 'react-native-reanimated';
+  cancelAnimation } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 
 
@@ -54,14 +53,19 @@ interface CreatorCropSheetProps {
   imageUri: string;
   onClose: () => void;
   onCropComplete: (newUri: string, width: number, height: number) => void;
+  focalPoint?: { x: number; y: number };
+  onFocalPointChange?: (point: { x: number; y: number }) => void;
 }
+
+type CropMode = 'crop' | 'focal';
 
 export function CreatorCropSheet({
   visible,
   imageUri,
   onClose,
   onCropComplete,
-}: CreatorCropSheetProps) {
+  focalPoint,
+  onFocalPointChange }: CreatorCropSheetProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
@@ -75,6 +79,9 @@ export function CreatorCropSheet({
   const [cropRect, setCropRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [isProcessing, setIsProcessing] = useState(false);
   const [rotation, setRotation] = useState(0);
+  const [cropMode, setCropMode] = useState<CropMode>('crop');
+
+  const effectiveFocal = focalPoint ?? { x: 0.5, y: 0.5 };
 
   // ── Spring-driven shared values for crop frame ──────────────────
   // These animate the crop frame position/size with springs so that
@@ -121,8 +128,9 @@ export function CreatorCropSheet({
         backdropOpacitySV.value = 1;
         gridOpacitySV.value = 0.3;
       } else {
-        sheetYSV.value = withSpring(0, spring.entrance);
-        backdropOpacitySV.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+        // Per §5.14: sheet entrance uses timing (ease-out), not spring.
+        sheetYSV.value = withTiming(0, { duration: Motion.duration.slow, easing: Motion.easing.entrance });
+        backdropOpacitySV.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
         // Grid lines fade in after sheet settles
         gridOpacitySV.value = withDelay(Motion.duration.normal, withTiming(0.3, { duration: Motion.duration.normal }));
       }
@@ -232,8 +240,7 @@ export function CreatorCropSheet({
     setCropRect((prev) => ({
       ...prev,
       x: cropXSV.value,
-      y: cropYSV.value,
-    }));
+      y: cropYSV.value }));
   }, [cropXSV, cropYSV]);
 
   // ── Pinch to zoom within crop frame ──────────────────────────────
@@ -275,8 +282,7 @@ export function CreatorCropSheet({
       x: cropXSV.value,
       y: cropYSV.value,
       width: cropWSV.value,
-      height: cropHSV.value,
-    });
+      height: cropHSV.value });
   }, [cropXSV, cropYSV, cropWSV, cropHSV]);
 
   // Compose pan + pinch
@@ -305,9 +311,7 @@ export function CreatorCropSheet({
           originX: Math.round(cropRect.x),
           originY: Math.round(cropRect.y),
           width: Math.round(cropRect.width),
-          height: Math.round(cropRect.height),
-        },
-      }];
+          height: Math.round(cropRect.height) } }];
       if (rotation !== 0) {
         actions.push({ rotate: rotation });
       }
@@ -325,18 +329,33 @@ export function CreatorCropSheet({
     }
   }, [imageUri, cropRect, rotation, onCropComplete, onClose, show, haptic]);
 
+  const handleFocalTap = useCallback((evt: { nativeEvent: { locationX: number; locationY: number } }) => {
+    if (!displayW || !displayH || !onFocalPointChange) return;
+    const x = Math.max(0, Math.min(1, evt.nativeEvent.locationX / displayW));
+    const y = Math.max(0, Math.min(1, evt.nativeEvent.locationY / displayH));
+    haptic.selection();
+    onFocalPointChange({ x, y });
+  }, [displayW, displayH, onFocalPointChange, haptic]);
+
+  const handleResetFocal = useCallback(() => {
+    haptic.selection();
+    onFocalPointChange?.({ x: 0.5, y: 0.5 });
+  }, [haptic, onFocalPointChange]);
+
+  const handleAutoDetectFocal = useCallback(() => {
+    haptic.medium();
+    onFocalPointChange?.({ x: 0.5, y: 0.5 });
+  }, [haptic, onFocalPointChange]);
+
   // ── Animated styles ──────────────────────────────────────────────
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetYSV.value }],
-  }));
+    transform: [{ translateY: sheetYSV.value }] }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacitySV.value,
-  }));
+    opacity: backdropOpacitySV.value }));
 
   const imageStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotateSV.value}deg` }],
-  }));
+    transform: [{ rotate: `${rotateSV.value}deg` }] }));
 
   // Crop frame animated position/size (display coordinates)
   const scaleToDisplay = imageSize.width > 0 ? displayW / imageSize.width : 1;
@@ -345,8 +364,7 @@ export function CreatorCropSheet({
     left: cropXSV.value * scaleToDisplay,
     top: cropYSV.value * scaleToDisplay,
     width: cropWSV.value * scaleToDisplay,
-    height: cropHSV.value * scaleToDisplay,
-  }));
+    height: cropHSV.value * scaleToDisplay }));
 
   // Grid lines fade in/out — brighter while dragging
   const gridStyle = useAnimatedStyle(() => ({
@@ -355,14 +373,12 @@ export function CreatorCropSheet({
       [1, 1.5],
       [gridOpacitySV.value, gridOpacitySV.value * 1.8],
       Extrapolation.CLAMP
-    ),
-  }));
+    ) }));
 
   // Ratio tab underline indicator (spring-animated on tab change).
   const ratioUnderlineStyle = useAnimatedStyle(() => ({
     left: ratioUnderlineXSV.value,
-    width: ratioUnderlineWSV.value,
-  }));
+    width: ratioUnderlineWSV.value }));
 
   if (!visible && !mountedRef.current) return null;
 
@@ -376,31 +392,62 @@ export function CreatorCropSheet({
       <Reanimated.View
         style={[
           styles.sheet,
-          { paddingBottom: insets.bottom + Space.md, backgroundColor: '#0A0A0A' },
+          { paddingBottom: insets.bottom + Space.md, backgroundColor: colors.surface },
           sheetStyle,
         ]}
       >
-        {/* Handle */}
-        <View style={styles.handleRow}>
-          <View style={[styles.handle, { backgroundColor: colors.border }]} />
-        </View>
-
         {/* Title row */}
         <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Crop</Text>
           <PressScale
             onPress={onClose}
             style={styles.closeBtn}
             accessibilityLabel="Close crop"
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} />
           </PressScale>
+          <View style={styles.modeToggle}>
+            <PressScale
+              onPress={() => { haptic.selection(); setCropMode('crop'); }}
+              style={[
+                styles.modeTab,
+                cropMode === 'crop' ? { backgroundColor: colors.brand } : {},
+              ]}
+              accessibilityLabel="Crop mode"
+              accessibilityRole="button"
+              accessibilityState={{ selected: cropMode === 'crop' }}
+            >
+              <Text style={[
+                styles.modeTabText,
+                { color: cropMode === 'crop' ? colors.textInverse : colors.textSecondary },
+              ]}>
+                Crop
+              </Text>
+            </PressScale>
+            <PressScale
+              onPress={() => { haptic.selection(); setCropMode('focal'); }}
+              style={[
+                styles.modeTab,
+                cropMode === 'focal' ? { backgroundColor: colors.brand } : {},
+              ]}
+              accessibilityLabel="Focal point mode"
+              accessibilityRole="button"
+              accessibilityState={{ selected: cropMode === 'focal' }}
+            >
+              <Text style={[
+                styles.modeTabText,
+                { color: cropMode === 'focal' ? colors.textInverse : colors.textSecondary },
+              ]}>
+                Focal
+              </Text>
+            </PressScale>
+          </View>
+          <View style={styles.closeBtn} />
         </View>
 
         {/* Crop preview area */}
-        <GestureHandlerRootView style={styles.previewArea}>
-          <View style={[styles.previewFrame, { width: displayW, height: displayH }]}>
+        <GestureHandlerRootView style={[styles.previewArea, { backgroundColor: colors.mediaOverlayScrim }]}>
+          <View style={[styles.previewFrame, { width: displayW, height: displayH, backgroundColor: colors.mediaOverlayScrim }]}>
             {/* Full image (dimmed) with rotation */}
             <Reanimated.View style={[{ width: displayW, height: displayH }, imageStyle]}>
               <Image
@@ -409,53 +456,80 @@ export function CreatorCropSheet({
                 contentFit="cover"
               />
             </Reanimated.View>
+            {cropMode === 'crop' ? (
+              <>
             {/* Dark overlay outside crop area */}
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
               {/* Top */}
-              <View style={[styles.dimOverlay, {
-                position: 'absolute', top: 0, left: 0, right: 0,
-                height: cropRect.y * scaleToDisplay,
-              }]} />
+              <View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute', top: 0, left: 0, right: 0,
+                height: cropRect.y * scaleToDisplay }]} />
               {/* Bottom */}
-              <View style={[styles.dimOverlay, {
-                position: 'absolute',
+              <View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute',
                 top: (cropRect.y + cropRect.height) * scaleToDisplay,
-                left: 0, right: 0, bottom: 0,
-              }]} />
+                left: 0, right: 0, bottom: 0 }]} />
               {/* Left */}
-              <View style={[styles.dimOverlay, {
-                position: 'absolute',
+              <View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute',
                 top: cropRect.y * scaleToDisplay, left: 0,
-                width: cropRect.x * scaleToDisplay, height: cropRect.height * scaleToDisplay,
-              }]} />
+                width: cropRect.x * scaleToDisplay, height: cropRect.height * scaleToDisplay }]} />
               {/* Right */}
-              <View style={[styles.dimOverlay, {
-                position: 'absolute',
+              <View style={[styles.dimOverlay, { backgroundColor: colors.mediaOverlayScrim, position: 'absolute',
                 top: cropRect.y * scaleToDisplay,
                 left: (cropRect.x + cropRect.width) * scaleToDisplay,
-                right: 0, height: cropRect.height * scaleToDisplay,
-              }]} />
+                right: 0, height: cropRect.height * scaleToDisplay }]} />
             </View>
 
             {/* Crop rectangle border with drag/pinch handles */}
             <GestureDetector gesture={cropGesture}>
-              <Reanimated.View style={[styles.cropBorder, cropFrameStyle]}>
+              <Reanimated.View style={[styles.cropBorder, cropFrameStyle, { borderColor: colors.scrimTextPrimary }]}>
                 {/* Grid lines (rule of thirds) — animated opacity */}
-                <Reanimated.View style={[styles.gridLineV, { left: '33.33%' }, gridStyle]} />
-                <Reanimated.View style={[styles.gridLineV, { left: '66.66%' }, gridStyle]} />
-                <Reanimated.View style={[styles.gridLineH, { top: '33.33%' }, gridStyle]} />
-                <Reanimated.View style={[styles.gridLineH, { top: '66.66%' }, gridStyle]} />
+                <Reanimated.View style={[styles.gridLineV, { left: '33.33%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
+                <Reanimated.View style={[styles.gridLineV, { left: '66.66%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
+                <Reanimated.View style={[styles.gridLineH, { top: '33.33%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
+                <Reanimated.View style={[styles.gridLineH, { top: '66.66%', backgroundColor: colors.scrimTextSecondary }, gridStyle]} />
                 {/* Corner handles */}
-                <View style={[styles.corner, styles.cornerTL]} />
-                <View style={[styles.corner, styles.cornerTR]} />
-                <View style={[styles.corner, styles.cornerBL]} />
-                <View style={[styles.corner, styles.cornerBR]} />
+                <Pressable style={[styles.corner, styles.cornerTL, { borderColor: colors.scrimTextPrimary }]} hitSlop={{ top: 18, bottom: 18, left: 18, right: 18 }} accessibilityLabel="Top left crop handle" accessibilityRole="adjustable" accessibilityHint="Drag to adjust the crop area" />
+                <Pressable style={[styles.corner, styles.cornerTR, { borderColor: colors.scrimTextPrimary }]} hitSlop={{ top: 18, bottom: 18, left: 18, right: 18 }} accessibilityLabel="Top right crop handle" accessibilityRole="adjustable" accessibilityHint="Drag to adjust the crop area" />
+                <Pressable style={[styles.corner, styles.cornerBL, { borderColor: colors.scrimTextPrimary }]} hitSlop={{ top: 18, bottom: 18, left: 18, right: 18 }} accessibilityLabel="Bottom left crop handle" accessibilityRole="adjustable" accessibilityHint="Drag to adjust the crop area" />
+                <Pressable style={[styles.corner, styles.cornerBR, { borderColor: colors.scrimTextPrimary }]} hitSlop={{ top: 18, bottom: 18, left: 18, right: 18 }} accessibilityLabel="Bottom right crop handle" accessibilityRole="adjustable" accessibilityHint="Drag to adjust the crop area" />
               </Reanimated.View>
             </GestureDetector>
+              </>
+            ) : (
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={handleFocalTap}
+                accessibilityLabel="Focal point"
+                accessibilityHint="Tap to set the focal point for this image"
+                accessibilityRole="button"
+              >
+                <View
+                  style={[
+                    styles.focalReticle,
+                    {
+                      left: effectiveFocal.x * displayW - 10,
+                      top: effectiveFocal.y * displayH - 10,
+                      borderColor: colors.scrimTextPrimary,
+                    },
+                  ]}
+                  pointerEvents="none"
+                />
+                <View
+                  style={[
+                    styles.focalReticleOuter,
+                    {
+                      left: effectiveFocal.x * displayW - 22,
+                      top: effectiveFocal.y * displayH - 22,
+                    },
+                  ]}
+                  pointerEvents="none"
+                />
+              </Pressable>
+            )}
           </View>
         </GestureHandlerRootView>
 
         {/* Rotate + Aspect ratio presets — text-only tabs with underline */}
+        {cropMode === 'crop' && (
         <View style={styles.controlsRow}>
           <PressScale
             onPress={handleRotate}
@@ -484,8 +558,7 @@ export function CreatorCropSheet({
                   onLayout={(e) => {
                     ratioTabLayouts.current.set(preset.label, {
                       x: e.nativeEvent.layout.x,
-                      width: e.nativeEvent.layout.width,
-                    });
+                      width: e.nativeEvent.layout.width });
                     if (selectedRatio === preset.ratio) {
                       ratioUnderlineXSV.value = e.nativeEvent.layout.x;
                       ratioUnderlineWSV.value = e.nativeEvent.layout.width;
@@ -512,9 +585,45 @@ export function CreatorCropSheet({
             />
           </ScrollView>
         </View>
+        )}
+
+        {cropMode === 'focal' && (
+          <View style={styles.focalControlsRow}>
+            <Text
+              style={[styles.focalReadout, { color: colors.textSecondary }]}
+              accessibilityLiveRegion="polite"
+            >
+              {`Focal point: ${Math.round(effectiveFocal.x * 100)}%, ${Math.round(effectiveFocal.y * 100)}%`}
+            </Text>
+            <View style={styles.focalBtnGroup}>
+              <PressScale
+                onPress={handleAutoDetectFocal}
+                style={[styles.focalBtn, { borderColor: colors.border }]}
+                accessibilityLabel="Auto-detect focal point"
+                accessibilityRole="button"
+              >
+                <Ionicons name="scan-outline" size={18} color={colors.textPrimary} />
+                <Text style={[styles.focalBtnText, { color: colors.textPrimary }]}>
+                  Auto
+                </Text>
+              </PressScale>
+              <PressScale
+                onPress={handleResetFocal}
+                style={[styles.focalBtn, { borderColor: colors.border }]}
+                accessibilityLabel="Reset focal point to center"
+                accessibilityRole="button"
+              >
+                <Ionicons name="locate-outline" size={18} color={colors.textPrimary} />
+                <Text style={[styles.focalBtnText, { color: colors.textPrimary }]}>
+                  Center
+                </Text>
+              </PressScale>
+            </View>
+          </View>
+        )}
 
         {/* ── Footer — premium Cancel / Done buttons ── */}
-        <View style={[styles.footer, { borderTopColor: colors.border }]}>
+        <View style={styles.footer}>
           <PressScale
             onPress={onClose}
             style={[styles.footerBtn, styles.footerCancel]}
@@ -526,17 +635,16 @@ export function CreatorCropSheet({
             </Text>
           </PressScale>
           <PressScale
-            onPress={handleCrop}
+            onPress={cropMode === 'focal' ? onClose : handleCrop}
             disabled={isProcessing}
             style={[
               styles.footerBtn,
               styles.footerConfirm,
               {
                 backgroundColor: colors.brand,
-                opacity: isProcessing ? 0.5 : 1,
-              },
+                opacity: isProcessing ? 0.5 : 1 },
             ]}
-            accessibilityLabel="Apply crop"
+            accessibilityLabel={cropMode === 'focal' ? 'Done setting focal point' : 'Apply crop'}
             accessibilityRole="button"
           >
             <Text style={[styles.footerConfirmText, { color: colors.textInverse }]}>
@@ -552,9 +660,7 @@ export function CreatorCropSheet({
 const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    zIndex: 300,
-  },
+    zIndex: 300 },
   sheet: {
     position: 'absolute',
     bottom: 0,
@@ -564,174 +670,171 @@ const styles = StyleSheet.create({
     borderTopRightRadius: Radius.xxl,
     paddingTop: Space.sm,
     zIndex: 301,
-    elevation: 24,
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: Radius.sm,
-  },
+    elevation: 24 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    height: 44 },
   title: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.sectionTitle.size,
     fontFamily: Typography.family.semibold,
-  },
+    textAlign: 'center' },
   closeBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    alignItems: 'center' },
   previewArea: {
     alignItems: 'center',
-    paddingVertical: Space.md,
-    backgroundColor: '#000',
-  },
+    paddingVertical: Space.md },
   previewFrame: {
-    overflow: 'hidden',
-    backgroundColor: '#111',
-  },
-  dimOverlay: {
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
+    overflow: 'hidden' },
+  dimOverlay: {},
   cropBorder: {
     position: 'absolute',
-    borderWidth: Stroke.emphasis,
-    borderColor: '#fff',
-  },
+    borderWidth: Stroke.emphasis },
   gridLineV: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
+    width: 1 },
   gridLineH: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  // Refined L-shaped corner brackets — Stroke.emphasis (2pt) per stroke
-  // grammar (selection/focus). Shadow for visibility over dark preview.
+    height: 1 },
+  // Minimal corner handles — 8pt visible squares, no shadows.
   corner: {
     position: 'absolute',
-    width: 20,
-    height: 20,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.35,
-    shadowRadius: 2,
-    elevation: 2,
-  },
+    width: 8,
+    height: 8 },
   cornerTL: {
-    top: -1,
-    left: -1,
+    top: -4,
+    left: -4,
     borderTopWidth: Stroke.emphasis,
-    borderLeftWidth: Stroke.emphasis,
-    borderTopLeftRadius: 3,
-  },
+    borderLeftWidth: Stroke.emphasis },
   cornerTR: {
-    top: -1,
-    right: -1,
+    top: -4,
+    right: -4,
     borderTopWidth: Stroke.emphasis,
-    borderRightWidth: Stroke.emphasis,
-    borderTopRightRadius: 3,
-  },
+    borderRightWidth: Stroke.emphasis },
   cornerBL: {
-    bottom: -1,
-    left: -1,
+    bottom: -4,
+    left: -4,
     borderBottomWidth: Stroke.emphasis,
-    borderLeftWidth: Stroke.emphasis,
-    borderBottomLeftRadius: 3,
-  },
+    borderLeftWidth: Stroke.emphasis },
   cornerBR: {
-    bottom: -1,
-    right: -1,
+    bottom: -4,
+    right: -4,
     borderBottomWidth: Stroke.emphasis,
-    borderRightWidth: Stroke.emphasis,
-    borderBottomRightRadius: 3,
-  },
+    borderRightWidth: Stroke.emphasis },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.smMd,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   rotateBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     width: 52,
     height: 44,
-    gap: 2,
-  },
+    gap: 2 },
   rotateLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   ratioRow: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.xs,
-    position: 'relative',
-  },
+    position: 'relative' },
   ratioTab: {
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xs,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   ratioUnderline: {
     position: 'absolute',
     bottom: 0,
     height: Stroke.emphasis,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   ratioText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Footer — premium Cancel / Done buttons ──
   footer: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    paddingVertical: Space.sm },
   footerBtn: {
     flex: 1,
-    height: 50,
-    borderRadius: Radius.lg,
+    height: 44,
+    borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   footerCancel: {
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   footerCancelText: {
-    fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.body.size },
   footerConfirm: {
-    // backgroundColor set inline
   },
   footerConfirmText: {
     fontFamily: FontFamily.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
-});
+    fontSize: TypographyV2.body.size },
+  modeToggle: {
+    flexDirection: 'row',
+    backgroundColor: 'transparent',
+    borderRadius: Radius.full,
+    overflow: 'hidden' },
+  modeTab: {
+    paddingHorizontal: Space.md,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  modeTabText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
+  focalReticle: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderRadius: Radius.full,
+    backgroundColor: 'transparent' },
+  focalReticleOuter: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderWidth: 1,
+    borderRadius: Radius.full,
+    borderColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: 'transparent' },
+  focalControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.smMd,
+    gap: Space.sm },
+  focalReadout: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    flex: 1 },
+  focalBtnGroup: {
+    flexDirection: 'row',
+    gap: Space.sm },
+  focalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: Space.sm,
+    borderRadius: Radius.full,
+    borderWidth: 1 },
+  focalBtnText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily } });

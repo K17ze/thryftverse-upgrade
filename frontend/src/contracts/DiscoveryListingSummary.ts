@@ -34,11 +34,8 @@ export interface DiscoverySellerSummary {
 // LISTING CONDITION
 // ============================================================================
 
-export type ListingCondition =
-  | 'New with tags'
-  | 'Very good'
-  | 'Good'
-  | 'Satisfactory';
+export type { ListingCondition } from './taxonomy';
+import type { ListingCondition } from './taxonomy';
 
 // ============================================================================
 // DISCOVERY LISTING SUMMARY
@@ -110,6 +107,8 @@ export interface DiscoveryListingSummary {
   subcategory?: string | null;
   /** Creation timestamp (ISO). */
   createdAt?: string;
+  /** Backend-computed sustainability grade (A/B/C/D). Null when no impact data available (fail-closed). */
+  sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
 }
 
 // ============================================================================
@@ -152,6 +151,7 @@ export interface ListingLike {
   createdAt?: string;
   shippingMethod?: string | null;
   shippingPayer?: string | null;
+  sustainabilityGrade?: 'A' | 'B' | 'C' | 'D' | null;
 }
 
 /**
@@ -195,6 +195,7 @@ export function mapListingToDiscoverySummary(
     category: source.category,
     subcategory: source.subcategory ?? null,
     createdAt: source.createdAt,
+    sustainabilityGrade: source.sustainabilityGrade ?? null,
   };
 }
 

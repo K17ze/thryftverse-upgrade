@@ -6,10 +6,9 @@ import { AnimatedPressable } from '../AnimatedPressable';
 import {
   Space,
   Control,
-  Type,
   TypeStyles,
-  PressScale,
-} from '../../theme/designTokens';
+  PressScale } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export type AppHeaderVariant = 'default' | 'large' | 'compact';
 
@@ -42,26 +41,25 @@ export function AppHeader({
   showBackButton = true,
   backIcon = 'chevron-back',
   style,
-  collapseProgress,
-}: AppHeaderProps) {
+  collapseProgress }: AppHeaderProps) {
   const { colors } = useAppTheme();
   const isLarge = variant === 'large';
   const isCompact = variant === 'compact';
 
   const titleFontSize = isLarge
-    ? Type.title.size
+    ? TypographyV2.screenTitle.size
     : isCompact
-      ? Type.bodyEmphasis.size
-      : Type.subtitle.size;
+      ? TypographyV2.bodyStrong.size
+      : TypographyV2.sectionTitle.size;
   const titleFontFamily = isLarge
     ? TypeStyles.title.fontFamily
     : TypeStyles.bodyStrong.fontFamily;
   const titleLineHeight = isLarge
-    ? Type.title.lineHeight
-    : Type.subtitle.lineHeight;
+    ? TypographyV2.screenTitle.lineHeight
+    : TypographyV2.sectionTitle.lineHeight;
   const titleLetterSpacing = isLarge
-    ? Type.title.letterSpacing
-    : Type.subtitle.letterSpacing;
+    ? TypographyV2.screenTitle.letterSpacing
+    : TypographyV2.sectionTitle.letterSpacing;
 
   const compactTitleOpacity =
     collapseProgress == null ? 1 : Math.max(0, Math.min(1, collapseProgress));
@@ -106,8 +104,7 @@ export function AppHeader({
                 fontFamily: titleFontFamily,
                 lineHeight: titleLineHeight,
                 letterSpacing: titleLetterSpacing,
-                opacity: compactTitleOpacity,
-              },
+                opacity: compactTitleOpacity },
             ]}
             numberOfLines={1}
           >
@@ -119,11 +116,10 @@ export function AppHeader({
                 styles.subtitle,
                 {
                   color: colors.textSecondary,
-                  fontSize: Type.caption.size,
+                  fontSize: TypographyV2.meta.size,
                   fontFamily: TypeStyles.body.fontFamily,
-                  lineHeight: Type.caption.lineHeight,
-                  letterSpacing: Type.caption.letterSpacing,
-                },
+                  lineHeight: TypographyV2.meta.lineHeight,
+                  letterSpacing: TypographyV2.meta.letterSpacing },
               ]}
               numberOfLines={1}
             >
@@ -146,38 +142,29 @@ const styles = StyleSheet.create({
   root: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
-    minHeight: 56,
-  },
+    minHeight: 56 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   iconBtn: {
     width: ICON_SIZE,
     height: ICON_SIZE,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   iconBtnPlaceholder: {
     width: ICON_SIZE,
-    height: ICON_SIZE,
-  },
+    height: ICON_SIZE },
   titleWrap: {
     flex: 1,
     alignItems: 'center',
-    marginHorizontal: Space.sm,
-  },
+    marginHorizontal: Space.sm },
   title: {
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   subtitle: {
     marginTop: Space.xs / 2,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   rightSlot: {
     minWidth: ICON_SIZE,
     alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });

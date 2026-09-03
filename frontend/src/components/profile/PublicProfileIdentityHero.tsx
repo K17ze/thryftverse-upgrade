@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Type, Radius, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import type { SellerTrustSummary, VerificationTier } from '../../platform/product';
 import { VERIFICATION_TIERS } from '../../platform/product';
@@ -42,8 +43,7 @@ export function PublicProfileIdentityHero({
   location,
   memberSince,
   listingCount,
-  sellerTrust,
-}: PublicProfileIdentityHeroProps) {
+  sellerTrust }: PublicProfileIdentityHeroProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const contextParts: string[] = [];
@@ -118,76 +118,61 @@ function createStyles(colors: ThemeColors) {
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   avatarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md + 2,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   avatarWrap: {
-    position: 'relative',
-  },
+    position: 'relative' },
   avatar: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     borderWidth: 3,
-    borderColor: colors.background,
-  },
+    borderColor: colors.background },
   avatarFallback: {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   identityCol: {
     flex: 1,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   displayNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   displayName: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.title.letterSpacing,
-    flexShrink: 1,
-  },
+    letterSpacing: TypographyV2.screenTitle.letterSpacing,
+    flexShrink: 1 },
   verifiedBadge: {
     flexShrink: 0,
-    marginTop: 1,
-  },
+    marginTop: 1 },
   username: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   bio: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.body.lineHeight,
-    marginBottom: Space.sm,
-  },
+    lineHeight: TypographyV2.body.lineHeight,
+    marginBottom: Space.sm },
   contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 2,
-    flexWrap: 'wrap',
-  },
+    flexWrap: 'wrap' },
   contextText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   contextSep: {
-    fontSize: Type.caption.size,
-    color: colors.textMuted,
-  },
-  });
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted } });
 }

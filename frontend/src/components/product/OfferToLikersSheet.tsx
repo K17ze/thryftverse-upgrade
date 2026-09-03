@@ -1,14 +1,15 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, Modal, Pressable, ScrollView, TextInput, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { AppButton } from '../ui/AppButton';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../../context/CurrencyContext';
-import { CURRENCIES, DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
+import { CURRENCIES } from '../../constants/currencies';
 import { convertGbpToDisplayAmount, sanitizeDecimalInput } from '../../utils/currencyAuthoringFlows';
 import { haptics } from '../../utils/haptics';
 
@@ -43,8 +44,7 @@ export function OfferToLikersSheet({
   visible,
   listing,
   onClose,
-  onSend,
-}: OfferToLikersSheetProps) {
+  onSend }: OfferToLikersSheetProps) {
   const { colors } = useAppTheme();
   const themed = {
     textPrimary: colors.textPrimary,
@@ -53,6 +53,14 @@ export function OfferToLikersSheet({
     brand: colors.brand,
     border: colors.border,
     borderSubtle: colors.borderSubtle,
+    brandSubtle: colors.brandSubtle,
+    dangerSubtle: colors.dangerSubtle,
+    successSubtle: colors.successSubtle,
+    warningSubtle: colors.warningSubtle,
+    brandBorder: colors.brandBorder,
+    dangerBorder: colors.dangerBorder,
+    successBorder: colors.successBorder,
+    warningBorder: colors.warningBorder,
     surface: colors.surface,
     surfaceAlt: colors.surfaceAlt,
     surfaceElevated: colors.surfaceElevated,
@@ -61,11 +69,10 @@ export function OfferToLikersSheet({
     warning: colors.warning,
     background: colors.background,
     textInverse: colors.textInverse,
-    overlay: colors.overlay,
-  };
+    overlay: colors.overlay };
   const styles = React.useMemo(() => createStyles(themed), [themed]);
   const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, fxRates } = useCurrencyContext();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
 
   const [selectedDiscount, setSelectedDiscount] = useState(15);
@@ -94,10 +101,10 @@ export function OfferToLikersSheet({
     return askingPrice * (1 - selectedDiscount / 100);
   }, [useCustomPrice, customPrice, askingPrice, selectedDiscount]);
 
-  const formattedOfferPrice = formatFromFiat(computedOfferPrice, DEFAULT_CURRENCY_CODE);
-  const formattedAskingPrice = formatFromFiat(askingPrice, DEFAULT_CURRENCY_CODE);
+  const formattedOfferPrice = formatFromFiat(computedOfferPrice, currencyCode);
+  const formattedAskingPrice = formatFromFiat(askingPrice, currencyCode);
   const savingsAmount = askingPrice - computedOfferPrice;
-  const formattedSavings = formatFromFiat(savingsAmount, DEFAULT_CURRENCY_CODE);
+  const formattedSavings = formatFromFiat(savingsAmount, currencyCode);
 
   const likerCount = listing?.likes ?? 0;
 
@@ -113,10 +120,10 @@ export function OfferToLikersSheet({
     const displayAmount = convertGbpToDisplayAmount(
       askingPrice * (1 - selectedDiscount / 100),
       currencyCode,
-      goldRates,
+      fxRates,
     );
     setCustomPrice((Number.isFinite(displayAmount) ? displayAmount : askingPrice).toFixed(2));
-  }, [askingPrice, selectedDiscount, currencyCode, goldRates]);
+  }, [askingPrice, selectedDiscount, currencyCode, fxRates]);
 
   const handleCustomPriceChange = useCallback((value: string) => {
     setCustomPrice(sanitizeDecimalInput(value));
@@ -134,8 +141,7 @@ export function OfferToLikersSheet({
       offerPrice: computedOfferPrice,
       includeFreeShipping,
       expiryHours,
-      likerCount,
-    });
+      likerCount });
   }, [listing, computedOfferPrice, useCustomPrice, askingPrice, selectedDiscount, includeFreeShipping, expiryHours, likerCount, onSend]);
 
   if (!listing) return null;
@@ -201,7 +207,7 @@ export function OfferToLikersSheet({
               {DISCOUNT_PRESETS.map((pct) => {
                 const isActive = !useCustomPrice && selectedDiscount === pct;
                 const discountedGbp = askingPrice * (1 - pct / 100);
-                const displayAmount = convertGbpToDisplayAmount(discountedGbp, currencyCode, goldRates);
+                const displayAmount = convertGbpToDisplayAmount(discountedGbp, currencyCode, fxRates);
                 const label = Number.isFinite(displayAmount)
                   ? `${pct}% off · ${currencySymbol}${displayAmount.toFixed(0)}`
                   : `${pct}% off`;
@@ -255,9 +261,9 @@ export function OfferToLikersSheet({
             {/* Free shipping toggle */}
             <View style={styles.toggleRow}>
               <View style={styles.toggleLeft}>
-                <View style={[styles.toggleIconWrap, { backgroundColor: includeFreeShipping ? `${themed.success}15` : themed.surfaceAlt }]}>
+                <View style={[styles.toggleIconWrap, { backgroundColor: includeFreeShipping ? themed.successSubtle : themed.surfaceAlt }]}>
                   <Ionicons
-                    name="cube-outline"
+                    name="car-outline"
                     size={16}
                     color={includeFreeShipping ? themed.success : themed.textMuted}
                   />
@@ -352,6 +358,8 @@ export function OfferToLikersSheet({
 const createStyles = (themed: {
   textPrimary: string; textSecondary: string; textMuted: string;
   brand: string; border: string; borderSubtle: string;
+  brandSubtle: string; dangerSubtle: string; successSubtle: string; warningSubtle: string;
+  brandBorder: string; dangerBorder: string; successBorder: string; warningBorder: string;
   surface: string; surfaceAlt: string; surfaceElevated: string;
   danger: string; success: string; warning: string;
   background: string; textInverse: string; overlay: string;
@@ -359,15 +367,13 @@ const createStyles = (themed: {
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: themed.overlay,
-  },
+    backgroundColor: themed.overlay },
   sheet: {
     backgroundColor: themed.background,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
     paddingBottom: Space.xl,
-    maxHeight: '85%',
-  },
+    maxHeight: '85%' },
   handle: {
     width: 36,
     height: 4,
@@ -375,55 +381,45 @@ const createStyles = (themed: {
     backgroundColor: themed.border,
     alignSelf: 'center',
     marginTop: Space.sm,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
     flex: 1,
-    paddingRight: Space.sm,
-  },
+    paddingRight: Space.sm },
   headerIconWrap: {
     width: 32,
     height: 32,
     borderRadius: Radius.full,
-    backgroundColor: `${themed.brand}15`,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
-  },
+    marginTop: 2 },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: themed.textPrimary,
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: themed.textSecondary,
-    lineHeight: 17,
-  },
+    lineHeight: 17 },
   closeText: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: themed.brand,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   scroll: {
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   scrollContent: {
-    paddingBottom: Space.lg,
-  },
+    paddingBottom: Space.lg },
 
   // Item preview
   itemRow: {
@@ -433,52 +429,44 @@ const createStyles = (themed: {
     backgroundColor: themed.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   itemImage: {
     width: 56,
     height: 56,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   itemImageFallback: {
     width: 56,
     height: 56,
     borderRadius: Radius.md,
     backgroundColor: themed.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   itemInfo: {
-    flex: 1,
-  },
+    flex: 1 },
   itemTitle: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: themed.textPrimary,
     marginBottom: Space.xs,
-    lineHeight: 19,
-  },
+    lineHeight: 19 },
   itemPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    color: themed.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: themed.textMuted },
 
   // Section labels
   sectionLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: themed.textSecondary,
     letterSpacing: 0.2,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
 
   // Discount chips
   discountRow: {
     flexDirection: 'row',
     gap: Space.xs,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   discountChip: {
     flex: 1,
     paddingVertical: Space.sm + 2,
@@ -488,22 +476,18 @@ const createStyles = (themed: {
     borderColor: themed.border,
     alignItems: 'center',
     minHeight: 48,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   discountChipActive: {
-    backgroundColor: `${themed.brand}12`,
+    backgroundColor: themed.brandSubtle,
     borderColor: themed.brand,
-    borderWidth: 1.5,
-  },
+    borderWidth: Stroke.emphasis },
   discountChipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: themed.textSecondary,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   discountChipTextActive: {
-    color: themed.brand,
-  },
+    color: themed.brand },
 
   // Custom price
   customPriceToggle: {
@@ -515,35 +499,29 @@ const createStyles = (themed: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     minHeight: 48,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   customPriceToggleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   customPriceToggleLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: themed.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: themed.textPrimary },
   customPriceInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   currencySymbol: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: themed.brand,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: themed.brand },
   customPriceInput: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: themed.textPrimary,
     minWidth: 60,
-    paddingVertical: 0,
-  },
+    paddingVertical: 0 },
 
   // Toggle row
   toggleRow: {
@@ -555,41 +533,35 @@ const createStyles = (themed: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     minHeight: 56,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
   toggleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     flex: 1,
-    paddingRight: Space.sm,
-  },
+    paddingRight: Space.sm },
   toggleIconWrap: {
     width: 32,
     height: 32,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   toggleTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: themed.textPrimary,
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   toggleSub: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: themed.textMuted,
-    lineHeight: 15,
-  },
+    lineHeight: 15 },
 
   // Expiry
   expiryRow: {
     flexDirection: 'row',
     gap: Space.xs,
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   expiryChip: {
     flex: 1,
     paddingVertical: Space.sm + 2,
@@ -599,83 +571,68 @@ const createStyles = (themed: {
     borderColor: themed.border,
     alignItems: 'center',
     minHeight: 48,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   expiryChipActive: {
-    backgroundColor: `${themed.brand}12`,
+    backgroundColor: themed.brandSubtle,
     borderColor: themed.brand,
-    borderWidth: 1.5,
-  },
+    borderWidth: Stroke.emphasis },
   expiryChipText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: themed.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: themed.textSecondary },
   expiryChipTextActive: {
-    color: themed.brand,
-  },
+    color: themed.brand },
   expiryHint: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: themed.textMuted,
     marginTop: Space.xs,
     lineHeight: 16,
-    marginBottom: Space.lg,
-  },
+    marginBottom: Space.lg },
 
   // Summary
   summaryCard: {
     backgroundColor: themed.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 6,
-  },
+    paddingVertical: 6 },
   summaryRowDivider: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: themed.border,
     marginTop: 2,
-    paddingTop: 10,
-  },
+    paddingTop: 10 },
   summaryLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: themed.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: themed.textSecondary },
   summaryValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: themed.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: themed.textPrimary },
 
   // Info note
   infoNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.xs + 2,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   infoNoteText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: themed.textMuted,
-    lineHeight: 16,
-  },
+    lineHeight: 16 },
 
   // Footer
   footer: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: themed.border,
-  },
+    borderTopColor: themed.border },
   sendBtn: {
-    width: '100%',
-  },
-});
+    width: '100%' } });

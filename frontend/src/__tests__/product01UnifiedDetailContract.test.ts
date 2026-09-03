@@ -81,6 +81,12 @@ const baseAuction: AuctionDetail = {
   winnerBidderId: null,
   settledAt: null,
   cancelledAt: null,
+  paidAt: null,
+  paymentDeadlineAt: null,
+  secondChanceOfferedTo: null,
+  cancelledBy: null,
+  cancelledReason: null,
+  antiSniping: null,
   createdAt: '2025-06-28T10:00:00Z',
 };
 
@@ -94,7 +100,7 @@ const baseAsset: MarketCoOwnAsset = {
   availableUnits: 60,
   unitPriceGbp: 12.5,
   unitPriceStable: 15.0,
-  settlementMode: 'GBP',
+  settlementMode: 'ONEZE',
   issuerJurisdiction: 'UK',
   marketMovePct24h: 2.5,
   holders: 8,

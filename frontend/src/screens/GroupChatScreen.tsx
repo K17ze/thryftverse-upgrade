@@ -17,9 +17,7 @@ import {
   View,
   Text,
   StyleSheet,
-  Pressable,
-  ScrollView,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { FlashList, type ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,43 +26,43 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useStore } from '../store/useStore';
+import { track } from '../analytics';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { KeyboardStickyView } from '../platform/keyboard/KeyboardProvider';
-import { Space, Radius, Type, TypeStyles, Control } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 
 import { ChatTopBar } from '../components/chat/ChatTopBar';
 import { MessageBubble } from '../components/chat/MessageBubble';
 import { ChatComposerBar } from '../components/chat/ChatComposerBar';
-import { ChatAgentPicker } from '../components/chat/ChatAgentPicker';
-import { SuggestedRepliesBar } from '../components/chat/SuggestedRepliesBar';
+import { ChatActionSheet } from '../components/chat/ChatActionSheet';
+import { AttachmentReviewSheet } from '../components/chat/AttachmentReviewSheet';
+import { DocumentReviewSheet } from '../components/chat/DocumentReviewSheet';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Caption, BodyEmphasis } from '../components/ui/Text';
 import { SkeletonChatLoader } from '../components/chat/SkeletonChatLoader';
 import { MessageContextMenu, type MessageAction } from '../components/chat/MessageContextMenu';
 import { EmojiReactionsBar, type EmojiReaction } from '../components/chat/EmojiReactionsBar';
 import { ReplyQuote } from '../components/chat/ReplyQuote';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import * as Clipboard from 'expo-clipboard';
 
+import { fetchGroupSettingsFromApi, reportConversationOnApi } from '../services/chatApi';
 import {
-  deployAgent,
-  removeAgent,
-  getDeployedAgents,
-  getAgentSuggestions,
-  type ChatAgent,
-  type SuggestedReply,
-} from '../services/chatAgentsApi';
-import { reportConversationOnApi } from '../services/chatApi';
-import { useTypingIndicator } from '../services/realtimeClient';
+  useTypingIndicator,
+  useChatGroupIdentityEvent,
+  useChatGroupSettingsEvent,
+  useChatGroupMembershipEvent,
+} from '../services/realtimeClient';
 
 import {
   useConversationMessages,
   useConversationComposer,
   type Message,
   formatDateSeparator,
-  formatMessageTime,
-} from '../hooks/chat';
+  formatMessageTime } from '../hooks/chat';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChat'>;
 
@@ -75,12 +73,11 @@ function toEmojiReactions(
   return reactions.map((r) => ({
     emoji: r.emoji,
     count: r.count,
-    reactedByMe: r.reactedByMe,
-  }));
+    reactedByMe: r.reactedByMe }));
 }
 
 export default function GroupChatScreen({ navigation, route }: Props) {
-  const { groupId, groupName } = route.params;
+  const { groupId, groupName } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
@@ -95,6 +92,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const setConversationDraft = useStore((state) => state.setConversationDraft);
   const addMessageReaction = useStore((state) => state.addMessageReaction);
   const removeMessageReaction = useStore((state) => state.removeMessageReaction);
+  const upsertConversation = useStore((state) => state.upsertConversation);
+  const reconcileGroupMembershipEvent = useStore((state) => state.reconcileGroupMembershipEvent);
 
   const conversation = useMemo(
     () => conversations.find((item) => item.id === groupId),
@@ -102,6 +101,70 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   );
 
   const conversationId = conversation?.id ?? groupId;
+  const currentRole = currentUser?.id ? conversation?.memberRoles?.[currentUser.id] : undefined;
+  const isGroupManager = Boolean(
+    currentUser?.id
+    && (conversation?.ownerId === currentUser.id || currentRole === 'owner' || currentRole === 'admin'),
+  );
+  const [sendPermission, setSendPermission] = useState<'loading' | 'allowed' | 'restricted' | 'unavailable'>(
+    isGroupManager ? 'allowed' : 'loading',
+  );
+
+  useEffect(() => {
+    let active = true;
+    if (isGroupManager) {
+      setSendPermission('allowed');
+      return () => {
+        active = false;
+      };
+    }
+    setSendPermission('loading');
+    fetchGroupSettingsFromApi(conversationId)
+      .then((snapshot) => {
+        if (!active) return;
+        setSendPermission(snapshot.capabilities.canSendMessages ? 'allowed' : 'restricted');
+      })
+      .catch(() => {
+        if (active) setSendPermission('unavailable');
+      });
+    return () => {
+      active = false;
+    };
+  }, [conversationId, isGroupManager]);
+
+  useChatGroupSettingsEvent(conversationId, (payload) => {
+    setSendPermission(
+      isGroupManager || payload.settings.sendMessages === 'everyone'
+        ? 'allowed'
+        : 'restricted',
+    );
+  });
+
+  useChatGroupMembershipEvent(conversationId, (event) => {
+    const removedUserId = event.type === 'chat.member.removed'
+      ? event.payload.memberUserId
+      : event.type === 'chat.member.left'
+        ? event.payload.actorUserId
+        : null;
+    reconcileGroupMembershipEvent(event);
+    if (removedUserId === currentUser?.id) {
+      navigation.reset({ index: 0, routes: [{ name: 'MainTabs', params: { screen: 'Inbox' } }] });
+    }
+  });
+
+  // Real-time group identity updates — merge avatar/cover/name changes
+  // from other admins into the local store so the header stays current.
+  useChatGroupIdentityEvent(conversationId, (payload) => {
+    if (!conversation) return;
+    upsertConversation({
+      ...conversation,
+      id: payload.conversationId,
+      title: payload.title ?? conversation.title,
+      description: payload.description ?? conversation.description,
+      avatar: payload.avatar !== undefined ? (payload.avatar ?? undefined) : conversation.avatar,
+      coverPhoto: payload.coverPhoto !== undefined ? (payload.coverPhoto ?? undefined) : conversation.coverPhoto,
+    });
+  });
 
   // ─── Hydrated messages from store ───────────────────────────────────
   const hydratedMessages = useMemo<Message[]>(() => {
@@ -126,32 +189,16 @@ export default function GroupChatScreen({ navigation, route }: Props) {
         date: entry.timestamp,
         mediaUri: entry.mediaUri,
         mediaType: entry.mediaType,
+        documentUri: entry.documentUri,
+        documentName: entry.documentName,
+        documentMimeType: entry.documentMimeType,
         reactions: entry.reactions?.map((r) => ({
           emoji: r.emoji,
           count: r.userIds.length,
-          reactedByMe: r.userIds.includes(currentUser?.id ?? 'me'),
-        })),
-        replyToMessageId: entry.replyToMessageId,
-      };
+          reactedByMe: r.userIds.includes(currentUser?.id ?? 'me') })),
+        replyToMessageId: entry.replyToMessageId };
     });
   }, [conversation, currentUser?.id]);
-
-  // ─── AI agents (demo service) ───────────────────────────────────────
-  const [agentPickerVisible, setAgentPickerVisible] = useState(false);
-  const [deployedAgents, setDeployedAgents] = useState<ChatAgent[]>([]);
-  const [suggestions, setSuggestions] = useState<SuggestedReply[]>([]);
-
-  useEffect(() => {
-    setDeployedAgents(getDeployedAgents(groupId));
-  }, [groupId]);
-
-  const refreshSuggestions = useCallback(
-    (lastMessage: string) => {
-      const next = getAgentSuggestions(groupId, lastMessage);
-      setSuggestions(next);
-    },
-    [groupId],
-  );
 
   // ─── Controller hook: message list, sync, send, retry, delete ───────
   const {
@@ -163,12 +210,17 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     recentlyDeleted,
     composerSending,
     sendMessage: hookSendMessage,
+    sendVoiceMessage,
+    handleSendVoice,
     handleDeleteMessage,
     handleUndoDelete,
+    handleSendPendingAttachment: hookSendPendingAttachment,
+    handleSendPendingDocument: hookSendPendingDocument,
+    confirmation: conversationConfirmation,
+    clearConfirmation: clearConversationConfirmation,
     dateSeparatorIndices,
     handleMessageListScroll: hookHandleMessageListScroll,
-    syncMessagesFromApi,
-  } = useConversationMessages({
+    syncMessagesFromApi } = useConversationMessages({
     conversationId,
     currentUser,
     hydratedMessages,
@@ -177,7 +229,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     haptic,
     onOfferSent: () => {},
     clearComposerState: async () => {},
-    deployedChatAgents: deployedAgents,
+    deployedChatAgents: [],
     getChatAgentResponse: () => ({ id: '', agentId: '', content: '' }),
     getChatAgentSuggestions: () => [],
     setChatAgentSuggestionsExternal: () => {},
@@ -186,8 +238,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     conversationUnread: conversation?.unread,
     markConversationRead,
     appendConversationMessage,
-    replaceConversationMessages,
-  });
+    replaceConversationMessages });
 
   // ─── Controller hook: composer state, typing, reply ─────────────────
   const messagesRef = useRef(messages);
@@ -201,58 +252,56 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     setReplyTo,
     reactingToMessage,
     setReactingToMessage,
-  } = useConversationComposer({
+    attachmentPickerVisible,
+    setAttachmentPickerVisible,
+    pendingAttachment,
+    setPendingAttachment,
+    pendingDocument,
+    setPendingDocument,
+    handleAttachmentSelect } = useConversationComposer({
     conversationId,
     messagesRef,
     show,
     haptic,
-    setConversationDraft,
-  });
+    setConversationDraft });
 
   // ─── Server-driven typing indicator (other participants only) ──────
   // P0.13: Replaces the false self-typing indicator. useTypingIndicator
   // subscribes to chat.typing.update events and auto-clears after 4s.
   const remoteTyping = useTypingIndicator(groupId);
 
+  // Voice recording state — owned at screen level so the recorder survives
+  // composer re-renders while recording (report 19).
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+
   // ─── Send adapter ───────────────────────────────────────────────────
   const handleSend = useCallback(() => {
+    if (sendPermission !== 'allowed') return;
     const trimmed = input.trim();
     if (!trimmed) return;
     hookSendMessage(trimmed, replyTo, setTypingInput, setReplyTo);
     notifyStoppedTyping();
-    refreshSuggestions(trimmed);
-  }, [input, hookSendMessage, replyTo, setTypingInput, setReplyTo, notifyStoppedTyping, refreshSuggestions]);
+    if (conversationId) {
+      track('message_sent', { conversation_id: conversationId, message_type: 'text' });
+    }
+  }, [input, hookSendMessage, replyTo, setTypingInput, setReplyTo, notifyStoppedTyping, sendPermission, conversationId]);
 
-  // ─── Agent management ───────────────────────────────────────────────
-  const handleSelectSuggestion = useCallback(
-    (reply: SuggestedReply) => {
-      haptic.selection();
-      setTypingInput(reply.text);
+  // ─── Attachment send adapters ───────────────────────────────────────
+  const handleSendPendingAttachment = useCallback(
+    (caption: string) => {
+      hookSendPendingAttachment(caption, pendingAttachment, setPendingAttachment);
+      if (pendingAttachment && conversationId) {
+        track('message_sent', { conversation_id: conversationId, message_type: pendingAttachment.mediaType });
+      }
     },
-    [haptic, setTypingInput],
+    [hookSendPendingAttachment, pendingAttachment, setPendingAttachment, conversationId],
   );
 
-  const handleDeployAgent = useCallback(
-    (agent: ChatAgent) => {
-      haptic.success();
-      deployAgent(groupId, agent.type);
-      setDeployedAgents(getDeployedAgents(groupId));
-      setAgentPickerVisible(false);
-      show(`${agent.name} connected`, 'success');
-      refreshSuggestions('');
+  const handleSendPendingDocument = useCallback(
+    (caption: string) => {
+      hookSendPendingDocument(caption, pendingDocument, setPendingDocument);
     },
-    [groupId, haptic, refreshSuggestions, show],
-  );
-
-  const handleRemoveAgent = useCallback(
-    (agentId: string) => {
-      haptic.medium();
-      removeAgent(groupId, agentId);
-      setDeployedAgents(getDeployedAgents(groupId));
-      setSuggestions([]);
-      show('Agent removed', 'info');
-    },
-    [groupId, haptic, show],
+    [hookSendPendingDocument, pendingDocument, setPendingDocument],
   );
 
   // ─── Context menu + reactions ───────────────────────────────────────
@@ -314,7 +363,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
       const next = messages[index + 1];
       const isFirstInCluster = !prev || prev.senderId !== item.senderId;
       const isLastInCluster = !next || next.senderId !== item.senderId;
-      const isAgent = deployedAgents.some((agent) => agent.id === item.senderId);
+      const isAgent = item.isAgent === true;
       const replyParent = item.replyToMessageId
         ? messages.find((m) => m.id === item.replyToMessageId)
         : undefined;
@@ -334,6 +383,8 @@ export default function GroupChatScreen({ navigation, route }: Props) {
             </View>
           ) : null}
           <MessageBubble
+            id={item.id}
+            conversationId={conversationId}
             text={item.text ?? ''}
             isMe={item.sender === 'me'}
             senderLabel={isAgent ? `${item.senderLabel ?? 'Member'} · AI` : item.senderLabel}
@@ -349,11 +400,16 @@ export default function GroupChatScreen({ navigation, route }: Props) {
             }
             onLongPress={() => handleMessageLongPress(item)}
             onReactionPress={() => setReactingToMessage(item)}
+            mediaUri={item.mediaUri}
+            mediaType={item.mediaType}
+            documentUri={item.documentUri}
+            documentName={item.documentName}
+            documentMimeType={item.documentMimeType}
           />
         </View>
       );
     },
-    [deployedAgents, styles.messageRow, messages, handleMessageLongPress, dateSeparatorIndices, colors, setReactingToMessage],
+    [styles.messageRow, messages, handleMessageLongPress, dateSeparatorIndices, colors, setReactingToMessage],
   );
 
   const keyExtractor = useCallback((item: Message) => item.id, []);
@@ -361,7 +417,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const memberCount = conversation?.participantIds?.length ?? 0;
   const headerSubtitle = remoteTyping
     ? 'typing…'
-    : `${memberCount} members${deployedAgents.length > 0 ? ` · ${deployedAgents.length} AI` : ''}`;
+    : `${memberCount} members`;
 
   // ─── Loading / error states ─────────────────────────────────────────
   const showLoading = isSyncing && messages.length === 0;
@@ -371,54 +427,15 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     <SafeAreaView edges={['bottom']} style={styles.screenRoot}>
       <View style={styles.screenRoot}>
         <ChatTopBar
-          title={groupName}
+          title={conversation?.title ?? groupName}
           subtitle={headerSubtitle}
+          avatarUrl={conversation?.avatar ?? null}
+          groupId={groupId}
           variant="group"
           onBack={() => navigation.goBack()}
           onInfo={() => navigation.navigate('GroupChatInfo', { conversationId: groupId })}
           onTitlePress={() => navigation.navigate('GroupChatInfo', { conversationId: groupId })}
         />
-
-        {/* AI agent chips */}
-        {deployedAgents.length > 0 && (
-          <View
-            style={[
-              styles.agentChipsRow,
-              { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.borderSubtle },
-            ]}
-          >
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.agentChipsContent}
-            >
-              {deployedAgents.map((agent) => (
-                <Pressable
-                  key={agent.id}
-                  hitSlop={4}
-                  onPress={() => handleRemoveAgent(agent.id)}
-                  style={({ pressed }) => [
-                    styles.agentChip,
-                    { backgroundColor: pressed ? colors.surface : `${colors.brand}14` },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove ${agent.name} agent`}
-                  accessibilityHint="Removes this AI agent from the group chat"
-                >
-                  <Ionicons
-                    name={agent.avatar as keyof typeof Ionicons.glyphMap}
-                    size={12}
-                    color={colors.brand}
-                  />
-                  <Text style={[styles.agentChipText, { color: colors.brand }]} numberOfLines={1}>
-                    {agent.name}
-                  </Text>
-                  <Ionicons name="close-circle" size={12} color={colors.brand} />
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        )}
 
         {showLoading && <SkeletonChatLoader count={6} />}
 
@@ -470,8 +487,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               // P0.6: Preserve scroll anchor when older messages are
               // prepended via cursor pagination.
               maintainVisibleContentPosition={{
-                autoscrollToTopThreshold: 0,
-              }}
+                autoscrollToTopThreshold: 0 }}
             />
 
             <KeyboardStickyView style={styles.composerWrap}>
@@ -509,48 +525,69 @@ export default function GroupChatScreen({ navigation, route }: Props) {
                 </View>
               ) : null}
 
-              {deployedAgents.length > 0 && suggestions.length > 0 && input.trim().length === 0 && (
-                <SuggestedRepliesBar suggestions={suggestions} onSelect={handleSelectSuggestion} />
-              )}
+              {sendPermission !== 'allowed' ? (
+                <View style={styles.permissionNotice} accessibilityRole="text">
+                  <Ionicons
+                    name={sendPermission === 'restricted' ? 'lock-closed-outline' : 'cloud-offline-outline'}
+                    size={16}
+                    color={colors.textMuted}
+                  />
+                  <Caption color={colors.textMuted} style={styles.permissionNoticeText}>
+                    {sendPermission === 'loading'
+                      ? 'Checking group permissions…'
+                      : sendPermission === 'restricted'
+                        ? 'Only admins can send messages in this group.'
+                        : 'Messaging permissions are unavailable. Try reopening the group.'}
+                  </Caption>
+                </View>
+              ) : null}
 
               <ChatComposerBar
                 value={input}
                 onChangeText={setTypingInput}
                 onSend={handleSend}
+                onAttachmentPress={() => setAttachmentPickerVisible(true)}
+                onCameraPress={() => handleAttachmentSelect("camera")}
+                onVoiceRecord={handleSendVoice}
+                isVoiceRecording={isVoiceRecording}
+                onVoiceRecordingChange={setIsVoiceRecording}
                 placeholder="Message the group…"
                 isSending={composerSending}
+                disabled={sendPermission !== 'allowed'}
               />
-
-              <View style={styles.addAgentContainer}>
-                <AnimatedPressable
-                  style={styles.addAgentRow}
-                  onPress={() => setAgentPickerVisible(true)}
-                  activeOpacity={0.7}
-                  scaleValue={0.98}
-                  hapticFeedback="light"
-                  accessibilityRole="button"
-                  accessibilityLabel="Add AI Agent to this group"
-                  accessibilityHint="Opens the AI agent picker"
-                >
-                  <Ionicons name="person-add-outline" size={15} color={colors.brand} />
-                  <Text style={[styles.addAgentText, { color: colors.brand }]}>
-                    {deployedAgents.length > 0 ? 'Manage AI agents' : 'Add AI agent'}
-                  </Text>
-                </AnimatedPressable>
-                <Caption color={colors.textMuted} style={styles.addAgentDescription}>
-                  Deploy AI assistants for group moderation, styling, or shopping help
-                </Caption>
-              </View>
             </KeyboardStickyView>
           </>
         )}
 
-        <ChatAgentPicker
-          visible={agentPickerVisible}
-          onClose={() => setAgentPickerVisible(false)}
-          onDeploy={handleDeployAgent}
-          deployedAgentIds={deployedAgents.map((agent) => agent.id)}
+        <ChatActionSheet
+          visible={attachmentPickerVisible && !composerSending}
+          onClose={() => setAttachmentPickerVisible(false)}
+          onSelect={(action) => {
+            if (action === "gallery" || action === "camera" || action === "document" || action === "location") {
+              handleAttachmentSelect(action);
+            }
+          }}
         />
+
+        {pendingAttachment && !composerSending && (
+          <AttachmentReviewSheet
+            visible={!!pendingAttachment}
+            uri={pendingAttachment.uri}
+            mediaType={pendingAttachment.mediaType}
+            onClose={() => setPendingAttachment(null)}
+            onSend={handleSendPendingAttachment}
+          />
+        )}
+
+        {pendingDocument && !composerSending && (
+          <DocumentReviewSheet
+            visible={!!pendingDocument}
+            fileName={pendingDocument.name}
+            mimeType={pendingDocument.mimeType}
+            onClose={() => setPendingDocument(null)}
+            onSend={handleSendPendingDocument}
+          />
+        )}
 
         <MessageContextMenu
           visible={contextMenuVisible}
@@ -558,6 +595,30 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           onAction={handleContextAction}
           messageText={selectedMessage?.text}
           isOwnMessage={selectedMessage?.sender === 'me'}
+        />
+
+        <ConfirmationSheet
+          visible={!!conversationConfirmation}
+          onDismiss={clearConversationConfirmation}
+          title={conversationConfirmation?.title ?? ''}
+          message={conversationConfirmation?.message}
+          confirmLabel={conversationConfirmation?.confirmLabel}
+          cancelLabel={conversationConfirmation?.cancelLabel}
+          onConfirm={() => {
+            const req = conversationConfirmation;
+            clearConversationConfirmation();
+            if (req) void req.onConfirm();
+          }}
+          onCancel={
+            conversationConfirmation?.onCancel
+              ? () => {
+                  const req = conversationConfirmation;
+                  clearConversationConfirmation();
+                  if (req?.onCancel) void req.onCancel();
+                }
+              : undefined
+          }
+          variant={conversationConfirmation?.variant ?? 'danger'}
         />
       </View>
     </SafeAreaView>
@@ -571,44 +632,18 @@ const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     screenRoot: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
-    agentChipsRow: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      paddingVertical: Space.xs,
-    },
-    agentChipsContent: {
-      paddingHorizontal: Space.md,
-      gap: Space.xs,
-      alignItems: 'center',
-    },
-    agentChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.lg,
-    },
-    agentChipText: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
+      backgroundColor: colors.background },
     centerState: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.xs + 2,
       paddingHorizontal: Space.xl,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     stateTitle: {
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     stateCaption: {
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     retryBtn: {
       paddingHorizontal: Space.lg,
       paddingVertical: Space.sm,
@@ -616,79 +651,54 @@ const createStyles = (colors: ThemeColors) =>
       minHeight: Control.hit,
       justifyContent: 'center',
       alignItems: 'center',
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     retryBtnText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypeStyles.bodyEmphasis.fontFamily },
     listContent: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      flexGrow: 1,
-    },
+      flexGrow: 1 },
     messageRow: {
-      marginVertical: 2,
-    },
+      marginVertical: 2 },
     dateSeparator: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     dateSeparatorLine: {
       flex: 1,
-      height: StyleSheet.hairlineWidth,
-    },
+      height: StyleSheet.hairlineWidth },
     dateSeparatorText: {
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     composerWrap: {
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border,
-    },
+      borderTopColor: colors.border },
     undoBanner: {
       backgroundColor: colors.brand,
       paddingHorizontal: Space.md,
       paddingVertical: Space.xs,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     replyQuote: {
       marginHorizontal: Space.md,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     reactionsBar: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     typingRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-    },
-    addAgentContainer: {
-      alignItems: 'center',
-      paddingVertical: Space.sm,
-      paddingBottom: Space.md,
-    },
-    addAgentRow: {
+      paddingVertical: Space.xs },
+    permissionNotice: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      gap: Space.xs,
-      paddingVertical: Space.xs,
-    },
-    addAgentText: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    },
-    addAgentDescription: {
-      textAlign: 'center',
-      marginTop: Space.xs,
-      paddingHorizontal: Space.lg,
-    },
-  });
+      gap: Space.sm,
+      minHeight: Control.hit,
+      paddingHorizontal: Space.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle },
+    permissionNoticeText: {
+      flex: 1 } });

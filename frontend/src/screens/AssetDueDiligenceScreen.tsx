@@ -59,7 +59,6 @@ import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDueDiligence'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -100,7 +99,7 @@ export default function AssetDueDiligenceScreen() {
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
   const currentUser = useStore((state) => state.currentUser);
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { show } = useToast();
 
   const assetId = route.params?.assetId;
@@ -256,7 +255,7 @@ export default function AssetDueDiligenceScreen() {
 
     if (asset.escrowTermsUrl) {
       docs.push({
-        icon: 'shield-checkmark-outline',
+        icon: 'checkmark-circle-outline',
         title: 'Escrow terms',
         subtitle: asset.escrowPartner ?? null,
         url: asset.escrowTermsUrl,
@@ -283,7 +282,7 @@ export default function AssetDueDiligenceScreen() {
     }
     if (asset.buyerProtectionTermsUrl) {
       docs.push({
-        icon: 'shield-outline',
+        icon: 'checkmark-circle-outline',
         title: 'Buyer protection terms',
         subtitle: asset.buyerProtection ? 'Active' : null,
         url: asset.buyerProtectionTermsUrl,
@@ -385,7 +384,7 @@ export default function AssetDueDiligenceScreen() {
             <View style={[styles.custodyEvidence, { borderTopColor: colors.borderSubtle }]}>
               {asset.custodianName && (
                 <View style={styles.evidenceRow}>
-                  <Ionicons name="cube-outline" size={16} color={colors.textMuted} />
+                  <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
                   <Text style={[styles.evidenceRowLabel, { color: colors.textSecondary }]}>
                     {asset.custodianName}
                     {asset.custodianLocation ? ` · ${asset.custodianLocation}` : ''}
@@ -507,7 +506,7 @@ export default function AssetDueDiligenceScreen() {
               {navPerUnitGbp != null && (
                 <CommerceDetailMetricRow
                   label="NAV / unit"
-                  value={formatFromFiat(navPerUnitGbp, DEFAULT_CURRENCY_CODE)}
+                  value={formatFromFiat(navPerUnitGbp, currencyCode)}
                 />
               )}
               {referenceVsNavPct != null && (

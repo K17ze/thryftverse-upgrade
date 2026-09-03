@@ -3,7 +3,8 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../theme/designTokens';
+import { Space, Typography } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface UtilityItem {
   icon: keyof typeof Ionicons.glyphMap;
@@ -76,37 +77,29 @@ function createStyles(colors: ThemeColors) {
   container: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   content: {
     paddingHorizontal: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   item: {
     width: Space.xxl + Space.xxl + Space.xs,
     minHeight: Space.xxl + Space.xxl - Space.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs + 1,
-  },
+    gap: Space.xs + 1 },
   label: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   value: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size - 1,
-    lineHeight: Type.meta.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size - 1,
+    lineHeight: TypographyV2.meta.lineHeight },
   valueWithData: {
     color: colors.brandSubtle,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   valuePlaceholder: {
-    height: 12,
-  },
-  });
+    height: 12 } });
 }

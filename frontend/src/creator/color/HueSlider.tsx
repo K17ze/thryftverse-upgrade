@@ -21,16 +21,16 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  Easing,
   runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 import { Radius, Stroke } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { HSV } from './ColorTypes';
 
 // ── Timing ───────────────────────────────────────────────────────────
-const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
+const SNAP_TIMING = { duration: Motion.duration.snapToGuide, easing: Motion.easing.entrance };
 
 // ── Props ────────────────────────────────────────────────────────────
 interface HueSliderProps {
@@ -115,7 +115,7 @@ export function HueSlider({
     }
     return {
       transform: [
-        { translateX: withTiming(thumbX.value - THUMB_SIZE / 2, SNAP_TIMING) },
+        { translateX: thumbX.value - THUMB_SIZE / 2 },
       ],
     };
   });
@@ -180,10 +180,5 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 2,
     borderWidth: Stroke.emphasis,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
   },
 });

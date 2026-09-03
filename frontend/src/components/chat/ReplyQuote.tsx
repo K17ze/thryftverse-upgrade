@@ -5,6 +5,7 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Caption, BodyEmphasis, Meta } from '../ui/Text';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface ReplyQuoteProps {
   senderName: string;
@@ -22,6 +23,7 @@ export function ReplyQuote({
   style,
 }: ReplyQuoteProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   return (
@@ -31,8 +33,8 @@ export function ReplyQuote({
         style={styles.content}
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityLabel={`Quoted reply from ${senderName}`}
-        accessibilityHint="Scrolls to the original message"
+        accessibilityLabel={t('messageActions.quotedReply', { sender: senderName })}
+        accessibilityHint={t('messageActions.scrollToOriginal')}
         activeOpacity={0.7}
         scaleValue={0.99}
         hapticFeedback="light"
@@ -46,7 +48,7 @@ export function ReplyQuote({
         style={styles.closeBtn}
         onPress={onClose}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss reply"
+        accessibilityLabel={t('messageActions.dismissReply')}
         activeOpacity={0.7}
         scaleValue={0.9}
         hapticFeedback="light"

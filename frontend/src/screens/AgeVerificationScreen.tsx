@@ -5,14 +5,14 @@ import {
   StyleSheet,
   BackHandler,
   Platform,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, FontFamily, LetterSpacing } from '../theme/designTokens';
-import { AppButton } from '../components/ui/AppButton';
+import { Space, Radius, FontFamily, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { secureStorage } from '../utils/security';
@@ -62,9 +62,6 @@ export default function AgeVerificationScreen({ navigation }: Props) {
   const storeOnboardingComplete = useStore((state) => state.hasCompletedOnboarding);
   const [underAge, setUnderAge] = useState(false);
 
-  // On mount, check if already verified — if so, navigate immediately to the
-  // next gate in the chain (onboarding or auth/main). This keeps returning
-  // users from seeing the age gate twice.
   useEffect(() => {
     let mounted = true;
     isAgeVerified().then((verified) => {
@@ -75,20 +72,14 @@ export default function AgeVerificationScreen({ navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Block swipe-back / hardware back so the gate cannot be bypassed before
-  // the user confirms. Once verified, the screen is replaced by the next route.
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      // Swallow back while the gate is active.
       return true;
     });
     return () => subscription.remove();
   }, []);
 
   const navigateToNextGate = useCallback(() => {
-    // After age verification, the next gate is onboarding (first launch) or
-    // the auth/main entry point (returning users). We replace rather than push
-    // so the age screen is not left on the back stack.
     if (!storeOnboardingComplete) {
       navigation.replace('Onboarding');
     } else if (isAuthenticated) {
@@ -111,117 +102,102 @@ export default function AgeVerificationScreen({ navigation }: Props) {
 
   const handleCloseApp = useCallback(() => {
     haptic.heavy();
-    // Exit the app. On Android this closes the activity; on iOS BackHandler
-    // does nothing so we no-op (the user is shown the polite message).
     if (Platform.OS === 'android') {
       BackHandler.exitApp();
     }
   }, [haptic]);
 
-  return (
-    <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      <View style={styles.brandMark}>
-        <View
-          style={[styles.logoBadge, { backgroundColor: colors.brand }]}
-        >
-          <Ionicons name="storefront" size={28} color={colors.background} />
-        </View>
-      </View>
-
-      {!underAge ? (
-        <View style={styles.content}>
-          <Text
-            style={[styles.title, { color: colors.textPrimary }]}
-            accessibilityRole="header"
-          >
-            ThryftVerse
-          </Text>
-          <Text
-            style={[styles.subtitle, { color: colors.textSecondary }]}
-          >
-            A marketplace for fashion, auctions, and co-ownership. 18+ only.
-          </Text>
-
-          <View style={styles.actions}>
-            <AppButton
-              title="Confirm I am 18 or older"
-              variant="primary"
-              size="lg"
-              onPress={handleConfirm18}
-              hapticFeedback="medium"
-              accessibilityLabel="Confirm I am 18 or older"
-              accessibilityHint="Confirms you are at least 18 and continues to the marketplace"
-              accessibilityRole="button"
-              style={styles.button}
-            />
-            <AppButton
-              title="I am under 18"
-              variant="secondary"
-              size="lg"
-              onPress={handleUnder18}
-              hapticFeedback="light"
-              accessibilityLabel="I am under 18"
-              accessibilityHint="Indicates you are below the required age"
-              accessibilityRole="button"
-              style={styles.button}
-            />
-          </View>
-
-          {/* Data-transparency microcopy (ICO 2026). The gate stores only a
-              boolean self-declaration (declared_18_plus) in hardware-backed
-              SecureStore — never the user's date of birth. Being explicit
-              that this is a self-declaration, not verified age assurance,
-              meets data-protection transparency expectations. */}
-          <Text
-            style={[styles.microcopy, { color: colors.textMuted }]}
-            maxFontSizeMultiplier={1.3}
-          >
-            This is a self-declaration stored on your device. Some features may require age verification later.
-          </Text>
-        </View>
-      ) : (
+  if (underAge) {
+    return (
+      <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <Reanimated.View
           entering={reducedMotion ? undefined : FadeIn}
-          style={styles.content}
+          style={styles.deniedContent}
           accessibilityLiveRegion="polite"
         >
-          <View style={[styles.deniedIcon, { backgroundColor: colors.surface }]}>
-            <Ionicons name="lock-closed" size={32} color={colors.textSecondary} />
-          </View>
           <Text
-            style={[styles.title, { color: colors.textPrimary }]}
+            style={[styles.deniedTitle, { color: colors.textPrimary }]}
             accessibilityRole="header"
           >
-            We're sorry
+            ThryftVerse is 18+
           </Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            We're sorry, but ThryftVerse is only available to users 18 and older.
+          <Text style={[styles.deniedBody, { color: colors.textSecondary }]}>
+            This app is only available to users 18 and older.
           </Text>
           {Platform.OS === 'android' ? (
-            <AppButton
-              title="Close app"
-              variant="secondary"
-              size="lg"
+            <Pressable
               onPress={handleCloseApp}
-              hapticFeedback="medium"
-              accessibilityLabel="Close app"
-              accessibilityHint="Closes the application"
+              style={({ pressed }) => [styles.deniedAction, pressed && styles.pressed]}
               accessibilityRole="button"
-              style={styles.button}
-            />
-          ) : (
-            // iOS — BackHandler.exitApp is a no-op, so we do not show a
-            // button that represents an action it cannot perform (§11).
-            // Instead, honest guidance tells the user how to leave.
-            <Text
-              style={[styles.iosCloseHint, { color: colors.textMuted }]}
-              maxFontSizeMultiplier={1.3}
+              accessibilityLabel="Close app"
             >
-              You can close the app by swiping up from the bottom of your screen.
+              <Text style={[styles.deniedActionText, { color: colors.textPrimary }]}>
+                Close app
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.iosCloseHint, { color: colors.textMuted }]}>
+              Swipe up from the bottom to close.
             </Text>
           )}
         </Reanimated.View>
-      )}
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
+      {/* Wordmark — top-left, not centered. Reads as a real product, not a gate. */}
+      <Text style={[styles.wordmark, { color: colors.textPrimary }]}>
+        ThryftVerse
+      </Text>
+
+      {/* Content anchored to the lower third — not vertically centered.
+          This gives the wordmark room to breathe and creates intentional
+          asymmetry (AGENTS §4: "Real product surfaces have intentional
+          asymmetry, dominant objects, and breathing room that serves focus"). */}
+      <View style={styles.content}>
+        <Text
+          style={[styles.statement, { color: colors.textPrimary }]}
+          accessibilityRole="header"
+        >
+          You must be 18 or older to use ThryftVerse.
+        </Text>
+
+        <Text style={[styles.finePrint, { color: colors.textMuted }]}>
+          A self-declaration stored on your device. Some features may require age verification later.
+        </Text>
+
+        {/* One dominant action. The "under 18" path is a quiet text link,
+            not an equal-weight pill — because it's the exit, not the entry. */}
+        <Pressable
+          onPress={handleConfirm18}
+          style={({ pressed }) => [
+            styles.confirmButton,
+            { backgroundColor: colors.brand },
+            pressed && styles.pressed,
+          ]}
+          accessibilityLabel="Confirm I am 18 or older"
+          accessibilityHint="Confirms you are at least 18 and continues to the marketplace"
+          accessibilityRole="button"
+        >
+          <Text style={[styles.confirmText, { color: colors.background }]}>
+            I'm 18 or older
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={handleUnder18}
+          style={({ pressed }) => [styles.underAgeLink, pressed && styles.pressed]}
+          accessibilityLabel="I am under 18"
+          accessibilityHint="Indicates you are below the required age"
+          accessibilityRole="button"
+        >
+          <Text style={[styles.underAgeText, { color: colors.textMuted }]}>
+            I'm under 18
+          </Text>
+        </Pressable>
+      </View>
     </SafeAreaView>
   );
 }
@@ -229,78 +205,96 @@ export default function AgeVerificationScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    paddingHorizontal: Space.xl,
-    justifyContent: 'center',
+    paddingHorizontal: Space.lg,
   },
-  brandMark: {
-    position: 'absolute',
-    top: Space.xxl,
-    alignSelf: 'center',
+  // Wordmark sits at the top with generous breathing room — not in a badge.
+  wordmark: {
+    fontFamily: FontFamily.bold,
+    fontSize: TypographyV2.bodyStrong.size,
+    letterSpacing: LetterSpacing.tight,
+    paddingTop: Space.xxl,
   },
-  logoBadge: {
-    width: Space.xxl + Space.sm,
-    height: Space.xxl + Space.sm,
+  // Content sits in the lower third. This is the dominant object.
+  content: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingBottom: Space.xxl + Space.lg,
+  },
+  // The statement IS the screen. No subtitle, no eyebrow, no badge.
+  statement: {
+    fontFamily: FontFamily.bold,
+    fontSize: TypographyV2.display.size,
+    lineHeight: TypographyV2.display.lineHeight,
+    letterSpacing: LetterSpacing.tight,
+    marginBottom: Space.md,
+  },
+  finePrint: {
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.caption.size,
+    lineHeight: TypographyV2.caption.lineHeight + 2,
+    marginBottom: Space.xxl,
+    maxWidth: 300,
+  },
+  // One dominant action — full-width, brand fill, clear hierarchy.
+  confirmButton: {
+    height: 52,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  content: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  title: {
-    fontFamily: Typography.family.extrabold,
-    fontSize: Type.display.size + 4,
-    lineHeight: Type.display.lineHeight + 6,
-    letterSpacing: LetterSpacing.tight,
-    textAlign: 'center',
     marginBottom: Space.md,
   },
-  subtitle: {
+  confirmText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+  },
+  // The exit path is a quiet text link — not an equal-weight button.
+  underAgeLink: {
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  underAgeText: {
     fontFamily: FontFamily.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 4,
-    letterSpacing: Type.body.letterSpacing,
-    textAlign: 'center',
-    marginBottom: Space.xxl,
-    maxWidth: 320,
+    fontSize: TypographyV2.body.size,
   },
-  actions: {
-    width: '100%',
-    maxWidth: 360,
-    alignSelf: 'center',
-    gap: Space.md,
+  pressed: {
+    opacity: 0.7,
   },
-  button: {
-    width: '100%',
+  // Denied state — text only, no icon circle, no chrome.
+  deniedContent: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    paddingHorizontal: Space.lg,
   },
-  microcopy: {
+  deniedTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    letterSpacing: LetterSpacing.tight,
+    marginBottom: Space.sm,
+  },
+  deniedBody: {
     fontFamily: FontFamily.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight + 2,
-    letterSpacing: Type.meta.letterSpacing,
-    textAlign: 'center',
-    marginTop: Space.lg,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 4,
+    marginBottom: Space.xl,
     maxWidth: 300,
-    alignSelf: 'center',
+  },
+  deniedAction: {
+    height: 44,
+    paddingHorizontal: Space.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.full,
+  },
+  deniedActionText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.body.size,
   },
   iosCloseHint: {
     fontFamily: FontFamily.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 4,
-    letterSpacing: Type.body.letterSpacing,
-    textAlign: 'center',
-    marginTop: Space.lg,
-    maxWidth: 300,
-    alignSelf: 'center',
-  },
-  deniedIcon: {
-    width: Space.xxl + Space.lg,
-    height: Space.xxl + Space.lg,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Space.lg,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 4,
   },
 });

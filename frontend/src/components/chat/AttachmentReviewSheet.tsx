@@ -4,21 +4,19 @@ import {
   Text,
   TextInput,
   StyleSheet,
-  Dimensions,
-  Pressable,
-} from 'react-native';
+  useWindowDimensions,
+  Pressable } from 'react-native';
 import Reanimated, {
   useSharedValue,
-  useAnimatedStyle,
-} from 'react-native-reanimated';
+  useAnimatedStyle } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-
-const { height } = Dimensions.get('window');
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
 interface AttachmentReviewSheetProps {
   visible: boolean;
@@ -33,9 +31,10 @@ export function AttachmentReviewSheet({
   uri,
   mediaType,
   onClose,
-  onSend,
-}: AttachmentReviewSheetProps) {
+  onSend }: AttachmentReviewSheetProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
+  const { height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const [caption, setCaption] = useState('');
   const [shouldRender, setShouldRender] = useState(visible);
@@ -54,12 +53,10 @@ export function AttachmentReviewSheet({
   }, [visible, reducedMotion]);
 
   const overlayStyle = useAnimatedStyle(() => ({
-    opacity: 1 - translateY.value / height,
-  }));
+    opacity: 1 - translateY.value / height }));
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   if (!shouldRender) return null;
 
@@ -68,16 +65,16 @@ export function AttachmentReviewSheet({
       <Reanimated.View style={[styles.overlay, { backgroundColor: colors.overlay }, overlayStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Reanimated.View>
-      <Reanimated.View style={[styles.sheet, { backgroundColor: colors.surface }, sheetStyle]}>
+      <Reanimated.View style={[styles.sheet, { backgroundColor: colors.surface, maxHeight: height * 0.85 }, sheetStyle]}>
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-            Review attachment
+            {t('attachments.reviewTitle')}
           </Text>
           <Pressable
             onPress={onClose}
             hitSlop={12}
-            accessibilityLabel="Cancel attachment"
+            accessibilityLabel={t('attachments.cancelAttachment')}
             accessibilityRole="button"
           >
             <Ionicons name="close" size={24} color={colors.textPrimary} />
@@ -102,17 +99,17 @@ export function AttachmentReviewSheet({
             style={[styles.captionInput, { backgroundColor: colors.surfaceAlt, color: colors.textPrimary }]}
             value={caption}
             onChangeText={setCaption}
-            placeholder="Add a caption..."
+            placeholder={t('attachments.captionPlaceholder')}
             placeholderTextColor={colors.textMuted}
             multiline
             maxLength={500}
-            accessibilityLabel="Attachment caption"
+            accessibilityLabel={t('attachments.captionAccessibility')}
             accessibilityRole="text"
           />
           <Pressable
             onPress={() => onSend(caption.trim())}
             style={[styles.sendBtn, { backgroundColor: colors.brand }]}
-            accessibilityLabel="Send attachment"
+            accessibilityLabel={t('attachments.sendAttachment')}
             accessibilityRole="button"
           >
             <Ionicons name="arrow-up" size={20} color={colors.textInverse} />
@@ -125,8 +122,7 @@ export function AttachmentReviewSheet({
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFill,
-  },
+    ...StyleSheet.absoluteFill },
   sheet: {
     position: 'absolute',
     bottom: 0,
@@ -134,16 +130,13 @@ const styles = StyleSheet.create({
     right: 0,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    paddingBottom: Space.xxl + Space.sm,
-    maxHeight: height * 0.85,
-  },
+    paddingBottom: Space.xxl + Space.sm },
   handle: {
     width: 36,
     height: 4,
     borderRadius: Radius.full,
     alignSelf: 'center',
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -151,13 +144,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.xs,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   headerTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   previewWrap: {
     marginHorizontal: Space.md,
     marginVertical: Space.sm,
@@ -166,26 +157,22 @@ const styles = StyleSheet.create({
     minHeight: 200,
     maxHeight: 350,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   preview: {
     width: '100%',
     height: '100%',
     minHeight: 200,
-    maxHeight: 350,
-  },
+    maxHeight: 350 },
   videoBadge: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   captionRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Space.sm,
     paddingHorizontal: Space.md,
-    paddingTop: Space.xs,
-  },
+    paddingTop: Space.xs },
   captionInput: {
     flex: 1,
     minHeight: 40,
@@ -193,15 +180,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   sendBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+    alignItems: 'center' } });

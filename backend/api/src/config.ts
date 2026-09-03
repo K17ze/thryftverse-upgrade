@@ -150,6 +150,16 @@ export const config = {
         'video/mp4',
         'video/quicktime',
         'video/x-m4v',
+        // Voice messages — report 19. M4A/AAC is the iOS/Android default from
+        // expo-audio's HIGH_QUALITY preset; Ogg/Opus is the Android alternative.
+        // The backend decodes at finalization to verify container/codec and
+        // reject polyglot/mismatch (extension trust is not enough).
+        'audio/mp4',
+        'audio/m4a',
+        'audio/x-m4a',
+        'audio/aac',
+        'audio/ogg',
+        'audio/webm',
         'application/pdf',
         ...(nodeEnv === 'production' ? [] : ['text/plain']),
       ],
@@ -173,6 +183,16 @@ export const config = {
     10 * 1024 * 1024,
     1_024,
     50 * 1024 * 1024
+  ),
+  // Voice messages — separate from documents. A 2-minute voice message at
+  // HIGH_QUALITY AAC is ~1–2 MB; 16 MB comfortably covers 2 minutes with
+  // headroom for higher bitrates, while bounding decompression/decoding abuse.
+  s3MaxAudioUploadBytes: asIntegerInRange(
+    'S3_MAX_AUDIO_UPLOAD_BYTES',
+    process.env.S3_MAX_AUDIO_UPLOAD_BYTES,
+    16 * 1024 * 1024,
+    1_024,
+    64 * 1024 * 1024
   ),
   s3PresignTtlSeconds: asIntegerInRange(
     'S3_PRESIGN_TTL_SECONDS',
@@ -353,6 +373,8 @@ export const config = {
   stripeApplePayMerchantIdentifier:
     process.env.STRIPE_APPLE_PAY_MERCHANT_IDENTIFIER?.trim() || null,
   stripeGooglePayEnabled: asBoolean(process.env.STRIPE_GOOGLE_PAY_ENABLED, false),
+  stripeMerchantCountryCode:
+    process.env.STRIPE_MERCHANT_COUNTRY_CODE?.trim().toUpperCase() || 'GB',
   paymentMetadataHmacSecret: requiredSecret(
     'PAYMENT_METADATA_HMAC_SECRET',
     'dev-only-payment-metadata-hmac-secret'
@@ -489,6 +511,7 @@ export const config = {
   ),
   platformRevenueSweepIntervalMs: asNumber(process.env.PLATFORM_REVENUE_SWEEP_INTERVAL_MS, 6 * 60 * 60 * 1000),
   retentionSweepIntervalMs: asNumber(process.env.RETENTION_SWEEP_INTERVAL_MS, 24 * 60 * 60 * 1000),
+  analyticsAggregationIntervalMs: asNumber(process.env.ANALYTICS_AGGREGATION_INTERVAL_MS, 15 * 60 * 1000),
   opsAlertIntervalMs: asNumber(process.env.OPS_ALERT_INTERVAL_MS, 60_000),
   alertingWebhookUrls: asCsvList(process.env.ALERTING_WEBHOOK_URLS ?? process.env.ALERTING_WEBHOOK_URL),
   alertingAdminUserIds: asCsvList(process.env.ALERTING_ADMIN_USER_IDS),
@@ -497,7 +520,7 @@ export const config = {
   onezeReservePolicyEnabled: asBoolean(process.env.ONEZE_RESERVE_POLICY_ENABLED, false),
   onezeReserveRatioMin: asNumber(process.env.ONEZE_RESERVE_RATIO_MIN, 0.3),
   onezeReserveRatioMax: asNumber(process.env.ONEZE_RESERVE_RATIO_MAX, 0.6),
-  onezeOperationalReserveMg: asNumber(process.env.ONEZE_OPERATIONAL_RESERVE_MG, 0),
+  onezeOperationalReserveUnits: asNumber(process.env.ONEZE_OPERATIONAL_RESERVE_UNITS, 0),
   expoPushApiUrl: process.env.EXPO_PUSH_API_URL ?? 'https://exp.host/--/api/v2/push/send',
   pushDefaultChannel: process.env.PUSH_DEFAULT_CHANNEL ?? 'default',
   sentryDsn: process.env.SENTRY_DSN,
@@ -512,7 +535,7 @@ export const config = {
   onezeFxProviderUrl:
     process.env.ONEZE_FX_PROVIDER_URL?.trim() || 'https://api.exchangerate.host/latest',
   onezeFxProviderApiKey: process.env.ONEZE_FX_PROVIDER_API_KEY?.trim() || null,
-  onezeFxProviderBaseCurrency: process.env.ONEZE_FX_PROVIDER_BASE_CURRENCY?.trim().toUpperCase() || 'INR',
+  onezeFxProviderBaseCurrency: process.env.ONEZE_FX_PROVIDER_BASE_CURRENCY?.trim().toUpperCase() || 'USD',
   onezeAutoAdjustEnabled: asBoolean(process.env.ONEZE_AUTO_ADJUST_ENABLED, false),
   onezeAutoAdjustIntervalMs: asNumber(process.env.ONEZE_AUTO_ADJUST_INTERVAL_MS, 60 * 60 * 1000),
   onezeAutoAdjustStepBps: asNumber(process.env.ONEZE_AUTO_ADJUST_STEP_BPS, 50),
@@ -521,12 +544,11 @@ export const config = {
   onezeAutoAdjustLowStressThreshold: asNumber(process.env.ONEZE_AUTO_ADJUST_LOW_STRESS_THRESHOLD, 0.35),
   onezeAutoAdjustHighRedemptionRate: asNumber(process.env.ONEZE_AUTO_ADJUST_HIGH_REDEMPTION_RATE, 0.8),
   onezeAutoAdjustLowRedemptionRate: asNumber(process.env.ONEZE_AUTO_ADJUST_LOW_REDEMPTION_RATE, 0.25),
-  onezeEnableDirectRedemption: asBoolean(process.env.ONEZE_ENABLE_DIRECT_REDEMPTION, false),
   onezeMintQuoteTtlSeconds: asNumber(process.env.ONEZE_MINT_QUOTE_TTL_SECONDS, 60),
   onezeMintPaymentGraceSeconds: asNumber(process.env.ONEZE_MINT_PAYMENT_GRACE_SECONDS, 5 * 60),
   onezeWithdrawalQuoteTtlSeconds: asNumber(process.env.ONEZE_WITHDRAWAL_QUOTE_TTL_SECONDS, 60),
-  onezeWithdrawalInstantLimitMg: asNumber(process.env.ONEZE_WITHDRAWAL_INSTANT_LIMIT_MG, 20_000),
-  onezeTravelRuleThresholdMg: asNumber(process.env.ONEZE_TRAVEL_RULE_THRESHOLD_MG, 11_000),
+  onezeWithdrawalInstantLimitUnits: asNumber(process.env.ONEZE_WITHDRAWAL_INSTANT_LIMIT_UNITS, 20_000),
+  onezeTravelRuleThresholdUnits: asNumber(process.env.ONEZE_TRAVEL_RULE_THRESHOLD_UNITS, 11_000),
   onezeDailyAttestationIntervalMs: asNumber(
     process.env.ONEZE_DAILY_ATTESTATION_INTERVAL_MS,
     24 * 60 * 60 * 1000

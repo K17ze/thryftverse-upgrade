@@ -15,7 +15,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke, Elevation } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { SustainabilityScore } from '../../utils/sustainabilityScore';
 
 export type SustainabilityBadgeVariant = 'compact' | 'detailed';
@@ -50,25 +51,22 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
       return {
         fill: colors.success,
         onFill: colors.scrimTextPrimary,
-        tint: `${colors.success}22`,
-        label: 'Excellent',
-      };
+        tint: colors.successSubtle,
+        label: 'High avoided emissions' };
     case 'B':
       // Light green — positive, slightly less.
       return {
-        fill: `${colors.success}CC`,
+        fill: colors.overlay,
         onFill: colors.scrimTextPrimary,
-        tint: `${colors.success}14`,
-        label: 'Good',
-      };
+        tint: colors.successSubtle,
+        label: 'Medium-high avoided emissions' };
     case 'C':
       // Amber — moderate.
       return {
         fill: colors.warning,
         onFill: colors.textInverse,
-        tint: `${colors.warning}1F`,
-        label: 'Moderate',
-      };
+        tint: colors.warningSubtle,
+        label: 'Medium avoided emissions' };
     case 'D':
     default:
       // Grey — low / unknown impact.
@@ -76,16 +74,14 @@ function gradeMeta(grade: GradeColorKey, colors: ThemeColors): GradeMeta {
         fill: colors.surfaceAlt,
         onFill: colors.textSecondary,
         tint: colors.surfaceAlt,
-        label: 'Low',
-      };
+        label: 'Low avoided emissions' };
   }
 }
 
 export function SustainabilityBadge({
   score,
   variant = 'compact',
-  onMedia = false,
-}: SustainabilityBadgeProps) {
+  onMedia = false }: SustainabilityBadgeProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
@@ -128,10 +124,10 @@ export function SustainabilityBadge({
         </View>
         <View style={styles.detailedHeaderText}>
           <Text style={[styles.eyebrow, { color: colors.textMuted }]}>
-            ESTIMATED IMPACT
+            Environmental impact
           </Text>
           <Text style={[styles.detailedTitle, { color: colors.textPrimary }]}>
-            {meta.label} sustainability
+            {meta.label}
           </Text>
         </View>
       </View>
@@ -169,7 +165,7 @@ export function SustainabilityBadge({
         </View>
       ) : null}
 
-      {/* CO2 + water savings — two stat cells. */}
+      {/* CO2 + water savings — two stat cells (water only if > 0). */}
       <View style={[styles.statRow, { borderTopColor: colors.borderSubtle }]}>
         <View style={styles.statCell}>
           <Ionicons name="cloud-outline" size={16} color={colors.success} />
@@ -180,20 +176,24 @@ export function SustainabilityBadge({
             CO₂e saved
           </Text>
         </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.borderSubtle }]} />
-        <View style={styles.statCell}>
-          <Ionicons name="water-outline" size={16} color={colors.success} />
-          <Text style={[styles.statValue, { color: colors.textPrimary }]}>
-            ~{score.waterSavedL.toLocaleString('en-GB')} L
-          </Text>
-          <Text style={[styles.statCaption, { color: colors.textMuted }]}>
-            Water saved
-          </Text>
-        </View>
+        {score.waterSavedL > 0 ? (
+          <>
+            <View style={[styles.statDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.statCell}>
+              <Ionicons name="water-outline" size={16} color={colors.success} />
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>
+                ~{score.waterSavedL.toLocaleString('en-GB')} L
+              </Text>
+              <Text style={[styles.statCaption, { color: colors.textMuted }]}>
+                Water saved
+              </Text>
+            </View>
+          </>
+        ) : null}
       </View>
 
       <Text style={[styles.disclaimer, { color: colors.textMuted }]}>
-        Estimates based on industry averages. Not a precise measurement.
+        Estimate based on verified emissions factors. Not a precise measurement.
       </Text>
     </View>
   );
@@ -207,107 +207,86 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 3,
     paddingHorizontal: 7,
     paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   compactChipOnMedia: {
     // Legibility on photography — subtle dark backing is provided by the
     // solid grade fill itself, so no extra scrim is needed.
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.5,
-    shadowRadius: 3,
-    elevation: 2,
-  },
+    ...Elevation.modal },
   compactLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0.2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.2 },
 
   // ── Detailed card ──────────────────────────────────────────────────────────
   detailedCard: {
     borderRadius: Radius.lg,
     padding: Space.md,
-    borderWidth: Stroke.hairline,
-  },
+    borderWidth: Stroke.hairline },
   detailedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   gradeChipLarge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   gradeChipLabel: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: 0.2,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: 0.2 },
   detailedHeaderText: {
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   eyebrow: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.2 },
   detailedTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     letterSpacing: -0.2,
-    marginTop: 1,
-  },
+    marginTop: 1 },
   summary: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: -0.1,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
 
   // ── Factor rows ───────────────────────────────────────────────────────────
   factorList: {
     marginTop: Space.sm,
-    borderTopWidth: Stroke.hairline,
-  },
+    borderTopWidth: Stroke.hairline },
   factorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm - 2,
     borderBottomWidth: Stroke.hairline,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   factorLabelWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   factorLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: -0.1,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: -0.1 },
   factorValue: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'right',
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
 
   // ── Stat row ──────────────────────────────────────────────────────────────
   statRow: {
@@ -315,39 +294,32 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     marginTop: Space.sm,
     paddingTop: Space.sm,
-    borderTopWidth: Stroke.hairline,
-  },
+    borderTopWidth: Stroke.hairline },
   statCell: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   statDivider: {
     width: Stroke.hairline,
-    alignSelf: 'stretch',
-  },
+    alignSelf: 'stretch' },
   statValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     letterSpacing: -0.2,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   statCaption: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: 0.1,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.1 },
 
   disclaimer: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight + 2,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.1,
     marginTop: Space.sm,
-    textAlign: 'center',
-  },
-});
+    textAlign: 'center' } });

@@ -337,6 +337,8 @@ export interface CreateOrderInput {
   shippingQuoteId: string;
   addressId?: number;
   paymentMethodId?: number;
+  /** When 'oneze_internal', the order will be paid via the buyer's 1ZE wallet */
+  paymentGatewayId?: string;
   platformChargeGbp?: number;
   buyerProtectionFeeGbp?: number;
   postageFeeGbp?: number;
@@ -571,6 +573,34 @@ export async function createCommercePaymentIntent(
   return payload.intent;
 }
 
+/**
+ * Create a 1ZE wallet checkout payment intent.
+ *
+ * This posts to /payments/intents with gatewayId: 'oneze_internal', which
+ * triggers the internal 1ZE payment flow — the buyer's 1ZE wallet is debited
+ * atomically at the at-par rate (1 1ZE ≈ 1 GBP) and the GBP amount is credited
+ * to escrow. No Stripe PaymentSheet is needed.
+ */
+export async function createOnezeCheckoutIntent(
+  orderId: string
+): Promise<PaymentIntentStatusResponse> {
+  const payload = await fetchJson<{ ok: true; intent: PaymentIntentStatusResponse }>(
+    '/payments/intents',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        channel: 'commerce',
+        orderId,
+        gatewayId: 'oneze_internal',
+        idempotencyKey: `oneze_payment_${orderId}`,
+      }),
+    }
+  );
+
+  return payload.intent;
+}
+
 export async function getPaymentIntentStatus(intentId: string): Promise<PaymentIntentStatusResponse> {
   const payload = await fetchJson<{ ok: true; intent: PaymentIntentStatusResponse }>(
     `/payments/intents/${encodeURIComponent(intentId)}`
@@ -741,11 +771,20 @@ export async function createBuyerProtectionClaim(
 
 export interface SellerAnalytics {
   totalListings: number;
+  activeListings: number;
   totalViews: number;
   totalLikes: number;
   totalSaves: number;
   itemsSold: number;
   revenueGbpMinor: number;
+  /** Refunds in the period (GBP minor). Null when ledger tables are absent. */
+  refundsGbpMinor: number | null;
+  /** Platform fees in the period (GBP minor). Null when ledger tables are absent. */
+  feesGbpMinor: number | null;
+  /** Net sales = revenue − refunds − fees (GBP minor). Null when ledger is absent. */
+  netSalesGbpMinor: number | null;
+  /** Data completeness — 'complete' when ledger is available, 'partial' otherwise. */
+  completeness: 'complete' | 'partial';
   avgRating: number | null;
   reviewCount: number;
   responseRate: number | null;
@@ -757,10 +796,15 @@ export interface SellerAnalytics {
 
 export async function fetchSellerAnalytics(
   sellerId: string,
-  period: '7d' | '30d' | '90d' | '1y' = '30d'
+  period: '7d' | '30d' | '90d' = '30d',
+  options?: { offsetDays?: number }
 ): Promise<SellerAnalytics> {
+  const offsetDays = options?.offsetDays ?? 0;
+  const qs = offsetDays > 0
+    ? `period=${period}&offsetDays=${offsetDays}`
+    : `period=${period}`;
   const payload = await fetchJson<{ ok: true; analytics: SellerAnalytics }>(
-    `/sellers/${encodeURIComponent(sellerId)}/analytics?period=${period}`
+    `/sellers/${encodeURIComponent(sellerId)}/analytics?${qs}`
   );
   return payload.analytics;
 }
@@ -785,4 +829,25 @@ export async function fetchTopPerformers(
     `/sellers/${encodeURIComponent(sellerId)}/analytics/top-performers?limit=${limit}`
   );
   return payload.items;
+}
+
+/* ─── Daily Breakdown — real per-day engagement ─── */
+
+export interface DailyBreakdownPoint {
+  /** ISO date string (YYYY-MM-DD) */
+  date: string;
+  views: number;
+  likes: number;
+  saves: number;
+  sales: number;
+}
+
+export async function fetchDailyBreakdown(
+  sellerId: string,
+  period: '7d' | '30d' | '90d' = '30d'
+): Promise<DailyBreakdownPoint[]> {
+  const payload = await fetchJson<{ ok: true; days: DailyBreakdownPoint[] }>(
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/daily?period=${period}`
+  );
+  return payload.days;
 }

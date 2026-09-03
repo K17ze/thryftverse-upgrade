@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { formatShortDateTime } from '../../utils/dateFormat';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -35,10 +36,9 @@ interface StageConfig {
 const STAGE_CONFIG: Record<OrderStepperStage, StageConfig> = {
   placed: { icon: 'receipt-outline', label: 'Placed' },
   paid: { icon: 'checkmark-circle-outline', label: 'Paid' },
-  shipped: { icon: 'cube-outline', label: 'Shipped' },
+  shipped: { icon: 'car-outline', label: 'Shipped' },
   in_transit: { icon: 'car-outline', label: 'In transit' },
-  delivered: { icon: 'checkmark-done-circle-outline', label: 'Delivered' },
-};
+  delivered: { icon: 'checkmark-done-circle-outline', label: 'Delivered' } };
 
 const STAGE_ORDER: OrderStepperStage[] = ['placed', 'paid', 'shipped', 'in_transit', 'delivered'];
 
@@ -48,8 +48,7 @@ export function OrderStatusStepper({
   currentStage,
   isFailure = false,
   failureLabel = 'Cancelled',
-  stageTimestamps,
-}: OrderStatusStepperProps) {
+  stageTimestamps }: OrderStatusStepperProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const currentIndex = STAGE_ORDER.indexOf(currentStage);
@@ -90,7 +89,7 @@ export function OrderStatusStepper({
               <View
                 style={[
                   styles.stageIconWrap,
-                  { backgroundColor: isCompleted || isCurrent ? `${colors.brand}15` : colors.surfaceAlt },
+                  { backgroundColor: isCompleted || isCurrent ? colors.brandSubtle : colors.surfaceAlt },
                   isCurrent && styles.stageIconWrapActive,
                 ]}
               >
@@ -130,64 +129,51 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
   stageColumn: {
     alignItems: 'center',
     gap: Space.xs,
-    width: Space.xxl + Space.xl,
-  },
+    width: Space.xxl + Space.xl },
   stageIconWrap: {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   stageIconWrapActive: {
     borderWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   stageLabel: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.1,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   stageLabelActive: {
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   stageTimestamp: {
-    fontSize: Type.meta.size - 4,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size - 4,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     textAlign: 'center',
-    marginTop: Space.xs / 4,
-  },
+    marginTop: Space.xs / 4 },
   connectorWrap: {
     flex: 1,
     height: Space.xl + Space.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.xs / 2,
-  },
+    paddingHorizontal: Space.xs / 2 },
   connectorLine: {
     width: '100%',
     height: Stroke.emphasis,
     borderRadius: Radius.sm,
-    marginTop: -Space.sm - 2,
-  },
+    marginTop: -Space.sm - 2 },
   failureContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
   failureIconWrap: {
-    backgroundColor: `${colors.danger}15`,
-  },
+    backgroundColor: colors.dangerSubtle },
   failureLabel: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily } });

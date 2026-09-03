@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Typography, Space, Type } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 
 export interface ProductDescriptionProps {
@@ -43,24 +44,19 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   sectionTitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginBottom: Space.xs,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   description: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    fontFamily: TypographyV2.body.fontFamily },
   toggleText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    marginTop: Space.xs,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: Space.xs } });

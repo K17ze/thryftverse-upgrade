@@ -12,7 +12,8 @@ import {
   MarketHistoryCursor,
   listUserMarketHistory,
 } from '../services/marketApi';
-import { Space, Radius, Type, Typography, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { OrderHistoryRow } from '../components/trade';
 import { AppSegmentControl } from '../components/ui/AppSegmentControl';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -23,6 +24,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { CoOwnStateCanvas, CoOwnLedgerSummary, CoOwnActivitySkeleton, CoOwnOfflineBanner, CoOwnReconciliationBanner } from '../components/coown';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type LedgerFilter = 'ALL' | 'AUCTION' | 'CO-OWN';
@@ -50,15 +52,6 @@ function getEntryCashflow(entry: { action: 'bid' | 'win' | 'buy-units' | 'sell-u
   if (entry.action === 'sell-units') return entry.amountGBP;
   if (entry.action === 'buy-units' || entry.action === 'win') return -entry.amountGBP;
   return 0;
-}
-
-function formatMoney(value: number) {
-  return `£${value.toFixed(2)}`;
-}
-
-function formatSignedMoney(value: number) {
-  const sign = value >= 0 ? '+' : '-';
-  return `${sign}${formatMoney(Math.abs(value))}`;
 }
 
 function relativeTime(isoTs: string) {
@@ -101,6 +94,20 @@ export default function MarketLedgerScreen() {
   const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const viewerId = currentUser?.id ?? '';
   const { isOffline } = useConnectivity();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
+
+  const formatMoney = useCallback(
+    (value: number) => formatFromFiat(value, currencyCode),
+    [formatFromFiat, currencyCode]
+  );
+
+  const formatSignedMoney = useCallback(
+    (value: number) => {
+      const sign = value >= 0 ? '+' : '-';
+      return `${sign}${formatMoney(Math.abs(value))}`;
+    },
+    [formatMoney]
+  );
 
   const [filter, setFilter] = React.useState<LedgerFilter>('ALL');
   const [remoteEntries, setRemoteEntries] = React.useState<LedgerEntry[]>([]);
@@ -193,7 +200,7 @@ export default function MarketLedgerScreen() {
 
   const handleBack = React.useCallback(() => {
     if (navigation.canGoBack()) { navigation.goBack(); return; }
-    navigation.navigate('Portfolio');
+    navigation.navigate('CoOwnHub');
   }, [navigation]);
 
   // FlashList v2 performance: memoized renderItem prevents full re-render of
@@ -236,7 +243,7 @@ export default function MarketLedgerScreen() {
         }}
       />
     );
-  }, [navigation]);
+  }, [navigation, formatMoney, formatSignedMoney]);
 
   // ── Loading state (initial sync, no entries yet) ──
   if (isSyncingLedger && entries.length === 0) {
@@ -374,15 +381,15 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   summaryStatLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
   summaryStatValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
   summaryStatDivider: {

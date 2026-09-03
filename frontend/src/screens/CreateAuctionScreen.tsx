@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, StyleSheet, StatusBar, Text, Platform } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -20,15 +21,16 @@ import { AppButton } from '../components/ui/AppButton';
 import { AppInput } from '../components/ui/AppInput';
 import { TradeHeader, TradeCard } from '../components/trade';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { Space, Radius, Typography, Type, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { Meta, BodyEmphasis, Body, Headline } from '../components/ui/Text';
 import { createAuction } from '../services/marketApi';
 import { createStableId } from '../utils/createStableId';
+import { t } from '../i18n';
 import { EmptyState } from '../components/EmptyState';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../platform/server/queryKeys';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -53,7 +55,7 @@ export default function CreateAuctionScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode, fxRates } = useCurrencyContext();
   const { listings, refreshListings } = useBackendData();
   const queryClient = useQueryClient();
 
@@ -80,19 +82,19 @@ export default function CreateAuctionScreen() {
   const fromGbpToDisplay = React.useCallback(
     (amountGbp: number) => {
       if (currencyCode === 'GBP') return amountGbp;
-      const amountIze = toIze(amountGbp, 'GBP', goldRates);
-      return toFiat(amountIze, currencyCode, goldRates);
+      const amountIze = toIze(amountGbp, 'GBP', fxRates);
+      return toFiat(amountIze, currencyCode, fxRates);
     },
-    [currencyCode, goldRates]
+    [currencyCode, fxRates]
   );
 
   const fromDisplayToGbp = React.useCallback(
     (amountDisplay: number) => {
       if (currencyCode === 'GBP') return amountDisplay;
-      const amountIze = toIze(amountDisplay, currencyCode, goldRates);
-      return toFiat(amountIze, 'GBP', goldRates);
+      const amountIze = toIze(amountDisplay, currencyCode, fxRates);
+      return toFiat(amountIze, 'GBP', fxRates);
     },
-    [currencyCode, goldRates]
+    [currencyCode, fxRates]
   );
 
   React.useEffect(() => {
@@ -122,14 +124,14 @@ export default function CreateAuctionScreen() {
 
   const launchAuction = async () => {
     if (!selectedListing) {
-      show('Select a listing to launch', 'error');
+      show(t('auction.create.selectListingError'), 'error');
       return;
     }
 
     const startingBidDisplay = Number(startingBidInput);
     const startingBid = fromDisplayToGbp(startingBidDisplay);
     if (!Number.isFinite(startingBid) || startingBid <= 0) {
-      show('Enter a valid starting bid', 'error');
+      show(t('auction.create.invalidStartingBid'), 'error');
       return;
     }
 
@@ -137,11 +139,11 @@ export default function CreateAuctionScreen() {
     if (reservePriceInput.trim()) {
       reservePriceGbp = fromDisplayToGbp(Number(reservePriceInput));
       if (!Number.isFinite(reservePriceGbp) || reservePriceGbp <= 0) {
-        show('Enter a valid reserve price', 'error');
+        show(t('auction.create.invalidReserve'), 'error');
         return;
       }
       if (reservePriceGbp < startingBid) {
-        show('Reserve price must be at least the starting bid', 'error');
+        show(t('auction.create.reserveBelowBid'), 'error');
         return;
       }
     }
@@ -150,7 +152,7 @@ export default function CreateAuctionScreen() {
     if (buyNowEnabled) {
       buyNowPriceGbp = fromDisplayToGbp(Number(buyNowInput));
       if (!Number.isFinite(buyNowPriceGbp) || buyNowPriceGbp <= startingBid) {
-        show('Buy now must be greater than starting bid', 'error');
+        show(t('auction.create.buyNowBelowBid'), 'error');
         return;
       }
     }
@@ -169,9 +171,8 @@ export default function CreateAuctionScreen() {
         startingBidGbp: startingBid,
         idempotencyKey,
         ...(reservePriceGbp ? { reservePriceGbp } : {}),
-        ...(buyNowPriceGbp ? { buyNowPriceGbp } : {}),
-      });
-      const startLabel = startInMinutes === 0 ? 'Immediately' : `In ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`;
+        ...(buyNowPriceGbp ? { buyNowPriceGbp } : {}) });
+      const startLabel = startInMinutes === 0 ? t('auction.create.startsImmediately') : `${t('auction.create.startsIn')} ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`;
       const durationLabel = DURATION_OPTIONS.find(d => d.hours === durationHours)?.label ?? `${durationHours}h`;
       setResultData({
         auctionId: result.id,
@@ -181,9 +182,8 @@ export default function CreateAuctionScreen() {
         durationLabel,
         startingBid: `${currencyCode} ${startingBidInput}`,
         reservePrice: reservePriceInput ? `${currencyCode} ${reservePriceInput}` : null,
-        buyNow: buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : null,
-      });
-      show(startInMinutes > 0 ? 'Auction scheduled successfully' : 'Auction is now live', 'success');
+        buyNow: buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : null });
+      show(startInMinutes > 0 ? t('auction.create.scheduled') : t('auction.create.live'), 'success');
       // The backend pauses the listing when an auction is created from it.
       // Refresh the feed + invalidate the listing detail so the paused
       // status propagates immediately.
@@ -191,7 +191,7 @@ export default function CreateAuctionScreen() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(selectedListing.id) });
       void queryClient.invalidateQueries({ queryKey: ['auctions', 'home'] });
     } catch (e) {
-      show('Failed to launch auction. Try again.', 'error');
+      show(t('auction.create.launchFailed'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -203,7 +203,7 @@ export default function CreateAuctionScreen() {
       <AnimatedPressable
         style={[styles.listingCard, selected && styles.listingCardSelected]}
         onPress={() => setSelectedListingId(item.id)}
-        activeOpacity={0.9}
+        activeOpacity={0.85}
         disableAnimation={false}
         scaleValue={0.97}
         accessibilityRole="button"
@@ -218,11 +218,11 @@ export default function CreateAuctionScreen() {
         />
         <View style={styles.listingMeta}>
           <BodyEmphasis style={styles.listingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, DEFAULT_CURRENCY_CODE)}</Meta>
+          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, currencyCode)}</Meta>
         </View>
         {selected && (
           <View style={styles.selectedTick}>
-            <Ionicons name="checkmark" size={14} color={colors.textInverse} />
+            <AppIcon name="checkmark" size={14} color="textInverse" opticalCenter accessible={false} />
           </View>
         )}
       </AnimatedPressable>
@@ -238,7 +238,7 @@ export default function CreateAuctionScreen() {
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       <TradeHeader
-        title="Launch Auction"
+        title={t('auction.create.launchTitle')}
         showClose
         onClose={() => {
           if (stage > 0) setStage(stage - 1);
@@ -249,7 +249,7 @@ export default function CreateAuctionScreen() {
 
       {/* Step indicator — refined active/inactive, weighted connectors */}
       <View style={styles.stepIndicator}>
-        {['Listing', 'Configure', 'Review'].map((label, i) => {
+        {[t('auction.create.stepListing'), t('auction.create.stepConfigure'), t('auction.create.stepReview')].map((label, i) => {
           const isComplete = i < stage;
           const isActive = i === stage;
           const isReached = i <= stage;
@@ -257,7 +257,7 @@ export default function CreateAuctionScreen() {
             <View key={label} style={styles.stepItem}>
               <View style={[styles.stepDot, isReached && styles.stepDotActive, isComplete && styles.stepDotComplete]}>
                 {isComplete ? (
-                  <Ionicons name="checkmark" size={12} color={colors.textInverse} />
+                  <AppIcon name="checkmark" size={12} color="textInverse" opticalCenter accessible={false} />
                 ) : (
                   <Text style={[styles.stepDotText, isReached && styles.stepDotTextActive]}>{i + 1}</Text>
                 )}
@@ -279,10 +279,10 @@ export default function CreateAuctionScreen() {
         {!sellerListings.length ? (
           <View>
             <EmptyState
-              icon="pricetag-outline"
-              title="No listings available"
-              subtitle="Create a listing first to launch an auction."
-              ctaLabel="Create Listing"
+              icon="bag-handle-outline"
+              title={t('auction.create.emptyTitle')}
+              subtitle={t('auction.create.emptySubtitle')}
+              ctaLabel={t('auction.create.emptyCta')}
               onCtaPress={() => navigation.navigate('Sell')}
             />
           </View>
@@ -292,7 +292,7 @@ export default function CreateAuctionScreen() {
             {stage === 0 && (
               <>
                 <View>
-                  <Meta style={styles.sectionLabel}>SELECT LISTING</Meta>
+                  <Meta style={styles.sectionLabel}>{t('auction.create.sectionSelectListing')}</Meta>
                 </View>
 
                 <FlashList
@@ -309,10 +309,10 @@ export default function CreateAuctionScreen() {
                     <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
                     <View style={styles.previewMeta}>
                       <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
-                        {selectedListing?.title ?? 'Select a listing'}
+                        {selectedListing?.title ?? t('auction.create.selectListing')}
                       </BodyEmphasis>
                       <Meta style={styles.previewPrice}>
-                        {selectedListing ? formatFromFiat(selectedListing.price, DEFAULT_CURRENCY_CODE) : '—'}
+                        {selectedListing ? formatFromFiat(selectedListing.price, currencyCode) : '—'}
                       </Meta>
                     </View>
                   </TradeCard>
@@ -325,7 +325,7 @@ export default function CreateAuctionScreen() {
               <>
                 <View>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>START WINDOW</Meta>
+                    <Meta style={styles.sectionLabel}>{t('auction.create.sectionStartWindow')}</Meta>
                     <View style={styles.windowRow}>
                       {START_WINDOWS.map((win) => (
                         <AnimatedPressable
@@ -335,7 +335,7 @@ export default function CreateAuctionScreen() {
                             startInMinutes === win.minutes && styles.windowChipActive,
                           ]}
                           onPress={() => setStartInMinutes(win.minutes)}
-                          activeOpacity={0.9}
+                          activeOpacity={0.85}
                           hapticFeedback="light"
                           accessibilityRole="button"
                           accessibilityState={{ selected: startInMinutes === win.minutes }}
@@ -352,7 +352,7 @@ export default function CreateAuctionScreen() {
 
                 <View>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>DURATION</Meta>
+                    <Meta style={styles.sectionLabel}>{t('auction.create.sectionDuration')}</Meta>
                     <View style={styles.windowRow}>
                       {DURATION_OPTIONS.map((opt) => (
                         <AnimatedPressable
@@ -362,7 +362,7 @@ export default function CreateAuctionScreen() {
                             durationHours === opt.hours && styles.windowChipActive,
                           ]}
                           onPress={() => setDurationHours(opt.hours)}
-                          activeOpacity={0.9}
+                          activeOpacity={0.85}
                           hapticFeedback="light"
                           accessibilityRole="button"
                           accessibilityState={{ selected: durationHours === opt.hours }}
@@ -379,7 +379,7 @@ export default function CreateAuctionScreen() {
 
                 <View>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>STARTING BID</Meta>
+                    <Meta style={styles.sectionLabel}>{t('listing.create.startingBid')}</Meta>
                     <AppInput
                       value={startingBidInput}
                       onChangeText={setStartingBidInput}
@@ -394,7 +394,7 @@ export default function CreateAuctionScreen() {
 
                 <View>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>RESERVE PRICE (OPTIONAL)</Meta>
+                    <Meta style={styles.sectionLabel}>{t('listing.create.reservePriceOptional')}</Meta>
                     <AppInput
                       value={reservePriceInput}
                       onChangeText={setReservePriceInput}
@@ -403,7 +403,7 @@ export default function CreateAuctionScreen() {
                       prefix={currencyCode}
                       accessibilityLabel="Reserve price (optional)"
                       accessibilityHint="Minimum sale price — item won't sell unless reserve is met"
-                      helperText="Minimum sale price — item won't sell unless reserve is met"
+                      helperText={t('auction.create.reserveHint')}
                       containerStyle={styles.input}
                     />
                   </TradeCard>
@@ -412,17 +412,17 @@ export default function CreateAuctionScreen() {
                 <View>
                   <TradeCard style={styles.formCard}>
                     <View style={styles.buyNowRow}>
-                      <Meta style={styles.sectionLabel}>BUY NOW PRICE</Meta>
+                      <Meta style={styles.sectionLabel}>{t('auction.create.sectionBuyNow')}</Meta>
                       <AnimatedPressable
                         style={[styles.toggleChip, buyNowEnabled && styles.toggleChipActive]}
                         onPress={() => setBuyNowEnabled((v) => !v)}
-                        activeOpacity={0.9}
+                        activeOpacity={0.85}
                         hapticFeedback="light"
                         accessibilityRole="switch"
                         accessibilityState={{ checked: buyNowEnabled }}
                       >
                         <Body style={[styles.toggleText, buyNowEnabled && styles.toggleTextActive]}>
-                          {buyNowEnabled ? 'ON' : 'OFF'}
+                          {buyNowEnabled ? t('auction.create.on') : t('auction.create.off')}
                         </Body>
                       </AnimatedPressable>
                     </View>
@@ -446,8 +446,8 @@ export default function CreateAuctionScreen() {
             {stage === 2 && (
               <>
                 <View>
-                  <Headline style={styles.reviewHeadline}>Review your auction</Headline>
-                  <Meta style={styles.reviewSubheadline}>Confirm the details below before launching.</Meta>
+                  <Headline style={styles.reviewHeadline}>{t('auction.create.reviewTitle')}</Headline>
+                  <Meta style={styles.reviewSubheadline}>{t('auction.create.reviewSubtitle')}</Meta>
                 </View>
 
                 <View>
@@ -455,10 +455,10 @@ export default function CreateAuctionScreen() {
                     <CachedImage uri={previewImage} style={styles.previewImage} containerStyle={styles.previewImageContainer} contentFit="cover" />
                     <View style={styles.previewMeta}>
                       <BodyEmphasis style={styles.previewTitle} numberOfLines={1}>
-                        {selectedListing?.title ?? 'Select a listing'}
+                        {selectedListing?.title ?? t('auction.create.selectListing')}
                       </BodyEmphasis>
                       <Meta style={styles.previewPrice}>
-                        {selectedListing ? formatFromFiat(selectedListing.price, DEFAULT_CURRENCY_CODE) : '—'}
+                        {selectedListing ? formatFromFiat(selectedListing.price, currencyCode) : '—'}
                       </Meta>
                     </View>
                   </TradeCard>
@@ -466,58 +466,58 @@ export default function CreateAuctionScreen() {
 
                 <View>
                   <TradeCard style={styles.formCard}>
-                    <Meta style={styles.sectionLabel}>AUCTION SUMMARY</Meta>
+                    <Meta style={styles.sectionLabel}>{t('auction.create.sectionSummary')}</Meta>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Listing</Meta>
+                      <Meta style={styles.termsLabel}>{t('auction.create.labelListing')}</Meta>
                       <Body style={styles.termsValue} numberOfLines={1}>{selectedListing?.title ?? '—'}</Body>
                     </View>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Starts</Meta>
+                      <Meta style={styles.termsLabel}>{t('auction.create.labelStarts')}</Meta>
                       <Body style={styles.termsValue}>
-                        {startInMinutes === 0 ? 'Immediately' : `In ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`}
+                        {startInMinutes === 0 ? t('auction.create.startsImmediately') : `${t('auction.create.startsIn')} ${START_WINDOWS.find(w => w.minutes === startInMinutes)?.label ?? startInMinutes + 'm'}`}
                       </Body>
                     </View>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Duration</Meta>
+                      <Meta style={styles.termsLabel}>{t('listing.create.duration')}</Meta>
                       <Body style={styles.termsValue}>
                         {DURATION_OPTIONS.find(d => d.hours === durationHours)?.label ?? `${durationHours}h`}
                       </Body>
                     </View>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Starting bid</Meta>
+                      <Meta style={styles.termsLabel}>{t('listing.create.startingBid')}</Meta>
                       <View style={styles.termsValueCol}>
                         <Body style={styles.termsValue}>
                           {startingBidInput ? `${currencyCode} ${startingBidInput}` : '—'}
                         </Body>
                         {startingBidInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, goldRates))}
+                            {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, fxRates))}
                           </Text>
                         )}
                       </View>
                     </View>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Reserve price</Meta>
+                      <Meta style={styles.termsLabel}>{t('auction.create.labelReserve')}</Meta>
                       <View style={styles.termsValueCol}>
                         <Body style={styles.termsValue}>
-                          {reservePriceInput ? `${currencyCode} ${reservePriceInput}` : 'None'}
+                          {reservePriceInput ? `${currencyCode} ${reservePriceInput}` : t('auction.create.none')}
                         </Body>
                         {reservePriceInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, goldRates))}
+                            {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, fxRates))}
                           </Text>
                         )}
                       </View>
                     </View>
                     <View style={styles.termsRow}>
-                      <Meta style={styles.termsLabel}>Buy now</Meta>
+                      <Meta style={styles.termsLabel}>{t('auction.create.labelBuyNow')}</Meta>
                       <View style={styles.termsValueCol}>
                         <Body style={styles.termsValue}>
-                          {buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : 'Disabled'}
+                          {buyNowEnabled && buyNowInput ? `${currencyCode} ${buyNowInput}` : t('auction.create.disabled')}
                         </Body>
                         {buyNowEnabled && buyNowInput && (
                           <Text style={styles.termsIzeText}>
-                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, goldRates))}
+                            {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, fxRates))}
                           </Text>
                         )}
                       </View>
@@ -527,24 +527,24 @@ export default function CreateAuctionScreen() {
 
                 <View>
                   <View style={styles.termsCard}>
-                    <Meta style={styles.termsSectionLabel}>TERMS & FEES</Meta>
+                    <Meta style={styles.termsSectionLabel}>{t('auction.create.sectionTerms')}</Meta>
                     <View style={styles.termsInlineRow}>
-                      <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
-                      <Text style={styles.termsInlineLabel}>Platform fee</Text>
-                      <Text style={styles.termsInlineValue}>3% of winning bid</Text>
+                      <AppIcon name="cash-outline" size={13} color="textMuted" opticalCenter accessible={false} />
+                      <Text style={styles.termsInlineLabel}>{t('auction.create.platformFee')}</Text>
+                      <Text style={styles.termsInlineValue}>{t('auction.create.platformFeeValue')}</Text>
                     </View>
                     <View style={styles.termsInlineRow}>
-                      <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-                      <Text style={styles.termsInlineLabel}>Settlement</Text>
-                      <Text style={styles.termsInlineValue}>After auction ends</Text>
+                      <AppIcon name="time-outline" size={13} color="textMuted" opticalCenter accessible={false} />
+                      <Text style={styles.termsInlineLabel}>{t('auction.create.settlement')}</Text>
+                      <Text style={styles.termsInlineValue}>{t('auction.create.settlementValue')}</Text>
                     </View>
                   </View>
                 </View>
 
                 <View>
                   <AppButton
-                    title={isSubmitting ? 'Launching...' : 'Launch Auction'}
-                    icon={isSubmitting ? undefined : <Ionicons name="speedometer-outline" size={16} color={colors.background} />}
+                    title={isSubmitting ? t('auction.create.launching') : t('auction.create.launchTitle')}
+                    icon={isSubmitting ? undefined : <AppIcon name="speedometer-outline" size={16} color="background" opticalCenter accessible={false} />}
                     onPress={launchAuction}
                     variant="primary"
                     size="md"
@@ -563,7 +563,7 @@ export default function CreateAuctionScreen() {
               <View style={styles.stageNavRow}>
                 {stage > 0 && (
                   <AppButton
-                    title="Back"
+                    title={t('auction.create.back')}
                     onPress={() => setStage(stage - 1)}
                     variant="secondary"
                     size="md"
@@ -573,7 +573,7 @@ export default function CreateAuctionScreen() {
                   />
                 )}
                 <AppButton
-                  title="Continue"
+                  title={t('auction.create.continue')}
                   onPress={() => setStage(stage + 1)}
                   variant="primary"
                   size="md"
@@ -594,10 +594,10 @@ export default function CreateAuctionScreen() {
           <View style={styles.resultCard}>
             {/* Success mark — refined, not a giant icon */}
             <View style={styles.resultIconWrap}>
-              <Ionicons name="checkmark" size={28} color={colors.success} />
+              <AppIcon name="checkmark" size={28} color="success" opticalCenter accessible={false} />
             </View>
-            <Headline style={styles.resultTitle}>Auction Launched</Headline>
-            <Meta style={styles.resultSubtitle}>{resultData.startLabel === 'Immediately' ? 'Your auction is now live' : 'Your auction is scheduled'}</Meta>
+            <Headline style={styles.resultTitle}>{t('auction.create.resultTitle')}</Headline>
+            <Meta style={styles.resultSubtitle}>{resultData.startLabel === t('auction.create.startsImmediately') ? t('auction.create.resultLive') : t('auction.create.resultScheduled')}</Meta>
 
             {resultData.imageUrl ? (
               <CachedImage
@@ -610,36 +610,36 @@ export default function CreateAuctionScreen() {
 
             <View style={styles.resultSummary}>
               <View style={styles.termsRow}>
-                <Meta style={styles.termsLabel}>Listing</Meta>
+                <Meta style={styles.termsLabel}>{t('auction.create.labelListing')}</Meta>
                 <Body style={styles.termsValue} numberOfLines={1}>{resultData.title}</Body>
               </View>
               <View style={styles.termsRow}>
-                <Meta style={styles.termsLabel}>Starts</Meta>
+                <Meta style={styles.termsLabel}>{t('auction.create.labelStarts')}</Meta>
                 <Body style={styles.termsValue}>{resultData.startLabel}</Body>
               </View>
               <View style={styles.termsRow}>
-                <Meta style={styles.termsLabel}>Duration</Meta>
+                <Meta style={styles.termsLabel}>{t('listing.create.duration')}</Meta>
                 <Body style={styles.termsValue}>{resultData.durationLabel}</Body>
               </View>
               <View style={styles.termsRow}>
-                <Meta style={styles.termsLabel}>Starting bid</Meta>
+                <Meta style={styles.termsLabel}>{t('listing.create.startingBid')}</Meta>
                 <View style={styles.termsValueCol}>
                   <Body style={styles.termsValue}>{resultData.startingBid}</Body>
                   {startingBidInput && (
                     <Text style={styles.termsIzeText}>
-                      {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, goldRates))}
+                      {formatIzeAmount(toIze(Number(startingBidInput), currencyCode, fxRates))}
                     </Text>
                   )}
                 </View>
               </View>
               {resultData.reservePrice && (
                 <View style={styles.termsRow}>
-                  <Meta style={styles.termsLabel}>Reserve price</Meta>
+                  <Meta style={styles.termsLabel}>{t('auction.create.labelReserve')}</Meta>
                   <View style={styles.termsValueCol}>
                     <Body style={styles.termsValue}>{resultData.reservePrice}</Body>
                     {reservePriceInput && (
                       <Text style={styles.termsIzeText}>
-                        {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, goldRates))}
+                        {formatIzeAmount(toIze(Number(reservePriceInput), currencyCode, fxRates))}
                       </Text>
                     )}
                   </View>
@@ -647,12 +647,12 @@ export default function CreateAuctionScreen() {
               )}
               {resultData.buyNow && (
                 <View style={styles.termsRow}>
-                  <Meta style={styles.termsLabel}>Buy now</Meta>
+                  <Meta style={styles.termsLabel}>{t('auction.create.labelBuyNow')}</Meta>
                   <View style={styles.termsValueCol}>
                     <Body style={styles.termsValue}>{resultData.buyNow}</Body>
                     {buyNowInput && (
                       <Text style={styles.termsIzeText}>
-                        {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, goldRates))}
+                        {formatIzeAmount(toIze(Number(buyNowInput), currencyCode, fxRates))}
                       </Text>
                     )}
                   </View>
@@ -662,7 +662,7 @@ export default function CreateAuctionScreen() {
 
             <View style={styles.resultActions}>
               <AppButton
-                title="View Auction"
+                title={t('auction.create.viewAuction')}
                 onPress={() => navigation.replace('AuctionDetail', { auctionId: resultData.auctionId })}
                 variant="primary"
                 size="md"
@@ -670,7 +670,7 @@ export default function CreateAuctionScreen() {
                 accessibilityLabel="View the launched auction"
               />
               <AppButton
-                title="Done"
+                title={t('auction.create.done')}
                 onPress={() => navigation.goBack()}
                 variant="secondary"
                 size="md"
@@ -689,56 +689,45 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   headerLaunchBtn: {
     borderRadius: Radius.md,
     minHeight: Control.chrome - 2,
-    paddingHorizontal: Space.smMd,
-  },
+    paddingHorizontal: Space.smMd },
   content: {
-    paddingBottom: Space.xl,
-  },
+    paddingBottom: Space.xl },
   sectionLabel: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   // ── Listing cards — elevated with shadow + rounded image ──
   listingListContent: {
     paddingHorizontal: Space.md,
     gap: Space.sm,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   listingCard: {
     width: Space.xxl * 3 + Space.xs + 2,
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   listingCardSelected: {
     borderColor: colors.brand,
-    borderWidth: Stroke.emphasis,
-  },
+    borderWidth: Stroke.emphasis },
   listingImageContainer: {
     width: '100%',
     height: Space.xxl * 3 + Space.lg + 2,
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   listingImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   listingMeta: {
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   listingTitle: {
-    marginBottom: Space.xs / 2,
-  },
+    marginBottom: Space.xs / 2 },
   listingPrice: {},
   selectedTick: {
     position: 'absolute',
@@ -751,39 +740,31 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: Stroke.emphasis,
-    borderColor: colors.surface,
-  },
+    borderColor: colors.surface },
   // ── Preview card ──
   previewCard: {
     marginTop: Space.sm,
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   previewImageContainer: {
     width: '100%',
     height: Space.xxl * 5,
     borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   previewImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   previewMeta: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   previewTitle: {},
   previewPrice: {
-    marginTop: Space.xs / 2,
-  },
+    marginTop: Space.xs / 2 },
   // ── Form cards ──
   formCard: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   windowRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   // ── Window chips — refined inactive, solid active ──
   windowChip: {
     flex: 1,
@@ -794,28 +775,22 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     paddingVertical: Space.smMd,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   windowChipActive: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   windowChipText: {
     color: colors.textSecondary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: Typography.family.medium },
   windowChipTextActive: {
     color: colors.textInverse,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   input: {
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   buyNowRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   // ── Toggle — refined pill ──
   toggleChip: {
     borderRadius: Radius.full,
@@ -825,26 +800,21 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.smMd,
     paddingVertical: Space.xs + 1,
     minWidth: Space.xxl,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   toggleChipActive: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   toggleText: {
     color: colors.textSecondary,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   toggleTextActive: {
     color: colors.textInverse,
     fontFamily: Typography.family.bold,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   launchBtn: {
     marginHorizontal: Space.md,
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   // ── Step indicator — refined active/inactive, weighted connectors ──
   stepIndicator: {
     flexDirection: 'row',
@@ -852,13 +822,11 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    gap: 0,
-  },
+    gap: 0 },
   stepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   stepDot: {
     width: Space.md + 2,
     height: Space.md + 2,
@@ -867,72 +835,56 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   stepDotActive: {
     borderColor: colors.brand,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   stepDotComplete: {
     backgroundColor: colors.brand,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   stepDotText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontWeight: '700',
-    fontFamily: Typography.family.bold,
-  },
+    fontFamily: Typography.family.bold },
   stepDotTextActive: {
-    color: colors.textInverse,
-  },
+    color: colors.textInverse },
   stepLabel: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   stepLabelActive: {
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   stepLabelCurrent: {
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   stepConnector: {
     width: Space.lg + 4,
     height: Stroke.emphasis,
     backgroundColor: colors.border,
-    marginHorizontal: Space.xs + 2,
-  },
+    marginHorizontal: Space.xs + 2 },
   stepConnectorActive: {
     backgroundColor: colors.brand,
-    height: Stroke.emphasis,
-  },
+    height: Stroke.emphasis },
   // ── Review ──
   reviewHeadline: {
-    fontSize: Type.priceHero.size - 2,
+    fontSize: TypographyV2.priceHero.size - 2,
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   reviewSubheadline: {
     color: colors.textMuted,
     paddingHorizontal: Space.md,
     marginTop: Space.xs,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   stageNavRow: {
     flexDirection: 'row',
     gap: Space.sm,
     paddingHorizontal: Space.md,
     marginTop: Space.lg,
-    marginBottom: Space.xl,
-  },
+    marginBottom: Space.xl },
   stageNavBtn: {
-    flex: 1,
-  },
+    flex: 1 },
   stageNavBtnFull: {
-    flex: 1,
-  },
+    flex: 1 },
   // ── Terms rows ──
   termsRow: {
     flexDirection: 'row',
@@ -940,31 +892,26 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     paddingVertical: Space.xs + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   termsLabel: {
     color: colors.textMuted,
-    fontSize: Type.meta.size - 1,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.caps,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   termsValue: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    fontVariant: ['tabular-nums'],
-  },
+    fontSize: TypographyV2.body.size,
+    fontVariant: ['tabular-nums'] },
   termsValueCol: {
-    alignItems: 'flex-end',
-  },
+    alignItems: 'flex-end' },
   termsIzeText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.meta.fontFamily,
     marginTop: Space.xs / 4,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   // ── Terms & fees — inline, lighter than summary ──
   termsCard: {
     marginHorizontal: Space.md,
@@ -975,32 +922,27 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.overlay,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   termsSectionLabel: {
-    fontSize: Type.meta.size - 1,
+    fontSize: TypographyV2.meta.size - 1,
     color: colors.textMuted,
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.caps,
     textTransform: 'uppercase',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   termsInlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   termsInlineLabel: {
     flex: 1,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.regular,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   termsInlineValue: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textPrimary,
-    fontFamily: Typography.family.medium,
-  },
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Result overlay — crafted success moment ──
   resultOverlay: {
     position: 'absolute',
@@ -1011,22 +953,19 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.lg,
-  },
+    paddingHorizontal: Space.lg },
   resultCard: {
     backgroundColor: colors.surface,
     borderRadius: Radius.xl,
     padding: Space.lg,
     width: '100%',
-    maxWidth: Space.xxl + Space.xxl + Space.xxl + Space.xxl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl + Space.xl - 4,
+    maxWidth: Space.xxl * 10,
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     ...Platform.select({
       ios: { shadowColor: colors.shadow, shadowOffset: { width: 0, height: 16 }, shadowOpacity: 0.3, shadowRadius: 24 },
-      android: { elevation: 16 },
-    }),
-  },
+      android: { elevation: 16 } }) },
   resultIconWrap: {
     marginBottom: Space.sm,
     width: Space.xxl + Space.xxl + 8,
@@ -1036,41 +975,32 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.emphasis,
     borderColor: colors.successBorder,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   resultTitle: {
-    fontSize: Type.title.size,
+    fontSize: TypographyV2.screenTitle.size,
     textAlign: 'center',
-    letterSpacing: Type.priceHero.letterSpacing,
-  },
+    letterSpacing: TypographyV2.priceHero.letterSpacing },
   resultSubtitle: {
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: Space.xs,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   resultImageContainer: {
     width: '100%',
     height: Space.xxl * 3 + Space.xl + Space.xs,
     borderRadius: Radius.lg,
     marginBottom: Space.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   resultImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   resultSummary: {
     width: '100%',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   resultActions: {
     flexDirection: 'row',
     gap: Space.sm,
-    width: '100%',
-  },
+    width: '100%' },
   resultBtn: {
-    flex: 1,
-  },
-  });
+    flex: 1 } });
 }

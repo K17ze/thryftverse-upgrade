@@ -10,7 +10,7 @@
  * @see ./useRealtimeEvent.ts — React hooks for subscribing to events
  */
 export { RealtimeClient } from './RealtimeClient';
-export { RealtimeProvider, useRealtime, getRealtimeClient } from './RealtimeProvider';
+export { RealtimeProvider, useRealtime, useRealtimeSafe, getRealtimeClient } from './RealtimeProvider';
 export type { RealtimeProviderProps } from './RealtimeProvider';
 export {
   useRealtimeEvent,

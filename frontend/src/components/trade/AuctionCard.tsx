@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppButton } from '../ui/AppButton';
 import { CachedImage } from '../CachedImage';
@@ -308,14 +309,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: `${colors.danger}E6`,
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
   },
   liveText: {
     color: colors.textInverse,
-    fontSize: Type.meta.size - 2,
+    fontSize: TypographyV2.meta.size - 2,
   },
   outbidBadge: {
     position: 'absolute',
@@ -324,7 +325,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: `${colors.danger}E6`,
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
@@ -336,7 +337,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: `${colors.success}E6`,
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
@@ -348,15 +349,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs / 2 + 1,
-    backgroundColor: `${colors.warning}E6`,
+    backgroundColor: colors.overlay,
     borderRadius: Radius.full,
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
   },
   viewerBadgeText: {
     color: colors.textInverse,
-    fontSize: Type.meta.size - 3,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.meta.size - 3,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   body: {
     padding: Space.md,
@@ -422,7 +423,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   bidHistoryBtnText: {
     color: colors.brand,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
   },
   progressTrack: {
     height: Space.xs - 2,

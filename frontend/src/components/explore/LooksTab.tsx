@@ -5,8 +5,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   Pressable,
-  RefreshControl,
-} from 'react-native';
+  RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,16 +13,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type, AspectRatio } from '../../theme/designTokens';
+import { Space, Radius, AspectRatio } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useScrollToTop } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
+import { useConnectivity } from '../../hooks/useConnectivity';
 import { EmptyState } from '../EmptyState';
+import { OfflineBanner } from '../OfflineBanner';
 import { PremiumSkeletonTile } from '../discover/PremiumSkeletonTile';
 import { fetchLooksFromApi, type LookApiItem } from '../../services/looksApi';
 import { isVideoUri } from '../../utils/media';
+import {
+  resolveLookTemplate,
+  type LookTemplate } from '../../utils/lookTemplates';
+import { useReadiness } from '../../performance/visuallyComplete';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -39,68 +45,9 @@ const FEED_TABS: { key: FeedMode; label: string; sort: string }[] = [
   { key: 'following', label: 'Following', sort: 'following' },
 ];
 
-// ── Template set ─────────────────────────────────────────────────────────────
-// A deterministic template set drives the mixed-tile Explore canvas with
-// TRUE masonry rhythm — varying heights so the two columns stagger naturally
-// like Pinterest/Instagram Explore, not a uniform grid.
-//
-//   1×1 standard        — default image look (span 1, 4:5)
-//   1×1 portrait        — tall portrait look (span 1, 3:4)
-//   1×1 square          — compact square look (span 1, 1:1)
-//   2×1 cinematic        — video or multi-layer collage (span 2, 16:9)
-//   2×2 editorial anchor — rare, every 8th item (span 2, 4:5)
-//
-// The height variation between standard/portrait/square is what creates the
-// masonry staggering. Assignment is deterministic from index — no randomness.
-const EDITORIAL_ANCHOR_INTERVAL = 8;
-
-// Deterministic height rhythm: a 7-step cycle that creates organic masonry
-// staggering without visible pattern repetition. Prime-length cycles avoid
-// the "every 4th item looks the same" tell. The mix of portrait/square/
-// marketplace/landscape creates true Pinterest-style column stagger.
-const HEIGHT_RHYTHM: number[] = [
-  AspectRatio.portrait,    // 3:4 — tall
-  AspectRatio.square,      // 1:1 — compact
-  AspectRatio.marketplace, // 4:5 — standard
-  AspectRatio.portrait,    // 3:4 — tall
-  AspectRatio.landscape,   // 4:3 — wide-ish (still span 1)
-  AspectRatio.square,      // 1:1 — compact
-  AspectRatio.marketplace, // 4:5 — standard
-];
-
-interface LookTemplate {
-  /** Column span (1 or 2). Consumed by overrideItemLayout. */
-  span: 1 | 2;
-  /** Media aspect ratio (width / height) applied to the tile image. */
-  aspect: number;
-  /** Semantic template id — drives overlay cues. */
-  kind: 'standard' | 'portrait' | 'square' | 'cinematic' | 'editorial';
-}
-
-function resolveLookTemplate(look: LookApiItem, index: number): LookTemplate {
-  // 2×2 editorial anchor — rare, at a controlled interval.
-  if (index > 0 && index % EDITORIAL_ANCHOR_INTERVAL === 0) {
-    return { span: 2, aspect: AspectRatio.marketplace, kind: 'editorial' };
-  }
-
-  // 2×1 cinematic — video or multi-layer collage looks get a wide feature.
-  const isVideo = look.mediaType === 'video' || isVideoUri(look.mediaUrl);
-  const isMultiLayer = look.compositionDocument != null;
-  if (isVideo || isMultiLayer) {
-    return { span: 2, aspect: AspectRatio.wide, kind: 'cinematic' };
-  }
-
-  // 1×1 tiles with deterministic height variation for true masonry rhythm.
-  // The cycle creates visual stagger between columns without randomness.
-  const aspect = HEIGHT_RHYTHM[index % HEIGHT_RHYTHM.length];
-  if (aspect === AspectRatio.portrait) {
-    return { span: 1, aspect, kind: 'portrait' };
-  }
-  if (aspect === AspectRatio.square) {
-    return { span: 1, aspect, kind: 'square' };
-  }
-  return { span: 1, aspect, kind: 'standard' };
-}
+// Template set and resolveLookTemplate are now shared from
+// ../../utils/lookTemplates — see that file for the height rhythm
+// and editorial/cinematic anchor logic.
 
 // ── LookTile ─────────────────────────────────────────────────────────────────
 // Lightweight inline tile for the Explore canvas. Overlay density is kept low:
@@ -114,8 +61,7 @@ function LookTile({
   template,
   onPress,
   colors,
-  styles,
-}: {
+  styles }: {
   look: LookApiItem;
   template: LookTemplate;
   onPress: () => void;
@@ -126,13 +72,14 @@ function LookTile({
   const isMultiLayer = look.compositionDocument != null;
   const isShoppable = look.tags.length > 0;
   const creatorHandle = look.creator.username ?? 'unknown';
+  const creatorVerified = look.creator.verified === true;
 
   return (
     <Pressable
       style={styles.tile}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Look by ${creatorHandle}`}
+      accessibilityLabel={`Look by ${creatorHandle}${creatorVerified ? ', verified creator' : ''}`}
       accessibilityHint="Opens the look detail"
     >
       <View style={[styles.tileMedia, { aspectRatio: template.aspect }]}>
@@ -145,24 +92,37 @@ function LookTile({
           transition={180}
         />
 
-        {/* Bottom gradient scrim — Pinterest/Instagram approach for text
-            legibility without heavy overlay pills. Fades from transparent to
-            a subtle dark scrim at the bottom 40% of the tile. */}
+        {/* Bottom gradient scrim — guarantees text contrast across all
+            imagery (AGENTS.md §4: text on variable imagery MUST have a
+            contrast scrim). Fades from transparent to a 0.6 dark scrim
+            over the bottom 45% of the tile. */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.45)']}
-          locations={[0, 0.55, 1.0]}
+          colors={['transparent', 'transparent', colors.mediaOverlayScrim]}
+          locations={[0, 0.5, 1.0]}
           style={styles.tileScrim}
           pointerEvents="none"
         />
 
-        {/* Creator identity — bottom-left, on the gradient scrim. No pill. */}
+        {/* Creator identity — bottom-left, on the gradient scrim. No pill.
+            Username is 12pt semibold white; the verified checkmark is 14pt
+            blue so it reads as a recognisable trust signal, not a tiny
+            inline glyph. */}
         <View style={styles.creatorOverlay}>
           <Text style={styles.creatorText} numberOfLines={1}>
             @{creatorHandle}
           </Text>
+          {creatorVerified && (
+            <Ionicons
+              name="checkmark-circle"
+              size={14}
+              color={colors.brand}
+              style={styles.verifiedIcon}
+              accessibilityLabel="Verified creator"
+            />
+          )}
           {isShoppable && (
             <View style={styles.shoppableInline}>
-              <Ionicons name="pricetag" size={9} color={colors.textInverse} />
+              <Ionicons name="bag-handle-outline" size={10} color={colors.mediaOverlayText} />
               <Text style={styles.shoppableText}>{look.tags.length}</Text>
             </View>
           )}
@@ -179,11 +139,12 @@ function LookTile({
           </View>
         )}
 
-        {/* Like count — bottom-right, on the gradient scrim. Pinterest-style
-            engagement cue without a heavy badge. */}
+        {/* Like count — bottom-right, on the gradient scrim. Heart icon is
+            14pt white with an 11pt regular white count — Pinterest-style
+            engagement cue with guaranteed contrast from the scrim. */}
         {look.likeCount > 0 && (
           <View style={styles.likeOverlay}>
-            <Ionicons name="heart" size={11} color={colors.textInverse} />
+            <Ionicons name="heart" size={14} color={colors.textInverse} />
             <Text style={styles.likeText}>
               {look.likeCount > 999 ? `${(look.likeCount / 1000).toFixed(1)}k` : look.likeCount}
             </Text>
@@ -200,9 +161,11 @@ export default function LooksTab() {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const { width: windowWidth } = useWindowDimensions();
+  const { isOffline } = useConnectivity();
   const scrollRef = useRef<any>(null);
   useScrollToTop(scrollRef);
   const haptic = useHaptic();
+  const reportReady = useReadiness('LooksTab');
 
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -216,6 +179,12 @@ export default function LooksTab() {
   useEffect(() => {
     loadedLookCountRef.current = looks.length;
   }, [looks.length]);
+
+  useEffect(() => {
+    if (looks.length > 0 && !isLoading) {
+      reportReady('interaction-ready');
+    }
+  }, [looks.length, isLoading, reportReady]);
 
   // Initial / refresh load. Resets the cursor and replaces the list.
   // The feed mode drives the `sort` parameter so the API can segment the feed.
@@ -239,9 +208,10 @@ export default function LooksTab() {
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
+        reportReady('data-ready');
       }
     },
-    [],
+    [reportReady],
   );
 
   useEffect(() => {
@@ -321,96 +291,11 @@ export default function LooksTab() {
     [feedMode, handleFeedModeChange, styles],
   );
 
-  // ── Loading / error / empty states (preserved) ────────────────────────────
-  if (isLoading) {
-    // Masonry skeleton matching the final layout — two columns of
-    // surfaceAlt blocks with varying heights that mirror the template
-    // set's aspect ratios (AGENTS.md §14: skeletons should resemble the
-    // final layout; no generic centred spinner).
-    const colWidth = (windowWidth - Space.md * 2 - Space.sm) / 2;
-    const skeletonHeights = [
-      Math.round(colWidth / AspectRatio.marketplace),
-      Math.round(colWidth / AspectRatio.wide),
-      Math.round(colWidth / AspectRatio.marketplace),
-      Math.round(colWidth / AspectRatio.marketplace),
-    ];
-    const leftCol = [skeletonHeights[0], skeletonHeights[2]];
-    const rightCol = [skeletonHeights[1], skeletonHeights[3]];
-
-    return (
-      <View style={styles.scrollContent}>
-        {FeedTabs}
-        <View style={styles.masonrySkeletonGrid}>
-          <View style={styles.masonrySkeletonCol}>
-            {leftCol.map((h, i) => (
-              <PremiumSkeletonTile
-                key={`l-${i}`}
-                width={colWidth}
-                height={h}
-                borderRadius={Radius.lg}
-                style={styles.masonrySkeletonTile}
-              />
-            ))}
-          </View>
-          <View style={styles.masonrySkeletonCol}>
-            {rightCol.map((h, i) => (
-              <PremiumSkeletonTile
-                key={`r-${i}`}
-                width={colWidth}
-                height={h}
-                borderRadius={Radius.lg}
-                style={styles.masonrySkeletonTile}
-              />
-            ))}
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  if (loadError && looks.length === 0) {
-    return (
-      <View style={styles.errorWrap}>
-        <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
-        <Text style={styles.errorTitle}>Looks could not be loaded</Text>
-        <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
-        <AnimatedPressable
-          style={styles.retryBtn}
-          onPress={() => {
-            setIsLoading(true);
-            void loadLooks(false, feedMode);
-          }}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading looks"
-        >
-          <Text style={styles.retryBtnText}>Retry</Text>
-        </AnimatedPressable>
-      </View>
-    );
-  }
-
-  if (looks.length === 0 && !loadError) {
-    return (
-      <View style={styles.scrollContent}>
-        {FeedTabs}
-        <EmptyState
-          icon="camera-outline"
-          title="No looks yet"
-          subtitle="Create a look, tag real products, and share your style with the community."
-          ctaLabel="Create a Look"
-          onCtaPress={handleCreateLook}
-          graphic={
-            <View style={{ alignItems: 'center', marginBottom: Space.md }}>
-              <Ionicons name="images-outline" size={48} color={colors.brand} />
-            </View>
-          }
-        />
-      </View>
-    );
-  }
-
-  // ── FlashList v2 masonry canvas ───────────────────────────────────────────
+  // ── FlashList v2 masonry hooks ────────────────────────────────────────────
+  // These hooks MUST be called before any early returns. React requires hooks
+  // to be called in the same order on every render. If we return early (e.g.
+  // during loading) and skip these hooks, React throws "Rendered more hooks
+  // than during the previous render" when the loading state clears.
   const keyExtractor = useCallback(
     (item: LookApiItem) => `look-${item.id}`,
     [],
@@ -507,6 +392,97 @@ export default function LooksTab() {
     [isLoadingMore, cursor, looks.length, windowWidth, styles],
   );
 
+  // ── Loading / error / empty states (preserved) ────────────────────────────
+  if (isLoading) {
+    // Masonry skeleton matching the final layout — two columns of
+    // surfaceAlt blocks with varying heights that mirror the template
+    // set's aspect ratios (AGENTS.md §14: skeletons should resemble the
+    // final layout; no generic centred spinner).
+    const colWidth = (windowWidth - Space.md * 2 - Space.sm) / 2;
+    const skeletonHeights = [
+      Math.round(colWidth / AspectRatio.marketplace),
+      Math.round(colWidth / AspectRatio.wide),
+      Math.round(colWidth / AspectRatio.marketplace),
+      Math.round(colWidth / AspectRatio.marketplace),
+    ];
+    const leftCol = [skeletonHeights[0], skeletonHeights[2]];
+    const rightCol = [skeletonHeights[1], skeletonHeights[3]];
+
+    return (
+      <View style={styles.scrollContent}>
+        {isOffline && <OfflineBanner />}
+        {FeedTabs}
+        <View style={styles.masonrySkeletonGrid}>
+          <View style={styles.masonrySkeletonCol}>
+            {leftCol.map((h, i) => (
+              <PremiumSkeletonTile
+                key={`l-${i}`}
+                width={colWidth}
+                height={h}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            ))}
+          </View>
+          <View style={styles.masonrySkeletonCol}>
+            {rightCol.map((h, i) => (
+              <PremiumSkeletonTile
+                key={`r-${i}`}
+                width={colWidth}
+                height={h}
+                borderRadius={Radius.lg}
+                style={styles.masonrySkeletonTile}
+              />
+            ))}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (loadError && looks.length === 0) {
+    return (
+      <View style={styles.errorWrap}>
+        <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
+        <Text style={styles.errorTitle}>Looks could not be loaded</Text>
+        <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
+        <AnimatedPressable
+          style={styles.retryBtn}
+          onPress={() => {
+            setIsLoading(true);
+            void loadLooks(false, feedMode);
+          }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading looks"
+        >
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </AnimatedPressable>
+      </View>
+    );
+  }
+
+  if (looks.length === 0 && !loadError) {
+    return (
+      <View style={styles.scrollContent}>
+        {isOffline && <OfflineBanner />}
+        {FeedTabs}
+        <EmptyState
+          icon="camera-outline"
+          title="No looks yet"
+          subtitle="Create a look, tag real products, and share your style with the community."
+          ctaLabel="Create a Look"
+          onCtaPress={handleCreateLook}
+          graphic={
+            <View style={{ alignItems: 'center', marginBottom: Space.md }}>
+              <Ionicons name="images-outline" size={48} color={colors.brand} />
+            </View>
+          }
+        />
+      </View>
+    );
+  }
+
   // Only wire onEndReached when there is a cursor to consume — avoids
   // no-op fetches at the end of a finite feed.
   const onEndReached = cursor ? loadMore : undefined;
@@ -514,6 +490,7 @@ export default function LooksTab() {
   return (
     <View style={styles.feedContainer}>
       <View style={styles.feedStaticHeader}>
+        {isOffline && <OfflineBanner />}
         {FeedTabs}
       </View>
       <FlashList
@@ -544,88 +521,71 @@ function createStyles(colors: ThemeColors) {
     masonrySkeletonGrid: {
       flexDirection: 'row',
       justifyContent: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     masonrySkeletonCol: {
       flexDirection: 'column',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     masonrySkeletonTile: {
-      marginBottom: 0,
-    },
+      marginBottom: 0 },
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     // Outer container for the populated feed — holds the static header +
     // feed tabs above the scrolling FlashList.
     feedContainer: {
-      flex: 1,
-    },
+      flex: 1 },
     // Static (non-scrolling) header region: section header + feed tabs.
     // Horizontal padding matches the FlashList content padding so the
     // header aligns with the masonry grid below.
     feedStaticHeader: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     // ── Feed tabs ──
     // Pill-style feed segmentation (For You / Following / Trending).
     // Active pill carries the brand fill; inactive pills are plain text.
     feedTabsRow: {
       flexDirection: 'row',
       gap: Space.xs,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     feedPill: {
       paddingVertical: Space.xs + 2,
       paddingHorizontal: Space.md,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     feedPillActive: {
-      backgroundColor: colors.brand,
-    },
+      backgroundColor: colors.brand },
     feedPillText: {
-      fontSize: Type.caption.size,
-    },
+      fontSize: TypographyV2.meta.size },
     feedPillTextActive: {
       color: colors.textInverse,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
     feedPillTextInactive: {
       color: colors.textSecondary,
-      fontFamily: Typography.family.medium,
-    },
+      fontFamily: TypographyV2.meta.fontFamily },
     errorWrap: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 80,
       paddingHorizontal: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     errorTitle: {
-      fontSize: 18,
-      fontFamily: Typography.family.bold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      color: colors.textPrimary },
     errorSubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       color: colors.textMuted,
-      textAlign: 'center',
-    },
+      textAlign: 'center' },
     retryBtn: {
       marginTop: Space.sm,
       paddingHorizontal: Space.lg,
       paddingVertical: 10,
       backgroundColor: colors.brand,
-      borderRadius: Radius.xxl,
-    },
+      borderRadius: Radius.xxl },
     retryBtnText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textInverse,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textInverse },
     refreshErrorBanner: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -635,67 +595,55 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: 10,
       marginBottom: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     refreshErrorText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      color: colors.textSecondary,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary },
     retryLink: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.brand,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.brand },
     footer: {
       paddingVertical: Space.md,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     endOfList: {
       alignItems: 'center',
       paddingVertical: Space.lg,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     endOfListHairline: {
       width: 40,
       height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border,
-    },
+      backgroundColor: colors.border },
     endOfListText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     // ── Tile ──
     tileCell: {
       paddingHorizontal: Space.sm,
       paddingBottom: Space.sm,
-      width: '100%',
-    },
+      width: '100%' },
     tile: {
       width: '100%',
       borderRadius: Radius.lg,
       overflow: 'hidden',
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     tileMedia: {
       width: '100%',
-      position: 'relative',
-    },
+      position: 'relative' },
     tileImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     // Gradient scrim — covers bottom 40% of tile for text legibility.
     tileScrim: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
-      height: '45%',
-    },
+      height: '45%' },
     // Creator identity — bottom-left, on the gradient scrim. No pill.
     creatorOverlay: {
       position: 'absolute',
@@ -704,26 +652,31 @@ function createStyles(colors: ThemeColors) {
       right: Space.xs + 2,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
+    // Username — 12pt semibold white. Uses mediaOverlayText (always white in
+    // both themes) because the gradient scrim is always dark at the bottom;
+    // a regular text token (black in dark mode) would render invisible.
     creatorText: {
-      color: colors.textInverse,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.meta.letterSpacing,
-      flexShrink: 1,
-    },
+      color: colors.mediaOverlayText,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: 16,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      flexShrink: 1 },
+    // Verified checkmark — 14pt blue, recognisable trust signal (not a tiny
+    // inline glyph). Uses the brand blue so it reads as verification, not
+    // a decorative icon.
+    verifiedIcon: {
+      flexShrink: 0 },
     // Shoppable count — inline with creator handle, not a separate badge.
     shoppableInline: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 2,
-    },
+      gap: 2 },
     shoppableText: {
-      color: colors.textInverse,
-      fontSize: 10,
-      fontFamily: Typography.family.semibold,
-    },
+      color: colors.mediaOverlayText,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     // Media-type / multi-layer cue — top-right, small icon only.
     mediaCueBadge: {
       position: 'absolute',
@@ -734,8 +687,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.overlay,
-    },
+      backgroundColor: colors.overlay },
     // Like count — bottom-right, on the gradient scrim.
     likeOverlay: {
       position: 'absolute',
@@ -743,12 +695,12 @@ function createStyles(colors: ThemeColors) {
       right: Space.xs + 2,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 3,
-    },
+      gap: 3 },
+    // Heart count — 11pt regular white. Uses mediaOverlayText (always white
+    // in both themes) because the gradient scrim guarantees contrast; a
+    // regular text token would render black-on-dark in dark mode.
     likeText: {
-      color: colors.textInverse,
-      fontSize: 10,
-      fontFamily: Typography.family.semibold,
-    },
-  });
+      color: colors.mediaOverlayText,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily } });
 }

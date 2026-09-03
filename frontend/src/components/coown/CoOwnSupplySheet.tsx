@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CoOwnOwnershipPanel } from './CoOwnOwnershipPanel';
 import type { CoOwnSettlementMode, CoOwnSupplyBuckets } from './CoOwnOwnershipPanel';
 
@@ -85,9 +86,6 @@ export function CoOwnSupplySheet({
             showsVerticalScrollIndicator={false}
           >
             <CoOwnOwnershipPanel {...panelProps} />
-            <Text style={[styles.note, { color: colors.textMuted }]}>
-              Sponsor locked is not exposed by the backend. Missing and zero are different.
-            </Text>
           </ScrollView>
         </View>
       </View>
@@ -123,8 +121,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
   },
   title: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     letterSpacing: -0.3,
   },
   closeBtn: {
@@ -139,12 +137,5 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Space.md,
     paddingBottom: Space.lg,
-  },
-  note: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-    lineHeight: Type.caption.lineHeight,
-    marginTop: Space.md,
-    fontStyle: 'italic',
   },
 });

@@ -1,12 +1,5 @@
 /**
- * LayoutPreviewRenderer — a small thumbnail that renders a layout using the
- * user's actual asset thumbnails.
- *
- * Replaces the blind "Try arrangement" cycling in the Look composer with
- * truthful previews of each layout. The renderer is intentionally tiny
- * (80×100pt default) so a horizontal rail of options stays scannable.
- *
- * Per AGENTS.md §4: authored composition, clear hierarchy, restraint.
+ * LayoutPreviewRenderer — thumbnail rendering a layout with actual asset thumbnails.
  */
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
@@ -17,6 +10,7 @@ import type { LayoutPreview } from './layoutTypes';
 
 export interface LayoutPreviewRendererProps {
   assetUris: string[];
+  assetFocalPoints?: ({ x: number; y: number } | undefined)[];
   layout: LayoutPreview;
   /** Thumbnail width in pt. Default 80. */
   width?: number;
@@ -27,15 +21,14 @@ export interface LayoutPreviewRendererProps {
 }
 
 /**
- * Render a mini canvas with the layout applied to the actual asset
- * thumbnails. Asset rectangles are positioned per the layout's normalized
- * transforms (0–1), scaled to the thumbnail dimensions.
+ * Render a mini canvas with the layout applied to the actual asset thumbnails.
  */
 export function LayoutPreviewRenderer({
   assetUris,
+  assetFocalPoints,
   layout,
-  width = 80,
-  height = 100,
+  width = 48,
+  height = 60,
   selected = false,
 }: LayoutPreviewRendererProps) {
   const { colors } = useAppTheme();
@@ -49,6 +42,7 @@ export function LayoutPreviewRenderer({
           height,
           backgroundColor: colors.surfaceAlt,
           borderColor: selected ? colors.brand : 'transparent',
+          borderWidth: selected ? Stroke.emphasis : 0,
         },
       ]}
     >
@@ -59,6 +53,10 @@ export function LayoutPreviewRenderer({
         const top = transform.y * height;
         const w = transform.width * width;
         const h = transform.height * height;
+        const focalPoint = assetFocalPoints?.[index];
+        const contentPosition = focalPoint
+          ? { top: `${Math.round(focalPoint.y * 100)}%`, left: `${Math.round(focalPoint.x * 100)}%` }
+          : undefined;
         return (
           <View
             key={`${layout.id}-${index}`}
@@ -78,6 +76,7 @@ export function LayoutPreviewRenderer({
               source={{ uri }}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
+              contentPosition={contentPosition}
               recyclingKey={uri}
               transition={0}
             />
@@ -92,7 +91,6 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: Radius.md,
     overflow: 'hidden',
-    borderWidth: Stroke.emphasis,
   },
   assetSlot: {
     position: 'absolute',

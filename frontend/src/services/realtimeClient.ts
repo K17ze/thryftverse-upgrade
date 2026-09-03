@@ -20,7 +20,7 @@
  * handler registration are cleaned up automatically on unmount.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRealtime, type RealtimeConnectionState, type RealtimeEnvelope } from '../platform/realtime';
+import { useRealtimeSafe, type RealtimeConnectionState, type RealtimeEnvelope } from '../platform/realtime';
 import { useStore } from '../store/useStore';
 import type { Message as ConversationMessage } from '../domain';
 
@@ -38,12 +38,27 @@ export const CHAT_TYPING_EVENT = 'chat.typing.update';
 /** P0.5: Message deleted (for-me or for-everyone). */
 export const CHAT_MESSAGE_DELETED_EVENT = 'chat.message.deleted';
 
+/** P2-03: Message edited (sender-only, time-windowed). Other participants and
+ *  second devices reconcile the new body and the "Edited" label. */
+export const CHAT_MESSAGE_EDITED_EVENT = 'chat.message.edited';
+
 /** P0.9: Reaction added/removed. */
 export const CHAT_REACTION_ADDED_EVENT = 'chat.reaction.added';
 export const CHAT_REACTION_REMOVED_EVENT = 'chat.reaction.removed';
 
 /** P0.7: Read receipt. */
 export const CHAT_MESSAGE_READ_EVENT = 'chat.message.read';
+
+/** Group identity updated — emitted when an admin changes the group name,
+ *  avatar, cover photo, or description. Other participants must merge this
+ *  into their local store so the chat header and info screen stay current
+ *  without a manual refetch. */
+export const CHAT_GROUP_IDENTITY_UPDATED_EVENT = 'chat.group.identity.updated';
+export const CHAT_GROUP_SETTINGS_UPDATED_EVENT = 'chat.group.settings.updated';
+export const CHAT_MEMBER_REMOVED_EVENT = 'chat.member.removed';
+export const CHAT_MEMBER_LEFT_EVENT = 'chat.member.left';
+export const CHAT_MEMBER_ROLE_UPDATED_EVENT = 'chat.member.role_updated';
+export const CHAT_GROUP_OWNERSHIP_TRANSFERRED_EVENT = 'chat.group.ownership_transferred';
 
 // ── Typed payloads ──────────────────────────────────────────────────
 
@@ -69,6 +84,16 @@ export interface ChatMessageDeletedPayload {
   actorUserId: string;
 }
 
+/** Payload shape for `chat.message.edited` (P2-03). */
+export interface ChatMessageEditedPayload {
+  conversationId: string;
+  messageId: string;
+  body: string;
+  editVersion: number;
+  editedAt: string | null;
+  actorUserId: string;
+}
+
 /** Payload shape for `chat.reaction.added` / `chat.reaction.removed`. */
 export interface ChatReactionPayload {
   conversationId: string;
@@ -91,6 +116,40 @@ export interface ChatTypingUpdatePayload {
   isTyping: boolean;
 }
 
+/** Payload shape for `chat.group.identity.updated`. Mirrors the backend
+ *  publish at backend/api/src/index.ts → PATCH /chat/conversations/:id.
+ *  All fields except `conversationId` are optional — only changed fields
+ *  are included by the backend. */
+export interface ChatGroupIdentityUpdatedPayload {
+  conversationId: string;
+  actorUserId: string;
+  changedFields: string[];
+  title?: string | null;
+  description?: string | null;
+  avatar?: string | null;
+  coverPhoto?: string | null;
+  updatedAt: string;
+}
+
+export interface ChatGroupSettingsUpdatedPayload {
+  conversationId: string;
+  actorUserId: string;
+  settings: {
+    editGroupInfo: 'admins' | 'everyone';
+    sendMessages: 'admins' | 'everyone';
+    addMembers: 'admins' | 'everyone';
+    updatedBy: string | null;
+    updatedAt: string | null;
+  };
+  messageId: string | null;
+}
+
+export type ChatGroupMembershipEvent =
+  | { type: typeof CHAT_MEMBER_REMOVED_EVENT; payload: { conversationId: string; memberUserId: string } }
+  | { type: typeof CHAT_MEMBER_LEFT_EVENT; payload: { conversationId: string; actorUserId: string } }
+  | { type: typeof CHAT_MEMBER_ROLE_UPDATED_EVENT; payload: { conversationId: string; memberUserId: string; newRole: 'owner' | 'admin' | 'member' } }
+  | { type: typeof CHAT_GROUP_OWNERSHIP_TRANSFERRED_EVENT; payload: { conversationId: string; newOwnerId: string } };
+
 /** Typed envelope for chat message events. */
 export type ChatMessageEnvelope = RealtimeEnvelope<ChatMessageCreatedPayload>;
 /** Typed envelope for typing events. */
@@ -110,8 +169,8 @@ export function chatConversationTopic(conversationId: string): string {
  * realtime client. Returns the current state and re-renders on changes.
  */
 export function useRealtimeConnection(): RealtimeConnectionState {
-  const { connectionState } = useRealtime();
-  return connectionState;
+  const ctx = useRealtimeSafe();
+  return ctx?.connectionState ?? 'idle';
 }
 
 // ── Payload → domain mapper ─────────────────────────────────────────
@@ -169,12 +228,13 @@ export function useChatMessageEvent(
 ): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
 
     client.subscribe([topic]);
     const unsubscribe = client.on<ChatMessageCreatedPayload>(topic, (envelope) => {
@@ -199,12 +259,13 @@ export function useChatMessageEvent(
 export function useTypingIndicator(conversationId: string | undefined): boolean {
   const [isTyping, setIsTyping] = useState(false);
   const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) {
+    if (!topic || !client) {
       setIsTyping(false);
       return;
     }
@@ -258,13 +319,15 @@ export function useInboxMessageEvent(
 ): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
   const conversations = useStore((state) => state.conversations);
 
   // Build the desired topic set from the current conversation list.
   const desiredTopics = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    if (!client) return;
     const next = new Set(conversations.map((c) => chatConversationTopic(c.id)));
     const prev = desiredTopics.current;
 
@@ -282,11 +345,151 @@ export function useInboxMessageEvent(
   // Register a handler on every desired topic. Each handler filters by
   // event type and forwards to the caller's callback.
   useEffect(() => {
+    if (!client) return;
     const unsubscribers: Array<() => void> = [];
     for (const topic of desiredTopics.current) {
       const unsubscribe = client.on<ChatMessageCreatedPayload>(topic, (envelope) => {
         if (envelope.type !== CHAT_MESSAGE_EVENT) return;
         handlerRef.current(envelope.payload, envelope as ChatMessageEnvelope);
+      });
+      unsubscribers.push(unsubscribe);
+    }
+    return () => {
+      for (const unsubscribe of unsubscribers) unsubscribe();
+    };
+  }, [client, conversations]);
+}
+
+// ── Group identity event hook (single conversation) ─────────────────
+
+/**
+ * useChatGroupIdentityEvent — subscribe to `chat.group.identity.updated`
+ * events for a single conversation. When an admin changes the group name,
+ * avatar, cover photo, or description, this hook fires so the caller can
+ * merge the update into the local store.
+ */
+export function useChatGroupIdentityEvent(
+  conversationId: string | undefined,
+  handler: (payload: ChatGroupIdentityUpdatedPayload) => void,
+): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+
+  const topic = conversationId ? chatConversationTopic(conversationId) : null;
+
+  useEffect(() => {
+    if (!topic || !client) return;
+
+    client.subscribe([topic]);
+    const unsubscribe = client.on<ChatGroupIdentityUpdatedPayload>(topic, (envelope) => {
+      if (envelope.type !== CHAT_GROUP_IDENTITY_UPDATED_EVENT) return;
+      handlerRef.current(envelope.payload);
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
+}
+
+/** Keep composer authority in sync when an admin changes group permissions. */
+export function useChatGroupSettingsEvent(
+  conversationId: string | undefined,
+  handler: (payload: ChatGroupSettingsUpdatedPayload) => void,
+): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+  const topic = conversationId ? chatConversationTopic(conversationId) : null;
+
+  useEffect(() => {
+    if (!topic || !client) return;
+    client.subscribe([topic]);
+    const unsubscribe = client.on<ChatGroupSettingsUpdatedPayload>(topic, (envelope) => {
+      if (envelope.type !== CHAT_GROUP_SETTINGS_UPDATED_EVENT) return;
+      handlerRef.current(envelope.payload);
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
+}
+
+export function useChatGroupMembershipEvent(
+  conversationId: string | undefined,
+  handler: (event: ChatGroupMembershipEvent) => void,
+): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+  const topic = conversationId ? chatConversationTopic(conversationId) : null;
+
+  useEffect(() => {
+    if (!topic || !client) return;
+    client.subscribe([topic]);
+    const unsubscribe = client.on<unknown>(topic, (envelope) => {
+      if (
+        envelope.type === CHAT_MEMBER_REMOVED_EVENT
+        || envelope.type === CHAT_MEMBER_LEFT_EVENT
+        || envelope.type === CHAT_MEMBER_ROLE_UPDATED_EVENT
+        || envelope.type === CHAT_GROUP_OWNERSHIP_TRANSFERRED_EVENT
+      ) {
+        handlerRef.current(envelope as ChatGroupMembershipEvent);
+      }
+    });
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
+}
+
+// ── Inbox-wide group identity event hook ────────────────────────────
+
+/**
+ * useInboxGroupIdentityEvent — subscribe to `chat.group.identity.updated`
+ * events across all loaded conversations. This ensures the inbox list,
+ * chat header, and group info screen stay current when any admin changes
+ * the group identity, without requiring a manual refetch.
+ */
+export function useInboxGroupIdentityEvent(
+  handler: (payload: ChatGroupIdentityUpdatedPayload) => void,
+): void {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+  const conversations = useStore((state) => state.conversations);
+
+  const desiredTopics = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!client) return;
+    const next = new Set(conversations.map((c) => chatConversationTopic(c.id)));
+    const prev = desiredTopics.current;
+
+    const toAdd = Array.from(next).filter((t) => !prev.has(t));
+    const toRemove = Array.from(prev).filter((t) => !next.has(t));
+
+    if (toAdd.length) client.subscribe(toAdd);
+    if (toRemove.length) client.unsubscribe(toRemove);
+    desiredTopics.current = next;
+  }, [client, conversations]);
+
+  useEffect(() => {
+    if (!client) return;
+    const unsubscribers: Array<() => void> = [];
+    for (const topic of desiredTopics.current) {
+      const unsubscribe = client.on<ChatGroupIdentityUpdatedPayload>(topic, (envelope) => {
+        if (envelope.type !== CHAT_GROUP_IDENTITY_UPDATED_EVENT) return;
+        handlerRef.current(envelope.payload);
       });
       unsubscribers.push(unsubscribe);
     }
@@ -314,12 +517,13 @@ export function useChatReadReceiptEvent(
 ): void {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
 
     client.subscribe([topic]);
     const unsubscribe = client.on<ChatMessageReadPayload>(topic, (envelope) => {
@@ -351,12 +555,13 @@ export function useChatMessageDeletedEvent(
 ): void {
   const handlerRef = useRef(onDeleted);
   handlerRef.current = onDeleted;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
 
     client.subscribe([topic]);
     const unsubscribe = client.on<ChatMessageDeletedPayload>(topic, (envelope) => {
@@ -367,6 +572,57 @@ export function useChatMessageDeletedEvent(
         conversationId: payload.conversationId,
         scope: payload.scope,
         deletedBy: payload.actorUserId,
+      });
+    });
+
+    return () => {
+      unsubscribe();
+      client.unsubscribe([topic]);
+    };
+  }, [client, topic]);
+}
+
+// ── Message edited event hook (P2-03) ───────────────────────────────
+
+/**
+ * useChatMessageEditedEvent — subscribe to message-edited events for a
+ * single conversation. The handler is invoked for each
+ * `chat.message.edited` event on the conversation's topic, signalling that
+ * a message's body was edited. The caller reconciles the new text and the
+ * "Edited" label into its local message list.
+ */
+export function useChatMessageEditedEvent(
+  conversationId: string | undefined,
+  onEdited: (event: {
+    messageId: string;
+    conversationId: string;
+    body: string;
+    editVersion: number;
+    editedAt: string | null;
+    editedBy: string;
+  }) => void,
+): void {
+  const handlerRef = useRef(onEdited);
+  handlerRef.current = onEdited;
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
+
+  const topic = conversationId ? chatConversationTopic(conversationId) : null;
+
+  useEffect(() => {
+    if (!topic || !client) return;
+
+    client.subscribe([topic]);
+    const unsubscribe = client.on<ChatMessageEditedPayload>(topic, (envelope) => {
+      if (envelope.type !== CHAT_MESSAGE_EDITED_EVENT) return;
+      const payload = envelope.payload;
+      handlerRef.current({
+        messageId: payload.messageId,
+        conversationId: payload.conversationId,
+        body: payload.body,
+        editVersion: payload.editVersion,
+        editedAt: payload.editedAt,
+        editedBy: payload.actorUserId,
       });
     });
 
@@ -391,12 +647,13 @@ export function useChatReactionEvent(
 ): void {
   const handlerRef = useRef(onReaction);
   handlerRef.current = onReaction;
-  const { client } = useRealtime();
+  const ctx = useRealtimeSafe();
+  const client = ctx?.client;
 
   const topic = conversationId ? chatConversationTopic(conversationId) : null;
 
   useEffect(() => {
-    if (!topic) return;
+    if (!topic || !client) return;
 
     client.subscribe([topic]);
     const unsubscribe = client.on<ChatReactionPayload>(topic, (envelope) => {

@@ -1,9 +1,28 @@
 import React from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 
-export type AuctionEffectiveState = 'cancelled' | 'settled' | 'upcoming' | 'live' | 'ended';
+export type AuctionEffectiveState =
+  | 'upcoming'
+  | 'live'
+  | 'ended'
+  | 'reserve_not_met'
+  | 'awaiting_payment'
+  | 'payment_expired'
+  | 'second_chance_offered'
+  | 'settled'
+  | 'cancelled';
 
-export type AuctionTerminalReason = 'cancelled' | 'settled' | 'buy_now' | 'scheduled_end' | null;
+export type AuctionTerminalReason =
+  | 'cancelled'
+  | 'settled'
+  | 'buy_now'
+  | 'scheduled_end'
+  | 'reserve_not_met'
+  | 'payment_expired'
+  | 'second_chance'
+  | 'seller_accepted_below_reserve'
+  | 'seller_cancelled'
+  | null;
 
 export interface AuctionTimingInput {
   startsAt: string;
@@ -45,9 +64,14 @@ export function resolveAuctionTiming(
   } else if (input.winnerBidderId || input.terminalReason === 'buy_now') {
     effectiveState = 'ended';
     terminalReason = 'buy_now';
-  } else if (input.lifecycle === 'ended' || serverNowMs >= endsAtMs) {
+  } else if (input.lifecycle && input.lifecycle !== 'upcoming' && input.lifecycle !== 'live') {
+    effectiveState = input.lifecycle as AuctionEffectiveState;
+    terminalReason = (input.terminalReason as AuctionTerminalReason) ?? null;
+  } else if (serverNowMs >= endsAtMs) {
     effectiveState = 'ended';
-    terminalReason = 'scheduled_end';
+    terminalReason = input.terminalReason === 'scheduled_end'
+      ? 'scheduled_end'
+      : (input.terminalReason as AuctionTerminalReason) ?? 'scheduled_end';
   } else if (serverNowMs >= startsAtMs) {
     effectiveState = 'live';
   } else {

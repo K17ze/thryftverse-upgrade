@@ -19,10 +19,12 @@
  *   realtime events so the UI shows text as it arrives.
  */
 
-import type { PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { BotRuntimeContext, BotInstallInfo, BotHandlerResult } from './types.js';
 import { resolveBotHandler } from './handlers.js';
 import { normalizeAgentConfig } from './agentConfig.js';
+import { encryptMessageBody, resolveMessageBody } from '../lib/messageEncryption.js';
+import { logger } from '../lib/logger.js';
 
 interface DbQueryable {
   query: PoolClient['query'];
@@ -58,12 +60,15 @@ export async function listActiveBotInstalls(
         i.permissions_snapshot,
         b.runtime_mode,
         b.status AS bot_status,
-        b.agent_config
+        COALESCE(av.agent_config, b.agent_config) as agent_config
       FROM chat_bot_installs i
       JOIN chat_bots b ON b.id = i.bot_id
+      LEFT JOIN agent_versions av ON av.id = i.agent_version_id
       WHERE i.conversation_id = $1
         AND i.status = 'active'
         AND b.is_active = TRUE
+        AND b.status != 'disabled'
+      ORDER BY i.installed_at ASC
     `,
     [conversationId]
   );
@@ -144,11 +149,14 @@ async function loadConversationHistory(
 ): Promise<BotRuntimeContext['conversationHistory']> {
   if (limit <= 0) return [];
   const result = await client.query<{
+    id: string;
     sender_type: 'user' | 'bot' | 'system';
     body: string;
+    body_ciphertext: string | null;
+    key_version: number | null;
   }>(
     `
-      SELECT sender_type, body
+      SELECT id, sender_type, body, body_ciphertext, key_version
       FROM chat_messages
       WHERE conversation_id = $1
         AND sender_type IN ('user', 'bot')
@@ -158,7 +166,12 @@ async function loadConversationHistory(
     `,
     [conversationId, Math.min(40, limit + 1)]
   );
-  const history = result.rows
+  // PII encryption: decrypt message bodies before building history.
+  const decryptedRows = await Promise.all(result.rows.map(async (row) => ({
+    ...row,
+    body: await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null),
+  })));
+  const history = decryptedRows
     .reverse()
     .map((row) => ({
       role: row.sender_type === 'bot' ? 'assistant' as const : 'user' as const,
@@ -238,9 +251,9 @@ async function loadRuntimeData(
   }
 
   if (input.category === 'safety') {
-    const recentMessages = await client.query<{ body: string }>(
+    const recentMessages = await client.query<{ id: string; body: string; body_ciphertext: string | null; key_version: number | null }>(
       `
-        SELECT body
+        SELECT id, body, body_ciphertext, key_version
         FROM chat_messages
         WHERE conversation_id = $1
           AND sender_type = 'user'
@@ -249,9 +262,14 @@ async function loadRuntimeData(
       `,
       [input.conversationId]
     );
+    // PII encryption: decrypt message bodies before safety analysis.
+    const decryptedRows = await Promise.all(recentMessages.rows.map(async (row) => ({
+      ...row,
+      body: await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null),
+    })));
     const reviewPattern = /\b(?:scam|fraud|pay\s+outside|bank\s+transfer|gift\s+card|crypto\s+only)\b/i;
-    runtimeData.recentMessagesAnalyzed = recentMessages.rows.length;
-    runtimeData.messagesRequiringReview = recentMessages.rows.filter((row) =>
+    runtimeData.recentMessagesAnalyzed = decryptedRows.length;
+    runtimeData.messagesRequiringReview = decryptedRows.filter((row) =>
       reviewPattern.test(row.body)
     ).length;
   }
@@ -277,6 +295,22 @@ async function insertBotMessage(
   }
 ): Promise<{ id: string; createdAt: string }> {
   const messageId = createRuntimeId('chatmsg');
+  // PII encryption dual-write: encrypt the body before INSERT. On failure,
+  // store plaintext so the backfill worker can encrypt later.
+  let bodyToStore = input.text;
+  let bodyCiphertext: string | null = null;
+  let keyVersion: number | null = null;
+  try {
+    const encrypted = await encryptMessageBody(messageId, input.text);
+    bodyCiphertext = encrypted.ciphertext;
+    keyVersion = encrypted.keyVersion;
+    bodyToStore = '[encrypted]';
+  } catch (err) {
+    logger.warn(
+      { messageId, err: err instanceof Error ? err.message : String(err) },
+      'messageEncryption.encryptFailed — storing plaintext for backfill',
+    );
+  }
   const result = await client.query<{ id: string; created_at: string }>(
     `
       INSERT INTO chat_messages (
@@ -286,12 +320,14 @@ async function insertBotMessage(
         sender_user_id,
         sender_bot_id,
         body,
+        body_ciphertext,
+        key_version,
         metadata
       )
-      VALUES ($1, $2, 'bot', NULL, $3, $4, $5::jsonb)
+      VALUES ($1, $2, 'bot', NULL, $3, $4, $5, $6, $7::jsonb)
       RETURNING id, created_at::text
     `,
-    [messageId, input.conversationId, input.botId, input.text, toJsonString(input.metadata ?? {})]
+    [messageId, input.conversationId, input.botId, bodyToStore, bodyCiphertext, keyVersion, toJsonString(input.metadata ?? {})]
   );
 
   await client.query(
@@ -370,11 +406,40 @@ export async function executeBotCommand(
 
     if (!match) continue;
 
-    // Permission check: allow reply if snapshot is empty (backward compatible)
-    // or explicitly includes reply_in_chat
-    const canReply =
-      install.permissionsSnapshot.length === 0 ||
-      install.permissionsSnapshot.includes('reply_in_chat');
+    if (install.status === 'disabled' || install.status === 'inactive') {
+      logger.warn(
+        { botId: install.botId, conversationId: input.conversationId, status: install.status },
+        'executeBotCommand — skipping bot with non-active status',
+      );
+      continue;
+    }
+
+    const effectivePermissions =
+      install.permissionsSnapshot.length === 0 && install.botType === 'system'
+        ? ['reply_in_chat', 'read_messages']
+        : install.permissionsSnapshot;
+    const canReply = effectivePermissions.includes('reply_in_chat');
+
+    if (!canReply) {
+      await logBotAuditEvent(client, {
+        botId: install.botId,
+        conversationId: input.conversationId,
+        actorUserId: input.actorUserId,
+        eventType: 'command_attempted',
+        metadata: {
+          command: match.command,
+          args: match.args,
+          runtimeMode: install.runtimeMode,
+          replied: false,
+          reason: 'missing reply_in_chat permission',
+        },
+      });
+      logger.info(
+        { botId: install.botId, conversationId: input.conversationId },
+        'executeBotCommand — agent skipped: missing reply_in_chat permission',
+      );
+      continue;
+    }
 
     const useStreaming = install.runtimeMode === 'ai' && input.stream === true;
     const handler = install.runtimeMode === 'ai'
@@ -383,7 +448,7 @@ export async function executeBotCommand(
     if (!handler) continue;
 
     const conversationHistory =
-      install.agentConfig && install.permissionsSnapshot.includes('read_messages')
+      install.agentConfig && effectivePermissions.includes('read_messages')
         ? await loadConversationHistory(
           client,
           input.conversationId,
@@ -409,7 +474,7 @@ export async function executeBotCommand(
       conversationTitle: input.conversationTitle,
       actorUserId: input.actorUserId,
       actorUserName: input.actorUserName,
-      permissionsSnapshot: install.permissionsSnapshot,
+      permissionsSnapshot: effectivePermissions,
       command: match.command,
       args: match.args,
       messageText:
@@ -545,7 +610,7 @@ export async function executeBotCommand(
       }
     }
 
-    if (!result.shouldReply || !canReply) {
+    if (!result.shouldReply) {
       // Log the attempt even if we don't reply
       await logBotAuditEvent(client, {
         botId: install.botId,
@@ -557,12 +622,16 @@ export async function executeBotCommand(
           args: match.args,
           runtimeMode: install.runtimeMode,
           replied: false,
-          reason: !canReply ? 'missing reply_in_chat permission' : 'handler declined',
+          reason: 'handler declined',
           confidence: result.confidence ?? null,
           explanation: result.explanation ?? null,
         },
       });
-      return { messageId: null, botId: install.botId, text: null };
+      logger.info(
+        { botId: install.botId, conversationId: input.conversationId },
+        'executeBotCommand — agent did not reply, trying next candidate',
+      );
+      continue;
     }
 
     const botMessage = await insertBotMessage(client, {
@@ -639,4 +708,191 @@ export async function executeBotCommand(
   }
 
   return { messageId: null, botId: null, text: null };
+}
+
+// ---------------------------------------------------------------------------
+// Durable agent execution — Phase 4
+//
+// enqueueAgentRun replaces the inline `await executeBotCommand(...)` call
+// inside message creation. Instead of blocking the message response on a
+// 30-second provider timeout, it creates an agent_runs row (status='queued')
+// and adds a BullMQ job. The worker calls processAgentRun, which loads the
+// run, transitions it to 'running', executes the bot command, and records
+// the final outcome. Runs survive process restarts.
+// ---------------------------------------------------------------------------
+
+/**
+ * Enqueue agent runs for every active bot install in the conversation whose
+ * trigger matches the incoming message. Returns one entry per bot that was
+ * matched (whether newly queued or already pending). Idempotency is enforced
+ * via a unique key derived from the trigger message + bot, so a duplicate
+ * enqueue (e.g. from a retry) is a no-op.
+ */
+export async function enqueueAgentRun(
+  client: DbQueryable,
+  input: {
+    conversationId: string;
+    conversationType: 'dm' | 'group';
+    conversationTitle: string | null;
+    actorUserId: string;
+    actorUserName: string | null;
+    messageText: string;
+    triggerMessageId: string | null;
+  }
+): Promise<{ runId: string; queued: boolean }[]> {
+  const installs = await listActiveBotInstalls(client, input.conversationId);
+
+  const runs: { runId: string; queued: boolean }[] = [];
+
+  for (const install of installs) {
+    const match = matchAgentInvocation(input.messageText, install);
+    if (!match) continue;
+
+    const effectivePermissions = install.permissionsSnapshot;
+    const canReply = install.botType === 'system'
+      ? (effectivePermissions.length === 0 || effectivePermissions.includes('reply_in_chat'))
+      : effectivePermissions.includes('reply_in_chat');
+    if (!canReply) continue;
+
+    // Idempotency key: trigger message + bot. When there is no trigger
+    // message (e.g. a manual/test invocation) fall back to a fresh random
+    // key so each enqueue produces a distinct run.
+    const idempotencyKey = input.triggerMessageId
+      ? `${input.triggerMessageId}:${install.botId}`
+      : `${createRuntimeId('idem')}:${install.botId}`;
+
+    // Skip if a run with the same idempotency key already exists.
+    const existing = await client.query<{ id: string; status: string }>(
+      `SELECT id, status FROM agent_runs WHERE idempotency_key = $1 LIMIT 1`,
+      [idempotencyKey]
+    );
+
+    if (existing.rowCount) {
+      runs.push({ runId: existing.rows[0].id, queued: false });
+      continue;
+    }
+
+    const runId = createRuntimeId('run');
+    const triggerType = install.agentConfig?.triggerMode ?? 'mention';
+
+    await client.query(
+      `INSERT INTO agent_runs (id, bot_id, conversation_id, actor_user_id, agent_version_id, trigger_type, trigger_message_id, status, idempotency_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8)`,
+      [runId, install.botId, input.conversationId, input.actorUserId, null, triggerType, input.triggerMessageId, idempotencyKey]
+    );
+
+    await logBotAuditEvent(client, {
+      botId: install.botId,
+      conversationId: input.conversationId,
+      actorUserId: input.actorUserId,
+      eventType: 'run_queued',
+      metadata: {
+        runId,
+        triggerType,
+        triggerMessageId: input.triggerMessageId,
+        idempotencyKey,
+      },
+    });
+
+    const { agentRunQueue } = await import('../lib/queues.js');
+    await agentRunQueue.add('agent-run', {
+      runId,
+      botId: install.botId,
+      conversationId: input.conversationId,
+      actorUserId: input.actorUserId,
+      triggerMessageId: input.triggerMessageId,
+      messageText: input.messageText,
+    });
+
+    runs.push({ runId, queued: true });
+  }
+
+  return runs;
+}
+
+/**
+ * Process a single agent run — called by the BullMQ worker. Loads the run,
+ * transitions it through the state machine (queued → running → succeeded |
+ * failed | timed_out), and records audit events for each transition.
+ */
+export async function processAgentRun(
+  db: Pool,
+  runId: string
+): Promise<void> {
+  const runResult = await db.query<{
+    id: string;
+    bot_id: string;
+    conversation_id: string;
+    actor_user_id: string;
+    trigger_message_id: string | null;
+    status: string;
+  }>(
+    `SELECT id, bot_id, conversation_id, actor_user_id, trigger_message_id, status FROM agent_runs WHERE id = $1 LIMIT 1`,
+    [runId]
+  );
+
+  if (!runResult.rowCount) return;
+  const run = runResult.rows[0];
+  if (run.status !== 'queued') return; // Already processed or cancelled
+
+  // Transition queued → running (guarded so a concurrent worker cannot
+  // double-process the same run).
+  const claimed = await db.query<{ id: string }>(
+    `UPDATE agent_runs SET status = 'running', started_at = NOW() WHERE id = $1 AND status = 'queued' RETURNING id`,
+    [runId]
+  );
+  if (!claimed.rowCount) return; // Lost the race to another worker
+
+  await logBotAuditEvent(db, {
+    botId: run.bot_id,
+    conversationId: run.conversation_id,
+    actorUserId: run.actor_user_id,
+    eventType: 'run_started',
+    metadata: { runId },
+  });
+
+  try {
+    const result = await executeBotCommand(db, {
+      conversationId: run.conversation_id,
+      conversationType: 'group',
+      conversationTitle: null,
+      actorUserId: run.actor_user_id,
+      actorUserName: null,
+      messageText: '',
+      targetBotId: run.bot_id,
+    });
+
+    await db.query(
+      `UPDATE agent_runs SET status = 'succeeded', completed_at = NOW(), result_message_id = $2, result_text = $3 WHERE id = $1`,
+      [runId, result.messageId, result.text]
+    );
+
+    await logBotAuditEvent(db, {
+      botId: run.bot_id,
+      conversationId: run.conversation_id,
+      actorUserId: run.actor_user_id,
+      eventType: 'run_succeeded',
+      metadata: {
+        runId,
+        resultMessageId: result.messageId,
+      },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message.slice(0, 500) : 'unknown error';
+    await db.query(
+      `UPDATE agent_runs SET status = 'failed', completed_at = NOW(), error_message = $2 WHERE id = $1`,
+      [runId, errorMessage]
+    );
+
+    await logBotAuditEvent(db, {
+      botId: run.bot_id,
+      conversationId: run.conversation_id,
+      actorUserId: run.actor_user_id,
+      eventType: 'run_failed',
+      metadata: {
+        runId,
+        errorMessage,
+      },
+    });
+  }
 }

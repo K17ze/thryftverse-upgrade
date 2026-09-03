@@ -29,7 +29,7 @@ import Reanimated, {
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { CreatorGlyph, type CreatorGlyphName } from './CreatorGlyph';
-import { Radius, Space } from '../../theme/designTokens';
+import { Radius, Space, PressScale } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { FontFamily } from '../../theme/designTokens';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -38,7 +38,6 @@ import { useHaptic } from '../../hooks/useHaptic';
 // ── Constants ────────────────────────────────────────────────────────
 
 const MIN_HEIGHT = 48;
-const PRESS_SCALE = 0.97;
 const DISABLED_OPACITY = 0.4;
 const LABEL_SIZE = 15;
 const ICON_SIZE = 20;
@@ -107,7 +106,7 @@ export function CreatorPrimaryButton({
       };
     }
     return {
-      transform: [{ scale: 1 - (1 - PRESS_SCALE) * pressedSV.value }],
+      transform: [{ scale: 1 - (1 - PressScale.tap) * pressedSV.value }],
     };
   });
 
@@ -123,14 +122,14 @@ export function CreatorPrimaryButton({
       disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ disabled: isDisabled || undefined }}
+      accessibilityState={{ disabled: isDisabled || undefined, busy: loading || undefined }}
       testID={testID}
       style={{ opacity: disabled ? DISABLED_OPACITY : 1 }}
     >
       <Reanimated.View
         style={[
           styles.button,
-          { backgroundColor: colors.brand, borderRadius: Radius.full },
+          { backgroundColor: colors.brand, borderRadius: Radius.lg },
           animatedStyle,
         ]}
       >

@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 /** Vehicle document — tap to open. */
 export interface CoOwnVehicleDocument {
@@ -69,7 +71,7 @@ export function CoOwnIssuerCard({
             <CachedImage uri={avatarUri} style={styles.avatar} contentFit="cover" transition={200} />
           ) : (
             <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="person" size={22} color={colors.textMuted} />
+              <AppIcon name="profile" size={IconSize.lg} color="textMuted" opticalCenter accessible={false} />
             </View>
           )}
         </View>
@@ -78,7 +80,7 @@ export function CoOwnIssuerCard({
           <View style={styles.nameRow}>
             <Text style={[styles.username, { color: colors.textPrimary }]} numberOfLines={1}>{username}</Text>
             {verified ? (
-              <Ionicons name="checkmark-circle" size={15} color={colors.brand} />
+              <AppIcon name="verified" focused size={IconSize.xs} color="brand" opticalCenter accessible={false} />
             ) : null}
           </View>
           <Text style={[styles.role, { color: colors.textSecondary }]}>
@@ -88,7 +90,7 @@ export function CoOwnIssuerCard({
           <View style={styles.statsRow}>
             {rating != null ? (
               <View style={styles.statItem}>
-                <Ionicons name="star" size={12} color={colors.brand} />
+                <AppIcon name="star" focused size={IconSize.xs} color="ratingStar" opticalCenter accessible={false} />
                 <Text style={[styles.statText, { color: colors.textSecondary }]}>
                   {rating.toFixed(1)}{reviewCount != null ? ` (${reviewCount})` : ''}
                 </Text>
@@ -96,13 +98,13 @@ export function CoOwnIssuerCard({
             ) : null}
             {location ? (
               <View style={styles.statItem}>
-                <Ionicons name="location-outline" size={12} color={colors.textMuted} />
+                <AppIcon name="location" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                 <Text style={[styles.statText, { color: colors.textSecondary }]} numberOfLines={1}>{location}</Text>
               </View>
             ) : null}
             {memberSince ? (
               <View style={styles.statItem}>
-                <Ionicons name="calendar-outline" size={12} color={colors.textMuted} />
+                <AppIcon name="clock" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                 <Text style={[styles.statText, { color: colors.textSecondary }]}>Since {memberSince}</Text>
               </View>
             ) : null}
@@ -116,7 +118,7 @@ export function CoOwnIssuerCard({
             accessibilityRole="button"
             accessibilityLabel={`Message ${username}`}
           >
-            <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
+            <AppIcon name="chat" size={IconSize.md} color="textPrimary" opticalCenter accessible={false} />
           </Pressable>
         ) : null}
 
@@ -124,16 +126,16 @@ export function CoOwnIssuerCard({
         {hasVehicle && (
           <View style={[styles.vehicleSection, { borderColor: colors.border }]}>
             {legalForm && (
-              <VehicleRow icon="business-outline" label="Legal form" value={legalForm} colors={colors} />
+              <VehicleRow icon="business" label="Legal form" value={legalForm} colors={colors} />
             )}
             {jurisdiction && (
-              <VehicleRow icon="globe-outline" label="Jurisdiction" value={jurisdiction} colors={colors} />
+              <VehicleRow icon="globe" label="Jurisdiction" value={jurisdiction} colors={colors} />
             )}
             {operator && (
-              <VehicleRow icon="person-circle-outline" label="Operator" value={operator} colors={colors} />
+              <VehicleRow icon="profile" label="Operator" value={operator} colors={colors} />
             )}
             {custodian && (
-              <VehicleRow icon="shield-checkmark-outline" label="Custodian" value={custodian} colors={colors} />
+              <VehicleRow icon="shieldCheck" label="Custodian" value={custodian} colors={colors} />
             )}
             {documents && documents.length > 0 && (
               <View style={styles.documentsSection}>
@@ -146,11 +148,11 @@ export function CoOwnIssuerCard({
                     accessibilityRole="link"
                     accessibilityLabel={`Open document: ${doc.label}`}
                   >
-                    <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
+                    <AppIcon name="document" size={IconSize.xs} color="textSecondary" opticalCenter accessible={false} />
                     <Text style={[styles.documentLabel, { color: colors.textSecondary }]} numberOfLines={1}>
                       {doc.label}
                     </Text>
-                    <Ionicons name="open-outline" size={12} color={colors.textMuted} />
+                    <AppIcon name="link" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
                   </Pressable>
                 ))}
               </View>
@@ -169,14 +171,14 @@ function VehicleRow({
   value,
   colors,
 }: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: string;
   label: string;
   value: string;
   colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
   return (
     <View style={styles.vehicleRow}>
-      <Ionicons name={icon} size={13} color={colors.textMuted} />
+      <AppIcon name={icon} size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
       <Text style={[styles.vehicleRowLabel, { color: colors.textMuted }]}>{label}</Text>
       <Text style={[styles.vehicleRowValue, { color: colors.textSecondary }]} numberOfLines={1}>
         {value}
@@ -220,13 +222,13 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   username: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     letterSpacing: -0.2,
   },
   role: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   statsRow: {
     flexDirection: 'row',
@@ -240,14 +242,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   msgBtn: {
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -267,28 +269,28 @@ const styles = StyleSheet.create({
     minHeight: 20,
   },
   vehicleRowLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     width: 80,
   },
   vehicleRowValue: {
     flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   documentsSection: {
     gap: Space.xs,
     marginTop: Space.xs,
   },
   documentsHeader: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
   },
   documentRow: {
@@ -299,9 +301,9 @@ const styles = StyleSheet.create({
   },
   documentLabel: {
     flex: 1,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
 });

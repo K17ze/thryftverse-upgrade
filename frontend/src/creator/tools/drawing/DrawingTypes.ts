@@ -35,6 +35,8 @@ export interface Stroke {
   brushType: BrushType;
   color: string;
   size: number;
+  /** User-controlled opacity 0–1 (multiplied with brush-specific opacity). */
+  opacity?: number;
   points: { x: number; y: number }[];
   /** Emoji brush config — present only when brushType === 'emoji'. */
   emojiConfig?: EmojiBrushConfig;

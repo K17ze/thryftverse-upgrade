@@ -1,6 +1,19 @@
 /**
- * Agent Activity Ledger — records material agent actions for user
- * transparency (spec 05: Capability Broker, Permissions & Approvals).
+ * Agent Activity Ledger — LOCAL-ONLY convenience cache of material agent
+ * actions for user transparency (spec 05: Capability Broker, Permissions &
+ * Approvals).
+ *
+ * IMPORTANT — this is NOT the authoritative activity record.
+ *
+ * This module persists a convenience log to AsyncStorage on-device so the
+ * user can review recent agent actions in plain language via the Agent
+ * Activity screen. It is a local cache only — it has no relationship to,
+ * and is not synchronised with, the backend's authoritative audit tables
+ * (`chat_bot_audit_events` and `ai_usage_events`). Entries here may be
+ * lost when the device is wiped, the app is reinstalled, or AsyncStorage
+ * is cleared, and they MUST NOT be treated as an official or complete
+ * audit trail. The authoritative record of agent activity lives on the
+ * backend and is accessed via the backend APIs.
  *
  * Persists an append-only log of:
  *  - agent deployed
@@ -16,7 +29,7 @@
  *
  * Per AGENTS.md §11 (Truthful UI):
  *  - We never fabricate ledger entries. Every entry corresponds to a real
- *    action that actually occurred.
+ *    action that actually occurred on this device.
  *  - Sanitized argument summaries omit raw secrets and PII.
  */
 
@@ -81,8 +94,9 @@ function makeEntryId(): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Record a material agent action in the ledger. The entry is appended to
- * the persisted log immediately.
+ * Record a material agent action in the LOCAL-ONLY convenience ledger.
+ * The entry is appended to the on-device persisted log immediately. This
+ * is not the authoritative record — the backend audit tables are.
  */
 export async function recordAgentActivity(
   entry: Omit<AgentActivityEntry, 'id' | 'timestamp'>,
@@ -106,8 +120,9 @@ export async function recordAgentActivity(
 }
 
 /**
- * Retrieve all recorded agent activity entries, newest first.
- * Returns an empty array when nothing has been recorded yet.
+ * Retrieve all recorded agent activity entries from the LOCAL-ONLY cache,
+ * newest first. Returns an empty array when nothing has been recorded on
+ * this device yet. This is not the authoritative record.
  */
 export async function getAgentActivity(): Promise<AgentActivityEntry[]> {
   try {
@@ -122,8 +137,9 @@ export async function getAgentActivity(): Promise<AgentActivityEntry[]> {
 }
 
 /**
- * Clear all agent activity entries. Used when the user wants to reset the
- * ledger (e.g. from the Agent Activity screen).
+ * Clear all agent activity entries from the LOCAL-ONLY cache. Used when
+ * the user wants to reset the on-device ledger (e.g. from the Agent
+ * Activity screen). This does not affect the backend audit tables.
  */
 export async function clearAgentActivity(): Promise<void> {
   try {

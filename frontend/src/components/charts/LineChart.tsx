@@ -26,15 +26,14 @@ import {
   CartesianChart,
   Line,
   useChartPressState,
-  type ChartBounds,
-} from 'victory-native';
+  type ChartBounds } from 'victory-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   type ChartSeries,
   type ChartPadding,
-  type ChartTheme,
-} from './types';
+  type ChartTheme } from './types';
 import { ChartTooltip, buildSingleTooltipLines } from './ChartTooltip';
 
 // ============================================================================
@@ -64,6 +63,8 @@ export interface LineChartProps {
   error?: string | null;
   /** Optional empty-state message override. */
   emptyMessage?: string;
+  /** Screen-reader summary of the chart data (e.g. "Portfolio value over 30 days, peak £1,240 on day 18, current £1,180"). Required for WCAG 1.1.1 — the Skia canvas is invisible to assistive tech. */
+  accessibilitySummary?: string;
 }
 
 // ============================================================================
@@ -79,8 +80,7 @@ const DEFAULT_PADDING: ChartPadding = {
   top: 16,
   right: 50,
   bottom: 28,
-  left: 8,
-};
+  left: 8 };
 
 // ============================================================================
 // INTERNAL DATA ROW TYPE
@@ -128,8 +128,7 @@ function useChartTheme(): ChartTheme {
       positive: colors.coownUp,
       negative: colors.coownDown,
       gridLine: colors.borderSubtle,
-      axisLine: colors.border,
-    }),
+      axisLine: colors.border }),
     [colors],
   );
 }
@@ -142,8 +141,7 @@ function defaultYAxisFormat(value: number): string {
   if (Math.abs(value) >= 1000) {
     return value.toLocaleString('en-GB', {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
+      maximumFractionDigits: 0 });
   }
   return value.toFixed(1);
 }
@@ -166,8 +164,7 @@ function CrosshairLine({
   xPosition,
   chartBounds,
   color,
-  isActive,
-}: {
+  isActive }: {
   xPosition: SharedValue<number>;
   chartBounds: ChartBounds;
   color: string;
@@ -204,7 +201,7 @@ export function LineChart({
   loading = false,
   error = null,
   emptyMessage = 'No data available',
-}: LineChartProps): React.ReactElement {
+  accessibilitySummary }: LineChartProps): React.ReactElement {
   const appTheme = useChartTheme();
   const theme = useMemo(
     () => ({ ...appTheme, ...themeOverride }),
@@ -239,8 +236,7 @@ export function LineChart({
         chartData: [] as LineDataRow[],
         yKeys: [] as YKey[],
         seriesColors: [] as string[],
-        seriesLabels: [] as string[],
-      };
+        seriesLabels: [] as string[] };
     }
 
     const seriesCount = Math.min(data.length, MAX_SERIES);
@@ -291,16 +287,14 @@ export function LineChart({
         y1: seriesMap?.get(1) ?? null,
         y2: seriesMap?.get(2) ?? null,
         y3: seriesMap?.get(3) ?? null,
-        y4: seriesMap?.get(4) ?? null,
-      };
+        y4: seriesMap?.get(4) ?? null };
     });
 
     return {
       chartData: rows,
       yKeys: keys,
       seriesColors: cols,
-      seriesLabels: labels,
-    };
+      seriesLabels: labels };
   }, [data]);
 
   // Chart press state for crosshair interaction.
@@ -309,8 +303,7 @@ export function LineChart({
   // are active. Only the first series is shown in the tooltip.
   const { state: pressState, isActive } = useChartPressState({
     x: chartData.length > 0 ? chartData[0].x : 0,
-    y: { y0: 0, y1: 0, y2: 0, y3: 0, y4: 0 },
-  });
+    y: { y0: 0, y1: 0, y2: 0, y3: 0, y4: 0 } });
 
   // Derive tooltip text from press state (runs on UI thread).
   // Shows the first series value at the crosshair position.
@@ -378,6 +371,13 @@ export function LineChart({
       style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
       onLayout={onLayout}
     >
+      {/* Off-screen text for screen readers — the Skia canvas is invisible
+          to VoiceOver/TalkBack, so we expose a textual summary (WCAG 1.1.1). */}
+      <Text
+        accessibilityLabel={accessibilitySummary ?? `${chartData.length} data points`}
+        accessibilityRole="text"
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+      />
       <CartesianChart
         data={chartData}
         xKey="x"
@@ -392,8 +392,7 @@ export function LineChart({
           labelColor,
           labelOffset: 6,
           formatXLabel: (label: string | number) => xAxisFormat(label),
-          tickCount: 5,
-        }}
+          tickCount: 5 }}
         yAxis={[
           {
             yKeys,
@@ -403,13 +402,11 @@ export function LineChart({
             labelOffset: 4,
             formatYLabel: (value: number | null) => (value == null ? '' : yAxisFormat(value)),
             tickCount: 5,
-            axisSide: 'right',
-          },
+            axisSide: 'right' },
         ]}
         frame={{
           lineColor: axisColor,
-          lineWidth: StyleSheet.hairlineWidth,
-        }}
+          lineWidth: StyleSheet.hairlineWidth }}
         renderOutside={showCrosshair ? ({ chartBounds }) =>
           isActive ? (
             <>
@@ -461,28 +458,22 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.sm,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   skeletonBar: {
     height: 12,
     width: '80%',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   errorText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    textAlign: 'center' },
   emptyTitle: {
-    fontSize: Type.bodyEmphasis.size,
-    fontFamily: Typography.family.semibold,
-    textAlign: 'center',
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    textAlign: 'center' } });
 
 export default LineChart;

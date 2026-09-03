@@ -2,11 +2,11 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type { Listing } from '../../domain';
 import { CachedImage } from '../CachedImage';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
 
 export interface BundleUpsellRowProps {
   /** Items from the same seller (typically more_from_seller recommendations) */
@@ -41,11 +41,10 @@ function BundleUpsellRowComponent({
   onPressItem,
   sellerId,
   sellerName,
-  onOpenBundleBag,
-}: BundleUpsellRowProps) {
+  onOpenBundleBag }: BundleUpsellRowProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat, displayMode } = useFormattedPrice();
+  const { formatFromFiat, displayMode, currencyCode } = useFormattedPrice();
 
   const bundleItems = items
     .filter((i) => i.id !== currentListingId && !i.isSold)
@@ -55,13 +54,13 @@ function BundleUpsellRowComponent({
 
   const showShippingMessage = shippingPayer === 'buyer';
   const bundleTotal = bundleItems.reduce((sum, i) => sum + i.price, 0);
-  const formattedBundleTotal = formatFromFiat(bundleTotal, DEFAULT_CURRENCY_CODE, { displayMode });
+  const formattedBundleTotal = formatFromFiat(bundleTotal, currencyCode, { displayMode });
 
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Ionicons name="cube" size={16} color={colors.brand} />
+          <Ionicons name="layers-outline" size={16} color={colors.brand} />
           <Text style={styles.sectionTitle}>Bundle and save</Text>
         </View>
         <View style={styles.bundleCountBadge}>
@@ -79,7 +78,7 @@ function BundleUpsellRowComponent({
 
       <View style={styles.thumbRow}>
         {bundleItems.map((bundleItem) => {
-          const formattedPrice = formatFromFiat(bundleItem.price, DEFAULT_CURRENCY_CODE, { displayMode });
+          const formattedPrice = formatFromFiat(bundleItem.price, currencyCode, { displayMode });
           return (
             <Pressable
               key={bundleItem.id}
@@ -142,77 +141,63 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   sectionTitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   bundleCountBadge: {
     paddingHorizontal: Space.sm,
     paddingVertical: 3,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.brand}12`,
-  },
+    backgroundColor: colors.brandSubtle },
   bundleCountText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.brand },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     lineHeight: 16,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   thumbRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   thumb: {
-    width: 72,
-  },
+    width: 72 },
   thumbPressed: {
     opacity: 0.8,
-    transform: [{ scale: 0.97 }],
-  },
+    transform: [{ scale: 0.97 }] },
   thumbImageWrap: {
     width: 72,
     height: 72,
     borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt,
     marginBottom: 6,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   thumbImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   thumbFallback: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   thumbPrice: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    textAlign: 'center',
-  },
+    textAlign: 'center' },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -220,18 +205,15 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.sm,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   totalLabel: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   totalValue: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   createBundleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -240,17 +222,13 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.sm,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: `${colors.brand}40`,
-    backgroundColor: `${colors.brand}08`,
-  },
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    backgroundColor: colors.brandSubtle },
   createBundleBtnPressed: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   createBundleBtnText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.brand,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand } });
 }

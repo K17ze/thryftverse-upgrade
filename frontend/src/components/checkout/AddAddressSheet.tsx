@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, Platform, Pressable } from 'react-native';
 import { BottomSheet } from '../BottomSheet';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useStore } from '../../store/useStore';
 import { useToast } from '../../context/ToastContext';
@@ -87,8 +88,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
       postalCode: postalCode.trim().toUpperCase(),
       countryCode,
       country: selectedCountry.name,
-      isDefault: isDefaultAddress,
-    };
+      isDefault: isDefaultAddress };
 
     const userId = currentUser?.id;
     if (!userId) {
@@ -112,8 +112,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
         postalCode: saved.postalCode,
         countryCode: saved.countryCode,
         country: saved.country,
-        isDefault: saved.isDefault,
-      });
+        isDefault: saved.isDefault });
       show('Delivery address saved', 'success');
       haptic.success();
     } catch {
@@ -262,8 +261,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
             styles.defaultToggleRow,
             {
               borderColor: isDefaultAddress ? colors.brand : colors.borderSubtle,
-              backgroundColor: isDefaultAddress ? colors.surface : 'transparent',
-            },
+              backgroundColor: isDefaultAddress ? colors.surface : 'transparent' },
           ]}
           onPress={() => {
             setIsDefaultAddress(!isDefaultAddress);
@@ -295,8 +293,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
             styles.saveBtn,
             {
               backgroundColor: (!isFormValid || isSaving) ? colors.surfaceAlt : colors.brand,
-              borderColor: colors.borderSubtle,
-            },
+              borderColor: colors.borderSubtle },
           ]}
           onPress={handleSave}
           disabled={!isFormValid || isSaving}
@@ -307,8 +304,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
           <Text style={[
             styles.saveBtnText,
             {
-              color: (!isFormValid || isSaving) ? colors.textMuted : colors.textInverse,
-            },
+              color: (!isFormValid || isSaving) ? colors.textMuted : colors.textInverse },
           ]}>
             {isSaving ? 'Processing…' : 'Save address'}
           </Text>
@@ -323,36 +319,31 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
 function createStyles(colors: any) {
   return StyleSheet.create({
     sheetTitle: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      marginBottom: Space.lg,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      marginBottom: Space.lg },
     content: {
       paddingTop: Space.sm,
-      paddingBottom: Space.xxl + Space.md,
-    },
+      paddingBottom: Space.xxl + Space.md },
     heroCopy: {
-      fontSize: Type.priceHero.size,
-      lineHeight: Type.priceHero.lineHeight,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.priceHero.letterSpacing,
+      fontSize: TypographyV2.priceHero.size,
+      lineHeight: TypographyV2.priceHero.lineHeight,
+      fontFamily: TypographyV2.priceHero.fontFamily,
+      letterSpacing: TypographyV2.priceHero.letterSpacing,
       marginBottom: Space.xxl,
-      maxWidth: '80%',
-    },
+      maxWidth: '80%' },
     formGroup: {
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     label: {
-      fontSize: Type.label.size,
-      lineHeight: Type.label.lineHeight,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.label.letterSpacing,
+      fontSize: TypographyV2.label.size,
+      lineHeight: TypographyV2.label.lineHeight,
+      fontFamily: TypographyV2.label.fontFamily,
+      letterSpacing: TypographyV2.label.letterSpacing,
       textTransform: 'uppercase',
       marginBottom: Space.sm,
-      marginLeft: Space.xs,
-    },
+      marginLeft: Space.xs },
     // ── Input fields — per Design.md form-field: input background,
     // 52px height, Radius.xl. ──
     inputWrapper: {
@@ -360,13 +351,11 @@ function createStyles(colors: any) {
       paddingHorizontal: Space.lg,
       height: 52,
       justifyContent: 'center',
-      borderWidth: 1,
-    },
+      borderWidth: Stroke.standard },
     input: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     // ── Country selector ──
     countrySelector: {
       flexDirection: 'row',
@@ -375,47 +364,39 @@ function createStyles(colors: any) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md + 2,
       borderRadius: Radius.xl,
-      borderWidth: 1,
-      minHeight: 52,
-    },
+      borderWidth: Stroke.standard,
+      minHeight: 52 },
     countryText: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     // ── Default toggle — flat row ──
     defaultToggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       padding: Space.md,
       borderRadius: Radius.xl,
       marginTop: Space.md,
       gap: Space.md,
-      minHeight: 52,
-    },
+      minHeight: 52 },
     defaultToggleText: {
       flex: 1,
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
     // ── Footer ──
     footer: {
       paddingTop: Space.sm,
-      paddingBottom: Platform.OS === 'ios' ? 0 : Space.md,
-    },
+      paddingBottom: Platform.OS === 'ios' ? 0 : Space.md },
     saveBtn: {
       height: 52,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: 1,
-    },
+      borderWidth: Stroke.standard },
     saveBtnText: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.bold,
-    },
-  });
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily } });
 }

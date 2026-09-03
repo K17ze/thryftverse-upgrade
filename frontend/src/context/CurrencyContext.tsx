@@ -7,15 +7,15 @@ import {
 } from '../constants/currencies';
 import {
   CurrencyDisplayMode,
-  DEFAULT_GOLD_RATES,
-  GoldRates,
+  DEFAULT_FX_RATES,
+  FxRates,
 } from '../utils/currency';
 import { fetchOnezeDisplayRates } from '../services/onezeQuoteApi';
 
 interface CurrencyContextValue {
   currencyCode: SupportedCurrencyCode;
   displayMode: CurrencyDisplayMode;
-  goldRates: GoldRates;
+  fxRates: FxRates;
   rateUpdatedAt: number;
   rateSource: string;
   settlementCurrencies: Set<string>;
@@ -33,7 +33,7 @@ const CURRENCY_PREF_STORAGE_KEY = 'thryftverse:currency-pref:v1';
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const [currencyCode, setCurrencyCode] = React.useState<SupportedCurrencyCode>(DEFAULT_CURRENCY_CODE);
   const [displayMode, setDisplayMode] = React.useState<CurrencyDisplayMode>('both');
-  const [goldRates, setGoldRates] = React.useState<GoldRates>(DEFAULT_GOLD_RATES);
+  const [fxRates, setFxRates] = React.useState<FxRates>(DEFAULT_FX_RATES);
   const [rateUpdatedAt, setRateUpdatedAt] = React.useState<number>(Date.now());
   const [rateSource, setRateSource] = React.useState<string>('fallback:static');
   const [settlementCurrencies, setSettlementCurrencies] = React.useState<Set<string>>(new Set(['GBP']));
@@ -103,7 +103,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
 
   const refreshRates = React.useCallback(async () => {
     const result = await fetchOnezeDisplayRates();
-    setGoldRates(result.goldRates);
+    setFxRates(result.fxRates);
     setRateSource(result.rateSource);
     setRateUpdatedAt(result.rateUpdatedAt);
     setSettlementCurrencies(result.settlementCurrencies);
@@ -119,7 +119,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     () => ({
       currencyCode,
       displayMode,
-      goldRates,
+      fxRates,
       rateUpdatedAt,
       rateSource,
       settlementCurrencies,
@@ -128,7 +128,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
       cycleDisplayMode,
       refreshRates,
     }),
-    [currencyCode, displayMode, goldRates, rateUpdatedAt, rateSource, settlementCurrencies, cycleDisplayMode, refreshRates]
+    [currencyCode, displayMode, fxRates, rateUpdatedAt, rateSource, settlementCurrencies, cycleDisplayMode, refreshRates]
   );
 
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;

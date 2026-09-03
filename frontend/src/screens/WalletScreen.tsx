@@ -6,8 +6,7 @@ import {
   ScrollView,
   RefreshControl,
   Pressable,
-  Linking,
-} from 'react-native';
+  Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -17,23 +16,22 @@ import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useCurrencyContext } from '../context/CurrencyContext';
 import { useToast } from '../context/ToastContext';
-import { Space, Radius, Type, Typography, DockConstants, LetterSpacing, IconGrammar } from '../theme/designTokens';
+import { useA11yAudit } from '../hooks/useA11yAudit';
+import { Space, Radius, Typography, DockConstants, LetterSpacing, IconGrammar } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { haptics } from '../utils/haptics';
-import { convertGbpToDisplayAmount } from '../utils/currencyAuthoringFlows';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
+import { izeToUsd, formatUsd } from '../utils/currency';
 import { parseApiError } from '../lib/apiClient';
 import {
   getIzePosition,
   getWalletSnapshot,
   getSellerWalletBalances,
-  type SellerWalletBalanceItem,
-} from '../services/walletApi';
+  type SellerWalletBalanceItem } from '../services/walletApi';
 import {
   CoOwnStateCanvas,
   CoOwnOfflineBanner,
   CoOwnReconciliationBanner,
-  type CoOwn1ZeBalance,
-} from '../components/coown';
+  type CoOwn1ZeBalance } from '../components/coown';
 import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { SkeletonLoader } from '../components/SkeletonLoader';
@@ -44,15 +42,22 @@ import { WalletTransactionHistory } from '../components/wallet/WalletTransaction
 import { AddMoneySheet } from '../components/wallet/AddMoneySheet';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { t } from '../i18n';
+import { track } from '../analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
 
+// Wallet balance — large numeric display, not a typographic token.
+// This is a financial display glyph size, not body text.
+const WALLET_BALANCE_SIZE = 40;
+
 export default function WalletScreen({ navigation }: Props) {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'WalletScreen');
   useScreenCaptureProtection();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
-  const { currencyCode, goldRates } = useCurrencyContext();
+  const { currencyCode } = useCurrencyContext();
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { isOffline } = useConnectivity();
@@ -78,8 +83,7 @@ export default function WalletScreen({ navigation }: Props) {
     safeguardingTermsUrl: null,
     snapshotSequence: 0,
     serverTimestamp: '',
-    reconciliationState: 'reconciled',
-  });
+    reconciliationState: 'reconciled' });
   // Fiat balance kept in parallel for the "Buy 1ZE with fiat balance" flow.
   const [availableFiatBalance, setAvailableFiatBalance] = useState(0);
   // Seller wallet: pending vs available balance with per-order breakdown.
@@ -131,16 +135,14 @@ export default function WalletScreen({ navigation }: Props) {
           safeguardingTermsUrl: position.balances.safeguardingTermsUrl ?? null,
           snapshotSequence: position.balances.snapshotSequence,
           serverTimestamp: position.balances.serverTimestamp,
-          reconciliationState: position.balances.reconciliationState,
-        });
+          reconciliationState: position.balances.reconciliationState });
         setAvailableFiatBalance(fiatWallet?.snapshot.availableGbp ?? 0);
         if (sellerWallet) {
           setSellerBalances({
             availableGbp: sellerWallet.balances.availableGbp,
             pendingGbp: sellerWallet.balances.pendingGbp,
             heldInReserveGbp: sellerWallet.balances.heldInReserveGbp,
-            pendingBreakdown: sellerWallet.pendingBreakdown,
-          });
+            pendingBreakdown: sellerWallet.pendingBreakdown });
         }
       })
       .catch((err) => {
@@ -164,6 +166,8 @@ export default function WalletScreen({ navigation }: Props) {
     const cleanup = loadBalance();
     return cleanup;
   }, [loadBalance]);
+
+  React.useEffect(() => { track('wallet_viewed'); }, []);
 
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -198,10 +202,11 @@ export default function WalletScreen({ navigation }: Props) {
     balance.unsettledSaleProceeds > 0 ? t('commerce.wallet.proceedsUnsettled', { amount: formatBalance(balance.unsettledSaleProceeds) }) : null,
   ].filter(Boolean).join(' · ');
 
-  // ── Local-fiat indication for spendable hero ──
-  const localFiatRate = convertGbpToDisplayAmount(1, currencyCode, goldRates);
-  const localFiatLabel = balance.available > 0 && localFiatRate > 0
-    ? `≈ ${formatFromFiat(balance.available, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })}`
+  // ── At-par USD equivalent for spendable hero ──
+  // 1 1ZE = $1.00 USD — always, at par. Shown as the honest USD value.
+  const usdEquivalent = izeToUsd(balance.available);
+  const usdLabel = balance.available > 0
+    ? formatUsd(usdEquivalent)
     : undefined;
 
   // ── Add money (extracted AddMoneySheet — spec 17 dedicated flow) ──
@@ -215,10 +220,10 @@ export default function WalletScreen({ navigation }: Props) {
     setBalanceHidden((prev) => !prev);
   }, []);
 
-  // ── Activity (canonical WalletActivityScreen — spec 17) ──
+  // ── Activity (canonical WalletHistoryScreen — spec 17) ──
   const handleViewActivity = React.useCallback(() => {
     haptics.tap();
-    navigation.navigate('WalletActivity');
+    navigation.navigate('WalletHistory');
   }, [navigation]);
 
   // ── Seller earnings (extracted SellerEarningsScreen — spec 17) ──
@@ -366,6 +371,7 @@ export default function WalletScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen
+      ref={a11yRef}
       header={
         <FlagshipHeader
           title={t('commerce.wallet.title')}
@@ -442,12 +448,12 @@ export default function WalletScreen({ navigation }: Props) {
               <Text style={[styles.balanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
             </Text>
           )}
-          {localFiatLabel && !balanceHidden && (
+          {usdLabel && !balanceHidden && (
             <View style={styles.localFiatRow}>
               <Ionicons name="cash-outline" size={IconGrammar.badge} color={colors.textMuted} />
-              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${localFiatLabel}${currencyCode ? ` · ${currencyCode}` : ''}`}>
-                {localFiatLabel}
-                {currencyCode ? ` · ${currencyCode}` : ''}
+              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${usdLabel} USD at par`}>
+                {usdLabel}
+                <Text style={styles.localFiatSuffix}> USD · at par</Text>
               </Text>
             </View>
           )}
@@ -521,10 +527,10 @@ export default function WalletScreen({ navigation }: Props) {
           />
         )}
 
-        {/* ── Seller earnings summary (spec 17: "Seller earnings · £X available · £Y pending") ── */}
+        {/* ── Seller earnings summary (spec 17: "Seller earnings · {currencySymbol}X available · {currencySymbol}Y pending") ── */}
         {sellerBalances !== null && (sellerBalances.pendingGbp > 0 || sellerBalances.availableGbp > 0 || sellerBalances.heldInReserveGbp > 0) && (
           <FlagshipNavigationRow
-            icon="pricetag-outline"
+            icon="cash-outline"
             iconColor={colors.brand}
             title={t('commerce.wallet.sellerEarnings')}
             subtitle={t('commerce.wallet.sellerEarningsSubtitle', { available: formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' }) })}
@@ -661,8 +667,7 @@ function SubBalanceRow({
   value,
   formatBalance,
   colors,
-  emphasize = false,
-}: {
+  emphasize = false }: {
   label: string;
   value: number;
   formatBalance: (v: number) => string;
@@ -694,74 +699,68 @@ function SubBalanceRow({
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.md,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
 
   // ── Balance hero — flat, no card (spec 17 viewport 1) ──
   balanceHero: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   balanceHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   balanceLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase' },
   // 44pt transparent hit area — visible eye glyph is 20pt
   eyeToggle: {
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: -Space.xs,
-  },
+    marginRight: -Space.xs },
   balanceMasked: {
-    fontSize: 40,
+    fontSize: WALLET_BALANCE_SIZE,
     lineHeight: 44,
     fontFamily: Typography.family.bold,
     letterSpacing: 2,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   // Largest text on screen — tabular-nums, bold
   balanceValue: {
-    fontSize: 40,
+    fontSize: WALLET_BALANCE_SIZE,
     lineHeight: 44,
     fontFamily: Typography.family.bold,
     fontVariant: ['tabular-nums'],
     letterSpacing: -1,
-    marginTop: Space.xs,
-  },
+    marginTop: Space.xs },
   balanceUnit: {
-    fontSize: 20,
+    fontSize: TypographyV2.priceList.size,
     lineHeight: 44,
-    fontFamily: Typography.family.semibold,
-  },
+    fontFamily: Typography.family.semibold },
   localFiatRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginTop: Space.xs + 2,
-  },
+    marginTop: Space.xs + 2 },
   localFiatText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'] },
+  localFiatSuffix: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // ── Primary actions — 3 equal-width buttons in a row ──
   actionRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   actionBtn: {
     flex: 1,
     minHeight: 44,
@@ -769,20 +768,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs - 1,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   actionBtnPrimary: {
-    borderWidth: 0,
-  },
+    borderWidth: 0 },
   actionBtnSecondary: {
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   actionBtnLabel: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // ── Pending attention row (now FlagshipNavigationRow) ──
 
@@ -790,45 +785,38 @@ const styles = StyleSheet.create({
 
   // ── Sub-balance flat rows (restrained — muted, smaller) ──
   subBalanceSection: {
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   subBalanceSectionLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.xs + 2,
-  },
+    marginBottom: Space.xs + 2 },
   breakdownSection: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 0,
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   subBalanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: Space.sm + 2,
-    gap: Space.md,
-  },
+    gap: Space.md },
   subBalanceLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   subBalanceValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   subBalanceUnit: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 
   // ── Withdrawable (restrained — muted) ──
   withdrawableRow: {
@@ -840,97 +828,79 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: Space.md,
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   withdrawableLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   withdrawableLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   withdrawableValue: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
 
   // ── Transaction history ──
   txHistorySection: {
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   txHistoryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   txHistoryTitle: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   txHistorySeeAll: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // ── Skeleton ──
   skeletonSubRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
 
   // ── Safeguarding info (flat canvas, hairline divider — no card) ──
   infoContent: {
     padding: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   disclosureSection: {
     paddingHorizontal: 0,
     paddingVertical: Space.md,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   infoHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   infoTitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   infoBody: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   safeguardingLinksRow: {
     flexDirection: 'row',
     gap: Space.md,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   safeguardingLink: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: LetterSpacing.wide,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   infoDivider: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    marginVertical: Space.sm,
-  },
-});
+    marginVertical: Space.sm } });

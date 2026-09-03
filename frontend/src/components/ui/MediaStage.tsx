@@ -40,20 +40,17 @@ import {
   Pressable,
   useWindowDimensions,
   AccessibilityInfo,
-  AppState,
-} from 'react-native';
+  AppState } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
   withTiming,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 import {
   GestureDetector,
   Gesture,
-  FlatList,
-} from 'react-native-gesture-handler';
+  FlatList } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -62,12 +59,11 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
   Control,
   AspectRatio,
   CommerceLayout,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -192,8 +188,7 @@ function ImagePage({
   maxZoom,
   onDoubleTap,
   onOpenFullscreen,
-  reducedMotion,
-}: ImagePageProps) {
+  reducedMotion }: ImagePageProps) {
   const { colors } = useAppTheme();
   const [failed, setFailed] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
@@ -290,8 +285,7 @@ function ImagePage({
       { translateX: translateX.value },
       { translateY: translateY.value },
       { scale: scale.value },
-    ],
-  }));
+    ] }));
 
   return (
     <GestureDetector gesture={composed}>
@@ -337,6 +331,7 @@ interface VideoPageProps {
 
 function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPageProps) {
   const { colors } = useAppTheme();
+  const videoControlStyles = useMemo(() => createVideoControlStyles(colors), [colors]);
   const [appIsActive, setAppIsActive] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -469,7 +464,7 @@ function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPag
               accessibilityLabel="Play video"
               accessibilityRole="button"
             >
-              <Ionicons name="play" size={32} color="#fff" />
+              <Ionicons name="play" size={32} color={colors.scrimTextPrimary} />
             </Pressable>
           )}
           <View style={videoControlStyles.controlBar}>
@@ -480,7 +475,7 @@ function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPag
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color="#fff" />
+              <Ionicons name={isPlaying ? 'pause' : 'play'} size={20} color={colors.scrimTextPrimary} />
             </Pressable>
             <Pressable
               style={videoControlStyles.controlBtn}
@@ -489,7 +484,7 @@ function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPag
               accessibilityRole="button"
               hitSlop={8}
             >
-              <Ionicons name={isMuted ? 'volume-mute' : 'volume-medium'} size={20} color="#fff" />
+              <Ionicons name={isMuted ? 'volume-mute' : 'volume-medium'} size={20} color={colors.scrimTextPrimary} />
             </Pressable>
             {onOpenFullscreen ? (
               <Pressable
@@ -499,7 +494,7 @@ function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPag
                 accessibilityRole="button"
                 hitSlop={8}
               >
-                <Ionicons name="expand" size={20} color="#fff" />
+                <Ionicons name="expand" size={20} color={colors.scrimTextPrimary} />
               </Pressable>
             ) : null}
           </View>
@@ -509,14 +504,13 @@ function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPag
   );
 }
 
-const videoControlStyles = StyleSheet.create({
+const createVideoControlStyles = (colors: ThemeColors) => StyleSheet.create({
   bottomScrim: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 80,
-  },
+    height: 80 },
   centerPlayBtn: {
     position: 'absolute',
     top: '50%',
@@ -526,10 +520,9 @@ const videoControlStyles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   controlBar: {
     position: 'absolute',
     bottom: 0,
@@ -539,15 +532,12 @@ const videoControlStyles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Space.sm,
     paddingBottom: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   controlBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });
 
 // ---------------------------------------------------------------------------
 // MediaStage
@@ -566,8 +556,7 @@ export function MediaStage({
   showPageIndicator = true,
   showControls = true,
   maxZoom = CommerceLayout.mediaMaxZoom,
-  style,
-}: MediaStageProps) {
+  style }: MediaStageProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
@@ -583,8 +572,7 @@ export function MediaStage({
       .filter((item) => !!item.uri)
       .map((item) => ({
         ...item,
-        kind: item.kind ?? (isVideoUri(item.uri) ? 'video' : 'image'),
-      }));
+        kind: item.kind ?? (isVideoUri(item.uri) ? 'video' : 'image') }));
   }, [media]);
 
   useEffect(() => {
@@ -689,7 +677,7 @@ export function MediaStage({
               accessibilityLabel="Go back"
               accessibilityHint="Returns to the previous screen"
             >
-              <Ionicons name="chevron-back" size={24} color="#fff" style={styles.controlIcon} />
+              <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} style={styles.controlIcon} />
             </AnimatedPressable>
           ) : <View style={styles.controlBtn} />}
 
@@ -705,7 +693,7 @@ export function MediaStage({
                 <Ionicons
                   name={ctrl.icon}
                   size={24}
-                  color={ctrl.active ? (ctrl.activeColor ?? colors.brand) : '#fff'}
+                  color={ctrl.active ? (ctrl.activeColor ?? colors.brand) : colors.scrimTextPrimary}
                   style={styles.controlIcon}
                 />
               </AnimatedPressable>
@@ -743,7 +731,7 @@ export function MediaStage({
       {/* Video badge — lower-left when the active page is video */}
       {mediaItems.length > 0 && mediaItems[activeIndex]?.kind === 'video' && (
         <View style={styles.videoBadge}>
-          <Ionicons name="play-circle" size={16} color="#fff" />
+          <Ionicons name="play-circle" size={16} color={colors.scrimTextPrimary} />
           <Text style={styles.videoBadgeText}>Video</Text>
         </View>
       )}
@@ -759,15 +747,13 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   stage: {
     position: 'relative',
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   topScrim: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 132,
-  },
+    height: 132 },
   floatingHeader: {
     position: 'absolute',
     top: 0,
@@ -777,60 +763,50 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: Space.md,
-    zIndex: 10,
-  },
+    zIndex: 10 },
   headerRight: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   controlBtn: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   // Subtle media-contrast scrim behind control glyphs — functional
   // (legibility over arbitrary imagery), not decorative chrome.
   controlIcon: {
-    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowColor: colors.overlay,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   indexBadge: {
     position: 'absolute',
     bottom: Space.sm,
     right: Space.md,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   indexBadgePressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.95 }],
-  },
+    transform: [{ scale: 0.95 }] },
   dotRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   dot: {
     width: 5,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.45)',
-  },
+    backgroundColor: colors.scrimTextTertiary },
   dotActive: {
     width: 14,
     height: 5,
     borderRadius: Radius.full,
-    backgroundColor: '#fff',
-  },
+    backgroundColor: colors.scrimTextPrimary },
   indexText: {
-    color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: FontFamily.medium,
-  },
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium },
   videoBadge: {
     position: 'absolute',
     bottom: Space.sm,
@@ -838,14 +814,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs / 2 + 1,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   videoBadgeText: {
-    color: '#fff',
-    fontSize: Type.caption.size,
-    fontFamily: FontFamily.medium,
-  },
-});
+    color: colors.scrimTextPrimary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium } });

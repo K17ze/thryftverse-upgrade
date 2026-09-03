@@ -4,9 +4,7 @@ import {
   Text,
   StyleSheet,
   RefreshControl,
-  ScrollView,
-  Alert,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -16,7 +14,11 @@ import { useHaptic } from '../hooks/useHaptic';
 import { parseApiError } from '../lib/apiClient';
 import { FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipNavigationRow } from '../components/flagship';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, Type, Typography, Stroke, IconGrammar } from '../theme/designTokens';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { Space, Radius, Stroke, IconGrammar } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize, type SemanticIconName } from '../theme/iconTokens';
 import { haptics } from '../utils/haptics';
 import {
   fetchInterventionState,
@@ -25,14 +27,12 @@ import {
   revokeOtherSecuritySessions,
   declareCompromise,
   type UserSafeInterventionState,
-  type SecuritySessionInfo,
-} from '../services/accountSecurityApi';
+  type SecuritySessionInfo } from '../services/accountSecurityApi';
 import {
   registerPasskey,
   listUserPasskeys,
   removeUserPasskey,
-  type PasskeyInfo,
-} from '../services/passkeyApi';
+  type PasskeyInfo } from '../services/passkeyApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AccountSecurity'>;
 
@@ -51,10 +51,10 @@ function formatLastActive(iso: string | null): string {
   return date.toLocaleDateString();
 }
 
-function platformIcon(platform: string): React.ComponentProps<typeof Ionicons>['name'] {
-  if (platform === 'iOS' || platform === 'Android') return 'phone-portrait-outline';
-  if (platform === 'Web') return 'desktop-outline';
-  return 'hardware-chip-outline';
+function platformIcon(platform: string): SemanticIconName {
+  if (platform === 'iOS' || platform === 'Android') return 'phone';
+  if (platform === 'Web') return 'desktop';
+  return 'desktop';
 }
 
 /**
@@ -90,6 +90,14 @@ export default function AccountSecurityScreen({ navigation }: Props) {
   const [passkeys, setPasskeys] = useState<PasskeyInfo[]>([]);
   const [registeringPasskey, setRegisteringPasskey] = useState(false);
   const [removingPasskeyId, setRemovingPasskeyId] = useState<string | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const loadData = useCallback(async () => {
     try {
@@ -137,31 +145,26 @@ export default function AccountSecurityScreen({ navigation }: Props) {
   }, [haptic, show]);
 
   const handleRevokeOthers = useCallback(async () => {
-    Alert.alert(
-      'Revoke other sessions',
-      'This will sign out all other devices. You will stay signed in on this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Revoke',
-          style: 'destructive',
-          onPress: async () => {
-            setRevokingOthers(true);
-            try {
-              const result = await revokeOtherSecuritySessions();
-              haptic.heavy();
-              show(`${result.revokedCount} session${result.revokedCount === 1 ? '' : 's'} revoked`, 'success');
-              setSessions((prev) => prev.map((s) => s.isCurrent ? s : { ...s, isRevoked: true }));
-            } catch (err) {
-              const parsed = parseApiError(err, 'Could not revoke other sessions.');
-              show(parsed.message, 'error');
-            } finally {
-              setRevokingOthers(false);
-            }
-          },
-        },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Revoke other sessions',
+      message: 'This will sign out all other devices. You will stay signed in on this device.',
+      confirmLabel: 'Revoke',
+      variant: 'danger',
+      onConfirm: async () => {
+        setRevokingOthers(true);
+        try {
+          const result = await revokeOtherSecuritySessions();
+          haptic.heavy();
+          show(`${result.revokedCount} session${result.revokedCount === 1 ? '' : 's'} revoked`, 'success');
+          setSessions((prev) => prev.map((s) => s.isCurrent ? s : { ...s, isRevoked: true }));
+        } catch (err) {
+          const parsed = parseApiError(err, 'Could not revoke other sessions.');
+          show(parsed.message, 'error');
+        } finally {
+          setRevokingOthers(false);
+        }
+      } });
   }, [haptic, show]);
 
   const handleRegisterPasskey = useCallback(async () => {
@@ -182,58 +185,48 @@ export default function AccountSecurityScreen({ navigation }: Props) {
   }, [haptic, show]);
 
   const handleRemovePasskey = useCallback(async (credentialId: string) => {
-    Alert.alert(
-      'Remove passkey',
-      'You will need to use another sign-in method if you remove this passkey.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setRemovingPasskeyId(credentialId);
-            try {
-              await removeUserPasskey(credentialId);
-              haptic.medium();
-              show('Passkey removed', 'success');
-              setPasskeys((prev) => prev.filter((p) => p.credentialId !== credentialId));
-            } catch (err) {
-              const parsed = parseApiError(err, 'Could not remove passkey');
-              show(parsed.message, 'error');
-            } finally {
-              setRemovingPasskeyId(null);
-            }
-          },
-        },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Remove passkey',
+      message: 'You will need to use another sign-in method if you remove this passkey.',
+      confirmLabel: 'Remove',
+      variant: 'danger',
+      onConfirm: async () => {
+        setRemovingPasskeyId(credentialId);
+        try {
+          await removeUserPasskey(credentialId);
+          haptic.medium();
+          show('Passkey removed', 'success');
+          setPasskeys((prev) => prev.filter((p) => p.credentialId !== credentialId));
+        } catch (err) {
+          const parsed = parseApiError(err, 'Could not remove passkey');
+          show(parsed.message, 'error');
+        } finally {
+          setRemovingPasskeyId(null);
+        }
+      } });
   }, [haptic, show]);
 
   const handleDeclareCompromise = useCallback(async () => {
-    Alert.alert(
-      'Secure your account',
-      'If you think someone else accessed your account, we will sign out other sessions and hold payouts until you confirm it is safe.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Secure account',
-          style: 'destructive',
-          onPress: async () => {
-            setDeclaring(true);
-            try {
-              const result = await declareCompromise({});
-              haptic.heavy();
-              navigation.navigate('AccountSecurityRecovery', { caseId: result.caseId });
-            } catch (err) {
-              const parsed = parseApiError(err, 'Could not start account recovery.');
-              show(parsed.message, 'error');
-            } finally {
-              setDeclaring(false);
-            }
-          },
-        },
-      ],
-    );
+    setConfirmSheet({
+      visible: true,
+      title: 'Secure your account',
+      message: 'If you think someone else accessed your account, we will sign out other sessions and hold payouts until you confirm it is safe.',
+      confirmLabel: 'Secure account',
+      variant: 'danger',
+      onConfirm: async () => {
+        setDeclaring(true);
+        try {
+          const result = await declareCompromise({});
+          haptic.heavy();
+          navigation.navigate('AccountSecurityRecovery', { caseId: result.caseId });
+        } catch (err) {
+          const parsed = parseApiError(err, 'Could not start account recovery.');
+          show(parsed.message, 'error');
+        } finally {
+          setDeclaring(false);
+        }
+      } });
   }, [haptic, show, navigation]);
 
   // ── Loading state ──────────────────────────────────────────────────
@@ -409,7 +402,7 @@ export default function AccountSecurityScreen({ navigation }: Props) {
         <FlagshipNavigationRow
           title="Something looks wrong"
           subtitle="Secure your account if you see activity you do not recognise"
-          icon="shield-checkmark-outline"
+          icon="lock-closed-outline"
           onPress={handleDeclareCompromise}
           separator={false}
           accessibilityLabel="Secure your account"
@@ -429,6 +422,16 @@ export default function AccountSecurityScreen({ navigation }: Props) {
         />
       </View>
       </ScrollView>
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </FlagshipScreen>
   );
 }
@@ -441,8 +444,7 @@ function SessionRow({
   onRevoke,
   isLast,
   colors,
-  styles,
-}: {
+  styles }: {
   session: SecuritySessionInfo;
   isRevoking: boolean;
   onRevoke: () => void;
@@ -454,7 +456,7 @@ function SessionRow({
   return (
     <View style={[styles.sessionRow, !isLast && { borderBottomColor: colors.borderSubtle }]}>
       <View style={styles.sessionIconWrap}>
-        <Ionicons name={icon} size={20} color={colors.textSecondary} />
+        <AppIcon name={icon} size={IconSize.md} color="textSecondary" opticalCenter accessible={false} />
       </View>
       <View style={styles.sessionContent}>
         <Text style={[styles.sessionDevice, { color: colors.textPrimary }]}>
@@ -493,8 +495,7 @@ function capabilityLabel(cap: string): string {
   const labels: Record<string, string> = {
     payout_changes: 'Payout changes',
     withdrawals: 'Withdrawals',
-    protected_field_changes: 'Profile changes',
-  };
+    protected_field_changes: 'Profile changes' };
   return labels[cap] ?? cap;
 }
 
@@ -508,80 +509,64 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.md,
       marginBottom: Space.lg,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     interventionText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing },
     interventionCaps: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight },
     interventionAction: {
       marginTop: Space.xs,
-      alignSelf: 'flex-start',
-    },
+      alignSelf: 'flex-start' },
     section: {
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     sectionTitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       textTransform: 'uppercase',
       marginBottom: Space.sm,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     sessionRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingVertical: Space.smMd,
       paddingHorizontal: Space.md,
       borderBottomWidth: Stroke.hairline,
-      minHeight: 52,
-    },
+      minHeight: 52 },
     sessionIconWrap: {
-      marginRight: Space.md,
-    },
+      marginRight: Space.md },
     sessionContent: {
       flex: 1,
-      gap: 2,
-    },
+      gap: 2 },
     sessionDevice: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     sessionCurrent: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     sessionMeta: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     revokeBtn: {
-      minWidth: 60,
-    },
+      minWidth: 60 },
     revokedLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     emptyText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.md,
-    },
-  });
+      paddingVertical: Space.md } });
 }
 
 // ── Passkey row ────────────────────────────────────────────────────────
@@ -592,8 +577,7 @@ function PasskeyRow({
   onRemove,
   isLast,
   colors,
-  styles,
-}: {
+  styles }: {
   passkey: PasskeyInfo;
   isRemoving: boolean;
   onRemove: () => void;
@@ -605,7 +589,7 @@ function PasskeyRow({
   return (
     <View style={[styles.sessionRow, !isLast && { borderBottomColor: colors.borderSubtle }]}>
       <View style={styles.sessionIconWrap}>
-        <Ionicons name="key-outline" size={20} color={colors.textSecondary} />
+        <AppIcon name="key" size={IconSize.md} color="textSecondary" opticalCenter accessible={false} />
       </View>
       <View style={styles.sessionContent}>
         <Text style={[styles.sessionDevice, { color: colors.textPrimary }]}>

@@ -21,7 +21,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import NetInfo from "@react-native-community/netinfo";
 import { AppState } from "react-native";
-import { Alert } from "react-native";
 
 import { type FlashListRef } from "@shopify/flash-list";
 
@@ -31,6 +30,7 @@ import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,
   deleteConversationMessageOnApi,
+  editConversationMessageOnApi,
   mapApiMessageToConversationMessage,
 } from "../../services/chatApi";
 import { uploadMedia } from "../../services/mediaUpload";
@@ -38,6 +38,7 @@ import { enqueueChatMessage, drainChatOutbox } from "../../services/chatOutbox";
 import {
   useChatMessageEvent,
   useChatMessageDeletedEvent,
+  useChatMessageEditedEvent,
   useChatReactionEvent,
   useChatReadReceiptEvent,
   realtimePayloadToMessage,
@@ -50,6 +51,11 @@ import { containsOffPlatformPaymentPattern } from "../../utils/chatSafetyWarning
 import { isVideoUri } from "../../utils/media";
 import { makeStableId, createStableId } from "../../utils/createStableId";
 import { t } from "../../i18n";
+
+/** P2-03: Edit window — must match the backend default (15 minutes). Used
+ *  only for frontend UX (hiding the edit action after the window closes);
+ *  the backend enforces it authoritatively. */
+const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 import type { SuggestedReply } from "../../services/chatAgentsApi";
 import type { SupportedCurrencyCode } from "../../constants/currencies";
 import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
@@ -104,6 +110,25 @@ interface UseConversationMessagesOptions {
   ) => void;
 }
 
+/**
+ * A confirmation request emitted by the hook for the calling screen to
+ * render via `<ConfirmationSheet>`. Hooks cannot render UI, so they expose
+ * a request object and the screen binds it to the sheet.
+ *
+ * `onCancel` is optional: when present it is invoked by the sheet's cancel
+ * button (used for the "delete for me" secondary action in the
+ * delete-for-everyone flow); backdrop dismiss always aborts without action.
+ */
+export interface ConversationConfirmationRequest {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  variant: 'default' | 'danger';
+  onConfirm: () => void | Promise<void>;
+  onCancel?: () => void | Promise<void>;
+}
+
 export function useConversationMessages({
   conversationId,
   routeOfferPayload,
@@ -136,7 +161,12 @@ export function useConversationMessages({
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [recentlyDeleted, setRecentlyDeleted] = useState<Message[]>([]);
+  const [confirmation, setConfirmation] = useState<ConversationConfirmationRequest | null>(null);
+  const clearConfirmation = useCallback(() => setConfirmation(null), []);
   const [composerSending, setComposerSending] = useState(false);
+  // P2-03: The id of the message currently being edited inline. When set,
+  // ChatMessageRow replaces that message's bubble with a TextInput.
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   // Ref mirror of the local message list so async callbacks (e.g.
   // confirmAgentDraft) can read the latest messages without re-subscribing.
@@ -157,9 +187,16 @@ export function useConversationMessages({
   // count shown on the scroll-to-bottom FAB (Instagram/WhatsApp pattern).
   const seenMessageCountRef = useRef(0);
 
-  // Sync local messages when hydrated store messages change
+  // Sync local messages when hydrated store messages change.
+  // Guard against setting the same array reference — prevents an
+  // infinite loop when the parent passes a stable reference but the
+  // effect fires due to other state changes causing a re-render.
+  const lastHydratedRef = useRef<typeof hydratedMessages | null>(null);
   useEffect(() => {
-    setMessages(hydratedMessages);
+    if (lastHydratedRef.current !== hydratedMessages) {
+      lastHydratedRef.current = hydratedMessages;
+      setMessages(hydratedMessages);
+    }
   }, [hydratedMessages]);
 
   // NetInfo listener — offline state + reconcile on reconnect
@@ -389,6 +426,39 @@ export function useConversationMessages({
     ),
   );
 
+  // P2-03: Consume edit realtime events — reconcile the edited body and the
+  // "Edited" label when another participant (or this user's second device)
+  // edits a message. Skips the optimistic edit the editor already applied.
+  useChatMessageEditedEvent(
+    conversationId,
+    useCallback(
+      (event: {
+        messageId: string;
+        body: string;
+        editVersion: number;
+        editedAt: string | null;
+        editedBy: string;
+      }) => {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== event.messageId) return m;
+            // Skip if we already have a newer or equal revision (optimistic
+            // edit applied locally before the realtime echo arrived).
+            if ((m.editVersion ?? 0) >= event.editVersion) return m;
+            return {
+              ...m,
+              text: event.body,
+              isEdited: true,
+              editedAt: event.editedAt,
+              editVersion: event.editVersion,
+            };
+          }),
+        );
+      },
+      [],
+    ),
+  );
+
   // P0.9: Consume reaction realtime events — update the local message's
   // reactions when another participant adds or removes a reaction.
   useChatReactionEvent(
@@ -472,7 +542,7 @@ export function useConversationMessages({
   // P0.14: Drain the chat outbox on mount — in case messages were queued
   // while offline and the user is now opening the conversation.
   useEffect(() => {
-    void drainChatOutbox();
+    void drainChatOutbox().catch(() => undefined);
   }, []);
 
   // NOTE: confirmAgentDraft is defined after `appendToConversationStore`
@@ -754,7 +824,7 @@ export function useConversationMessages({
             clientMessageId,
             text: caption ?? "",
             metadata: { mediaUri: canonicalUrl, type: mediaType },
-          });
+          }).catch(() => undefined);
         });
 
       if (!pushPermissionAskedRef.current) {
@@ -765,33 +835,167 @@ export function useConversationMessages({
     [conversationId, show],
   );
 
+  // ---------------------------------------------------------------------------
+  // Voice messages — report 19. Recording preview → presign → PUT → finalize
+  // → voice send with idempotent clientMessageId. Unknown-outcome sends use
+  // the durable outbox, just like media and text.
+  // ---------------------------------------------------------------------------
+  const sendVoiceMessage = useCallback(
+    async (msgId: string, draft: { uri: string; fileName: string; contentType: string; durationMs: number; sizeBytes: number }, existingCanonicalUrl?: string) => {
+      if (!conversationId) return;
+      const clientMessageId = createStableId('cmsg');
+
+      let canonicalUrl: string;
+      if (existingCanonicalUrl && existingCanonicalUrl.startsWith('http')) {
+        canonicalUrl = existingCanonicalUrl;
+      } else {
+        try {
+          const uploaded = await uploadMedia(draft.uri, 'voice');
+          canonicalUrl = uploaded.publicUrl;
+        } catch {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
+            ),
+          );
+          show("Voice upload failed. Tap voice message to retry.", "error");
+          return;
+        }
+      }
+
+      const voiceMetadata = {
+        durationMs: draft.durationMs,
+        bytes: draft.sizeBytes,
+        container: 'm4a' as const,
+        codec: 'aac' as const,
+      };
+
+      sendConversationMessageOnApi(
+        conversationId,
+        '',
+        { mediaUri: canonicalUrl, mediaType: 'voice' as const, ...voiceMetadata },
+        clientMessageId,
+        { type: 'voice' as const, mediaUri: canonicalUrl },
+      )
+        .then((serverMsg) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const, voiceUri: canonicalUrl } : m,
+            ),
+          );
+        })
+        .catch(() => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, status: "reconciling" as const, uploadStatus: "sent" as const, voiceUri: canonicalUrl } : m,
+            ),
+          );
+          enqueueChatMessage({
+            conversationId,
+            clientMessageId,
+            text: '',
+            metadata: { mediaUri: canonicalUrl, type: 'voice', ...voiceMetadata },
+          }).catch(() => undefined);
+        });
+    },
+    [conversationId, show],
+  );
+
+  const createVoiceMessage = useCallback(
+    (draft: { uri: string; fileName: string; contentType: string; durationMs: number; sizeBytes: number }): Message => {
+      return {
+        id: makeStableId('msg_voice', 7),
+        type: 'voice',
+        sender: 'me',
+        senderLabel: currentUser?.username ?? 'you',
+        text: '',
+        voiceUri: draft.uri,
+        voiceDurationMs: draft.durationMs,
+        voiceContainer: 'm4a',
+        voiceCodec: 'aac',
+        uploadStatus: 'uploading',
+      };
+    },
+    [currentUser?.username],
+  );
+
+  const handleSendVoice = useCallback(
+    async (draft: { uri: string; fileName: string; contentType: string; durationMs: number; sizeBytes: number }) => {
+      if (!conversationId) return;
+      const outgoing = createVoiceMessage(draft);
+      pushMessage(outgoing);
+      appendToConversationStore(outgoing, currentUser?.id ?? 'me');
+      haptic.success();
+      scheduleScrollToEnd();
+      sendVoiceMessage(outgoing.id, draft);
+    },
+    [conversationId, createVoiceMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendVoiceMessage],
+  );
+
   const handleRetryUpload = useCallback(
     (msgId: string) => {
       setMessages((prev) => {
         const msg = prev.find((m) => m.id === msgId);
-        if (!msg?.mediaUri || !msg.mediaType) return prev;
-        if (msg.uploadStatus === "uploading") return prev;
+        if (!msg || msg.uploadStatus === "uploading") return prev;
+
+        if (msg.type === 'voice' && msg.voiceUri && msg.voiceDurationMs) {
+          // Voice retry: reuse the canonical URL if already uploaded, or
+          // re-upload the local draft if still a file:// URI.
+          const alreadyUploaded = msg.voiceUri.startsWith('http');
+          setTimeout(() => {
+            void sendVoiceMessage(
+              msgId,
+              {
+                uri: alreadyUploaded ? msg.voiceUri! : msg.voiceUri!,
+                fileName: `voice_retry_${Date.now()}.m4a`,
+                contentType: 'audio/m4a',
+                durationMs: msg.voiceDurationMs!,
+                sizeBytes: 0,
+              },
+              alreadyUploaded ? msg.voiceUri : undefined,
+            );
+          }, 0);
+          return prev.map((m) =>
+            m.id === msgId ? { ...m, uploadStatus: "uploading" as const } : m,
+          );
+        }
+
+        if (!msg.mediaUri || !msg.mediaType) return prev;
         // P0.7: If the media was already uploaded (canonical URL exists),
         // pass it so sendMediaMessage skips re-upload and only retries the
         // message send with the same clientMessageId.
         const alreadyUploaded = msg.mediaUri.startsWith('http');
-        setTimeout(
-          () => sendMediaMessage(
-            msgId,
-            msg.mediaUri!,
-            msg.mediaType!,
-            msg.text || undefined,
-            alreadyUploaded ? msg.mediaUri : undefined,
-          ),
-          0,
-        );
+        if (msg.mediaType === 'document') {
+          setTimeout(
+            () => void sendDocumentMessage(
+              msgId,
+              msg.mediaUri!,
+              msg.documentName ?? 'File',
+              msg.documentMimeType,
+              msg.text || undefined,
+              alreadyUploaded ? msg.mediaUri : undefined,
+            ),
+            0,
+          );
+        } else {
+          setTimeout(
+            () => void sendMediaMessage(
+              msgId,
+              msg.mediaUri!,
+              msg.mediaType as "image" | "video",
+              msg.text || undefined,
+              alreadyUploaded ? msg.mediaUri : undefined,
+            ),
+            0,
+          );
+        }
         return prev.map((m) =>
           m.id === msgId ? { ...m, uploadStatus: "uploading" as const } : m,
         );
       });
       haptic.light();
     },
-    [sendMediaMessage, haptic],
+    [sendMediaMessage, sendVoiceMessage, haptic],
   );
 
   const handleRetrySendMessage = useCallback(
@@ -868,10 +1072,112 @@ export function useConversationMessages({
       appendToConversationStore(outgoing, currentUser?.id ?? "me");
       haptic.success();
       scheduleScrollToEnd();
-      sendMediaMessage(outgoing.id, uri, mediaType, outgoing.text || undefined);
+      void sendMediaMessage(outgoing.id, uri, mediaType, outgoing.text || undefined);
       setPendingAttachment(null);
     },
     [createMediaMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendMediaMessage],
+  );
+
+  // ── Document message send ───────────────────────────────────────────
+  // Documents (PDF, ZIP, etc.) are uploaded via the same media platform,
+  // then sent as type: 'document' with documentName/documentMimeType in
+  // metadata. The backend stores them in chat_message_attachments with
+  // kind='document'.
+  const sendDocumentMessage = useCallback(
+    async (msgId: string, uri: string, fileName: string, mimeType?: string, caption?: string, existingCanonicalUrl?: string) => {
+      if (!conversationId) return;
+      const clientMessageId = createStableId('cmsg');
+
+      let canonicalUrl: string;
+      if (existingCanonicalUrl && existingCanonicalUrl.startsWith('http')) {
+        canonicalUrl = existingCanonicalUrl;
+      } else {
+        try {
+          const uploaded = await uploadMedia(uri, 'uploads');
+          canonicalUrl = uploaded.publicUrl;
+        } catch {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
+            ),
+          );
+          show("Upload failed. Tap to retry.", "error");
+          return;
+        }
+      }
+
+      sendConversationMessageOnApi(
+        conversationId,
+        caption ?? "",
+        { documentUri: canonicalUrl, documentName: fileName, documentMimeType: mimeType, mediaUri: canonicalUrl, mediaType: 'document' },
+        clientMessageId,
+        { type: 'document', mediaUri: canonicalUrl },
+      )
+        .then((serverMsg) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const, documentUri: canonicalUrl } : m,
+            ),
+          );
+        })
+        .catch(() => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, status: "reconciling" as const, uploadStatus: "sent" as const, documentUri: canonicalUrl } : m,
+            ),
+          );
+          enqueueChatMessage({
+            conversationId,
+            text: caption ?? "",
+            metadata: { documentUri: canonicalUrl, documentName: fileName, documentMimeType: mimeType, mediaUri: canonicalUrl, mediaType: 'document' },
+            clientMessageId,
+            type: 'document',
+            mediaUri: canonicalUrl,
+          });
+        });
+    },
+    [conversationId, setMessages, show],
+  );
+
+  const createDocumentMessage = useCallback(
+    (uri: string, fileName: string, mimeType?: string): Message => {
+      return {
+        id: makeStableId('msg_doc', 7),
+        type: "media",
+        sender: "me",
+        senderLabel: currentUser?.username ?? "you",
+        text: "",
+        mediaUri: uri,
+        mediaType: "image",
+        uploadStatus: "uploading",
+        documentUri: uri,
+        documentName: fileName,
+        documentMimeType: mimeType,
+      };
+    },
+    [currentUser?.username],
+  );
+
+  const handleSendPendingDocument = useCallback(
+    (
+      caption: string,
+      pendingDocument: { uri: string; name: string; mimeType?: string } | null,
+      setPendingDocument: (v: null) => void,
+    ) => {
+      if (!pendingDocument) return;
+      const { uri, name, mimeType } = pendingDocument;
+      const outgoing = createDocumentMessage(uri, name, mimeType);
+      if (caption) {
+        outgoing.text = caption;
+      }
+      pushMessage(outgoing);
+      appendToConversationStore(outgoing, currentUser?.id ?? "me");
+      haptic.success();
+      scheduleScrollToEnd();
+      void sendDocumentMessage(outgoing.id, uri, name, mimeType, outgoing.text || undefined);
+      setPendingDocument(null);
+    },
+    [createDocumentMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendDocumentMessage],
   );
 
   const scheduleUndoClear = useCallback(() => {
@@ -904,35 +1210,31 @@ export function useConversationMessages({
         exitSelectionMode();
         return;
       }
-      Alert.alert(
-        "Delete messages?",
-        `This will remove ${toDelete.length} message${toDelete.length === 1 ? "" : "s"}.`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: async () => {
-              haptic.medium();
-              deleteApiStatusRef.current = "pending";
-              setRecentlyDeleted(toDelete);
-              setMessages((prev) => prev.filter((m) => !idsToDelete.has(m.id)));
-              exitSelectionMode();
-              scheduleUndoClear();
-              try {
-                if (!conversationId) throw new Error("No conversation");
-                await Promise.all(
-                  toDelete.map((m) => deleteConversationMessageOnApi(conversationId, m.id, 'me')),
-                );
-                deleteApiStatusRef.current = "success";
-              } catch {
-                deleteApiStatusRef.current = "error";
-                show("Some messages may not have been deleted on the server.", "error");
-              }
-            },
-          },
-        ],
-      );
+      setConfirmation({
+        title: "Delete messages?",
+        message: `This will remove ${toDelete.length} message${toDelete.length === 1 ? "" : "s"}.`,
+        confirmLabel: "Delete",
+        cancelLabel: "Cancel",
+        variant: "danger",
+        onConfirm: async () => {
+          haptic.medium();
+          deleteApiStatusRef.current = "pending";
+          setRecentlyDeleted(toDelete);
+          setMessages((prev) => prev.filter((m) => !idsToDelete.has(m.id)));
+          exitSelectionMode();
+          scheduleUndoClear();
+          try {
+            if (!conversationId) throw new Error("No conversation");
+            await Promise.all(
+              toDelete.map((m) => deleteConversationMessageOnApi(conversationId, m.id, 'me')),
+            );
+            deleteApiStatusRef.current = "success";
+          } catch {
+            deleteApiStatusRef.current = "error";
+            show("Some messages may not have been deleted on the server.", "error");
+          }
+        },
+      });
     },
     [messages, conversationId, haptic, show, scheduleUndoClear],
   );
@@ -963,30 +1265,106 @@ export function useConversationMessages({
       };
 
       if (canDeleteForEveryone) {
-        Alert.alert("Delete message?", "Choose how to delete this message.", [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete for me",
-            onPress: () => performDelete('me'),
-          },
-          {
-            text: "Delete for everyone",
-            style: "destructive",
-            onPress: () => performDelete('everyone'),
-          },
-        ]);
+        // Two real actions (delete for everyone / delete for me) plus an
+        // implicit abort via backdrop dismiss. The destructive option is
+        // the confirm button; the less-destructive option is the cancel
+        // button. Labels make both actions explicit so neither reads as a
+        // plain "cancel".
+        setConfirmation({
+          title: "Delete message?",
+          message: "Choose how to delete this message.",
+          confirmLabel: "Delete for everyone",
+          cancelLabel: "Delete for me",
+          variant: "danger",
+          onConfirm: () => performDelete('everyone'),
+          onCancel: () => performDelete('me'),
+        });
       } else {
-        Alert.alert("Delete message?", "This message will be removed for you.", [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: () => performDelete('me'),
-          },
-        ]);
+        setConfirmation({
+          title: "Delete message?",
+          message: "This message will be removed for you.",
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          variant: "danger",
+          onConfirm: () => performDelete('me'),
+        });
       }
     },
     [conversationId, haptic, show, scheduleUndoClear],
+  );
+
+  // P2-03: Inline message editing. The hook owns the editing message id so
+  // ChatMessageRow can swap the bubble for a TextInput. `saveEdit` applies an
+  // optimistic update (new text + isEdited label), calls the API, and reverts
+  // to the prior text on failure. The realtime echo is reconciled by
+  // `useChatMessageEditedEvent` above (skipped when the optimistic revision
+  // already matches).
+  const startEdit = useCallback((msg: Message) => {
+    setEditingMessageId(msg.id);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingMessageId(null);
+  }, []);
+
+  const saveEdit = useCallback(
+    async (messageId: string, newText: string) => {
+      const trimmed = newText.trim();
+      const target = messagesRef.current.find((m) => m.id === messageId);
+      if (!target || !conversationId) {
+        setEditingMessageId(null);
+        return;
+      }
+      if (!trimmed || trimmed === (target.text ?? "")) {
+        // No-op edit — just close the editor.
+        setEditingMessageId(null);
+        return;
+      }
+
+      const previousText = target.text;
+      const previousEditVersion = target.editVersion ?? 0;
+      const nextEditVersion = previousEditVersion + 1;
+
+      // Optimistic update — apply the new text and "Edited" label immediately.
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                text: trimmed,
+                isEdited: true,
+                editedAt: new Date().toISOString(),
+                editVersion: nextEditVersion,
+              }
+            : m,
+        ),
+      );
+      setEditingMessageId(null);
+      haptic.light();
+
+      try {
+        await editConversationMessageOnApi(conversationId, messageId, trimmed);
+        // The realtime echo reconciles editVersion/editedAt from the server.
+        // No further local mutation needed.
+      } catch {
+        // Revert to the pre-edit state.
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  text: previousText,
+                  isEdited: previousEditVersion > 0,
+                  editedAt: m.editedAt,
+                  editVersion: previousEditVersion,
+                }
+              : m,
+          ),
+        );
+        show("Failed to edit message. Please try again.", "error");
+      }
+    },
+    [conversationId, haptic, show],
   );
 
   // When the user is at the bottom, record the seen message count so
@@ -1097,13 +1475,25 @@ export function useConversationMessages({
     retryAgentDraft,
     sendMessage,
     sendMediaMessage,
+    sendVoiceMessage,
+    handleSendVoice,
+    createVoiceMessage,
     handleRetryUpload,
     handleRetrySendMessage,
     createMediaMessage,
     handleSendPendingAttachment,
+    sendDocumentMessage,
+    createDocumentMessage,
+    handleSendPendingDocument,
     handleUndoDelete,
     handleBulkDelete,
     handleDeleteMessage,
+    editingMessageId,
+    startEdit,
+    cancelEdit,
+    saveEdit,
+    confirmation,
+    clearConfirmation,
     dateSeparatorIndices,
     unreadDividerIndex,
     handleMessageListScroll,

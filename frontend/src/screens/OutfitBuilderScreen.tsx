@@ -12,18 +12,15 @@ import {
   StyleSheet,
   ScrollView,
   StatusBar,
-  Dimensions,
-  Alert,
+  useWindowDimensions,
   Platform,
   Share,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  Easing,
-} from 'react-native-reanimated';
+  Easing } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -40,7 +37,9 @@ import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
-import { Typography, DockConstants, Radius, Type, Space, Stroke, LetterSpacing, Control } from '../theme/designTokens';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { Typography, DockConstants, Radius, Space, Stroke, LetterSpacing, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import {
   OutfitSlot,
   StyleItem,
@@ -49,16 +48,10 @@ import {
   suggestCompletion,
   createOutfit,
   getSlotLabel,
-  getSlotIcon,
-} from '../services/styleGraph';
+  getSlotIcon } from '../services/styleGraph';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-const { width: SCREEN_W } = Dimensions.get('window');
-const SLOT_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * 4) / 5;
-
 const SLOTS: OutfitSlot[] = ['top', 'bottom', 'shoes', 'outerwear', 'accessory'];
-
-const BG_COLORS = ['#F5F5F0', '#E8E4DF', '#D4C9BE', '#C9D9E8', '#D9D0E1', '#E8D4D4', '#D4E8D6', '#1A1A1A'];
 
 // ── Helper Components ──
 
@@ -67,14 +60,15 @@ function SlotCircle({
   item,
   isActive,
   onPress,
-}: {
+  slotSize }: {
   slot: OutfitSlot;
   item?: StyleItem;
   isActive: boolean;
   onPress: () => void;
+  slotSize: number;
 }) {
   const { colors } = useAppTheme();
-  const slotStyles = useMemo(() => createSlotStyles(colors), [colors]);
+  const slotStyles = useMemo(() => createSlotStyles(colors, slotSize), [colors, slotSize]);
   return (
     <AnimatedPressable
       style={[slotStyles.circle, isActive && slotStyles.circleActive]}
@@ -103,54 +97,49 @@ function SlotCircle({
   );
 }
 
-function createSlotStyles(colors: ThemeColors) {
+function createSlotStyles(colors: ThemeColors, slotSize: number) {
   return StyleSheet.create({
   circle: {
-    width: SLOT_SIZE,
-    height: SLOT_SIZE,
+    width: slotSize,
+    height: slotSize,
     borderRadius: Radius.lg,
     backgroundColor: colors.surface,
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     overflow: 'hidden',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   circleActive: {
     borderColor: colors.brand,
-    borderWidth: Stroke.emphasis,
-  },
+    borderWidth: Stroke.emphasis },
   image: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   empty: {
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   activeRing: {
     position: 'absolute',
     bottom: Space.xs,
     width: Space.xs + 2,
     height: Space.xs + 2,
     borderRadius: Radius.sm,
-    backgroundColor: colors.brand,
-  },
-  });
+    backgroundColor: colors.brand } });
 }
 
 function ItemThumb({
   item,
   onPress,
   isSelected,
-}: {
+  screenWidth }: {
   item: StyleItem;
   onPress: () => void;
   isSelected: boolean;
+  screenWidth: number;
 }) {
   const { colors } = useAppTheme();
-  const thumbStyles = useMemo(() => createThumbStyles(colors), [colors]);
+  const thumbStyles = useMemo(() => createThumbStyles(colors, screenWidth), [colors, screenWidth]);
   return (
     <AnimatedPressable
       style={[thumbStyles.card, isSelected && thumbStyles.cardSelected]}
@@ -190,42 +179,35 @@ function ItemThumb({
   );
 }
 
-function createThumbStyles(colors: ThemeColors) {
+function createThumbStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
   card: {
-    width: (SCREEN_W - Space.md * 2 - Space.sm) / 2,
+    width: (screenWidth - Space.md * 2 - Space.sm) / 2,
     overflow: 'hidden',
     marginBottom: Space.sm,
     borderBottomWidth: Stroke.hairline,
     borderBottomColor: colors.border,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   cardSelected: {
     borderBottomWidth: Stroke.hairline,
     borderBottomColor: colors.border,
     borderWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   image: {
     width: '100%',
     height: Space.xxl * 3 - Space.xs,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   placeholder: {
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   meta: {
-    padding: Space.sm,
-  },
+    padding: Space.sm },
   check: {
     position: 'absolute',
     top: Space.xs,
     right: Space.xs,
     backgroundColor: colors.background,
-    borderRadius: Radius.full,
-  },
-  });
+    borderRadius: Radius.full } });
 }
 
 function ScoreBadge({ score }: { score: number }) {
@@ -246,8 +228,7 @@ function ScoreBadge({ score }: { score: number }) {
   }, [score, reducedMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+    transform: [{ scale: scale.value }] }));
 
   const scoreColor = score >= 80 ? colors.success : score >= 50 ? colors.brand : colors.danger;
 
@@ -269,15 +250,15 @@ function createScoreStyles(colors: ThemeColors) {
     borderWidth: Stroke.emphasis,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-  },
-  });
+    backgroundColor: colors.surface } });
 }
 
 // ── Main Screen ──
 
 export default function OutfitBuilderScreen() {
   const navigation = useNavigation<NavT>();
+  const { width: SCREEN_W } = useWindowDimensions();
+  const SLOT_SIZE = (SCREEN_W - Space.md * 2 - Space.sm * 4) / 5;
   const { listings, isSyncing, lastError, refreshListings } = useBackendData();
   const collections = useStore((s) => s.collections);
   const createCollectionFn = useStore((s) => s.createCollection);
@@ -287,13 +268,20 @@ export default function OutfitBuilderScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [activeSlot, setActiveSlot] = useState<OutfitSlot>('top');
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
   const [outfitItems, setOutfitItems] = useState<Record<OutfitSlot, StyleItem | undefined>>({
     top: undefined,
     bottom: undefined,
     shoes: undefined,
     outerwear: undefined,
-    accessory: undefined,
-  });
+    accessory: undefined });
   const [backgroundColor, setBackgroundColor] = useState<string | undefined>(undefined);
 
   // ── Undo / Redo history ──
@@ -319,8 +307,7 @@ export default function OutfitBuilderScreen() {
     (items: Record<OutfitSlot, StyleItem | undefined>, bg: string | undefined) => {
       const snapshot: OutfitSnapshot = {
         items: { ...items },
-        bg,
-      };
+        bg };
       // Truncate any redo tail before pushing.
       historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
       historyRef.current.push(snapshot);
@@ -362,8 +349,7 @@ export default function OutfitBuilderScreen() {
       condition: l.condition,
       imageUri: l.images?.[0] ?? l.imageUri,
       price: l.price,
-      styleTags: l.styleTags,
-    }));
+      styleTags: l.styleTags }));
   }, [listings]);
 
   const slotItems = useMemo(() => {
@@ -393,7 +379,12 @@ export default function OutfitBuilderScreen() {
 
   const handleSave = () => {
     if (filledCount < 2) {
-      Alert.alert('Need more items', 'Select at least 2 items to save an outfit.');
+      setConfirmSheet({
+        visible: true,
+        title: 'Need more items',
+        message: 'Select at least 2 items to save an outfit.',
+        confirmLabel: 'OK',
+        onConfirm: () => {} });
       return;
     }
 
@@ -413,18 +404,25 @@ export default function OutfitBuilderScreen() {
       itemIds,
       backgroundColor,
       createdAt: outfit.createdAt,
-      updatedAt: outfit.createdAt,
-    });
+      updatedAt: outfit.createdAt });
 
     haptics.success();
-    Alert.alert('Outfit Saved', `"${collectionName}" added to your outfits.`, [
-      { text: 'OK', onPress: () => navigation.goBack() },
-    ]);
+    setConfirmSheet({
+      visible: true,
+      title: 'Outfit Saved',
+      message: `"${collectionName}" added to your outfits.`,
+      confirmLabel: 'OK',
+      onConfirm: () => navigation.goBack() });
   };
 
   const handleShare = async () => {
     if (filledCount < 1) {
-      Alert.alert('No items', 'Add at least one item to share your outfit.');
+      setConfirmSheet({
+        visible: true,
+        title: 'No items',
+        message: 'Add at least one item to share your outfit.',
+        confirmLabel: 'OK',
+        onConfirm: () => {} });
       return;
     }
     const outfit = createOutfit(outfitItems);
@@ -434,26 +432,24 @@ export default function OutfitBuilderScreen() {
       .join(', ');
     try {
       await Share.share({
-        message: `Check out my outfit "${outfit.name}" on Thryftverse — ${itemNames}`,
-      });
+        message: `Check out my outfit "${outfit.name}" on Thryftverse — ${itemNames}` });
     } catch { /* user cancelled */ }
   };
 
   const handleClear = () => {
-    Alert.alert('Clear Outfit?', 'This will remove all selected items.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: () => {
-          const cleared = { top: undefined, bottom: undefined, shoes: undefined, outerwear: undefined, accessory: undefined };
-          setOutfitItems(cleared);
-          setBackgroundColor(undefined);
-          pushHistory(cleared, undefined);
-          haptics.error();
-        },
-      },
-    ]);
+    setConfirmSheet({
+      visible: true,
+      title: 'Clear Outfit?',
+      message: 'This will remove all selected items.',
+      confirmLabel: 'Clear',
+      variant: 'danger',
+      onConfirm: () => {
+        const cleared = { top: undefined, bottom: undefined, shoes: undefined, outerwear: undefined, accessory: undefined };
+        setOutfitItems(cleared);
+        setBackgroundColor(undefined);
+        pushHistory(cleared, undefined);
+        haptics.error();
+      } });
   };
 
   const handleAiSuggest = () => {
@@ -591,6 +587,7 @@ export default function OutfitBuilderScreen() {
                   item={outfitItems[slot]}
                   isActive={activeSlot === slot}
                   onPress={() => setActiveSlot(slot)}
+                  slotSize={SLOT_SIZE}
                 />
                 <T.Meta color={activeSlot === slot ? colors.brand : colors.textMuted} style={styles.slotLabel}>
                   {getSlotLabel(slot)}
@@ -630,7 +627,7 @@ export default function OutfitBuilderScreen() {
               >
                 <Ionicons name="close" size={14} color={colors.textMuted} />
               </AnimatedPressable>
-              {BG_COLORS.map((c) => (
+              {colors.outfitBackgrounds.map((c) => (
                 <AnimatedPressable
                   key={c}
                   style={[
@@ -691,6 +688,7 @@ export default function OutfitBuilderScreen() {
                   item={item}
                   onPress={() => toggleItem(item)}
                   isSelected={outfitItems[activeSlot]?.id === item.id}
+                  screenWidth={SCREEN_W}
                 />
               </View>
             ))}
@@ -729,6 +727,16 @@ export default function OutfitBuilderScreen() {
         </View>
       </View>
       )}
+
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((prev) => ({ ...prev, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={confirmSheet.onConfirm}
+      />
     </SafeAreaView>
   );
 }
@@ -737,15 +745,13 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   iconBtn: {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
@@ -754,13 +760,11 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   headerTitle: {
     textTransform: 'uppercase',
     letterSpacing: LetterSpacing.caps,
-    fontSize: Type.subtitle.size,
-  },
+    fontSize: TypographyV2.sectionTitle.size },
   undoRedoBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -769,8 +773,7 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.xs,
     paddingHorizontal: Space.md,
     borderBottomWidth: Stroke.hairline,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   undoRedoBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -778,55 +781,44 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs,
     borderRadius: Radius.md,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   undoRedoBtnDisabled: {
-    opacity: 0.4,
-  },
+    opacity: 0.4 },
   undoRedoLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: LetterSpacing.wide,
-  },
+    letterSpacing: LetterSpacing.wide },
   undoRedoLabelDisabled: {
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   scrollContent: {
-    paddingTop: Space.sm,
-  },
+    paddingTop: Space.sm },
   stateContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   previewWrap: {
     marginHorizontal: Space.md,
     marginBottom: Space.md,
-    padding: Space.md,
-  },
+    padding: Space.md },
   slotRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   slotWrap: {
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   slotLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   scoreRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: Stroke.standard,
     borderTopColor: colors.border,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   bgRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -834,13 +826,11 @@ function createStyles(colors: ThemeColors) {
     borderTopWidth: Stroke.hairline,
     borderTopColor: colors.border,
     paddingTop: Space.md,
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   bgSwatches: {
     flexDirection: 'row',
     gap: Space.xs,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   swatch: {
     width: Space.lg + Space.xs,
     height: Space.lg + Space.xs,
@@ -848,36 +838,30 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   swatchActive: {
     borderWidth: Stroke.emphasis,
-    borderColor: colors.brand,
-  },
+    borderColor: colors.brand },
   aiCard: {
     paddingVertical: Space.md,
     borderTopWidth: Stroke.hairline,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   aiRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginHorizontal: Space.md,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -888,13 +872,11 @@ function createStyles(colors: ThemeColors) {
     paddingBottom: Platform.OS === 'ios' ? Space.md : Space.sm,
     backgroundColor: colors.background,
     borderTopWidth: Stroke.standard,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   shareBtn: {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
@@ -903,7 +885,5 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  });
+    alignItems: 'center' } });
 }

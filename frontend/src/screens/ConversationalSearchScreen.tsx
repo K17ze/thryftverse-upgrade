@@ -24,21 +24,22 @@ import {
   ScrollView,
   StatusBar,
   Platform,
-  ActivityIndicator,
-} from 'react-native';
+  ActivityIndicator } from 'react-native';
 import { FlashList, ListRenderItem, FlashListRef } from '@shopify/flash-list';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Typography, Radius, Type, Space, Control, Stroke } from '../theme/designTokens';
+import { Radius, Space, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
-import { TypingIndicator } from '../components/TypingIndicator';
+import { TypingIndicator } from '../components/chat/TypingIndicator';
 import { AITrustSignal, type AIConfidence } from '../components/ai/AITrustSignal';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useStore } from '../store/useStore';
 import { RootStackParamList } from '../navigation/types';
 import {
@@ -49,8 +50,8 @@ import {
   SearchSuggestion,
   continueConversation,
   fetchSuggestions,
-  startConversation,
-} from '../services/conversationalSearchApi';
+  startConversation } from '../services/conversationalSearchApi';
+import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ConversationalSearch'>;
 
@@ -61,9 +62,11 @@ type ConversationRow =
 
 export default function ConversationalSearchScreen({ navigation }: Props) {
   const { colors, isDark } = useAppTheme();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const { t } = useAppTranslation('conversationalSearch');
 
   // ── Store (for Browse filter hand-off) ──
   const resetBrowseFilters = useStore((state) => state.resetBrowseFilters);
@@ -105,8 +108,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
     if (!conversation) return [];
     const messageRows: ConversationRow[] = conversation.messages.map((m) => ({
       kind: 'message' as const,
-      message: m,
-    }));
+      message: m }));
     if (isProcessing) {
       messageRows.push({ kind: 'typing' });
     }
@@ -129,7 +131,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       const trimmed = query.trim();
       if (!trimmed || isProcessing) return;
       if (isOffline) {
-        setError('You are offline. Reconnect to search.');
+        setError(t('error.offline'));
         return;
       }
 
@@ -149,12 +151,12 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
           setConversation({ ...conversation, messages: [...conversation.messages] });
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
+        setError(e instanceof Error ? e.message : t('error.generic'));
       } finally {
         setIsProcessing(false);
       }
     },
-    [conversation, isProcessing, isOffline],
+    [conversation, isProcessing, isOffline, t],
   );
 
   // ── Navigate to Browse with extracted filters applied ──
@@ -178,11 +180,10 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
 
       navigation.navigate('Browse', {
         categoryId: 'search',
-        title: 'Search results',
-        searchQuery: queryText || undefined,
-      });
+        title: t('browseTitle'),
+        searchQuery: queryText || undefined });
     },
-    [navigation, resetBrowseFilters, updateBrowseFilters],
+    [navigation, resetBrowseFilters, updateBrowseFilters, t],
   );
 
   // ── Render a filter chip inside an assistant message ──
@@ -208,37 +209,37 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
     (filters: SearchFilters): { label: string; key: string }[] => {
       const chips: { label: string; key: string }[] = [];
       if (filters.brands?.length) {
-        chips.push({ label: `Brand: ${filters.brands.join(', ')}`, key: 'brand' });
+        chips.push({ label: t('filters.brand', { value: filters.brands.join(', ') }), key: 'brand' });
       }
       if (filters.categories?.length) {
-        chips.push({ label: `Category: ${filters.categories.join(', ')}`, key: 'cat' });
+        chips.push({ label: t('filters.category', { value: filters.categories.join(', ') }), key: 'cat' });
       }
       if (filters.sizes?.length) {
-        chips.push({ label: `Size: ${filters.sizes.join(', ')}`, key: 'size' });
+        chips.push({ label: t('filters.size', { value: filters.sizes.join(', ') }), key: 'size' });
       }
       if (filters.conditions?.length) {
-        chips.push({ label: `Condition: ${filters.conditions.join(', ')}`, key: 'cond' });
+        chips.push({ label: t('filters.condition', { value: filters.conditions.join(', ') }), key: 'cond' });
       }
       if (filters.colors?.length) {
-        chips.push({ label: `Colour: ${filters.colors.join(', ')}`, key: 'colour' });
+        chips.push({ label: t('filters.colour', { value: filters.colors.join(', ') }), key: 'colour' });
       }
       if (filters.styles?.length) {
-        chips.push({ label: `Style: ${filters.styles.join(', ')}`, key: 'style' });
+        chips.push({ label: t('filters.style', { value: filters.styles.join(', ') }), key: 'style' });
       }
       if (filters.priceRange) {
         const { min, max } = filters.priceRange;
-        let priceLabel = 'Price: ';
-        if (min !== undefined && max !== undefined) priceLabel += `£${min}–£${max}`;
-        else if (max !== undefined) priceLabel += `under £${max}`;
-        else if (min !== undefined) priceLabel += `over £${min}`;
+        let priceLabel = t('filters.priceLabel');
+        if (min !== undefined && max !== undefined) priceLabel += `${formatFromFiat(min, currencyCode)}–${formatFromFiat(max, currencyCode)}`;
+        else if (max !== undefined) priceLabel += t('filters.priceUnder', { value: formatFromFiat(max, currencyCode) });
+        else if (min !== undefined) priceLabel += t('filters.priceOver', { value: formatFromFiat(min, currencyCode) });
         chips.push({ label: priceLabel, key: 'price' });
       }
       if (filters.sustainableOnly) {
-        chips.push({ label: 'Sustainable only', key: 'sust' });
+        chips.push({ label: t('filters.sustainableOnly'), key: 'sust' });
       }
       return chips;
     },
-    [],
+    [formatFromFiat, t, currencyCode],
   );
 
   // ── Render an assistant message bubble ──
@@ -254,8 +255,8 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
         matchedCount >= 3 ? 'high' : matchedCount >= 1 ? 'medium' : 'low';
       const matchedSource =
         matchedCount > 0
-          ? `Matched keywords: ${chips.map((c) => c.label).join(', ')}`
-          : 'No keywords matched — showing a general response';
+          ? t('trust.matchedKeywords', { keywords: chips.map((c) => c.label).join(', ') })
+          : t('trust.noMatch');
       return (
         <View style={[localStyles.bubbleAssistant, { backgroundColor: colors.surface }]}>
           <Text
@@ -280,7 +281,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
                 style={[localStyles.matchedKeywordsLabel, { color: colors.textMuted }]}
                 accessibilityRole="text"
               >
-                Matched keywords
+                {t('matched.label')}
               </Text>
               <View style={localStyles.filterChipWrap}>
                 {chips.map((chip) => renderFilterChip(chip.label, chip.key))}
@@ -307,7 +308,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
                   style={[localStyles.viewResultsText, { color: colors.textInverse }]}
                   accessibilityRole="text"
                 >
-                  View results
+                  {t('actions.viewResults')}
                 </Text>
                 <Ionicons name="arrow-forward" size={16} color={colors.textInverse} />
               </AnimatedPressable>
@@ -321,7 +322,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
                 style={[localStyles.refineLabel, { color: colors.textMuted }]}
                 accessibilityRole="text"
               >
-                Refine
+                {t('actions.refine')}
               </Text>
               <ScrollView
                 horizontal
@@ -370,6 +371,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       handleViewResults,
       sendQuery,
       isProcessing,
+      t,
     ],
   );
 
@@ -433,13 +435,13 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
           style={[localStyles.greetingTitle, { color: colors.textPrimary }]}
           accessibilityRole="header"
         >
-          What are you looking for today?
+          {t('empty.greetingTitle')}
         </Text>
         <Text
           style={[localStyles.greetingSubtitle, { color: colors.textSecondary }]}
           accessibilityRole="text"
         >
-          Describe it in your own words.
+          {t('empty.greetingSubtitle')}
         </Text>
       </View>
 
@@ -449,7 +451,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
           style={[localStyles.suggestionsLabel, { color: colors.textMuted }]}
           accessibilityRole="text"
         >
-          Try one of these
+          {t('empty.suggestionsLabel')}
         </Text>
         {suggestionsLoading ? (
           <View style={localStyles.suggestionSkeletonRow}>
@@ -523,7 +525,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
           style={[localStyles.retryBtnText, { color: colors.textInverse }]}
           accessibilityRole="text"
         >
-          Retry
+          {t('error.retry')}
         </Text>
       </AnimatedPressable>
     </View>
@@ -544,14 +546,13 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
 
       {/* ── Header ── */}
       <ScreenHeader
-        title="Ask ThryftVerse"
+        title={t('header.title')}
         backIcon="arrow-back"
         onBack={() => navigation.goBack()}
         style={{
           paddingBottom: Space.sm,
           borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: colors.border,
-        }}
+          borderBottomColor: colors.border }}
       />
 
       {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
@@ -567,7 +568,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             style={[localStyles.demoBannerText, { color: colors.textMuted }]}
             accessibilityRole="text"
           >
-            Keyword matching — we extract filters from your description.
+            {t('demo.banner')}
           </Text>
         </View>
       )}
@@ -585,7 +586,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             style={[localStyles.offlineBannerText, { color: colors.textMuted }]}
             accessibilityRole="text"
           >
-            You are offline. Reconnect to search.
+            {t('offline.banner')}
           </Text>
         </View>
       )}
@@ -621,8 +622,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             {
               backgroundColor: colors.background,
               borderTopColor: colors.border,
-              paddingBottom: insets.bottom + Space.sm,
-            },
+              paddingBottom: insets.bottom + Space.sm },
           ]}
         >
           <View
@@ -634,7 +634,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             <TextInput
               ref={inputRef}
               style={[localStyles.input, { color: colors.inputText }]}
-              placeholder="Describe what you are looking for…"
+              placeholder={t('input.placeholder')}
               placeholderTextColor={colors.textMuted}
               value={input}
               onChangeText={setInput}
@@ -652,8 +652,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             style={[
               localStyles.sendBtn,
               {
-                backgroundColor: input.trim().length > 0 && !isProcessing ? colors.brand : colors.surfaceAlt,
-              },
+                backgroundColor: input.trim().length > 0 && !isProcessing ? colors.brand : colors.surfaceAlt },
             ]}
             onPress={() => void sendQuery(input)}
             disabled={input.trim().length === 0 || isProcessing || isOffline}
@@ -686,11 +685,9 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
 // ---------------------------------------------------------------------------
 const localStyles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   flexOne: {
-    flex: 1,
-  },
+    flex: 1 },
 
   // Demo mode banner
   demoBanner: {
@@ -699,15 +696,13 @@ const localStyles = StyleSheet.create({
     gap: Space.xs,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   demoBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // Offline banner
   offlineBanner: {
@@ -716,36 +711,30 @@ const localStyles = StyleSheet.create({
     gap: Space.xs,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    borderBottomWidth: StyleSheet.hairlineWidth },
   offlineBannerText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // List
   listContent: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   messageRow: {
-    marginVertical: Space.xs,
-  },
+    marginVertical: Space.xs },
 
   // User bubble (right-aligned, brand-tinted)
   userBubbleCol: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   bubbleUser: {
     maxWidth: '82%',
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-  },
+    paddingVertical: Space.sm + 2 },
 
   // Assistant bubble (left-aligned, surface)
   bubbleAssistant: {
@@ -753,52 +742,43 @@ const localStyles = StyleSheet.create({
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   bubbleText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   trustSignal: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
 
   // Filter chips inside assistant message
   filterChipRow: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   matchedKeywordsLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   filterChipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   filterChip: {
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.xs + 1,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   filterChipText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // Actions row (View results)
   actionsRow: {
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   viewResultsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -807,31 +787,26 @@ const localStyles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   viewResultsText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
 
   // Refinement suggestions
   refineWrap: {
-    marginTop: Space.md,
-  },
+    marginTop: Space.md },
   refineLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   refineScroll: {
     gap: Space.xs,
-    paddingRight: Space.md,
-  },
+    paddingRight: Space.md },
   refineChip: {
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm + 2,
@@ -839,60 +814,49 @@ const localStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: Control.chrome,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   refineChipText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // Typing indicator row
   typingRow: {
-    marginVertical: Space.xs,
-  },
+    marginVertical: Space.xs },
 
   // Empty / first-viewport state
   emptyStateWrap: {
     flex: 1,
     paddingHorizontal: Space.md,
-    paddingTop: Space.xl,
-  },
+    paddingTop: Space.xl },
   greetingWrap: {
-    alignItems: 'flex-start',
-  },
+    alignItems: 'flex-start' },
   greetingTitle: {
-    fontSize: Type.title.size,
-    lineHeight: Type.title.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.title.letterSpacing,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    lineHeight: TypographyV2.screenTitle.lineHeight,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    letterSpacing: TypographyV2.screenTitle.letterSpacing },
   greetingSubtitle: {
     marginTop: Space.xs,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing },
   suggestionsSection: {
-    marginTop: Space.xl,
-  },
+    marginTop: Space.xl },
   suggestionsLabel: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     textTransform: 'uppercase',
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   suggestionSkeletonRow: {
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   suggestionScroll: {
     gap: Space.sm,
-    paddingRight: Space.md,
-  },
+    paddingRight: Space.md },
   suggestionChip: {
     borderRadius: Radius.full,
     paddingHorizontal: Space.md,
@@ -900,14 +864,12 @@ const localStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   suggestionChipText: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.caption.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   // Error state
   errorWrap: {
@@ -915,15 +877,13 @@ const localStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.lg,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   errorTitle: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    textAlign: 'center' },
   retryBtn: {
     borderRadius: Radius.full,
     paddingHorizontal: Space.xl,
@@ -931,14 +891,12 @@ const localStyles = StyleSheet.create({
     minHeight: Control.hit,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   retryBtnText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
 
   // Input bar
   inputBar: {
@@ -947,28 +905,23 @@ const localStyles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   inputShell: {
     flex: 1,
     borderRadius: Radius.lg,
     borderWidth: Stroke.standard,
     paddingHorizontal: Space.md,
     justifyContent: 'center',
-    minHeight: Space.xxl,
-  },
+    minHeight: Space.xxl },
   input: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-    letterSpacing: Type.body.letterSpacing,
-    paddingVertical: Space.sm,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    paddingVertical: Space.sm },
   sendBtn: {
     width: Space.xxl,
     height: Space.xxl,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+    justifyContent: 'center' } });

@@ -6,11 +6,11 @@ import {
   Modal,
   FlatList,
   Keyboard,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Space, Radius, Typography, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppInput } from '../ui/AppInput';
@@ -309,8 +309,7 @@ export function SaveToCollectionModal({ visible, itemId, onClose }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'flex-end',
-  },
+    justifyContent: 'flex-end' },
   // ── Card (sheet container) — the one dominant panel ──
   card: {
     borderTopLeftRadius: Radius.xl,
@@ -318,57 +317,48 @@ const styles = StyleSheet.create({
     padding: Space.md,
     maxHeight: '80%',
     borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-  },
+    borderBottomRightRadius: 0 },
   // ── Header ──
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Space.md,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   title: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   // ── Item context — flat, no card ──
   itemContext: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.sm,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   itemThumb: {
     width: 48,
     height: 48,
     borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   itemThumbEmpty: {
     width: 48,
     height: 48,
     borderRadius: Radius.md,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   itemInfo: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   itemTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   itemBrand: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Saved toggle — flat row with hairline separator ──
   savedRow: {
     flexDirection: 'row',
@@ -376,97 +366,81 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   savedRowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    flex: 1,
-  },
+    flex: 1 },
   savedRowTitle: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   savedRowSub: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    marginTop: 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: 2 },
   // ── Section label ──
   sectionLabel: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase',
     marginTop: Space.lg,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   // ── Collections list ──
   listContent: {
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   collectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: Space.sm + 2,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   collectionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    flex: 1,
-  },
+    flex: 1 },
   collectionThumb: {
     width: 44,
     height: 44,
     borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   collectionThumbEmpty: {
     width: 44,
     height: 44,
     borderRadius: Radius.md,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   collectionInfo: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   collectionName: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   collectionCount: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Empty state ──
   emptyWrap: {
     alignItems: 'center',
-    paddingVertical: Space.xl,
-  },
+    paddingVertical: Space.xl },
   emptyText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   // ── Create collection ──
   createWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: Space.md,
-  },
+    paddingTop: Space.md },
   createTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -475,11 +449,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
     marginTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
-  },
+    minHeight: 44 },
   createTriggerText: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily } });

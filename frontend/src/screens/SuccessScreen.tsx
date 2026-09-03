@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,19 +20,19 @@ import { getListingCoverUri } from '../utils/media';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { ElevatedSurface } from '../components/ui/ElevatedSurface';
-import { Typography, Radius, Type, Space, Elevation, Stroke } from '../theme/designTokens';
+import { Radius, Space, Elevation, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { normaliseOrderStatus } from '../components/orders/orderCapabilities';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 type RouteT = RouteProp<RootStackParamList, 'Success'>;;
 
 export default function SuccessScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { orderId } = route.params;
+  const { orderId } = route.params ?? {};
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
-  const { formatFromFiat } = useFormattedPrice();
+  const { currencyCode, formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
 
   const [order, setOrder] = React.useState<CommerceOrder | null>(null);
@@ -96,8 +95,7 @@ export default function SuccessScreen() {
       orderPlaced: {
         isComplete: true, // Payment confirmed — we are on the success screen.
         isActive: false,
-        detail: "We've notified the seller",
-      },
+        detail: "We've notified the seller" },
       sellerPrep: {
         isComplete: shippedOrBeyond.has(status),
         // Only active when the seller has genuinely accepted ('processing'/'preparing').
@@ -105,21 +103,17 @@ export default function SuccessScreen() {
         isActive: sellerPreparing.has(status),
         detail: sellerPreparing.has(status)
           ? 'The seller is preparing your item'
-          : 'Waiting for the seller to confirm',
-      },
+          : 'Waiting for the seller to confirm' },
       shipped: {
         isComplete: deliveredOrBeyond.has(status),
         isActive: inTransit.has(status),
         detail: inTransit.has(status)
           ? "You'll get tracking updates in chat"
-          : 'Not yet shipped',
-      },
+          : 'Not yet shipped' },
       delivered: {
         isComplete: status === 'completed',
         isActive: status === 'delivered',
-        detail: 'Leave a review once you receive it',
-      },
-    };
+        detail: 'Leave a review once you receive it' } };
   }, [order]);
 
   return (
@@ -129,9 +123,7 @@ export default function SuccessScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.centerContent}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="checkmark" size={48} color={colors.background} />
-          </View>
+          <Ionicons name="checkmark" size={64} color={colors.success} style={styles.successIcon} />
 
           <View>
             <Text style={styles.title}>Payment Successful</Text>
@@ -159,7 +151,7 @@ export default function SuccessScreen() {
                 <View style={styles.orderInfo}>
                   <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
                   <Text style={styles.orderSeller}>from @{sellerName}</Text>
-                  <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, DEFAULT_CURRENCY_CODE)}</Text>
+                  <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, currencyCode)}</Text>
                 </View>
               </ElevatedSurface>
             </View>
@@ -177,7 +169,7 @@ export default function SuccessScreen() {
                   isComplete={timelineStates.orderPlaced.isComplete}
                 />
                 <TimelineStep
-                  icon="cube-outline"
+                  icon="car-outline"
                   label="Seller prepares item"
                   detail={timelineStates.sellerPrep.detail}
                   isComplete={timelineStates.sellerPrep.isComplete}
@@ -213,9 +205,7 @@ export default function SuccessScreen() {
               accessibilityLabel="Open order support"
             >
               <View style={styles.supportIdentity}>
-                <View style={[styles.supportAvatarWrap, { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
-                </View>
+                <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
                 <Text style={styles.supportText}>Need help with this order?</Text>
                 <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
               </View>
@@ -245,8 +235,7 @@ function TimelineStep({
   detail,
   isComplete,
   isActive,
-  isLast,
-}: {
+  isLast }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   detail: string;
@@ -260,13 +249,7 @@ function TimelineStep({
   return (
     <View style={timelineStyles.step}>
       <View style={timelineStyles.iconCol}>
-        <View style={[
-          timelineStyles.iconWrap,
-          isComplete && timelineStyles.iconWrapComplete,
-          isActive && timelineStyles.iconWrapActive,
-        ]}>
-          <Ionicons name={icon} size={14} color={isComplete || isActive ? colors.background : colors.textMuted} />
-        </View>
+        <Ionicons name={icon} size={18} color={color} style={timelineStyles.stepIcon} />
         {!isLast && <View style={[
           timelineStyles.connector,
           isComplete && timelineStyles.connectorComplete,
@@ -287,51 +270,30 @@ function createTimelineStyles(colors: ThemeColors) {
   step: {
     flexDirection: 'row',
     gap: Space.smMd,
-    paddingBottom: Space.md,
-  },
+    paddingBottom: Space.md },
   iconCol: {
-    alignItems: 'center',
-  },
-  iconWrap: {
-    width: Space.lg + 4,
-    height: Space.lg + 4,
-    borderRadius: Radius.xl,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconWrapComplete: {
-    backgroundColor: colors.success,
-  },
-  iconWrapActive: {
-    backgroundColor: colors.brand,
-  },
+    alignItems: 'center' },
+  stepIcon: {
+    marginBottom: Space.xs },
   connector: {
     width: Stroke.standard,
     flex: 1,
     backgroundColor: colors.border,
-    marginTop: Space.xs,
-    minHeight: Space.md + 4,
-  },
+    minHeight: Space.md + 4 },
   connectorComplete: {
-    backgroundColor: colors.success,
-  },
+    backgroundColor: colors.success },
   textCol: {
     flex: 1,
     gap: Space.xs / 2,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   label: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily },
   detail: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    lineHeight: Type.caption.size + 4,
-  },
-  });
+    lineHeight: TypographyV2.meta.size + 4 } });
 }
 
 function createStyles(colors: ThemeColors) {
@@ -339,15 +301,11 @@ function createStyles(colors: ThemeColors) {
   container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { flexGrow: 1, paddingHorizontal: Space.lg },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: Space.xl + Space.xl - 8, paddingBottom: 20 },
-  iconCircle: {
-    width: Space.xxl + Space.xxl + Space.xxl, height: Space.xxl + Space.xxl + Space.xxl, borderRadius: Radius.full,
-    backgroundColor: colors.success,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: Space.xl,
-  },
+  successIcon: {
+    marginBottom: Space.lg },
 
-  title: { fontSize: Type.priceHero.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginBottom: Space.smMd, textAlign: 'center' },
-  subtitle: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.regular, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
+  title: { fontSize: TypographyV2.priceHero.size, fontFamily: TypographyV2.priceHero.fontFamily, color: colors.textPrimary, marginBottom: Space.smMd, textAlign: 'center' },
+  subtitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
 
   orderCardWrap: { width: '100%', marginTop: Space.lg },
   orderCard: {
@@ -356,29 +314,25 @@ function createStyles(colors: ThemeColors) {
     gap: Space.smMd,
     padding: Space.smMd,
     borderRadius: Radius.lg,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   orderImage: { width: Space.xxl + Space.xl + Space.xs, height: Space.xxl + Space.xl + Space.xs, borderRadius: Radius.md },
   orderInfo: { flex: 1, gap: 2 },
-  orderTitle: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.semibold, color: colors.textPrimary },
-  orderSeller: { fontSize: Type.caption.size, fontFamily: Typography.family.regular, color: colors.textSecondary },
-  orderAmount: { fontSize: Type.bodyStrong.size, fontFamily: Typography.family.bold, color: colors.textPrimary, marginTop: 2 },
+  orderTitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary },
+  orderSeller: { fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textSecondary },
+  orderAmount: { fontSize: TypographyV2.bodyStrong.size, fontFamily: TypographyV2.bodyStrong.fontFamily, color: colors.textPrimary, marginTop: 2 },
 
   timelineWrap: {
     width: '100%',
     marginTop: Space.xl + 4,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   timelineTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     marginBottom: Space.sm + 2,
-    textAlign: 'left',
-  },
+    textAlign: 'left' },
   timeline: {
-    paddingLeft: Space.xs,
-  },
+    paddingLeft: Space.xs },
 
   supportRowWrap: { marginTop: Space.lg, width: '100%' },
   supportIdentity: {
@@ -390,20 +344,12 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     backgroundColor: colors.surface,
     paddingHorizontal: Space.smMd,
-    paddingVertical: Space.xs + 2,
-  },
-  supportAvatarWrap: {
-    width: Space.lg + 4,
-    height: Space.lg + 4,
-    borderRadius: Radius.xl,
-  },
+    paddingVertical: Space.xs + 2 },
   supportText: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
 
-  footer: { paddingHorizontal: Space.lg, paddingBottom: Space.xl + Space.xl - 8, gap: 12 },
-  });
+  footer: { paddingHorizontal: Space.lg, paddingBottom: Space.xl + Space.xl - 8, gap: 12 } });
 }

@@ -2,7 +2,8 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Type } from '../theme/designTokens';
+import { Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { Caption } from './ui/Text';
 
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
@@ -16,8 +17,7 @@ interface MessageStatusIndicatorProps {
 export function MessageStatusIndicator({
   status,
   timestamp,
-  size = 'sm',
-}: MessageStatusIndicatorProps) {
+  size = 'sm' }: MessageStatusIndicatorProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const iconSize = size === 'sm' ? 12 : 14;
@@ -26,13 +26,12 @@ export function MessageStatusIndicator({
     switch (status) {
       case 'sending':
         return (
-          <View style={styles.sendingContainer}>
-            <Ionicons
-              name="time-outline"
-              size={iconSize}
-              color={colors.textMuted}
-            />
-          </View>
+          <Ionicons
+            name="time-outline"
+            size={iconSize}
+            color={colors.textMuted}
+            style={styles.sendingIcon}
+          />
         );
 
       case 'sent':
@@ -83,7 +82,7 @@ export function MessageStatusIndicator({
           {timestamp}
         </Caption>
       )}
-      <View style={styles.iconContainer}>{renderIcon()}</View>
+      {renderIcon()}
     </View>
   );
 }
@@ -93,19 +92,9 @@ function createStyles(colors: ThemeColors) {
     container: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     timestamp: {
-      fontSize: Type.meta.size,
-    },
-    iconContainer: {
-      width: 14,
-      height: 14,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    sendingContainer: {
-      opacity: 0.7,
-    },
-  });
+      fontSize: TypographyV2.meta.size },
+    sendingIcon: {
+      opacity: 0.7 } });
 }

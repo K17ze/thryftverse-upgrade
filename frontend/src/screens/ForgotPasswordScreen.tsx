@@ -1,10 +1,10 @@
-import { Space, Typography, Type } from '../theme/designTokens';
+import { Space } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-} from 'react-native';
+  StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AppInput } from '../components/ui/AppInput';
@@ -189,42 +189,37 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   content: { flex: 1, paddingHorizontal: Space.lg },
   contentContainer: { justifyContent: 'center', flexGrow: 1, paddingBottom: Space.xl },
-  title: { fontSize: Type.display.size + Space.sm + Space.xs, fontFamily: Typography.family.bold, color: colors.textPrimary, lineHeight: Type.display.lineHeight + 10, letterSpacing: Type.display.letterSpacing * 2, marginBottom: Space.lg },
-  subtitle: { fontSize: Type.body.size, fontFamily: Typography.family.regular, color: colors.textSecondary, marginBottom: Space.xl, lineHeight: Type.subtitle.lineHeight },
+  title: { fontSize: TypographyV2.display.size + Space.sm + Space.xs, fontFamily: TypographyV2.display.fontFamily, color: colors.textPrimary, lineHeight: TypographyV2.display.lineHeight + 10, letterSpacing: TypographyV2.display.letterSpacing * 2, marginBottom: Space.lg },
+  subtitle: { fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, color: colors.textSecondary, marginBottom: Space.xl, lineHeight: TypographyV2.sectionTitle.lineHeight },
 
   form: { marginBottom: Space.xl },
   inputGroup: { marginBottom: Space.xl },
 
   footer: { paddingBottom: Space.xl },
-  errorText: { color: colors.danger, fontSize: Type.caption.size, fontFamily: Typography.family.medium, marginBottom: Space.xs },
+  errorText: { color: colors.danger, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, marginBottom: Space.xs },
 
   successState: {
     alignItems: 'center',
-    paddingTop: Space.lg,
-  },
+    paddingTop: Space.lg },
   successText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textPrimary,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'center',
     marginVertical: Space.lg,
-    lineHeight: Type.subtitle.lineHeight,
-  },
+    lineHeight: TypographyV2.sectionTitle.lineHeight },
   spamHint: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
-    fontFamily: Typography.family.regular,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
-    lineHeight: Type.caption.lineHeight + 2,
-    maxWidth: 300,
-  },
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    maxWidth: 300 },
   resendMsg: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypographyV2.meta.fontFamily,
     textAlign: 'center',
     marginTop: Space.sm,
-    lineHeight: Type.caption.lineHeight + 2,
-  },
-  });
+    lineHeight: TypographyV2.meta.lineHeight + 2 } });
 }

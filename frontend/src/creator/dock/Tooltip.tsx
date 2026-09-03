@@ -5,12 +5,12 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Elevation } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useHaptic } from '../../hooks/useHaptic';
 import type { ThemeColors } from '../../theme/ThemeContext';
@@ -53,7 +53,7 @@ export function Tooltip({ label, floating, colors, onShow, visible }: TooltipPro
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Timing config derived from motion tokens — 120ms ease-out cubic fade.
-  const fadeTiming = { duration: (duration as { fast: number }).fast, easing: Easing.out(Easing.cubic) };
+  const fadeTiming = { duration: (duration as { fast: number }).fast, easing: Motion.easing.entrance };
 
   // Cleanup tooltip timer on unmount
   useEffect(() => {
@@ -94,8 +94,7 @@ export function Tooltip({ label, floating, colors, onShow, visible }: TooltipPro
 
   const tooltipStyle = useAnimatedStyle(() => ({
     transform: [{ scale: tooltipScaleSV.value }],
-    opacity: tooltipOpacitySV.value,
-  }));
+    opacity: tooltipOpacitySV.value }));
 
   return (
     <Reanimated.View
@@ -124,17 +123,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs + 1,
     borderRadius: Radius.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
+    ...Elevation.modal },
   tooltipText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: 0.1,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: 0.1 } });
 
 export default Tooltip;

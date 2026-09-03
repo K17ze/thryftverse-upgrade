@@ -15,12 +15,12 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
-import { Space, Radius, Type, Typography, AspectRatio, Control } from '../../../theme/designTokens';
+import { Space, Radius, AspectRatio, Control } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { CachedImage } from '../../CachedImage';
 import { ImageEmptyGraphic } from '../../ImageEmptyGraphic';
 import { SkeletonLoader } from '../../SkeletonLoader';
@@ -28,7 +28,6 @@ import { AnimatedPressable } from '../../AnimatedPressable';
 import { PressPresets } from '../../../hooks/usePremiumPressFeedback';
 import { useFormattedPrice } from '../../../hooks/useFormattedPrice';
 import type { Listing } from '../../../services/listingsApi';
-import { DEFAULT_CURRENCY_CODE } from '../../../constants/currencies';
 
 export interface RelatedItemsRailProps {
   items: Listing[];
@@ -48,11 +47,10 @@ export function RelatedItemsRail({
   loading = false,
   onSeeAll,
   onPressItem,
-  headerLabel = 'More like this',
-}: RelatedItemsRailProps) {
+  headerLabel = 'More like this' }: RelatedItemsRailProps) {
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Portrait card width: ~40% of screen, capped so 2.5 cards are visible.
@@ -63,7 +61,7 @@ export function RelatedItemsRail({
     ({ item }: { item: Listing }) => {
       const imageUri = item.images?.[0];
       const formattedPrice = item.price != null
-        ? formatFromFiat(item.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
+        ? formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })
         : 'Price unavailable';
       return (
         <AnimatedPressable
@@ -159,7 +157,7 @@ export function RelatedItemsRail({
           <Pressable
             onPress={onSeeAll}
             hitSlop={8}
-            style={({ pressed }) => [styles.seeAllHitTarget, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [styles.seeAllHitTarget, pressed && styles.seeAllPressed]}
             accessibilityLabel={`See all ${headerLabel.toLowerCase()}`}
             accessibilityRole="button"
           >
@@ -187,49 +185,41 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       paddingTop: Space.lg,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     title: {
-      fontSize: Type.subtitle.size,
-      lineHeight: Type.subtitle.lineHeight,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      color: colors.textPrimary },
     seeAllRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     seeAllHitTarget: {
       minHeight: Control.hit,
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
+    seeAllPressed: {
+      opacity: 0.85 },
     seeAll: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.medium,
-      color: colors.textMuted,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
     listContent: {
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     card: {
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     cardImageWrap: {
-      position: 'relative',
-    },
+      position: 'relative' },
     cardImage: {
       width: '100%',
-      height: '100%',
-    },
+      height: '100%' },
     soldBadge: {
       position: 'absolute',
       top: Space.xs,
@@ -237,57 +227,47 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.overlay,
       paddingHorizontal: Space.xs + 1,
       paddingVertical: Space.xs / 2,
-      borderRadius: Radius.sm,
-    },
+      borderRadius: Radius.sm },
     soldText: {
       color: colors.textInverse,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.bold,
-      letterSpacing: 0.5,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: 0.5 },
     cardBrand: {
-      fontSize: Type.meta.size,
-      lineHeight: Type.meta.lineHeight,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       letterSpacing: 0.1,
-      textTransform: 'uppercase',
-    },
+      textTransform: 'uppercase' },
     cardTitle: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     cardPrice: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
-      marginTop: 2,
-    },
+      marginTop: 2 },
     skeletonRow: {
       flexDirection: 'row',
       gap: Space.sm,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     skeletonTextGap: {
       gap: Space.xs,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     emptyWrap: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.lg,
-    },
+      paddingVertical: Space.lg },
     emptyText: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.regular,
-      color: colors.textMuted,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textMuted } });
 }

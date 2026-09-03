@@ -13,11 +13,11 @@ interface Props {
 
 function getConfig(colors: ReturnType<typeof useAppTheme>['colors']): Record<AuctionState, { label: string; bg: string; fg: string; dot?: boolean; icon?: keyof typeof Ionicons.glyphMap }> {
   return {
-    live: { label: 'LIVE', bg: `${colors.danger}26`, fg: colors.danger, dot: true },
-    upcoming: { label: 'UPCOMING', bg: `${colors.border}40`, fg: colors.textSecondary, icon: 'time-outline' },
-    ended: { label: 'ENDED', bg: `${colors.border}30`, fg: colors.textMuted },
-    cancelled: { label: 'CANCELLED', bg: `${colors.danger}20`, fg: colors.danger },
-    settled: { label: 'SETTLED', bg: `${colors.success}20`, fg: colors.success },
+    live: { label: 'LIVE', bg: colors.dangerSubtle, fg: colors.danger, dot: true },
+    upcoming: { label: 'UPCOMING', bg: colors.borderSubtle, fg: colors.textSecondary, icon: 'time-outline' },
+    ended: { label: 'ENDED', bg: colors.borderSubtle, fg: colors.textMuted },
+    cancelled: { label: 'CANCELLED', bg: colors.dangerSubtle, fg: colors.danger },
+    settled: { label: 'SETTLED', bg: colors.successSubtle, fg: colors.success },
   };
 }
 
@@ -50,7 +50,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderRadius: Radius.full,
     alignSelf: 'flex-start',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.border}30`,
+    borderColor: colors.borderSubtle,
   },
   dot: {
     borderRadius: Radius.full,

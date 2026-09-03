@@ -4,12 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
-import { Space, Typography, Type, Radius, Control, Stroke } from '../theme/designTokens';
+import { Space, Typography, Radius, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import {
   FlagshipHeader,
-  FlagshipScreen,
-} from '../components/flagship';
+  FlagshipScreen } from '../components/flagship';
 import { reportUser, blockUser, type ReportReason } from '../services/profileApi';
 import { reportListing, type ListingReportReason } from '../services/listingsApi';
 import { reportConversationOnApi } from '../services/chatApi';
@@ -18,6 +18,8 @@ import { useToast } from '../context/ToastContext';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { uploadMedia } from '../services/mediaUpload';
 import { useConnectivity } from '../hooks/useConnectivity';
+import { useAppTranslation } from '../i18n/useAppTranslation';
+import { track } from '../analytics';
 
 type EvidenceState = 'uploading' | 'attached' | 'submitted';
 
@@ -31,94 +33,83 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Report'>;
 
 const REPORT_REASONS: Array<{
   key: ReportReason;
-  label: string;
-  description: string;
+  labelKey: string;
+  descKey: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
 }> = [
   {
     key: 'spam',
-    label: 'Spam',
-    description: 'Unwanted promotion, scams or repetitive messages',
-    icon: 'mail-unread-outline',
-  },
+    labelKey: 'reasons.spam',
+    descKey: 'reasons.spamDesc',
+    icon: 'mail-unread-outline' },
   {
     key: 'harassment',
-    label: 'Harassment',
-    description: 'Threatening, abusive or targeted unwanted contact',
-    icon: 'warning-outline',
-  },
+    labelKey: 'reasons.harassment',
+    descKey: 'reasons.harassmentDesc',
+    icon: 'warning-outline' },
   {
     key: 'hate_speech',
-    label: 'Hate speech',
-    description: 'Slurs, dehumanizing language, or attacks on protected groups',
-    icon: 'megaphone-outline',
-  },
+    labelKey: 'reasons.hateSpeech',
+    descKey: 'reasons.hateSpeechDesc',
+    icon: 'megaphone-outline' },
   {
     key: 'counterfeit',
-    label: 'Fake item',
-    description: 'Counterfeit goods or misleading authenticity claims',
-    icon: 'pricetag-outline',
-  },
+    labelKey: 'reasons.counterfeit',
+    descKey: 'reasons.counterfeitDesc',
+    icon: 'bag-handle-outline' },
   {
     key: 'prohibited',
-    label: 'Prohibited item',
-    description: 'Weapons, drugs, wildlife, or other prohibited categories',
-    icon: 'ban-outline',
-  },
+    labelKey: 'reasons.prohibited',
+    descKey: 'reasons.prohibitedDesc',
+    icon: 'ban-outline' },
   {
     key: 'off_platform',
-    label: 'Off-platform request',
-    description: 'Asked to transact outside Thryftverse, against policy',
-    icon: 'exit-outline',
-  },
+    labelKey: 'reasons.offPlatform',
+    descKey: 'reasons.offPlatformDesc',
+    icon: 'exit-outline' },
   {
     key: 'scam',
-    label: 'Scam or fraud',
-    description: 'Attempted financial fraud, phishing, or impersonation',
-    icon: 'cash-outline',
-  },
+    labelKey: 'reasons.scam',
+    descKey: 'reasons.scamDesc',
+    icon: 'cash-outline' },
   {
     key: 'misinformation',
-    label: 'Misleading content',
-    description: 'False or misleading claims about an item',
-    icon: 'information-circle-outline',
-  },
+    labelKey: 'reasons.misinformation',
+    descKey: 'reasons.misinformationDesc',
+    icon: 'information-circle-outline' },
   {
     key: 'privacy',
-    label: 'Privacy violation',
-    description: 'Shared private information without consent',
-    icon: 'lock-closed-outline',
-  },
+    labelKey: 'reasons.privacy',
+    descKey: 'reasons.privacyDesc',
+    icon: 'lock-closed-outline' },
   {
     key: 'impersonation',
-    label: 'Impersonation',
-    description: 'Pretending to be someone else',
-    icon: 'person-outline',
-  },
+    labelKey: 'reasons.impersonation',
+    descKey: 'reasons.impersonationDesc',
+    icon: 'person-outline' },
   {
     key: 'minor_safety',
-    label: 'Minor safety',
-    description: 'Content or behavior endangering minors',
-    icon: 'shield-outline',
-  },
+    labelKey: 'reasons.minorSafety',
+    descKey: 'reasons.minorSafetyDesc',
+    icon: 'lock-closed-outline' },
   {
     key: 'other',
-    label: 'Something else',
-    description: 'Tell the moderation team what happened',
-    icon: 'help-circle-outline',
-  },
+    labelKey: 'reasons.other',
+    descKey: 'reasons.otherDesc',
+    icon: 'help-circle-outline' },
 ];
 
 export default function ReportScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { type, targetId } = route.params;
+  const { type, targetId } = route.params ?? {};
   const toggleBlocked = useStore((s) => s.toggleBlockedUser);
   const isBlocked = useStore((s) =>
     targetId ? s.blockedUsers.includes(targetId) : false
   );
   const { isOffline } = useConnectivity();
+  const { t } = useAppTranslation('report');
   const [selectedReason, setSelectedReason] =
     useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
@@ -139,31 +130,29 @@ export default function ReportScreen({ navigation, route }: Props) {
 
   const handlePickEvidence = useCallback(async () => {
     if (evidenceItems.length >= 3) {
-      show('Attach up to 3 photos.', 'info');
+      show(t('toast.attachUpTo3'), 'info');
       return;
     }
     if (isOffline) {
-      show('You appear to be offline. Check your connection and try again.', 'error');
+      show(t('toast.offline'), 'error');
       return;
     }
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        show('Allow photo access to upload evidence.', 'error');
+        show(t('toast.allowPhotoAccess'), 'error');
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.85,
-        selectionLimit: 3 - evidenceItems.length,
-      });
+        selectionLimit: 3 - evidenceItems.length });
       if (result.canceled || !result.assets?.length) return;
       const placeholders: EvidenceItem[] = result.assets.map((_, idx) => ({
         id: `pick_${Date.now()}_${idx}`,
         uri: '',
-        state: 'uploading',
-      }));
+        state: 'uploading' }));
       setEvidenceItems((prev) => [...prev, ...placeholders]);
       setIsUploading(true);
       let successCount = 0;
@@ -183,44 +172,42 @@ export default function ReportScreen({ navigation, route }: Props) {
         }
       }
       if (successCount > 0) {
-        show(`${successCount} photo${successCount > 1 ? 's' : ''} attached.`, 'success');
+        show(t('toast.photosAttached', { count: successCount }), 'success');
       } else {
-        show('Unable to upload photo(s). Try again.', 'error');
+        show(t('toast.uploadFailed'), 'error');
       }
     } catch {
-      show('Unable to upload photo(s). Try again.', 'error');
+      show(t('toast.uploadFailed'), 'error');
     } finally {
       setIsUploading(false);
     }
-  }, [evidenceItems.length, isOffline, show]);
+  }, [evidenceItems.length, isOffline, show, t]);
 
   const handleTakeEvidence = useCallback(async () => {
     if (evidenceItems.length >= 3) {
-      show('Attach up to 3 photos.', 'info');
+      show(t('toast.attachUpTo3'), 'info');
       return;
     }
     if (isOffline) {
-      show('You appear to be offline. Check your connection and try again.', 'error');
+      show(t('toast.offline'), 'error');
       return;
     }
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        show('Allow camera access to take evidence photos.', 'error');
+        show(t('toast.allowCameraAccess'), 'error');
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 0.85,
-      });
+        quality: 0.85 });
       if (result.canceled || !result.assets?.length) return;
       const placeholder: EvidenceItem = {
         id: `cam_${Date.now()}`,
         uri: '',
-        state: 'uploading',
-      };
+        state: 'uploading' };
       setEvidenceItems((prev) => [...prev, placeholder]);
       setIsUploading(true);
       try {
@@ -232,17 +219,17 @@ export default function ReportScreen({ navigation, route }: Props) {
               : it
           )
         );
-        show('Photo attached.', 'success');
+        show(t('toast.photoAttached'), 'success');
       } catch {
         setEvidenceItems((prev) => prev.filter((it) => it.id !== placeholder.id));
-        show('Unable to upload photo. Try again.', 'error');
+        show(t('toast.singleUploadFailed'), 'error');
       }
     } catch {
-      show('Unable to upload photo. Try again.', 'error');
+      show(t('toast.singleUploadFailed'), 'error');
     } finally {
       setIsUploading(false);
     }
-  }, [evidenceItems.length, isOffline, show]);
+  }, [evidenceItems.length, isOffline, show, t]);
 
   const handleRemoveEvidence = useCallback((id: string) => {
     setEvidenceItems((prev) => prev.filter((it) => it.id !== id));
@@ -280,8 +267,9 @@ export default function ReportScreen({ navigation, route }: Props) {
       setEvidenceItems((prev) => prev.map((it) => ({ ...it, state: 'submitted' as const })));
       setSubmittedAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
       setIsSubmitted(true);
+      track('report_submitted', { target_id: targetId, reason: selectedReason });
     } catch {
-      show('The report could not be sent. Check your connection and try again.', 'error');
+      show(t('toast.reportFailed'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -294,9 +282,9 @@ export default function ReportScreen({ navigation, route }: Props) {
       await blockUser(targetId);
       toggleBlocked(targetId);
       setHasBlocked(true);
-      show('Account blocked', 'success');
+      show(t('toast.accountBlocked'), 'success');
     } catch {
-      show('Could not block this account. Try again.', 'error');
+      show(t('toast.blockFailed'), 'error');
     } finally {
       setIsBlocking(false);
     }
@@ -308,7 +296,7 @@ export default function ReportScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Report received"
+            title={t('received.title')}
             onBack={() => navigation.goBack()}
           />
         }
@@ -319,18 +307,18 @@ export default function ReportScreen({ navigation, route }: Props) {
             size={28}
             color={colors.textPrimary}
           />
-          <Text style={styles.completeTitle}>Report received</Text>
+          <Text style={styles.completeTitle}>{t('received.title')}</Text>
           {reportId ? (
             <Text style={styles.reportIdText}>
-              Report #{reportId}
+              {t('received.reportId', { reportId })}
             </Text>
           ) : null}
           <Text style={styles.completeBody}>
-            We'll review and let you know the outcome.
+            {t('received.body')}
           </Text>
           {submittedAt ? (
             <Text style={styles.submittedAtText}>
-              Received at {submittedAt}
+              {t('received.receivedAt', { time: submittedAt })}
             </Text>
           ) : null}
           {evidenceItems.length > 0 ? (
@@ -351,7 +339,7 @@ export default function ReportScreen({ navigation, route }: Props) {
           ) : null}
           {reportId ? (
             <Text style={styles.reportIdNote}>
-              Reference this number in future support contact.
+              {t('received.referenceNote')}
             </Text>
           ) : null}
           {showBlockButton ? (
@@ -362,7 +350,7 @@ export default function ReportScreen({ navigation, route }: Props) {
               scaleValue={0.98}
               disabled={isBlocking}
               accessibilityRole="button"
-              accessibilityLabel="Block this user"
+              accessibilityLabel={t('accessibility.blockUser')}
               accessibilityState={{ busy: isBlocking, disabled: isBlocking }}
             >
               {isBlocking ? (
@@ -374,7 +362,7 @@ export default function ReportScreen({ navigation, route }: Props) {
                     size={16}
                     color={colors.textInverse}
                   />
-                  <Text style={styles.blockActionText}>Block this user</Text>
+                  <Text style={styles.blockActionText}>{t('received.blockUser')}</Text>
                 </>
               )}
             </AnimatedPressable>
@@ -387,7 +375,7 @@ export default function ReportScreen({ navigation, route }: Props) {
                 color={colors.success}
               />
               <Text style={styles.blockedNoteText}>
-                This account is blocked and cannot contact you.
+                {t('received.blockedNote')}
               </Text>
             </View>
           ) : null}
@@ -397,9 +385,9 @@ export default function ReportScreen({ navigation, route }: Props) {
             activeOpacity={0.78}
             scaleValue={0.98}
             accessibilityRole="button"
-            accessibilityLabel="Done"
+            accessibilityLabel={t('received.done')}
           >
-            <Text style={styles.doneActionText}>Done</Text>
+            <Text style={styles.doneActionText}>{t('received.done')}</Text>
           </AnimatedPressable>
         </View>
       </FlagshipScreen>
@@ -411,7 +399,7 @@ export default function ReportScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Report"
+            title={t('header.title')}
             onBack={() => navigation.goBack()}
           />
         }
@@ -422,10 +410,9 @@ export default function ReportScreen({ navigation, route }: Props) {
             size={28}
             color={colors.textMuted}
           />
-          <Text style={styles.completeTitle}>Report target unavailable</Text>
+          <Text style={styles.completeTitle}>{t('unavailable.title')}</Text>
           <Text style={styles.completeBody}>
-            This report was opened without a valid reference. Nothing
-            has been submitted.
+            {t('unavailable.body')}
           </Text>
           <AnimatedPressable
             style={styles.secondaryDoneAction}
@@ -433,9 +420,9 @@ export default function ReportScreen({ navigation, route }: Props) {
             activeOpacity={0.72}
             scaleValue={0.98}
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel={t('unavailable.goBack')}
           >
-            <Text style={styles.secondaryDoneText}>Go back</Text>
+            <Text style={styles.secondaryDoneText}>{t('unavailable.goBack')}</Text>
           </AnimatedPressable>
         </View>
       </FlagshipScreen>
@@ -443,16 +430,16 @@ export default function ReportScreen({ navigation, route }: Props) {
   }
 
   const reportTitle =
-    type === 'user' ? 'Report account'
-      : type === 'group' ? 'Report group'
-      : 'Report listing';
+    type === 'user' ? t('header.reportAccount')
+      : type === 'group' ? t('header.reportGroup')
+      : t('header.reportListing');
 
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
           title={reportTitle}
-          subtitle="Reports are confidential"
+          subtitle={t('header.subtitle')}
           onBack={() => navigation.goBack()}
         />
       }
@@ -464,23 +451,22 @@ export default function ReportScreen({ navigation, route }: Props) {
           scaleValue={0.985}
           disabled={!canSubmit}
           accessibilityRole="button"
-          accessibilityLabel="Send report"
+          accessibilityLabel={t('submit.label')}
           accessibilityState={{ disabled: !canSubmit, busy: isSubmitting }}
         >
           {isSubmitting ? (
             <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
-            <Text style={styles.submitText}>Send report</Text>
+            <Text style={styles.submitText}>{t('submit.label')}</Text>
           )}
         </AnimatedPressable>
       }
       footerInsetHeight={96}
     >
       <View style={styles.intro}>
-        <Text style={styles.introTitle}>What happened?</Text>
+        <Text style={styles.introTitle}>{t('intro.title')}</Text>
         <Text style={styles.introBody}>
-          Choose the reason that best describes the issue. Do not include
-          passwords, payment details or other sensitive information.
+          {t('intro.body')}
         </Text>
       </View>
 
@@ -499,8 +485,8 @@ export default function ReportScreen({ navigation, route }: Props) {
               scaleValue={0.99}
               hapticFeedback="selection"
               accessibilityRole="radio"
-              accessibilityLabel={reason.label}
-              accessibilityHint={reason.description}
+              accessibilityLabel={t(reason.labelKey)}
+              accessibilityHint={t(reason.descKey)}
               accessibilityState={{ selected }}
             >
               <View style={[styles.reasonIcon, selected && styles.reasonIconSelected]}>
@@ -511,9 +497,9 @@ export default function ReportScreen({ navigation, route }: Props) {
                 />
               </View>
               <View style={styles.reasonCopy}>
-                <Text style={styles.reasonLabel}>{reason.label}</Text>
+                <Text style={styles.reasonLabel}>{t(reason.labelKey)}</Text>
                 <Text style={styles.reasonDescription}>
-                  {reason.description}
+                  {t(reason.descKey)}
                 </Text>
               </View>
               <View style={[styles.radio, selected && styles.radioSelected]}>
@@ -526,22 +512,22 @@ export default function ReportScreen({ navigation, route }: Props) {
 
       {selectedReason ? (
         <View style={styles.details}>
-          <Text style={styles.detailsLabel}>Additional details (optional)</Text>
+          <Text style={styles.detailsLabel}>{t('details.label')}</Text>
           <TextInput
             style={styles.detailsInput}
             value={details}
             onChangeText={setDetails}
-            placeholder="Describe what happened"
+            placeholder={t('details.placeholder')}
             placeholderTextColor={colors.textMuted}
             multiline
             maxLength={500}
             textAlignVertical="top"
-            accessibilityLabel="Additional report details"
+            accessibilityLabel={t('accessibility.detailsInput')}
           />
-          <Text style={styles.characterCount}>{details.length}/500</Text>
+          <Text style={styles.characterCount}>{t('details.characterCount', { current: details.length, max: 500 })}</Text>
 
           {/* Evidence photo upload */}
-          <Text style={styles.evidenceLabel}>Evidence photos (optional)</Text>
+          <Text style={styles.evidenceLabel}>{t('evidence.label')}</Text>
           {evidenceItems.length > 0 ? (
             <View style={styles.evidenceGrid}>
               {evidenceItems.map((item, i) => (
@@ -551,7 +537,7 @@ export default function ReportScreen({ navigation, route }: Props) {
                       source={{ uri: item.uri }}
                       style={styles.evidenceTile}
                       resizeMode="cover"
-                      accessibilityLabel={`Evidence photo ${i + 1}`}
+                      accessibilityLabel={t('accessibility.evidencePhoto', { index: i + 1 })}
                     />
                   ) : (
                     <View style={[styles.evidenceTile, styles.evidenceTilePlaceholder]} />
@@ -572,7 +558,7 @@ export default function ReportScreen({ navigation, route }: Props) {
                       onPress={() => handleRemoveEvidence(item.id)}
                       hitSlop={8}
                       accessibilityRole="button"
-                      accessibilityLabel={`Remove evidence photo ${i + 1}`}
+                      accessibilityLabel={t('accessibility.removeEvidencePhoto', { index: i + 1 })}
                     >
                       <Ionicons name="close-circle" size={22} color={colors.danger} />
                     </Pressable>
@@ -589,10 +575,10 @@ export default function ReportScreen({ navigation, route }: Props) {
                 scaleValue={0.97}
                 hapticFeedback="light"
                 accessibilityRole="button"
-                accessibilityLabel="Take evidence photo with camera"
+                accessibilityLabel={t('accessibility.takeEvidenceCamera')}
               >
                 <Ionicons name="camera-outline" size={18} color={colors.textPrimary} />
-                <Text style={styles.evidenceUploadText}>Camera</Text>
+                <Text style={styles.evidenceUploadText}>{t('evidence.camera')}</Text>
               </AnimatedPressable>
               <AnimatedPressable
                 style={[styles.evidenceUploadBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
@@ -600,19 +586,19 @@ export default function ReportScreen({ navigation, route }: Props) {
                 scaleValue={0.97}
                 hapticFeedback="light"
                 accessibilityRole="button"
-                accessibilityLabel="Choose evidence photos from gallery"
+                accessibilityLabel={t('accessibility.chooseEvidenceGallery')}
               >
                 {isUploading ? (
                   <ActivityIndicator size="small" color={colors.textPrimary} />
                 ) : (
                   <Ionicons name="images-outline" size={18} color={colors.textPrimary} />
                 )}
-                <Text style={styles.evidenceUploadText}>Gallery</Text>
+                <Text style={styles.evidenceUploadText}>{t('evidence.gallery')}</Text>
               </AnimatedPressable>
             </View>
           ) : null}
           <Text style={styles.evidenceCount}>
-            {evidenceItems.length}/3 photos
+            {t('evidence.count', { count: evidenceItems.length })}
           </Text>
         </View>
       ) : null}
@@ -623,67 +609,57 @@ export default function ReportScreen({ navigation, route }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   intro: {
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   introTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   introBody: {
     maxWidth: 340,
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
   reasons: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   reason: {
     minHeight: Control.hit + Space.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   reasonDivider: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   reasonIcon: {
     width: Space.lg + Space.xs,
     height: Space.lg + Space.xs,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   reasonIconSelected: {
-    backgroundColor: `${colors.textPrimary}14`,
-  },
+    // TODO: replace `${colors.textPrimary}14` with textPrimarySubtle token when available
+    backgroundColor: `${colors.textPrimary}14` },
   reasonCopy: {
     minWidth: 0,
     flex: 1,
-    gap: Space.xs / 2,
-  },
+    gap: Space.xs / 2 },
   reasonLabel: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   reasonDescription: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
   radio: {
     width: Space.lg - Space.xs,
     height: Space.lg - Space.xs,
@@ -691,27 +667,22 @@ function createStyles(colors: ThemeColors) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   radioSelected: {
-    borderColor: colors.textPrimary,
-  },
+    borderColor: colors.textPrimary },
   radioDot: {
     width: Space.sm + 2,
     height: Space.sm + 2,
     borderRadius: Radius.full,
-    backgroundColor: colors.textPrimary,
-  },
+    backgroundColor: colors.textPrimary },
   details: {
-    marginTop: Space.lg,
-  },
+    marginTop: Space.lg },
   detailsLabel: {
     marginBottom: Space.xs + 2,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   detailsInput: {
     minHeight: Space.xl * 3 + Space.md + Space.xs,
     padding: Space.md,
@@ -721,39 +692,33 @@ function createStyles(colors: ThemeColors) {
     color: colors.textPrimary,
     backgroundColor: colors.background,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   characterCount: {
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-    textAlign: 'right',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'right' },
   evidenceLabel: {
     marginTop: Space.lg,
     marginBottom: Space.xs + 2,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   evidenceGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   evidenceTileWrap: {
-    position: 'relative',
-  },
+    position: 'relative' },
   evidenceTile: {
     width: Space.xxl + Space.xl,
     height: Space.xxl + Space.xl,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   evidenceRemoveBtn: {
     position: 'absolute',
     top: -Space.xs,
@@ -761,11 +726,9 @@ function createStyles(colors: ThemeColors) {
     width: Control.chrome,
     height: Control.chrome,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   evidenceTilePlaceholder: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   evidenceStateOverlay: {
     position: 'absolute',
     top: 0,
@@ -773,8 +736,7 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     bottom: 0,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   evidenceStateBadge: {
     position: 'absolute',
     bottom: Space.xs,
@@ -784,13 +746,11 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.success,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   evidenceUploadRow: {
     flexDirection: 'row',
     gap: Space.sm,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   evidenceUploadBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -799,93 +759,80 @@ function createStyles(colors: ThemeColors) {
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.md,
     borderWidth: Stroke.standard,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   evidenceUploadText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   evidenceCount: {
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   submitAction: {
     minHeight: Space.xxl,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.textPrimary,
-  },
+    backgroundColor: colors.textPrimary },
   submitDisabled: {
-    opacity: 0.36,
-  },
+    opacity: 0.36 },
   submitText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   complete: {
     alignItems: 'center',
     paddingHorizontal: Space.xl,
-    paddingTop: Control.hit * 2,
-  },
+    paddingTop: Control.hit * 2 },
   completeTitle: {
     marginTop: Space.md,
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    letterSpacing: Type.subtitle.letterSpacing,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    textAlign: 'center' },
   reportIdText: {
     marginTop: Space.xs,
     color: colors.brand,
     fontFamily: Typography.family.bold,
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    textAlign: 'center' },
   reportIdNote: {
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    textAlign: 'center' },
   completeBody: {
     maxWidth: 330,
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2,
+    textAlign: 'center' },
   submittedAtText: {
     marginTop: Space.xs,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    letterSpacing: Type.meta.letterSpacing,
-    textAlign: 'center',
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'center' },
   submittedEvidence: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm,
     marginTop: Space.md,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   doneAction: {
     minWidth: 150,
     minHeight: Control.hit,
@@ -894,14 +841,12 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     backgroundColor: colors.textPrimary,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   doneActionText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   blockAction: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -914,28 +859,24 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     borderWidth: Stroke.standard,
     borderColor: colors.danger,
-    backgroundColor: colors.danger,
-  },
+    backgroundColor: colors.danger },
   blockActionText: {
     color: colors.textInverse,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   blockedNote: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     marginTop: Space.md,
-    maxWidth: 300,
-  },
+    maxWidth: 300 },
   blockedNoteText: {
     flex: 1,
     color: colors.success,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 2 },
   secondaryDoneAction: {
     minWidth: 140,
     minHeight: Control.hit,
@@ -945,13 +886,10 @@ function createStyles(colors: ThemeColors) {
     borderColor: colors.border,
     borderRadius: Radius.full,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   secondaryDoneText: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight } });
 }

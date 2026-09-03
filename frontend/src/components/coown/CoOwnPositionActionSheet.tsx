@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -54,7 +55,7 @@ export function CoOwnPositionActionSheet({
                 <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={200} />
               ) : (
                 <View style={styles.imageFallback}>
-                  <Ionicons name="cube-outline" size={22} color={colors.textMuted} />
+                  <Ionicons name="image-outline" size={22} color={colors.textMuted} />
                 </View>
               )}
             </View>
@@ -150,18 +151,18 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   title: {
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     lineHeight: 20,
     letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   value: {
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
     letterSpacing: -0.3,
     marginTop: 2,
   },
@@ -179,10 +180,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.md,
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
   },
   actionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
 });

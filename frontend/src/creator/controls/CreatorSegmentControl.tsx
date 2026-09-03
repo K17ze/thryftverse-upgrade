@@ -25,9 +25,6 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  Easing,
-  useDerivedValue,
-  runOnJS,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
 
@@ -35,6 +32,7 @@ import { CreatorGlyph, type CreatorGlyphName } from './CreatorGlyph';
 import { Radius, Space, IconGrammar } from '../../theme/designTokens';
 import { Motion, REDUCED_SPRING } from '../../theme/motionTokens';
 import { FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 
@@ -98,11 +96,11 @@ export function CreatorSegmentControl({
       } else {
         contentOpacitySV.value = withTiming(0, {
           duration: Motion.duration.fast / 2,
-          easing: Easing.in(Easing.cubic),
+          easing: Motion.easing.exit,
         }, () => {
           contentOpacitySV.value = withTiming(1, {
             duration: Motion.duration.fast / 2,
-            easing: Easing.out(Easing.cubic),
+            easing: Motion.easing.entrance,
           });
         });
       }
@@ -232,12 +230,6 @@ const styles = StyleSheet.create({
     top: INDICATOR_PADDING,
     bottom: INDICATOR_PADDING,
     left: INDICATOR_PADDING,
-    // Shadow for depth separation
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
   },
   segmentsRow: {
     flexDirection: 'row',
@@ -255,7 +247,7 @@ const styles = StyleSheet.create({
     gap: Space.xs,
   },
   segmentLabel: {
-    fontSize: 13,
+    fontSize: TypographyV2.captionElevated.size,
     letterSpacing: 0,
   },
 });

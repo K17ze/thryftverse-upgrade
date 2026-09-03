@@ -24,19 +24,13 @@ import {
   CoOwnPortfolioStorytelling,
   CoOwnPortfolioPerformanceChart,
   CoOwnOfflineBanner,
-  CoOwnReconciliationBanner,
   type CoOwnPositionAction,
 } from '../components/coown';
 import { fetchCoOwnPortfolioPositions, type CoOwnPositionVM, type CoOwnPortfolioSummary } from '../services/coOwnPortfolio';
-// listCoOwnAssets and fetchCoOwnHoldings are re-exported here for transparency.
-// The coOwnPortfolio adapter composes them internally; importing them here
-// keeps the screen's data dependencies visible and auditable.
-import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
 import { useBackendData } from '../context/BackendDataContext';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -46,7 +40,7 @@ export default function PortfolioScreen() {
   const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { show } = useToast();
   const { width: screenWidth } = useWindowDimensions();
   const { listings } = useBackendData();
@@ -229,7 +223,7 @@ export default function PortfolioScreen() {
     const actions: CoOwnPositionAction[] = [
       {
         label: 'View item details',
-        icon: 'cube-outline',
+        icon: 'document-text-outline',
         onPress: () => navigation.navigate('AssetDetail', { assetId: p.assetId }),
         variant: 'primary',
       },
@@ -273,16 +267,16 @@ export default function PortfolioScreen() {
         unitsOwned={item.unitsOwned}
         totalUnits={item.totalUnits}
         ownershipPct={item.ownershipPct}
-        currentValueLabel={formatFromFiat(item.currentValueGbp, DEFAULT_CURRENCY_CODE)}
-        avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, DEFAULT_CURRENCY_CODE)}
+        currentValueLabel={formatFromFiat(item.currentValueGbp, currencyCode)}
+        avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, currencyCode)}
         unrealizedLabel={item.unrealizedPnlGbp >= 0
-          ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), DEFAULT_CURRENCY_CODE)}`
-          : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), DEFAULT_CURRENCY_CODE)}`
+          ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), currencyCode)}`
+          : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), currencyCode)}`
         }
         realizedLabel={item.realizedPnlGbp !== 0
           ? (item.realizedPnlGbp >= 0
-            ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), DEFAULT_CURRENCY_CODE)}`
-            : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), DEFAULT_CURRENCY_CODE)}`)
+            ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), currencyCode)}`
+            : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), currencyCode)}`)
           : undefined
         }
         status={formatPositionStatus(item)}
@@ -304,7 +298,6 @@ export default function PortfolioScreen() {
         header={
           <FlagshipHeader
             title="Portfolio"
-            subtitle="Your Co-Own positions"
             onBack={handleBack}
             rightAction={
               <AnimatedPressable
@@ -335,7 +328,6 @@ export default function PortfolioScreen() {
         header={
           <FlagshipHeader
             title="Portfolio"
-            subtitle="Your Co-Own positions"
             onBack={handleBack}
             rightAction={
               <AnimatedPressable
@@ -370,7 +362,6 @@ export default function PortfolioScreen() {
         header={
           <FlagshipHeader
             title="Portfolio"
-            subtitle="Your Co-Own positions"
             onBack={handleBack}
             rightAction={
               <AnimatedPressable
@@ -392,7 +383,7 @@ export default function PortfolioScreen() {
         <CoOwnStateCanvas
           variant="empty"
           title="No positions yet"
-          subtitle="Your Co-Own portfolio will appear here once you purchase units."
+          subtitle="Buy units to start your portfolio."
           actionLabel="Browse items"
           onAction={() => navigation.navigate('CoOwnHub')}
           emptyGraphicVariant="bag"
@@ -403,6 +394,7 @@ export default function PortfolioScreen() {
 
   return (
     <FlagshipScreen
+      testID="portfolio-screen"
       header={
         <FlagshipHeader
           title="Portfolio"
@@ -426,7 +418,6 @@ export default function PortfolioScreen() {
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
-      <CoOwnReconciliationBanner isActive={false} />
 
       <FlashList
         data={activePortfolioTab === 'positions' ? positions : []}
@@ -482,66 +473,67 @@ export default function PortfolioScreen() {
                 </View>
               )}
 
-              {/* Phase 3: 4-tile summary — total return / unrealised / realised / distributions */}
-              <View style={[styles.summaryStats, { borderColor: colors.border }]}>
-                <View style={styles.summaryStat}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Total return</Text>
+              {/* ── P&L breakdown — flat hairline rows, not a 4-tile grid ──
+                  Per anti-AI design: remove the generic dashboard silhouette.
+                  Each metric is a flat row with a hairline divider. */}
+              <View style={styles.pnlRows}>
+                <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Total return</Text>
                   <CoOwnNumericText
                     value={summary.totalUnrealizedGbp + summary.totalRealizedGbp}
                     unit="1ZE"
-                    size="priceList"
+                    size="price"
                     signed
                     showUnit={false}
                     showGlyph={false}
                     color={(summary.totalUnrealizedGbp + summary.totalRealizedGbp) >= 0 ? colors.success : colors.danger}
                   />
                 </View>
-                <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Unrealised</Text>
+                <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Unrealised</Text>
                   <CoOwnNumericText
                     value={summary.totalUnrealizedGbp}
                     unit="1ZE"
-                    size="priceList"
+                    size="price"
                     signed
                     showUnit={false}
                     showGlyph={false}
                     color={summary.totalUnrealizedGbp >= 0 ? colors.success : colors.danger}
                   />
                 </View>
-                <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Realised</Text>
+                <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Realised</Text>
                   <CoOwnNumericText
                     value={summary.totalRealizedGbp}
                     unit="1ZE"
-                    size="priceList"
+                    size="price"
                     signed
                     showUnit={false}
                     showGlyph={false}
                     color={summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}
                   />
                 </View>
-                <View style={[styles.summaryStat, { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
-                  <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Distrib.</Text>
-                  <CoOwnNumericText
-                    value={totalDistributionsGbp}
-                    unit="1ZE"
-                    size="priceList"
-                    signed
-                    showUnit={false}
-                    showGlyph={false}
-                    color={totalDistributionsGbp >= 0 ? colors.success : colors.danger}
-                  />
-                </View>
+                {totalDistributionsGbp > 0 && (
+                  <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
+                    <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Distributions</Text>
+                    <CoOwnNumericText
+                      value={totalDistributionsGbp}
+                      unit="1ZE"
+                      size="price"
+                      signed
+                      showUnit={false}
+                      showGlyph={false}
+                      color={totalDistributionsGbp >= 0 ? colors.success : colors.danger}
+                    />
+                  </View>
+                )}
               </View>
 
-              {/* Phase 3: data-quality note — only when true */}
+              {/* Data-quality note — only when stale marks exist */}
               {staleMarkCount > 0 && (
-                <View style={[styles.dataQualityNote, { backgroundColor: colors.warningSubtle }]}>
-                  <Ionicons name="time-outline" size={12} color={colors.warning} />
-                  <Text style={[styles.dataQualityText, { color: colors.warning }]} numberOfLines={2}>
-                    Data quality: {staleMarkCount} {staleMarkCount === 1 ? 'position has' : 'positions have'} stale marks ({'>'}24h)
-                  </Text>
-                </View>
+                <Text style={[styles.dataQualityText, { color: colors.warning }]} numberOfLines={2}>
+                  {staleMarkCount} {staleMarkCount === 1 ? 'position has' : 'positions have'} stale marks ({'>'}24h)
+                </Text>
               )}
             </View>
 
@@ -761,19 +753,7 @@ export default function PortfolioScreen() {
             {summary.totalRealizedGbp !== 0 && (
               <View style={[styles.realisedCard, { borderBottomColor: colors.border }]}>
                 <View style={styles.realisedHeader}>
-                  <View style={[styles.realisedIcon, { backgroundColor: `${summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}15` }]}>
-                    <Ionicons
-                      name={summary.totalRealizedGbp >= 0 ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
-                      size={15}
-                      color={summary.totalRealizedGbp >= 0 ? colors.success : colors.danger}
-                    />
-                  </View>
-                  <View style={styles.realisedHeaderText}>
-                    <Text style={[styles.realisedLabel, { color: colors.textMuted }]}>Realised returns</Text>
-                    <Text style={[styles.realisedCaption, { color: colors.textSecondary }]}>
-                      From closed positions
-                    </Text>
-                  </View>
+                  <Text style={[styles.realisedLabel, { color: colors.textMuted }]}>Realised returns</Text>
                   <CoOwnNumericText
                     value={summary.totalRealizedGbp}
                     unit="1ZE"
@@ -791,7 +771,7 @@ export default function PortfolioScreen() {
             {performers.best && performers.best.avgEntryPriceGbp > 0 && (
               <CoOwnPortfolioStorytelling
                 premiumPct={null}
-                lastPriceLabel={formatFromFiat(performers.best.currentValueGbp / performers.best.unitsOwned, DEFAULT_CURRENCY_CODE)}
+                lastPriceLabel={formatFromFiat(performers.best.currentValueGbp / performers.best.unitsOwned, currencyCode)}
                 markSourceLabel="Last trade"
                 markAgeLabel={undefined}
               />
@@ -807,13 +787,10 @@ export default function PortfolioScreen() {
                 scaleValue={0.98}
                 hapticFeedback="light"
               >
-                <View style={[styles.watchlistIcon, { backgroundColor: `${colors.brand}15` }]}>
-                  <Ionicons name="eye-outline" size={15} color={colors.brand} />
-                </View>
                 <View style={styles.watchlistBody}>
                   <Text style={[styles.watchlistTitle, { color: colors.textPrimary }]}>Watchlist</Text>
                   <Text style={[styles.watchlistSub, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {coOwnWatchlist.length} {coOwnWatchlist.length === 1 ? 'asset' : 'assets'} on your radar
+                    {coOwnWatchlist.length} {coOwnWatchlist.length === 1 ? 'asset' : 'assets'} watched
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
@@ -826,7 +803,7 @@ export default function PortfolioScreen() {
                 <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
                 <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Rights are instrument-specific</Text>
               </View>
-              <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Open a position to review its current rights version, safeguarding arrangements, transfer limits and available exit routes.</Text>
+              <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Rights depend on the instrument. Open a position to review.</Text>
             </View>
             </>
             )}
@@ -876,7 +853,7 @@ export default function PortfolioScreen() {
         title={actionSheetAsset?.title ?? ''}
         unitsOwned={actionSheetAsset?.unitsOwned ?? 0}
         ownershipPct={actionSheetAsset?.ownershipPct ?? 0}
-        currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, DEFAULT_CURRENCY_CODE) : ''}
+        currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, currencyCode) : ''}
         statusLabel={actionSheetAsset ? (actionSheetAsset.isOpen ? 'Active' : 'Closed') : ''}
         actions={actionSheetActions}
       />
@@ -922,29 +899,19 @@ const styles = StyleSheet.create({
   // Values use Numeric.priceList (20/24/700) with tabular-nums for stable
   // column alignment — per spec 11_COOWN: "Monetary and unit quantities
   // never change width erratically."
-  summaryStats: {
+  // ── P&L flat rows — replaced 4-tile grid ──
+  pnlRows: {
+    marginTop: Space.sm },
+  pnlRow: {
     flexDirection: 'row',
-    paddingTop: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  summaryStat: {
-    flex: 1,
-    paddingHorizontal: Space.sm,
     alignItems: 'center',
-    gap: Space.xs,
-  },
-  summaryStatLabel: {
-    fontSize: TypographyV2.label.size,
-    lineHeight: TypographyV2.label.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
-  },
-  summaryStatValue: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: FontFamily.bold,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth },
+  pnlLabel: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   // ── Allocation card — calm, professional breakdown ──
   // Per spec 11_COOWN: 24pt between sections. Hairline separator, no card
   // chrome — flat canvas with spacing communicates relationship.
@@ -1230,19 +1197,8 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.meta.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  // ── Data quality note — calm, professional warning ──
-  // Uses warning color with subtle background. Tabular-nums for the count.
-  dataQualityNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
-    borderRadius: RadiusRoleValue.compactControl,
-    marginTop: Space.sm,
-  },
+  // ── Data quality text — flat, no chrome ──
   dataQualityText: {
-    flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,

@@ -1,8 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   StyleSheet,
-  ScrollView,
   RefreshControl,
   Pressable,
   Text,
@@ -17,6 +16,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useToast } from '../context/ToastContext';
+import { useA11yAudit } from '../hooks/useA11yAudit';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -25,33 +25,17 @@ import { Motion } from '../theme/motionTokens';
 import { haptics } from '../utils/haptics';
 import { HapticPatterns } from '../utils/hapticPatterns';
 import { useCurrencyContext } from '../context/CurrencyContext';
-import { parseApiError } from '../lib/apiClient';
-import { requestPushPermissionWithSoftAsk } from '../lib/pushPermission';
-import { Meta, BodyEmphasis, Headline } from '../components/ui/Text';
 import { toIze, formatIzeAmount } from '../utils/currency';
-import { Space, FontFamily, DockConstants, LetterSpacing } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
+import { Space, FontFamily, DockConstants, LetterSpacing, PressScale } from '../theme/designTokens';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
-import {
-  getAuctionDetail,
-  placeAuctionBid,
-  buyAuctionNow,
-  addToWatchlist,
-  removeFromWatchlist,
-  listAuctions,
-  type AuctionDetail as AuctionDetailType,
-  type AuctionBidActivity,
-  type AuctionDetailResponse,
-  type BuyNowResult,
-  type MarketAuction,
-} from '../services/marketApi';
-import { BottomSheet } from '../components/BottomSheet';
+import { TypographyV2 } from '../theme/typography.v2';
 import { BidSheet } from '../components/ui/BidSheet';
 import { BuyNowSheet } from '../components/ui/BuyNowSheet';
 import { FullscreenMediaViewer } from '../components/product/FullscreenMediaViewer';
-import { RecommendationRail, ProductDetailSkeleton } from '../components/product';
+import { RecommendationRail } from '../components/product';
 import { SaveToCollectionModal } from '../components/closet/SaveToCollectionModal';
 import { ShareSheet } from '../components/ShareSheet';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { CommerceStateCanvas, CommerceRelatedRail, CategoryEvidence, CommerceMediaStage } from '../components/commerce';
 import {
   CommerceDetailHeader,
@@ -67,11 +51,7 @@ import {
   CommerceDetailUnavailableInline,
 } from '../components/commerce/detail';
 import { resolveEvidenceGroups } from '../platform/commerce/categoryEvidence';
-import {
-  useBucketedServerClock,
-  resolveAuctionTiming,
-  type AuctionEffectiveState,
-} from '../hooks/useServerClock';
+import { resolveAuctionTiming } from '../hooks/useServerClock';
 import {
   buildAuctionViewModel,
   useProductSocialState,
@@ -85,38 +65,60 @@ import { useStore } from '../store/useStore';
 import { useSignupWall } from '../hooks/useSignupWall';
 import { createDmConversationOnApi } from '../services/chatApi';
 import type { Listing } from '../services/listingsApi';
-import { DEFAULT_CURRENCY_CODE } from '../constants/currencies';
 import {
   resolveStateAction,
+  resolveAuctionPresentationState,
   resolveDetailPriceLabel,
   resolveDetailPriceAmount,
   resolveDetailCountdown,
   isBuyNowAvailable,
   buildDetailAccessibilityLabel,
   formatBidActivityRow,
-  detectLifecycleTransition,
+  resolvePaymentDeadlineCountdown,
+  formatCountdownSentence,
   type AuctionDetailInput,
   resolveReserveStatus,
+  buildAuctionMediaItems,
+  resolveTerminalAmountText,
+  auctionHasValidWinner,
+  isAuctionPaymentConfirmed,
+  resolveSellerSaleTitle,
+  resolveWinnerSubtitle,
+  resolveSellerSubtitle,
+  resolveLiveMsToEnd,
+  resolveLiveMsToStart,
+  resolveCountdownColor,
+  resolveHasDualDock,
 } from '../utils/auctionDetailLogic';
 import {
   ReserveStatusBadge,
+  AuctionCountdownBar,
+  AuctionPostEndBanners,
+  AuctionTerminalResult,
+  AuctionOverflowSheet,
+  AuctionBidHistorySheet,
+  AuctionRulesSheet,
 } from '../components/auction';
+import { useAuctionDetail } from '../hooks/useAuctionDetail';
+import { track } from '../analytics/track';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'AuctionDetail'>;
 
 export default function AuctionDetailScreen() {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'AuctionDetailScreen');
   const navigation = useNavigation<NavT>();
   const route = useRoute<RouteT>();
   const {
     auctionId,
     openBidSheet: shouldOpenBidSheet,
     initialBidAmount,
-  } = route.params;
+  } = route.params ?? {};
   const { show } = useToast();
   const { requireAuth } = useSignupWall();
-  const { formatFromFiat } = useFormattedPrice();
-  const { currencyCode, goldRates, displayMode } = useCurrencyContext();
+  const { formatFromFiat, currencySymbol } = useFormattedPrice();
+  const { currencyCode, fxRates, displayMode } = useCurrencyContext();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
 
@@ -125,33 +127,68 @@ export default function AuctionDetailScreen() {
     scrollY.value = event.contentOffset.y;
   });
 
-  const [auction, setAuction] = React.useState<AuctionDetailType | null>(null);
-  const [bidActivity, setBidActivity] = React.useState<AuctionBidActivity[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [refreshing, setRefreshing] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [bidActivityError, setBidActivityError] = React.useState(false);
+  const {
+    auction,
+    bidActivity,
+    loading,
+    refreshing,
+    error,
+    bidActivityError,
+    setBidActivityError,
+    relatedAuctions,
+    relatedLoading,
+    lastFetchAt,
+    setLoading,
+    serverNowRef,
+    secondClock,
+    minuteClock,
+    needsResync,
+    resyncFailed,
+    isTransitionRefreshing,
+    effectiveState,
+    bidSheetVisible,
+    setBidSheetVisible,
+    buyNowSheetVisible,
+    setBuyNowSheetVisible,
+    isSubmittingBid,
+    isBuyNowLoading,
+    watchToggling,
+    isCancelLoading,
+    isPayLoading,
+    isAcceptHighestBidLoading,
+    isAcceptSecondChanceLoading,
+    isDeclineSecondChanceLoading,
+    fetchDetail,
+    handleRefresh,
+    handleToggleWatch,
+    openBidSheet,
+    closeBidSheet,
+    handleSubmitBid,
+    openBuyNowSheet,
+    closeBuyNowSheet,
+    handleSubmitBuyNow,
+    handleAcceptHighestBid,
+    handlePayNow,
+    handleAcceptSecondChance,
+    handleDeclineSecondChance,
+    handleCancelAuction,
+    cancelAuctionConfirmation,
+    dismissCancelAuctionConfirmation,
+    refreshDetailForTransaction,
+  } = useAuctionDetail(auctionId, {
+    openBidSheet: shouldOpenBidSheet,
+    initialBidAmount,
+  });
 
-  const [bidSheetVisible, setBidSheetVisible] = React.useState(false);
-  const [buyNowSheetVisible, setBuyNowSheetVisible] = React.useState(false);
-  const [isSubmittingBid, setIsSubmittingBid] = React.useState(false);
-  const [isBuyNowLoading, setIsBuyNowLoading] = React.useState(false);
-  const [watchToggling, setWatchToggling] = React.useState(false);
-  // Per App Store / Google Play 2026 guidelines, push permission is requested
-  // only after a meaningful user action — here, after the user watches/favorites
-  // an auction for the first time. The ref guards within-session re-prompting;
-  // requestPushPermissionWithSoftAsk shows an in-app pre-prompt before the
-  // one-shot OS prompt and persists an AsyncStorage flag across sessions.
-  const favoritePushAskedRef = React.useRef(false);
-  const [isTransitionRefreshing, setIsTransitionRefreshing] = React.useState(false);
   const [bidHistorySheetVisible, setBidHistorySheetVisible] = React.useState(false);
   const [rulesSheetVisible, setRulesSheetVisible] = React.useState(false);
   const [mediaViewerVisible, setMediaViewerVisible] = React.useState(false);
   const [fullscreenMediaIndex, setFullscreenMediaIndex] = React.useState(0);
   const [overflowVisible, setOverflowVisible] = React.useState(false);
-  const [relatedAuctions, setRelatedAuctions] = React.useState<MarketAuction[]>([]);
-  const [relatedLoading, setRelatedLoading] = React.useState(false);
-  const [lastFetchAt, setLastFetchAt] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    track('auction_viewed', { auction_id: auctionId });
+  }, [auctionId]);
 
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
@@ -160,240 +197,6 @@ export default function AuctionDetailScreen() {
   const { isCommerceCompact: isCompact } = useBreakpoint();
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
-
-  const serverNowRef = React.useRef<string | null>(null);
-  const { secondClock, minuteClock, resync, needsResync, resyncFailed, markResyncFailed, clearResyncFailed } =
-    useBucketedServerClock(serverNowRef.current);
-
-  const prevLifecycleRef = React.useRef<AuctionEffectiveState | null>(null);
-
-  // Guard against async state updates after the component unmounts.
-  // fetchDetail and fetchRelatedAuctions both await network calls and
-  // then call setState; without this guard those calls would fire on
-  // an unmounted component, causing a memory-leak warning.
-  const isMountedRef = React.useRef(true);
-  React.useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
-
-  // ── Refresh-in-progress guard ────────────────────────────────────
-  // Prevents race conditions between 5 independent refresh sources:
-  // polling, manual pull-to-refresh, lifecycle transitions, server clock
-  // resync, and post-bid refresh. Without this guard, concurrent
-  // fetchDetail() calls cause UI flickering, state thrashing, and
-  // excessive API load — the root cause of the "worse" auction experience.
-  const isFetchingRef = React.useRef(false);
-
-  const fetchDetail = React.useCallback(async (): Promise<AuctionDetailResponse | null> => {
-    // Block concurrent calls — the most recent caller will get null.
-    // This is safe because the next polling tick or user action will retry.
-    if (isFetchingRef.current) return null;
-    isFetchingRef.current = true;
-    try {
-      const res = await getAuctionDetail(auctionId);
-      if (!isMountedRef.current) return null;
-      serverNowRef.current = res.serverNow;
-      setAuction(res.auction);
-      setBidActivity(res.bidActivity);
-      setBidActivityError(false);
-      setError(null);
-      setLastFetchAt(Date.now());
-      resync(res.serverNow);
-      clearResyncFailed();
-      return res;
-    } catch (err) {
-      if (!isMountedRef.current) return null;
-      const parsed = parseApiError(err, 'Failed to load auction');
-      setError(parsed.message);
-      markResyncFailed();
-      return null;
-    } finally {
-      isFetchingRef.current = false;
-      if (isMountedRef.current) {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    }
-  }, [auctionId, resync, clearResyncFailed, markResyncFailed]);
-
-  React.useEffect(() => {
-    void fetchDetail();
-  }, [fetchDetail]);
-
-  const fetchRelatedAuctions = React.useCallback(async (category: string | null, currentId: string) => {
-    setRelatedLoading(true);
-    try {
-      const result = await listAuctions({ status: 'live', category: category ?? undefined, limit: 6 });
-      if (!isMountedRef.current) return;
-      setRelatedAuctions(result.items.filter((a) => a.id !== currentId).slice(0, 4));
-    } catch {
-      if (!isMountedRef.current) return;
-      setRelatedAuctions([]);
-    } finally {
-      if (isMountedRef.current) setRelatedLoading(false);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    if (auction?.category) {
-      void fetchRelatedAuctions(auction.category, auction.id);
-    } else if (auction) {
-      void fetchRelatedAuctions(null, auction.id);
-    }
-  }, [auction?.id, auction?.category, fetchRelatedAuctions]);
-
-  React.useEffect(() => {
-    if (needsResync) {
-      void fetchDetail();
-    }
-  }, [needsResync, fetchDetail]);
-
-  const effectiveState = React.useMemo(() => {
-    if (!auction) return null;
-    return resolveEffectiveState(auction, minuteClock);
-  }, [auction, minuteClock]);
-
-  React.useEffect(() => {
-    if (!effectiveState) return;
-    if (
-      prevLifecycleRef.current !== null &&
-      !isTransitionRefreshing &&
-      detectLifecycleTransition(prevLifecycleRef.current, effectiveState)
-    ) {
-      setIsTransitionRefreshing(true);
-      void fetchDetail().finally(() => {
-        if (isMountedRef.current) setIsTransitionRefreshing(false);
-      });
-    }
-    prevLifecycleRef.current = effectiveState;
-  }, [effectiveState, fetchDetail, isTransitionRefreshing]);
-
-  // Compound haptic feedback for viewer-state transitions. Fires once on
-  const handleRefresh = () => {
-    setRefreshing(true);
-    void fetchDetail();
-  };
-
-  const handleToggleWatch = async () => {
-    if (!auction || watchToggling) return;
-    if (!requireAuth('save_item')) return;
-    setWatchToggling(true);
-    const wasWatching = auction.isWatched;
-    setAuction({ ...auction, isWatched: !wasWatching });
-    try {
-      if (wasWatching) {
-        await removeFromWatchlist(auctionId);
-        show('Removed from watchlist', 'info');
-      } else {
-        await addToWatchlist(auctionId);
-        // Upcoming auctions: make the notification intent explicit so the
-        // user understands watching = "notify me when this goes live."
-        // (audit 08 P1: upcoming notification toggle)
-        const isUpcomingAuction = effectiveState === 'upcoming';
-        show(
-          isUpcomingAuction ? 'Watching · we’ll notify you when it goes live' : 'Added to watchlist',
-          'info',
-        );
-        // Contextual push permission prompt — ask once after the user adds an
-        // item to their watchlist. Best-effort; never blocks the watch flow.
-        if (!favoritePushAskedRef.current) {
-          favoritePushAskedRef.current = true;
-          requestPushPermissionWithSoftAsk('favorite').catch(() => undefined);
-        }
-      }
-    } catch {
-      setAuction({ ...auction, isWatched: wasWatching });
-      show('Failed to update watchlist', 'error');
-    } finally {
-      setWatchToggling(false);
-    }
-  };
-
-  // Authoritative refresh that returns the fetched snapshot for transaction preflight
-  const refreshDetailForTransaction = React.useCallback(async (): Promise<AuctionDetailResponse | null> => {
-    return fetchDetail();
-  }, [fetchDetail]);
-
-  const openBidSheet = () => {
-    if (!auction) return;
-    if (!requireAuth('place_bid')) return;
-    setBidSheetVisible(true);
-  };
-
-  const closeBidSheet = () => {
-    setBidSheetVisible(false);
-  };
-
-  // Auto-open BidSheet when arriving from an outbid notification
-  React.useEffect(() => {
-    if (shouldOpenBidSheet && auction && !loading && !bidSheetVisible) {
-      // Only auto-open if the auction is still live (bidding is possible)
-      const effectiveState = auction.lifecycle;
-      if (effectiveState === 'live') {
-        setBidSheetVisible(true);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldOpenBidSheet, auction, loading]);
-
-  // PASS 6: Sheet owns transaction feedback. Parent only calls API and returns typed result.
-  // No duplicate toast — sheet handles inline error/success presentation.
-  const handleSubmitBid = async (gbpAmount: number, idempotencyKey: string): Promise<void> => {
-    if (!auction || isSubmittingBid) return;
-    setIsSubmittingBid(true);
-
-    try {
-      await placeAuctionBid(auction.id, { amountGbp: gbpAmount, idempotencyKey });
-      // Post-success refresh — do not convert to error if refresh fails
-      await fetchDetail();
-    } catch (err) {
-      // Sheet owns reconciliation refresh — parent does not duplicate
-      throw err;
-    } finally {
-      setIsSubmittingBid(false);
-    }
-  };
-
-  const openBuyNowSheet = () => {
-    if (!auction?.buyNowPriceGbp || isBuyNowLoading) return;
-    if (!requireAuth('purchase')) return;
-    setBuyNowSheetVisible(true);
-  };
-
-  const closeBuyNowSheet = () => {
-    setBuyNowSheetVisible(false);
-  };
-
-  // PASS 4: Buy Now calls dedicated API, verifies isBuyNow in response
-  // PASS 6: Sheet owns feedback — no duplicate toast from parent
-  const handleSubmitBuyNow = async (gbpAmount: number, idempotencyKey: string): Promise<BuyNowResult> => {
-    if (!auction?.buyNowPriceGbp || isBuyNowLoading) throw new Error('Buy Now not available');
-    setIsBuyNowLoading(true);
-
-    try {
-      const result = await buyAuctionNow(auction.id, {
-        idempotencyKey,
-        expectedPriceGbp: gbpAmount,
-      });
-      // Verify the response explicitly confirms Buy Now
-      if (!result.isBuyNow) {
-        throw new Error('The response did not confirm the Buy Now winning bid. Try again.');
-      }
-      // Post-success refresh — do not convert to error if refresh fails
-      try {
-        await fetchDetail();
-      } catch {
-        // Retain successful transaction result; sheet shows sync-pending message
-      }
-      return result;
-    } catch (err) {
-      // Sheet owns reconciliation refresh — parent does not duplicate
-      throw err;
-    } finally {
-      setIsBuyNowLoading(false);
-    }
-  };
 
   const detailInput: AuctionDetailInput | null = React.useMemo(() => {
     if (!auction) return null;
@@ -419,7 +222,14 @@ export default function AuctionDetailScreen() {
       isWatched: auction.isWatched,
       cancelledAt: auction.cancelledAt,
       settledAt: auction.settledAt,
+      paidAt: auction.paidAt,
+      paymentDeadlineAt: auction.paymentDeadlineAt,
+      secondChanceOfferedTo: auction.secondChanceOfferedTo,
+      cancelledBy: auction.cancelledBy,
+      cancelledReason: auction.cancelledReason,
+      antiSniping: auction.antiSniping,
       winnerBidderId: auction.winnerBidderId,
+      auctionSequence: auction.auctionSequence,
       lifecycle: auction.lifecycle,
       terminalReason: auction.terminalReason,
       fulfilment: auction.fulfilment ?? null,
@@ -453,13 +263,24 @@ export default function AuctionDetailScreen() {
 
   const priceText = React.useMemo(() => {
     if (priceLabel === 'No bids') return 'No bids';
-    return formatFromFiat(priceAmount, DEFAULT_CURRENCY_CODE);
+    return formatFromFiat(priceAmount, currencyCode);
   }, [priceLabel, priceAmount, formatFromFiat]);
 
   const countdown = React.useMemo(() => {
     if (!timing) return { text: '', isFinalMinutes: false, stage: 'plenty' as const };
     return resolveDetailCountdown(timing, secondClock, minuteClock);
   }, [timing, secondClock, minuteClock]);
+
+  // Canonical presentation state for badge, primary sentence, and dock.
+  const presentation = React.useMemo(() => {
+    if (!detailInput || !effectiveState || !countdown) return null;
+    return resolveAuctionPresentationState(
+      effectiveState,
+      detailInput.viewerState,
+      detailInput,
+      countdown.stage,
+    );
+  }, [detailInput, effectiveState, countdown]);
 
   const accessibilityLabel = React.useMemo(() => {
     if (!detailInput || !timing) return '';
@@ -478,26 +299,12 @@ export default function AuctionDetailScreen() {
   const isEnded = effectiveState === 'ended';
   const isCancelled = effectiveState === 'cancelled';
   const isSettled = effectiveState === 'settled';
+  const isReserveNotMet = effectiveState === 'reserve_not_met';
+  const isAwaitingPayment = effectiveState === 'awaiting_payment';
+  const isPaymentExpired = effectiveState === 'payment_expired';
+  const isSecondChanceOffered = effectiveState === 'second_chance_offered';
+  const isPostEnd = isReserveNotMet || isAwaitingPayment || isPaymentExpired || isSecondChanceOffered;
   const isTerminal = isEnded || isCancelled || isSettled;
-
-  // ── Real-time polling for live auctions ──────────────────────────
-  // During a live auction, poll the backend every 10s so competing bids,
-  // outbid status, and bid activity update without manual refresh.
-  // Upcoming auctions poll every 45s (price changes are unlikely but
-  // the auction may transition to live). Terminal auctions stop polling.
-  // The isFetchingRef guard inside fetchDetail prevents overlapping calls.
-  const pollIntervalMs = isLive ? 10_000 : isUpcoming ? 45_000 : 0;
-
-  React.useEffect(() => {
-    if (pollIntervalMs === 0) return;
-    if (isSubmittingBid || isBuyNowLoading) return;
-    const interval = setInterval(() => {
-      if (isMountedRef.current && !isSubmittingBid && !isBuyNowLoading && !isFetchingRef.current) {
-        void fetchDetail();
-      }
-    }, pollIntervalMs);
-    return () => clearInterval(interval);
-  }, [pollIntervalMs, isLive, isUpcoming, fetchDetail, isSubmittingBid, isBuyNowLoading]);
   const viewerState = auction?.viewerState ?? 'not_participating';
 
   // Compound haptic feedback when the viewer's auction outcome transitions
@@ -518,7 +325,28 @@ export default function AuctionDetailScreen() {
   const isSeller = viewerState === 'seller';
   const buyNowAvailable = detailInput ? isBuyNowAvailable(detailInput, effectiveState ?? 'upcoming') : false;
   const reserveStatus = detailInput ? resolveReserveStatus(detailInput) : 'none';
-  const showBidControls = !isTerminal && !isSeller;
+  const showBidControls = !isTerminal && !isPostEnd && !isSeller;
+
+  // ── Second-chance recipient detection ──
+  // The backend sets secondChanceOfferedTo to a specific user ID. Only
+  // that user sees accept/decline controls. Falls back to viewerState
+  // (outbid/lost) when the backend hasn't populated the field yet.
+  const isSecondChanceRecipient = React.useMemo(() => {
+    if (!auction) return false;
+    if (auction.secondChanceOfferedTo && currentUser?.id) {
+      return auction.secondChanceOfferedTo === currentUser.id;
+    }
+    return (isPaymentExpired || isSecondChanceOffered) &&
+      (viewerState === 'outbid' || viewerState === 'lost');
+  }, [auction, currentUser?.id, isPaymentExpired, isSecondChanceOffered, viewerState]);
+
+  // ── Payment deadline countdown ──
+  // Uses the same server-clock pattern as the auction end countdown so
+  // the deadline ticks down with the same per-second precision.
+  const paymentDeadlineCountdown = React.useMemo(() => {
+    if (!auction?.paymentDeadlineAt) return null;
+    return resolvePaymentDeadlineCountdown(auction.paymentDeadlineAt, secondClock);
+  }, [auction?.paymentDeadlineAt, secondClock]);
 
   // ── PRODUCT-01: unified view model + shared social state + seller trust + recommendations ──
   const viewModel = React.useMemo(() => {
@@ -526,8 +354,9 @@ export default function AuctionDetailScreen() {
     return buildAuctionViewModel({
       auction,
       currentUserId: currentUser?.id,
+      currencySymbol,
     });
-  }, [auction, currentUser?.id]);
+  }, [auction, currentUser?.id, currencySymbol]);
 
   const social = useProductSocialState(viewModel);
 
@@ -593,88 +422,40 @@ export default function AuctionDetailScreen() {
     navigation.push('AuctionDetail', { auctionId: id });
   }, [navigation]);
 
+  const handleTrackBid = React.useCallback(
+    async (gbpAmount: number, idempotencyKey: string, maxBidGbp?: number) => {
+      await handleSubmitBid(gbpAmount, idempotencyKey, maxBidGbp);
+      track('auction_bid_placed', { auction_id: auctionId, bid_amount: gbpAmount });
+    },
+    [auctionId, handleSubmitBid],
+  );
+
   // ── Canonical media array ──
   // Per spec 02_AUCTION §7: render the canonical media array through
   // CommerceMediaStage. Maintain imageUrl as a temporary compatibility
   // field.
   const auctionMediaItems = React.useMemo(() => {
     if (!auction) return [];
-    if (auction.mediaItems && auction.mediaItems.length > 0) {
-      return auction.mediaItems
-        .slice()
-        .sort((a, b) => a.order - b.order)
-        .map((item) => ({
-          id: item.id,
-          uri: item.url,
-          kind: item.type,
-          posterUri: item.posterUrl,
-          width: item.width,
-          height: item.height,
-          focalPoint: item.focalX != null && item.focalY != null
-            ? { x: item.focalX, y: item.focalY }
-            : null,
-          fit: item.focalX != null && item.focalY != null ? 'cover' as const : 'contain' as const,
-          altText: `${auction.title} ${item.type}`,
-        }));
-    }
-    return auction.imageUrl
-      ? [{
-          uri: auction.imageUrl,
-          kind: 'image' as const,
-          fit: 'contain' as const,
-          altText: auction.title,
-        }]
-      : [];
+    return buildAuctionMediaItems(auction);
   }, [auction]);
 
   // ── Fulfilment summary ──
   // Per spec 02_AUCTION §8: backend-backed result/fulfilment contract.
   // The frontend must not invent next steps.
   const auctionFulfilment = auction?.fulfilment ?? null;
-  const terminalAmountGbp =
-    auction && auction.bidCount > 0 && Number.isFinite(auction.currentBidGbp)
-      ? auction.currentBidGbp
-      : null;
-  const terminalAmountText =
-    terminalAmountGbp != null
-      ? formatFromFiat(terminalAmountGbp, DEFAULT_CURRENCY_CODE)
-      : 'Amount unavailable';
+  const terminalAmountText = auction
+    ? resolveTerminalAmountText(auction, formatFromFiat)
+    : 'Amount unavailable';
 
   // ── Truthful terminal sale-state labels (audit P0.5) ──
   // `ended` is not `settled`. Derive the sale title from the authoritative
   // effective state + backend payment status so the body never says "Sold"
   // (implying settlement) for an auction that has only ended.
-  const isPaymentConfirmed = auctionFulfilment?.paymentStatus === 'paid';
-  const hasValidWinner = auction != null && auction.winnerBidderId != null && auction.bidCount > 0;
-  const sellerSaleTitle = !hasValidWinner
-    ? 'Ended without bids'
-    : isSettled
-      ? 'Sold'
-      : isPaymentConfirmed
-        ? 'Sold · settlement pending'
-        : 'Sold · awaiting payment';
-  const winnerSubtitle = isSettled
-    ? (auctionFulfilment?.buyerNextAction
-        ? auctionFulfilment.buyerNextAction
-        : auctionFulfilment?.fulfilmentStatus
-          ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
-          : 'Fulfilment details are not available yet.')
-    : isPaymentConfirmed
-      ? 'Payment confirmed · settlement pending'
-      : (auctionFulfilment?.buyerNextAction
-          ? auctionFulfilment.buyerNextAction
-          : 'Complete payment to secure your win.');
-  const sellerSubtitle = !hasValidWinner
-    ? 'No bids were received.'
-    : (auctionFulfilment?.sellerNextAction
-        ? auctionFulfilment.sellerNextAction
-        : isSettled
-          ? (auctionFulfilment?.fulfilmentStatus
-              ? `Fulfilment · ${auctionFulfilment.fulfilmentStatus.replace(/_/g, ' ')}`
-              : 'Fulfilment details are not available yet.')
-          : isPaymentConfirmed
-            ? 'Payment confirmed · settlement pending.'
-            : 'Awaiting buyer payment.');
+  const isPaymentConfirmed = isAuctionPaymentConfirmed(auctionFulfilment);
+  const hasValidWinner = auctionHasValidWinner(auction);
+  const sellerSaleTitle = resolveSellerSaleTitle(hasValidWinner, isSettled, isPaymentConfirmed);
+  const winnerSubtitle = resolveWinnerSubtitle(auctionFulfilment, isSettled, isPaymentConfirmed);
+  const sellerSubtitle = resolveSellerSubtitle(hasValidWinner, auctionFulfilment, isSettled, isPaymentConfirmed);
 
   // ── One primary state sentence (audit: reduce simultaneous state cues) ──
   // Above the fold, show ONE dominant sentence that communicates the most
@@ -683,22 +464,19 @@ export default function AuctionDetailScreen() {
   // page reads like precise instrumentation, not a casino dashboard.
   const liveMsToEnd = React.useMemo(() => {
     if (!auction) return 0;
-    return Math.max(0, new Date(auction.endsAt).getTime() - secondClock);
+    return resolveLiveMsToEnd(auction, secondClock);
   }, [auction, secondClock]);
 
   const liveMsToStart = React.useMemo(() => {
     if (!auction) return 0;
-    return Math.max(0, new Date(auction.startsAt).getTime() - secondClock);
+    return resolveLiveMsToStart(auction, secondClock);
   }, [auction, secondClock]);
 
   // Countdown color changes only at meaningful thresholds.
   // < 10 seconds = danger, < 1 minute = warning, otherwise neutral.
   // This is the single accent for urgency — not every element is red.
   const countdownColor = React.useMemo(() => {
-    if (!isLive) return colors.textPrimary;
-    if (liveMsToEnd <= 10_000) return colors.danger;
-    if (liveMsToEnd <= 60_000) return colors.warning;
-    return colors.textPrimary;
+    return resolveCountdownColor(isLive, liveMsToEnd, colors);
   }, [isLive, liveMsToEnd, colors]);
 
   // Primary state sentence — one dominant line above the fold.
@@ -709,59 +487,43 @@ export default function AuctionDetailScreen() {
     text: string;
     color: string;
   } | null>(() => {
-    if (!timing || !detailInput || !auction) return null;
+    if (!presentation) return null;
+    const colorByKey: Record<typeof presentation.colorKey, string> = {
+      brand: colors.brand,
+      success: colors.success,
+      danger: colors.danger,
+      warning: colors.warning,
+      textPrimary: colors.textPrimary,
+      textSecondary: colors.textSecondary,
+      textMuted: colors.textMuted,
+    };
+    return {
+      text: presentation.viewerMessage ?? presentation.stateLabel,
+      color: colorByKey[presentation.colorKey],
+    };
+  }, [presentation, colors]);
 
-    // Terminal states — server-confirmed end
-    if (isEnded || isSettled) {
-      if (viewerState === 'won' && !isPaymentConfirmed && !isSettled) {
-        return { text: 'Payment required', color: colors.warning };
-      }
-      return { text: 'Ended', color: colors.textMuted };
-    }
-    if (isCancelled) {
-      return { text: 'Cancelled', color: colors.textMuted };
-    }
-
-    // Live — viewer-state sentences dominate over countdown
-    if (isLive) {
-      if (viewerState === 'outbid') {
-        return { text: 'Outbid', color: colors.warning };
-      }
-      if (viewerState === 'leading') {
-        return { text: "You're highest bidder", color: colors.success };
-      }
-      if (reserveStatus === 'not-met') {
-        return { text: 'Reserve not met', color: colors.textPrimary };
-      }
-      // Default — countdown is the primary sentence
-      return { text: `Ends in ${formatCountdownSentence(liveMsToEnd)}`, color: countdownColor };
-    }
-
-    // Upcoming
-    if (isUpcoming) {
-      return { text: `Starts in ${formatCountdownSentence(liveMsToStart)}`, color: colors.brand };
-    }
-
-    return null;
-  }, [timing, detailInput, auction, isEnded, isSettled, isCancelled, isLive, isUpcoming, viewerState, isPaymentConfirmed, reserveStatus, liveMsToEnd, liveMsToStart, countdownColor, colors]);
-
-  // Subordinate metadata — countdown demotes here when viewer state
-  // dominates the primary sentence. Kept small and neutral so it never
-  // competes with the primary state sentence.
+  // The dedicated countdown bar owns time display; avoid a second
+  // countdown line in the transaction surface.
   const subordinateStateText = React.useMemo<string | null>(() => {
-    if (!isLive || !auction) return null;
-    // Only show subordinate countdown when the primary sentence is NOT
-    // the countdown itself (i.e., viewer state or reserve dominates).
-    const primaryIsCountdown =
-      primaryState?.text.startsWith('Ends in') || primaryState?.text.startsWith('Starts in');
-    if (primaryIsCountdown) return null;
-    if (liveMsToEnd <= 0) return null;
-    return `Ends in ${formatCountdownSentence(liveMsToEnd)}`;
-  }, [isLive, auction, primaryState, liveMsToEnd]);
+    return null;
+  }, []);
 
   // Compute scroll bottom padding from dock geometry + safe area so the
   // sticky dock never covers the last content row.
-  const hasDualDock = showBidControls && buyNowAvailable && stateAction?.secondary.type === 'buyNow' && !isBuyNowLoading;
+  const hasDualDock = resolveHasDualDock({
+    showBidControls,
+    buyNowAvailable,
+    secondaryActionType: stateAction?.secondary.type ?? 'none',
+    isBuyNowLoading,
+    isPostEnd,
+    isReserveNotMet,
+    isSeller,
+    bidCount: auction?.bidCount ?? 0,
+    isPaymentExpired,
+    isSecondChanceOffered,
+    isSecondChanceRecipient,
+  });
   const dockHeight = hasDualDock
     ? DockConstants.dualActionHeight
     : DockConstants.singleActionHeight;
@@ -771,15 +533,11 @@ export default function AuctionDetailScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: Space.md }}
-          accessibilityLabel="Loading auction details"
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-        >
-          <ProductDetailSkeleton />
-        </ScrollView>
+        <CommerceStateCanvas
+          state="loading"
+          family="auction"
+          heroFraction={isCompact ? 0.54 : 0.58}
+        />
       </View>
     );
   }
@@ -821,6 +579,8 @@ export default function AuctionDetailScreen() {
 
   return (
     <Reanimated.View
+      ref={a11yRef}
+      testID="auction-detail-screen"
       entering={reducedMotion ? FadeIn.duration(0) : FadeIn.duration(Motion.transitions.mediaLoad.duration)}
       style={[styles.container, { backgroundColor: colors.background }]}
     >
@@ -923,59 +683,12 @@ export default function AuctionDetailScreen() {
             stage. Red when < 1 hour remaining (urgency). Shows the
             server-authoritative countdown so the user always knows the
             time state without scrolling. */}
-        {isLive && liveMsToEnd > 0 && (
-          <View
-            style={[
-              styles.countdownBar,
-              {
-                backgroundColor: liveMsToEnd < 60 * 60 * 1000
-                  ? colors.danger
-                  : colors.surface,
-                borderBottomColor: colors.border,
-              },
-            ]}
-            accessibilityLiveRegion="polite"
-            accessibilityLabel={`Time remaining: ${formatCountdownSentence(liveMsToEnd)}`}
-          >
-            <Ionicons
-              name="time-outline"
-              size={16}
-              color={liveMsToEnd < 60 * 60 * 1000 ? colors.textInverse : colors.textSecondary}
-            />
-            <Text
-              style={[
-                styles.countdownBarText,
-                {
-                  color: liveMsToEnd < 60 * 60 * 1000
-                    ? colors.textInverse
-                    : colors.textPrimary,
-                  fontVariant: ['tabular-nums'] as any,
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {`Ends in ${formatCountdownSentence(liveMsToEnd)}`}
-            </Text>
-            {liveMsToEnd < 60 * 60 * 1000 && (
-              <View style={[styles.countdownBarUrgencyDot, { backgroundColor: colors.textInverse }]} />
-            )}
-          </View>
-        )}
-        {isUpcoming && liveMsToStart > 0 && (
-          <View
-            style={[styles.countdownBar, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}
-            accessibilityLiveRegion="polite"
-            accessibilityLabel={`Starts in: ${formatCountdownSentence(liveMsToStart)}`}
-          >
-            <Ionicons name="time-outline" size={16} color={colors.brand} />
-            <Text
-              style={[styles.countdownBarText, { color: colors.textPrimary, fontVariant: ['tabular-nums'] as any }]}
-              numberOfLines={1}
-            >
-              Starts in {formatCountdownSentence(liveMsToStart)}
-            </Text>
-          </View>
-        )}
+        <AuctionCountdownBar
+          isLive={isLive}
+          liveMsToEnd={liveMsToEnd}
+          isUpcoming={isUpcoming}
+          liveMsToStart={liveMsToStart}
+        />
 
         {/* ── Offline banner ──
             Per spec 05 §14: offline state must be designed, not a blank
@@ -993,6 +706,23 @@ export default function AuctionDetailScreen() {
           isStale={needsResync && !isTransitionRefreshing}
           refreshFailed={resyncFailed}
           onRetry={handleRefresh}
+        />
+
+        {/* ── Post-end lifecycle status banners ──
+            Flat, restrained bars using the same countdownBar geometry.
+            One icon + one line of truthful copy. No decorative chrome.
+            Color comes from the theme via the presentation state's
+            colorKey so the banner stays consistent with the dock and
+            primary state sentence. */}
+        <AuctionPostEndBanners
+          isReserveNotMet={isReserveNotMet}
+          isAwaitingPayment={isAwaitingPayment}
+          isPaymentExpired={isPaymentExpired}
+          isSecondChanceOffered={isSecondChanceOffered}
+          isSeller={isSeller}
+          viewerState={viewerState}
+          isSecondChanceRecipient={isSecondChanceRecipient}
+          paymentDeadlineCountdown={paymentDeadlineCountdown}
         />
 
         {/* ── Zone C — Auction transaction surface ──
@@ -1056,7 +786,7 @@ export default function AuctionDetailScreen() {
                   Minimum to lead
                 </Text>
                 <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(auction.minimumNextBidGbp, DEFAULT_CURRENCY_CODE)}
+                  {formatFromFiat(auction.minimumNextBidGbp, currencyCode)}
                 </Text>
               </View>
             )}
@@ -1067,91 +797,24 @@ export default function AuctionDetailScreen() {
             Spec 04 §7: "Terminal: one result state, one next valid
             action." The result state lives here; the dock carries the
             next valid action. */}
-        {isTerminal && !isCancelled && (
-          <View style={styles.terminalResultModule}>
-            {viewerState === 'won' && (
-              <>
-                <Text
-                  style={[
-                    styles.terminalResultTitleWon,
-                    { color: isPaymentConfirmed || isSettled ? colors.success : colors.warning },
-                  ]}
-                >
-                  {isPaymentConfirmed || isSettled ? 'You won' : 'Payment required'}
-                </Text>
-                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
-                  {terminalAmountText}
-                </Text>
-                <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-                  {winnerSubtitle}
-                </Text>
-              </>
-            )}
-            {viewerState === 'lost' && (
-              <>
-                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction ended</Text>
-                <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-                  You didn't win this time
-                </Text>
-                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
-                  {terminalAmountText}
-                </Text>
-                <Pressable
-                  style={styles.discoverLinkInline}
-                  onPress={() => navigation.navigate('AuctionHome')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Discover similar auctions"
-                >
-                  <Ionicons name="search-outline" size={14} color={colors.brand} />
-                  <Text style={[styles.discoverLinkInlineText, { color: colors.brand }]}>Discover similar</Text>
-                  <Ionicons name="chevron-forward" size={12} color={colors.brand} />
-                </Pressable>
-              </>
-            )}
-            {viewerState === 'seller' && hasValidWinner && (
-              <>
-                <Text
-                  style={[
-                    styles.terminalResultTitleSold,
-                    { color: isSettled ? colors.success : isPaymentConfirmed ? colors.brand : colors.warning },
-                  ]}
-                >
-                  {sellerSaleTitle}
-                </Text>
-                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
-                  {terminalAmountText}
-                </Text>
-                <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-                  {sellerSubtitle}
-                </Text>
-              </>
-            )}
-            {viewerState === 'seller' && !hasValidWinner && (
-              <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Ended without bids</Text>
-            )}
-            {viewerState === 'not_participating' && (
-              <>
-                <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction closed</Text>
-                <Text style={[styles.terminalResultValue, { color: colors.textPrimary }]}>
-                  {terminalAmountText}
-                </Text>
-              </>
-            )}
-          </View>
-        )}
-
-        {/* ── Cancelled terminal module ── */}
-        {isCancelled && (
-          <View style={styles.terminalResultModule}>
-            <Text style={[styles.terminalResultTitleLost, { color: colors.textPrimary }]}>Auction cancelled</Text>
-            <Text style={[styles.terminalResultNote, { color: colors.textSecondary }]}>
-              Cancelled by the seller or platform. Any payment or release status appears in your orders.
-            </Text>
-          </View>
-        )}
+        <AuctionTerminalResult
+          isTerminal={isTerminal}
+          isCancelled={isCancelled}
+          viewerState={viewerState}
+          isPaymentConfirmed={isPaymentConfirmed}
+          isSettled={isSettled}
+          hasValidWinner={hasValidWinner}
+          terminalAmountText={terminalAmountText}
+          winnerSubtitle={winnerSubtitle}
+          sellerSaleTitle={sellerSaleTitle}
+          sellerSubtitle={sellerSubtitle}
+          onDiscoverSimilar={() => navigation.navigate('AuctionHome')}
+        />
 
         <View style={[styles.identityExtension, { borderTopColor: colors.borderSubtle }]}>
           <CommerceDetailSellerRow
+            variant="rich"
+            avatarUri={sellerTrustData?.avatar ?? auction.seller.avatarUrl ?? undefined}
             name={auction.seller.displayName ?? auction.seller.username}
             verified={sellerTrustData?.verified}
             ratingLine={
@@ -1159,6 +822,16 @@ export default function AuctionDetailScreen() {
                 ? `${sellerTrustData.rating.toFixed(1)}${sellerTrustData?.reviewCount != null ? ` · ${sellerTrustData.reviewCount} reviews` : ''}`
                 : undefined
             }
+            statsLine={
+              sellerTrustData
+                ? [
+                    sellerTrustData.completedSales != null ? `${sellerTrustData.completedSales} sales` : null,
+                    sellerTrustData.rating != null ? `${sellerTrustData.rating.toFixed(1)}★` : null,
+                    sellerTrustData.responseRate != null ? `${sellerTrustData.responseRate}% response` : null,
+                  ].filter(Boolean).join(' · ') || undefined
+                : undefined
+            }
+            locationLine={sellerTrustData?.location ?? undefined}
             onPress={() => openProfile(navigation, auction.seller.id, currentUser?.id)}
             primaryAction={
               !isSeller
@@ -1206,6 +879,27 @@ export default function AuctionDetailScreen() {
             }
           />
         </View>
+
+        {/* ── Seller cancel action ──
+            Restrained: a muted text link in a secondary position, not a
+            prominent CTA. Only shown to the seller when the auction is
+            still live or upcoming (cancellable states). Destructive
+            intent signalled by the text, not by a red button. */}
+        {isSeller && (isLive || isUpcoming) && (
+          <View style={styles.sellerCancelRow}>
+            <Pressable
+              onPress={handleCancelAuction}
+              disabled={isCancelLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel this auction"
+              style={({ pressed }) => pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }}
+            >
+              <Text style={[styles.sellerCancelText, { color: colors.textMuted }]}>
+                {isCancelLoading ? 'Cancelling…' : 'Cancel auction'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* ── Zone E — Item details ──
             Per spec 02_AUCTION §5: wrap description, category evidence,
@@ -1280,8 +974,11 @@ export default function AuctionDetailScreen() {
           ) : null}
           {!bidActivityError && auction.bidCount > 0 && (
             <Pressable
-              style={styles.bidActivityViewAll}
-              onPress={() => setBidHistorySheetVisible(true)}
+              style={({ pressed }) => [styles.bidActivityViewAll, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
+              onPress={() => {
+                haptics.selection();
+                setBidHistorySheetVisible(true);
+              }}
               accessibilityRole="button"
               accessibilityLabel={`View all ${auction.bidCount} bids`}
             >
@@ -1327,8 +1024,8 @@ export default function AuctionDetailScreen() {
                 id: rel.id,
                 title: rel.title,
                 imageUrl: rel.imageUrl,
-                priceText: formatFromFiat(relPrice, DEFAULT_CURRENCY_CODE),
-                izeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, 'GBP', goldRates), 2) : undefined,
+                priceText: formatFromFiat(relPrice, currencyCode),
+                sizeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, currencyCode, fxRates), 2) : undefined,
                 badgeText: relStateLabel,
                 mode: 'auction' as const,
                 stateText: relStateLabel,
@@ -1339,12 +1036,11 @@ export default function AuctionDetailScreen() {
           />
         )}
 
-        {/* The slim seller row near identity is the primary seller
-            presentation. The full SellerTrustCard is not rendered by
-            default — the slim row already carries Follow/Message and
-            navigates to the full profile on tap. Spec 04: "choose either
-            the slim seller row or the full seller card as the primary
-            presentation; do not show both by default." */}
+        {/* The rich seller row near identity is the primary seller
+            presentation — avatar, name, verification, stats, location,
+            Follow and Message actions. No separate SellerInfoCard is
+            rendered; the rich row carries all seller trust signals and
+            actions. Tapping the row navigates to the full profile. */}
 
         {/* ── Discovery — maximum one related-auctions rail + one Seen in
             Looks rail. Per spec 02_AUCTION §9: no generic duplicate
@@ -1433,6 +1129,160 @@ export default function AuctionDetailScreen() {
           ) : null;
         }
 
+        // ── Post-end lifecycle states ──
+        // reserve_not_met, awaiting_payment, payment_expired,
+        // second_chance_offered. The body status banner communicates the
+        // state; the dock carries the single next valid action. Uses
+        // presentation.stateLabel for the dock badge so the dock and
+        // banner stay in sync.
+        if (isPostEnd) {
+          const postEndBadge = presentation ? (
+            <Text style={[styles.dockStateBadge, { color: colors.textPrimary }]}>
+              {presentation.stateLabel}
+            </Text>
+          ) : undefined;
+
+          // Reserve not met — seller can accept highest bid; others get discovery.
+          if (isReserveNotMet) {
+            if (isSeller && auction.bidCount > 0) {
+              return (
+                <CommerceDetailStateDock
+                  stateBadge={postEndBadge}
+                  value={terminalAmountText}
+                  valueLabel="Highest bid"
+                  primaryAction={{
+                    label: isAcceptHighestBidLoading ? 'Accepting…' : 'Accept highest bid',
+                    onPress: () => { haptics.press(); void handleAcceptHighestBid(); },
+                    loading: isAcceptHighestBidLoading,
+                    disabled: isAcceptHighestBidLoading,
+                    accessibilityLabel: 'Accept the highest bid',
+                  }}
+                  secondaryAction={{
+                    label: 'Manage',
+                    onPress: () => navigation.navigate('SellerAuctionCentre'),
+                    accessibilityLabel: 'Manage auction in seller centre',
+                    primary: false,
+                  }}
+                />
+              );
+            }
+            return (
+              <CommerceDetailStateDock
+                stateBadge={postEndBadge}
+                value={terminalAmountText}
+                valueLabel="Highest bid"
+                primaryAction={{
+                  label: 'Discover similar',
+                  onPress: () => navigation.navigate('AuctionHome'),
+                  accessibilityLabel: 'Discover similar auctions',
+                }}
+              />
+            );
+          }
+
+          // Awaiting payment — winner pays; seller/others wait.
+          if (isAwaitingPayment) {
+            if (viewerState === 'won') {
+              return (
+                <CommerceDetailStateDock
+                  stateBadge={postEndBadge}
+                  value={terminalAmountText}
+                  valueLabel="Amount due"
+                  subtitle={paymentDeadlineCountdown && !paymentDeadlineCountdown.isExpired
+                    ? `Pay within ${paymentDeadlineCountdown.text}`
+                    : undefined}
+                  primaryAction={{
+                    label: isPayLoading ? 'Processing…' : 'Pay now',
+                    onPress: () => { haptics.press(); void handlePayNow(); },
+                    loading: isPayLoading,
+                    disabled: isPayLoading,
+                    accessibilityLabel: 'Pay for this auction now',
+                  }}
+                  secondaryAction={auctionFulfilment?.orderId
+                    ? {
+                        label: 'View order',
+                        onPress: () => navigation.navigate('OrderDetail', { orderId: auctionFulfilment.orderId! }),
+                        accessibilityLabel: 'View auction order',
+                        primary: false,
+                      }
+                    : undefined}
+                />
+              );
+            }
+            if (isSeller) {
+              return (
+                <CommerceDetailStateDock
+                  stateBadge={postEndBadge}
+                  value={terminalAmountText}
+                  valueLabel="Highest bid"
+                  subtitle="Awaiting buyer payment"
+                  primaryAction={{
+                    label: 'Manage auction',
+                    onPress: () => navigation.navigate('SellerAuctionCentre'),
+                    accessibilityLabel: 'Manage auction in seller centre',
+                  }}
+                />
+              );
+            }
+            return (
+              <CommerceDetailStateDock
+                stateBadge={postEndBadge}
+                value={terminalAmountText}
+                valueLabel="Final bid"
+                primaryAction={{
+                  label: 'Discover similar',
+                  onPress: () => navigation.navigate('AuctionHome'),
+                  accessibilityLabel: 'Discover similar auctions',
+                }}
+              />
+            );
+          }
+
+          // Payment expired / second chance offered — recipient gets
+          // accept/decline; everyone else gets discovery.
+          if (isPaymentExpired || isSecondChanceOffered) {
+            if (isSecondChanceRecipient) {
+              return (
+                <CommerceDetailStateDock
+                  stateBadge={postEndBadge}
+                  value={terminalAmountText}
+                  valueLabel="Second chance"
+                  subtitle={paymentDeadlineCountdown && !paymentDeadlineCountdown.isExpired
+                    ? `${paymentDeadlineCountdown.text} to decide`
+                    : undefined}
+                  primaryAction={{
+                    label: isAcceptSecondChanceLoading ? 'Accepting…' : 'Accept second chance',
+                    onPress: () => { haptics.press(); void handleAcceptSecondChance(); },
+                    loading: isAcceptSecondChanceLoading,
+                    disabled: isAcceptSecondChanceLoading,
+                    accessibilityLabel: 'Accept the second chance offer',
+                  }}
+                  secondaryAction={{
+                    label: isDeclineSecondChanceLoading ? 'Declining…' : 'Decline',
+                    onPress: () => { haptics.tap(); void handleDeclineSecondChance(); },
+                    loading: isDeclineSecondChanceLoading,
+                    disabled: isDeclineSecondChanceLoading,
+                    accessibilityLabel: 'Decline the second chance offer',
+                    primary: false,
+                  }}
+                />
+              );
+            }
+            return (
+              <CommerceDetailStateDock
+                stateBadge={postEndBadge}
+                value={terminalAmountText}
+                valueLabel="Final bid"
+                primaryAction={{
+                  label: 'Discover similar',
+                  onPress: () => navigation.navigate('AuctionHome'),
+                  accessibilityLabel: 'Discover similar auctions',
+                }}
+              />
+            );
+          }
+        }
+
         // Seller view — calm state, no primary action.
         if (isSeller) {
           return (
@@ -1459,7 +1309,7 @@ export default function AuctionDetailScreen() {
         // Live bidder — current/min next bid + Place bid (+ optional Buy now).
         if (showBidControls && stateAction && stateAction.primary.type !== 'none') {
           const dockValue = isLive && auction.minimumNextBidGbp > 0
-            ? formatFromFiat(auction.minimumNextBidGbp, DEFAULT_CURRENCY_CODE)
+            ? formatFromFiat(auction.minimumNextBidGbp, currencyCode)
             : priceText;
           const dockValueLabel = isLive && auction.minimumNextBidGbp > 0
             ? 'Min next bid'
@@ -1493,7 +1343,7 @@ export default function AuctionDetailScreen() {
                     HapticPatterns.bidPlaced();
                     openBidSheet();
                   } else if (primaryType === 'watchAuction') {
-                    haptics.tap();
+                    haptics.selection();
                     void handleToggleWatch();
                   } else if (primaryType === 'viewSimilar') {
                     haptics.tap();
@@ -1530,7 +1380,7 @@ export default function AuctionDetailScreen() {
                       onPress: () => { haptics.press(); openBuyNowSheet(); },
                       disabled: isBuyNowLoading,
                       loading: isBuyNowLoading,
-                      accessibilityLabel: `Buy now for ${formatFromFiat(auction.buyNowPriceGbp ?? 0, DEFAULT_CURRENCY_CODE)}`,
+                      accessibilityLabel: `Buy now for ${formatFromFiat(auction.buyNowPriceGbp ?? 0, currencyCode)}`,
                     }
                   : undefined
               }
@@ -1543,85 +1393,18 @@ export default function AuctionDetailScreen() {
 
       {/* ── Overflow sheet — Watchlist, Save to collection, wishlist (lower-frequency
           actions kept off the hero per spec 04 §1). ── */}
-      <BottomSheet
+      <AuctionOverflowSheet
         visible={overflowVisible}
         onDismiss={() => setOverflowVisible(false)}
-        snapPoint={0.4}
-      >
-        <View style={styles.sheetHeader}>
-          <Headline style={styles.sheetTitle}>More actions</Headline>
-        </View>
-        <Pressable
-          style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
-          onPress={() => {
-            setOverflowVisible(false);
-            handleToggleWatch();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={auction.isWatched ? 'Remove from watchlist' : (effectiveState === 'upcoming' ? 'Get notified when this goes live' : 'Add to watchlist')}
-          accessibilityState={{ selected: auction.isWatched }}
-        >
-          <Ionicons
-            name={auction.isWatched ? 'eye' : 'eye-outline'}
-            size={20}
-            color={auction.isWatched ? colors.brand : colors.textPrimary}
-          />
-          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
-            {auction.isWatched ? 'Remove from watchlist' : (effectiveState === 'upcoming' ? 'Get notified when live' : 'Add to watchlist')}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
-          onPress={() => {
-            setOverflowVisible(false);
-            social.openShare();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Share auction"
-        >
-          <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
-          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>Share auction</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
-          onPress={() => {
-            setOverflowVisible(false);
-            guardedOpenCollectionPicker();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={social.isSavedToCollection ? 'Saved to collection' : 'Save to collection'}
-          accessibilityState={{ selected: social.isSavedToCollection }}
-        >
-          <Ionicons
-            name={social.isSavedToCollection ? 'bookmark' : 'bookmark-outline'}
-            size={20}
-            color={social.isSavedToCollection ? colors.brand : colors.textPrimary}
-          />
-          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
-            {social.isSavedToCollection ? 'Saved to collection' : 'Save to collection'}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.overflowRow, { borderColor: colors.borderSubtle }]}
-          onPress={() => {
-            setOverflowVisible(false);
-            guardedToggleLike();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={social.isLiked ? 'Remove from wishlist' : 'Add to wishlist'}
-          accessibilityState={{ selected: social.isLiked }}
-        >
-          <Ionicons
-            name={social.isLiked ? 'heart' : 'heart-outline'}
-            size={20}
-            color={social.isLiked ? colors.danger : colors.textPrimary}
-          />
-          <Text style={[styles.overflowRowText, { color: colors.textPrimary }]}>
-            {social.isLiked ? 'Remove from wishlist' : 'Add to wishlist'}
-          </Text>
-        </Pressable>
-        <View style={{ height: Space.md }} />
-      </BottomSheet>
+        isWatched={auction.isWatched}
+        isUpcoming={isUpcoming}
+        isSavedToCollection={social.isSavedToCollection}
+        isLiked={social.isLiked}
+        onToggleWatch={handleToggleWatch}
+        onShare={social.openShare}
+        onOpenCollectionPicker={guardedOpenCollectionPicker}
+        onToggleLike={guardedToggleLike}
+      />
 
       {/* ── Bid transaction sheet ── */}
       {auction && (
@@ -1645,9 +1428,9 @@ export default function AuctionDetailScreen() {
                 : countdown.text,
           }}
           currencyCode={currencyCode}
-          goldRates={goldRates}
+          fxRates={fxRates}
           formatFromFiat={formatFromFiat}
-          onSubmitBid={handleSubmitBid}
+          onSubmitBid={handleTrackBid}
           onRefreshDetail={refreshDetailForTransaction}
           onReviewBuyNow={() => {
             setBidSheetVisible(false);
@@ -1673,6 +1456,7 @@ export default function AuctionDetailScreen() {
             isSeller,
           }}
           currencyCode={currencyCode}
+          fxRates={fxRates}
           formatFromFiat={formatFromFiat}
           onSubmitBuyNow={handleSubmitBuyNow}
           onRefreshDetail={refreshDetailForTransaction}
@@ -1680,162 +1464,22 @@ export default function AuctionDetailScreen() {
       )}
 
       {/* ── Bid history bottom sheet ── */}
-      <BottomSheet
+      <AuctionBidHistorySheet
         visible={bidHistorySheetVisible}
         onDismiss={() => setBidHistorySheetVisible(false)}
-        snapPoint={0.6}
-      >
-        <View style={styles.sheetHeader}>
-          <Headline style={styles.sheetTitle}>Bid history</Headline>
-          {auction && auction.bidCount > 0 && (
-            <Meta style={[styles.sheetSubtitle, { color: colors.textMuted }]}>{auction.bidCount} bids</Meta>
-          )}
-        </View>
-
-        {bidActivityError && (
-          <View style={[styles.subSectionError, { backgroundColor: colors.surfaceAlt }]}>
-            <Text style={[styles.subSectionErrorText, { color: colors.textMuted }]}>Couldn't load bid history</Text>
-            <Pressable
-              onPress={() => { setBidActivityError(false); void fetchDetail(); }}
-              style={({ pressed }) => pressed && { opacity: 0.5 }}
-              accessibilityRole="button"
-              accessibilityLabel="Retry loading bid history"
-            >
-              <Text style={[styles.retryText, { color: colors.brand }]}>Retry</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {!bidActivityError && bidActivity.length === 0 && (
-          <Text style={[styles.noBidsText, { color: colors.textMuted }]}>No bids placed yet.</Text>
-        )}
-
-        {!bidActivityError && bidActivity.length > 0 && (
-          <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
-            <View style={styles.bidList}>
-              {bidActivity.map((bid, index) => {
-                const row = formatBidActivityRow(bid, index, formatFromFiat, serverNowRef.current);
-                return (
-                  <View
-                    key={bid.id}
-                    style={[styles.bidRow, { borderBottomColor: colors.border }, row.isTopBid && { backgroundColor: `${colors.success}08` }]}
-                  >
-                    <View style={styles.bidRowLeft}>
-                      {row.isViewer && (
-                        <View style={[styles.viewerBadge, { backgroundColor: colors.brand }]}>
-                          <Text style={[styles.viewerBadgeText, { color: colors.textInverse }]}>YOU</Text>
-                        </View>
-                      )}
-                      <View style={styles.bidRowInfo}>
-                        <View style={styles.bidRowNameLine}>
-                          <Text style={[styles.bidderName, { color: colors.textSecondary }]}>{row.bidderLabel}</Text>
-                          {row.isTopBid && (
-                            <Text style={[styles.topBidLabel, { color: colors.success }]}>Top bid</Text>
-                          )}
-                        </View>
-                        {row.relativeTime && (
-                          <Text style={[styles.bidRelativeTime, { color: colors.textMuted }]}>{row.relativeTime}</Text>
-                        )}
-                      </View>
-                    </View>
-                    <View style={styles.bidRowRight}>
-                      <Text style={[styles.bidAmount, { color: colors.textPrimary }]}>{row.amountText}</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
-        )}
-      </BottomSheet>
+        bidActivity={bidActivity}
+        bidActivityError={bidActivityError}
+        bidCount={auction.bidCount}
+        serverNow={serverNowRef.current}
+        formatFromFiat={formatFromFiat}
+        onRetry={() => { setBidActivityError(false); void fetchDetail(); }}
+      />
 
       {/* ── How bidding works bottom sheet ── */}
-      <BottomSheet
+      <AuctionRulesSheet
         visible={rulesSheetVisible}
         onDismiss={() => setRulesSheetVisible(false)}
-        snapPoint={0.65}
-      >
-        <View style={styles.sheetHeader}>
-          <Headline style={styles.sheetTitle}>How bidding works</Headline>
-        </View>
-        <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
-          <View style={styles.rulesContainer}>
-            <View style={styles.ruleItem}>
-              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
-                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>1</Text>
-              </View>
-              <View style={styles.ruleContent}>
-                <BodyEmphasis style={styles.ruleTitle}>Place your bid</BodyEmphasis>
-                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-                  Enter an amount equal to or above the minimum next bid shown. The system accepts your bid instantly if it's higher than the current top bid.
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.ruleItem}>
-              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
-                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>2</Text>
-              </View>
-              <View style={styles.ruleContent}>
-                <BodyEmphasis style={styles.ruleTitle}>Outbid alerts</BodyEmphasis>
-                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-                  If another bidder places a higher bid, you'll be notified immediately. Come back and place a new bid to reclaim the top spot.
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.ruleItem}>
-              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
-                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>3</Text>
-              </View>
-              <View style={styles.ruleContent}>
-                <BodyEmphasis style={styles.ruleTitle}>Winning the auction</BodyEmphasis>
-                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-                  When the auction ends, the highest eligible bidder wins. Payment and fulfilment actions appear only when the auction provides them.
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.ruleItem}>
-              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
-                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>4</Text>
-              </View>
-              <View style={styles.ruleContent}>
-                <BodyEmphasis style={styles.ruleTitle}>Buy Now option</BodyEmphasis>
-                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-                  Some auctions include a Buy Now price. Confirming it records the fixed-price winning bid and ends the auction immediately.
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.ruleItem}>
-              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
-                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>5</Text>
-              </View>
-              <View style={styles.ruleContent}>
-                <BodyEmphasis style={styles.ruleTitle}>Reserve prices</BodyEmphasis>
-                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-                  Some auctions have a hidden reserve price set by the seller. If the highest bid hasn't met the reserve when the auction ends, the seller isn't obligated to sell. The "Reserve met" badge means the current top bid has reached or exceeded this threshold.
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.ruleItem}>
-              <View style={[styles.ruleNumber, { backgroundColor: colors.brand }]}>
-                <Text style={[styles.ruleNumberText, { color: colors.textInverse }]}>6</Text>
-              </View>
-              <View style={styles.ruleContent}>
-                <BodyEmphasis style={styles.ruleTitle}>Currency & payments</BodyEmphasis>
-                <Text style={[styles.ruleDescription, { color: colors.textSecondary }]}>
-                  Bids are placed in GBP and automatically converted to your local currency for display. Final settlement uses the 1ZE platform value.
-                </Text>
-              </View>
-            </View>
-
-            <View style={{ height: Space.xl }} />
-          </View>
-        </ScrollView>
-      </BottomSheet>
+      />
 
       {/* ── Fullscreen media viewer ── */}
       <FullscreenMediaViewer
@@ -1857,55 +1501,27 @@ export default function AuctionDetailScreen() {
         onDismiss={social.closeShare}
         url={`https://thryftverse.com/auction/${auction.id}`}
         title={auction.title}
+        contentType="auction"
+        contentId={auction.id}
+      />
+
+      <ConfirmationSheet
+        visible={!!cancelAuctionConfirmation}
+        onDismiss={dismissCancelAuctionConfirmation}
+        title={cancelAuctionConfirmation?.title ?? ''}
+        message={cancelAuctionConfirmation?.message}
+        confirmLabel={cancelAuctionConfirmation?.confirmLabel}
+        cancelLabel={cancelAuctionConfirmation?.cancelLabel}
+        onConfirm={() => {
+          const req = cancelAuctionConfirmation;
+          dismissCancelAuctionConfirmation();
+          if (req) void req.onConfirm();
+        }}
+        variant={cancelAuctionConfirmation?.variant ?? 'danger'}
       />
     </Reanimated.View>
   );
 }
-
-function resolveEffectiveState(
-  auction: AuctionDetailType,
-  clockMs: number,
-): 'cancelled' | 'settled' | 'upcoming' | 'live' | 'ended' {
-  // 1. Cancelled — highest precedence
-  if (auction.cancelledAt) return 'cancelled';
-  // 2. Settled — explicit settlement
-  if (auction.settledAt) return 'settled';
-  // 3. Winner set or Buy Now terminal — ended regardless of dates
-  if (auction.winnerBidderId) return 'ended';
-  if (auction.terminalReason === 'buy_now') return 'ended';
-  // 4. Authoritative lifecycle from backend
-  if (auction.lifecycle === 'ended') return 'ended';
-  if (auction.lifecycle === 'cancelled') return 'cancelled';
-  if (auction.lifecycle === 'settled') return 'settled';
-  // 5. Scheduled end according to server clock
-  const endsMs = new Date(auction.endsAt).getTime();
-  const startsMs = new Date(auction.startsAt).getTime();
-  if (clockMs >= endsMs) return 'ended';
-  // 6. Live
-  if (clockMs >= startsMs) return 'live';
-  // 7. Upcoming
-  return 'upcoming';
-}
-
-// ── Countdown sentence formatter ──
-// Produces a compact "12m 08s" / "3h 15m" / "2d 5h" string for the
-// primary state sentence and dock subtitle. Uses tabular-friendly
-// zero-padded seconds to prevent per-second layout shift.
-function formatCountdownSentence(ms: number): string {
-  if (ms <= 0) return 'Ended';
-  const totalSeconds = Math.floor(ms / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
-}
-
-// Viewer-state treatment and title colour maps were dead code from the
-// pre-reconstruction implementation. The shared CommerceDetailTransactionSurface
-// and inline viewer-state rendering now own this logic.
 
 const styles = StyleSheet.create({
   container: {
@@ -1944,6 +1560,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     letterSpacing: TypographyV2.priceList.letterSpacing,
     fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
   bidActivityViewAll: {
     flexDirection: 'row',
@@ -2014,6 +1631,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     letterSpacing: TypographyV2.priceHero.letterSpacing,
     fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
   terminalResultNote: {
     fontSize: TypographyV2.body.size,
@@ -2087,6 +1705,7 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
   transactionMinRow: {
     flexDirection: 'row',
@@ -2107,6 +1726,7 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.priceList.lineHeight,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
   transactionStatusRow: {
     gap: Space.xs,
@@ -2212,6 +1832,20 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     fontSize: TypographyV2.body.size,
     lineHeight: TypographyV2.body.lineHeight,
+  },
+  // ── Seller cancel action ──
+  // Restrained: a muted text link centered in a secondary position.
+  // Not a prominent CTA — destructive intent is communicated by the
+  // text itself, not by a red button or card container.
+  sellerCancelRow: {
+    alignItems: 'center',
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+  },
+  sellerCancelText: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
   },
   // ── Bid history sheet rows ──
   // Per 2026 Apple HIG: compact flat rows, not cards. No outer

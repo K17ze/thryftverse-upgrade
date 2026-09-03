@@ -72,6 +72,10 @@ export function CreatorToggle({
   const haptic = useHaptic();
   const reduceMotion = useReducedMotion();
 
+  if (__DEV__ && !accessibilityLabel && !label) {
+    console.warn('CreatorToggle requires an accessibilityLabel or label prop for screen reader users.');
+  }
+
   const toggleSV = useSharedValue(value ? 1 : 0);
   const springConfig = reduceMotion ? REDUCED_SPRING : Motion.spring.press;
 
@@ -110,6 +114,7 @@ export function CreatorToggle({
       disabled={disabled}
       accessibilityRole="switch"
       accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityValue={{ text: value ? 'On' : 'Off' }}
       accessibilityState={{
         disabled: disabled || undefined,
         checked: value,
@@ -158,21 +163,8 @@ const styles = StyleSheet.create({
   track: {
     justifyContent: 'center',
     padding: 1,
-    // Subtle shadow for depth
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
   },
-  thumb: {
-    // Subtle elevation — thumb lifts above the track
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
-  },
+  thumb: {},
 });
 
 export default CreatorToggle;

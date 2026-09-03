@@ -1,19 +1,6 @@
 /**
  * GradientEditor — gradient stop editor for background fills and shapes.
- *
- * Per spec 04_COLOR_SYSTEM_ZERO_GAP §9:
- * - 2-4 stops;
- * - add/remove;
- * - draggable stop positions;
- * - angle;
- * - alpha;
- * - reverse;
- * - linear/radial if supported;
- * - media-derived suggestions.
- *
- * Uses react-native-gesture-handler for drag gestures on stop positions
- * and react-native-reanimated for smooth feedback. Per-stop color editing
- * uses the CreatorColorPicker in a compact popover.
+ * Supports 2-4 stops, draggable positions, angle, reverse, and per-stop color editing.
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
@@ -24,8 +11,7 @@ import {
   Pressable,
   LayoutChangeEvent,
   ViewStyle,
-  ColorValue,
-} from 'react-native';
+  ColorValue } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -33,12 +19,12 @@ import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  Easing,
-  runOnJS,
-} from 'react-native-reanimated';
+  runOnJS } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { IconGrammar } from '../../theme/designTokens';
+import { Motion } from '../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useHaptic } from '../../hooks/useHaptic';
 import { PressScale } from '../CreatorAnimations';
@@ -50,7 +36,7 @@ import type { GradientDefinition, GradientStop, CreatorColor } from './ColorType
 // ── Constants ────────────────────────────────────────────────────────
 const MIN_STOPS = 2;
 const MAX_STOPS = 4;
-const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
+const SNAP_TIMING = { duration: Motion.duration.snapToGuide, easing: Motion.easing.entrance };
 // Canvas-specific geometry — these describe the gradient bar and draggable
 // stop thumbs. No design token maps to them; they are interaction geometry,
 // not layout spacing or type scale.
@@ -83,8 +69,7 @@ function StopThumb({
   isSelected,
   onSelect,
   onDragChange,
-  onDragCommit,
-}: StopThumbProps) {
+  onDragCommit }: StopThumbProps) {
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
   // Shared value (not useRef) so the worklet can read the measured width
@@ -127,14 +112,12 @@ function StopThumb({
   const thumbStyle = useAnimatedStyle(() => {
     if (reduceMotion) {
       return {
-        transform: [{ translateX: thumbX.value - STOP_THUMB_SIZE / 2 }],
-      };
+        transform: [{ translateX: thumbX.value - STOP_THUMB_SIZE / 2 }] };
     }
     return {
       transform: [
         { translateX: withTiming(thumbX.value - STOP_THUMB_SIZE / 2, SNAP_TIMING) },
-      ],
-    };
+      ] };
   });
 
   return (
@@ -146,8 +129,7 @@ function StopThumb({
           {
             backgroundColor: toHexString(stop.color),
             borderColor: isSelected ? colors.brand : colors.textInverse,
-            borderWidth: isSelected ? Stroke.emphasis : Stroke.standard,
-          },
+            borderWidth: isSelected ? Stroke.emphasis : Stroke.standard },
         ]}
         accessibilityRole="adjustable"
         accessibilityLabel={`Gradient stop at ${Math.round(stop.position * 100)} percent`}
@@ -155,8 +137,7 @@ function StopThumb({
           min: 0,
           max: 100,
           now: Math.round(stop.position * 100),
-          text: `Position ${Math.round(stop.position * 100)} percent`,
-        }}
+          text: `Position ${Math.round(stop.position * 100)} percent` }}
       />
     </GestureDetector>
   );
@@ -167,8 +148,7 @@ export function GradientEditor({
   gradient,
   onChange,
   onCommit,
-  style,
-}: GradientEditorProps) {
+  style }: GradientEditorProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useGradientEditorStyles(colors);
@@ -215,10 +195,6 @@ export function GradientEditor({
 
   const handleStopDragChange = useCallback((position: number) => {
     if (!selectedStopId) return;
-    const newStops = gradient.stops.map((s) =>
-      s.id === selectedStopId ? { ...s, position: normalize({ ...s.color, r: position }).r } : s,
-    );
-    // Actually just set position directly
     const updatedStops = gradient.stops.map((s) =>
       s.id === selectedStopId ? { ...s, position } : s,
     );
@@ -257,13 +233,11 @@ export function GradientEditor({
     const newStop: GradientStop = {
       id: makeStableId('stop'),
       position: bestPos,
-      color: newColor,
-    };
+      color: newColor };
 
     const newGradient = {
       ...gradient,
-      stops: [...gradient.stops, newStop],
-    };
+      stops: [...gradient.stops, newStop] };
     setSelectedStopId(newStop.id);
     updateGradient(newGradient, true);
   }, [gradient, haptic, updateGradient]);
@@ -281,8 +255,7 @@ export function GradientEditor({
     haptic.selection();
     const reversedStops = gradient.stops.map((s) => ({
       ...s,
-      position: 1 - s.position,
-    }));
+      position: 1 - s.position }));
     updateGradient({ ...gradient, stops: reversedStops }, true);
   }, [gradient, haptic, updateGradient]);
 
@@ -340,12 +313,11 @@ export function GradientEditor({
             {gradient.stops.map((stop) => (
               <Pressable
                 key={`thumb-wrapper-${stop.id}`}
-                accessibilityLabel="Gradient stop"
+                accessible={false}
                 onPress={() => {
                   haptic.selection();
                   setSelectedStopId(stop.id);
                 }}
-              accessibilityRole="checkbox"
               >
                 <StopThumb
                   stop={stop}
@@ -501,14 +473,12 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
   const thumbStyle = useAnimatedStyle(() => {
     if (reduceMotion) {
       return {
-        transform: [{ translateX: thumbX.value - THUMB_SIZE / 2 }],
-      };
+        transform: [{ translateX: thumbX.value - THUMB_SIZE / 2 }] };
     }
     return {
       transform: [
         { translateX: withTiming(thumbX.value - THUMB_SIZE / 2, SNAP_TIMING) },
-      ],
-    };
+      ] };
   });
 
   return (
@@ -522,8 +492,7 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
           min: 0,
           max: 360,
           now: Math.round(angle),
-          text: `${Math.round(angle)} degrees`,
-        }}
+          text: `${Math.round(angle)} degrees` }}
       >
         <View style={[styles.angleTrack, { backgroundColor: colors.border, height: TRACK_HEIGHT }]} />
         <Reanimated.View
@@ -534,9 +503,7 @@ function AngleSlider({ angle, width, onChange, onCommit }: AngleSliderProps) {
               width: THUMB_SIZE,
               height: THUMB_SIZE,
               borderRadius: THUMB_SIZE / 2,
-              backgroundColor: colors.brand,
-              borderColor: colors.textInverse,
-            },
+              backgroundColor: colors.brand },
           ]}
         />
       </View>
@@ -562,106 +529,35 @@ function interpolateGradientColor(gradient: GradientDefinition, position: number
         r: a.color.r + (b.color.r - a.color.r) * t,
         g: a.color.g + (b.color.g - a.color.g) * t,
         b: a.color.b + (b.color.b - a.color.b) * t,
-        a: a.color.a + (b.color.a - a.color.a) * t,
-      });
+        a: a.color.a + (b.color.a - a.color.a) * t });
     }
   }
   return sorted[sorted.length - 1]!.color;
 }
 
 // ── Styles ───────────────────────────────────────────────────────────
+// Static styles — only keys used by StopThumb and AngleSlider (which don't
+// call useGradientEditorStyles). All other keys are theme-dependent and
+// live in useGradientEditorStyles below.
 const styles = StyleSheet.create({
-  container: {
-    gap: Space.sm,
-  },
-  barContainer: {
-    gap: Space.xs,
-  },
-  bar: {
-    height: GRADIENT_BAR_HEIGHT,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    borderWidth: Stroke.hairline,
-    borderColor: 'rgba(0,0,0,0.1)',
-  },
-  thumbsOverlay: {
-    position: 'relative',
-    height: STOP_THUMB_SIZE,
-    marginTop: Space.xs,
-  },
   stopThumb: {
     position: 'absolute',
     top: 0,
     width: STOP_THUMB_SIZE,
     height: STOP_THUMB_SIZE,
     borderRadius: STOP_THUMB_SIZE / 2,
-    borderWidth: Stroke.standard,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  stopControls: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    minHeight: Control.hit,
-    alignItems: 'center',
-  },
-  controlBtn: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlBtnDisabled: {
-    opacity: 0.4,
-  },
-  controlBtnActive: {
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
-  angleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  angleLabel: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    color: '#666666',
-  },
-  angleValue: {
-    fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-    minWidth: 40,
-    textAlign: 'right',
-  },
+    borderWidth: Stroke.standard },
   angleSlider: {
     flex: 1,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   angleTrack: {
     position: 'absolute',
     left: 0,
     right: 0,
-    // Track height is set inline via TRACK_HEIGHT; borderRadius keeps the bar
-    // a pill — canvas-specific, no token.
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   angleThumb: {
     position: 'absolute',
-    top: Space.xs,
-    borderWidth: Stroke.emphasis,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  colorPickerSection: {
-    marginTop: Space.sm,
-  },
+    top: Space.xs },
 });
 
 // ── Theme-dependent styles ───────────────────────────────────────────
@@ -670,63 +566,50 @@ function useGradientEditorStyles(colors: ThemeColors) {
     () =>
       StyleSheet.create({
         container: {
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         barContainer: {
-          gap: Space.xs,
-        },
+          gap: Space.xs },
         bar: {
           height: GRADIENT_BAR_HEIGHT,
           borderRadius: Radius.md,
           overflow: 'hidden',
           borderWidth: Stroke.hairline,
-          borderColor: colors.borderSubtle,
-        },
+          borderColor: colors.borderSubtle },
         thumbsOverlay: {
           position: 'relative',
           height: STOP_THUMB_SIZE,
-          marginTop: Space.xs,
-        },
+          marginTop: Space.xs },
         stopControls: {
           flexDirection: 'row',
           gap: Space.sm,
           minHeight: Control.hit,
-          alignItems: 'center',
-        },
+          alignItems: 'center' },
         controlBtn: {
           width: Control.hit,
           height: Control.hit,
           borderRadius: Radius.md,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         controlBtnDisabled: {
-          opacity: 0.4,
-        },
+          opacity: 0.4 },
         controlBtnActive: {
-          backgroundColor: colors.brandSubtle,
-        },
+          backgroundColor: colors.brandSubtle },
         angleRow: {
           flexDirection: 'row',
           alignItems: 'center',
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         angleLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.caption.size,
-          color: colors.textSecondary,
-        },
+          fontSize: TypographyV2.meta.size,
+          color: colors.textSecondary },
         angleValue: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.body.size,
+          fontSize: TypographyV2.body.size,
           color: colors.textPrimary,
           minWidth: 40,
-          textAlign: 'right',
-        },
+          textAlign: 'right' },
         colorPickerSection: {
-          marginTop: Space.sm,
-        },
-      }),
+          marginTop: Space.sm } }),
     [colors],
   );
 }

@@ -4,7 +4,8 @@ import type { User } from '../domain/user';
 import { MOCK_LISTINGS, MOCK_USERS } from './mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 
-import { Type } from '../theme/designTokens';
+import {} from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 export interface PosterStoryOverlay {
   text: string;
   color: string;
@@ -98,127 +99,115 @@ export const POSTER_TEMPLATES: PosterTemplate[] = [
     id: 'tpl_fresh_drop', name: 'Fresh Drop', category: 'drop', layout: 'single',
     backgroundColor: '#1a1a2e', filter: 'clarendon',
     textLayers: [
-      { text: 'FRESH DROP', color: '#ffffff', fontFamily: 'bold', fontSize: Type.display.size, x: 40, y: 120 },
+      { text: 'FRESH DROP', color: '#ffffff', fontFamily: 'bold', fontSize: TypographyV2.display.size, x: 40, y: 120 },
       { text: 'Just listed', color: '#C9A46A', fontFamily: 'modern', fontSize: 18, x: 40, y: 170 },
     ],
     stickers: [{ type: 'emoji', content: '🔥', x: 280, y: 120 }],
-    thumbnailColor: '#1a1a2e', icon: 'flame',
-  },
+    thumbnailColor: '#1a1a2e', icon: 'flame' },
   {
     id: 'tpl_auction_live', name: 'Auction Live', category: 'auction', layout: 'single',
     backgroundColor: '#0f3460', filter: 'juno',
     textLayers: [
-      { text: 'LIVE AUCTION', color: '#9b0202', fontFamily: 'bold', fontSize: Type.priceHero.size, x: 30, y: 100 },
+      { text: 'LIVE AUCTION', color: '#9b0202', fontFamily: 'bold', fontSize: TypographyV2.priceHero.size, x: 30, y: 100 },
       { text: 'Bid now!', color: '#ffffff', fontFamily: 'classic', fontSize: 18, x: 30, y: 150 },
     ],
     stickers: [
       { type: 'countdown', content: 'Ends in 2h', color: '#9b0202', x: 30, y: 200 },
       { type: 'emoji', content: '🔨', x: 300, y: 100 },
     ],
-    thumbnailColor: '#0f3460', icon: 'hammer',
-  },
+    thumbnailColor: '#0f3460', icon: 'hammer' },
   {
     id: 'tpl_coown_open', name: 'Co-Own Open', category: 'coown', layout: 'single',
     backgroundColor: '#16213e', filter: 'ludwig',
     textLayers: [
       { text: 'CO-OWN', color: '#215634', fontFamily: 'bold', fontSize: 30, x: 40, y: 110 },
-      { text: 'Split the cost', color: '#ffffff', fontFamily: 'modern', fontSize: Type.body.size, x: 40, y: 160 },
+      { text: 'Split the cost', color: '#ffffff', fontFamily: 'modern', fontSize: TypographyV2.body.size, x: 40, y: 160 },
     ],
     stickers: [{ type: 'emoji', content: '🤝', x: 290, y: 110 }],
-    thumbnailColor: '#16213e', icon: 'people',
-  },
+    thumbnailColor: '#16213e', icon: 'people' },
   {
     id: 'tpl_price_drop', name: 'Price Drop', category: 'sale', layout: 'single',
     backgroundColor: '#7B0E1E', filter: 'clarendon',
     textLayers: [
-      { text: 'PRICE DROP', color: '#ffffff', fontFamily: 'bold', fontSize: Type.display.size, x: 30, y: 120, backgroundColor: 'rgba(0,0,0,0.3)' },
-      { text: 'Was £120  →  Now £80', color: '#C9A46A', fontFamily: 'classic', fontSize: Type.priceList.size, x: 30, y: 180 },
+      { text: 'PRICE DROP', color: '#ffffff', fontFamily: 'bold', fontSize: TypographyV2.display.size, x: 30, y: 120, backgroundColor: 'rgba(0,0,0,0.3)' },
+      { text: 'Was £120  →  Now £80', color: '#C9A46A', fontFamily: 'classic', fontSize: TypographyV2.priceList.size, x: 30, y: 180 },
     ],
     stickers: [{ type: 'emoji', content: '📉', x: 300, y: 120 }],
-    thumbnailColor: '#7B0E1E', icon: 'trending-down',
-  },
+    thumbnailColor: '#7B0E1E', icon: 'trending-down' },
   {
     id: 'tpl_new_tags', name: 'New With Tags', category: 'drop', layout: 'single',
     backgroundColor: '#1C5631', filter: 'perpetua',
     textLayers: [
       { text: 'NEW WITH TAGS', color: '#ffffff', fontFamily: 'bold', fontSize: 26, x: 30, y: 120 },
-      { text: 'Never worn', color: '#16213e', fontFamily: 'modern', fontSize: Type.body.size, x: 30, y: 170 },
+      { text: 'Never worn', color: '#16213e', fontFamily: 'modern', fontSize: TypographyV2.body.size, x: 30, y: 170 },
     ],
     stickers: [{ type: 'emoji', content: '🏷️', x: 300, y: 120 }],
-    thumbnailColor: '#1C5631', icon: 'pricetag',
-  },
+    thumbnailColor: '#1C5631', icon: 'bag-handle-outline' },
   {
     id: 'tpl_vintage', name: 'Vintage Find', category: 'general', layout: 'single',
     backgroundColor: '#d4a76a', filter: 'reyes',
     textLayers: [
-      { text: 'VINTAGE', color: '#3d2b1f', fontFamily: 'typewriter', fontSize: Type.display.size, x: 40, y: 120 },
-      { text: 'One of a kind', color: '#5a3e2b', fontFamily: 'typewriter', fontSize: Type.body.size, x: 40, y: 170 },
+      { text: 'VINTAGE', color: '#3d2b1f', fontFamily: 'typewriter', fontSize: TypographyV2.display.size, x: 40, y: 120 },
+      { text: 'One of a kind', color: '#5a3e2b', fontFamily: 'typewriter', fontSize: TypographyV2.body.size, x: 40, y: 170 },
     ],
     stickers: [{ type: 'emoji', content: '🕰️', x: 300, y: 120 }],
-    thumbnailColor: '#d4a76a', icon: 'time',
-  },
+    thumbnailColor: '#d4a76a', icon: 'time' },
   {
     id: 'tpl_flash_sale', name: 'Flash Sale', category: 'sale', layout: 'single',
     backgroundColor: '#9A6B7A', filter: 'clarendon',
     textLayers: [
-      { text: 'FLASH SALE', color: '#ffffff', fontFamily: 'bold', fontSize: Type.display.size, x: 30, y: 100 },
+      { text: 'FLASH SALE', color: '#ffffff', fontFamily: 'bold', fontSize: TypographyV2.display.size, x: 30, y: 100 },
       { text: '24 hours only', color: '#ffffff', fontFamily: 'modern', fontSize: 18, x: 30, y: 155 },
     ],
     stickers: [
       { type: 'countdown', content: '23:59:59', color: '#ffffff', x: 30, y: 200 },
       { type: 'emoji', content: '⚡', x: 300, y: 100 },
     ],
-    thumbnailColor: '#9A6B7A', icon: 'flash',
-  },
+    thumbnailColor: '#9A6B7A', icon: 'flash' },
   {
     id: 'tpl_mystery', name: 'Mystery Box', category: 'general', layout: 'single',
     backgroundColor: '#6B3245', filter: 'slumber',
     textLayers: [
-      { text: 'MYSTERY BOX', color: '#ffffff', fontFamily: 'bold', fontSize: Type.priceHero.size, x: 30, y: 120 },
-      { text: 'Worth £200+ inside', color: '#C9A46A', fontFamily: 'modern', fontSize: Type.body.size, x: 30, y: 170 },
+      { text: 'MYSTERY BOX', color: '#ffffff', fontFamily: 'bold', fontSize: TypographyV2.priceHero.size, x: 30, y: 120 },
+      { text: 'Worth £200+ inside', color: '#C9A46A', fontFamily: 'modern', fontSize: TypographyV2.body.size, x: 30, y: 170 },
     ],
     stickers: [{ type: 'emoji', content: '🎁', x: 300, y: 120 }],
-    thumbnailColor: '#6B3245', icon: 'gift',
-  },
+    thumbnailColor: '#6B3245', icon: 'gift' },
   {
     id: 'tpl_quick_sell', name: 'Quick Sell', category: 'sale', layout: 'split-h',
     backgroundColor: '#8A6A3F', filter: 'juno',
     textLayers: [
-      { text: 'QUICK SELL', color: '#ffffff', fontFamily: 'bold', fontSize: Type.priceHero.size, x: 30, y: 80 },
+      { text: 'QUICK SELL', color: '#ffffff', fontFamily: 'bold', fontSize: TypographyV2.priceHero.size, x: 30, y: 80 },
     ],
     stickers: [{ type: 'emoji', content: '💨', x: 280, y: 80 }],
-    thumbnailColor: '#8A6A3F', icon: 'speedometer',
-  },
+    thumbnailColor: '#8A6A3F', icon: 'speedometer' },
   {
     id: 'tpl_bundle', name: 'Bundle Deal', category: 'sale', layout: 'grid-2x2',
     backgroundColor: '#06489A', filter: 'lark',
     textLayers: [
-      { text: 'BUNDLE', color: '#ffffff', fontFamily: 'bold', fontSize: Type.priceHero.size, x: 30, y: 80 },
+      { text: 'BUNDLE', color: '#ffffff', fontFamily: 'bold', fontSize: TypographyV2.priceHero.size, x: 30, y: 80 },
       { text: '3 for £50', color: '#0f3460', fontFamily: 'classic', fontSize: 18, x: 30, y: 130 },
     ],
     stickers: [{ type: 'emoji', content: '📦', x: 280, y: 80 }],
-    thumbnailColor: '#06489A', icon: 'cube',
-  },
+    thumbnailColor: '#06489A', icon: 'layers-outline' },
   {
     id: 'tpl_rare', name: 'Rare Find', category: 'general', layout: 'single',
     backgroundColor: '#222f3e', filter: 'moon',
     textLayers: [
       { text: 'RARE', color: '#C9A46A', fontFamily: 'bold', fontSize: 36, x: 40, y: 120 },
-      { text: 'Limited edition', color: '#c8d6e5', fontFamily: 'modern', fontSize: Type.body.size, x: 40, y: 180 },
+      { text: 'Limited edition', color: '#c8d6e5', fontFamily: 'modern', fontSize: TypographyV2.body.size, x: 40, y: 180 },
     ],
     stickers: [{ type: 'emoji', content: '💎', x: 290, y: 120 }],
-    thumbnailColor: '#222f3e', icon: 'diamond',
-  },
+    thumbnailColor: '#222f3e', icon: 'diamond' },
   {
     id: 'tpl_swap', name: 'Swap Request', category: 'general', layout: 'single',
     backgroundColor: '#4A7AC4', filter: 'aden',
     textLayers: [
       { text: 'SWAP?', color: '#ffffff', fontFamily: 'bold', fontSize: 36, x: 40, y: 120 },
-      { text: 'Open to trades', color: '#ffffff', fontFamily: 'modern', fontSize: Type.body.size, x: 40, y: 180 },
+      { text: 'Open to trades', color: '#ffffff', fontFamily: 'modern', fontSize: TypographyV2.body.size, x: 40, y: 180 },
     ],
     stickers: [{ type: 'emoji', content: '🔄', x: 280, y: 120 }],
-    thumbnailColor: '#4A7AC4', icon: 'repeat',
-  },
+    thumbnailColor: '#4A7AC4', icon: 'repeat' },
 ];
 
 const NOW_TS = Date.now();
@@ -232,8 +221,7 @@ export const MOCK_POSTERS: Poster[] = [
     caption: 'Fresh drop: YSL knit in very good condition',
     createdAt: new Date(NOW_TS - 20 * 60 * 1000).toISOString(),
     expiryHours: 24,
-    templateId: 'tpl_fresh_drop',
-  },
+    templateId: 'tpl_fresh_drop' },
   {
     id: 'p2',
     uploaderId: 'u2',
@@ -241,8 +229,7 @@ export const MOCK_POSTERS: Poster[] = [
     image: MOCK_LISTINGS[4]?.images[0] ?? '',
     caption: 'Off-White hoodie deal, size XL',
     createdAt: new Date(NOW_TS - 55 * 60 * 1000).toISOString(),
-    expiryHours: 18,
-  },
+    expiryHours: 18 },
   {
     id: 'p3',
     uploaderId: 'u1',
@@ -251,8 +238,7 @@ export const MOCK_POSTERS: Poster[] = [
     caption: 'Sharing this sneaker ad from my friend',
     createdAt: new Date(NOW_TS - 95 * 60 * 1000).toISOString(),
     expiryHours: 12,
-    sharedFromUserId: 'u3',
-  },
+    sharedFromUserId: 'u3' },
   {
     id: 'p4',
     uploaderId: 'u4',
@@ -261,8 +247,7 @@ export const MOCK_POSTERS: Poster[] = [
     caption: 'New with tags cargo trousers',
     createdAt: new Date(NOW_TS - 3.5 * 60 * 60 * 1000).toISOString(),
     expiryHours: 10,
-    templateId: 'tpl_new_tags',
-  },
+    templateId: 'tpl_new_tags' },
   {
     id: 'p_expired',
     uploaderId: 'u3',
@@ -270,8 +255,7 @@ export const MOCK_POSTERS: Poster[] = [
     image: MOCK_LISTINGS[2]?.images[0] ?? '',
     caption: 'This one is expired and should be hidden',
     createdAt: new Date(NOW_TS - 30 * 60 * 60 * 1000).toISOString(),
-    expiryHours: 24,
-  },
+    expiryHours: 24 },
 ];
 
 export function getFreshPosters(
@@ -298,8 +282,7 @@ export function getFreshPosters(
         expiresAtMs,
         remainingHours,
         uploader,
-        sharedFrom,
-      };
+        sharedFrom };
     })
     .filter((poster) => poster.expiresAtMs > now && now - poster.createdAtMs <= freshnessWindowMs)
     .sort((a, b) => b.createdAtMs - a.createdAtMs);

@@ -304,9 +304,9 @@ module.exports = function ({ config }) {
       // the EXPO_PUBLIC_OTA_CODE_SIGNING_KEY env var / EAS secret.
       ...(hasOtaCodeSigning
         ? {
-            codeSigningCertificate: 'keys/update-certificate.pem',
-            codeSigningMetadata: { keyid: 'main', alg: 'rsa-v1_5-sha256' },
-          }
+          codeSigningCertificate: 'keys/update-certificate.pem',
+          codeSigningMetadata: { keyid: 'main', alg: 'rsa-v1_5-sha256' },
+        }
         : {}),
     },
     ios: {

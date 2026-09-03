@@ -24,7 +24,7 @@
 import NetInfo from '@react-native-community/netinfo';
 import { AppState } from 'react-native';
 import type { OPSQLiteDatabase } from '@op-engineering/op-sqlite';
-import { getDb } from './db';
+import { getDb, isDbAvailable } from './db';
 import { pushOutbox } from './syncEngine';
 
 export interface OutboxConflictRow {
@@ -77,6 +77,7 @@ export async function enqueueOperation(
  * call succeeds, so the outbox row does not get re-pushed by the drain.
  */
 export async function removeOutboxOperation(operationId: string): Promise<void> {
+  if (!isDbAvailable()) return;
   const db = await getDb();
   db.execute(
     `DELETE FROM mutation_outbox WHERE operation_id = ?;`,
@@ -93,6 +94,7 @@ export async function markOutboxOperationFailed(
   operationId: string,
   error: string,
 ): Promise<void> {
+  if (!isDbAvailable()) return;
   const db = await getDb();
   db.execute(
     `UPDATE mutation_outbox
@@ -127,6 +129,7 @@ export async function drainOutbox(): Promise<DrainResult> {
  * removed) and `failed` rows (which require manual intervention).
  */
 export async function getOutboxPendingCount(): Promise<number> {
+  if (!isDbAvailable()) return 0;
   const db = await getDb();
   const result = db.execute(
     `SELECT COUNT(*) AS count
@@ -142,6 +145,7 @@ export async function getOutboxPendingCount(): Promise<number> {
  * for user resolution (e.g. "This item was edited elsewhere — review").
  */
 export async function getOutboxConflicts(): Promise<OutboxConflictRow[]> {
+  if (!isDbAvailable()) return [];
   const db = await getDb();
   const result = db.execute(
     `SELECT seq, operation_id, entity_type, entity_id, operation, attempt_count, last_error

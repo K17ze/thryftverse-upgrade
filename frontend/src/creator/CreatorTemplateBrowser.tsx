@@ -6,14 +6,13 @@ import {
   Pressable,
   ScrollView,
   FlatList,
-  Alert,
   useWindowDimensions,
   ViewStyle,
-  TextInput,
-} from 'react-native';
+  TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Control, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { Motion } from '../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -21,13 +20,13 @@ import {
   getTemplatesByCategory,
   TEMPLATE_CATEGORIES,
   type CreatorTemplate,
-  type TemplateCategory,
-} from './templates';
+  type TemplateCategory } from './templates';
 import { CreatorCanvas } from './CreatorCanvas';
 import { SheetContainer, PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
 import { withAlpha } from '../components/poster/shared/colorUtils';
 import { useStore } from '../store/useStore';
+import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 
@@ -53,8 +52,7 @@ function CategoryTab({ label, isActive, onPress, colors }: CategoryTabProps) {
   }, [isActive, underlineOpacity, reducedMotion]);
 
   const underlineStyle = useAnimatedStyle(() => ({
-    opacity: underlineOpacity.value,
-  }));
+    opacity: underlineOpacity.value }));
 
   return (
     <Pressable
@@ -64,8 +62,7 @@ function CategoryTab({ label, isActive, onPress, colors }: CategoryTabProps) {
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
           alignItems: 'center',
-          marginRight: Space.xs,
-        },
+          marginRight: Space.xs },
         pressed && { opacity: 0.7 },
       ]}
       accessibilityLabel={`Filter by ${label}`}
@@ -76,9 +73,8 @@ function CategoryTab({ label, isActive, onPress, colors }: CategoryTabProps) {
       <Text
         style={{
           fontFamily: Typography.family.semibold,
-          fontSize: Type.body.size,
-          color: isActive ? colors.textPrimary : colors.textSecondary,
-        }}
+          fontSize: TypographyV2.body.size,
+          color: isActive ? colors.textPrimary : colors.textSecondary }}
       >
         {label}
       </Text>
@@ -88,8 +84,7 @@ function CategoryTab({ label, isActive, onPress, colors }: CategoryTabProps) {
             height: Stroke.emphasis,
             backgroundColor: colors.brand,
             width: '100%',
-            marginTop: Space.xxs,
-          },
+            marginTop: Space.xxs },
           underlineStyle,
         ]}
       />
@@ -118,8 +113,7 @@ export function CreatorTemplateBrowser({
   documentType,
   onClose,
   onApply,
-  hasExistingWork,
-}: CreatorTemplateBrowserProps) {
+  hasExistingWork }: CreatorTemplateBrowserProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const { width: screenWidth } = useWindowDimensions();
@@ -127,6 +121,14 @@ export function CreatorTemplateBrowser({
   const [activeCategory, setActiveCategory] = useState<TemplateCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<TextInput>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    variant?: 'default' | 'danger';
+    onConfirm: () => void;
+  }>({ visible: false, title: '', message: '', onConfirm: () => {} });
 
   const templates = useMemo(
     () => getTemplatesByCategory(documentType, activeCategory),
@@ -188,22 +190,17 @@ export function CreatorTemplateBrowser({
     (template: CreatorTemplate) => {
       haptic.medium();
       if (hasExistingWork) {
-        Alert.alert(
-          'Replace current work?',
-          `Applying "${template.name}" will replace your current canvas. This cannot be undone.`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Replace',
-              style: 'destructive',
-              onPress: () => {
-                haptic.warning();
-                onApply(template);
-                onClose();
-              },
-            },
-          ],
-        );
+        setConfirmSheet({
+          visible: true,
+          title: 'Replace current work?',
+          message: `Applying "${template.name}" will replace your current canvas. This cannot be undone.`,
+          confirmLabel: 'Replace',
+          variant: 'danger',
+          onConfirm: () => {
+            haptic.warning();
+            onApply(template);
+            onClose();
+          } });
       } else {
         onApply(template);
         onClose();
@@ -385,6 +382,15 @@ export function CreatorTemplateBrowser({
           </View>
         }
       />
+      <ConfirmationSheet
+        visible={confirmSheet.visible}
+        onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
+        title={confirmSheet.title}
+        message={confirmSheet.message}
+        confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
+        variant={confirmSheet.variant ?? 'default'}
+        onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
+      />
     </SheetContainer>
   );
 }
@@ -396,25 +402,21 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    color: colors.textPrimary },
   closeBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   // ── Search bar ──
   searchContainer: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -422,52 +424,43 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     borderRadius: Radius.lg,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   searchInput: {
     flex: 1,
     fontFamily: Typography.family.regular,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textPrimary,
-    padding: 0,
-  },
+    padding: 0 },
   searchClearBtn: {
     width: 24,
     height: 24,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   // ── Category tabs ──
   categoryScroll: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   // ── Featured section ──
   featuredSection: {
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   sectionLabel: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textPrimary,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-  },
+    paddingBottom: Space.xs },
   featuredScroll: {
     paddingHorizontal: Space.md,
     gap: Space.md,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   featuredCard: {
-    width: screenWidth * 0.42,
-  },
+    width: screenWidth * 0.42 },
   featuredPreviewWrap: {
     borderRadius: Radius.lg,
     overflow: 'hidden',
     marginBottom: Space.xs,
-    position: 'relative',
-  },
+    position: 'relative' },
   featuredBadge: {
     position: 'absolute',
     top: Space.sm,
@@ -475,74 +468,60 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xxs,
-    backgroundColor: withAlpha(colors.antiqueGold, 0.95),
+    backgroundColor: withAlpha(colors.brand, 0.95),
     paddingHorizontal: Space.xs,
     paddingVertical: Space.xxs,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   featuredBadgeText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textPrimary,
-    letterSpacing: 0.3,
-  },
+    letterSpacing: 0.3 },
   featuredInfo: {
-    marginBottom: Space.xxs,
-  },
+    marginBottom: Space.xxs },
   featuredName: {
     flex: 1,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    color: colors.textPrimary },
   featuredDesc: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.textMuted },
   // ── Standard grid ──
   listContent: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.lg,
-  },
+    paddingBottom: Space.lg },
   columnWrapper: {
     gap: Space.md,
-    marginBottom: Space.md,
-  },
+    marginBottom: Space.md },
   templateCard: {
     flex: 1,
-    padding: Space.xs,
-  },
+    padding: Space.xs },
   previewContainer: {
     alignItems: 'center',
     marginBottom: Space.xs,
     borderRadius: Radius.md,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   templateName: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textPrimary,
     marginBottom: Space.xxs,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   templateDesc: {
     fontFamily: Typography.family.regular,
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textMuted,
     lineHeight: 14,
-    paddingHorizontal: Space.xs,
-  },
+    paddingHorizontal: Space.xs },
   emptyState: {
     alignItems: 'center',
     paddingVertical: Space.xl * 2,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   emptyText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  });
+    textAlign: 'center' } });
 }

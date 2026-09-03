@@ -19,21 +19,38 @@ export interface ImpactResult {
   co2eEolAvoidedKg: number;
   co2eShippingKg: number;
   co2ePackagingKg: number;
+  waterSavedL: number;
+  displacementRate: number;
+  reboundEffect: number;
+  distanceKm: number;
+  carrierMode: string;
   methodologyVersion: string;
   factorSources: string[];
 }
 
-export const METHODOLOGY_VERSION = '2026-08-v1';
+export const METHODOLOGY_VERSION = '2026-08-v2';
 
 const DEFAULT_SHIPPING_DISTANCE_KM = 800;
 const DEFAULT_CARRIER_MODE = 'road' as const;
 const DEFAULT_PACKAGING_TYPE = 'poly_mailer' as const;
+
+const DEFAULT_DISPLACEMENT_RATE = 0.85;
+const DEFAULT_REBOUND_EFFECT = 0.12;
 
 const EARTH_RADIUS_KM = 6371;
 
 interface EmissionsFactorRow {
   co2e_kg_per_kg: string;
   source: string;
+}
+
+interface WaterFactorRow {
+  water_l_per_kg: string;
+}
+
+interface ImpactConfigRow {
+  key: string;
+  value: string;
 }
 
 function haversineDistanceKm(
@@ -80,6 +97,55 @@ async function lookupFactor(
   return { co2eKgPerKg: value, source: result.rows[0].source };
 }
 
+async function lookupWaterFactor(
+  db: Pool,
+  material: string,
+): Promise<number | null> {
+  const result = await db.query<WaterFactorRow>(
+    `SELECT water_l_per_kg::text
+     FROM emissions_factors
+     WHERE factor_type = 'production' AND material = $1
+       AND water_l_per_kg IS NOT NULL
+     ORDER BY effective_date DESC
+     LIMIT 1`,
+    [material],
+  );
+  if (!result.rowCount) {
+    return null;
+  }
+  const value = Number(result.rows[0].water_l_per_kg);
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return value;
+}
+
+async function lookupImpactConfig(
+  db: Pool,
+): Promise<{ displacementRate: number; reboundEffect: number }> {
+  let displacementRate = DEFAULT_DISPLACEMENT_RATE;
+  let reboundEffect = DEFAULT_REBOUND_EFFECT;
+  try {
+    const result = await db.query<ImpactConfigRow>(
+      `SELECT key, value::text FROM impact_config WHERE key IN ('displacement_rate', 'rebound_effect')`,
+    );
+    for (const row of result.rows) {
+      const value = Number(row.value);
+      if (!Number.isFinite(value)) {
+        continue;
+      }
+      if (row.key === 'displacement_rate') {
+        displacementRate = value;
+      } else if (row.key === 'rebound_effect') {
+        reboundEffect = value;
+      }
+    }
+  } catch {
+    // impact_config table may not exist yet; fall back to defaults.
+  }
+  return { displacementRate, reboundEffect };
+}
+
 export async function calculateImpact(
   input: ImpactInput,
   db: Pool,
@@ -96,12 +162,24 @@ export async function calculateImpact(
     return null;
   }
 
-  const co2eProductionAvoidedKg = input.weightKg * productionFactor.co2eKgPerKg;
-  const co2eEolAvoidedKg = input.weightKg * eolFactor.co2eKgPerKg;
+  const { displacementRate, reboundEffect } = await lookupImpactConfig(db);
+
+  let co2eProductionAvoidedKg = input.weightKg * productionFactor.co2eKgPerKg;
+  let co2eEolAvoidedKg = input.weightKg * eolFactor.co2eKgPerKg;
+
+  // Apply displacement rate to avoided production and EOL emissions.
+  co2eProductionAvoidedKg *= displacementRate;
+  co2eEolAvoidedKg *= displacementRate;
 
   const factorSources = new Set<string>();
   factorSources.add(productionFactor.source);
   factorSources.add(eolFactor.source);
+
+  // Water saved is optional — 0 if no water factor exists for the material.
+  const waterFactor = await lookupWaterFactor(db, material);
+  const waterSavedL = waterFactor !== null
+    ? waterFactor * input.weightKg * displacementRate
+    : 0;
 
   const carrierMode = input.carrierMode ?? DEFAULT_CARRIER_MODE;
   let distanceKm: number;
@@ -153,8 +231,11 @@ export async function calculateImpact(
     co2ePackagingKg = packagingFactor.co2eKgPerKg;
   }
 
-  const co2eAvoidedKg =
-    co2eProductionAvoidedKg + co2eEolAvoidedKg - co2eShippingKg - co2ePackagingKg;
+  // Apply rebound effect to gross avoided (production + EOL), then net
+  // out shipping and packaging.
+  const grossAvoided =
+    (co2eProductionAvoidedKg + co2eEolAvoidedKg) * (1 - reboundEffect);
+  const co2eAvoidedKg = grossAvoided - co2eShippingKg - co2ePackagingKg;
 
   return {
     co2eAvoidedKg: roundTo(co2eAvoidedKg, 4),
@@ -162,6 +243,11 @@ export async function calculateImpact(
     co2eEolAvoidedKg: roundTo(co2eEolAvoidedKg, 4),
     co2eShippingKg: roundTo(co2eShippingKg, 4),
     co2ePackagingKg: roundTo(co2ePackagingKg, 4),
+    waterSavedL: roundTo(waterSavedL, 4),
+    displacementRate,
+    reboundEffect,
+    distanceKm: roundTo(distanceKm, 4),
+    carrierMode,
     methodologyVersion: METHODOLOGY_VERSION,
     factorSources: Array.from(factorSources),
   };

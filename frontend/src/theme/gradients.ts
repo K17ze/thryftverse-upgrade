@@ -15,7 +15,7 @@
  *   const { gradients, glass, glow } = useGradients();
  */
 
-import { Colors } from '../constants/colors';
+import { Colors, DARK_COLORS } from '../constants/colors';
 import { useAppTheme } from './ThemeContext';
 
 // ============================================================================
@@ -48,20 +48,19 @@ function computeGradients(colors: GradientColorSource) {
   return {
     /** Brand accent gradient — warm neutral direction (dark) / dark neutral (light) */
     brand: [colors.brandPressed, colors.brand] as [string, string],
-    /** Brand gradient — horizontal variant */
-    brandH: [colors.brandPressed, colors.brand] as [string, string],
     /** Surface gradient — subtle depth on backgrounds */
     dark: [colors.background, colors.surface] as [string, string],
     /** Danger gradient for destructive states */
-    danger: ['#E06666', colors.danger] as [string, string],
+    danger: [DARK_COLORS.danger, colors.danger] as [string, string],
     /** Success gradient for positive states */
-    success: ['#3A7D4E', colors.success] as [string, string],
+    success: [DARK_COLORS.success, colors.success] as [string, string],
   };
 }
 
 function computeGlass(colors: GradientColorSource) {
   // In dark mode, glass uses white tints; in light mode, black tints.
   // isDark is passed explicitly (audit M10) — no hex-value sniffing.
+  // NOTE: hex-alpha required for gradient stops — token substitution not applicable
   const isDark = resolveIsDark(colors);
   if (isDark) {
     return {
@@ -82,10 +81,11 @@ function computeGlass(colors: GradientColorSource) {
 }
 
 function computeGlow(colors: GradientColorSource) {
+  // NOTE: hex-alpha required for gradient stops — token substitution not applicable
   return {
     brand: `${colors.brand}26`,
-    danger: 'rgba(255,77,77,0.20)',
-    success: 'rgba(76,175,80,0.15)',
+    danger: `${DARK_COLORS.danger}33`,
+    success: `${DARK_COLORS.success}26`,
   };
 }
 
@@ -126,9 +126,6 @@ export function getGlow() {
 /** Brand accent gradient — warm neutral direction */
 export const BrandGradient = computeGradients(Colors).brand;
 
-/** Brand gradient — horizontal variant */
-export const BrandGradientH = computeGradients(Colors).brandH;
-
 /** Dark surface gradient — subtle depth on backgrounds */
 export const DarkGradient = computeGradients(Colors).dark;
 
@@ -162,7 +159,6 @@ export const SUCCESS_GLOW = computeGlow(Colors).success;
 
 export const Gradients = {
   brand: [...BrandGradient],
-  brandH: [...BrandGradientH],
   dark: [...DarkGradient],
   danger: [...DangerGradient],
   success: [...SuccessGradient],

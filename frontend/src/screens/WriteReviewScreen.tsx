@@ -5,13 +5,13 @@ import {
   StyleSheet,
   TextInput,
   ActivityIndicator,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useToast } from '../context/ToastContext';
-import { Typography, Space, Radius, Type, Stroke } from '../theme/designTokens';
+import { Space, Radius, Stroke } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppButton } from '../components/ui/AppButton';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -21,9 +21,12 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { RootStackParamList } from '../navigation/types';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 import { getOrder, CommerceOrder } from '../services/commerceApi';
 import { getOrderReview, createOrderReview, OrderReview } from '../services/reviewApi';
 import { parseApiError } from '../lib/apiClient';
+import { track } from '../analytics';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { uploadMedia } from '../services/mediaUpload';
@@ -35,7 +38,7 @@ const RATING_LABELS = ['Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
 export default function WriteReviewScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { orderId, initialRating } = route.params;
+  const { orderId, initialRating } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
@@ -98,8 +101,7 @@ export default function WriteReviewScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.85,
-        selectionLimit: 4 - photoUris.length,
-      });
+        selectionLimit: 4 - photoUris.length });
       if (result.canceled || !result.assets?.length) return;
       setIsUploadingPhotos(true);
       const uploaded: string[] = [];
@@ -128,6 +130,7 @@ export default function WriteReviewScreen() {
     setIsUnknownOutcome(false);
     try {
       await createOrderReview(orderId, rating, review.trim() || undefined, photoUris.length > 0 ? photoUris : undefined);
+      track('review_written', { seller_id: order!.sellerId, rating });
       haptic.success();
       show('Review published', 'success');
       navigation.goBack();
@@ -188,7 +191,7 @@ export default function WriteReviewScreen() {
 
           {existingReview ? (
             <View style={styles.existingState}>
-              <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+              <AppIcon name="checkmark-circle" focused size={IconSize.xl} color="success" opticalCenter accessible={false} />
               <Text style={styles.existingTitle}>Review published</Text>
               <Text style={styles.existingSub}>
                 {existingReview.rating} star{existingReview.rating > 1 ? 's' : ''} ·{' '}
@@ -229,10 +232,13 @@ export default function WriteReviewScreen() {
                       accessibilityLabel={`${star} of 5${star > 1 ? 's' : ''}${rating === star ? ', selected' : ''}`}
                       accessibilityState={{ selected: rating === star }}
                     >
-                      <Ionicons
-                        name={rating >= star ? 'star' : 'star-outline'}
-                        size={36}
-                        color={rating >= star ? colors.brand : colors.textMuted}
+                      <AppIcon
+                        name="star"
+                        focused={rating >= star}
+                        size={IconSize.hero}
+                        color={rating >= star ? 'ratingStar' : 'textMuted'}
+                        opticalCenter
+                        accessible={false}
                       />
                     </AnimatedPressable>
                   ))}
@@ -280,7 +286,7 @@ export default function WriteReviewScreen() {
                           accessibilityRole="button"
                           accessibilityLabel={`Remove photo ${index + 1}`}
                         >
-                          <Ionicons name="close-circle" size={20} color={colors.danger} />
+                          <AppIcon name="close" size={IconSize.md} color="danger" opticalCenter accessible={false} />
                         </Pressable>
                       </View>
                     ))}
@@ -301,7 +307,7 @@ export default function WriteReviewScreen() {
                       <ActivityIndicator size="small" color={colors.brand} />
                     ) : (
                       <>
-                        <Ionicons name="camera-outline" size={20} color={colors.brand} />
+                        <AppIcon name="camera" size={IconSize.md} color="brand" opticalCenter accessible={false} />
                         <Text style={styles.photoAddText}>
                           {photoUris.length > 0 ? 'Add more' : 'Add photos'}
                         </Text>
@@ -347,8 +353,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     paddingBottom: Space.xl,
-    gap: Space.lg,
-  },
+    gap: Space.lg },
   // Order context — flat row, no card
   orderRow: {
     flexDirection: 'row',
@@ -356,91 +361,74 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingBottom: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   orderThumb: {
     width: 48,
     height: 48,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   orderInfo: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   orderTitle: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
   orderMeta: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   // Rating — left-aligned, dominant
   ratingSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   ratingPrompt: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    color: colors.textPrimary },
   starsRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   ratingLabel: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.brand,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.brand },
   // Text — flat input, hairline border
   textSection: {
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   textInput: {
     minHeight: 120,
     maxHeight: 240,
     color: colors.textPrimary,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     textAlignVertical: 'top',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: Radius.md,
-    padding: Space.md,
-  },
+    padding: Space.md },
   charCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    textAlign: 'right',
-  },
+    textAlign: 'right' },
   // Photos — hairline add tile, privacy guidance
   photoSection: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   photoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   photoTileWrap: {
-    position: 'relative',
-  },
+    position: 'relative' },
   photoTile: {
     width: 72,
     height: 72,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   photoRemoveBtn: {
     position: 'absolute',
     top: -4,
     right: -4,
     backgroundColor: colors.background,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   photoAddBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -449,63 +437,51 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: Radius.md,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   photoAddText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.brand,
-    flex: 1,
-  },
+    flex: 1 },
   photoAddHint: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   photoPrivacy: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   // Existing review state — flat, no card
   existingState: {
     gap: Space.sm,
-    paddingVertical: Space.md,
-  },
+    paddingVertical: Space.md },
   existingTitle: {
-    fontSize: Type.title.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.screenTitle.size,
+    fontFamily: TypographyV2.screenTitle.fontFamily,
+    color: colors.textPrimary },
   existingSub: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary },
   existingComment: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    lineHeight: Type.body.lineHeight + 4,
-    marginTop: Space.xs,
-  },
+    lineHeight: TypographyV2.body.lineHeight + 4,
+    marginTop: Space.xs },
   existingPhotos: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Space.sm,
-    marginTop: Space.sm,
-  },
+    marginTop: Space.sm },
   existingPhoto: {
     width: 64,
     height: 64,
-    borderRadius: Radius.md,
-  },
+    borderRadius: Radius.md },
   footer: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  });
+    borderTopColor: colors.border } });
 }

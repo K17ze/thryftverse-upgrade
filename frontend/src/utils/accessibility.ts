@@ -1,6 +1,4 @@
-import { PixelRatio, Dimensions, AccessibilityInfo } from 'react-native';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { PixelRatio, AccessibilityInfo } from 'react-native';
 
 // Minimum touch target sizes (WCAG 2.5.5)
 export const MIN_TOUCH_TARGET = {

@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { formatAuctionIze, toIze, DEFAULT_GOLD_RATES } from '../utils/currency';
+import { formatAuctionIze, toIze, DEFAULT_FX_RATES } from '../utils/currency';
 
 describe('VQ-10A19: Auction 1ZE display helper', () => {
   describe('formatAuctionIze', () => {
     it('produces two display decimals', () => {
-      const izeAmount = toIze(100, 'GBP', DEFAULT_GOLD_RATES);
+      const izeAmount = toIze(100, 'GBP', DEFAULT_FX_RATES);
       const result = formatAuctionIze(izeAmount);
       // Should have exactly 2 decimal places before the suffix
       const numericPart = result.split(' ')[0];
@@ -46,7 +46,7 @@ describe('VQ-10A19: Auction 1ZE display helper', () => {
     });
 
     it('preserves full calculation precision in the input (no premature rounding)', () => {
-      const izeAmount = toIze(99.99, 'GBP', DEFAULT_GOLD_RATES);
+      const izeAmount = toIze(99.99, 'GBP', DEFAULT_FX_RATES);
       // The helper should receive the full-precision value
       // and display only 2 decimals without altering the input
       const result = formatAuctionIze(izeAmount);

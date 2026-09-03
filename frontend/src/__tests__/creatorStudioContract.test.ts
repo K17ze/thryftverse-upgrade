@@ -141,9 +141,9 @@ function makePosterDoc(): CreatorDocument {
 
 describe('Composition contract — schema version', () => {
   it('exports a valid schema version range', () => {
-    expect(COMPOSITION_SCHEMA_VERSION).toBe(1);
+    expect(COMPOSITION_SCHEMA_VERSION).toBe(2);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBe(1);
-    expect(MAX_SUPPORTED_SCHEMA_VERSION).toBe(1);
+    expect(MAX_SUPPORTED_SCHEMA_VERSION).toBe(2);
     expect(MIN_SUPPORTED_SCHEMA_VERSION).toBeLessThanOrEqual(MAX_SUPPORTED_SCHEMA_VERSION);
   });
 });

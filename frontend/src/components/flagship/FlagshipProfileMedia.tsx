@@ -3,11 +3,11 @@ import { View, Text, StyleSheet, useWindowDimensions, ViewStyle, ActivityIndicat
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography, Type, IconGrammar, Control, Stroke, AvatarSize } from '../../theme/designTokens';
+import { Space, Radius, IconGrammar, Control, Stroke, AvatarSize, ProfileLayout } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { CachedImage } from '../CachedImage';
 import { ImageEmptyGraphic } from '../ImageEmptyGraphic';
-import { ActiveTheme } from '../../constants/colors';
 import { FACE_FOCAL_POINT } from '../../utils/media';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { Video, ResizeMode } from '../compat/Video';
@@ -42,12 +42,11 @@ export function FlagshipProfileMedia({
   style,
   cacheBuster,
   coverOnly = false,
-  coverHeight = 220,
+  coverHeight = ProfileLayout.coverHeight,
   coverError = null,
   onRetryCover,
-  onRevertCover,
-}: FlagshipProfileMediaProps) {
-  const { colors } = useAppTheme();
+  onRevertCover }: FlagshipProfileMediaProps) {
+  const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
   const effectiveCover = coverVideoUri || coverUri;
@@ -173,9 +172,9 @@ export function FlagshipProfileMedia({
             ) : (
               <View style={[styles.avatarImage, styles.avatarFallback]} accessibilityElementsHidden>
                 <LinearGradient
-                  colors={ActiveTheme === 'light'
-                    ? ['#F0EBE6', '#E2DDD6']
-                    : ['#1F1F1F', '#161616']}
+                  colors={isDark
+                    ? ['#1F1F1F', '#161616']
+                    : ['#F0EBE6', '#E2DDD6']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={StyleSheet.absoluteFill}
@@ -183,7 +182,7 @@ export function FlagshipProfileMedia({
                 <Ionicons
                   name="person"
                   size={IconGrammar.hero}
-                  color={ActiveTheme === 'light' ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.22)'}
+                  color={isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.22)'}
                 />
               </View>
             )}
@@ -214,33 +213,28 @@ export function FlagshipProfileMedia({
   );
 }
 
-const DEFAULT_COVER_H = 220;
-const AVATAR_SIZE = 104;
+const DEFAULT_COVER_H = ProfileLayout.coverHeight;
+const AVATAR_SIZE = AvatarSize.xl;
 
 const createStyles = (colors: any) => StyleSheet.create({
   root: {
-    width: '100%',
-  },
+    width: '100%' },
   coverWrap: {
     width: '100%',
     height: DEFAULT_COVER_H,
     position: 'relative',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   coverImage: {
     width: '100%',
-    height: DEFAULT_COVER_H,
-  },
+    height: DEFAULT_COVER_H },
   coverFallback: {
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   coverGradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: 100,
-  },
+    height: 100 },
   editCoverBtn: {
     position: 'absolute',
     right: Space.md,
@@ -248,8 +242,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   editCoverVisible: {
     width: 34,
     height: 34,
@@ -258,8 +251,7 @@ const createStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: Stroke.hairline,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
+    borderColor: 'rgba(255,255,255,0.2)' },
   coverErrorRow: {
     position: 'absolute',
     right: Space.md,
@@ -270,35 +262,29 @@ const createStyles = (colors: any) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.65)',
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   coverErrorText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.danger,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
   coverErrorActions: {
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   coverErrorBtn: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
     borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.15)',
     minHeight: Control.hit,
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   coverErrorBtnText: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.scrimTextPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextPrimary },
   avatarRow: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    marginTop: -(AVATAR_SIZE / 2),
-  },
+    marginTop: -(AVATAR_SIZE / 2) },
   avatarWrap: {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
@@ -307,18 +293,15 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderColor: colors.background,
     backgroundColor: colors.surface,
     overflow: 'hidden',
-    position: 'relative',
-  },
+    position: 'relative' },
   avatarImage: {
-    width: AVATAR_SIZE - 8,
-    height: AVATAR_SIZE - 8,
-    borderRadius: Radius.full,
-  },
+    width: AVATAR_SIZE - Stroke.emphasis * 2 * 2,
+    height: AVATAR_SIZE - Stroke.emphasis * 2 * 2,
+    borderRadius: Radius.full },
   avatarFallback: {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   editAvatarBtn: {
     position: 'absolute',
     right: Space.xs / 2,
@@ -330,6 +313,4 @@ const createStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: Stroke.emphasis,
-    borderColor: colors.background,
-  },
-});
+    borderColor: colors.background } });

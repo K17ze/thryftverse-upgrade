@@ -18,7 +18,7 @@ import { Motion } from '../theme/motionTokens';
 import { isVideoUri } from '../utils/media';
 import { ImageEmptyGraphic } from './ImageEmptyGraphic';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Radius } from '../theme/designTokens';
+import { Radius, Stroke} from '../theme/designTokens';
 
 interface CachedImageProps {
   uri: string;
@@ -470,7 +470,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.surfaceElevated,
   },
 });

@@ -1,9 +1,14 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Type, FontFamily } from '../../theme/designTokens';
+import { Space, FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { ConfirmationSheet } from '../ConfirmationSheet';
+
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 export interface SettingsSignOutRowProps {
   username?: string | null;
@@ -20,53 +25,40 @@ const createStyles = (colors: ThemeColors) =>
       minHeight: 50,
       gap: Space.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     icon: {
       width: 24,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     label: {
       flex: 1,
-      fontSize: 16,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.danger,
-      letterSpacing: Type.body.letterSpacing,
-    },
-  });
+      letterSpacing: TypographyV2.body.letterSpacing } });
 
 export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const [isBusy, setIsBusy] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
 
   const handlePress = useCallback(() => {
     if (isBusy) return;
-    Alert.alert(
-      'Sign Out',
-      username
-        ? `You'll be signed out of @${username} on this device.`
-        : 'You\'ll be signed out of your account on this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            setIsBusy(true);
-            try {
-              await onSignOut();
-            } finally {
-              setIsBusy(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [isBusy, onSignOut]);
+    setConfirmVisible(true);
+  }, [isBusy]);
+
+  const handleConfirm = useCallback(async () => {
+    setIsBusy(true);
+    try {
+      await onSignOut();
+    } finally {
+      setIsBusy(false);
+    }
+  }, [onSignOut]);
 
   return (
+    <>
     <AnimatedPressable
       onPress={handlePress}
       activeOpacity={0.7}
@@ -82,12 +74,29 @@ export function SettingsSignOutRow({ username, onSignOut }: SettingsSignOutRowPr
         {isBusy ? (
           <ActivityIndicator size={20} color={colors.danger} style={styles.icon} />
         ) : (
-          <Ionicons name="log-out-outline" size={24} color={colors.danger} style={styles.icon} />
+          <View style={styles.icon}>
+            <AppIcon name="log-out-outline" size={IconSize.lg} color="danger" accessible={false} />
+          </View>
         )}
         <Text style={styles.label}>
           {isBusy ? 'Signing out…' : 'Sign Out'}
         </Text>
       </View>
     </AnimatedPressable>
+
+    <ConfirmationSheet
+      visible={confirmVisible}
+      onDismiss={() => setConfirmVisible(false)}
+      title="Sign Out"
+      message={
+        username
+          ? `You'll be signed out of @${username} on this device.`
+          : 'You\'ll be signed out of your account on this device.'
+      }
+      confirmLabel="Sign Out"
+      variant="danger"
+      onConfirm={handleConfirm}
+    />
+    </>
   );
 }

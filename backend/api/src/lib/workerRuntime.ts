@@ -37,14 +37,15 @@ import {
   ALERT_DEDUP_REDIS_PREFIX,
   DEFAULT_WALLET_FIAT_CURRENCY,
   MINT_OPERATION_TERMINAL_STATES,
-  ONEZE_MG_PER_IZE,
+  ONEZE_UNITS_PER_IZE,
   PAYOUTS_PAUSED_REDIS_KEY,
   createApiError,
   createRuntimeId,
   fromFiatMinor,
   ledgerTablesAvailable,
-  mgToOnezeAmount,
+  unitsToOnezeAmount,
   mapEventToPushCategory,
+  isCriticalEventType,
   normalizeOnezeCountryTag,
   roundTo,
   toJsonString,
@@ -150,17 +151,39 @@ export async function queueUserNotification(input: {
       // A durable event may have been inserted just before Redis became
       // unavailable. Retrying the producer repairs that boundary. BullMQ's
       // event-based job ID prevents duplicate queued jobs.
+      //
+      // P0 FIX: Re-evaluate push preference before re-enqueueing. A previously
+      // queued event may have been suppressed by a preference change since the
+      // original insert. Re-enqueueing without re-checking would defeat
+      // suppression — the retry would send a push the user opted out of.
       if (existingEvent?.status === 'queued') {
-        await enqueuePushNotificationJob({
-          eventId: existingEvent.id,
-          userId: existingEvent.user_id,
-          title: existingEvent.title,
-          body: existingEvent.body,
-          payload: existingEvent.payload,
-          eventType: existingEvent.event_type,
-          actorUserId: existingEvent.actor_user_id,
-          route: existingEvent.route,
-        });
+        const retryCategory = mapEventToPushCategory(existingEvent.event_type);
+        let retryShouldPush = false;
+        if (retryCategory) {
+          const retryPref = await db.query<{ enabled: boolean }>(
+            `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+            [existingEvent.user_id, retryCategory]
+          );
+          retryShouldPush = !retryPref.rowCount || retryPref.rows[0].enabled;
+        }
+        if (retryShouldPush) {
+          await enqueuePushNotificationJob({
+            eventId: existingEvent.id,
+            userId: existingEvent.user_id,
+            title: existingEvent.title,
+            body: existingEvent.body,
+            payload: existingEvent.payload,
+            eventType: existingEvent.event_type,
+            actorUserId: existingEvent.actor_user_id,
+            route: existingEvent.route,
+          });
+        } else {
+          await db.query(
+            `UPDATE notification_events SET status = 'suppressed', suppression_reason = 'preference' WHERE id = $1`,
+            [existingEvent.id]
+          );
+          recordPushDelivery({ provider: 'expo', status: 'suppressed' });
+        }
       }
       return existingEvent?.id ?? null;
     }
@@ -169,16 +192,57 @@ export async function queueUserNotification(input: {
 
   const insertedEventId = insertResult.rows[0].id;
 
-  // Push preference check
+  // Push preference check — fail closed for unknown event types.
+  // Unknown events (mapEventToPushCategory returns null) are in-app only;
+  // they never bypass preferences with shouldPush=true.
   const pushCategory = mapEventToPushCategory(eventType);
-  let shouldPush = true;
-  if (pushCategory) {
+  let shouldPush = false;
+  let suppressionReason: string | null = null;
+  if (!pushCategory) {
+    shouldPush = false;
+    suppressionReason = 'unmapped_event_type';
+  } else {
     const prefResult = await db.query<{ enabled: boolean }>(
       `SELECT enabled FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
       [input.userId, pushCategory]
     );
     if (prefResult.rowCount && !prefResult.rows[0].enabled) {
       shouldPush = false;
+      suppressionReason = 'preference';
+    } else {
+      shouldPush = true;
+    }
+  }
+
+  // Server-side quiet hours enforcement.
+  // If the user has quiet hours configured and the current time falls within
+  // the quiet window, suppress non-critical push notifications. Critical
+  // event types (auction won, safety, resolution) bypass quiet hours.
+  if (shouldPush && pushCategory && !isCriticalEventType(eventType)) {
+    const qhResult = await db.query<{ quiet_hours: unknown }>(
+      `SELECT quiet_hours FROM notification_preferences WHERE user_id = $1 AND category = $2 LIMIT 1`,
+      [input.userId, pushCategory]
+    );
+    const qhRaw = qhResult.rows[0]?.quiet_hours;
+    if (qhRaw && typeof qhRaw === 'object') {
+      const qh = qhRaw as { enabled?: boolean; startHour?: number; endHour?: number };
+      if (qh.enabled && typeof qh.startHour === 'number' && typeof qh.endHour === 'number') {
+        const nowUtc = new Date();
+        // Use UTC hour as a simple approximation. A full implementation would
+        // store the user's IANA timezone and convert. The quiet_hours JSONB
+        // can include a `timezone` field for future enhancement.
+        const currentHour = nowUtc.getUTCHours();
+        const start = qh.startHour;
+        const end = qh.endHour;
+        // Handle wrap-around (e.g., 22 → 7)
+        const inQuietWindow = start <= end
+          ? (currentHour >= start && currentHour < end)
+          : (currentHour >= start || currentHour < end);
+        if (inQuietWindow) {
+          shouldPush = false;
+          suppressionReason = 'quiet_hours';
+        }
+      }
     }
   }
 
@@ -193,12 +257,17 @@ export async function queueUserNotification(input: {
       actorUserId: input.actorUserId ?? null,
       route: input.route ?? null,
     });
+    recordPushDelivery({
+      provider: 'expo',
+      status: 'queued',
+    });
+  } else {
+    await db.query(
+      `UPDATE notification_events SET status = 'suppressed', suppression_reason = $2 WHERE id = $1`,
+      [insertedEventId, suppressionReason]
+    );
+    recordPushDelivery({ provider: 'expo', status: 'suppressed' });
   }
-
-  recordPushDelivery({
-    provider: 'expo',
-    status: 'queued',
-  });
 
   publishRealtimeEvent({
     topic: `notifications.user:${input.userId}`,
@@ -529,7 +598,7 @@ export async function loadMintOperationById(
       fiat_currency,
       net_fiat_amount_minor::text,
       platform_fee_minor::text,
-      ize_amount_mg::text,
+      ize_amount_units::text,
       rate_per_gram::text,
       rate_source,
       rate_locked_at::text,
@@ -575,7 +644,7 @@ export async function ensureWallet(
       RETURNING
         id,
         user_id,
-        oneze_balance_mg,
+        oneze_balance_units,
         fiat_balance_minor,
         fiat_currency,
         version,
@@ -606,11 +675,11 @@ export async function ensureWallet(
   }
 
   const legacyIzeBalance = await getLedgerAccountBalance(client, 'user', userId, 'ize_wallet', 'IZE');
-  const syncedOnezeBalanceMg = Math.max(0, Math.round(legacyIzeBalance * ONEZE_MG_PER_IZE));
+  const syncedOnezeBalanceUnits = Math.max(0, Math.round(legacyIzeBalance * ONEZE_UNITS_PER_IZE));
 
   if (
-    !Number.isSafeInteger(syncedOnezeBalanceMg)
-    || syncedOnezeBalanceMg === Number(wallet.oneze_balance_mg)
+    !Number.isSafeInteger(syncedOnezeBalanceUnits)
+    || syncedOnezeBalanceUnits === Number(wallet.oneze_balance_units)
   ) {
     return wallet;
   }
@@ -619,21 +688,21 @@ export async function ensureWallet(
     `
       UPDATE wallets
       SET
-        oneze_balance_mg = $2,
+        oneze_balance_units = $2,
         version = version + 1,
         updated_at = NOW()
       WHERE id = $1
       RETURNING
         id,
         user_id,
-        oneze_balance_mg,
+        oneze_balance_units,
         fiat_balance_minor,
         fiat_currency,
         version,
         created_at::text,
         updated_at::text
     `,
-    [wallet.id, syncedOnezeBalanceMg]
+    [wallet.id, syncedOnezeBalanceUnits]
   );
 
   return syncedResult.rows[0] ?? wallet;
@@ -645,7 +714,7 @@ async function loadWalletForUpdate(client: DbQueryable, walletId: string): Promi
       SELECT
         id,
         user_id,
-        oneze_balance_mg,
+        oneze_balance_units,
         fiat_balance_minor,
         fiat_currency,
         version,
@@ -687,7 +756,7 @@ export async function applyWalletLedgerDelta(
 
   const wallet = await loadWalletForUpdate(client, input.walletId);
   const currentBalance = Number(
-    input.asset === '1ZE' ? wallet.oneze_balance_mg : wallet.fiat_balance_minor
+    input.asset === '1ZE' ? wallet.oneze_balance_units : wallet.fiat_balance_minor
   );
   const nextBalance = currentBalance + input.amount;
 
@@ -705,7 +774,7 @@ export async function applyWalletLedgerDelta(
       `
         UPDATE wallets
         SET
-          oneze_balance_mg = $2,
+          oneze_balance_units = $2,
           version = version + 1,
           updated_at = NOW()
         WHERE id = $1
@@ -760,14 +829,14 @@ export async function applyWalletLedgerDelta(
 }
 
 async function ensureWalletSegments(client: DbQueryable, wallet: WalletRow): Promise<WalletSegmentRow> {
-  const seededPurchasedMg = Math.max(0, Number(wallet.oneze_balance_mg));
+  const seededPurchasedUnits = Math.max(0, Number(wallet.oneze_balance_units));
 
   const upserted = await client.query<WalletSegmentRow>(
     `
       INSERT INTO oneze_wallet_segments (
         wallet_id,
-        purchased_balance_mg,
-        earned_balance_mg,
+        purchased_balance_units,
+        earned_balance_units,
         metadata
       )
       VALUES ($1, $2, 0, $3::jsonb)
@@ -775,53 +844,53 @@ async function ensureWalletSegments(client: DbQueryable, wallet: WalletRow): Pro
       DO UPDATE SET wallet_id = EXCLUDED.wallet_id
       RETURNING
         wallet_id,
-        purchased_balance_mg,
-        earned_balance_mg,
+        purchased_balance_units,
+        earned_balance_units,
         metadata,
         created_at::text,
         updated_at::text
     `,
     [
       wallet.id,
-      seededPurchasedMg,
+      seededPurchasedUnits,
       toJsonString({
-        bootstrapFromWalletMg: seededPurchasedMg,
+        bootstrapFromWalletUnits: seededPurchasedUnits,
       }),
     ]
   );
 
   const segments = upserted.rows[0];
-  const walletBalanceMg = Math.max(0, Number(wallet.oneze_balance_mg));
-  const segmentTotalMg = Number(segments.purchased_balance_mg) + Number(segments.earned_balance_mg);
+  const walletBalanceUnits = Math.max(0, Number(wallet.oneze_balance_units));
+  const segmentTotalUnits = Number(segments.purchased_balance_units) + Number(segments.earned_balance_units);
 
-  if (segmentTotalMg >= walletBalanceMg) {
+  if (segmentTotalUnits >= walletBalanceUnits) {
     return segments;
   }
 
-  const parityDeltaMg = walletBalanceMg - segmentTotalMg;
+  const parityDeltaUnits = walletBalanceUnits - segmentTotalUnits;
   const parityPatched = await client.query<WalletSegmentRow>(
     `
       UPDATE oneze_wallet_segments
       SET
-        purchased_balance_mg = purchased_balance_mg + $2,
+        purchased_balance_units = purchased_balance_units + $2,
         metadata = metadata || $3::jsonb,
         updated_at = NOW()
       WHERE wallet_id = $1
       RETURNING
         wallet_id,
-        purchased_balance_mg,
-        earned_balance_mg,
+        purchased_balance_units,
+        earned_balance_units,
         metadata,
         created_at::text,
         updated_at::text
     `,
     [
       wallet.id,
-      parityDeltaMg,
+      parityDeltaUnits,
       toJsonString({
         paritySync: {
           at: new Date().toISOString(),
-          deltaMg: parityDeltaMg,
+          deltaUnits: parityDeltaUnits,
           reason: 'segment_total_below_wallet_balance',
         },
       }),
@@ -841,8 +910,8 @@ async function loadWalletSegmentsForUpdate(
     `
       SELECT
         wallet_id,
-        purchased_balance_mg,
-        earned_balance_mg,
+        purchased_balance_units,
+        earned_balance_units,
         metadata,
         created_at::text,
         updated_at::text
@@ -870,13 +939,13 @@ async function appendWalletOriginEvent(
   input: {
     walletId: string;
     txId: string;
-    amountMg: number;
+    amountUnits: number;
     originCountry: string;
     segment: 'purchased' | 'earned';
     metadata?: Record<string, unknown>;
   }
 ): Promise<void> {
-  if (!Number.isSafeInteger(input.amountMg) || input.amountMg === 0) {
+  if (!Number.isSafeInteger(input.amountUnits) || input.amountUnits === 0) {
     return;
   }
 
@@ -885,7 +954,7 @@ async function appendWalletOriginEvent(
       INSERT INTO oneze_balance_origin_events (
         wallet_id,
         tx_id,
-        amount_mg,
+        amount_units,
         origin_country,
         segment,
         metadata
@@ -895,7 +964,7 @@ async function appendWalletOriginEvent(
     [
       input.walletId,
       input.txId,
-      input.amountMg,
+      input.amountUnits,
       normalizeOnezeCountryTag(input.originCountry),
       input.segment,
       toJsonString(input.metadata ?? {}),
@@ -908,56 +977,56 @@ export async function creditWalletSegmentBalance(
   input: {
     wallet: WalletRow;
     txId: string;
-    purchasedCreditMg?: number;
-    earnedCreditMg?: number;
+    purchasedCreditUnits?: number;
+    earnedCreditUnits?: number;
     originCountry: string;
     metadata?: Record<string, unknown>;
   }
-): Promise<{ purchasedBalanceMg: number; earnedBalanceMg: number }> {
-  const purchasedCreditMg = input.purchasedCreditMg ?? 0;
-  const earnedCreditMg = input.earnedCreditMg ?? 0;
+): Promise<{ purchasedBalanceUnits: number; earnedBalanceUnits: number }> {
+  const purchasedCreditUnits = input.purchasedCreditUnits ?? 0;
+  const earnedCreditUnits = input.earnedCreditUnits ?? 0;
 
-  if (!Number.isSafeInteger(purchasedCreditMg) || !Number.isSafeInteger(earnedCreditMg)) {
-    throw createApiError('WALLET_SEGMENT_AMOUNT_INVALID', 'Wallet segment credits must be integer mg units');
+  if (!Number.isSafeInteger(purchasedCreditUnits) || !Number.isSafeInteger(earnedCreditUnits)) {
+    throw createApiError('WALLET_SEGMENT_AMOUNT_INVALID', 'Wallet segment credits must be integer minor units');
   }
 
-  if (purchasedCreditMg < 0 || earnedCreditMg < 0) {
+  if (purchasedCreditUnits < 0 || earnedCreditUnits < 0) {
     throw createApiError('WALLET_SEGMENT_AMOUNT_INVALID', 'Wallet segment credits cannot be negative');
   }
 
   const segments = await loadWalletSegmentsForUpdate(client, input.wallet);
-  const nextPurchasedMg = Number(segments.purchased_balance_mg) + purchasedCreditMg;
-  const nextEarnedMg = Number(segments.earned_balance_mg) + earnedCreditMg;
+  const nextPurchasedUnits = Number(segments.purchased_balance_units) + purchasedCreditUnits;
+  const nextEarnedUnits = Number(segments.earned_balance_units) + earnedCreditUnits;
 
   await client.query(
     `
       UPDATE oneze_wallet_segments
       SET
-        purchased_balance_mg = $2,
-        earned_balance_mg = $3,
+        purchased_balance_units = $2,
+        earned_balance_units = $3,
         metadata = metadata || $4::jsonb,
         updated_at = NOW()
       WHERE wallet_id = $1
     `,
     [
       input.wallet.id,
-      nextPurchasedMg,
-      nextEarnedMg,
+      nextPurchasedUnits,
+      nextEarnedUnits,
       toJsonString({
         txId: input.txId,
         operation: 'credit',
-        purchasedCreditMg,
-        earnedCreditMg,
+        purchasedCreditUnits,
+        earnedCreditUnits,
         ...(input.metadata ?? {}),
       }),
     ]
   );
 
-  if (purchasedCreditMg > 0) {
+  if (purchasedCreditUnits > 0) {
     await appendWalletOriginEvent(client, {
       walletId: input.wallet.id,
       txId: input.txId,
-      amountMg: purchasedCreditMg,
+      amountUnits: purchasedCreditUnits,
       originCountry: input.originCountry,
       segment: 'purchased',
       metadata: {
@@ -967,11 +1036,11 @@ export async function creditWalletSegmentBalance(
     });
   }
 
-  if (earnedCreditMg > 0) {
+  if (earnedCreditUnits > 0) {
     await appendWalletOriginEvent(client, {
       walletId: input.wallet.id,
       txId: input.txId,
-      amountMg: earnedCreditMg,
+      amountUnits: earnedCreditUnits,
       originCountry: input.originCountry,
       segment: 'earned',
       metadata: {
@@ -982,8 +1051,8 @@ export async function creditWalletSegmentBalance(
   }
 
   return {
-    purchasedBalanceMg: nextPurchasedMg,
-    earnedBalanceMg: nextEarnedMg,
+    purchasedBalanceUnits: nextPurchasedUnits,
+    earnedBalanceUnits: nextEarnedUnits,
   };
 }
 
@@ -999,8 +1068,8 @@ function toWithdrawalPayload(row: WithdrawalRow) {
     id: row.id,
     userId: row.user_id,
     burnTxId: row.burn_tx_id,
-    amountMg: Number(row.amount_mg),
-    amountOneze: mgToOnezeAmount(Number(row.amount_mg)),
+    amountUnits: Number(row.amount_units),
+    amountOneze: unitsToOnezeAmount(Number(row.amount_units)),
     targetCurrency: row.target_currency,
     grossMinor,
     gross: fromFiatMinor(grossMinor, row.target_currency),
@@ -1059,7 +1128,7 @@ async function loadWithdrawalById(
       id,
       user_id,
       burn_tx_id,
-      amount_mg::text,
+      amount_units::text,
       target_currency,
       gross_minor::text,
       spread_minor::text,
@@ -1096,11 +1165,11 @@ export async function executeReservedWithdrawal(
   withdrawal: ReturnType<typeof toWithdrawalPayload>;
   settlement: {
     railRef: string;
-    reserveConsumption: Array<{ lotId: string; consumedMg: number }>;
+    reserveConsumption: Array<{ lotId: string; consumedUnits: number }>;
   } | null;
   wallet: {
     walletId: string;
-    onezeBalanceMg: number;
+    onezeBalanceUnits: number;
     onezeBalance: number;
   } | null;
 }> {
@@ -1127,13 +1196,13 @@ export async function executeReservedWithdrawal(
     });
   }
 
-  const amountMg = Number(withdrawal.amount_mg);
+  const amountUnits = Number(withdrawal.amount_units);
   const linkedTxId = withdrawal.burn_tx_id ?? createRuntimeId('wdburn');
-  const reserveConsumption: Array<{ lotId: string; consumedMg: number }> = [];
+  const reserveConsumption: Array<{ lotId: string; consumedUnits: number }> = [];
   const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, withdrawal.target_currency);
 
   const wallet = await ensureWallet(client, withdrawal.user_id, withdrawal.target_currency);
-  const walletBalanceAfterMg = await applyWalletLedgerDelta(client, {
+  const walletBalanceAfterUnits = await applyWalletLedgerDelta(client, {
     walletId: wallet.id,
     txId: linkedTxId,
     asset: '1ZE',
@@ -1165,7 +1234,7 @@ export async function executeReservedWithdrawal(
         id,
         user_id,
         burn_tx_id,
-        amount_mg::text,
+        amount_units::text,
         target_currency,
         gross_minor::text,
         spread_minor::text,
@@ -1202,8 +1271,8 @@ export async function executeReservedWithdrawal(
     },
     wallet: {
       walletId: wallet.id,
-      onezeBalanceMg: walletBalanceAfterMg,
-      onezeBalance: mgToOnezeAmount(walletBalanceAfterMg),
+      onezeBalanceUnits: walletBalanceAfterUnits,
+      onezeBalance: unitsToOnezeAmount(walletBalanceAfterUnits),
     },
   };
 }

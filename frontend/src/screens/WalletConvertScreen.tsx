@@ -6,8 +6,7 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
@@ -28,9 +27,13 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 
 import { parseApiError } from '../lib/apiClient';
-import { getIzePosition, convertIzeToFiat } from '../services/walletApi';
-import { convertGbpToDisplayAmount, sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
-import { formatIzeAmount } from '../utils/currency';
+import {
+  getIzePosition,
+  convertIzeToFiat,
+  getConvertQuote,
+  type ConvertQuotePayload } from '../services/walletApi';
+import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
+import { formatIzeAmount, izeToUsd, formatUsd } from '../utils/currency';
 import { CURRENCIES } from '../constants/currencies';
 import { COPY } from '../constants/copy';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
@@ -40,16 +43,12 @@ import {
   Typography,
   Space,
   Radius,
-  Type,
   Stroke,
   Control,
   LetterSpacing,
-  IconGrammar,
-} from '../theme/designTokens';
+  IconGrammar } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { t } from '../i18n';
-
-// ── Platform fee rate for 1ZE → fiat conversion (2%) ──
-const CONVERT_FEE_RATE = 0.02;
 
 type ConvertStep = 'amount' | 'review' | 'authenticating' | 'executing' | 'receipt' | 'error';
 
@@ -57,6 +56,11 @@ interface ConversionResult {
   izeAmount: number;
   fiatAmount: number;
   fiatCurrency: string;
+  feeAmount: number;
+  feeBps: number;
+  principalAmount: number;
+  netRedemption: number;
+  rateUsed: number;
   timestamp: string;
 }
 
@@ -70,13 +74,13 @@ export default function WalletConvertScreen() {
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
   const currentUser = useStore((state) => state.currentUser);
-  const { currencyCode, goldRates, rateUpdatedAt, refreshRates } = useCurrencyContext();
+  const { currencyCode, rateUpdatedAt, refreshRates } = useCurrencyContext();
   const { formatFromFiat } = useFormattedPrice();
   const biometricGate = useBiometricGate();
 
   const currencySymbol = CURRENCIES[currencyCode].symbol;
 
-  // ── State ──
+  // -- State --
   const [step, setStep] = useState<ConvertStep>('amount');
   const [amount, setAmount] = useState('');
   const [availableIze, setAvailableIze] = useState(0);
@@ -85,7 +89,16 @@ export default function WalletConvertScreen() {
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // ── Balance hydration (available 1ZE) ──
+  // -- Fee quote from backend (transparent, not hardcoded) --
+  // The full principal/fee/net breakdown comes from the backend preview
+  // quote. The client never assumes a fee rate -- it discloses what the
+  // backend returns (MiCA EMT transparent-fee requirement).
+  const [quote, setQuote] = useState<ConvertQuotePayload | null>(null);
+  const [isFetchingQuote, setIsFetchingQuote] = useState(false);
+  const [quoteError, setQuoteError] = useState(false);
+  const [quoteNonce, setQuoteNonce] = useState(0);
+
+  // -- Balance hydration (available 1ZE) --
   useEffect(() => {
     let isCancelled = false;
 
@@ -118,16 +131,16 @@ export default function WalletConvertScreen() {
     };
   }, [currentUser?.id, currencyCode]);
 
-  // ── Derived conversion values ──
+  // -- Derived conversion values (at-par model) --
+  // All financial truth comes from the backend quote: principalAmount,
+  // feeAmount, feeBps, netFiatAmount and rateUsed. The client only
+  // displays these -- it never computes a fee locally.
   const izeValue = Number(amount || '0');
-  const grossFiat = convertGbpToDisplayAmount(izeValue, currencyCode, goldRates);
-  const platformFee = grossFiat * CONVERT_FEE_RATE;
-  const netFiat = Math.max(0, grossFiat - platformFee);
-  const feeRateLabel = `${Math.round(CONVERT_FEE_RATE * 100)}%`;
+  const usdEquivalent = izeToUsd(izeValue);
   const exceedsBalance = izeValue > availableIze;
   const isWalletOperational = !isOffline;
 
-  // ── Rate timestamp (when the rate was captured) ──
+  // -- Rate timestamp (when the rate was captured) --
   const rateTimestampLabel = React.useMemo(() => {
     if (!rateUpdatedAt) return null;
     const date = new Date(rateUpdatedAt);
@@ -136,11 +149,10 @@ export default function WalletConvertScreen() {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
-      minute: '2-digit',
-    });
+      minute: '2-digit' });
   }, [rateUpdatedAt]);
 
-  // ── Rate expiry: rates are valid for 30 minutes from the timestamp ──
+  // -- Rate expiry: rates are valid for 30 minutes from the timestamp --
   const RATE_VALIDITY_MINUTES = 30;
   const [rateExpiryMs, setRateExpiryMs] = useState<number | null>(null);
 
@@ -174,14 +186,60 @@ export default function WalletConvertScreen() {
 
   const isRateExpired = remainingMs <= 0 && rateExpiryMs !== null;
 
+  // -- Fetch fee quote from backend (debounced) --
+  // The fee is transparent -- fetched from the backend, never hardcoded.
+  // We call the same convert endpoint with a preview flag so the breakdown
+  // matches exactly what execution will return.
+  useEffect(() => {
+    if (izeValue <= 0 || exceedsBalance || !currentUser?.id) {
+      setQuote(null);
+      setQuoteError(false);
+      return;
+    }
+    let isCancelled = false;
+    const debounce = setTimeout(async () => {
+      setIsFetchingQuote(true);
+      setQuoteError(false);
+      try {
+        const response = await getConvertQuote({
+          userId: currentUser.id,
+          izeAmount: izeValue,
+          fiatCurrency: currencyCode });
+        if (!isCancelled) {
+          setQuote(response.conversion);
+        }
+      } catch {
+        if (!isCancelled) {
+          setQuote(null);
+          setQuoteError(true);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsFetchingQuote(false);
+        }
+      }
+    }, 400);
+    return () => {
+      isCancelled = true;
+      clearTimeout(debounce);
+    };
+  }, [izeValue, currencyCode, exceedsBalance, currentUser?.id, quoteNonce]);
+
+  const handleRetryQuote = () => {
+    setQuoteNonce((n) => n + 1);
+  };
+
   const canReview =
     Number.isFinite(izeValue) &&
     izeValue > 0 &&
     !exceedsBalance &&
     !isExecuting &&
-    isWalletOperational;
+    isWalletOperational &&
+    quote !== null &&
+    !isFetchingQuote &&
+    !quoteError;
 
-  // ── Step transitions ──
+  // -- Step transitions --
   const handleReview = () => {
     if (!canReview) {
       return;
@@ -229,11 +287,16 @@ export default function WalletConvertScreen() {
     setStep('executing');
     setIsExecuting(true);
     try {
+      const idempotencyKey =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `convert_${currentUser.id}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
       const response = await convertIzeToFiat({
         userId: currentUser.id,
         izeAmount: izeValue,
         fiatCurrency: currencyCode,
-      });
+        idempotencyKey });
 
       const conversion = response.conversion;
       const nextAvailable = Math.max(0, availableIze - conversion.izeAmount);
@@ -241,10 +304,14 @@ export default function WalletConvertScreen() {
 
       setResult({
         izeAmount: conversion.izeAmount,
-        fiatAmount: conversion.fiatAmount,
+        fiatAmount: conversion.netFiatAmount,
         fiatCurrency: conversion.fiatCurrency,
-        timestamp: new Date().toISOString(),
-      });
+        feeAmount: conversion.feeAmount,
+        feeBps: conversion.feeBps,
+        principalAmount: conversion.principalAmount,
+        netRedemption: conversion.netFiatAmount,
+        rateUsed: conversion.rateUsed,
+        timestamp: new Date().toISOString() });
 
       haptic.success();
       setStep('receipt');
@@ -299,7 +366,7 @@ export default function WalletConvertScreen() {
     }
   };
 
-  // ── Step indicator ──
+  // -- Step indicator --
   const stepLabels = ['Amount', 'Review', 'Auth', 'Done'];
   const activeStepIndex =
     step === 'amount'
@@ -325,8 +392,7 @@ export default function WalletConvertScreen() {
                   styles.stepDot,
                   {
                     backgroundColor: isComplete || isActive ? colors.brand : colors.surfaceAlt,
-                    borderColor: isComplete || isActive ? colors.brand : colors.border,
-                  },
+                    borderColor: isComplete || isActive ? colors.brand : colors.border },
                 ]}
               >
                 {isComplete ? (
@@ -349,8 +415,7 @@ export default function WalletConvertScreen() {
                     color: isActive ? colors.textPrimary : colors.textMuted,
                     fontFamily: isActive
                       ? Typography.family.semibold
-                      : Typography.family.regular,
-                  },
+                      : Typography.family.regular },
                 ]}
               >
                 {label}
@@ -361,8 +426,7 @@ export default function WalletConvertScreen() {
                 style={[
                   styles.stepConnector,
                   {
-                    backgroundColor: index < activeStepIndex ? colors.brand : colors.border,
-                  },
+                    backgroundColor: index < activeStepIndex ? colors.brand : colors.border },
                 ]}
               />
             )}
@@ -384,8 +448,7 @@ export default function WalletConvertScreen() {
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: colors.border,
           marginTop: Space.xs,
-          paddingTop: Space.xs,
-        },
+          paddingTop: Space.xs },
       ]}
       accessibilityRole="text"
       accessibilityLabel={`${label} ${value}`}
@@ -412,7 +475,7 @@ export default function WalletConvertScreen() {
     </View>
   );
 
-  // ── Loading skeleton ──
+  // -- Loading skeleton --
   if (isHydratingBalance) {
     return (
       <FlagshipScreen
@@ -450,7 +513,7 @@ export default function WalletConvertScreen() {
     );
   }
 
-  // ── Footer actions per step ──
+  // -- Footer actions per step --
   const renderFooter = () => {
     if (step === 'amount') {
       return (
@@ -525,7 +588,7 @@ export default function WalletConvertScreen() {
         <View
           style={[
             styles.offlineBanner,
-            { backgroundColor: `${colors.danger}14`, borderBottomColor: colors.border },
+            { backgroundColor: colors.dangerSubtle, borderBottomColor: colors.border },
           ]}
         >
           <Ionicons name="cloud-offline-outline" size={IconGrammar.metadata} color={colors.danger} />
@@ -545,33 +608,19 @@ export default function WalletConvertScreen() {
         showsVerticalScrollIndicator={false}
         scrollEnabled={step === 'amount'}
       >
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* STEP 1: AMOUNT                                                    */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {step === 'amount' && (
           <>
-            {/* Hero summary — available 1ZE balance */}
-            <View>
-              <View
-                style={[
-                  styles.heroCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                ]}
-              >
-                <View style={styles.heroRow}>
-                  <View style={[styles.heroIcon, { backgroundColor: colors.brand }]}>
-                    <Ionicons name="swap-horizontal" size={18} color={colors.textInverse} />
-                  </View>
-                  <View style={styles.heroText}>
-                    <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
-                      {formatIzeAmount(availableIze)}
-                    </Text>
-                    <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                      Available 1ZE to convert
-                    </Text>
-                  </View>
-                </View>
-              </View>
+            {/* Available 1ZE balance — flat, no card or decorative icon circle */}
+            <View style={styles.balanceBlock}>
+              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+                {formatIzeAmount(availableIze, 2)}
+              </Text>
+              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+                Available 1ZE · {formatUsd(izeToUsd(availableIze))} at par
+              </Text>
             </View>
 
             {/* Amount input */}
@@ -596,7 +645,7 @@ export default function WalletConvertScreen() {
                 />
               </View>
               <Text style={styles.availableText}>
-                Available: {formatIzeAmount(availableIze)}
+                Available: {formatIzeAmount(availableIze, 2)} · {formatUsd(izeToUsd(availableIze))}
               </Text>
               {exceedsBalance ? (
                 <Text style={styles.balanceError}>
@@ -605,28 +654,55 @@ export default function WalletConvertScreen() {
               ) : null}
             </View>
 
-            {/* Live calculation summary */}
+            {/* Live calculation summary -- transparent at-par breakdown */}
             {izeValue > 0 && !exceedsBalance && (
               <View>
-                <View
-                  style={[
-                    styles.calcCard,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
-                  ]}
-                >
-                  {renderSummaryRow(
-                    `Gross ${currencyCode}`,
-                    formatFromFiat(grossFiat, currencyCode, { displayMode: 'fiat' })
-                  )}
-                  {renderSummaryRow(
-                    `Platform fee (${feeRateLabel})`,
-                    formatFromFiat(platformFee, currencyCode, { displayMode: 'fiat' })
-                  )}
-                  {renderSummaryRow(
-                    'Net fiat credited',
-                    formatFromFiat(netFiat, currencyCode, { displayMode: 'fiat' }),
-                    { total: true }
-                  )}
+                <View style={styles.calcBlock}>
+                  {isFetchingQuote ? (
+                    <View style={styles.quoteLoadingRow}>
+                      <ActivityIndicator size="small" color={colors.textMuted} />
+                      <Text style={[styles.quoteStatusText, { color: colors.textMuted }]}>
+                        Fetching live quote…
+                      </Text>
+                    </View>
+                  ) : quoteError ? (
+                    <View style={styles.quoteErrorRow}>
+                      <Ionicons name="alert-circle-outline" size={14} color={colors.danger} />
+                      <Text style={[styles.quoteStatusText, { color: colors.danger }]}>
+                        Couldn't fetch quote.
+                      </Text>
+                      <Pressable
+                        hitSlop={8}
+                        onPress={handleRetryQuote}
+                        accessibilityRole="button"
+                        accessibilityLabel="Retry quote fetch"
+                      >
+                        <Text style={[styles.quoteStatusText, { color: colors.brand }]}>
+                          Retry
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : quote ? (
+                    <>
+                      {renderSummaryRow(
+                        'You convert',
+                        `${formatIzeAmount(izeValue, 2)} · ${formatUsd(usdEquivalent)}`
+                      )}
+                      {renderSummaryRow(
+                        'Principal',
+                        formatFromFiat(quote.principalAmount, currencyCode, { displayMode: 'fiat' })
+                      )}
+                      {renderSummaryRow(
+                        `Platform fee (${quote.feeBps} bps)`,
+                        `−${formatFromFiat(quote.feeAmount, currencyCode, { displayMode: 'fiat' })}`
+                      )}
+                      {renderSummaryRow(
+                        'You receive',
+                        formatFromFiat(quote.netFiatAmount, currencyCode, { displayMode: 'fiat' }),
+                        { total: true }
+                      )}
+                    </>
+                  ) : null}
                 </View>
                 {rateTimestampLabel ? (
                   <View style={styles.rateTimestampRow}>
@@ -656,42 +732,33 @@ export default function WalletConvertScreen() {
           </>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* STEP 2: REVIEW                                                    */}
-        {/* ════════════════════════════════════════════════════════════════ */}
-        {step === 'review' && (
-          <View>
-            <View
-              style={[
-                styles.reviewCard,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
-            >
-              <View style={styles.reviewHeader}>
-                <Ionicons name="swap-horizontal" size={20} color={colors.brand} />
-                <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>
-                  Conversion summary
-                </Text>
-              </View>
+        {/* ================================================================ */}
+        {step === 'review' && quote && (
+          <View style={styles.reviewBlock}>
+              <Text style={[styles.reviewTitle, { color: colors.textPrimary }]}>
+                Conversion summary
+              </Text>
 
-              {renderSummaryRow('Converting', formatIzeAmount(izeValue), { emphasis: true })}
+              {renderSummaryRow('You convert', `${formatIzeAmount(izeValue, 2)} · ${formatUsd(usdEquivalent)}`, { emphasis: true })}
               {renderSummaryRow(
-                `To ${currencyCode}`,
-                formatFromFiat(grossFiat, currencyCode, { displayMode: 'fiat' })
+                'Principal',
+                formatFromFiat(quote.principalAmount, currencyCode, { displayMode: 'fiat' })
               )}
               {renderSummaryRow(
-                `Platform fee (${feeRateLabel})`,
-                formatFromFiat(platformFee, currencyCode, { displayMode: 'fiat' })
+                `Platform fee (${quote.feeBps} bps)`,
+                `−${formatFromFiat(quote.feeAmount, currencyCode, { displayMode: 'fiat' })}`
               )}
               {renderSummaryRow(
-                'Net credit',
-                formatFromFiat(netFiat, currencyCode, { displayMode: 'fiat' }),
+                'You receive',
+                formatFromFiat(quote.netFiatAmount, currencyCode, { displayMode: 'fiat' }),
                 { total: true }
               )}
 
               <Text style={[styles.reviewHint, { color: colors.textMuted }]}>
-                The net amount will be credited to your {currencyCode} wallet balance. 1ZE is
-                burned at the prevailing reference rate at settlement time.
+                1ZE is burned at par (1 1ZE = $1.00 USD) and converted to {currencyCode} at the
+                prevailing rate. The fee is a transparent line item — you see exactly what you pay.
               </Text>
               {rateTimestampLabel ? (
                 <View style={styles.rateTimestampRow}>
@@ -717,19 +784,16 @@ export default function WalletConvertScreen() {
                 </View>
               ) : null}
             </View>
-          </View>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* STEP 3: AUTHENTICATING                                            */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {step === 'authenticating' && (
           <View
             style={styles.centeredStep}
           >
-            <View style={[styles.authIconCircle, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="lock-closed-outline" size={32} color={colors.textPrimary} />
-            </View>
+            <Ionicons name="lock-closed-outline" size={48} color={colors.textPrimary} style={styles.stepIcon} />
             <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>
               Authenticate to continue
             </Text>
@@ -769,16 +833,14 @@ export default function WalletConvertScreen() {
           </View>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* STEP 4: EXECUTING                                                 */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {step === 'executing' && (
           <View
             style={styles.centeredStep}
           >
-            <View style={[styles.authIconCircle, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="swap-horizontal" size={32} color={colors.brand} />
-            </View>
+            <Ionicons name="swap-horizontal" size={48} color={colors.brand} style={styles.stepIcon} />
             <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>
               Converting 1ZE…
             </Text>
@@ -793,37 +855,38 @@ export default function WalletConvertScreen() {
           </View>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* STEP 5: RECEIPT                                                   */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {step === 'receipt' && result && (
           <View>
             <View style={styles.receiptWrap}>
-              <View style={[styles.successIconCircle, { backgroundColor: `${colors.success}22` }]}>
-                <Ionicons name="checkmark-circle" size={40} color={colors.success} />
-              </View>
+              <Ionicons name="checkmark-circle" size={56} color={colors.success} style={styles.stepIcon} />
               <Text style={[styles.receiptTitle, { color: colors.textPrimary }]}>
                 Conversion complete
               </Text>
               <Text style={[styles.receiptSubtitle, { color: colors.textSecondary }]}>
-                Converted {formatIzeAmount(result.izeAmount)} to{' '}
-                {formatFromFiat(result.fiatAmount, result.fiatCurrency as any, {
-                  displayMode: 'fiat',
-                })}
+                Converted {formatIzeAmount(result.izeAmount, 2)} to{' '}
+                {formatFromFiat(result.netRedemption, result.fiatCurrency as any, {
+                  displayMode: 'fiat' })}
               </Text>
 
-              <View
-                style={[
-                  styles.receiptCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                ]}
-              >
-                {renderSummaryRow('Converted', formatIzeAmount(result.izeAmount))}
+              <View style={styles.receiptBlock}>
+                {renderSummaryRow('Converted', `${formatIzeAmount(result.izeAmount, 2)} · ${formatUsd(izeToUsd(result.izeAmount))}`)}
                 {renderSummaryRow(
-                  'Credited',
-                  formatFromFiat(result.fiatAmount, result.fiatCurrency as any, {
-                    displayMode: 'fiat',
-                  })
+                  'Principal',
+                  formatFromFiat(result.principalAmount, result.fiatCurrency as any, {
+                    displayMode: 'fiat' })
+                )}
+                {renderSummaryRow(
+                  `Platform fee (${result.feeBps} bps)`,
+                  `−${formatFromFiat(result.feeAmount, result.fiatCurrency as any, {
+                    displayMode: 'fiat' })}`
+                )}
+                {renderSummaryRow(
+                  'You received',
+                  formatFromFiat(result.netRedemption, result.fiatCurrency as any, {
+                    displayMode: 'fiat' })
                 )}
                 {renderSummaryRow(
                   'Currency',
@@ -833,8 +896,7 @@ export default function WalletConvertScreen() {
                   'Timestamp',
                   new Date(result.timestamp).toLocaleString('en-GB', {
                     dateStyle: 'medium',
-                    timeStyle: 'short',
-                  }),
+                    timeStyle: 'short' }),
                   { total: true }
                 )}
               </View>
@@ -842,16 +904,14 @@ export default function WalletConvertScreen() {
           </View>
         )}
 
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {/* ERROR STATE                                                       */}
-        {/* ════════════════════════════════════════════════════════════════ */}
+        {/* ================================================================ */}
         {step === 'error' && (
           <View
             style={styles.centeredStep}
           >
-            <View style={[styles.errorIconCircle, { backgroundColor: `${colors.danger}18` }]}>
-              <Ionicons name="close-circle-outline" size={40} color={colors.danger} />
-            </View>
+            <Ionicons name="close-circle-outline" size={56} color={colors.danger} style={styles.stepIcon} />
             <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>
               Conversion failed
             </Text>
@@ -886,15 +946,14 @@ export default function WalletConvertScreen() {
   );
 }
 
-// ── Styles ──
+// -- Styles --
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
 
     skeletonContainer: {
       paddingHorizontal: Space.md + Space.xs,
-      paddingTop: Space.md,
-    },
+      paddingTop: Space.md },
 
     header: {
       flexDirection: 'row',
@@ -903,19 +962,16 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       height: Space.xl + Space.xl + 8,
       borderBottomWidth: Stroke.standard,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     backBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'flex-start',
-    },
+      alignItems: 'flex-start' },
     headerTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      color: colors.textPrimary },
 
     offlineBanner: {
       flexDirection: 'row',
@@ -923,323 +979,250 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      borderBottomWidth: Stroke.standard,
-    },
+      borderBottomWidth: Stroke.standard },
     offlineBannerText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight },
 
-    // ── Step indicator ──
+    // -- Step indicator --
     stepIndicatorRow: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: Space.md + Space.xs,
       paddingVertical: Space.sm + 2,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     stepItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     stepDot: {
       width: 22,
       height: 22,
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     stepDotText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: LetterSpacing.wide,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: LetterSpacing.wide },
     stepLabel: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     stepConnector: {
       flex: 1,
       height: StyleSheet.hairlineWidth,
-      marginHorizontal: Space.xs,
-    },
+      marginHorizontal: Space.xs },
 
     content: {
       flex: 1,
-      paddingHorizontal: Space.md + Space.xs,
-    },
+      paddingHorizontal: Space.md + Space.xs },
 
-    // ── Hero card (flat canvas + hairline — no shadow) ──
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
+    // -- Hero balance (flat, no card or decorative icon circle) --
+    balanceBlock: {
       marginTop: Space.md,
       marginBottom: Space.lg,
-    },
-    heroRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-    heroIcon: {
-      width: Space.xl + Space.sm,
-      height: Space.xl + Space.sm,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
+      paddingHorizontal: Space.xs },
     heroTitle: {
-      fontSize: Type.priceHero.size,
-      lineHeight: Type.priceHero.lineHeight,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.priceHero.letterSpacing,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.priceHero.size,
+      lineHeight: TypographyV2.priceHero.lineHeight,
+      fontFamily: TypographyV2.priceHero.fontFamily,
+      letterSpacing: TypographyV2.priceHero.letterSpacing,
+      fontVariant: ['tabular-nums'] },
     heroSubtitle: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      marginTop: Space.xs / 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginTop: Space.xs / 2 },
 
-    // ── Amount input ──
+    // -- Amount input --
     amountWrap: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       marginTop: Space.xl + Space.xl - 8,
-      marginBottom: Space.sm + Space.xs,
-    },
+      marginBottom: Space.sm + Space.xs },
     amountSuffix: {
-      fontSize: Type.priceHero.size + 12,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceHero.size + 12,
+      fontFamily: TypographyV2.priceHero.fontFamily,
       color: colors.textMuted,
       marginRight: Space.sm,
-      letterSpacing: LetterSpacing.wide,
-    },
+      letterSpacing: LetterSpacing.wide },
     amountInput: {
-      fontSize: Type.priceHero.size + 28,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.priceHero.size + 28,
+      fontFamily: TypographyV2.priceHero.fontFamily,
       color: colors.textPrimary,
       minWidth: Space.xxl * 3 + Space.xs + 2,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     availableText: {
       textAlign: 'center',
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
       color: colors.textSecondary,
       marginBottom: Space.sm,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     balanceError: {
       textAlign: 'center',
       marginTop: Space.xs,
       marginBottom: Space.md + 4,
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-      color: colors.danger,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.danger },
 
-    // ── Calculation / summary card ──
-    calcCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
+    // -- Calculation / summary (flat, no card wrapper) --
+    calcBlock: {
       marginTop: Space.sm,
-    },
-    reviewCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginTop: Space.md,
-      gap: Space.xs,
-    },
-    reviewHeader: {
+      paddingHorizontal: Space.xs },
+    quoteLoadingRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginBottom: Space.sm,
-    },
+      paddingVertical: Space.xs },
+    quoteErrorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xs },
+    quoteStatusText: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
+    reviewBlock: {
+      marginTop: Space.md,
+      gap: Space.xs,
+      paddingHorizontal: Space.xs },
     reviewTitle: {
-      fontSize: Type.bodyStrong.size,
-      lineHeight: Type.bodyStrong.lineHeight,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     reviewHint: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight + 2,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      marginTop: Space.sm + Space.xs,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginTop: Space.sm + Space.xs },
     rateTimestampRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     rateTimestampText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     rateExpiryText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.meta.letterSpacing,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      fontVariant: ['tabular-nums'] },
 
-    // ── Summary rows ──
+    // -- Summary rows --
     summaryRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     summaryLabel: {
-      fontSize: Type.caption.size,
-      lineHeight: Type.caption.lineHeight,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     summaryValue: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.body.letterSpacing,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      fontVariant: ['tabular-nums'] },
 
-    // ── Centered step (auth / executing / error) ──
+    // -- Centered step (auth / executing / error) --
     centeredStep: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: Space.lg,
-      paddingTop: Space.xxl,
-    },
-    authIconCircle: {
-      width: 72,
-      height: 72,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: Space.md,
-    },
+      paddingTop: Space.xxl },
+    stepIcon: {
+      marginBottom: Space.md },
     stepTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
       textAlign: 'center',
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
-      marginBottom: Space.xs,
-    },
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      marginBottom: Space.xs },
     stepSubtitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       textAlign: 'center',
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight,
       marginBottom: Space.lg,
-      maxWidth: 320,
-    },
+      maxWidth: 320 },
     authActions: {
       flexDirection: 'column',
       gap: Space.sm,
       width: 280,
-      maxWidth: '100%',
-    },
+      maxWidth: '100%' },
     authActionBtn: {
-      width: '100%',
-    },
+      width: '100%' },
 
-    // ── Receipt ──
+    // -- Receipt --
     receiptWrap: {
       alignItems: 'center',
       paddingTop: Space.xl,
-      paddingHorizontal: Space.md,
-    },
-    successIconCircle: {
-      width: 80,
-      height: 80,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: Space.md,
-    },
-    errorIconCircle: {
-      width: 80,
-      height: 80,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: Space.md,
-    },
+      paddingHorizontal: Space.md },
+    receiptBlock: {
+      width: '100%',
+      paddingHorizontal: Space.xs },
     receiptTitle: {
-      fontSize: Type.title.size,
-      lineHeight: Type.title.lineHeight,
-      fontFamily: Typography.family.bold,
-      letterSpacing: Type.title.letterSpacing,
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
       textAlign: 'center',
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     receiptSubtitle: {
-      fontSize: Type.body.size,
-      lineHeight: Type.body.lineHeight,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.body.letterSpacing,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing,
       color: colors.textSecondary,
       textAlign: 'center',
       marginBottom: Space.lg,
-      maxWidth: 320,
-    },
-    receiptCard: {
-      width: '100%',
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-    },
-
-    // ── Footer ──
+      maxWidth: 320 },
     footer: {
       paddingVertical: Space.md + 4,
       paddingHorizontal: Space.md + Space.xs,
       borderTopWidth: Stroke.standard,
       borderTopColor: colors.border,
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     primaryBtn: {
       backgroundColor: colors.textPrimary,
       height: Space.xl + Space.xl + 8,
       borderRadius: Space.lg + 4,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     primaryBtnDisabled: { opacity: 0.45 },
     primaryText: {
       color: colors.background,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.bold,
-      fontVariant: ['tabular-nums'],
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      fontVariant: ['tabular-nums'] },
     secondaryBtn: {
       height: Space.xl + 8,
       borderRadius: Space.lg + 4,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
-  });
+      justifyContent: 'center' } });
 }

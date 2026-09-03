@@ -155,16 +155,15 @@ function trackShareEvent(
   detail?: string,
 ): void {
   try {
-    // Lazy require — analytics is optional at runtime.
     const analyticsModule = require('../../analytics/track') as {
       track?: (event: string, properties: Record<string, unknown>) => void;
     };
     const track = analyticsModule?.track;
     if (typeof track !== 'function') return;
-    track('share_attempt', {
+    track('share_completed', {
       platform,
+      content_type: 'generic',
       outcome,
-      detail: detail ?? null,
     });
   } catch {
     // Analytics must never crash the share flow.

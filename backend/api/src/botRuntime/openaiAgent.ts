@@ -1,6 +1,15 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
+import type { Pool } from 'pg';
 import type { BotRuntimeContext, BotHandlerResult, AgentStreamChunkHandler } from './types.js';
 import { AI_RATE_LIMITS, computeRetryDelayMs } from '../lib/aiTruth.js';
+import {
+  loadEnabledTools,
+  loadToolBindings,
+  toolsToOpenAIFormat,
+  evaluateToolPolicy,
+  type ToolDefinition,
+  type ToolBinding,
+} from './toolRegistry.js';
 
 const runtimeConfig = {
   apiKey: process.env.OPENAI_API_KEY?.trim() || null,
@@ -222,7 +231,13 @@ function buildAgentInput(ctx: BotRuntimeContext) {
   ];
 }
 
-function buildRequestBody(ctx: BotRuntimeContext, instructions: string, input: unknown, stream: boolean): string {
+function buildRequestBody(
+  ctx: BotRuntimeContext,
+  instructions: string,
+  input: unknown,
+  stream: boolean,
+  toolsPayload: Record<string, unknown> = {},
+): string {
   const safetyIdentifier = createHash('sha256')
     .update(`thryftverse:${ctx.actorUserId}`)
     .digest('hex');
@@ -239,7 +254,199 @@ function buildRequestBody(ctx: BotRuntimeContext, instructions: string, input: u
     safety_identifier: safetyIdentifier,
     store: false,
     ...(stream ? { stream: true } : {}),
+    ...toolsPayload,
   });
+}
+
+// ── Tool call handling ─────────────────────────────────────────────────
+//
+// When tools are sent to the model, the Responses API may return output
+// items of type 'function_call' instead of (or alongside) text. Each
+// function_call item carries a name, arguments (JSON string), and a
+// call_id. The server policy engine decides whether to allow, require
+// approval, or deny each proposed call.
+
+interface ProposedToolCall {
+  callId: string;
+  name: string;
+  arguments: string;
+}
+
+function extractToolCalls(payload: unknown): ProposedToolCall[] {
+  if (!payload || typeof payload !== 'object') return [];
+  const record = payload as Record<string, unknown>;
+  if (!Array.isArray(record.output)) return [];
+
+  return record.output
+    .filter((item): item is Record<string, unknown> =>
+      item !== null && typeof item === 'object' &&
+      (item as Record<string, unknown>).type === 'function_call')
+    .map((item) => ({
+      callId: typeof item.call_id === 'string' ? item.call_id : '',
+      name: typeof item.name === 'string' ? item.name : '',
+      arguments: typeof item.arguments === 'string' ? item.arguments : '{}',
+    }))
+    .filter((tc) => tc.name.length > 0);
+}
+
+function parseToolArguments(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Process proposed tool calls through the policy engine. Returns a
+ * BotHandlerResult describing the outcome. When a tool call requires
+ * approval and both `db` and `runId` are available, a durable approval
+ * request row is created so the run can be resumed after the user decides.
+ */
+async function processToolCalls(
+  ctx: BotRuntimeContext,
+  toolCalls: ProposedToolCall[],
+  tools: ToolDefinition[],
+  bindings: ToolBinding[],
+  payload: unknown,
+  attempt: number,
+  startedAtMs: number,
+  db?: Pool,
+  runId?: string,
+): Promise<BotHandlerResult> {
+  const bindingMap = new Map(bindings.map((b) => [b.toolName, b]));
+  const toolMap = new Map(tools.map((t) => [t.name, t]));
+  const providerUsage = extractProviderUsage(payload);
+  const responseRecord = payload && typeof payload === 'object'
+    ? payload as Record<string, unknown>
+    : {};
+
+  const approvedCalls: string[] = [];
+  const deniedCalls: string[] = [];
+  const pendingApprovals: string[] = [];
+
+  for (const call of toolCalls) {
+    const tool = toolMap.get(call.name);
+    if (!tool) {
+      deniedCalls.push(`${call.name} (unknown tool)`);
+      continue;
+    }
+
+    const binding = bindingMap.get(call.name);
+    const decision = evaluateToolPolicy(
+      tool,
+      binding,
+      ctx.permissionsSnapshot,
+      false, // No prior approval in this phase
+    );
+
+    if (decision.decision === 'allow') {
+      approvedCalls.push(call.name);
+      // Phase 5: tool execution is minimal — actual execution is Phase 6.
+      // We log the call but return a placeholder result.
+    } else if (decision.decision === 'require_approval') {
+      pendingApprovals.push(call.name);
+
+      // Create a durable approval request when we have db + runId.
+      if (db && runId) {
+        try {
+          const approvalId = `apr_${randomBytes(12).toString('hex')}`;
+          const continuationToken = createHash('sha256')
+            .update(`${runId}:${call.callId}:${call.name}`)
+            .digest('hex');
+          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+
+          await db.query(
+            `INSERT INTO agent_approval_requests
+               (id, run_id, bot_id, conversation_id, actor_user_id, tool_name, tool_arguments, continuation_token, status, expires_at, metadata)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)`,
+            [
+              approvalId,
+              runId,
+              ctx.botId,
+              ctx.conversationId,
+              ctx.actorUserId,
+              call.name,
+              JSON.stringify(parseToolArguments(call.arguments)),
+              continuationToken,
+              expiresAt,
+              JSON.stringify({ callId: call.callId, reason: decision.reason }),
+            ],
+          );
+        } catch {
+          // Approval persistence is best-effort in this phase; the
+          // waiting result is still returned so the caller can react.
+        }
+      }
+    } else {
+      deniedCalls.push(`${call.name} (${decision.reason})`);
+    }
+  }
+
+  // If any tool calls require approval, return a waiting result.
+  if (pendingApprovals.length > 0) {
+    const text = `${ctx.botName}: I need approval before I can proceed with: ${pendingApprovals.join(', ')}. A human reviewer will need to approve this action.`;
+    return {
+      text,
+      shouldReply: true,
+      confidence: 1.0,
+      explanation: `Agent proposed tool call(s) requiring approval: ${pendingApprovals.join(', ')}. The run is paused pending human decision.`,
+      needsHumanReview: true,
+      metadata: {
+        agentRuntime: 'openai-responses',
+        model: typeof responseRecord.model === 'string'
+          ? responseRecord.model
+          : ctx.agentConfig!.model,
+        providerRequestId: typeof responseRecord.id === 'string'
+          ? responseRecord.id
+          : null,
+        providerUsage,
+        providerLatencyMs: Date.now() - startedAtMs,
+        attempt,
+        toolCalls: toolCalls.map((c) => ({ name: c.name, callId: c.callId })),
+        pendingApprovals,
+        waitingForApproval: true,
+        runId: runId ?? null,
+      },
+    };
+  }
+
+  // All tool calls were either allowed or denied. Return a summary.
+  const parts: string[] = [];
+  if (approvedCalls.length > 0) {
+    parts.push(`I can help with that. I've prepared the following action(s): ${approvedCalls.join(', ')}.`);
+  }
+  if (deniedCalls.length > 0) {
+    parts.push(`I wasn't able to proceed with: ${deniedCalls.join(', ')}.`);
+  }
+  const text = parts.length > 0
+    ? `${ctx.botName}: ${parts.join(' ')}`
+    : `${ctx.botName}: I received a tool request but could not process it.`;
+
+  return {
+    text,
+    shouldReply: true,
+    confidence: 0.8,
+    explanation: `Agent proposed tool call(s). Allowed: [${approvedCalls.join(', ')}]. Denied: [${deniedCalls.join(', ')}]. Tool execution is not yet implemented — this is a placeholder result.`,
+    metadata: {
+      agentRuntime: 'openai-responses',
+      model: typeof responseRecord.model === 'string'
+        ? responseRecord.model
+        : ctx.agentConfig!.model,
+      providerRequestId: typeof responseRecord.id === 'string'
+        ? responseRecord.id
+        : null,
+      providerUsage,
+      providerLatencyMs: Date.now() - startedAtMs,
+      attempt,
+      toolCalls: toolCalls.map((c) => ({ name: c.name, callId: c.callId })),
+      approvedTools: approvedCalls,
+      deniedTools: deniedCalls,
+    },
+  };
 }
 
 function buildSuccessResult(
@@ -308,22 +515,47 @@ function buildSuccessResult(
   };
 }
 
-export async function executeOpenAiAgent(ctx: BotRuntimeContext): Promise<BotHandlerResult> {
+export async function executeOpenAiAgent(
+  ctx: BotRuntimeContext,
+  connectionCredential?: { apiKey: string; baseUrl: string },
+  db?: Pool,
+  runId?: string,
+): Promise<BotHandlerResult> {
   if (!ctx.agentConfig) {
     throw new Error('Agent configuration is missing');
   }
-  if (!runtimeConfig.apiKey) {
+  const effectiveApiKey = connectionCredential?.apiKey ?? runtimeConfig.apiKey;
+  const effectiveBaseUrl = connectionCredential?.baseUrl ?? runtimeConfig.baseUrl;
+  if (!effectiveApiKey) {
     throw new Error('AI provider is not configured');
   }
 
   const instructions = buildAgentInstructions(ctx);
   const input = buildAgentInput(ctx);
 
+  // Load tools and bindings from the registry when a db pool is available.
+  // Without db, the agent operates in text-only mode (no tools sent).
+  let tools: ToolDefinition[] = [];
+  let bindings: ToolBinding[] = [];
+  if (db) {
+    try {
+      tools = await loadEnabledTools(db);
+      if (tools.length > 0) {
+        bindings = await loadToolBindings(db, ctx.botId);
+      }
+    } catch {
+      // Tool loading is best-effort — the agent can still respond without tools.
+    }
+  }
+  const toolsPayload = tools.length > 0
+    ? { tools: toolsToOpenAIFormat(tools) }
+    : {};
+
   // P0-9: Retry with exponential backoff + jitter for transient provider
   // failures. 429 (rate-limit) and 5xx are retried; 4xx (auth, bad
   // request) are not retried because they will not succeed on retry.
   const maxRetries = AI_RATE_LIMITS.maxRetries;
-  const body = buildRequestBody(ctx, instructions, input, false);
+  const body = buildRequestBody(ctx, instructions, input, false, toolsPayload);
 
   let lastError: Error | null = null;
   const startedAtMs = Date.now();
@@ -331,10 +563,10 @@ export async function executeOpenAiAgent(ctx: BotRuntimeContext): Promise<BotHan
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs);
     try {
-      const response = await fetch(`${runtimeConfig.baseUrl}/responses`, {
+      const response = await fetch(`${effectiveBaseUrl}/responses`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${runtimeConfig.apiKey}`,
+          Authorization: `Bearer ${effectiveApiKey}`,
           'Content-Type': 'application/json',
         },
         body,
@@ -343,6 +575,17 @@ export async function executeOpenAiAgent(ctx: BotRuntimeContext): Promise<BotHan
 
       if (response.ok) {
         const payload = (await response.json()) as unknown;
+
+        // Check for tool calls before extracting text. When the model
+        // proposes tool calls, the response may have no output_text —
+        // the output array contains function_call items instead.
+        const toolCalls = extractToolCalls(payload);
+        if (toolCalls.length > 0 && tools.length > 0) {
+          return processToolCalls(
+            ctx, toolCalls, tools, bindings, payload, attempt, startedAtMs, db, runId,
+          );
+        }
+
         const text = extractResponseText(payload);
         if (!text) {
           throw new Error('AI provider returned an empty response');
@@ -432,17 +675,40 @@ function extractDeltaText(event: SseEvent): string {
 export async function streamOpenAiAgent(
   ctx: BotRuntimeContext,
   onChunk: AgentStreamChunkHandler,
+  connectionCredential?: { apiKey: string; baseUrl: string },
+  db?: Pool,
+  runId?: string,
 ): Promise<BotHandlerResult> {
   if (!ctx.agentConfig) {
     throw new Error('Agent configuration is missing');
   }
-  if (!runtimeConfig.apiKey) {
+  const effectiveApiKey = connectionCredential?.apiKey ?? runtimeConfig.apiKey;
+  const effectiveBaseUrl = connectionCredential?.baseUrl ?? runtimeConfig.baseUrl;
+  if (!effectiveApiKey) {
     throw new Error('AI provider is not configured');
   }
 
   const instructions = buildAgentInstructions(ctx);
   const input = buildAgentInput(ctx);
-  const body = buildRequestBody(ctx, instructions, input, true);
+
+  // Load tools and bindings from the registry when a db pool is available.
+  let tools: ToolDefinition[] = [];
+  let bindings: ToolBinding[] = [];
+  if (db) {
+    try {
+      tools = await loadEnabledTools(db);
+      if (tools.length > 0) {
+        bindings = await loadToolBindings(db, ctx.botId);
+      }
+    } catch {
+      // Tool loading is best-effort.
+    }
+  }
+  const toolsPayload = tools.length > 0
+    ? { tools: toolsToOpenAIFormat(tools) }
+    : {};
+
+  const body = buildRequestBody(ctx, instructions, input, true, toolsPayload);
 
   const maxRetries = AI_RATE_LIMITS.maxRetries;
   let lastError: Error | null = null;
@@ -452,10 +718,10 @@ export async function streamOpenAiAgent(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs);
     try {
-      const response = await fetch(`${runtimeConfig.baseUrl}/responses`, {
+      const response = await fetch(`${effectiveBaseUrl}/responses`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${runtimeConfig.apiKey}`,
+          Authorization: `Bearer ${effectiveApiKey}`,
           'Content-Type': 'application/json',
         },
         body,
@@ -480,6 +746,14 @@ export async function streamOpenAiAgent(
           ) {
             finalPayload = event.data;
           }
+        }
+
+        // Check for tool calls in the final payload before requiring text.
+        const toolCalls = extractToolCalls(finalPayload);
+        if (toolCalls.length > 0 && tools.length > 0) {
+          return processToolCalls(
+            ctx, toolCalls, tools, bindings, finalPayload, attempt, startedAtMs, db, runId,
+          );
         }
 
         const text = assembledText.trim() || extractResponseText(finalPayload);

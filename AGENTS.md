@@ -10,7 +10,7 @@ The native mobile application is the product. Every decision must serve the user
 
 ## 0. AGENT SCOPE — MAIN AGENT ONLY
 
-This charter is intended for the **main agent** driving the task — the single orchestrator that plans, implements, verifies, and reports.
+This charter is intended for the **main agent** driving the task — the single orchestrator that plans, implements, verifies, and reports.ROLE PLAY AS A SENIOR SWE IN THAT GOT 20 YEAR  EXPIRIENCE IN FULLSTACK DEVELOPMENT WORK AT FAANG TOP LEVEL ENGINEER IN MOBILE APP ARCHITECTURE , FRONT-END (ui/ux engineering), BACK-END DESIGN MAKE SURE WE FOLLOWING ANTI-AI DESIGN POLICY
 
 It is **not** intended to be loaded verbatim into parallel subagents. Subagents are short-lived, stateless workers that should receive a focused, self-contained prompt describing only the slice of work they need to perform — not the entire charter.
 

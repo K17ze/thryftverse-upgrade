@@ -1,10 +1,29 @@
-import { fetchJson } from '../lib/apiClient';
+import { fetchJson, fetchWithAuth } from '../lib/apiClient';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 import { warnIfMockSuppressed } from '../utils/mockGate';
 
-export type AuctionLifecycle = 'upcoming' | 'live' | 'ended' | 'cancelled' | 'settled';
+export type AuctionLifecycle =
+  | 'upcoming'
+  | 'live'
+  | 'ended'
+  | 'reserve_not_met'
+  | 'awaiting_payment'
+  | 'payment_expired'
+  | 'second_chance_offered'
+  | 'settled'
+  | 'cancelled';
 export type AuctionStatus = AuctionLifecycle;
-export type AuctionTerminalReason = 'cancelled' | 'settled' | 'buy_now' | 'scheduled_end' | null;
+export type AuctionTerminalReason =
+  | 'cancelled'
+  | 'settled'
+  | 'buy_now'
+  | 'scheduled_end'
+  | 'reserve_not_met'
+  | 'payment_expired'
+  | 'second_chance'
+  | 'seller_accepted_below_reserve'
+  | 'seller_cancelled'
+  | null;
 export type AuctionViewerState = 'not_participating' | 'watching' | 'leading' | 'outbid' | 'won' | 'lost' | 'seller';
 export type AuctionSortMode = 'endingSoon' | 'newest' | 'mostBids' | 'priceLow' | 'priceHigh';
 
@@ -39,6 +58,18 @@ export interface MarketAuction {
   winnerBidderId: string | null;
   cancelledAt: string | null;
   settledAt: string | null;
+  paidAt: string | null;
+  paymentDeadlineAt: string | null;
+  secondChanceOfferedTo: string | null;
+  cancelledBy: string | null;
+  cancelledReason: string | null;
+  antiSniping: {
+    enabled: boolean;
+    extensionSeconds: number;
+    maxExtensions: number;
+    windowSeconds: number;
+  } | null;
+  auctionSequence?: number;
   createdAt: string;
 }
 
@@ -81,6 +112,18 @@ export interface AuctionDetail {
   winnerBidderId: string | null;
   settledAt: string | null;
   cancelledAt: string | null;
+  paidAt: string | null;
+  paymentDeadlineAt: string | null;
+  secondChanceOfferedTo: string | null;
+  cancelledBy: string | null;
+  cancelledReason: string | null;
+  antiSniping: {
+    enabled: boolean;
+    extensionSeconds: number;
+    maxExtensions: number;
+    windowSeconds: number;
+  } | null;
+  auctionSequence?: number;
   createdAt: string;
   /** Terminal fulfilment summary. Per spec 02_AUCTION §8: backend-backed
    * result/fulfilment contract. Null when the auction is not terminal
@@ -180,7 +223,7 @@ export interface MarketAuctionBidResult {
   } | null;
 }
 
-export type CoOwnSettlementMode = 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+export type CoOwnSettlementMode = 'ONEZE';
 
 export interface MarketCoOwnAsset {
   id: string;
@@ -643,6 +686,7 @@ interface ListUserMarketHistoryOptions {
 
 export interface PlaceAuctionBidInput {
   amountGbp: number;
+  maxBidGbp?: number;
   idempotencyKey?: string;
 }
 
@@ -650,8 +694,10 @@ interface PlaceCoOwnOrderInput {
   userId: string;
   side: CoOwnOrderSide;
   units: number;
-  orderType?: 'market' | 'limit';
+  orderType?: 'market' | 'limit' | 'protected_market';
   limitPriceGbp?: number;
+  maxPriceGbp?: number;  // for protected_market buy orders
+  minPriceGbp?: number;  // for protected_market sell orders
   /** Active server reservation created immediately before confirmation. */
   reservationId: string;
   /** Client-supplied idempotency key per spec 10 §1. Prevents duplicate orders on retry. */
@@ -689,6 +735,12 @@ export interface CreateAuctionInput {
   buyNowPriceGbp?: number;
   reservePriceGbp?: number;
   minIncrementGbp?: number;
+  antiSniping?: {
+    enabled: boolean;
+    extensionSeconds: number;
+    maxExtensions: number;
+    windowSeconds: number;
+  };
   idempotencyKey?: string;
 }
 
@@ -828,6 +880,12 @@ function mockAuction(
     winnerBidderId: null,
     cancelledAt: null,
     settledAt: null,
+    paidAt: null,
+    paymentDeadlineAt: null,
+    secondChanceOfferedTo: null,
+    cancelledBy: null,
+    cancelledReason: null,
+    antiSniping: null,
     createdAt: isoFromNow(-1440),
   };
 }
@@ -1063,6 +1121,36 @@ export async function getMyAuctionBids(
   return { items: payload.items, nextCursor: payload.nextCursor };
 }
 
+// ── Unknown-outcome reconciliation ──────────────────────────────────
+//
+// When a POST /auctions/:auctionId/bids response is lost (network
+// timeout), the client cannot tell whether the bid was placed. This
+// lookup resolves the ambiguity by querying the backend by idempotency key.
+//
+// Returns one of three states:
+//   - 'acknowledged': the bid exists, body contains the bid
+//   - 'processing': the server returned a transient error (retry)
+//   - 'safe_to_retry': no bid with this key exists (may resubmit)
+
+import type { LookupResult } from '../hooks/useUnknownOutcomeReconciliation';
+
+export async function lookupAuctionBidByIdempotencyKey(
+  idempotencyKey: string,
+): Promise<LookupResult<MarketAuctionBid>> {
+  try {
+    const payload = await fetchJson<{ ok: true; status: 'acknowledged'; bid: MarketAuctionBid }>(
+      `/users/me/auction-bids/lookup-by-key/${encodeURIComponent(idempotencyKey)}`,
+    );
+    return { status: 'acknowledged', value: payload.bid };
+  } catch (error: unknown) {
+    const status = (error as { status?: number }).status;
+    if (status === 404) {
+      return { status: 'safe_to_retry' };
+    }
+    return { status: 'processing' };
+  }
+}
+
 export async function placeAuctionBid(
   auctionId: string,
   input: PlaceAuctionBidInput
@@ -1123,6 +1211,102 @@ export async function buyAuctionNow(
   return payload;
 }
 
+interface CancelAuctionResponse {
+  ok: true;
+  auction: MarketAuction;
+}
+
+export async function cancelAuction(
+  auctionId: string,
+  reason?: string
+): Promise<MarketAuction> {
+  const payload = await fetchJson<CancelAuctionResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/cancel`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    }
+  );
+  return payload.auction;
+}
+
+interface PayAuctionInput {
+  idempotencyKey: string;
+  paymentMethodId?: number;
+}
+
+interface PayAuctionResponse {
+  ok: true;
+  paymentStatus: 'pending' | 'paid' | 'failed';
+  orderId?: string;
+  auction: MarketAuction;
+}
+
+export async function payAuction(
+  auctionId: string,
+  input: PayAuctionInput
+): Promise<PayAuctionResponse> {
+  return fetchJson<PayAuctionResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/payment`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }
+  );
+}
+
+interface AcceptSecondChanceResponse {
+  ok: true;
+  auction: MarketAuction;
+}
+
+export async function acceptSecondChance(
+  auctionId: string,
+  idempotencyKey: string
+): Promise<MarketAuction> {
+  const payload = await fetchJson<AcceptSecondChanceResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/second-chance/accept`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idempotencyKey }),
+    }
+  );
+  return payload.auction;
+}
+
+interface DeclineSecondChanceResponse {
+  ok: true;
+  auction: MarketAuction;
+}
+
+export async function declineSecondChance(
+  auctionId: string
+): Promise<MarketAuction> {
+  const payload = await fetchJson<DeclineSecondChanceResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/second-chance/decline`,
+    { method: 'POST' }
+  );
+  return payload.auction;
+}
+
+interface AcceptHighestBidResponse {
+  ok: true;
+  auction: MarketAuction;
+}
+
+export async function acceptHighestBid(
+  auctionId: string
+): Promise<MarketAuction> {
+  const payload = await fetchJson<AcceptHighestBidResponse>(
+    `/auctions/${encodeURIComponent(auctionId)}/accept-highest-bid`,
+    { method: 'POST' }
+  );
+  return payload.auction;
+}
+
 export async function listAuctionBids(
   auctionId: string,
   options: ListAuctionBidsOptions = {}
@@ -1175,7 +1359,7 @@ function mockCoOwnAsset(
     availableUnits: available,
     unitPriceGbp: opts.unitPriceGbp ?? 25,
     unitPriceStable: opts.unitPriceStable ?? 30,
-    settlementMode: opts.settlementMode ?? 'HYBRID',
+    settlementMode: opts.settlementMode ?? 'ONEZE',
     issuerJurisdiction: opts.issuerJurisdiction ?? 'United Kingdom',
     marketMovePct24h: opts.marketMovePct24h ?? null,
     holders: opts.holders ?? total - available,
@@ -1285,7 +1469,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 35,
       unitPriceGbp: 85,
       unitPriceStable: 102,
-      settlementMode: 'HYBRID',
+      settlementMode: 'ONEZE',
       holders: 65,
       volume24hGbp: 1200,
       imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
@@ -1297,7 +1481,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 12,
       unitPriceGbp: 180,
       unitPriceStable: 216,
-      settlementMode: 'GBP',
+      settlementMode: 'ONEZE',
       holders: 38,
       volume24hGbp: 2400,
       imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
@@ -1309,7 +1493,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 200,
       unitPriceGbp: 22,
       unitPriceStable: 26,
-      settlementMode: 'TVUSD',
+      settlementMode: 'ONEZE',
       holders: 0,
       volume24hGbp: 0,
       imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
@@ -1321,7 +1505,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 5,
       unitPriceGbp: 650,
       unitPriceStable: 780,
-      settlementMode: 'HYBRID',
+      settlementMode: 'ONEZE',
       holders: 25,
       volume24hGbp: 5200,
       imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
@@ -1333,7 +1517,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 28,
       unitPriceGbp: 95,
       unitPriceStable: 114,
-      settlementMode: 'GBP',
+      settlementMode: 'ONEZE',
       holders: 52,
       volume24hGbp: 1800,
       imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
@@ -1345,7 +1529,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 40,
       unitPriceGbp: 420,
       unitPriceStable: 504,
-      settlementMode: 'TVUSD',
+      settlementMode: 'ONEZE',
       holders: 0,
       volume24hGbp: 0,
       imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
@@ -1357,7 +1541,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 48,
       unitPriceGbp: 18,
       unitPriceStable: 22,
-      settlementMode: 'HYBRID',
+      settlementMode: 'ONEZE',
       holders: 72,
       volume24hGbp: 600,
       imageUrl: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800',
@@ -1369,7 +1553,7 @@ function getMockCoOwnAssets(): MarketCoOwnAsset[] {
       availableUnits: 18,
       unitPriceGbp: 140,
       unitPriceStable: 168,
-      settlementMode: 'GBP',
+      settlementMode: 'ONEZE',
       holders: 42,
       volume24hGbp: 900,
       imageUrl: 'https://images.unsplash.com/photo-1547996160-81dfa63595aa?w=800',
@@ -1433,6 +1617,43 @@ interface GetCoOwnAssetResponse {
   item: MarketCoOwnAsset;
 }
 
+// ── Co-own asset summary for listing detail ──
+// Lightweight response from GET /co-own/assets/by-listing/:listingId —
+// enough to render a "Buy Shares" section on the listing detail screen
+// without loading the full asset detail.
+export interface CoOwnAssetSummary {
+  id: string;
+  listingId: string;
+  issuerId: string;
+  title: string;
+  imageUrl: string | null;
+  totalUnits: number;
+  availableUnits: number;
+  unitPriceGbp: number;
+  isOpen: boolean;
+  createdAt: string;
+  issuer: {
+    username: string;
+    displayName: string | null;
+    avatar: string | null;
+  } | null;
+}
+
+export async function fetchCoOwnAssetByListingId(
+  listingId: string
+): Promise<CoOwnAssetSummary | null> {
+  try {
+    const payload = await fetchJson<{
+      ok: true;
+      asset: CoOwnAssetSummary;
+    }>(`/co-own/assets/by-listing/${encodeURIComponent(listingId)}`);
+    return payload.asset;
+  } catch {
+    // 404 means no co-own asset exists for this listing — return null
+    return null;
+  }
+}
+
 export async function fetchCoOwnAssetById(assetId: string): Promise<MarketCoOwnAsset> {
   try {
     const payload = await fetchJson<GetCoOwnAssetResponse>(
@@ -1479,6 +1700,8 @@ export async function createCoOwnAssetIssue(input: {
 export interface CoOwnOrderBookEntry {
   side: 'buy' | 'sell';
   unitPriceGbp: number;
+  /** P0.8: Exact decimal string from the backend — no IEEE 754 drift. */
+  unitPriceGbpStr?: string;
   units: number;
   orderCount: number;
 }
@@ -1488,6 +1711,8 @@ interface GetCoOwnOrderBookResponse {
   bids: CoOwnOrderBookEntry[];
   asks: CoOwnOrderBookEntry[];
   snapshotSequence?: number;
+  /** P0.8: Exact decimal string — sequences can exceed 2^53. */
+  snapshotSequenceStr?: string;
   eventSequence?: number;
   serverTimestamp?: string;
   lastExecutionTimestamp?: string | null;
@@ -1499,6 +1724,8 @@ export interface CoOwnOrderBookSnapshot {
   bids: CoOwnOrderBookEntry[];
   asks: CoOwnOrderBookEntry[];
   snapshotSequence: number;
+  /** P0.8: Exact decimal string — sequences can exceed 2^53. */
+  snapshotSequenceStr?: string;
   eventSequence: number;
   serverTimestamp: string;
   lastExecutionTimestamp: string | null;
@@ -1512,7 +1739,11 @@ export interface MarketCoOwnExecution {
   assetId: string;
   units: number;
   unitPriceGbp: number;
+  /** P0.8: Exact decimal string — no IEEE 754 drift. */
+  unitPriceGbpStr?: string;
   notionalGbp: number;
+  /** P0.8: Exact decimal string — no IEEE 754 drift. */
+  notionalGbpStr?: string;
   executedAt: string;
   /** WS3: settlement status of the trade. */
   settlementStatus?: 'settled' | 'pending' | 'failed' | 'reversed';
@@ -1593,6 +1824,41 @@ export async function placeCoOwnOrder(
   );
 }
 
+// ── P0.7: Unknown-result lookup ──
+// After a network error during order submission, the client can look up
+// the result by idempotency key to determine whether the order was placed.
+// Returns one of three states:
+//   - 'acknowledged': the order was placed, body contains the order
+//   - 'processing': the order is still being processed (poll with backoff)
+//   - 'safe_to_retry': no record found, the client may resubmit the order
+
+export type CoOwnOrderLookupResult =
+  | { status: 'acknowledged'; order: MarketCoOwnOrder; asset?: unknown }
+  | { status: 'processing' }
+  | { status: 'safe_to_retry' };
+
+export async function lookupCoOwnOrderByIdempotencyKey(
+  assetId: string,
+  idempotencyKey: string
+): Promise<CoOwnOrderLookupResult> {
+  const response = await fetchWithAuth(
+    `/co-own/assets/${encodeURIComponent(assetId)}/orders/lookup-by-key/${encodeURIComponent(idempotencyKey)}`,
+    { method: 'GET' }
+  );
+
+  if (response.status === 200) {
+    const body = await response.json() as { ok: true; status: 'acknowledged'; order: MarketCoOwnOrder; asset?: unknown };
+    return { status: 'acknowledged', order: body.order, asset: body.asset };
+  }
+
+  if (response.status === 202) {
+    return { status: 'processing' };
+  }
+
+  // 404 or any other → safe to retry
+  return { status: 'safe_to_retry' };
+}
+
 // ── Order preview (authoritative server-side) ──
 // Replaces the client-side generateSimulatedBook() with a server-side
 // preview that walks the real order book. Non-binding — the actual order
@@ -1602,8 +1868,10 @@ export interface CoOwnOrderPreviewInput {
   userId: string;
   side: CoOwnOrderSide;
   units: number;
-  orderType?: 'market' | 'limit';
+  orderType?: 'market' | 'limit' | 'protected_market';
   limitPriceGbp?: number;
+  maxPriceGbp?: number;  // for protected_market buy orders
+  minPriceGbp?: number;  // for protected_market sell orders
 }
 
 export interface CoOwnOrderPreviewResponse {
@@ -1614,18 +1882,35 @@ export interface CoOwnOrderPreviewResponse {
     units: number;
     orderType: 'market' | 'limit';
     limitPriceGbp: number | null;
+    protectionPriceGbp: number | null;
+    /** P0.8: Exact decimal string. */
+    protectionPriceGbpStr?: string | null;
     referencePriceGbp: number;
+    /** P0.8: Exact decimal string. */
+    referencePriceGbpStr?: string;
     orderPriceGbp: number;
+    /** P0.8: Exact decimal string. */
+    orderPriceGbpStr?: string;
     estimatedFill: {
       filledUnits: number;
       remainingUnits: number;
       avgFillPrice: number;
+      /** P0.8: Exact decimal string. */
+      avgFillPriceGbpStr?: string;
       worstPrice: number;
+      /** P0.8: Exact decimal string. */
+      worstPriceGbpStr?: string;
       grossNotional: number;
+      /** P0.8: Exact decimal string. */
+      grossNotionalGbpStr?: string;
       slippageBeyondDepth: boolean;
     };
     fee: number;
+    /** P0.8: Exact decimal string. */
+    feeGbpStr?: string;
     total: number;
+    /** P0.8: Exact decimal string. */
+    totalGbpStr?: string;
     feeRate: number;
     availableUnits: number;
     totalUnits: number;
@@ -1662,8 +1947,10 @@ export interface CoOwnOrderReservationInput {
   userId: string;
   side: CoOwnOrderSide;
   units: number;
-  orderType?: 'market' | 'limit';
+  orderType?: 'market' | 'limit' | 'protected_market';
   limitPriceGbp?: number;
+  maxPriceGbp?: number;  // for protected_market buy orders
+  minPriceGbp?: number;  // for protected_market sell orders
   idempotencyKey?: string;
 }
 
@@ -1674,11 +1961,19 @@ export interface CoOwnOrderReservationResponse {
     assetId: string;
     userId: string;
     side: CoOwnOrderSide;
-    reserved1zeMg: number;
+    reserved1zeUnits: number;
+    /** P0.8: Exact decimal string. */
+    reserved1zeUnitsStr?: string;
     reservedUnits: number;
     referencePriceGbp: number;
+    /** P0.8: Exact decimal string. */
+    referencePriceGbpStr?: string;
     estimatedTotalGbp: number;
+    /** P0.8: Exact decimal string. */
+    estimatedTotalGbpStr?: string;
     estimatedFeeGbp: number;
+    /** P0.8: Exact decimal string. */
+    estimatedFeeGbpStr?: string;
     expiresAt: string;
     status: 'active' | 'placed' | 'cancelled' | 'expired';
   };
@@ -1780,7 +2075,7 @@ export interface CreateCoOwnAssetInput {
   totalUnits: number;
   unitPriceGbp: number;
   unitPriceStable?: number;
-  settlementMode?: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
+  settlementMode?: 'ONEZE';
   issuerJurisdiction?: string;
   // ── Trust profile (WS1) ──
   legalVehicleType: 'spv' | 'llc' | 'trust' | 'series_llc' | 'none';
@@ -1941,6 +2236,45 @@ export async function fetchCoOwnHoldings(userId: string): Promise<MarketCoOwnHol
     warnIfMockSuppressed('fetchCoOwnHoldings', err);
     throw err;
   }
+}
+
+// ── Co-Own eligibility (server-authoritative) ────────────────────────
+// The server is the source of truth for co-own eligibility. The result is
+// ADVISORY for the UI only — it drives the disabled state and reason copy.
+// The backend re-evaluates eligibility transactionally before any money
+// mutation, so a tampered or stale client response can never authorise a
+// trade.
+export interface CoOwnEligibilityResult {
+  eligible: boolean;
+  reasonCodes: string[];
+  policyVersion: string;
+  evaluatedAt: string;
+  expiresAt: string;
+  message?: string;
+}
+
+interface CoOwnEligibilityResponse {
+  ok: true;
+  eligible: boolean;
+  reasonCodes: string[];
+  policyVersion: string;
+  evaluatedAt: string;
+  expiresAt: string;
+  message?: string;
+}
+
+export async function fetchCoOwnEligibility(assetId: string): Promise<CoOwnEligibilityResult> {
+  const payload = await fetchJson<CoOwnEligibilityResponse>(
+    `/co-own/eligibility/${encodeURIComponent(assetId)}`
+  );
+  return {
+    eligible: payload.eligible,
+    reasonCodes: payload.reasonCodes,
+    policyVersion: payload.policyVersion,
+    evaluatedAt: payload.evaluatedAt,
+    expiresAt: payload.expiresAt,
+    message: payload.message,
+  };
 }
 
 export async function listUserMarketHistory(

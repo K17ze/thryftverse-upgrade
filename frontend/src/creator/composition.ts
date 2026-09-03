@@ -143,6 +143,8 @@ const TextLayerPayloadSchema = z.object({
   // Typography
   fontFamilyId: z.string().optional(),
   fontWeight: z.union([z.string(), z.number()]).optional(),
+  fontSize: z.number().min(8).max(200).optional(),
+  bold: z.boolean().optional(),
   italic: z.boolean().optional(),
   underline: z.boolean().optional(),
   letterSpacing: z.number().optional(),
@@ -156,6 +158,7 @@ const TextLayerPayloadSchema = z.object({
     durationMs: z.number().min(0),
     delayMs: z.number().min(0).optional(),
   }).optional(),
+  isCaption: z.boolean().optional(),
 });
 
 const MediaLayerPayloadSchema = z.object({
@@ -201,6 +204,14 @@ const MediaLayerPayloadSchema = z.object({
   // and read by the playback pipeline to ramp volume at clip boundaries.
   fadeInMs: z.number().min(0).max(5000).optional(),
   fadeOutMs: z.number().min(0).max(5000).optional(),
+  // Focal point for art-directed crops (AGENTS.md §4 — no blind `cover`).
+  // Normalized 0–1 for both x and y. When present and contentFit is 'cover',
+  // the renderer shifts the crop window so the focal point stays in frame.
+  // Defaults to center (0.5, 0.5) when absent.
+  focalPoint: z.object({
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+  }).optional(),
   // Effect stack — ordered list of adjustments/filters applied to the media
   effects: z.array(EffectNodeSchema).optional(),
 });
@@ -551,6 +562,16 @@ export type CreatorMetadata = z.infer<typeof CreatorMetadataSchema>;
 
 // ── Full document schema ───────────────────────────────────────────
 
+const AssetRegistryEntrySchema = z.object({
+  uri: z.string(),
+  type: z.enum(['image', 'video']),
+  mimeType: z.string().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+});
+
+export type AssetRegistryEntry = z.infer<typeof AssetRegistryEntrySchema>;
+
 export const CreatorDocumentSchema = z.object({
   id: z.string().min(1),
   type: z.enum(['look', 'poster']),
@@ -564,6 +585,7 @@ export const CreatorDocumentSchema = z.object({
   }),
   pages: z.array(CreatorPageSchema).min(1).max(10),
   metadata: CreatorMetadataSchema,
+  assetRegistry: z.record(z.string(), AssetRegistryEntrySchema).optional(),
   updatedAt: z.string().default(() => new Date().toISOString()),
 });
 
@@ -829,6 +851,7 @@ export function migratePosterFramesToDocument(params: {
           textColor: '#ffffff',
           alignment: 'center',
           opacity: 1,
+          isCaption: true,
         },
       });
     }
@@ -1184,33 +1207,47 @@ export function getAllLayersSorted(page: CreatorPage): CreatorLayer[] {
 
 // ── Document migration ─────────────────────────────────────────────
 
-/**
- * Migrate a potentially stale document to the current schema conventions.
- *
- * Currently handles:
- * - Poster documents created with the legacy 16:9 landscape ratio (1.777…)
- *   are corrected to the canonical 9:16 portrait ratio (0.5625).
- *
- * Returns a new document object; does not mutate the input.
- */
+type DocumentMigration = {
+  fromVersion: number;
+  migrate: (doc: CreatorDocument) => CreatorDocument;
+};
+
+const MIGRATIONS: DocumentMigration[] = [
+  {
+    fromVersion: 1,
+    migrate: (doc) => {
+      if (
+        doc.type === 'poster' &&
+        Math.abs(doc.canvas.aspectRatio - LEGACY_POSTER_LANDSCAPE_RATIO) < 0.001
+      ) {
+        return {
+          ...doc,
+          canvas: {
+            ...doc.canvas,
+            aspectRatio: POSTER_DEFAULT_ASPECT_RATIO,
+          },
+        };
+      }
+      return doc;
+    },
+  },
+];
+
+export const LATEST_DOCUMENT_VERSION = MIGRATIONS.length + 1;
+
 export function migrateDocument(doc: CreatorDocument): CreatorDocument {
-  let migrated = { ...doc };
-
-  // P0.1: Fix legacy Poster 16:9 landscape ratio → 9:16 portrait
-  if (
-    migrated.type === 'poster' &&
-    Math.abs(migrated.canvas.aspectRatio - LEGACY_POSTER_LANDSCAPE_RATIO) < 0.001
-  ) {
-    migrated = {
-      ...migrated,
-      canvas: {
-        ...migrated.canvas,
-        aspectRatio: POSTER_DEFAULT_ASPECT_RATIO,
-      },
-    };
+  const startVersion = doc.version ?? 1;
+  if (startVersion >= LATEST_DOCUMENT_VERSION) {
+    return doc;
   }
-
-  return migrated;
+  let current = { ...doc };
+  for (const migration of MIGRATIONS) {
+    if (migration.fromVersion >= startVersion) {
+      current = migration.migrate(current);
+      current = { ...current, version: migration.fromVersion + 1 };
+    }
+  }
+  return current;
 }
 
 // ── Golden composition fixtures ────────────────────────────────────
@@ -1390,6 +1427,7 @@ export function goldenPosterFixture(): CreatorDocument {
             textColor: '#ffffff',
             alignment: 'center',
             opacity: 1,
+            isCaption: true,
           },
         },
         // Product sticker

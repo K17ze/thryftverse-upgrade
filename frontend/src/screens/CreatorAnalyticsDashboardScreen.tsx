@@ -8,48 +8,57 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing, interpolate } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   Space,
   Radius,
-  Type,
-  Typography,
-  Control,
-  LetterSpacing,
-} from '../theme/designTokens';
+  FontFamily,
+  Numeric } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
-import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState, FlagshipMetricLine } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { CommerceDetailOfflineBanner } from '../components/commerce/detail/CommerceDetailOfflineBanner';
+import { OfflineBanner } from '../components/OfflineBanner';
+import { CachedImage } from '../components/CachedImage';
+import { BarChart } from '../components/charts/BarChart';
+import type { ChartPoint } from '../components/charts/types';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useHaptic } from '../hooks/useHaptic';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { Motion } from '../theme/motionTokens';
+import { useA11yAudit } from '../hooks/useA11yAudit';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { formatFiatAmount } from '../utils/currency';
+import type { SupportedCurrencyCode } from '../constants/currencies';
+import { useToast } from '../context/ToastContext';
 import {
-  fetchCreatorAnalyticsSummary,
-  fetchCreatorAnalyticsTimeline,
-  type CreatorAnalyticsSummary,
-  type CreatorAnalyticsTimelinePoint,
-} from '../services/creatorAnalyticsApi';
+  fetchAnalyticsSummary,
+  fetchAnalyticsTimeline,
+  fetchContentRanking,
+  fetchEarningsSummary,
+  requestPayout,
+  type AnalyticsSummary,
+  type AnalyticsTimeline,
+  type ContentRankingResponse,
+  type AnalyticsPeriod,
+  type Completeness,
+  type EarningsSummary } from '../services/creatorAnalyticsApi';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-type PeriodKey = '7d' | '30d' | '90d';
+type PeriodKey = AnalyticsPeriod;
 
-const PERIOD_DAYS: Record<PeriodKey, number> = {
-  '7d': 7,
-  '30d': 30,
-  '90d': 90,
-};
+const PERIOD_LABELS: Record<PeriodKey, string> = {
+  '7d': '7 days',
+  '30d': '30 days',
+  '90d': '90 days' };
 
-// Enable LayoutAnimation for period-switch transitions on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -61,61 +70,93 @@ function formatCount(n: number): string {
   return String(n);
 }
 
-function formatRate(n: number): string {
-  return `${n.toFixed(1)}%`;
+function formatRate(ratio: number): string {
+  return `${(ratio * 100).toFixed(1)}%`;
 }
 
-function formatDelta(n: number): string {
-  const sign = n > 0 ? '+' : '';
-  return `${sign}${n.toFixed(1)}%`;
+function formatDelta(changeRatio: number | null): string {
+  if (changeRatio === null) return '';
+  const pct = changeRatio * 100;
+  const sign = pct > 0 ? '+' : '';
+  return `${sign}${pct.toFixed(1)}%`;
+}
+
+function formatMoney(minor: number, currencyCode: SupportedCurrencyCode): string {
+  const sign = minor < 0 ? '-' : '';
+  const abs = Math.abs(minor);
+  const major = abs / 100;
+  return `${sign}${formatFiatAmount(major, currencyCode)}`;
 }
 
 function shortDate(iso: string): string {
-  const d = new Date(iso);
+  const d = new Date(iso + 'T00:00:00Z');
   if (isNaN(d.getTime())) return '';
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-// ── Derived types ─────────────────────────────────────────────────────
-interface MetricCard {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  value: string;
-  delta: number | null;
+function formatDateRange(range: { start: string; endExclusive: string }): string {
+  const s = new Date(range.start);
+  const e = new Date(range.endExclusive);
+  e.setUTCDate(e.getUTCDate() - 1); // endExclusive is exclusive — display the last included day
+  const fmt = (d: Date) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return `${fmt(s)} – ${fmt(e)}`;
 }
 
-interface EngagementBar {
-  label: string;
-  count: number;
-  pct: number;
-  colorKey: 'brand' | 'success' | 'warning' | 'textSecondary';
+function completenessLabel(c: Completeness): string {
+  switch (c) {
+    case 'complete': return 'Up to date';
+    case 'provisional': return 'Provisional';
+    case 'delayed': return 'Delayed';
+    case 'unavailable': return 'No data yet';
+  }
 }
 
-interface TopContentItem {
-  id: string;
-  title: string;
-  date: string;
-  views: number;
-  engagementRate: number;
-  rank: number;
+function completenessColor(c: Completeness, colors: ThemeColors): string {
+  switch (c) {
+    case 'complete': return colors.success;
+    case 'provisional': return colors.warning;
+    case 'delayed': return colors.warning;
+    case 'unavailable': return colors.textMuted;
+  }
+}
+
+function entryTypeLabel(t: string): string {
+  switch (t) {
+    case 'estimated': return 'Estimated';
+    case 'earned': return 'Earned';
+    case 'held': return 'Held';
+    case 'adjustment': return 'Adjustment';
+    case 'refund_reversal': return 'Refund';
+    case 'chargeback_reversal': return 'Chargeback';
+    case 'payout': return 'Payout';
+    default: return t;
+  }
 }
 
 // ── Main screen ───────────────────────────────────────────────────────
 export default function CreatorAnalyticsDashboardScreen() {
+  const a11yRef = useRef<any>(null);
+  useA11yAudit(a11yRef, 'CreatorAnalyticsDashboardScreen');
   const { colors } = useAppTheme();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const { isOffline } = useConnectivity();
-  const reducedMotionEnabled = useReducedMotion();
+  const { currencyCode } = useFormattedPrice();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [period, setPeriod] = useState<PeriodKey>('30d');
-  const [summary, setSummary] = useState<CreatorAnalyticsSummary | null>(null);
-  const [previousSummary, setPreviousSummary] = useState<CreatorAnalyticsSummary | null>(null);
-  const [timeline, setTimeline] = useState<CreatorAnalyticsTimelinePoint[]>([]);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [timeline, setTimeline] = useState<AnalyticsTimeline | null>(null);
+  const [ranking, setRanking] = useState<ContentRankingResponse | null>(null);
+  const [earnings, setEarnings] = useState<EarningsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [partialError, setPartialError] = useState<string | null>(null);
+  const [fatalError, setFatalError] = useState<string | null>(null);
+  const [isPayoutLoading, setIsPayoutLoading] = useState(false);
+  const [payoutError, setPayoutError] = useState<string | null>(null);
+  const { show: showToast } = useToast();
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -124,52 +165,51 @@ export default function CreatorAnalyticsDashboardScreen() {
   }, []);
 
   const load = useCallback(async (selectedPeriod: PeriodKey) => {
-    setError(null);
-    const days = PERIOD_DAYS[selectedPeriod];
-    try {
-      const [summaryRes, timelineRes] = await Promise.all([
-        fetchCreatorAnalyticsSummary(),
-        fetchCreatorAnalyticsTimeline({ days }),
-      ]);
-      if (!mountedRef.current) return;
-      setSummary(summaryRes);
-      setTimeline(timelineRes.points ?? []);
+    setFatalError(null);
+    setPartialError(null);
 
-      // Derive a "previous period" summary from the first half of the timeline
-      // so we can show honest deltas without a second API call. If the timeline
-      // is too short, deltas are simply omitted (null) — never fabricated.
-      const points = timelineRes.points ?? [];
-      if (points.length >= 4) {
-        const mid = Math.floor(points.length / 2);
-        const prevSlice = points.slice(0, mid);
-        const prev: CreatorAnalyticsSummary = {
-          views: 0, likes: 0, saves: 0, comments: 0, shares: 0,
-          productClicks: 0, profileVisits: 0, engagementRate: 0,
-        };
-        for (const p of prevSlice) {
-          prev.views += p.views;
-          prev.likes += p.likes;
-          prev.saves += p.saves;
-          prev.comments += p.comments;
-          prev.shares += p.shares;
-          prev.productClicks += p.productClicks;
-          prev.profileVisits += p.profileVisits;
-        }
-        const prevEng = prev.views > 0
-          ? ((prev.likes + prev.saves + prev.comments + prev.shares) / prev.views) * 100
-          : 0;
-        prev.engagementRate = prevEng;
-        setPreviousSummary(prev);
-      } else {
-        setPreviousSummary(null);
-      }
+    let summaryResult: AnalyticsSummary | null = null;
+    let timelineResult: AnalyticsTimeline | null = null;
+    let rankingResult: ContentRankingResponse | null = null;
+    let earningsResult: EarningsSummary | null = null;
+    let hadPartialError = false;
+
+    // Summary is critical — if it fails, show fatal error.
+    try {
+      summaryResult = await fetchAnalyticsSummary({ period: selectedPeriod });
     } catch (err) {
       if (!mountedRef.current) return;
-      setError(err instanceof Error ? err.message : 'Unable to load analytics');
+      setFatalError(err instanceof Error ? err.message : 'Unable to load analytics');
       setSummary(null);
-      setTimeline([]);
-      setPreviousSummary(null);
+      setTimeline(null);
+      setRanking(null);
+      setEarnings(null);
+      return;
     }
+
+    // Timeline, ranking, and earnings are non-critical — partial failure is OK.
+    try {
+      timelineResult = await fetchAnalyticsTimeline({ period: selectedPeriod });
+    } catch {
+      hadPartialError = true;
+    }
+    try {
+      rankingResult = await fetchContentRanking({ period: selectedPeriod, limit: 10 });
+    } catch {
+      hadPartialError = true;
+    }
+    try {
+      earningsResult = await fetchEarningsSummary();
+    } catch {
+      hadPartialError = true;
+    }
+
+    if (!mountedRef.current) return;
+    setSummary(summaryResult);
+    setTimeline(timelineResult);
+    setRanking(rankingResult);
+    setEarnings(earningsResult);
+    setPartialError(hadPartialError ? 'Some details could not be loaded.' : null);
   }, []);
 
   useEffect(() => {
@@ -186,134 +226,123 @@ export default function CreatorAnalyticsDashboardScreen() {
   const onSelectPeriod = (next: PeriodKey) => {
     if (next === period) return;
     haptic.selection();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (!reducedMotion) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
     setPeriod(next);
   };
 
-  // ── Derived: metric cards ───────────────────────────────────────────
-  const metrics = useMemo<MetricCard[]>(() => {
-    if (!summary) return [];
-    const deltaFor = (current: number, prev: number | undefined): number | null => {
-      if (prev === undefined || prev === 0) return null;
-      return ((current - prev) / prev) * 100;
-    };
-    return [
-      {
-        icon: 'eye-outline',
-        label: 'Total Views',
-        value: formatCount(summary.views),
-        delta: deltaFor(summary.views, previousSummary?.views ?? undefined),
-      },
-      {
-        icon: 'heart-outline',
-        label: 'Engagement Rate',
-        value: formatRate(summary.engagementRate),
-        delta: deltaFor(summary.engagementRate, previousSummary?.engagementRate ?? undefined),
-      },
-      {
-        icon: 'person-outline',
-        label: 'Profile Visits',
-        value: formatCount(summary.profileVisits),
-        delta: deltaFor(summary.profileVisits, previousSummary?.profileVisits ?? undefined),
-      },
-      {
-        icon: 'bag-outline',
-        label: 'Product Clicks',
-        value: formatCount(summary.productClicks),
-        delta: deltaFor(summary.productClicks, previousSummary?.productClicks ?? undefined),
-      },
-    ];
-  }, [summary, previousSummary]);
+  const onPayout = useCallback(async () => {
+    if (isPayoutLoading) return;
+    haptic.light();
+    setIsPayoutLoading(true);
+    setPayoutError(null);
+    try {
+      await requestPayout('wallet', `manual_${Date.now()}`);
+      // Reload earnings after successful payout
+      const fresh = await fetchEarningsSummary();
+      if (mountedRef.current) setEarnings(fresh);
+      if (mountedRef.current) showToast('Payout requested', 'success');
+    } catch (err) {
+      // Surface the failure — silent swallowing is a truth defect.
+      // The user must know the payout did not go through so they can retry.
+      const message = err instanceof Error ? err.message : 'Payout failed. Please try again.';
+      if (mountedRef.current) {
+        setPayoutError(message);
+        showToast(message, 'error');
+      }
+    } finally {
+      if (mountedRef.current) setIsPayoutLoading(false);
+    }
+  }, [haptic, isPayoutLoading, showToast]);
 
-  // ── Derived: engagement breakdown ───────────────────────────────────
-  const engagementBars = useMemo<EngagementBar[]>(() => {
-    if (!summary) return [];
-    const total = summary.likes + summary.saves + summary.comments + summary.shares;
-    const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
-    return [
-      { label: 'Likes', count: summary.likes, pct: pct(summary.likes), colorKey: 'brand' },
-      { label: 'Saves', count: summary.saves, pct: pct(summary.saves), colorKey: 'success' },
-      { label: 'Comments', count: summary.comments, pct: pct(summary.comments), colorKey: 'warning' },
-      { label: 'Shares', count: summary.shares, pct: pct(summary.shares), colorKey: 'textSecondary' },
-    ];
-  }, [summary]);
-
-  // ── Derived: top content (from timeline points, honest derivation) ─
-  const topContent = useMemo<TopContentItem[]>(() => {
-    if (timeline.length === 0) return [];
-    // The timeline gives daily aggregates, not per-content. We surface the
-    // highest-view days as "top performing periods" — honestly labelled by
-    // date. This avoids fabricating per-content IDs the API does not return.
-    const sorted = [...timeline]
-      .sort((a, b) => b.views - a.views)
-      .slice(0, 5);
-    return sorted.map((p, i) => ({
-      id: p.date,
-      title: shortDate(p.date),
-      date: p.date,
-      views: p.views,
-      engagementRate: p.engagementRate,
-      rank: i + 1,
-    }));
+  // ── Derived: chart data ─────────────────────────────────────────────
+  const chartData = useMemo<ChartPoint[]>(() => {
+    if (!timeline) return [];
+    return timeline.points.map((p) => ({
+      x: shortDate(p.date),
+      y: p.views }));
   }, [timeline]);
 
-  const timelineChartSummary = useMemo(() => {
-    if (timeline.length === 0) return 'Views over time chart. No data for this period.';
-    const views = timeline.map((p) => p.views);
-    const max = Math.max(...views);
-    const min = Math.min(...views);
-    const total = views.reduce((sum, v) => sum + v, 0);
-    return `Views over time chart, ${timeline.length} days. Total ${total} views. Highest: ${max}, lowest: ${min}.`;
-  }, [timeline]);
+  // ── Derived: chart accessibility summary for screen readers ────────
+  // The Skia canvas is invisible to VoiceOver/TalkBack, so we expose a
+  // textual summary via the BarChart's accessibilityLabel (WCAG 1.1.1).
+  const chartA11ySummary = useMemo(() => {
+    if (chartData.length === 0) return 'No views in this period';
+    const total = chartData.reduce((sum, p) => sum + p.y, 0);
+    const peak = chartData.reduce((best, p) => (p.y > best.y ? p : best), chartData[0]);
+    return `Views over ${chartData.length} ${chartData.length === 1 ? 'day' : 'days'}, peak ${peak.y} on ${peak.x}, total ${total}`;
+  }, [chartData]);
 
-  // ── Empty detection (honest: all zeros) ─────────────────────────────
+  // ── Derived: hero thumbnail (top content) ───────────────────────────
+  const heroThumbnail = useMemo(() => {
+    if (!ranking || ranking.items.length === 0) return null;
+    return ranking.items[0].thumbnailUrl;
+  }, [ranking]);
+
+  // ── Empty detection ─────────────────────────────────────────────────
   const isEmpty = useMemo(() => {
     if (!summary) return false;
-    return (
-      summary.views === 0 &&
-      summary.likes === 0 &&
-      summary.saves === 0 &&
-      summary.comments === 0 &&
-      summary.shares === 0 &&
-      summary.productClicks === 0 &&
-      summary.profileVisits === 0
-    );
+    return summary.summary.views.value === 0 &&
+      summary.summary.likes.value === 0 &&
+      summary.summary.saves.value === 0 &&
+      summary.summary.comments.value === 0 &&
+      summary.summary.shares.value === 0 &&
+      summary.summary.productClicks.value === 0;
   }, [summary]);
 
-  // ── Period selector ─────────────────────────────────────────────────
+  // ── Period selector: hairline tabs ──────────────────────────────────
   const periodSelector = (
     <View style={styles.periodRow}>
       {(['7d', '30d', '90d'] as PeriodKey[]).map((key) => {
         const active = key === period;
         return (
-          <AnimatedPressable
+          <Pressable
             key={key}
-            style={[
-              styles.periodChip,
-              active && { backgroundColor: colors.textPrimary },
-            ]}
             onPress={() => onSelectPeriod(key)}
+            style={styles.periodTab}
             accessibilityRole="button"
-            accessibilityLabel={`Show last ${PERIOD_DAYS[key]} days`}
+            accessibilityLabel={`Show last ${PERIOD_LABELS[key]}`}
             accessibilityState={{ selected: active }}
-            hapticFeedback="selection"
-            scaleValue={0.94}
+            hitSlop={4}
           >
             <Text
               style={[
-                styles.periodChipText,
-                { color: active ? colors.background : colors.textSecondary },
+                styles.periodTabText,
+                { color: active ? colors.textPrimary : colors.textMuted },
               ]}
             >
               {key}
             </Text>
-          </AnimatedPressable>
+            {active && (
+              <View style={[styles.periodTabIndicator, { backgroundColor: colors.textPrimary }]} />
+            )}
+          </Pressable>
         );
       })}
     </View>
   );
 
-  // ── Loading skeleton ────────────────────────────────────────────────
+  // ── Data freshness strip ────────────────────────────────────────────
+  const freshnessStrip = useMemo(() => {
+    if (!summary) return null;
+    const c = summary.completeness;
+    const color = completenessColor(c, colors);
+    return (
+      <View style={styles.freshnessRow}>
+        <View style={[styles.freshnessDot, { backgroundColor: color }]} />
+        <Text style={[styles.freshnessText, { color: colors.textMuted }]}>
+          {completenessLabel(c)}
+        </Text>
+        {/* Always show watermark — even when complete */}
+        <Text style={[styles.freshnessWatermark, { color: colors.textMuted }]}>
+          · updated {new Date(summary.watermark).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+        </Text>
+      </View>
+    );
+  }, [summary, colors]);
+
+  // ── Loading state ───────────────────────────────────────────────────
   if (isLoading) {
     return (
       <FlagshipScreen
@@ -337,8 +366,8 @@ export default function CreatorAnalyticsDashboardScreen() {
     );
   }
 
-  // ── Error state ─────────────────────────────────────────────────────
-  if (error && !summary) {
+  // ── Fatal error state ───────────────────────────────────────────────
+  if (fatalError && !summary) {
     return (
       <FlagshipScreen
         header={
@@ -351,19 +380,19 @@ export default function CreatorAnalyticsDashboardScreen() {
         scrollEnabled={false}
         contentStyle={{ paddingHorizontal: Space.md, paddingTop: Space.md }}
       >
-        {isOffline ? <CommerceDetailOfflineBanner isOffline /> : null}
+        {isOffline ? <OfflineBanner onRetry={() => load(period)} /> : null}
         <FlagshipState
           variant="error"
           title="Couldn't load analytics"
-          subtitle={error}
-          actionLabel="Retry"
-          onAction={() => { haptic.light(); load(period); }}
+          subtitle={isOffline ? undefined : fatalError}
+          actionLabel={isOffline ? undefined : 'Retry'}
+          onAction={isOffline ? undefined : () => { haptic.light(); load(period); }}
         />
       </FlagshipScreen>
     );
   }
 
-  // ── Empty state (honest zeros) ──────────────────────────────────────
+  // ── Empty state ─────────────────────────────────────────────────────
   if (isEmpty) {
     return (
       <FlagshipScreen
@@ -377,7 +406,7 @@ export default function CreatorAnalyticsDashboardScreen() {
         scrollEnabled={false}
         contentStyle={{ paddingHorizontal: Space.md, paddingTop: Space.md }}
       >
-        {isOffline ? <CommerceDetailOfflineBanner isOffline /> : null}
+        {isOffline ? <OfflineBanner onRetry={() => load(period)} /> : null}
         <EmptyState
           icon="bar-chart-outline"
           title="No analytics data yet"
@@ -390,8 +419,16 @@ export default function CreatorAnalyticsDashboardScreen() {
   }
 
   // ── Populated state ─────────────────────────────────────────────────
+  const currentSummary = summary;
+  if (!currentSummary) return null;
+
+  const s = currentSummary.summary;
+  const viewsDelta = formatDelta(s.views.changeRatio);
+  const viewsUp = s.views.changeRatio !== null && s.views.changeRatio > 0;
+
   return (
     <FlagshipScreen
+      ref={a11yRef}
       header={
         <FlagshipHeader
           title="Analytics"
@@ -404,7 +441,7 @@ export default function CreatorAnalyticsDashboardScreen() {
     >
       {isOffline ? (
         <View style={styles.bannerWrap}>
-          <CommerceDetailOfflineBanner isOffline />
+          <OfflineBanner onRetry={() => load(period)} />
         </View>
       ) : null}
       <ScrollView
@@ -414,90 +451,292 @@ export default function CreatorAnalyticsDashboardScreen() {
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />
         }
       >
-        {/* ── 1. SUMMARY METRICS — 2x2 grid, dominant ─────────────── */}
-        <View
-          style={styles.metricsGrid}
-        >
-          {metrics.map((m, i) => (
-            <MetricTile
-              key={m.label}
-              metric={m}
-              colors={colors}
-              index={i}
-              reducedMotion={reducedMotionEnabled}
-            />
-          ))}
-        </View>
+        {/* ── 1. DATA FRESHNESS ────────────────────────────────────── */}
+        {freshnessStrip}
 
-        {/* ── 2. ENGAGEMENT BREAKDOWN — horizontal bars ───────────── */}
-        <View
-          style={styles.section}
-        >
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-              Engagement breakdown
-            </Text>
-            <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-              Last {PERIOD_DAYS[period]} days
-            </Text>
-          </View>
-          <View style={styles.breakdownWrap}>
-            {engagementBars.map((bar, i) => (
-              <EngagementBarRow
-                key={bar.label}
-                bar={bar}
-                colors={colors}
-                index={i}
-                reducedMotion={reducedMotionEnabled}
+        {/* ── 2. PERFORMANCE HERO — media-anchored ─────────────────── */}
+        <View style={styles.heroWrap}>
+          {heroThumbnail ? (
+            <View style={styles.heroMediaWrap}>
+              <CachedImage
+                uri={heroThumbnail}
+                style={styles.heroMedia}
+                contentFit="cover"
+                transition={200}
+                priority="high"
               />
-            ))}
-          </View>
+              <LinearGradient
+                colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.55)']}
+                locations={[0.2, 1.0]}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.heroOverlay}>
+                <Text style={styles.heroLabel}>
+                  Views
+                </Text>
+                <View style={styles.heroRow}>
+                  <Text style={styles.heroValue}>
+                    {formatCount(s.views.value)}
+                  </Text>
+                  {viewsDelta ? (
+                    <View style={styles.heroDeltaInline}>
+                      <Ionicons
+                        name={viewsUp ? 'arrow-up' : 'arrow-down'}
+                        size={11}
+                        color={colors.scrimTextPrimary}
+                      />
+                      <Text style={styles.heroDeltaInlineText}>
+                        {viewsDelta}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          ) : (
+            <>
+              <Text style={[styles.heroLabel, { color: colors.textSecondary }]}>
+                Views
+              </Text>
+              <View style={styles.heroRow}>
+                <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
+                  {formatCount(s.views.value)}
+                </Text>
+                {viewsDelta ? (
+                  <View style={[
+                    styles.heroDelta,
+                    { backgroundColor: viewsUp ? colors.successSubtle : colors.dangerSubtle },
+                  ]}>
+                    <Ionicons
+                      name={viewsUp ? 'arrow-up' : 'arrow-down'}
+                      size={11}
+                      color={viewsUp ? colors.success : colors.danger}
+                    />
+                    <Text style={[
+                      styles.heroDeltaText,
+                      { color: viewsUp ? colors.success : colors.danger },
+                    ]}>
+                      {viewsDelta}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </>
+          )}
         </View>
 
-        {/* ── 3. TIMELINE — daily views bar chart ─────────────────── */}
-        <View
-          style={styles.section}
-        >
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-              Views over time
-            </Text>
-            <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-              {timeline.length} day{timeline.length === 1 ? '' : 's'}
+        {/* ── 3. COMPARISON CONTEXT — single line, not per-metric ──── */}
+        <Text style={[styles.comparisonContext, { color: colors.textMuted }]}>
+          {formatDateRange(currentSummary.range)} vs {formatDateRange(currentSummary.comparisonRange)}
+        </Text>
+
+        {/* ── 4. SUPPRESSED DIMENSIONS — inline callout ─────────────── */}
+        {currentSummary.suppressedDimensions.length > 0 && (
+          <View style={styles.suppressedCallout}>
+            <Ionicons name="information-circle-outline" size={13} color={colors.textMuted} />
+            <Text style={[styles.suppressedText, { color: colors.textMuted }]}>
+              {currentSummary.suppressedDimensions.map(d => `${d.dimension}: ${d.reason}`).join(' · ')}
             </Text>
           </View>
-          <TimelineChart
-            points={timeline}
-            colors={colors}
-            reducedMotion={reducedMotionEnabled}
-            accessibilitySummary={timelineChartSummary}
+        )}
+
+        {/* ── 5. SECONDARY METRICS — flat lines, no cards ──────────── */}
+        <View style={styles.metricsSection}>
+          <FlagshipMetricLine
+            label="Engagement rate"
+            value={formatRate(s.engagementRate.value)}
+            separated
+          />
+          <FlagshipMetricLine
+            label="Profile visits"
+            value={formatCount(s.profileVisits.value)}
+            separated
+          />
+          <FlagshipMetricLine
+            label="Product clicks"
+            value={formatCount(s.productClicks.value)}
+            separated
+          />
+          <FlagshipMetricLine
+            label="Likes"
+            value={formatCount(s.likes.value)}
+            separated
+          />
+          <FlagshipMetricLine
+            label="Saves"
+            value={formatCount(s.saves.value)}
+            separated
+          />
+          <FlagshipMetricLine
+            label="Comments"
+            value={formatCount(s.comments.value)}
+            separated
+          />
+          <FlagshipMetricLine
+            label="Shares"
+            value={formatCount(s.shares.value)}
+            separated
           />
         </View>
 
-        {/* ── 4. TOP CONTENT — derived from timeline ──────────────── */}
-        <View
-          style={styles.section}
-        >
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-              Top performing days
+        {/* ── 6. PARTIAL ERROR BANNER ──────────────────────────────── */}
+        {partialError ? (
+          <View style={[styles.partialBanner, { backgroundColor: colors.warningSubtle }]}>
+            <Ionicons name="alert-circle-outline" size={14} color={colors.warning} />
+            <Text style={[styles.partialText, { color: colors.textSecondary }]}>
+              {partialError}
             </Text>
           </View>
-          {topContent.length > 0 ? (
-            <View style={styles.topList}>
-              {topContent.map((item) => (
-                <TopContentRow
-                  key={item.id}
-                  item={item}
-                  colors={colors}
-                />
-              ))}
-            </View>
-          ) : (
-            <Text style={[styles.inlineEmpty, { color: colors.textMuted }]}>
-              No timeline data for this period.
+        ) : null}
+
+        {/* ── 7. TREND CHART ───────────────────────────────────────── */}
+        <View style={styles.chartSection}>
+          <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+            Views over time
+          </Text>
+          <BarChart
+            data={chartData}
+            height={180}
+            barColor={colors.brand}
+            loading={false}
+            error={timeline ? null : 'Chart unavailable'}
+            emptyMessage="No views in this period"
+            valueFormat={formatCount}
+            accessibilitySummary={chartA11ySummary}
+          />
+        </View>
+
+        {/* ── 8. TOP CONTENT — real thumbnails as colour ───────────── */}
+        {ranking && ranking.items.length > 0 ? (
+          <View style={styles.contentSection}>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              Top content
             </Text>
-          )}
+            {ranking.items.map((item, i) => (
+              <Pressable
+                key={`${item.contentType}:${item.contentId}`}
+                onPress={() => {
+                  // Navigate to content detail — looks have a detail screen,
+                  // posters use the story viewer.
+                  if (item.contentType === 'look') {
+                    navigation.navigate('LookDetail', { lookId: item.contentId });
+                  } else if (item.contentType === 'poster') {
+                    navigation.navigate('PosterViewer', { storyId: item.contentId });
+                  }
+                }}
+                style={({ pressed }) => [
+                  styles.contentRowPress,
+                  pressed && { opacity: 0.6 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${item.title}`}
+              >
+                <ContentRankingRow
+                  item={item}
+                  rank={i + 1}
+                  colors={colors}
+                  isLast={i === ranking.items.length - 1}
+                />
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        {/* ── 9. EARNINGS — flat ledger, not a dashboard card ──────── */}
+        {earnings ? (
+          <View style={styles.earningsSection}>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              Earnings
+            </Text>
+
+            {/* Available balance — the dominant figure */}
+            <FlagshipMetricLine
+              label="Available"
+              value={formatMoney(earnings.available.amountMinor, currencyCode)}
+              emphasis
+              separated
+            />
+            <FlagshipMetricLine
+              label="Estimated"
+              value={formatMoney(earnings.estimated.amountMinor, currencyCode)}
+              separated
+            />
+            <FlagshipMetricLine
+              label="Finalized"
+              value={formatMoney(earnings.finalized.amountMinor, currencyCode)}
+              separated
+            />
+            <FlagshipMetricLine
+              label="Paid"
+              value={formatMoney(earnings.paid.amountMinor, currencyCode)}
+              separated
+            />
+
+            {/* Payout action — only if there's available balance */}
+            {earnings.available.amountMinor > 0 && (
+              <>
+                <AnimatedPressable
+                  onPress={onPayout}
+                  style={[styles.payoutButton, { backgroundColor: colors.brand }]}
+                  hapticFeedback="light"
+                  scaleValue={0.97}
+                  disabled={isPayoutLoading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Request payout"
+                >
+                  <Text style={styles.payoutButtonText}>
+                    {isPayoutLoading ? 'Processing…' : 'Request payout'}
+                  </Text>
+                </AnimatedPressable>
+                {payoutError ? (
+                  <Text style={[styles.payoutErrorText, { color: colors.danger }]}>
+                    {payoutError}
+                  </Text>
+                ) : null}
+              </>
+            )}
+
+            {/* Recent entries — last 5 */}
+            {earnings.recentEntries.length > 0 && (
+              <View style={styles.earningsEntries}>
+                <Text style={[styles.entriesLabel, { color: colors.textMuted }]}>
+                  Recent
+                </Text>
+                {earnings.recentEntries.slice(0, 5).map((entry) => (
+                  <View
+                    key={entry.id}
+                    style={[styles.entryRow, { borderBottomColor: colors.border }]}
+                  >
+                    <View style={styles.entryInfo}>
+                      <Text style={[styles.entryType, { color: colors.textPrimary }]}>
+                        {entryTypeLabel(entry.entryType)}
+                      </Text>
+                      {entry.description && (
+                        <Text style={[styles.entryDesc, { color: colors.textMuted }]} numberOfLines={1}>
+                          {entry.description}
+                        </Text>
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.entryAmount,
+                        { color: entry.amountMinor < 0 ? colors.danger : colors.textPrimary },
+                      ]}
+                    >
+                      {formatMoney(entry.amountMinor, currencyCode)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {/* ── 10. DATA QUALITY FOOTER ──────────────────────────────── */}
+        <View style={styles.footer}>
+          <Text style={[styles.footerText, { color: colors.textMuted }]}>
+            {currentSummary.metricVersion}
+          </Text>
         </View>
 
         <View style={{ height: Space.xl }} />
@@ -506,269 +745,52 @@ export default function CreatorAnalyticsDashboardScreen() {
   );
 }
 
-// ── Metric tile ───────────────────────────────────────────────────────
-function MetricTile({
-  metric,
-  colors,
-  index,
-  reducedMotion,
-}: {
-  metric: MetricCard;
-  colors: ThemeColors;
-  index: number;
-  reducedMotion: boolean;
-}) {
-  const styles = useMemo(() => createMetricTileStyles(colors), [colors]);
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      progress.value = 1;
-    } else {
-      progress.value = withDelay(index * 60, withTiming(1, { duration: Motion.duration.slower, easing: Easing.out(Easing.cubic) }));
-    }
-  }, [progress, index, reducedMotion]);
-
-  const valueStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0, 1]),
-    transform: [{ translateY: interpolate(progress.value, [0, 1], [6, 0]) }],
-  }));
-
-  const hasDelta = metric.delta !== null && metric.delta !== 0;
-  const deltaUp = (metric.delta ?? 0) > 0;
-  const deltaColor = deltaUp ? colors.success : colors.danger;
-  const deltaIcon: React.ComponentProps<typeof Ionicons>['name'] = deltaUp
-    ? 'arrow-up'
-    : 'arrow-down';
-
-  return (
-    <View style={styles.tile}>
-      <View style={styles.tileTop}>
-        <View style={[styles.tileIcon, { backgroundColor: colors.surfaceAlt }]}>
-          <Ionicons name={metric.icon} size={18} color={colors.textPrimary} />
-        </View>
-        {hasDelta ? (
-          <View style={styles.deltaRow}>
-            <Ionicons name={deltaIcon} size={11} color={deltaColor} />
-            <Text style={[styles.deltaText, { color: deltaColor }]}>
-              {formatDelta(metric.delta ?? 0)}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-      <Reanimated.Text style={[styles.tileValue, { color: colors.textPrimary }, valueStyle]}>
-        {metric.value}
-      </Reanimated.Text>
-      <Text style={[styles.tileLabel, { color: colors.textSecondary }]}>
-        {metric.label}
-      </Text>
-    </View>
-  );
-}
-
-// ── Engagement bar row ────────────────────────────────────────────────
-function EngagementBarRow({
-  bar,
-  colors,
-  index,
-  reducedMotion,
-}: {
-  bar: EngagementBar;
-  colors: ThemeColors;
-  index: number;
-  reducedMotion: boolean;
-}) {
-  const styles = useMemo(() => createEngagementStyles(colors), [colors]);
-  const width = useSharedValue(0);
-
-  const barColor =
-    bar.colorKey === 'brand' ? colors.brand :
-    bar.colorKey === 'success' ? colors.success :
-    bar.colorKey === 'warning' ? colors.warning :
-    colors.textSecondary;
-
-  useEffect(() => {
-    if (reducedMotion) {
-      width.value = bar.pct;
-    } else {
-      width.value = withDelay(index * 80 + 120, withTiming(bar.pct, { duration: Motion.duration.crawl, easing: Easing.out(Easing.cubic) }));
-    }
-  }, [width, bar.pct, index, reducedMotion]);
-
-  const barStyle = useAnimatedStyle(() => ({
-    width: `${interpolate(width.value, [0, 100], [0, 100])}%`,
-  }));
-
-  return (
-    <View style={styles.barRow}>
-      <View style={styles.barLabelRow}>
-        <Text style={[styles.barLabel, { color: colors.textPrimary }]}>{bar.label}</Text>
-        <View style={styles.barMetaRow}>
-          <Text style={[styles.barCount, { color: colors.textSecondary }]}>
-            {formatCount(bar.count)}
-          </Text>
-          <Text style={[styles.barPct, { color: colors.textMuted }]}>
-            {bar.pct.toFixed(1)}%
-          </Text>
-        </View>
-      </View>
-      <View style={[styles.barTrack, { backgroundColor: colors.surfaceAlt }]}>
-        <Reanimated.View style={[styles.barFill, { backgroundColor: barColor }, barStyle]} />
-      </View>
-    </View>
-  );
-}
-
-// ── Timeline chart (View-based bar chart) ─────────────────────────────
-function TimelineChart({
-  points,
-  colors,
-  reducedMotion,
-  accessibilitySummary,
-}: {
-  points: CreatorAnalyticsTimelinePoint[];
-  colors: ThemeColors;
-  reducedMotion: boolean;
-  accessibilitySummary: string;
-}) {
-  const styles = useMemo(() => createTimelineStyles(colors), [colors]);
-  const progress = useSharedValue(0);
-
-  const maxViews = useMemo(() => {
-    if (points.length === 0) return 0;
-    return Math.max(...points.map((p) => p.views), 1);
-  }, [points]);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      progress.value = 1;
-    } else {
-      progress.value = withTiming(1, { duration: Motion.duration.crawl, easing: Easing.out(Easing.cubic) });
-    }
-  }, [progress, reducedMotion, points.length]);
-
-  // Choose a label interval so labels don't collide. For 7d: every day,
-  // 30d: every ~5th, 90d: every ~15th.
-  const labelInterval = useMemo(() => {
-    if (points.length <= 7) return 1;
-    if (points.length <= 30) return Math.ceil(points.length / 6);
-    return Math.ceil(points.length / 6);
-  }, [points.length]);
-
-  if (points.length === 0) {
-    return (
-      <Text style={[styles.inlineEmpty, { color: colors.textMuted }]}>
-        No timeline data for this period.
-      </Text>
-    );
-  }
-
-  return (
-    <View style={styles.chartWrap}>
-      <Text
-        accessibilityLabel={accessibilitySummary}
-        accessibilityRole="text"
-        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
-      />
-      <View style={styles.chartBars}>
-        {points.map((p, i) => {
-          const heightPct = maxViews > 0 ? (p.views / maxViews) * 100 : 0;
-          const showLabel = i % labelInterval === 0 || i === points.length - 1;
-          return (
-            <TimelineBar
-              key={p.date}
-              heightPct={heightPct}
-              showLabel={showLabel}
-              label={shortDate(p.date)}
-              colors={colors}
-              index={i}
-              reducedMotion={reducedMotion}
-            />
-          );
-        })}
-      </View>
-      {/* Baseline */}
-      <View style={[styles.baseline, { backgroundColor: colors.border }]} />
-    </View>
-  );
-}
-
-function TimelineBar({
-  heightPct,
-  showLabel,
-  label,
-  colors,
-  index,
-  reducedMotion,
-}: {
-  heightPct: number;
-  showLabel: boolean;
-  label: string;
-  colors: ThemeColors;
-  index: number;
-  reducedMotion: boolean;
-}) {
-  const styles = useMemo(() => createTimelineStyles(colors), [colors]);
-  const height = useSharedValue(0);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      height.value = heightPct;
-    } else {
-      height.value = withDelay(
-        Math.min(index * 12, 400),
-        withTiming(heightPct, { duration: Motion.duration.crawl, easing: Easing.out(Easing.cubic) })
-      );
-    }
-  }, [height, heightPct, index, reducedMotion]);
-
-  const barStyle = useAnimatedStyle(() => ({
-    height: `${interpolate(height.value, [0, 100], [0, 100])}%`,
-  }));
-
-  return (
-    <View style={styles.barCol}>
-      <View style={styles.barColumnTrack}>
-        <Reanimated.View
-          style={[styles.timelineBar, { backgroundColor: colors.textPrimary }, barStyle]}
-        />
-      </View>
-      {showLabel ? (
-        <Text style={[styles.barColLabel, { color: colors.textMuted }]} numberOfLines={1}>
-          {label}
-        </Text>
-      ) : (
-        <View style={styles.barColLabelPlaceholder} />
-      )}
-    </View>
-  );
-}
-
-// ── Top content row ───────────────────────────────────────────────────
-function TopContentRow({
+// ── Content ranking row ────────────────────────────────────────────────
+function ContentRankingRow({
   item,
+  rank,
   colors,
-}: {
-  item: TopContentItem;
+  isLast }: {
+  item: ContentRankingResponse['items'][number];
+  rank: number;
   colors: ThemeColors;
+  isLast: boolean;
 }) {
-  const styles = useMemo(() => createTopContentStyles(colors), [colors]);
+  const styles = useMemo(() => createContentRowStyles(colors), [colors]);
   return (
-    <View style={[styles.row, { borderBottomColor: colors.border }]}>
-      <View style={[styles.rankBadge, { backgroundColor: colors.surfaceAlt }]}>
-        <Text style={[styles.rankText, { color: colors.textPrimary }]}>{item.rank}</Text>
+    <View style={[styles.row, !isLast && { borderBottomColor: colors.border }]}>
+      <Text style={[styles.rank, { color: colors.textMuted }]}>
+        {rank}
+      </Text>
+      <View style={styles.thumbWrap}>
+        {item.thumbnailUrl ? (
+          <CachedImage
+            uri={item.thumbnailUrl}
+            style={styles.thumb}
+            contentFit="cover"
+            transition={200}
+            priority="normal"
+          />
+        ) : (
+          <View style={[styles.thumb, styles.thumbFallback]}>
+            <Ionicons
+              name={item.contentType === 'look' ? 'shirt-outline' : 'image-outline'}
+              size={18}
+              color={colors.textMuted}
+            />
+          </View>
+        )}
       </View>
-      <View style={styles.rowInfo}>
-        <Text style={[styles.rowTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+      <View style={styles.info}>
+        <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
           {item.title}
         </Text>
-        <View style={styles.rowMeta}>
-          <Ionicons name="eye-outline" size={12} color={colors.textMuted} />
-          <Text style={[styles.rowMetaText, { color: colors.textMuted }]}>
+        <View style={styles.meta}>
+          <Text style={[styles.metaText, { color: colors.textMuted }]}>
             {formatCount(item.views)} views
           </Text>
-          <Text style={[styles.rowDot, { color: colors.border }]}>·</Text>
-          <Text style={[styles.rowMetaText, { color: colors.textMuted }]}>
+          <Text style={[styles.metaDot, { color: colors.border }]}>·</Text>
+          <Text style={[styles.metaText, { color: colors.textMuted }]}>
             {formatRate(item.engagementRate)} engagement
           </Text>
         </View>
@@ -782,31 +804,56 @@ function AnalyticsSkeleton({ colors }: { colors: ThemeColors }) {
   const styles = useMemo(() => createSkeletonStyles(colors), [colors]);
   return (
     <View>
-      <View style={styles.metricsGrid}>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <View key={i} style={styles.metricTile}>
-            <View style={styles.skelRow}>
-              <SkeletonLoader width={32} height={32} borderRadius={Radius.full} />
-              <SkeletonLoader width={48} height={12} />
-            </View>
-            <SkeletonLoader width="70%" height={28} style={{ marginTop: Space.sm }} />
-            <SkeletonLoader width="50%" height={12} style={{ marginTop: Space.xs }} />
-          </View>
-        ))}
-      </View>
-      <View style={{ height: Space.lg }} />
-      <SkeletonLoader width="60%" height={18} />
+      {/* Freshness strip placeholder */}
+      <SkeletonLoader width={140} height={14} />
+
+      {/* Hero placeholder — matches media-anchored hero height */}
+      <View style={{ height: Space.md }} />
+      <SkeletonLoader width="100%" height={140} borderRadius={Radius.md} />
+
+      {/* Comparison context */}
       <View style={{ height: Space.sm }} />
-      {Array.from({ length: 4 }).map((_, i) => (
-        <View key={i} style={styles.skelBarRow}>
+      <SkeletonLoader width={180} height={12} />
+
+      {/* Metric lines placeholder — 7 rows to match populated state */}
+      <View style={{ height: Space.lg }} />
+      {Array.from({ length: 7 }).map((_, i) => (
+        <View key={i} style={styles.skelMetricRow}>
           <SkeletonLoader width="40%" height={14} />
-          <SkeletonLoader width="100%" height={10} borderRadius={Radius.full} style={{ marginTop: Space.xs }} />
+          <SkeletonLoader width={60} height={16} />
         </View>
       ))}
+
+      {/* Chart placeholder */}
       <View style={{ height: Space.lg }} />
-      <SkeletonLoader width="50%" height={18} />
+      <SkeletonLoader width={80} height={14} />
       <View style={{ height: Space.sm }} />
-      <SkeletonLoader width="100%" height={120} borderRadius={Radius.md} />
+      <SkeletonLoader width="100%" height={180} borderRadius={Radius.lg} />
+
+      {/* Content ranking placeholder */}
+      <View style={{ height: Space.lg }} />
+      <SkeletonLoader width={70} height={14} />
+      <View style={{ height: Space.sm }} />
+      {Array.from({ length: 3 }).map((_, i) => (
+        <View key={i} style={styles.skelContentRow}>
+          <SkeletonLoader width={48} height={48} borderRadius={Radius.sm} />
+          <View style={styles.skelContentInfo}>
+            <SkeletonLoader width="60%" height={14} />
+            <SkeletonLoader width="40%" height={12} style={{ marginTop: Space.xs }} />
+          </View>
+        </View>
+      ))}
+
+      {/* Earnings placeholder */}
+      <View style={{ height: Space.lg }} />
+      <SkeletonLoader width={60} height={14} />
+      <View style={{ height: Space.sm }} />
+      {Array.from({ length: 4 }).map((_, i) => (
+        <View key={i} style={styles.skelMetricRow}>
+          <SkeletonLoader width="35%" height={14} />
+          <SkeletonLoader width={70} height={16} />
+        </View>
+      ))}
     </View>
   );
 }
@@ -817,277 +864,264 @@ function createStyles(colors: ThemeColors) {
     scrollContent: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     bannerWrap: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
+    // ── Period selector: hairline tabs ──
     periodRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs - 2,
-      backgroundColor: colors.surfaceAlt,
-      borderRadius: Radius.full,
-      padding: Space.xs - 2,
-    },
-    periodChip: {
-      paddingHorizontal: Space.sm + Space.xs,
-      paddingVertical: Space.xs + 1,
-      borderRadius: Radius.full,
+      gap: Space.sm + Space.xs },
+    periodTab: {
       alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: Space.lg + Space.xs,
-      minWidth: Control.chrome + Space.xs,
-    },
-    periodChipText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: LetterSpacing.wide,
-    },
-    metricsGrid: {
+      paddingVertical: Space.xs,
+      paddingHorizontal: Space.xxs },
+    periodTabText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: 0.3 },
+    periodTabIndicator: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: 2,
+      borderRadius: 1 },
+    // ── Freshness ──
+    freshnessRow: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Space.sm,
-    },
-    section: {
-      marginTop: Space.lg,
-    },
-    sectionHeader: {
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.xs },
+    freshnessDot: {
+      width: 6,
+      height: 6,
+      borderRadius: Radius.full },
+    freshnessText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium },
+    freshnessWatermark: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular },
+    // ── Hero ──
+    heroWrap: {
+      paddingTop: Space.md,
+      paddingBottom: Space.sm },
+    heroMediaWrap: {
+      position: 'relative',
+      height: 140,
+      borderRadius: Radius.md,
+      overflow: 'hidden' },
+    heroMedia: {
+      width: '100%',
+      height: 140 },
+    heroOverlay: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      padding: Space.md },
+    heroLabel: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      color: colors.scrimTextSecondary },
+    heroRow: {
       flexDirection: 'row',
       alignItems: 'baseline',
-      justifyContent: 'space-between',
-      marginBottom: Space.sm,
-    },
-    sectionTitle: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-    },
-    sectionCaption: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-    },
-    breakdownWrap: {
-      gap: Space.sm + 2,
-    },
-    topList: {
-      // flat list with hairline separators
-    },
-    inlineEmpty: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      paddingVertical: Space.md,
-    },
-  });
-}
-
-function createMetricTileStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    tile: {
-      flex: 1,
-      minWidth: '48%',
-      paddingVertical: Space.md,
-      paddingHorizontal: Space.md,
-      gap: Space.xs,
-    },
-    tileTop: {
+      gap: Space.sm,
+      marginTop: Space.xs },
+    heroValue: {
+      ...Numeric.priceList,
+      fontSize: TypographyV2.priceHero.size,
+      lineHeight: TypographyV2.priceHero.lineHeight,
+      letterSpacing: TypographyV2.priceHero.letterSpacing,
+      fontFamily: FontFamily.bold,
+      color: colors.scrimTextPrimary,
+      fontVariant: ['tabular-nums'] },
+    heroDelta: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    tileIcon: {
-      width: Control.chromeCompact,
-      height: Control.chromeCompact,
-      borderRadius: Radius.full,
+      gap: Space.xs - 2,
+      paddingHorizontal: Space.xs + 1,
+      paddingVertical: Space.xs - 1,
+      borderRadius: Radius.full },
+    heroDeltaText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: 0.2,
+      color: colors.scrimTextPrimary },
+    // ── Inline delta on hero (no pill chrome) ──
+    heroDeltaInline: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2 },
+    heroDeltaInlineText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.scrimTextPrimary,
+      fontVariant: ['tabular-nums'] },
+    // ── Comparison context ──
+    comparisonContext: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      paddingVertical: Space.xs },
+    // ── Suppressed dimensions ──
+    suppressedCallout: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingVertical: Space.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      marginTop: Space.xs },
+    suppressedText: {
+      flex: 1,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular },
+    // ── Metrics ──
+    metricsSection: {
+      marginTop: Space.sm },
+    // ── Partial error ──
+    partialBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs + 1,
+      paddingHorizontal: Space.sm + Space.xs,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.sm,
+      marginTop: Space.md },
+    partialText: {
+      flex: 1,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      lineHeight: TypographyV2.meta.lineHeight },
+    // ── Chart ──
+    chartSection: {
+      marginTop: Space.lg },
+    // ── Content ranking ──
+    contentSection: {
+      marginTop: Space.lg },
+    contentRowPress: {
+      marginLeft: -Space.xs },
+    sectionLabel: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      marginBottom: Space.sm },
+    // ── Earnings ──
+    earningsSection: {
+      marginTop: Space.xl },
+    payoutButton: {
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    deltaRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs - 2,
-    },
-    deltaText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-      fontVariant: ['tabular-nums'] as any,
-    },
-    tileValue: {
-      fontSize: Type.priceHero.size,
-      fontFamily: Typography.family.bold,
-      lineHeight: Type.priceHero.lineHeight,
-      letterSpacing: Type.priceHero.letterSpacing,
-      fontVariant: ['tabular-nums'] as any,
-    },
-    tileLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-  });
-}
-
-function createEngagementStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    barRow: {
-      gap: Space.xs + 2,
-    },
-    barLabelRow: {
+      paddingVertical: Space.sm + 2,
+      borderRadius: Radius.sm,
+      marginTop: Space.md,
+      minHeight: 48 },
+    payoutButtonText: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.textInverse },
+    payoutErrorText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      marginTop: Space.xs },
+    earningsEntries: {
+      marginTop: Space.lg },
+    entriesLabel: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      marginBottom: Space.sm },
+    entryRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-    },
-    barLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    barMetaRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    barCount: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      fontVariant: ['tabular-nums'] as any,
-    },
-    barPct: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      fontVariant: ['tabular-nums'] as any,
-    },
-    barTrack: {
-      height: Space.sm,
-      borderRadius: Radius.full,
-      overflow: 'hidden',
-    },
-    barFill: {
-      height: '100%',
-      borderRadius: Radius.full,
-    },
-  });
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth },
+    entryInfo: {
+      flex: 1,
+      gap: Space.xxs },
+    entryType: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: TypographyV2.body.letterSpacing },
+    entryDesc: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular },
+    entryAmount: {
+      ...Numeric.numericMeta,
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.semibold },
+    // ── Footer ──
+    footer: {
+      marginTop: Space.xl,
+      gap: Space.xxs },
+    footerText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular } });
 }
 
-function createTimelineStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    chartWrap: {
-      // container
-    },
-    chartBars: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      height: 140,
-      gap: Space.xs - 2,
-      paddingBottom: Space.xs - 2,
-    },
-    barCol: {
-      flex: 1,
-      alignItems: 'center',
-      gap: Space.xs,
-    },
-    barColumnTrack: {
-      flex: 1,
-      width: '100%',
-      justifyContent: 'flex-end',
-      alignItems: 'center',
-    },
-    timelineBar: {
-      width: '70%',
-      maxWidth: Space.sm + 2,
-      borderRadius: Radius.sm,
-      minHeight: Space.xs - 2,
-    },
-    barColLabel: {
-      fontSize: Type.meta.size - 2,
-      fontFamily: Typography.family.regular,
-      letterSpacing: LetterSpacing.normal,
-      textAlign: 'center',
-    },
-    barColLabelPlaceholder: {
-      height: Space.sm + Space.xs,
-    },
-    baseline: {
-      height: StyleSheet.hairlineWidth,
-      width: '100%',
-      marginTop: 0,
-    },
-    inlineEmpty: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      paddingVertical: Space.md,
-    },
-  });
-}
-
-function createTopContentStyles(colors: ThemeColors) {
+function createContentRowStyles(colors: ThemeColors) {
   return StyleSheet.create({
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
       paddingVertical: Space.sm + 2,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-    },
-    rankBadge: {
-      width: Control.icon + Space.xs,
-      height: Control.icon + Space.xs,
-      borderRadius: Radius.full,
+      borderBottomWidth: StyleSheet.hairlineWidth },
+    rank: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.semibold,
+      width: 20,
+      textAlign: 'center',
+      ...Numeric.numericMeta },
+    thumbWrap: {
+      width: 48,
+      height: 48 },
+    thumb: {
+      width: 48,
+      height: 48,
+      borderRadius: Radius.sm },
+    thumbFallback: {
       alignItems: 'center',
-      justifyContent: 'center',
-    },
-    rankText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.semibold,
-      fontVariant: ['tabular-nums'] as any,
-    },
-    rowInfo: {
+      justifyContent: 'center' },
+    info: {
       flex: 1,
-      gap: Space.xs - 1,
-    },
-    rowTitle: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    rowMeta: {
+      gap: Space.xs - 1 },
+    title: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.semibold,
+      letterSpacing: TypographyV2.body.letterSpacing },
+    meta: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
-    rowMetaText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-    rowDot: {
-      fontSize: Type.meta.size - 1,
-    },
-  });
+      gap: Space.xs },
+    metaText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      fontVariant: ['tabular-nums'] },
+    metaDot: {
+      fontSize: TypographyV2.meta.size - 1 } });
 }
 
 function createSkeletonStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    metricsGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Space.sm,
-    },
-    metricTile: {
-      flex: 1,
-      minWidth: '48%',
-      paddingVertical: Space.md,
-      paddingHorizontal: Space.md,
-    },
-    skelRow: {
+    skelMetricRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-    },
-    skelBarRow: {
-      marginTop: Space.sm,
-    },
-  });
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border },
+    skelContentRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.sm + 2 },
+    skelContentInfo: {
+      flex: 1 } });
 }

@@ -1,16 +1,20 @@
 import React, { useMemo } from "react";
-import { View, Text, StyleSheet, Modal, Pressable } from "react-native";
+
+import { TypographyV2 } from '../../theme/typography.v2';import { View, Text, StyleSheet, Modal, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Space, Radius, Type, Typography } from "../../theme/designTokens";
+import { Space, Radius, Elevation } from "../../theme/designTokens";
 import { useAppTheme } from "../../theme/ThemeContext";
 import { AnimatedPressable } from "../AnimatedPressable";
+import { useAppTranslation } from '../../i18n/useAppTranslation';
 
-export type ChatAction = "gallery" | "camera" | "agent";
+export type ChatAction = "gallery" | "camera" | "document" | "location" | "agent" | "offer" | "share_listing";
 
 interface ChatActionSheetProps {
   visible: boolean;
   onClose: () => void;
   onSelect: (action: ChatAction) => void;
+  hasLinkedListing?: boolean;
+  isSeller?: boolean;
 }
 
 interface ActionDef {
@@ -26,30 +30,55 @@ export function ChatActionSheet({
   visible,
   onClose,
   onSelect,
+  hasLinkedListing = false,
+  isSeller = false,
 }: ChatActionSheetProps) {
   const { colors } = useAppTheme();
+  const { t } = useAppTranslation('messaging');
   const actions = useMemo<ActionDef[]>(
     () => [
       {
         id: "gallery",
         icon: "images-outline",
-        label: "Photo & Video",
-        description: "Choose from your library",
-      },
+        label: t('attachments.photoAndVideo'),
+        description: t('attachments.chooseFromLibrary') },
       {
         id: "camera",
         icon: "camera-outline",
-        label: "Camera",
-        description: "Take a new photo or video",
-      },
+        label: t('attachments.camera'),
+        description: t('attachments.takePhotoOrVideo') },
+      {
+        id: "document",
+        icon: "document-attach-outline",
+        label: "File",
+        description: "Send PDF, ZIP, or other file" },
+      ...(hasLinkedListing && !isSeller
+        ? [
+            {
+              id: "offer" as ChatAction,
+              icon: "pricetag-outline" as const,
+              label: "Make an offer",
+              description: "Propose a price to the seller",
+            },
+          ]
+        : []),
+      ...(hasLinkedListing
+        ? [
+            {
+              id: "share_listing" as ChatAction,
+              icon: "bag-handle-outline" as const,
+              label: "Share listing",
+              description: "Send product card into conversation",
+            },
+          ]
+        : []),
       {
         id: "agent",
-        icon: "sparkles-outline",
-        label: "Add assistant",
-        description: "Deploy an AI assistant into this chat",
-      },
+        icon: 'bulb-outline',
+        label: t('agentPicker.addAssistant'),
+        description: t('agentPicker.addAssistantDescription') },
     ],
-    [],
+    [t, hasLinkedListing, isSeller],
   );
 
   return (
@@ -61,9 +90,9 @@ export function ChatActionSheet({
         >
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.textPrimary }]}>Attach</Text>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>{t('attachments.actionSheetTitle')}</Text>
             <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-              Share photos and videos in this chat
+              {t('attachments.actionSheetSubtitle')}
             </Text>
           </View>
 
@@ -86,19 +115,11 @@ export function ChatActionSheet({
                 accessibilityState={action.disabled ? { disabled: true } : undefined}
                 disabled={action.disabled}
               >
-                <View
-                  style={[
-                    styles.iconCircle,
-                    { backgroundColor: `${colors.brand}14` },
-                    action.disabled && { backgroundColor: colors.surfaceAlt },
-                  ]}
-                >
-                  <Ionicons
-                    name={action.icon}
-                    size={22}
-                    color={action.disabled ? colors.textMuted : colors.brand}
-                  />
-                </View>
+                <Ionicons
+                  name={action.icon}
+                  size={22}
+                  color={action.disabled ? colors.textMuted : colors.brand}
+                />
                 <View style={styles.rowText}>
                   <Text
                     style={[
@@ -134,10 +155,10 @@ export function ChatActionSheet({
             style={[styles.cancelBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
             onPress={onClose}
             accessibilityRole="button"
-            accessibilityLabel="Cancel"
+            accessibilityLabel={t('common.cancel')}
           >
             <Text style={[styles.cancelText, { color: colors.textPrimary }]}>
-              Cancel
+              {t('common.cancel')}
             </Text>
           </Pressable>
         </View>
@@ -149,8 +170,7 @@ export function ChatActionSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: "flex-end",
-  },
+    justifyContent: "flex-end" },
   sheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
@@ -158,80 +178,57 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.xxl,
     gap: Space.md,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 12,
-  },
+    ...Elevation.floating },
   handle: {
     width: 36,
     height: 4,
     borderRadius: Radius.full,
     alignSelf: "center",
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   header: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   title: {
-    fontSize: Type.subtitle.size,
-    lineHeight: Type.subtitle.lineHeight,
-    fontFamily: Typography.family.bold,
-    letterSpacing: Type.subtitle.letterSpacing,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   subtitle: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-    marginTop: 2,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    marginTop: 2 },
   list: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: Space.smMd,
     paddingVertical: Space.sm + 2,
     paddingHorizontal: Space.sm + 2,
-    borderRadius: Radius.lg,
-  },
+    borderRadius: Radius.lg },
   rowDisabled: {
-    opacity: 0.6,
-  },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+    opacity: 0.6 },
   rowText: {
     flex: 1,
-    gap: 2,
-  },
+    gap: 2 },
   rowLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily },
   rowDescription: {
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   disabledBadge: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
     borderRadius: Radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   disabledBadgeText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.meta.letterSpacing,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   cancelBtn: {
     borderRadius: Radius.lg,
     paddingVertical: Space.md + 2,
@@ -239,11 +236,8 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: 44,
-    justifyContent: "center",
-  },
+    justifyContent: "center" },
   cancelText: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.semibold,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily } });

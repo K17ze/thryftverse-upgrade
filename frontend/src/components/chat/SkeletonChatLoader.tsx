@@ -7,9 +7,9 @@ import Reanimated, {
   withRepeat,
   withSequence,
   withTiming,
-  Easing,
-} from 'react-native-reanimated';
-import { Space, Radius, Type } from '../../theme/designTokens';
+  Easing } from 'react-native-reanimated';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -29,8 +29,7 @@ function ShimmerBar({
   height = 14,
   style,
   color,
-  shimmer,
-}: {
+  shimmer }: {
   width: number | string;
   height?: number;
   style?: any;
@@ -38,8 +37,7 @@ function ShimmerBar({
   shimmer: ReturnType<typeof useSharedValue<number>>;
 }) {
   const shimmerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shimmer.value * 160 }],
-  }));
+    transform: [{ translateX: shimmer.value * 160 }] }));
 
   return (
     <View
@@ -115,7 +113,7 @@ export function SkeletonChatLoader({ count = 8 }: { count?: number }) {
               {showSender && (
                 <ShimmerBar
                   width={80}
-                  height={Type.caption.size}
+                  height={TypographyV2.meta.size}
                   style={styles.senderName}
                   color={barColor}
                   shimmer={shimmer}
@@ -133,14 +131,14 @@ export function SkeletonChatLoader({ count = 8 }: { count?: number }) {
                 <ShimmerBar
                   width="100%"
                   height={12}
-                  color={isMe ? `${colors.textInverse}25` : barColor}
+                  color={isMe ? colors.scrimTextTertiary : barColor}
                   shimmer={shimmer}
                 />
                 <ShimmerBar
                   width="60%"
                   height={12}
                   style={{ marginTop: Space.xs }}
-                  color={isMe ? `${colors.textInverse}25` : barColor}
+                  color={isMe ? colors.scrimTextTertiary : barColor}
                   shimmer={shimmer}
                 />
               </View>
@@ -156,33 +154,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   // Matches MessageBubble row: flexDirection row, alignItems flex-end, gap Space.sm.
   row: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Space.sm,
-    marginVertical: Space.xs,
-  },
+    marginVertical: Space.xs },
   // Matches MessageBubble rowRight: flexDirection row-reverse.
   rowRight: {
-    flexDirection: 'row-reverse',
-  },
+    flexDirection: 'row-reverse' },
   // Matches MessageBubble avatar: 28x28, borderRadius full, marginBottom Space.xs.
   avatar: {
-    marginBottom: Space.xs,
-  },
+    marginBottom: Space.xs },
   // Matches MessageBubble bubbleColumn: maxWidth 78%, gap 3.
   bubbleColumn: {
     maxWidth: '78%',
-    gap: 3,
-  },
+    gap: 3 },
   // Matches MessageBubble senderName: marginLeft Space.xs, marginBottom 2.
   senderName: {
     marginLeft: Space.xs,
-    marginBottom: 2,
-  },
+    marginBottom: 2 },
   // Matches MessageBubble bubble: paddingHorizontal Space.sm + 2, paddingVertical Space.sm, gap 3.
   bubble: {
     borderRadius: Radius.lg,
@@ -190,6 +182,4 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm,
     gap: 3,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-  },
-});
+    borderColor: 'transparent' } });

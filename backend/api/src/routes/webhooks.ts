@@ -97,7 +97,7 @@ interface MintOperationRow {
   user_id: string;
   operation_type: string;
   status: string;
-  amount_mg: number | string;
+  amount_units: number | string;
   fiat_currency: string;
   fiat_amount_minor: number | string | null;
   payment_intent_id: string | null;

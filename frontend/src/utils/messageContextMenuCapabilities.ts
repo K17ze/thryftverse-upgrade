@@ -1,4 +1,4 @@
-export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'edit' | 'delete' | 'retry' | 'report';
 
 import type { Ionicons } from '@expo/vector-icons';
 
@@ -14,6 +14,8 @@ export interface MessageContextCapabilities {
   isOwnMessage: boolean;
   isFailed: boolean;
   messageText?: string;
+  /** P2-03: Whether the message is still within the edit window. */
+  canEdit?: boolean;
 }
 
 export function deriveMessageActions(caps: MessageContextCapabilities): ActionDef[] {
@@ -26,13 +28,19 @@ export function deriveMessageActions(caps: MessageContextCapabilities): ActionDe
   list.push({ id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' });
   list.push({ id: 'react', label: 'React', icon: 'happy-outline' });
 
+  // P2-03: Edit — only for the sender's own text messages within the edit
+  // window. Placed before copy so the primary authoring action leads.
+  if (caps.isOwnMessage && caps.canEdit && caps.messageText && caps.messageText.trim().length > 0) {
+    list.push({ id: 'edit', label: 'Edit', icon: 'create-outline' });
+  }
+
   if (caps.messageText && caps.messageText.trim().length > 0) {
     list.push({ id: 'copy', label: 'Copy text', icon: 'copy-outline' });
     // Ask agent about this message — spec 16 agent invocation path
     list.push({
       id: 'askAgent',
       label: 'Ask agent about this',
-      icon: 'sparkles-outline',
+      icon: 'bulb-outline',
     });
   }
 

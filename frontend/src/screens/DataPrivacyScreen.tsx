@@ -35,17 +35,20 @@ import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { AppIcon } from '../components/common/AppIcon';
+import { IconSize } from '../theme/iconTokens';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataPrivacy'>;
 
-const DATA_CATEGORIES: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; description: string }[] = [
-  { icon: 'person-outline', label: 'Profile', description: 'Username, display name, bio, avatar' },
-  { icon: 'pricetag-outline', label: 'Listings', description: 'Items you have listed for sale' },
-  { icon: 'bag-outline', label: 'Orders', description: 'Purchase and sale order history' },
-  { icon: 'chatbubble-outline', label: 'Messages', description: 'Conversations and message metadata' },
-  { icon: 'location-outline', label: 'Addresses', description: 'Saved delivery addresses' },
-  { icon: 'card-outline', label: 'Payments', description: 'Saved cards and bank accounts' },
+const DATA_CATEGORIES = [
+  { icon: 'profile', label: 'Profile', description: 'Username, display name, bio, avatar' },
+  { icon: 'bag-handle-outline', label: 'Listings', description: 'Items you have listed for sale' },
+  { icon: 'cart', label: 'Orders', description: 'Purchase and sale order history' },
+  { icon: 'chat', label: 'Messages', description: 'Conversations and message metadata' },
+  { icon: 'location', label: 'Addresses', description: 'Saved delivery addresses' },
+  { icon: 'card', label: 'Payments', description: 'Saved cards and bank accounts' },
 ];
 
 export default function DataPrivacyScreen({ navigation }: Props) {
@@ -60,8 +63,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
     recommendationPersonalization,
     setRecommendationPersonalization,
     thirdPartySharing,
-    setThirdPartySharing,
-  } = useSettingsPreferences();
+    setThirdPartySharing } = useSettingsPreferences();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   const handleOpenExternal = async (url: string) => {
@@ -93,7 +95,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
         accessibilityRole="header"
         accessibilityLabel="Device-local privacy controls"
       >
-        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+        <AppIcon name="info" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
         <Text style={styles.demoBannerText}>
           These privacy controls are saved on this device and stay in effect
           across app restarts.
@@ -118,7 +120,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       <View>
         <SettingsSection title="Your data rights" noCard>
           <SettingsRow
-            icon="download-outline"
+            icon="download"
             title="Download your data"
             subtitle="Export a copy of your account data (GDPR portability)"
             onPress={() => navigation.navigate('DataExport')}
@@ -132,7 +134,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       <View>
         <SettingsSection title="Privacy controls" noCard>
           <SettingsRow
-            icon="megaphone-outline"
+            icon="notifications"
             title="Personalised ads"
             subtitle="Allow us to use your activity to show relevant ads"
             toggleValue={personalizedAds}
@@ -140,14 +142,14 @@ export default function DataPrivacyScreen({ navigation }: Props) {
             isFirst
           />
           <SettingsRow
-            icon="analytics-outline"
+            icon="analytics"
             title="Analytics"
             subtitle="Send anonymous usage data to improve ThryftVerse"
             toggleValue={!analyticsOptOut}
             onToggle={(v) => { haptic.selection(); setAnalyticsOptOut(!v); }}
           />
           <SettingsRow
-            icon="person-outline"
+            icon="profile"
             title="Recommendation personalisation"
             subtitle="Use your activity to personalise feed recommendations"
             toggleValue={recommendationPersonalization}
@@ -161,7 +163,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       <View>
         <View style={styles.infoBlock}>
           <View style={styles.infoHeader}>
-            <Ionicons name="time-outline" size={18} color={colors.textSecondary} />
+            <AppIcon name="clock" size={IconSize.md} color="textSecondary" opticalCenter accessible={false} />
             <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>Data retention</Text>
           </View>
           <Text style={[styles.infoBody, { color: colors.textSecondary }]}>
@@ -174,7 +176,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       <View>
         <SettingsSection title="Third-party sharing" noCard>
           <SettingsRow
-            icon="share-outline"
+            icon="share"
             title="Share data with partners"
             subtitle="Allow sharing anonymised data with shipping and payment partners"
             toggleValue={thirdPartySharing}
@@ -194,7 +196,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       <View>
         <SettingsSection title="Cookie preferences" noCard>
           <SettingsRow
-            icon="document-text-outline"
+            icon="document"
             title="Cookie policy"
             subtitle="How we use cookies and local storage"
             onPress={() => void handleOpenExternal('https://thryftverse.app/cookies')}
@@ -213,9 +215,9 @@ export default function DataPrivacyScreen({ navigation }: Props) {
         description="Deletion is permanent. Open orders, disputes or payouts may need to be resolved first."
         noCard
       >
-        <View style={[styles.destructiveDivider, { borderTopColor: `${colors.danger}40` }]}>
+        <View style={[styles.destructiveDivider, { borderTopColor: colors.dangerBorder }]}>
           <SettingsRow
-            icon="trash-outline"
+            icon="trash"
             title="Delete account"
             subtitle="Review affected data and verify your identity"
             danger
@@ -232,13 +234,13 @@ export default function DataPrivacyScreen({ navigation }: Props) {
       <View>
         <SettingsSection title="Legal" noCard>
           <SettingsRow
-            icon="shield-checkmark-outline"
+            icon="lock"
             title="Privacy Policy"
             onPress={() => void handleOpenExternal('https://thryftverse.app/privacy')}
             isFirst
           />
           <SettingsRow
-            icon="document-text-outline"
+            icon="document"
             title="Terms of Service"
             onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
             isLast
@@ -258,40 +260,32 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     demoBannerText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight,
       color: colors.textSecondary,
-      flex: 1,
-    },
+      flex: 1 },
     infoBlock: {
       paddingHorizontal: Space.md,
       paddingVertical: Space.sm,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     infoHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      marginBottom: Space.xs,
-    },
+      marginBottom: Space.xs },
     infoTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.body.letterSpacing },
     infoBody: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.caption.lineHeight,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     destructiveDivider: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-    },
-  });
+      borderTopWidth: StyleSheet.hairlineWidth } });
 }

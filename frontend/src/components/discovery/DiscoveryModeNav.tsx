@@ -6,21 +6,18 @@ import {
   Text,
   LayoutChangeEvent,
   StyleProp,
-  ViewStyle,
-} from 'react-native';
+  ViewStyle } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   Space,
-  Type,
   Typography,
-  Stroke,
-} from '../../theme/designTokens';
+  Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useHaptic } from '../../hooks/useHaptic';
 import { Motion } from '../../theme/motionTokens';
@@ -67,8 +64,7 @@ export function DiscoveryModeNav({
   onModeChange,
   modeStatus,
   onRepeatTap,
-  style,
-}: DiscoveryModeNavProps) {
+  style }: DiscoveryModeNavProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
@@ -106,14 +102,12 @@ export function DiscoveryModeNav({
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorX.value }],
-    width: indicatorWidth.value,
-  }));
+    width: indicatorWidth.value }));
 
   const handleTabLayout = (index: number, e: LayoutChangeEvent) => {
     tabLayouts.current[index] = {
       x: e.nativeEvent.layout.x,
-      width: e.nativeEvent.layout.width,
-    };
+      width: e.nativeEvent.layout.width };
     // Set initial indicator position without animation on first layout.
     if (!hasInitialized.current && MODES[index].value === activeMode) {
       indicatorX.value = e.nativeEvent.layout.x;
@@ -206,29 +200,23 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     borderBottomWidth: Stroke.hairline,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   tab: {
     flex: 1,
     minHeight: 44,
     paddingVertical: Space.sm,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   label: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-  },
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight },
   status: {
     marginTop: Space.xxs,
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.regular,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily },
   indicator: {
     position: 'absolute',
     height: 2,
     bottom: 0,
-    left: Space.md,
-  },
-});
+    left: Space.md } });

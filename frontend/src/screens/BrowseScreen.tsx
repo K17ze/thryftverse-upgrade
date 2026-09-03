@@ -8,8 +8,7 @@ import { View,
   useWindowDimensions,
   ScrollView,
   RefreshControl,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FlashList } from '@shopify/flash-list';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -43,9 +42,10 @@ import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
 import { SharedTransitionView } from '../components/SharedTransitionView';
 
-import { isSustainableGrade } from '../utils/sustainabilityScore';
-
-import { Space, Radius, Elevation, Type, Typography, AspectRatio, Control } from '../theme/designTokens';
+import { Space, Radius, Elevation, Typography, AspectRatio, Control, IconSize } from '../theme/designTokens';
+import { AppIcon } from '../components/common/AppIcon';
+import { AppIconButton } from '../components/common/AppIconButton';
+import { TypographyV2 } from '../theme/typography.v2';
 const GRID_SPACING = 16;
 
 const BROWSE_SORT_PREF_KEY = 'thryftverse:browse-sort-pref:v1';
@@ -119,8 +119,7 @@ export default function BrowseScreen() {
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.xs,
-    },
+      paddingBottom: Space.xs },
     backBtn: { width: Control.hit, height: Control.hit, alignItems: 'center', justifyContent: 'center' },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
     gridToggleBtn: { width: Control.hit, height: Control.hit, alignItems: 'center', justifyContent: 'center' },
@@ -129,21 +128,18 @@ export default function BrowseScreen() {
     titleContainer: {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
-      paddingBottom: Space.md,
-    },
+      paddingBottom: Space.md },
     hugeTitle: {
-      fontSize: Type.title.size,
-      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.screenTitle.size,
+      fontFamily: TypographyV2.screenTitle.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: Type.title.letterSpacing,
-      lineHeight: Type.title.lineHeight,
-    },
+      letterSpacing: TypographyV2.screenTitle.letterSpacing,
+      lineHeight: TypographyV2.screenTitle.lineHeight },
     itemCountText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      fontVariant: ['tabular-nums'],
-    },
+      fontVariant: ['tabular-nums'] },
     itemCountPill: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -153,8 +149,7 @@ export default function BrowseScreen() {
       borderRadius: Radius.full,
       backgroundColor: colors.surfaceAlt,
       marginTop: Space.xs + 2,
-      alignSelf: 'flex-start',
-    },
+      alignSelf: 'flex-start' },
 
     filterBar: { paddingBottom: Space.md },
     filterRow: { paddingHorizontal: Space.md, gap: Space.sm, alignItems: 'center' },
@@ -165,12 +160,10 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     filterPillActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
-    filterPillTextActive: { color: colors.textPrimary, fontSize: Type.caption.size, fontFamily: Typography.family.semibold },
+      backgroundColor: colors.surfaceAlt },
+    filterPillTextActive: { color: colors.textPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     filterPillOutline: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -178,16 +171,13 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      backgroundColor: 'transparent',
-    },
-    filterPillText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
+      backgroundColor: 'transparent' },
+    filterPillText: { color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     saveSearchPillActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     saveSearchTextActive: {
       color: colors.brand,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     sortTrigger: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -195,13 +185,11 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
-      backgroundColor: 'transparent',
-    },
+      backgroundColor: 'transparent' },
     sortTriggerActive: {
-      backgroundColor: colors.surfaceAlt,
-    },
-    sortTriggerText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
-    sortTriggerTextActive: { color: colors.textPrimary, fontFamily: Typography.family.semibold },
+      backgroundColor: colors.surfaceAlt },
+    sortTriggerText: { color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
+    sortTriggerTextActive: { color: colors.textPrimary, fontFamily: TypographyV2.meta.fontFamily },
     sortMenu: {
       marginHorizontal: Space.md,
       marginBottom: Space.sm,
@@ -209,8 +197,7 @@ export default function BrowseScreen() {
       overflow: 'hidden',
       backgroundColor: colors.surface,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     sortMenuItem: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -218,25 +205,21 @@ export default function BrowseScreen() {
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
+      borderBottomColor: colors.border },
     sortMenuItemText: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      color: colors.textPrimary,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary },
     sortMenuItemTextActive: {
       color: colors.brand,
-      fontFamily: Typography.family.semibold,
-    },
+      fontFamily: Typography.family.semibold },
     activeBadgeRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       alignItems: 'center',
       paddingHorizontal: Space.md,
       gap: Space.xs,
-      paddingBottom: Space.sm,
-    },
+      paddingBottom: Space.sm },
     activeBadge: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -244,41 +227,34 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-    },
+      backgroundColor: colors.surfaceAlt },
     activeBadgeText: {
       color: colors.textPrimary,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     activeBadgeClose: {
       width: Control.iconCompact,
       height: Control.iconCompact,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     activeBadgeDivider: {
       width: StyleSheet.hairlineWidth,
       height: Space.md,
       backgroundColor: colors.borderSubtle,
-      marginHorizontal: Space.xs / 2,
-    },
+      marginHorizontal: Space.xs / 2 },
     clearAllBtn: {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
+      borderColor: colors.border },
     clearAllText: {
       color: colors.textSecondary,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     syncRetryBanner: {
       marginHorizontal: Space.md,
-      marginBottom: Space.sm + 2,
-    },
+      marginBottom: Space.sm + 2 },
 
     gridContent: { paddingHorizontal: Space.md, paddingBottom: 100 },
     rowWrapper: { justifyContent: 'space-between', marginBottom: Space.xl },
@@ -287,18 +263,14 @@ export default function BrowseScreen() {
       flexWrap: 'wrap',
       justifyContent: 'space-between',
       paddingHorizontal: Space.md,
-      rowGap: Space.xl,
-    },
+      rowGap: Space.xl },
     loadingCard: {
-      width: itemWidth,
-    },
+      width: itemWidth },
     loadingCardOffset: {
-      marginTop: Space.lg,
-    },
+      marginTop: Space.lg },
     loadingCardBody: {
       marginTop: Space.sm + 2,
-      paddingHorizontal: Space.xs,
-    },
+      paddingHorizontal: Space.xs },
 
     gridItem: { width: itemWidth },
     imageWrap: {
@@ -306,17 +278,14 @@ export default function BrowseScreen() {
       borderRadius: Radius.sm,
       overflow: 'hidden',
       backgroundColor: colors.surfaceAlt,
-      marginBottom: Space.smMd,
-    },
+      marginBottom: Space.smMd },
     gridImageContainer: {
       width: '100%',
       aspectRatio: AspectRatio.portrait,
-      borderRadius: Radius.lg,
-    },
+      borderRadius: Radius.lg },
     gridImage: { width: '100%', height: '100%' },
     sharedImageLayer: {
-      ...StyleSheet.absoluteFill,
-    },
+      ...StyleSheet.absoluteFill },
     likeBtn: {
       position: 'absolute',
       top: Space.sm + 2,
@@ -325,66 +294,56 @@ export default function BrowseScreen() {
       height: Control.hit,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
 
     infoWrap: { paddingHorizontal: Space.xs },
     priceRow: {
       flexDirection: 'row',
       alignItems: 'flex-end',
       justifyContent: 'space-between',
-      marginBottom: Space.xs,
-    },
-    priceText: { color: colors.textPrimary, fontSize: Type.body.size, fontFamily: Typography.family.bold, fontVariant: ['tabular-nums'] },
-    brandText: { color: colors.textSecondary, fontSize: Type.caption.size, fontFamily: Typography.family.bold, textTransform: 'uppercase' },
-    sizeText: { color: colors.textMuted, fontSize: Type.caption.size, fontFamily: Typography.family.medium },
+      marginBottom: Space.xs },
+    priceText: { color: colors.textPrimary, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, fontVariant: ['tabular-nums'] },
+    brandText: { color: colors.textSecondary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, textTransform: 'uppercase' },
+    sizeText: { color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     sellerActionRow: {
       marginTop: Space.sm,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: Space.xs + 2,
-    },
+      gap: Space.xs + 2 },
     sellerIdentityChip: {
       flex: 1,
       minHeight: Space.lg + Space.xs,
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs + 2,
-      paddingHorizontal: Space.sm,
-    },
+      paddingHorizontal: Space.sm },
     sellerActionAvatarWrap: {
       width: Control.iconCompact,
       height: Control.iconCompact,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     sellerActionAvatar: {
       width: Control.iconCompact,
       height: Control.iconCompact,
-      borderRadius: Radius.full,
-    },
+      borderRadius: Radius.full },
     sellerActionAvatarFallback: {
       width: Control.iconCompact,
       height: Control.iconCompact,
       borderRadius: Radius.full,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.background,
-    },
+      backgroundColor: colors.background },
     sellerActionHandle: {
       flex: 1,
       color: colors.textSecondary,
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
     sellerMessageBtn: {
       width: Space.lg + Space.xs,
       height: Space.lg + Space.xs,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
-  }), [colors, itemWidth]);
+      justifyContent: 'center' } }), [colors, itemWidth]);
 
   const navigation = useNavigation<any>();
   const route = useRoute<BrowseRoute>();
@@ -452,13 +411,12 @@ export default function BrowseScreen() {
   }, [categoryId, searchQuery, browseFilters.query, updateBrowseFilters]);
 
   useEffect(() => {
-    const sortMap: Record<string, 'newest' | 'price_asc' | 'price_desc'> = {
+    const sortMap: Record<string, 'newest' | 'price_asc' | 'price_desc' | 'most_liked' | 'ending_soon'> = {
       Newest: 'newest',
       'Price: Low to High': 'price_asc',
       'Price: High to Low': 'price_desc',
-      'Most liked': 'newest',
-      'Ending soon': 'newest',
-    };
+      'Most liked': 'most_liked',
+      'Ending soon': 'ending_soon' };
 
     const hasBackendFilters =
       browseFilters.query.trim().length > 0 ||
@@ -466,6 +424,7 @@ export default function BrowseScreen() {
       browseFilters.sizes.length > 0 ||
       browseFilters.condition !== 'Any' ||
       browseFilters.sort !== 'Recommended' ||
+      browseFilters.sustainableOnly ||
       (categoryId && categoryId !== 'search' && categoryId !== 'all');
 
     if (!hasBackendFilters) {
@@ -486,7 +445,7 @@ export default function BrowseScreen() {
       minPrice: browseFilters.priceMin ?? undefined,
       maxPrice: browseFilters.priceMax ?? undefined,
       sort: sortMap[browseFilters.sort] || 'newest',
-    })
+      sustainableOnly: browseFilters.sustainableOnly })
       .then((result) => {
         if (cancelled) return;
         setBackendListings(result.listings);
@@ -510,8 +469,7 @@ export default function BrowseScreen() {
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => {
       scrollY.value = e.contentOffset.y;
-    },
-  });
+    } });
 
   const handleRefresh = async () => {
     haptic.patterns.refresh();
@@ -550,8 +508,7 @@ export default function BrowseScreen() {
       condition: 'Any',
       sustainableOnly: false,
       priceMin: null,
-      priceMax: null,
-    });
+      priceMax: null });
   }, [updateBrowseFilters]);
 
   // Save search — only available when there's a query or category to save
@@ -572,10 +529,8 @@ export default function BrowseScreen() {
         sizes: browseFilters.sizes,
         condition: browseFilters.condition,
         sort: browseFilters.sort,
-        category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined,
-      },
-      alertsEnabled: true,
-    });
+        category: categoryId !== 'search' && categoryId !== 'all' ? categoryId : undefined },
+      alertsEnabled: true });
     show('Search saved with alerts enabled', 'success');
   }, [saveSearchLabel, browseFilters, categoryId, addSavedSearch, show]);
 
@@ -632,18 +587,11 @@ export default function BrowseScreen() {
       if (browseFilters.priceMin != null && listing.price < browseFilters.priceMin) return false;
       if (browseFilters.priceMax != null && listing.price > browseFilters.priceMax) return false;
 
-      // Sustainable — fail-closed: returns false in production (no real
-      // data), so the filter yields no results until a backend impact
-      // service or seller tags exist.
+      // Sustainable — fail-closed: when the backend has no emissions data
+      // the grade is null, so the item does not pass the sustainable filter.
       if (
         browseFilters.sustainableOnly &&
-        !isSustainableGrade({
-          condition: listing.condition,
-          category: listing.category,
-          subcategory: listing.subcategory,
-          brand: listing.brand,
-          sellerLocation: listing.seller?.location ?? null,
-        })
+        !(listing.sustainabilityGrade === 'A' || listing.sustainabilityGrade === 'B')
       ) {
         return false;
       }
@@ -693,20 +641,12 @@ export default function BrowseScreen() {
     </View>
   );
 
-  // Sustainability filter is fail-closed: isSustainableGrade returns false
-  // in production (no real data), so this filter yields no results until a
-  // backend impact service or seller tags exist.
   const displayListings = useMemo(() => {
-    const base = backendListings ?? dataToRender;
+    if (backendListings !== null) return backendListings;
+    const base = dataToRender;
     if (!browseFilters.sustainableOnly) return base;
     return base.filter((listing) =>
-      isSustainableGrade({
-        condition: listing.condition,
-        category: listing.category,
-        subcategory: listing.subcategory,
-        brand: listing.brand,
-        sellerLocation: listing.seller?.location ?? null,
-      }),
+      listing.sustainabilityGrade === 'A' || listing.sustainabilityGrade === 'B',
     );
   }, [backendListings, dataToRender, browseFilters.sustainableOnly]);
   const displayCount = displayListings.length;
@@ -715,35 +655,35 @@ export default function BrowseScreen() {
   const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView testID="browse-screen" style={styles.container} edges={['top']}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
       {/* Heavy Typography Header */}
       <View style={styles.header}>
-        <AnimatedPressable style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} aria-hidden={true} />
-        </AnimatedPressable>
+        <AppIconButton
+          name="back"
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Go back"
+        />
         <View style={styles.headerActions}>
-          <AnimatedPressable
-            style={styles.gridToggleBtn}
-            activeOpacity={0.8}
+          <AppIconButton
+            name={gridDensity === 'comfortable' ? 'grid-outline' : 'grid'}
             onPress={() => handleGridDensityChange(gridDensity === 'comfortable' ? 'compact' : 'comfortable')}
-            accessibilityRole="button"
             accessibilityLabel={gridDensity === 'comfortable' ? 'Switch to compact 3 column grid' : 'Switch to comfortable 2 column grid'}
-            accessibilityState={{ selected: true }}
-          >
-            <Ionicons name={gridDensity === 'comfortable' ? 'grid-outline' : 'grid-sharp'} size={22} color={colors.textPrimary} aria-hidden={true} />
-          </AnimatedPressable>
-          <AnimatedPressable style={styles.searchBtn} activeOpacity={0.8} onPress={() => navigation.navigate('GlobalSearch')} accessibilityRole="button" accessibilityLabel="Search listings">
-            <Ionicons name="search" size={22} color={colors.textPrimary} aria-hidden={true} />
-          </AnimatedPressable>
+            selected={true}
+          />
+          <AppIconButton
+            name="search"
+            onPress={() => navigation.navigate('GlobalSearch')}
+            accessibilityLabel="Search listings"
+          />
         </View>
       </View>
 
       <View style={styles.titleContainer}>
         <Text style={styles.hugeTitle}>{title}</Text>
         <View style={styles.itemCountPill} accessibilityLiveRegion="polite" accessibilityLabel={backendLoading ? 'Loading items' : `${displayCount} items`}>
-          <Ionicons name="pricetag-outline" size={12} color={colors.textMuted} aria-hidden={true} />
+          <AppIcon name="bag-handle-outline" size={IconSize.micro} color="textMuted" accessible={false} />
           <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
         </View>
       </View>
@@ -759,7 +699,12 @@ export default function BrowseScreen() {
             accessibilityState={{ selected: hasActiveFilters }}
             accessibilityHint={hasActiveFilters ? 'Filters are applied' : 'Opens filter options'}
           >
-            <Ionicons name="options-outline" size={16} color={hasActiveFilters ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon
+              name="options"
+              size={IconSize.sm}
+              color={hasActiveFilters ? 'textPrimary' : 'textMuted'}
+              accessible={false}
+            />
             <Text style={[styles.filterPillText, hasActiveFilters && styles.filterPillTextActive]}>{hasActiveFilters ? 'Filter on' : 'Filter'}</Text>
           </AnimatedPressable>
           <AnimatedPressable
@@ -770,9 +715,19 @@ export default function BrowseScreen() {
             accessibilityLabel={`Sort by ${browseFilters.sort}`}
             accessibilityState={{ expanded: sortMenuOpen }}
           >
-            <Ionicons name="swap-vertical" size={16} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon
+              name="filter"
+              size={IconSize.sm}
+              color={browseFilters.sort !== 'Recommended' ? 'textPrimary' : 'textMuted'}
+              accessible={false}
+            />
             <Text style={[styles.sortTriggerText, browseFilters.sort !== 'Recommended' && styles.sortTriggerTextActive]}>{browseFilters.sort}</Text>
-            <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={browseFilters.sort !== 'Recommended' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon
+              name={sortMenuOpen ? 'chevronUp' : 'chevronDown'}
+              size={IconSize.micro}
+              color={browseFilters.sort !== 'Recommended' ? 'textPrimary' : 'textMuted'}
+              accessible={false}
+            />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -783,7 +738,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.brands.length > 0 ? `${browseFilters.brands.length} brands selected` : 'Opens brand filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.brands.length > 0 && styles.filterPillTextActive]}>{browseFilters.brands.length > 0 ? `Brand (${browseFilters.brands.length})` : 'Brand'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.brands.length > 0 ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon name="chevronDown" size={IconSize.micro} color={browseFilters.brands.length > 0 ? 'textPrimary' : 'textMuted'} accessible={false} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -794,7 +749,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.sizes.length > 0 ? `${browseFilters.sizes.length} sizes selected` : 'Opens size filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.sizes.length > 0 && styles.filterPillTextActive]}>{browseFilters.sizes.length > 0 ? `Size (${browseFilters.sizes.length})` : 'Size'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.sizes.length > 0 ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon name="chevronDown" size={IconSize.micro} color={browseFilters.sizes.length > 0 ? 'textPrimary' : 'textMuted'} accessible={false} />
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.filterPillOutline}
@@ -805,7 +760,7 @@ export default function BrowseScreen() {
             accessibilityHint={browseFilters.condition !== 'Any' ? `Condition: ${browseFilters.condition}` : 'Opens condition filter'}
           >
             <Text style={[styles.filterPillText, browseFilters.condition !== 'Any' && styles.filterPillTextActive]}>{browseFilters.condition !== 'Any' ? browseFilters.condition : 'Condition'}</Text>
-            <Ionicons name="chevron-down" size={12} color={browseFilters.condition !== 'Any' ? colors.textPrimary : colors.textMuted} aria-hidden={true} />
+            <AppIcon name="chevronDown" size={IconSize.micro} color={browseFilters.condition !== 'Any' ? 'textPrimary' : 'textMuted'} accessible={false} />
           </AnimatedPressable>
           <AnimatedPressable
             style={[styles.filterPillOutline, browseFilters.sustainableOnly && styles.filterPillActive]}
@@ -818,11 +773,12 @@ export default function BrowseScreen() {
             accessibilityState={{ checked: browseFilters.sustainableOnly }}
             accessibilityLabel="Toggle sustainable items only"
           >
-            <Ionicons
+            <AppIcon
               name="leaf"
-              size={16}
-              color={browseFilters.sustainableOnly ? colors.textPrimary : colors.textMuted}
-              aria-hidden={true}
+              size={IconSize.sm}
+              color={browseFilters.sustainableOnly ? 'textPrimary' : 'textMuted'}
+              focused={browseFilters.sustainableOnly}
+              accessible={false}
             />
             <Text
               style={[
@@ -1015,6 +971,7 @@ export default function BrowseScreen() {
             gap={gridDensity === 'compact' ? Space.xs + 2 : 3}
             horizontalPadding={Space.md}
             testIDPrefix="golden-browse-product-card"
+            firstItemTestID="golden-browse-first-product"
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -1041,7 +998,7 @@ export default function BrowseScreen() {
           // from filtered-empty: there is nothing to show regardless of filters.
           <View style={{ flex: 1 }}>
             <EmptyState
-              icon="pricetag-outline"
+              icon="bag-handle-outline"
               title="No items here yet"
               subtitle="New listings are added every day. Check back soon or explore everything."
               ctaLabel="Explore all"

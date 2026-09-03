@@ -6,16 +6,13 @@ import {
   NotificationRowBase,
   NotificationStatusIcon,
   NotificationActionButton,
-} from './NotificationRowBase';
+  NotificationThumbnail } from './NotificationRowBase';
 import {
-  Space,
-  Type,
-  FontFamily,
-} from '../../theme/designTokens';
+  FontFamily } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import {
   readPayloadString,
-  type NotificationEventV2,
-} from '../../services/notificationsApi';
+  type NotificationEventV2 } from '../../services/notificationsApi';
 
 // ---------------------------------------------------------------------------
 // SystemNotificationRow — resolution / dispute / system events
@@ -36,7 +33,6 @@ export interface SystemNotificationRowProps {
 interface SystemVisual {
   icon: keyof typeof Ionicons.glyphMap;
   accentKey: 'warning' | 'danger' | 'brand';
-  accentSubtleKey: 'warningSubtle' | 'dangerSubtle' | 'brandSubtle';
   statusLabel: string;
   actionLabel?: string;
 }
@@ -44,11 +40,11 @@ interface SystemVisual {
 function resolveSystemVisual(eventType: NotificationEventV2['eventType']): SystemVisual {
   switch (eventType) {
     case 'resolution_opened':
-      return { icon: 'alert-circle-outline', accentKey: 'warning', accentSubtleKey: 'warningSubtle', statusLabel: 'Dispute opened', actionLabel: 'Respond' };
+      return { icon: 'alert-circle-outline', accentKey: 'warning', statusLabel: 'Dispute opened', actionLabel: 'Respond' };
     case 'resolution_status_changed':
-      return { icon: 'document-text-outline', accentKey: 'brand', accentSubtleKey: 'brandSubtle', statusLabel: 'Status updated' };
+      return { icon: 'document-text-outline', accentKey: 'brand', statusLabel: 'Status updated' };
     default:
-      return { icon: 'information-circle-outline', accentKey: 'brand', accentSubtleKey: 'brandSubtle', statusLabel: 'System update' };
+      return { icon: 'information-circle-outline', accentKey: 'brand', statusLabel: 'System update' };
   }
 }
 
@@ -58,30 +54,32 @@ export function SystemNotificationRow({
   aggregatedCount,
   inAttentionSection = false,
   onPress,
-  onAction,
-}: SystemNotificationRowProps) {
+  onAction }: SystemNotificationRowProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
   const visual = useMemo(() => resolveSystemVisual(event.eventType), [event.eventType]);
   const accentColor = colors[visual.accentKey] ?? colors.brand;
-  const accentSubtle = colors[visual.accentSubtleKey];
   const isUnread = !event.readAt;
 
-  const subject = event.objectRef?.label ?? readPayloadString(event.payload, 'ticketSubject') ?? event.title;
-  const status = readPayloadString(event.payload, 'resolutionStatus') ?? readPayloadString(event.payload, 'status');
+  // Title vs Body deduplication:
+  const titleText = event.title || visual.statusLabel;
+  const rawBody = event.body?.trim();
+  const bodyText = rawBody && rawBody !== titleText
+    ? rawBody
+    : visual.statusLabel !== titleText
+      ? visual.statusLabel
+      : event.eventType.replace(/_/g, ' ');
 
-  const description = status ? `${visual.statusLabel} · ${status}` : visual.statusLabel;
+  const objectImage = event.objectRef?.imageUrl ?? event.imageUrl;
 
-  const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${event.requiresAction ? 'Action required. ' : ''}${visual.statusLabel}${subject ? `: ${subject}` : ''}. ${time}${visual.actionLabel ? `. Button: ${visual.actionLabel}` : ''}`;
+  const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${event.requiresAction ? 'Action required. ' : ''}${titleText}. ${bodyText}. ${time}${visual.actionLabel ? `. Button: ${visual.actionLabel}` : ''}`;
 
   const leading = (
     <NotificationStatusIcon
       icon={visual.icon}
       accentColor={accentColor}
-      accentSubtle={accentSubtle}
-      colors={colors}
-      size={44}
+      size={24}
     />
   );
 
@@ -91,6 +89,13 @@ export function SystemNotificationRow({
       onPress={onAction ?? onPress}
       colors={colors}
       variant="primary"
+    />
+  ) : objectImage ? (
+    <NotificationThumbnail
+      uri={objectImage}
+      colors={colors}
+      fallbackIcon="information-circle-outline"
+      size={44}
     />
   ) : undefined;
 
@@ -106,10 +111,10 @@ export function SystemNotificationRow({
       accessibilityLabel={accessibilityLabel}
     >
       <Text style={[styles.title, isUnread && styles.titleUnread]} numberOfLines={1}>
-        {subject || visual.statusLabel}
+        {titleText}
       </Text>
       <Text style={styles.body} numberOfLines={2}>
-        {description}
+        {bodyText}
       </Text>
     </NotificationRowBase>
   );
@@ -118,21 +123,17 @@ export function SystemNotificationRow({
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     title: {
-      fontSize: Type.bodyLarge.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.bodyLarge.lineHeight,
-      paddingRight: Space.xxl + Space.sm,
-    },
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      flexShrink: 1 },
     titleUnread: {
       color: colors.textPrimary,
-      fontFamily: FontFamily.semibold,
-    },
+      fontFamily: FontFamily.semibold },
     body: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textSecondary,
-      lineHeight: Type.body.lineHeight,
-    },
-  });
+      lineHeight: TypographyV2.body.lineHeight } });
 }

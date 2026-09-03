@@ -27,11 +27,11 @@ import Reanimated, {
   useAnimatedStyle,
   runOnJS,
   withTiming,
-  Easing,
   useDerivedValue,
 } from 'react-native-reanimated';
 import { useReducedMotion } from 'react-native-reanimated';
-import { Radius, Control } from '../../../theme/designTokens';
+import { Radius, Control, Stroke} from '../../../theme/designTokens';
+import { Motion } from '../../../theme/motionTokens';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import type { StickerPin } from './StickerPinTracker';
@@ -63,7 +63,7 @@ export interface StickerPinOverlayProps {
   onAnchorCommit: (anchor: { x: number; y: number }) => void;
 }
 
-const SNAP_TIMING = { duration: 120, easing: Easing.out(Easing.cubic) };
+const SNAP_TIMING = { duration: Motion.duration.snapToGuide, easing: Motion.easing.entrance };
 
 // ── Component ──────────────────────────────────────────────────────────
 
@@ -221,7 +221,7 @@ export function StickerPinOverlay({
           />
           {/* Center dot */}
           <View
-            style={[crosshairStyles.dot, { backgroundColor: accent }]}
+            style={[crosshairStyles.dot, { backgroundColor: accent, borderColor: colors.scrimTextPrimary }]}
             pointerEvents="none"
           />
           {/* 44pt drag handle — transparent so the crosshair reads as the
@@ -274,8 +274,7 @@ const crosshairStyles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.85)',
+    borderWidth: Stroke.standard,
   } as ViewStyle,
   handle: {
     // Transparent 44pt target — visible chrome is the crosshair above.

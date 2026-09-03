@@ -15,16 +15,15 @@ import {
   StyleSheet,
   ScrollView,
   Text,
-  AccessibilityInfo,
-} from 'react-native';
+  AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
-  runOnJS,
-} from 'react-native-reanimated';
-import { Radius, Space, Stroke, Type, Typography } from '../../../theme/designTokens';
+  runOnJS } from 'react-native-reanimated';
+import { Radius, Space, Stroke, Typography, Elevation } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { useHaptic } from '../../../hooks/useHaptic';
 import { AnimatedPressable } from '../../AnimatedPressable';
@@ -35,8 +34,7 @@ import {
   FONT_OPTIONS,
   CATEGORY_LABELS,
   type FontFamily,
-  type FontCategory,
-} from './fontRegistry';
+  type FontCategory } from './fontRegistry';
 import type { TextLayer } from './types';
 
 // ── Skia availability check (same pattern as DrawingCanvas) ─────────────────
@@ -72,8 +70,7 @@ export function FontColorPicker({
   canvasSize,
   onFontChange,
   onColorChange,
-  presetColors,
-}: FontColorPickerProps) {
+  presetColors }: FontColorPickerProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -141,8 +138,7 @@ export function FontColorPicker({
   // Group fonts by category for the picker
   const groupedFonts = useMemo(() => {
     const groups: Record<FontCategory, typeof FONT_OPTIONS> = {
-      sans: [], serif: [], display: [], handwriting: [], mono: [], decorative: [],
-    };
+      sans: [], serif: [], display: [], handwriting: [], mono: [], decorative: [] };
     for (const font of FONT_OPTIONS) {
       groups[font.category].push(font);
     }
@@ -320,8 +316,7 @@ function EyedropperOverlay({
   canvasSize,
   layers,
   onColorSampled,
-  onCancel,
-}: EyedropperOverlayProps) {
+  onCancel }: EyedropperOverlayProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createEyedropperStyles(colors), [colors]);
   const haptic = useHaptic();
@@ -417,8 +412,7 @@ function EyedropperOverlay({
     transform: [
       { translateX: loupeX.value - 50 },
       { translateY: loupeY.value - 130 },
-    ],
-  }));
+    ] }));
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="auto">
@@ -466,8 +460,7 @@ function createStyles(colors: ThemeColors) {
     fontRow: {
       flexDirection: 'row',
       gap: 8,
-      paddingBottom: 2,
-    },
+      paddingBottom: 2 },
     fontPill: {
       flexDirection: 'column',
       alignItems: 'center',
@@ -478,120 +471,95 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.glassBg,
       minHeight: 56,
       minWidth: 56,
-      gap: 2,
-    },
+      gap: 2 },
     fontPillActive: {
       backgroundColor: colors.surfaceAlt,
       borderWidth: Stroke.standard,
-      borderColor: colors.textPrimary,
-    },
+      borderColor: colors.textPrimary },
     fontPreviewText: {
-      fontSize: 22,
+      fontSize: TypographyV2.screenTitle.size,
       color: colors.textSecondary,
-      lineHeight: 26,
-    },
+      lineHeight: TypographyV2.screenTitle.lineHeight },
     fontPreviewTextActive: {
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     fontLabel: {
-      fontSize: 10,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
-      fontFamily: Typography.family.regular,
-    },
+      fontFamily: Typography.family.regular },
     fontLabelActive: {
-      color: colors.textPrimary,
-    },
+      color: colors.textPrimary },
     colorRow: {
       flexDirection: 'row',
       gap: 10,
       paddingBottom: 2,
       paddingTop: 2,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     colorOrb: {
       width: 32,
       height: 32,
       borderRadius: Radius.full,
-      borderWidth: 1,
+      borderWidth: Stroke.standard,
       borderColor: colors.borderSubtle,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     colorOrbActive: {
       borderWidth: 2,
       borderColor: colors.textPrimary,
-      transform: [{ scale: 1.08 }],
-    },
+      transform: [{ scale: 1.08 }] },
     eyedropperBtn: {
       backgroundColor: colors.glassBg,
       borderWidth: Stroke.standard,
-      borderColor: colors.borderSubtle,
-    },
+      borderColor: colors.borderSubtle },
     eyedropperBtnActive: {
       backgroundColor: colors.surfaceAlt,
-      borderColor: colors.textPrimary,
-    },
+      borderColor: colors.textPrimary },
     slidersContainer: {
       gap: Space.xs,
-      paddingHorizontal: 4,
-    },
-  });
+      paddingHorizontal: 4 } });
 }
 
 function createEyedropperStyles(colors: ThemeColors) {
   return StyleSheet.create({
     eyedropperBackdrop: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.3)',
-    },
+      backgroundColor: colors.overlay },
     loupe: {
       position: 'absolute',
       width: 100,
-      alignItems: 'center',
-    },
+      alignItems: 'center' },
     loupeColorPreview: {
       width: 80,
       height: 80,
       borderRadius: Radius.full,
       borderWidth: 3,
-      borderColor: '#FFFFFF',
+      borderColor: colors.scrimTextPrimary,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: '#000',
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 8,
-    },
+      ...Elevation.modal },
     loupeCrosshairH: {
       position: 'absolute',
       width: 20,
       height: 1,
-      backgroundColor: 'rgba(255,255,255,0.8)',
-    },
+      backgroundColor: colors.scrimTextSecondary },
     loupeCrosshairV: {
       position: 'absolute',
       width: 1,
       height: 20,
-      backgroundColor: 'rgba(255,255,255,0.8)',
-    },
+      backgroundColor: colors.scrimTextSecondary },
     loupeLabel: {
       marginTop: 4,
       backgroundColor: colors.overlay,
       borderRadius: Radius.sm,
       paddingHorizontal: 8,
-      paddingVertical: 2,
-    },
+      paddingVertical: 2 },
     loupeLabelText: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       color: colors.textPrimary,
-      fontFamily: Typography.family.regular,
-    },
+      fontFamily: Typography.family.regular },
     instructionWrap: {
       ...StyleSheet.absoluteFill,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     instructionBubble: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -599,12 +567,9 @@ function createEyedropperStyles(colors: ThemeColors) {
       backgroundColor: colors.overlay,
       borderRadius: Radius.full,
       paddingHorizontal: Space.md,
-      paddingVertical: 10,
-    },
+      paddingVertical: 10 },
     instructionText: {
       color: colors.textPrimary,
-      fontSize: 14,
-      fontFamily: Typography.family.regular,
-    },
-  });
+      fontSize: TypographyV2.body.size,
+      fontFamily: Typography.family.regular } });
 }

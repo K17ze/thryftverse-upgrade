@@ -92,7 +92,7 @@ export function MasonrySkeleton({
       {/* Full-width hero skeleton — matches the hero listing row. */}
       <View style={{ paddingHorizontal: horizontalPadding }}>
         <SkeletonLoader width="100%" height={heroHeight} borderRadius={Radius.lg} />
-        <SkeletonLoader width="45%" height={12} borderRadius={Radius.sm} style={{ marginTop: 8 }} />
+        <SkeletonLoader width="45%" height={12} borderRadius={Radius.sm} style={{ marginTop: Space.sm }} />
       </View>
 
       {/* Context-break eyebrow skeleton — a quiet full-width line. */}

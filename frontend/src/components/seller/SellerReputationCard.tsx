@@ -2,7 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 import type { SellerTrustSummary } from '../../platform/product';
 
 interface ReputationMetric {
@@ -27,8 +30,7 @@ function buildReputationMetrics(seller: SellerTrustSummary | null): ReputationMe
       icon: 'chatbubble-ellipses',
       label: 'Response rate',
       value: `${responseRate}%`,
-      progress: Math.min(responseRate / 100, 1),
-    });
+      progress: Math.min(responseRate / 100, 1) });
   }
 
   const responseTimeLabel = seller.responseTimeLabel ?? null;
@@ -36,17 +38,15 @@ function buildReputationMetrics(seller: SellerTrustSummary | null): ReputationMe
     metrics.push({
       icon: 'time',
       label: 'Response time',
-      value: responseTimeLabel,
-    });
+      value: responseTimeLabel });
   }
 
   const dispatchTimeLabel = seller.dispatchTimeLabel ?? null;
   if (dispatchTimeLabel) {
     metrics.push({
-      icon: 'cube',
+      icon: 'car-outline',
       label: 'Ship time',
-      value: dispatchTimeLabel,
-    });
+      value: dispatchTimeLabel });
   }
 
   // Completed sales — omitted because the ProfileHero trust line already
@@ -90,7 +90,7 @@ export function SellerReputationCard({ seller }: SellerReputationCardProps) {
             accessibilityLabel={`${metric.label}: ${metric.value}`}
           >
             <View style={styles.metricIconWrap}>
-              <Ionicons name={metric.icon} size={16} color={colors.textSecondary} />
+              <AppIcon name={metric.icon} size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
             </View>
             <View style={styles.metricBody}>
               <View style={styles.metricLabelRow}>
@@ -124,73 +124,60 @@ function createStyles(colors: ThemeColors) {
     marginHorizontal: Space.md,
     paddingVertical: Space.sm + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-  },
+    borderBottomColor: colors.borderSubtle },
   title: {
-    fontSize: Type.label.size,
-    lineHeight: Type.label.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
+    fontFamily: TypographyV2.label.fontFamily,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: Type.label.letterSpacing,
-    marginBottom: Space.sm,
-  },
+    letterSpacing: TypographyV2.label.letterSpacing,
+    marginBottom: Space.sm },
   metricsList: {
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   metricRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm + 2,
-  },
+    gap: Space.sm + 2 },
   metricRowSeparated: {
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-  },
+    borderTopColor: colors.borderSubtle },
   metricIconWrap: {
     width: 24,
     height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   metricBody: {
     flex: 1,
     minWidth: 0,
-    gap: Space.xs + 1,
-  },
+    gap: Space.xs + 1 },
   metricLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   metricLabel: {
-    fontSize: Type.body.size,
-    lineHeight: Type.body.lineHeight,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    letterSpacing: TypographyV2.body.letterSpacing },
   metricValue: {
-    fontSize: Type.bodyStrong.size,
-    lineHeight: Type.bodyStrong.lineHeight,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size,
+    lineHeight: TypographyV2.bodyStrong.lineHeight,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    letterSpacing: Type.bodyStrong.letterSpacing,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
+    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   progressTrack: {
     height: 3,
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.full,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   progressFill: {
     height: '100%',
     backgroundColor: colors.success,
-    borderRadius: Radius.full,
-  },
-  });
+    borderRadius: Radius.full } });
 }

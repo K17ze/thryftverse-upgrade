@@ -4,8 +4,7 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  Pressable,
-} from 'react-native';
+  Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -13,7 +12,8 @@ import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Stroke, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
@@ -52,8 +52,7 @@ const deleteSchema = z.object({
   password: z
     .string()
     .min(1, 'Enter your password to verify identity'),
-  reason: z.string().optional(),
-});
+  reason: z.string().optional() });
 
 type DeleteFormValues = z.infer<typeof deleteSchema>;
 
@@ -82,16 +81,13 @@ export default function DeleteAccountScreen({ navigation }: Props) {
     control,
     handleSubmit,
     watch,
-    formState: { errors },
-  } = useForm<DeleteFormValues>({
+    formState: { errors } } = useForm<DeleteFormValues>({
     resolver: zodResolver(deleteSchema),
     defaultValues: {
       confirmText: '',
       password: '',
-      reason: undefined,
-    },
-    mode: 'onChange',
-  });
+      reason: undefined },
+    mode: 'onChange' });
 
   const confirmTextValue = watch('confirmText');
   const passwordValue = watch('password');
@@ -140,7 +136,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
       { icon: 'location-outline' as const, text: 'All saved delivery addresses are removed.' },
       { icon: 'card-outline' as const, text: 'Saved payment methods and bank details are removed.' },
       { icon: 'wallet-outline' as const, text: 'Wallet history and payout records are deleted.' },
-      { icon: 'cube-outline' as const, text: 'Active listings remain visible to buyers until they expire, but you\'ll no longer manage them.' },
+      { icon: 'bag-handle-outline' as const, text: 'Active listings remain visible to buyers until they expire, but you\'ll no longer manage them.' },
       { icon: 'alert-circle-outline' as const, text: 'Pending payouts, open disputes or active orders may need to be resolved before full erasure.' },
     ],
     [],
@@ -191,15 +187,14 @@ export default function DeleteAccountScreen({ navigation }: Props) {
         contentContainerStyle={{
           paddingHorizontal: Space.md,
           paddingTop: Space.sm,
-          paddingBottom: insets.bottom + Space.xxl,
-        }}
+          paddingBottom: insets.bottom + Space.xxl }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         {/* ── Warning hero ── */}
         <View>
-          <View style={[styles.warningHero, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
+          <View style={[styles.warningHero, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
             <View style={styles.warningHeader}>
               <View style={[styles.warningIcon, { backgroundColor: colors.danger }]}>
                 <Ionicons name="warning" size={20} color={colors.surface} />
@@ -230,8 +225,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
                   styles.consequenceRow,
                   i < consequences.length - 1 && {
                     borderBottomColor: colors.border,
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                  },
+                    borderBottomWidth: StyleSheet.hairlineWidth },
                 ]}
               >
                 <View style={styles.consequenceIcon}>
@@ -318,8 +312,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
                         styles.reasonChip,
                         {
                           backgroundColor: selected ? colors.brand : colors.surface,
-                          borderColor: selected ? colors.brand : colors.border,
-                        },
+                          borderColor: selected ? colors.brand : colors.border },
                       ]}
                     >
                       <Text
@@ -346,7 +339,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
 
           {/* Error state */}
           {deleteError ? (
-            <View style={[styles.errorRow, { backgroundColor: `${colors.danger}10`, borderColor: `${colors.danger}30` }]}>
+            <View style={[styles.errorRow, { backgroundColor: colors.dangerSubtle, borderColor: colors.dangerBorder }]}>
               <Ionicons name="alert-circle" size={16} color={colors.danger} />
               <Text style={[styles.errorText, { color: colors.danger }]}>{deleteError}</Text>
             </View>
@@ -397,124 +390,104 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.lg,
       borderWidth: Stroke.standard,
       padding: Space.md,
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     warningHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      marginBottom: Space.sm,
-    },
+      marginBottom: Space.sm },
     warningIcon: {
       width: Control.chrome,
       height: Control.chrome,
       borderRadius: Radius.full,
       alignItems: 'center',
-      justifyContent: 'center',
-    },
+      justifyContent: 'center' },
     warningHeaderText: {
-      flex: 1,
-    },
+      flex: 1 },
     warningTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.bodyStrong.letterSpacing,
-      lineHeight: Type.bodyStrong.lineHeight,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight },
     warningSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       marginTop: Space.xs - 3,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight },
     warningBody: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight + 2,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight + 2,
+      letterSpacing: TypographyV2.body.letterSpacing },
     sectionLabel: {
-      fontSize: Type.subtitle.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.subtitle.letterSpacing,
-      lineHeight: Type.subtitle.lineHeight,
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
       marginBottom: Space.sm,
-      marginTop: Space.sm,
-    },
+      marginTop: Space.sm },
     consequenceCard: {
       borderRadius: Radius.lg,
       borderWidth: StyleSheet.hairlineWidth,
       overflow: 'hidden',
-      marginBottom: Space.lg,
-    },
+      marginBottom: Space.lg },
     consequenceRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     consequenceIcon: {
       width: Space.lg,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: Space.xs - 3,
-    },
+      marginTop: Space.xs - 3 },
     consequenceText: {
       flex: 1,
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.regular,
-      lineHeight: Type.body.lineHeight + 2,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      lineHeight: TypographyV2.body.lineHeight + 2,
+      letterSpacing: TypographyV2.body.letterSpacing },
     fieldWrap: {
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     fieldLabel: {
-      fontSize: Type.body.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
       marginBottom: Space.sm,
-      letterSpacing: Type.body.letterSpacing,
-      lineHeight: Type.body.lineHeight,
-    },
+      letterSpacing: TypographyV2.body.letterSpacing,
+      lineHeight: TypographyV2.body.lineHeight },
     textInput: {
       borderWidth: Stroke.standard,
       borderRadius: Radius.xl,
       paddingVertical: Space.sm + 2,
       paddingHorizontal: Space.md,
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.medium,
-      minHeight: Space.xxl,
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      minHeight: Space.xxl },
     fieldError: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       marginTop: Space.xs,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     reasonChips: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     reasonChip: {
       borderRadius: Radius.full,
       borderWidth: Stroke.standard,
       paddingVertical: Space.sm,
-      paddingHorizontal: Space.md,
-    },
+      paddingHorizontal: Space.md },
     reasonChipText: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     accountLabel: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
       marginTop: Space.xs,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     errorRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -524,24 +497,18 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.md,
       marginTop: Space.sm,
-      marginBottom: Space.md,
-    },
+      marginBottom: Space.md },
     errorText: {
       flex: 1,
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.medium,
-      letterSpacing: Type.caption.letterSpacing,
-      lineHeight: Type.caption.lineHeight + 2,
-    },
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      lineHeight: TypographyV2.meta.lineHeight + 2 },
     actionSection: {
       marginTop: Space.lg,
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     keepBtn: {
-      width: '100%',
-    },
+      width: '100%' },
     deleteBtn: {
-      width: '100%',
-    },
-  });
+      width: '100%' } });
 }

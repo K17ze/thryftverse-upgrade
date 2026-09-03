@@ -8,7 +8,8 @@ import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Control } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { fetchAiCapability, type AiCapabilitySummary } from '../services/aiTruthApi';
 
@@ -115,7 +116,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           accessibilityLabel="Open your agents"
         >
           <View style={styles.leadingIcon}>
-            <Ionicons name="person-outline" size={21} color={colors.textPrimary} />
+            <Ionicons name="person-outline" size={24} color={colors.textPrimary} />
           </View>
           <View style={styles.yourAgentsCopy}>
             <Text style={styles.yourAgentsTitle}>Your agents</Text>
@@ -133,33 +134,31 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           <Text style={styles.sectionDetail}>Built-in help for common chat workflows.</Text>
         </View>
 
-        <View style={styles.filterBackground}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filters}
-          >
-            {CATEGORIES.map((category) => {
-              const selected = selectedCategory === category.value;
-              return (
-                <AnimatedPressable
-                  key={category.value}
-                  onPress={() => setSelectedCategory(category.value)}
-                  style={[styles.filter, selected && styles.filterSelected]}
-                  scaleValue={0.98}
-                  hapticFeedback="selection"
-                  accessibilityRole="tab"
-                  accessibilityLabel={category.label}
-                  accessibilityState={{ selected }}
-                >
-                  <Text style={[styles.filterText, selected && styles.filterTextSelected]}>
-                    {category.label}
-                  </Text>
-                </AnimatedPressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filters}
+        >
+          {CATEGORIES.map((category) => {
+            const selected = selectedCategory === category.value;
+            return (
+              <AnimatedPressable
+                key={category.value}
+                onPress={() => setSelectedCategory(category.value)}
+                style={[styles.filterChip, selected && styles.filterChipSelected]}
+                scaleValue={0.96}
+                hapticFeedback="selection"
+                accessibilityRole="tab"
+                accessibilityLabel={category.label}
+                accessibilityState={{ selected }}
+              >
+                <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>
+                  {category.label}
+                </Text>
+              </AnimatedPressable>
+            );
+          })}
+        </ScrollView>
 
         {isLoading && filteredAgents.length === 0 ? (
           <View style={styles.list}>
@@ -195,7 +194,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                     <AgentIcon
                       category={agent.category}
                       name={agent.name}
-                      size={21}
+                      size={24}
                       color={colors.textPrimary}
                     />
                   </View>
@@ -233,14 +232,12 @@ export default function BotDirectoryScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
   content: {
-    paddingBottom: Space.xxl,
-  },
+    paddingBottom: Space.xxl },
   headerAction: {
     width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   yourAgents: {
     minHeight: Space.xxl + Space.xl + 2,
     marginHorizontal: Space.md,
@@ -249,151 +246,123 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     gap: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   leadingIcon: {
-    width: Control.chromeCompact,
+    width: Control.hit,
     height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   yourAgentsCopy: {
     flex: 1,
-    gap: Space.xs - 1,
-  },
+    gap: Space.xs - 1 },
   yourAgentsTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-  },
+    fontSize: TypographyV2.sectionTitle.size },
   yourAgentsDetail: {
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight + 1,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight + 1 },
   sectionIntro: {
     paddingHorizontal: Space.md,
     paddingTop: Space.xl,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   sectionTitle: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-  },
+    fontSize: TypographyV2.sectionTitle.size },
   sectionDetail: {
     marginTop: Space.xs - 2,
     color: colors.textMuted,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-  },
-  filterBackground: {
-    backgroundColor: colors.background,
-  },
+    fontSize: TypographyV2.meta.size },
   filters: {
     paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    gap: Space.sm + 1,
-  },
-  filter: {
-    minHeight: Control.chrome + 2,
-    justifyContent: 'center',
-    paddingHorizontal: Space.xs + 2,
-    borderBottomWidth: Stroke.emphasis,
-    borderBottomColor: 'transparent',
-  },
-  filterSelected: {
-    borderBottomColor: colors.textPrimary,
-  },
-  filterText: {
-    color: colors.textMuted,
-    fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
-  filterTextSelected: {
-    color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-  },
-  list: {
+    paddingVertical: Space.sm,
+    gap: Space.sm,
+    backgroundColor: colors.background },
+  filterChip: {
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     paddingHorizontal: Space.md,
-  },
+    paddingVertical: Space.sm,
+    justifyContent: 'center',
+    alignItems: 'center' },
+  filterChipSelected: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand },
+  filterChipText: {
+    color: colors.textSecondary,
+    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size },
+  filterChipTextSelected: {
+    color: colors.background,
+    fontFamily: Typography.family.semibold },
+  list: {
+    paddingHorizontal: Space.md },
   agentRow: {
     minHeight: Space.xxl + Space.xxl + Space.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    paddingVertical: Space.smMd,
-  },
+    paddingVertical: Space.smMd },
   agentCopy: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   agentName: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
+    fontSize: TypographyV2.bodyStrong.size },
   agentDescription: {
     color: colors.textSecondary,
     fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    lineHeight: Type.caption.lineHeight,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight },
   agentMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs + 1,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   categoryText: {
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-    textTransform: 'capitalize',
-  },
+    fontSize: TypographyV2.meta.size,
+    textTransform: 'capitalize' },
   agentMetaText: {
     flexShrink: 1,
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   statusText: {
     flexShrink: 0,
     color: colors.textMuted,
     fontFamily: Typography.family.medium,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   metaDot: {
     color: colors.textMuted,
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   divider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginLeft: Control.hit,
-  },
+    marginLeft: Control.hit },
   skeletonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.smMd,
-    minHeight: Space.xxl + Space.xxl + Space.sm,
-  },
+    minHeight: Space.xxl + Space.xxl + Space.sm },
   skeletonIcon: {
     width: Control.chromeCompact,
     height: Control.hit,
     borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   skeletonCopy: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   skeletonLine: {
     height: 12,
     borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt,
-  },
-  });
+    backgroundColor: colors.surfaceAlt } });
 }

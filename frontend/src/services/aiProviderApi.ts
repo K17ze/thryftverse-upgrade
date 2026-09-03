@@ -36,7 +36,7 @@ export interface ProviderConfig {
   name: string;
   /** Short description shown beneath the name. */
   description: string;
-  /** Ionicons glyph name used for the provider row. */
+  /** Ionicons glyph name representing the connection type (not provider brand identity). */
   icon: string;
   /** Expected key prefix(es) used for format validation. Empty = no prefix rule. */
   keyPrefixes: string[];
@@ -112,7 +112,7 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     // No hardcoded model catalogue — models are discovered dynamically from
     // the provider's /v1/models endpoint (spec 04: provider-authoritative).
     description: 'OpenAI chat and reasoning models. Available models are discovered from your account.',
-    icon: 'cube-outline',
+    icon: 'key-outline',
     keyPrefixes: ['sk-'],
     minKeyLength: 20,
     models: [],
@@ -123,7 +123,7 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     id: 'anthropic',
     name: 'Anthropic Claude',
     description: 'Anthropic Claude chat models. Available models are discovered from your account.',
-    icon: 'chatbubbles-outline',
+    icon: 'key-outline',
     keyPrefixes: ['sk-ant-'],
     minKeyLength: 40,
     models: [],
@@ -134,7 +134,7 @@ export const PROVIDER_CONFIGS: Record<AIProvider, ProviderConfig> = {
     id: 'gemini',
     name: 'Google Gemini',
     description: 'Google Gemini multimodal models. Available models are discovered from your account.',
-    icon: 'globe-outline',
+    icon: 'key-outline',
     // Google API keys are commonly prefixed with 'AIza' but the platform does
     // not strictly enforce it; we accept the prefix when present and otherwise
     // only enforce length.

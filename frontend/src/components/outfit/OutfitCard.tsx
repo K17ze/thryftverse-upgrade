@@ -14,7 +14,7 @@ interface OutfitCardProps {
   backgroundColor?: string;
   onPress?: () => void;
   onLongPress?: () => void;
-  style?: ViewStyle;
+  style?: ViewStyle | ViewStyle[];
   testID?: string;
 }
 

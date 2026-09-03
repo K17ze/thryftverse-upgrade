@@ -16,6 +16,24 @@
 -- Do not place raw secrets, payment credentials, government IDs, or full
 -- message bodies in audit metadata.
 
+-- ── Audit chain HMAC keys ───────────────────────────────────────────────
+-- Key management for HMAC-SHA256 hash chain. Key rotation creates a new key
+-- and signs the rotation event with the outgoing key, preserving chain
+-- continuity. Keys are loaded by the SECURITY DEFINER hash function.
+-- Defined before immutable_audit_events because of FK reference.
+
+CREATE TABLE IF NOT EXISTS audit_chain_keys (
+  key_id        TEXT PRIMARY KEY,
+  key_value     TEXT NOT NULL,
+  algorithm     VARCHAR(20) NOT NULL DEFAULT 'hmac-sha256',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  rotated_at    TIMESTAMPTZ,
+  revoked_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_chain_keys_active
+  ON audit_chain_keys (key_id) WHERE revoked_at IS NULL;
+
 -- ── Immutable audit events ──────────────────────────────────────────────
 -- Partitioned by month for query performance. Append-only via trigger.
 
@@ -120,23 +138,6 @@ CREATE TRIGGER trg_immutable_audit_no_delete
 
 CREATE SEQUENCE IF NOT EXISTS immutable_audit_event_seq
   AS BIGINT START 1 INCREMENT 1 NO CYCLE;
-
--- ── Audit chain HMAC keys ───────────────────────────────────────────────
--- Key management for HMAC-SHA256 hash chain. Key rotation creates a new key
--- and signs the rotation event with the outgoing key, preserving chain
--- continuity. Keys are loaded by the SECURITY DEFINER hash function.
-
-CREATE TABLE IF NOT EXISTS audit_chain_keys (
-  key_id        TEXT PRIMARY KEY,
-  key_value     TEXT NOT NULL,
-  algorithm     VARCHAR(20) NOT NULL DEFAULT 'hmac-sha256',
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  rotated_at    TIMESTAMPTZ,
-  revoked_at    TIMESTAMPTZ
-);
-
-CREATE INDEX IF NOT EXISTS idx_audit_chain_keys_active
-  ON audit_chain_keys (key_id) WHERE revoked_at IS NULL;
 
 -- Seed the initial key. In production, this is set via env var or KMS.
 -- The key value is a 256-bit hex secret. For dev, a deterministic value.
@@ -286,7 +287,7 @@ BEGIN
   FOR i IN 0..5 LOOP
     PERFORM create_partition_if_not_exists(
       'immutable_audit_events',
-      start_date + (i || ' month')::INTERVAL
+      (start_date + (i || ' month')::INTERVAL)::DATE
     );
   END LOOP;
 
@@ -359,7 +360,7 @@ DECLARE
 BEGIN
   start_date := DATE_TRUNC('month', NOW())::DATE;
   PERFORM create_partition_if_not_exists('audit_outbox', start_date);
-  PERFORM create_partition_if_not_exists('audit_outbox', start_date + '1 month'::INTERVAL);
+  PERFORM create_partition_if_not_exists('audit_outbox', (start_date + '1 month'::INTERVAL)::DATE);
   CREATE TABLE IF NOT EXISTS audit_outbox_default
     PARTITION OF audit_outbox DEFAULT;
 END;
@@ -401,7 +402,7 @@ CREATE TABLE IF NOT EXISTS pii_reveal_log (
 CREATE INDEX IF NOT EXISTS idx_pii_reveal_log_principal
   ON pii_reveal_log (principal_id, revealed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pii_reveal_log_active
-  ON pii_reveal_log (auto_remask_at) WHERE auto_remask_at > NOW();
+  ON pii_reveal_log (auto_remask_at) WHERE auto_remask_at IS NOT NULL;
 
 COMMENT ON TABLE immutable_audit_events IS
   'Tamper-evident audit chain. Append-only via trigger. Hash chain with daily signed checkpoints. Fail-closed for high-impact commands.';

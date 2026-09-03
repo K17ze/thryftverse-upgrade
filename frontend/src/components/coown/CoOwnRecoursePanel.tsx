@@ -2,7 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Type, Typography, Radius } from '../../theme/designTokens';
+import { useFormattedPrice } from '../../hooks/useFormattedPrice';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import type {
   CoOwnRecourseAgreement,
   CoOwnSellerLiability,
@@ -38,16 +40,17 @@ export function CoOwnRecoursePanel({
   isIssuer,
 }: CoOwnRecoursePanelProps) {
   const { colors } = useAppTheme();
+  const { currencySymbol } = useFormattedPrice();
 
   const items: Array<{ icon: React.ComponentProps<typeof Ionicons>['name']; label: string; value: string; positive: boolean; warning?: boolean }> = [];
 
   // ── Recourse agreement status ──
   if (recourseAgreementSigned && agreement) {
     const liabilityStr = agreement.maxLiabilityGbp != null
-      ? ` · £${Math.round(agreement.maxLiabilityGbp).toLocaleString()} liability`
+      ? ` · ${currencySymbol}${Math.round(agreement.maxLiabilityGbp).toLocaleString()} liability`
       : '';
     items.push({
-      icon: 'shield-checkmark',
+      icon: 'checkmark-circle',
       label: 'Seller liability',
       value: `Personal guarantee signed${liabilityStr}`,
       positive: true,
@@ -103,7 +106,7 @@ export function CoOwnRecoursePanel({
       items.push({
         icon: 'cash-outline',
         label: 'Total seller liability',
-        value: `£${Math.round(sellerLiability.totalActiveLiabilityGbp).toLocaleString()} across ${sellerLiability.activeAgreementCount} asset${sellerLiability.activeAgreementCount > 1 ? 's' : ''}`,
+        value: `${currencySymbol}${Math.round(sellerLiability.totalActiveLiabilityGbp).toLocaleString()} across ${sellerLiability.activeAgreementCount} asset${sellerLiability.activeAgreementCount > 1 ? 's' : ''}`,
         positive: false,
       });
     }
@@ -125,7 +128,7 @@ export function CoOwnRecoursePanel({
     items.push({
       icon: 'trending-up-outline',
       label: 'Total traded value',
-      value: `£${Math.round(totalTradedValueGbp).toLocaleString()} traded on this asset`,
+      value: `${currencySymbol}${Math.round(totalTradedValueGbp).toLocaleString()} traded on this asset`,
       positive: false,
     });
   }
@@ -262,8 +265,8 @@ export function CoOwnRecoursePanel({
 
 const styles = StyleSheet.create({
   sectionTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
     marginBottom: Space.sm,
@@ -283,14 +286,14 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   itemLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
     textTransform: 'uppercase',
   },
   itemValue: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   demandButton: {
     flexDirection: 'row',
@@ -303,16 +306,16 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   demandButtonText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
   },
   demandsList: {
     marginTop: Space.md,
     gap: Space.xs,
   },
   demandsTitle: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.2,
     textTransform: 'uppercase',
   },
@@ -323,12 +326,12 @@ const styles = StyleSheet.create({
   },
   demandText: {
     flex: 1,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.medium,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
     textTransform: 'capitalize',
   },
   demandDate: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
 });

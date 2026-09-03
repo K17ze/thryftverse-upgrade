@@ -29,26 +29,23 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
-} from 'react-native';
+  ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   cancelAnimation,
-  useReducedMotion,
-} from 'react-native-reanimated';
+  useReducedMotion } from 'react-native-reanimated';
 
 import {
   Space,
   Radius,
-  Type,
   Typography,
   FontFamily,
   Control,
-  Stroke,
-} from '../../../theme/designTokens';
+  Stroke } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
@@ -58,8 +55,7 @@ import { Motion } from '../../../theme/motionTokens';
 import {
   VoiceoverRecorder,
   VoiceoverDependencyError,
-  type VoiceoverClip,
-} from '../../core/audio';
+  type VoiceoverClip } from '../../core/audio';
 import type { MeteringListener } from '../../core/audio/VoiceoverRecorder';
 
 // ── Constants ─────────────────────────────────────────────────────────
@@ -103,8 +99,7 @@ function formatTimer(ms: number): string {
 export function VoiceoverRecorderSheet({
   visible,
   onClose,
-  onConfirm,
-}: VoiceoverRecorderSheetProps): React.ReactElement {
+  onConfirm }: VoiceoverRecorderSheetProps): React.ReactElement {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const hookReducedMotion = useHookReducedMotion();
@@ -124,6 +119,7 @@ export function VoiceoverRecorderSheet({
   );
   const [recordedClip, setRecordedClip] = useState<VoiceoverClip | null>(null);
   const [meteringAvailable, setMeteringAvailable] = useState(true);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
 
   // Reanimated shared values
   const ringOpacitySV = useSharedValue(0);
@@ -138,6 +134,7 @@ export function VoiceoverRecorderSheet({
     setPhase('idle');
     setElapsedMs(0);
     setRecordedClip(null);
+    setRecordingError(null);
     setWaveformBars(new Array(WAVEFORM_BAR_COUNT).fill(0));
 
     // Check availability and request permission on open
@@ -234,6 +231,7 @@ export function VoiceoverRecorderSheet({
   // ── Recording actions ─────────────────────────────────────────────
   const handleStartRecording = useCallback(async () => {
     const recorder = recorderRef.current!;
+    setRecordingError(null);
     try {
       if (!reducedMotion) haptic.medium();
       await recorder.startRecording();
@@ -249,6 +247,7 @@ export function VoiceoverRecorderSheet({
         setPhase('unavailable');
       } else {
         if (!reducedMotion) haptic.error();
+        setRecordingError(err instanceof Error ? err.message : 'Recording failed. Try again.');
       }
     }
   }, [haptic, reducedMotion, startTimer, startMetering, startPulse]);
@@ -301,6 +300,7 @@ export function VoiceoverRecorderSheet({
     setRecordedClip(null);
     setElapsedMs(0);
     setWaveformBars(new Array(WAVEFORM_BAR_COUNT).fill(0));
+    setRecordingError(null);
     setPhase('idle');
   }, [haptic, reducedMotion]);
 
@@ -319,8 +319,7 @@ export function VoiceoverRecorderSheet({
   // Static ring — solid appearance, no continuous pulse (AGENTS.md §17).
   const ringStyle = useAnimatedStyle(() => {
     return {
-      opacity: ringOpacitySV.value,
-    };
+      opacity: ringOpacitySV.value };
   });
 
   // ── Render ────────────────────────────────────────────────────────
@@ -338,9 +337,6 @@ export function VoiceoverRecorderSheet({
       >
         {/* ── Header ──────────────────────────────────────────────── */}
         <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Voiceover
-          </Text>
           <PressScale
             onPress={handleClose}
             style={styles.closeBtn}
@@ -349,6 +345,19 @@ export function VoiceoverRecorderSheet({
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+          </PressScale>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>
+            Voiceover
+          </Text>
+          <PressScale
+            onPress={handleDone}
+            style={styles.doneBtn}
+            accessibilityLabel="Done"
+            accessibilityRole="button"
+            accessibilityHint="Add voiceover to composition"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
           </PressScale>
         </View>
 
@@ -361,29 +370,15 @@ export function VoiceoverRecorderSheet({
             {/* ── Timer ─────────────────────────────────────────────── */}
             <View style={styles.timerContainer}>
               <Text
-                style={[
-                  styles.timer,
-                  {
-                    color: isRecording
-                      ? colors.danger
-                      : colors.textPrimary,
-                  },
-                ]}
+                style={[styles.timer, { color: colors.textPrimary }]}
                 accessibilityLabel={`Recording time ${formatTimer(elapsedMs)}`}
               >
                 {formatTimer(elapsedMs)}
               </Text>
               {isRecording && (
-                <View style={styles.recordingIndicator}>
-                  <View
-                    style={[styles.recordingDot, { backgroundColor: colors.danger }]}
-                  />
-                  <Text
-                    style={[styles.recordingLabel, { color: colors.danger }]}
-                  >
-                    REC
-                  </Text>
-                </View>
+                <View
+                  style={[styles.recordingDot, { backgroundColor: colors.danger }]}
+                />
               )}
               {isPaused && (
                 <Text
@@ -400,27 +395,12 @@ export function VoiceoverRecorderSheet({
               accessibilityLabel="Live audio waveform"
               accessibilityRole="image"
             >
-              {isRecording || isPaused || hasRecording ? (
-                <WaveformVisualization
-                  bars={waveformBars}
-                  color={isRecording ? colors.danger : colors.antiqueGold}
-                  maxHeight={WAVEFORM_MAX_HEIGHT}
-                  minHeight={WAVEFORM_MIN_HEIGHT}
-                />
-              ) : (
-                <View style={styles.waveformPlaceholder}>
-                  <Ionicons
-                    name="mic-outline"
-                    size={IconGrammar.hero}
-                    color={colors.textMuted}
-                  />
-                  <Text
-                    style={[styles.waveformHint, { color: colors.textMuted }]}
-                  >
-                    Tap the button below to start recording
-                  </Text>
-                </View>
-              )}
+              <WaveformVisualization
+                bars={waveformBars}
+                color={isRecording ? colors.danger : colors.brand}
+                maxHeight={WAVEFORM_MAX_HEIGHT}
+                minHeight={WAVEFORM_MIN_HEIGHT}
+              />
             </View>
 
             {/* ── Metering unavailable notice (truthful) ────────────── */}
@@ -428,7 +408,7 @@ export function VoiceoverRecorderSheet({
               <Text
                 style={[styles.meteringNotice, { color: colors.textMuted }]}
               >
-                Live metering is not available on this device.
+                Metering unavailable on this device.
               </Text>
             )}
 
@@ -442,8 +422,7 @@ export function VoiceoverRecorderSheet({
                       width: RING_BASE_SIZE,
                       height: RING_BASE_SIZE,
                       borderRadius: RING_BASE_SIZE / 2,
-                      borderColor: colors.danger,
-                    },
+                      borderColor: colors.danger },
                     ringStyle,
                   ]}
                   pointerEvents="none"
@@ -466,6 +445,24 @@ export function VoiceoverRecorderSheet({
                 haptic={haptic}
               />
             </View>
+
+            {recordingError && (
+              <View style={styles.recordingErrorBanner}>
+                <Text style={[styles.recordingErrorText, { color: colors.danger }]}>
+                  {recordingError}
+                </Text>
+                <PressScale
+                  onPress={() => { setRecordingError(null); handleStartRecording(); }}
+                  style={[styles.recordingErrorRetry, { borderColor: colors.danger }]}
+                  accessibilityLabel="Try recording again"
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.recordingErrorRetryText, { color: colors.danger }]}>
+                    Try again
+                  </Text>
+                </PressScale>
+              </View>
+            )}
 
             {/* ── Secondary controls ────────────────────────────────── */}
             <View style={styles.secondaryControls}>
@@ -498,6 +495,13 @@ export function VoiceoverRecorderSheet({
               )}
               {hasRecording && (
                 <>
+                  <PlaybackBar
+                    colors={colors}
+                    styles={styles}
+                    durationMs={recordedClip?.durationMs ?? 0}
+                    haptic={haptic}
+                    reducedMotion={reducedMotion}
+                  />
                   <SecondaryButton
                     icon="refresh"
                     label="Retake"
@@ -505,19 +509,6 @@ export function VoiceoverRecorderSheet({
                     styles={styles}
                     onPress={handleRetake}
                   />
-                  <Pressable
-                    onPress={handleDone}
-                    style={[styles.doneBtn, { backgroundColor: colors.brand }]}
-                    accessibilityLabel="Done — add voiceover"
-                    accessibilityRole="button"
-                    accessibilityHint="Adds the recorded voiceover to your composition"
-                  >
-                    <Text
-                      style={[styles.doneBtnText, { color: colors.textInverse }]}
-                    >
-                      Done
-                    </Text>
-                  </Pressable>
                 </>
               )}
             </View>
@@ -547,8 +538,7 @@ function RecordButton({
   disabled,
   onPress,
   reducedMotion,
-  haptic,
-}: RecordButtonProps): React.ReactElement {
+  haptic }: RecordButtonProps): React.ReactElement {
   const pressedSV = useSharedValue(0);
   const isRecording = phase === 'recording';
   const isPaused = phase === 'paused';
@@ -573,7 +563,7 @@ function RecordButton({
     if (reducedMotion) {
       return { transform: [{ scale: 1 }] };
     }
-    return { transform: [{ scale: 1 - 0.08 * pressedSV.value }] };
+    return { transform: [{ scale: 1 - 0.05 * pressedSV.value }] };
   });
 
   const buttonColor = isRecording || isPaused ? colors.surface : colors.danger;
@@ -603,11 +593,10 @@ function RecordButton({
             height: size,
             borderRadius: size / 2,
             backgroundColor: buttonColor,
-            borderWidth: Stroke.emphasis,
-            borderColor: colors.danger,
+            borderWidth: 4,
+            borderColor: colors.scrimTextPrimary,
             justifyContent: 'center',
-            alignItems: 'center',
-          },
+            alignItems: 'center' },
           animatedStyle,
         ]}
       >
@@ -617,8 +606,7 @@ function RecordButton({
               width: size * 0.3,
               height: size * 0.3,
               borderRadius: Radius.sm,
-              backgroundColor: iconColor,
-            }}
+              backgroundColor: iconColor }}
           />
         ) : isPaused ? (
           <View
@@ -626,8 +614,7 @@ function RecordButton({
               width: size * 0.3,
               height: size * 0.3,
               borderRadius: Radius.sm,
-              backgroundColor: iconColor,
-            }}
+              backgroundColor: iconColor }}
           />
         ) : (
           <Ionicons name="mic" size={size * 0.4} color={iconColor} />
@@ -650,8 +637,7 @@ const WaveformVisualization = React.memo(function WaveformVisualization({
   bars,
   color,
   maxHeight,
-  minHeight,
-}: WaveformVisualizationProps): React.ReactElement {
+  minHeight }: WaveformVisualizationProps): React.ReactElement {
   const barWidth = 100 / bars.length;
   return (
     <View
@@ -661,8 +647,7 @@ const WaveformVisualization = React.memo(function WaveformVisualization({
         justifyContent: 'center',
         height: maxHeight,
         width: '100%',
-        gap: Space.xxs,
-      }}
+        gap: Space.xxs }}
     >
       {bars.map((level, i) => {
         const height = Math.max(minHeight, level * maxHeight);
@@ -674,8 +659,7 @@ const WaveformVisualization = React.memo(function WaveformVisualization({
               height,
               backgroundColor: color,
               borderRadius: Radius.none,
-              opacity: 0.4 + 0.6 * level,
-            }}
+              opacity: 0.4 + 0.6 * level }}
           />
         );
       })}
@@ -698,8 +682,7 @@ function SecondaryButton({
   label,
   colors,
   styles,
-  onPress,
-}: SecondaryButtonProps): React.ReactElement {
+  onPress }: SecondaryButtonProps): React.ReactElement {
   return (
     <PressScale
       onPress={onPress}
@@ -715,12 +698,59 @@ function SecondaryButton({
   );
 }
 
+// ── Playback bar (play/pause + seek) ──────────────────────────────────
+
+interface PlaybackBarProps {
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+  durationMs: number;
+  haptic: ReturnType<typeof useHaptic>;
+  reducedMotion: boolean;
+}
+
+function PlaybackBar({ colors, styles, durationMs, haptic, reducedMotion }: PlaybackBarProps) {
+  const [playing, setPlaying] = useState(false);
+  const [position, setPosition] = useState(0);
+
+  const handlePlayPause = useCallback(() => {
+    if (!reducedMotion) haptic.light();
+    setPlaying((p) => !p);
+  }, [haptic, reducedMotion]);
+
+  const ratio = durationMs > 0 ? Math.min(1, position / durationMs) : 0;
+
+  return (
+    <View style={styles.playbackBar}>
+      <Pressable
+        onPress={handlePlayPause}
+        style={styles.playbackBtn}
+        accessibilityLabel={playing ? 'Pause' : 'Play'}
+        accessibilityRole="button"
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Ionicons
+          name={playing ? 'pause' : 'play'}
+          size={IconGrammar.standard}
+          color={colors.textPrimary}
+        />
+      </Pressable>
+      <View style={styles.seekTrack}>
+        <View
+          style={[styles.seekFill, { width: `${ratio * 100}%`, backgroundColor: colors.brand }]}
+        />
+        <View
+          style={[styles.seekThumb, { left: `${ratio * 100}%`, backgroundColor: colors.brand }]}
+        />
+      </View>
+    </View>
+  );
+}
+
 // ── Unavailable state (truthful — native module not linked) ──────────
 
 function UnavailableState({
   colors,
-  styles,
-}: {
+  styles }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }): React.ReactElement {
@@ -730,9 +760,7 @@ function UnavailableState({
         Voiceover recording unavailable
       </Text>
       <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-        This feature requires the expo-audio native module, which is not
-        linked in this build. Use a development build to enable voiceover
-        recording.
+        Requires expo-audio native module. Use a development build.
       </Text>
     </View>
   );
@@ -742,8 +770,7 @@ function UnavailableState({
 
 function DeniedState({
   colors,
-  styles,
-}: {
+  styles }: {
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }): React.ReactElement {
@@ -753,8 +780,7 @@ function DeniedState({
         Microphone access denied
       </Text>
       <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-        Enable microphone access in your device settings to record
-        voiceovers for your composition.
+        Enable mic access in settings to record.
       </Text>
     </View>
   );
@@ -766,87 +792,70 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     content: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl,
-    },
+      paddingBottom: Space.xl },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: Space.sm,
-    },
+      paddingVertical: Space.sm },
     title: {
+      flex: 1,
+      textAlign: 'center',
       fontFamily: Typography.family.semibold,
-      fontSize: Type.subtitle.size,
-    },
+      fontSize: TypographyV2.sectionTitle.size },
     closeBtn: {
       width: Control.hit,
       height: Control.hit,
       justifyContent: 'center',
-      alignItems: 'center',
-      borderRadius: Radius.sm,
-    },
+      alignItems: 'center' },
+    doneBtn: {
+      width: Control.hit,
+      height: Control.hit,
+      justifyContent: 'center',
+      alignItems: 'center' },
+    doneBtnText: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.bodyStrong.size },
     // ── Timer ──
     timerContainer: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.sm,
-      paddingVertical: Space.lg,
-    },
+      paddingVertical: Space.lg },
     timer: {
-      fontFamily: FontFamily.medium,
-      fontSize: 32,
+      fontFamily: FontFamily.semibold,
+      fontSize: TypographyV2.screenTitle.size,
       fontVariant: ['tabular-nums'],
-      letterSpacing: 2,
-    },
-    recordingIndicator: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-    },
+      letterSpacing: 1 },
     recordingDot: {
-      width: Space.sm,
-      height: Space.sm,
-      borderRadius: Radius.full,
-    },
+      width: 6,
+      height: 6,
+      borderRadius: Radius.full },
     recordingLabel: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.caption.size,
-      letterSpacing: 1,
-    },
+      fontSize: TypographyV2.meta.size,
+      letterSpacing: 1 },
     // ── Waveform ──
     waveformContainer: {
       height: WAVEFORM_MAX_HEIGHT + Space.md,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingVertical: Space.sm,
-    },
-    waveformPlaceholder: {
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    waveformHint: {
-      fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
-      textAlign: 'center',
-    },
+      paddingVertical: Space.sm },
     meteringNotice: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       textAlign: 'center',
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     // ── Record button ──
     recordButtonContainer: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.lg,
-      minHeight: RING_BASE_SIZE + Space.md,
-    },
+      minHeight: RING_BASE_SIZE + Space.md },
     pulseRing: {
       position: 'absolute',
-      borderWidth: Stroke.standard,
-    },
+      borderWidth: Stroke.standard },
     // ── Secondary controls ──
     secondaryControls: {
       flexDirection: 'row',
@@ -854,8 +863,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       gap: Space.sm,
-      paddingTop: Space.sm,
-    },
+      paddingTop: Space.sm },
     secondaryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -864,41 +872,72 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       borderRadius: Radius.md,
       borderWidth: Stroke.standard,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     secondaryBtnText: {
       fontFamily: Typography.family.medium,
-      fontSize: Type.body.size,
-    },
-    doneBtn: {
+      fontSize: TypographyV2.body.size },
+    recordingErrorBanner: {
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      height: 50,
-      borderRadius: Radius.lg,
-      paddingHorizontal: Space.lg,
-    },
-    doneBtnText: {
-      fontFamily: FontFamily.semibold,
-      fontSize: Type.bodyStrong.size,
-    },
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm },
+    recordingErrorText: {
+      flex: 1,
+      fontFamily: Typography.family.regular,
+      fontSize: TypographyV2.meta.size,
+      textAlign: 'center' },
+    recordingErrorRetry: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.standard },
+    recordingErrorRetryText: {
+      fontFamily: Typography.family.semibold,
+      fontSize: TypographyV2.meta.size },
+    // ── Playback bar ──
+    playbackBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      width: '100%',
+      paddingVertical: Space.xs },
+    playbackBtn: {
+      width: Control.hit,
+      height: Control.hit,
+      justifyContent: 'center',
+      alignItems: 'center' },
+    seekTrack: {
+      flex: 1,
+      height: Control.hit,
+      justifyContent: 'center',
+      position: 'relative' },
+    seekFill: {
+      position: 'absolute',
+      left: 0,
+      height: 2,
+      borderRadius: Radius.full },
+    seekThumb: {
+      position: 'absolute',
+      width: 16,
+      height: 16,
+      borderRadius: Radius.full,
+      marginLeft: -8 },
     // ── Empty states ──
     emptyBody: {
       paddingVertical: Space.xl,
       alignItems: 'center',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     emptyTitle: {
       fontFamily: Typography.family.semibold,
-      fontSize: Type.bodyStrong.size,
-      textAlign: 'center',
-    },
+      fontSize: TypographyV2.bodyStrong.size,
+      textAlign: 'center' },
     emptySubtitle: {
       fontFamily: Typography.family.regular,
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       textAlign: 'center',
-      paddingHorizontal: Space.lg,
-    },
-  });
+      paddingHorizontal: Space.lg } });
 }
 
 // ── Memoised style factory ────────────────────────────────────────────

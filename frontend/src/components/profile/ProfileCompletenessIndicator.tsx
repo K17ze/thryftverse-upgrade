@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export interface ProfileCompletenessInput {
   avatar?: string | null;
@@ -31,8 +32,8 @@ function calculateCompleteness(input: ProfileCompletenessInput): {
     { key: 'bio', label: 'Bio', icon: 'text-outline', done: !!input.bio?.trim() },
     { key: 'location', label: 'Location', icon: 'location-outline', done: !!input.location?.trim() },
     { key: 'website', label: 'Website', icon: 'link-outline', done: !!input.website?.trim() },
-    { key: 'emailVerified', label: 'Email verified', icon: 'shield-checkmark-outline', done: !!input.emailVerified },
-    { key: 'listings', label: 'First listing', icon: 'pricetag-outline', done: !!input.hasListings },
+    { key: 'emailVerified', label: 'Email verified', icon: 'checkmark-circle-outline', done: !!input.emailVerified },
+    { key: 'listings', label: 'First listing', icon: 'bag-handle-outline', done: !!input.hasListings },
   ];
 
   const doneCount = items.filter((i) => i.done).length;
@@ -51,8 +52,7 @@ export interface ProfileCompletenessIndicatorProps {
  */
 export function ProfileCompletenessIndicator({
   input,
-  onCompleteProfile,
-}: ProfileCompletenessIndicatorProps) {
+  onCompleteProfile }: ProfileCompletenessIndicatorProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { score, items } = React.useMemo(() => calculateCompleteness(input), [input]);
@@ -114,38 +114,31 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   title: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   barTrack: {
     height: Stroke.standard * 2,
     borderRadius: Radius.sm,
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   barFill: {
     height: '100%',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   itemsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.xs + 1,
-  },
+    gap: Space.xs + 1 },
   missingChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -153,12 +146,9 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.xs + 3,
     paddingVertical: Space.xs / 2 + 1,
     backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   missingChipText: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.medium,
-    color: colors.textMuted,
-  },
-  });
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted } });
 }

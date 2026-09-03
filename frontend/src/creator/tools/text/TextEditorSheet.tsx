@@ -28,36 +28,33 @@ import {
   Pressable,
   TextInput,
   ScrollView,
-  PanResponder,
   Animated,
-  type TextStyle,
-  type LayoutChangeEvent,
-  type GestureResponderEvent,
-  type PanResponderGestureState,
-} from 'react-native';
+  type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CreatorGlyph, type CreatorGlyphName } from '../../controls/CreatorGlyph';
+import { CreatorSlider } from '../../controls/CreatorSlider';
 import {
   Space,
   Radius,
-  Type,
   Typography,
   Stroke,
   Control,
-  FontFamily,
-} from '../../../theme/designTokens';
+  FontFamily } from '../../../theme/designTokens';
+import { TypographyV2 } from '../../../theme/typography.v2';
 import { IconGrammar } from '../../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../../theme/ThemeContext';
 import { SheetContainer, PressScale } from '../../CreatorAnimations';
 import { KeyboardAwareScrollView } from '../../../platform/keyboard/KeyboardProvider';
 import { useHaptic } from '../../../hooks/useHaptic';
+import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { AppIcon } from '../../../components/common/AppIcon';
+import { IconSize } from '../../../theme/iconTokens';
 import { Motion } from '../../../theme/motionTokens';
 import { FontChooserRail } from './FontChooserRail';
 import { CURATED_FONTS, resolveFontPreviewStyle } from './FontRegistry';
 import {
   DEFAULT_TEXT_STYLE,
-  type TextStyleConfig,
-} from './textStylePresets';
+  type TextStyleConfig } from './textStylePresets';
 import {
   CreatorColorPicker,
   useCreatorColorHistory,
@@ -66,9 +63,7 @@ import {
   fromHexString,
   BLACK,
   WHITE,
-  type CreatorColor,
-  type RecentColor,
-} from '../../color';
+  type CreatorColor } from '../../color';
 
 export interface TextEditorSheetProps {
   visible: boolean;
@@ -107,8 +102,7 @@ const ANIMATION_TO_PAYLOAD: Record<AnimationKey, TextStyleConfig['textAnimation'
   rise: 'slide',
   type: 'typewriter',
   pop: 'bounce',
-  slide: 'slide',
-};
+  slide: 'slide' };
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -131,10 +125,10 @@ export function TextEditorSheet({
   onClose,
   initialText,
   initialStyle,
-  onConfirm,
-}: TextEditorSheetProps) {
+  onConfirm }: TextEditorSheetProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const reducedMotion = useReducedMotion();
   const styles = useEditorStyles(colors);
   const inputRef = useRef<TextInput>(null);
   const { recents, commitColor: addRecent } = useCreatorColorHistory();
@@ -198,22 +192,25 @@ export function TextEditorSheet({
     ) => {
       const layout = layouts[index];
       if (!layout) return;
-      Animated.parallel([
-        Animated.spring(leftVal, {
-          toValue: layout.x,
-          useNativeDriver: false,
-          stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping,
-        }),
-        Animated.spring(widthVal, {
-          toValue: layout.width,
-          useNativeDriver: false,
-          stiffness: Motion.spring.indicator.stiffness,
-          damping: Motion.spring.indicator.damping,
-        }),
-      ]).start();
+      if (reducedMotion) {
+        leftVal.setValue(layout.x);
+        widthVal.setValue(layout.width);
+      } else {
+        Animated.parallel([
+          Animated.spring(leftVal, {
+            toValue: layout.x,
+            useNativeDriver: false, // left/width are not native-driver supported
+            stiffness: Motion.spring.indicator.stiffness,
+            damping: Motion.spring.indicator.damping }),
+          Animated.spring(widthVal, {
+            toValue: layout.width,
+            useNativeDriver: false, // left/width are not native-driver supported
+            stiffness: Motion.spring.indicator.stiffness,
+            damping: Motion.spring.indicator.damping }),
+        ]).start();
+      }
     },
-    [],
+    [reducedMotion],
   );
 
   // Animate alignment underline when alignment changes
@@ -364,8 +361,7 @@ export function TextEditorSheet({
         : undefined,
       background: bgEnabled
         ? { color: bgColor, radius: bgRadius, paddingX: bgPaddingX, paddingY: bgPaddingY }
-        : undefined,
-    };
+        : undefined };
 
     haptic.light();
     onConfirm(trimmed, style);
@@ -378,7 +374,7 @@ export function TextEditorSheet({
 
   // ── Preview style ──
   const previewFontStyle = useMemo(
-    () => resolveFontPreviewStyle(fontId, Type.bodyStrong.size + 2),
+    () => resolveFontPreviewStyle(fontId, TypographyV2.bodyStrong.size + 2),
     [fontId],
   );
 
@@ -390,16 +386,14 @@ export function TextEditorSheet({
     fontFamily: previewFontStyle.fontFamily,
     lineHeight: previewFontStyle.lineHeight,
     textAlign: alignment,
-    color: colorToRgba(fillColor),
-  };
+    color: colorToRgba(fillColor) };
 
   // Shadow style for preview
   const previewShadow: TextStyle = shadowEnabled
     ? {
         textShadowColor: colorToRgba(shadowColor),
         textShadowOffset: { width: shadowOffsetX, height: shadowOffsetY },
-        textShadowRadius: shadowBlur,
-      }
+        textShadowRadius: shadowBlur }
     : {};
 
   // Stroke preview: use multi-shadow technique (8 directions)
@@ -438,7 +432,7 @@ export function TextEditorSheet({
             accessibilityHint="Closes the text editor sheet"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+            <AppIcon name="close" size={IconSize.lg} color="textPrimary" opticalCenter={true} accessible={false} />
           </PressScale>
         </View>
 
@@ -451,8 +445,7 @@ export function TextEditorSheet({
                 backgroundColor: colorToRgba(bgColor),
                 borderRadius: bgRadius,
                 paddingHorizontal: bgPaddingX,
-                paddingVertical: bgPaddingY,
-              },
+                paddingVertical: bgPaddingY },
             ]}
           >
             {strokeEnabled && strokeOffsets.length > 0 ? (
@@ -467,8 +460,7 @@ export function TextEditorSheet({
                         color: 'transparent',
                         textShadowColor: colorToRgba(strokeColor),
                         textShadowOffset: offset,
-                        textShadowRadius: 0,
-                      },
+                        textShadowRadius: 0 },
                     ]}
                     numberOfLines={3}
                   >
@@ -521,7 +513,7 @@ export function TextEditorSheet({
             onChange={setFillColor}
             onCommit={handleFillCommit}
             mode={expandedColor === 'fill' ? 'expanded' : 'compact'}
-            recents={recents as RecentColor[]}
+            recents={recents}
             onCommitRecent={addRecent}
             accessibilityLabel="Text fill color picker"
             style={styles.colorPicker}
@@ -543,8 +535,7 @@ export function TextEditorSheet({
                   onLayout={(e) => {
                     alignmentLayouts.current[i] = {
                       x: e.nativeEvent.layout.x,
-                      width: e.nativeEvent.layout.width,
-                    };
+                      width: e.nativeEvent.layout.width };
                     if (isActive) {
                       animateUnderline(alignmentLayouts.current, alignmentUnderlineLeft, alignmentUnderlineWidth, i);
                     }
@@ -573,10 +564,12 @@ export function TextEditorSheet({
               accessibilityState={{ checked: strokeEnabled }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons
-                name={strokeEnabled ? 'checkmark-circle' : 'ellipse-outline'}
-                size={IconGrammar.hero}
-                color={strokeEnabled ? colors.brand : colors.textMuted}
+              <AppIcon
+                name={strokeEnabled ? 'checkmarkCircle' : 'ellipse-outline'}
+                size={IconSize.hero}
+                color={strokeEnabled ? 'brand' : 'textMuted'}
+                opticalCenter={true}
+                accessible={false}
               />
             </Pressable>
           </View>
@@ -603,10 +596,12 @@ export function TextEditorSheet({
                 <Text style={[styles.colorWellLabel, { color: colors.textSecondary }]}>
                   {toHexString(strokeColor).toUpperCase()}
                 </Text>
-                <Ionicons
-                  name={expandedColor === 'stroke' ? 'chevron-up-outline' : 'chevron-down-outline'}
-                  size={IconGrammar.metadata}
-                  color={colors.textSecondary}
+                <AppIcon
+                  name={expandedColor === 'stroke' ? 'up' : 'down'}
+                  size={IconSize.xs}
+                  color="textSecondary"
+                  opticalCenter={true}
+                  accessible={false}
                 />
               </Pressable>
               {expandedColor === 'stroke' && (
@@ -615,7 +610,7 @@ export function TextEditorSheet({
                   onChange={setStrokeColor}
                   onCommit={handleStrokeCommit}
                   mode="expanded"
-                  recents={recents as RecentColor[]}
+                  recents={recents}
                   onCommitRecent={addRecent}
                   accessibilityLabel="Stroke color picker"
                   style={styles.colorPicker}
@@ -635,10 +630,12 @@ export function TextEditorSheet({
               accessibilityState={{ checked: shadowEnabled }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons
-                name={shadowEnabled ? 'checkmark-circle' : 'ellipse-outline'}
-                size={IconGrammar.hero}
-                color={shadowEnabled ? colors.brand : colors.textMuted}
+              <AppIcon
+                name={shadowEnabled ? 'checkmarkCircle' : 'ellipse-outline'}
+                size={IconSize.hero}
+                color={shadowEnabled ? 'brand' : 'textMuted'}
+                opticalCenter={true}
+                accessible={false}
               />
             </Pressable>
           </View>
@@ -685,10 +682,12 @@ export function TextEditorSheet({
                 <Text style={[styles.colorWellLabel, { color: colors.textSecondary }]}>
                   {toHexString(shadowColor).toUpperCase()}
                 </Text>
-                <Ionicons
-                  name={expandedColor === 'shadow' ? 'chevron-up-outline' : 'chevron-down-outline'}
-                  size={IconGrammar.metadata}
-                  color={colors.textSecondary}
+                <AppIcon
+                  name={expandedColor === 'shadow' ? 'up' : 'down'}
+                  size={IconSize.xs}
+                  color="textSecondary"
+                  opticalCenter={true}
+                  accessible={false}
                 />
               </Pressable>
               {expandedColor === 'shadow' && (
@@ -697,7 +696,7 @@ export function TextEditorSheet({
                   onChange={setShadowColor}
                   onCommit={handleShadowCommit}
                   mode="expanded"
-                  recents={recents as RecentColor[]}
+                  recents={recents}
                   onCommitRecent={addRecent}
                   accessibilityLabel="Shadow color picker"
                   style={styles.colorPicker}
@@ -717,10 +716,12 @@ export function TextEditorSheet({
               accessibilityState={{ checked: bgEnabled }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons
-                name={bgEnabled ? 'checkmark-circle' : 'ellipse-outline'}
-                size={IconGrammar.hero}
-                color={bgEnabled ? colors.brand : colors.textMuted}
+              <AppIcon
+                name={bgEnabled ? 'checkmarkCircle' : 'ellipse-outline'}
+                size={IconSize.hero}
+                color={bgEnabled ? 'brand' : 'textMuted'}
+                opticalCenter={true}
+                accessible={false}
               />
             </Pressable>
           </View>
@@ -767,10 +768,12 @@ export function TextEditorSheet({
                 <Text style={[styles.colorWellLabel, { color: colors.textSecondary }]}>
                   {toHexString(bgColor).toUpperCase()}
                 </Text>
-                <Ionicons
-                  name={expandedColor === 'background' ? 'chevron-up-outline' : 'chevron-down-outline'}
-                  size={IconGrammar.metadata}
-                  color={colors.textSecondary}
+                <AppIcon
+                  name={expandedColor === 'background' ? 'up' : 'down'}
+                  size={IconSize.xs}
+                  color="textSecondary"
+                  opticalCenter={true}
+                  accessible={false}
                 />
               </Pressable>
               {expandedColor === 'background' && (
@@ -779,7 +782,7 @@ export function TextEditorSheet({
                   onChange={setBgColor}
                   onCommit={handleBgCommit}
                   mode="expanded"
-                  recents={recents as RecentColor[]}
+                  recents={recents}
                   onCommitRecent={addRecent}
                   accessibilityLabel="Background color picker"
                   style={styles.colorPicker}
@@ -799,8 +802,7 @@ export function TextEditorSheet({
                   onLayout={(e) => {
                     animLayouts.current[i] = {
                       x: e.nativeEvent.layout.x,
-                      width: e.nativeEvent.layout.width,
-                    };
+                      width: e.nativeEvent.layout.width };
                     if (isActive) {
                       animateUnderline(animLayouts.current, animUnderlineLeft, animUnderlineWidth, i);
                     }
@@ -813,7 +815,7 @@ export function TextEditorSheet({
                     accessibilityRole="button"
                     accessibilityState={{ selected: isActive }}
                   >
-                    <Ionicons name={a.icon} size={IconGrammar.metadata} color={isActive ? colors.brand : colors.textSecondary} />
+                    <AppIcon name={a.icon} size={IconSize.sm} color={isActive ? 'brand' : 'textSecondary'} opticalCenter={true} accessible={false} />
                     <Text
                       style={[
                         styles.animTabLabel,
@@ -844,10 +846,12 @@ export function TextEditorSheet({
             accessibilityState={{ disabled: !canConfirm }}
           >
             <Text style={[styles.confirmBtnText, !canConfirm && { color: colors.textMuted }]}>Done</Text>
-            <Ionicons
-              name="checkmark"
-              size={IconGrammar.metadata}
-              color={canConfirm ? colors.textInverse : colors.textMuted}
+            <AppIcon
+              name="check"
+              size={IconSize.sm}
+              color={canConfirm ? 'textInverse' : 'textMuted'}
+              opticalCenter={true}
+              accessible={false}
             />
           </Pressable>
         </View>
@@ -856,7 +860,7 @@ export function TextEditorSheet({
   );
 }
 
-// ── MiniSlider (PanResponder-based, no new deps) ─────────────────────
+// ── MiniSlider (delegates to shared CreatorSlider) ──────────────────
 
 interface MiniSliderProps {
   label: string;
@@ -877,48 +881,9 @@ function MiniSlider({
   step,
   valueFormatter,
   onChange,
-  colors,
-}: MiniSliderProps) {
-  const trackWidthRef = useRef(0);
-  const [trackWidth, setTrackWidth] = useState(0);
+  colors }: MiniSliderProps) {
   const styles = useEditorStyles(colors);
-
-  const handleLayout = useCallback((e: LayoutChangeEvent) => {
-    trackWidthRef.current = e.nativeEvent.layout.width;
-    setTrackWidth(e.nativeEvent.layout.width);
-  }, []);
-
-  const range = max - min;
   const clamped = clamp(value, min, max);
-  const ratio = range === 0 ? 0 : (clamped - min) / range;
-  const trackLayoutWidth = trackWidth > 0 ? trackWidth : 1;
-  const thumbPosition = ratio * trackLayoutWidth;
-
-  const valueToPosition = useCallback(
-    (x: number) => {
-      const r = Math.min(1, Math.max(0, x / trackLayoutWidth));
-      const raw = min + r * range;
-      // Snap to step
-      return Math.round(raw / step) * step;
-    },
-    [trackLayoutWidth, min, range, step],
-  );
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderMove: (_e: GestureResponderEvent, g: PanResponderGestureState) => {
-          const next = valueToPosition(thumbPosition + g.dx);
-          onChange(clamp(next, min, max));
-        },
-        onPanResponderRelease: () => {},
-        onPanResponderTerminationRequest: () => false,
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [thumbPosition, valueToPosition, onChange],
-  );
 
   return (
     <View style={styles.sliderRow}>
@@ -930,33 +895,14 @@ function MiniSlider({
           {valueFormatter(clamped)}
         </Text>
       </View>
-      <View
-        style={styles.trackWrap}
-        onLayout={handleLayout}
-        {...panResponder.panHandlers}
+      <CreatorSlider
+        value={clamped}
+        min={min}
+        max={max}
+        step={step}
+        onValueChange={onChange}
         accessibilityLabel={`${label} slider`}
-        accessibilityRole="adjustable"
-        accessibilityValue={{
-          min,
-          max,
-          now: clamped,
-          text: valueFormatter(clamped),
-        }}
-      >
-        <View style={[styles.track, { backgroundColor: colors.border }]} />
-        <View
-          style={[
-            styles.fill,
-            { width: thumbPosition, backgroundColor: colors.brand },
-          ]}
-        />
-        <View
-          style={[
-            styles.thumb,
-            { left: thumbPosition, backgroundColor: colors.textPrimary },
-          ]}
-        />
-      </View>
+      />
     </View>
   );
 }
@@ -973,24 +919,19 @@ function useEditorStyles(colors: ThemeColors) {
           justifyContent: 'space-between',
           paddingHorizontal: Space.md,
           paddingTop: Space.sm,
-          paddingBottom: Space.sm,
-        },
+          paddingBottom: Space.sm },
         title: {
-          fontFamily: Typography.family.bold,
-          fontSize: Type.subtitle.size,
-          letterSpacing: Type.subtitle.letterSpacing,
-        },
+          fontFamily: Typography.family.semibold,
+          fontSize: TypographyV2.bodyStrong.size },
         closeBtn: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         body: {
           paddingHorizontal: Space.md,
           paddingBottom: Space.lg,
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         preview: {
           minHeight: 72,
           borderRadius: Radius.lg,
@@ -1000,152 +941,105 @@ function useEditorStyles(colors: ThemeColors) {
           justifyContent: 'center',
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
-          overflow: 'hidden',
-        },
+          overflow: 'hidden' },
         strokePreviewWrap: {
           // The multi-shadow stroke technique requires a relative container
           alignItems: 'center',
           justifyContent: 'center',
-          alignSelf: 'stretch',
-        },
+          alignSelf: 'stretch' },
         input: {
           fontFamily: Typography.family.regular,
-          fontSize: Type.body.size,
+          fontSize: TypographyV2.body.size,
           color: colors.textPrimary,
           borderWidth: Stroke.standard,
           borderColor: colors.border,
           borderRadius: Radius.md,
           paddingHorizontal: Space.md,
           paddingVertical: Space.sm,
-          minHeight: 48,
-        },
+          minHeight: 48 },
         sectionLabel: {
           fontFamily: Typography.family.semibold,
-          fontSize: Type.label.size,
-          letterSpacing: Type.label.letterSpacing,
+          fontSize: TypographyV2.label.size,
+          letterSpacing: TypographyV2.label.letterSpacing,
           textTransform: 'uppercase',
           color: colors.textSecondary,
-          marginTop: Space.xs,
-        },
+          marginTop: Space.xs },
         colorPicker: {
           // No extra padding — CreatorColorPicker manages its own layout
         },
         tabBar: {
           flexDirection: 'row',
-          position: 'relative',
-        },
+          position: 'relative' },
         tabItem: {
           flex: 1,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         tabUnderline: {
           position: 'absolute',
           bottom: 0,
           height: Stroke.emphasis,
           backgroundColor: colors.brand,
-          borderRadius: Stroke.emphasis,
-        },
+          borderRadius: Stroke.emphasis },
         // ── Effect section header (label + enable toggle) ──
         effectSectionHeader: {
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'space-between',
-        },
+          justifyContent: 'space-between' },
         enableToggle: {
           width: Control.hit,
           height: Control.hit,
           alignItems: 'center',
-          justifyContent: 'center',
-        },
+          justifyContent: 'center' },
         enableToggleActive: {},
         effectControls: {
-          gap: Space.sm,
-        },
+          gap: Space.sm },
         // ── Color section toggle ──
         colorSectionToggle: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.sm,
           paddingVertical: Space.xs,
-          minHeight: 44,
-        },
+          minHeight: 44 },
         colorWell: {
           width: 28,
           height: 28,
           borderRadius: Radius.sm,
           borderWidth: Stroke.hairline,
-          borderColor: 'rgba(0,0,0,0.1)',
-        },
+          borderColor: 'rgba(0,0,0,0.1)' },
         colorWellLabel: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.caption.size,
-          flex: 1,
-        },
-        // ── Slider ──
+          fontSize: TypographyV2.meta.size,
+          flex: 1 },
+        // ── Slider label row (track rendered by CreatorSlider) ──
         sliderRow: {
-          paddingVertical: Space.xs,
-        },
+          paddingVertical: Space.xs },
         sliderHeader: {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: Space.xxs,
-        },
+          marginBottom: Space.xxs },
         sliderLabel: {
           fontFamily: Typography.family.regular,
-          fontSize: Type.caption.size,
-        },
+          fontSize: TypographyV2.meta.size },
         sliderValue: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.caption.size,
-          fontVariant: ['tabular-nums'],
-        },
-        trackWrap: {
-          height: Control.hit,
-          justifyContent: 'center',
-          position: 'relative',
-        },
-        track: {
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          height: 3,
-          borderRadius: Radius.full,
-        },
-        fill: {
-          position: 'absolute',
-          left: 0,
-          height: 3,
-          borderRadius: Radius.full,
-        },
-        thumb: {
-          position: 'absolute',
-          width: 16,
-          height: 16,
-          borderRadius: Radius.full,
-          marginLeft: -8,
-          borderWidth: Stroke.standard,
-          borderColor: 'rgba(0,0,0,0)',
-        },
+          fontSize: TypographyV2.meta.size,
+          fontVariant: ['tabular-nums'] },
         // ── Animation ──
         animContent: {
           gap: Space.sm,
           paddingRight: Space.md,
-          position: 'relative',
-        },
+          position: 'relative' },
         animTab: {
           flexDirection: 'row',
           alignItems: 'center',
           gap: Space.xs,
           paddingHorizontal: Space.smMd,
-          height: Control.hit,
-        },
+          height: Control.hit },
         animTabLabel: {
           fontFamily: Typography.family.medium,
-          fontSize: Type.caption.size,
-        },
+          fontSize: TypographyV2.meta.size },
         // ── Confirm ──
         confirmBtn: {
           backgroundColor: colors.brand,
@@ -1155,17 +1049,13 @@ function useEditorStyles(colors: ThemeColors) {
           alignItems: 'center',
           justifyContent: 'center',
           gap: Space.xs,
-          marginTop: Space.sm,
-        },
+          marginTop: Space.sm },
         confirmBtnDisabled: {
-          backgroundColor: colors.surfaceAlt,
-        },
+          backgroundColor: colors.surfaceAlt },
         confirmBtnText: {
           fontFamily: FontFamily.semibold,
-          fontSize: Type.bodyStrong.size,
-          color: colors.textInverse,
-        },
-      }),
+          fontSize: TypographyV2.bodyStrong.size,
+          color: colors.textInverse } }),
     [colors],
   );
 }

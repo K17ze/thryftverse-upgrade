@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, AspectRatio } from '../../theme/designTokens';
+import { Space, Radius, AspectRatio, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 export function ProductDetailSkeleton() {
   const { colors } = useAppTheme();
@@ -63,97 +64,76 @@ export function ProductDetailSkeleton() {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
+    flex: 1 },
   hero: {
-    width: '100%',
-  },
+    width: '100%' },
   identity: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
     paddingBottom: Space.lg,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   line: {
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   brand: {
     width: 84,
-    height: 11,
-  },
+    height: TypographyV2.meta.lineHeight },
   title: {
     width: '84%',
-    height: 28,
-  },
+    height: TypographyV2.screenTitle.lineHeight },
   price: {
     width: 112,
-    height: 25,
-  },
+    height: TypographyV2.priceHero.lineHeight },
   meta: {
     width: '58%',
-    height: 13,
-  },
+    height: TypographyV2.meta.lineHeight },
   hairline: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: Space.md,
-  },
+    marginHorizontal: Space.md },
   trustStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   trustChip: {
     width: 96,
-    height: 16,
-    borderRadius: Radius.sm,
-  },
+    height: TypographyV2.meta.lineHeight,
+    borderRadius: Radius.sm },
   seller: {
     minHeight: 76,
     paddingHorizontal: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   avatar: {
     width: 44,
     height: 44,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   sellerCopy: {
     flex: 1,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   sellerName: {
     width: '52%',
-    height: 14,
-  },
+    height: TypographyV2.body.lineHeight },
   sellerMeta: {
     width: '68%',
-    height: 11,
-  },
+    height: TypographyV2.meta.lineHeight },
   sellerAction: {
     width: 48,
-    height: 12,
-  },
+    height: TypographyV2.meta.lineHeight },
   section: {
     paddingHorizontal: Space.md,
     paddingTop: Space.lg,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   sectionTitle: {
     width: 128,
-    height: 17,
-  },
+    height: TypographyV2.sectionTitle.lineHeight },
   bodyLine: {
     width: '100%',
-    height: 13,
-  },
+    height: TypographyV2.body.lineHeight },
   bodyLineShort: {
     width: '78%',
-    height: 13,
-  },
+    height: TypographyV2.body.lineHeight },
   dock: {
     position: 'absolute',
     bottom: 0,
@@ -164,15 +144,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
+    borderTopWidth: StyleSheet.hairlineWidth },
   dockPrice: {
     width: 80,
-    height: 22,
-  },
+    height: TypographyV2.priceList.lineHeight },
   dockBtn: {
     width: 120,
-    height: 36,
-    borderRadius: Radius.sm,
-  },
-});
+    height: Control.chrome,
+    borderRadius: Radius.sm } });

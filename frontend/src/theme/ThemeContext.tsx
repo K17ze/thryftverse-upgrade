@@ -64,10 +64,15 @@ export interface ThemeColors {
   /** Subtle accent tints — icon-badge fills, category backgrounds. Replaces hex-alpha. */
   commerceTrustSubtle: string;
   discoverySubtle: string;
+  /** @deprecated Premium accent — many external consumers remain. Do not
+   *  add new uses; creator surfaces should use neutral tokens per AGENTS.md §4. */
   bronzeSubtle: string;
-  /** Premium accent from Design.md proposed-luxury. Used sparingly for
-   * verified status, authenticated value, or curated distinction. */
+  /** @deprecated Premium accent from Design.md proposed-luxury. Used sparingly for
+   * verified status, authenticated value, or curated distinction. Do not add
+   * new uses; creator surfaces should use neutral tokens per AGENTS.md §4. */
   antiqueGold: string;
+  /** @deprecated Premium accent — many external consumers remain. Do not
+   *  add new uses; creator surfaces should use neutral tokens per AGENTS.md §4. */
   bronze: string;
   /** Text over media scrims — always white regardless of theme, because
    *  scrims are dark-on-image in both light and dark mode. Replaces
@@ -77,6 +82,20 @@ export interface ThemeColors {
   scrimTextSecondary: string;
   /** Tertiary text/decor over media scrims — low-opacity white for inactive dots. */
   scrimTextTertiary: string;
+  /** Positive price delta over media scrims — light green visible on dark scrim in both themes. */
+  scrimDeltaPositive: string;
+  /** Negative price delta over media scrims — light red visible on dark scrim in both themes. */
+  scrimDeltaNegative: string;
+  /** Media overlay — semantic tokens for text/shadows on top of images.
+   *  These express intent (media overlay) not mechanism (scrim). Always
+   *  white-on-dark-scrim in both themes — identical values in light/dark. */
+  mediaOverlayText: string;
+  /** Secondary text on images in media overlays. */
+  mediaOverlayTextMuted: string;
+  /** Dark scrim for legibility behind media-overlay text. */
+  mediaOverlayScrim: string;
+  /** Text shadow for legibility on images in media overlays. */
+  mediaOverlayShadow: string;
   overlay: string;
   input: string;
   inputText: string;
@@ -85,8 +104,16 @@ export interface ThemeColors {
   tabBar: string;
   header: string;
   shadow: string;
+  /** @deprecated Glass/blur surface tokens — many external consumers remain.
+   *  Do not add new uses; use surfaceElevated + hairline per AGENTS.md §4. */
   glassBg: string;
+  /** @deprecated Glass/blur surface tokens — many external consumers remain.
+   *  Do not add new uses; use border (hairline) per AGENTS.md §4. */
   glassBorder: string;
+  /** Outfit builder background swatches — warm-paper neutrals for light mode,
+   *  muted darks for dark mode. 8 curated tones per theme; replaces the
+   *  former static OutfitColors array so the picker respects dark-mode parity. */
+  outfitBackgrounds: readonly string[];
 }
 
 const DARK_COLORS: ThemeColors = RAW_DARK_COLORS as ThemeColors;
@@ -129,7 +156,7 @@ function applyHighContrast(base: ThemeColors, isDark: boolean): ThemeColors {
       // Strengthen text contrast on dark backgrounds
       textPrimary: '#FFFFFF',
       textSecondary: '#C4C4C4', // was #A3A3A3 — raised for WCAG AAA
-      textMuted: '#9A9A9A',     // was #7A7A7A — raised for stronger separation
+      textMuted: '#9A9A9A',     // was #888888 (base) — raised for WCAG AAA
       // Strengthen borders for clearer structural separation
       border: '#3A3A3A',        // was #262626
       borderSubtle: '#2E2E2E',  // was #1E1E1E
@@ -143,7 +170,7 @@ function applyHighContrast(base: ThemeColors, isDark: boolean): ThemeColors {
     // Strengthen text contrast on light backgrounds
     textPrimary: '#000000',
     textSecondary: '#4A4A4A', // was #666666 — raised for WCAG AAA
-    textMuted: '#5A5A5A',     // was #767676 — raised for stronger separation
+    textMuted: '#5A5A5A',     // was #6C6C6C (base) — raised for WCAG AAA
     // Strengthen borders
     border: '#CCCCCC',        // was #E5E5E5
     borderSubtle: '#DDDDDD',  // was #F0F0F0

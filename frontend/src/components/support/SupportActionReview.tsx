@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, FontFamily, Stroke, Control } from '../../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Control } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AppButton } from '../ui/AppButton';
 import type { SupportActionProposal, ActionProposalState } from '../../contracts/support';
 
@@ -64,8 +65,7 @@ function stateCopy(state: ActionProposalState): StateCopy {
       return {
         label: "We couldn't confirm the result",
         tone: 'warning',
-        icon: 'help-circle-outline',
-      };
+        icon: 'help-circle-outline' };
   }
 }
 
@@ -102,8 +102,7 @@ export function SupportActionReview({
   proposal,
   onConfirm,
   onReject,
-  isPending = false,
-}: SupportActionReviewProps) {
+  isPending = false }: SupportActionReviewProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -207,91 +206,75 @@ function createStyles(colors: ThemeColors) {
       borderTopColor: colors.border,
       paddingTop: Space.sm,
       marginTop: Space.xs,
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: Space.sm,
-    },
+      gap: Space.sm },
     stateRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xs,
-    },
+      gap: Space.xs },
     stateLabel: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
-      letterSpacing: Type.metaElevated.letterSpacing,
-      textTransform: 'uppercase',
-    },
+      letterSpacing: TypographyV2.label.letterSpacing,
+      textTransform: 'uppercase' },
     expiry: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
       color: colors.textMuted,
-      letterSpacing: Type.meta.letterSpacing,
-    },
+      letterSpacing: TypographyV2.meta.letterSpacing },
     toolName: {
-      fontSize: Type.bodyEmphasis.size,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
-      letterSpacing: Type.bodyEmphasis.letterSpacing,
-      lineHeight: Type.bodyEmphasis.lineHeight,
-    },
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      lineHeight: TypographyV2.bodyStrong.lineHeight },
     consequence: {
-      fontSize: Type.body.size,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.regular,
       color: colors.textPrimary,
-      lineHeight: Type.body.lineHeight + 2,
-      letterSpacing: Type.body.letterSpacing,
-    },
+      lineHeight: TypographyV2.body.lineHeight + 2,
+      letterSpacing: TypographyV2.body.letterSpacing },
     argsBox: {
       backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.sm,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.sm,
-      gap: Space.xs / 2,
-    },
+      gap: Space.xs / 2 },
     argsLabel: {
-      fontSize: Type.meta.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       color: colors.textSecondary,
-      letterSpacing: Type.metaElevated.letterSpacing,
-      textTransform: 'uppercase',
-    },
+      letterSpacing: TypographyV2.label.letterSpacing,
+      textTransform: 'uppercase' },
     argsBody: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.textPrimary,
-      lineHeight: Type.caption.lineHeight + 2,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     unknownNote: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
       color: colors.warning,
-      lineHeight: Type.caption.lineHeight + 2,
-      letterSpacing: Type.caption.letterSpacing,
-    },
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+      letterSpacing: TypographyV2.meta.letterSpacing },
     actions: {
       flexDirection: 'row',
       gap: Space.sm,
-      marginTop: Space.xs,
-    },
+      marginTop: Space.xs },
     actionBtn: {
-      flex: 1,
-    },
+      flex: 1 },
     terminalRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
-      minHeight: Control.hit,
-    },
+      minHeight: Control.hit },
     terminalText: {
-      fontSize: Type.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
-      letterSpacing: Type.caption.letterSpacing,
-    },
-  });
+      letterSpacing: TypographyV2.meta.letterSpacing } });
 }

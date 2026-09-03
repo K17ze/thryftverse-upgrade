@@ -5,13 +5,13 @@
  * Usage:
  *   <StaggeredGridEntrance>
  *     {items.map((item, i) => (
- *       <ProductCardV2 key={item.id} item={item} index={i} />
+ *       <ProductCard key={item.id} item={item} index={i} />
  *     ))}
  *   </StaggeredGridEntrance>
  *
  * Or per-item wrapper:
  *   <StaggeredItem index={index}>
- *     <ProductCardV2 item={item} />
+ *     <ProductCard item={item} />
  *   </StaggeredItem>
  */
 

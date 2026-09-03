@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 interface Props {
   /** ISO timestamp of order creation (dispatch window start) */
@@ -76,9 +77,9 @@ export function DispatchCountdown({ createdAt, shipByDate, windowHours = 24, shi
     colors.textPrimary;
 
   const bgColor =
-    urgency === 'overdue' ? `${colors.danger}15` :
-    urgency === 'urgent' ? `${colors.danger}10` :
-    urgency === 'warning' ? `${colors.warning}10` :
+    urgency === 'overdue' ? colors.dangerSubtle :
+    urgency === 'urgent' ? colors.dangerSubtle :
+    urgency === 'warning' ? colors.warningSubtle :
     colors.surface;
 
   const icon: React.ComponentProps<typeof Ionicons>['name'] =
@@ -112,8 +113,7 @@ export function DispatchCountdown({ createdAt, shipByDate, windowHours = 24, shi
             styles.progressFill,
             {
               width: `${Math.min(100, Math.max(0, elapsedPercent))}%`,
-              backgroundColor: color,
-            },
+              backgroundColor: color },
           ]}
         />
       </View>
@@ -133,39 +133,31 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.sm + 2,
     borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 2,
-  },
+    gap: Space.xs + 2 },
   progressTrack: {
     height: 3,
     borderRadius: Radius.sm,
     backgroundColor: colors.border,
     marginTop: Space.sm,
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   progressFill: {
     height: '100%',
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.sm },
   label: {
     flex: 1,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   countdown: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
-  },
+    letterSpacing: -0.3 },
   overdueHint: {
     marginTop: Space.xs,
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
-});
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted } });

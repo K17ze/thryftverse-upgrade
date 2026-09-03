@@ -1,17 +1,23 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   withTiming,
   withSpring,
-  type EntryExitAnimationFunction,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, TypeStyles, Typography, Stroke } from '../../theme/designTokens';
+  type EntryExitAnimationFunction } from 'react-native-reanimated';
+import { Space, Radius, TypeStyles, Stroke, AspectRatio, FontFamily } from '../../theme/designTokens';
+import { colorForId } from '../../utils/avatarColor';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { CachedImage } from '../CachedImage';
 import { VoiceMessageBubble } from './VoiceMessageBubble';
+import { VoiceTranscriptionPanel } from './VoiceTranscriptionPanel';
+import { useMessageTranslation } from '../../hooks/useMessageTranslation';
+import { useAppTranslation } from '../../i18n/useAppTranslation';
+import { getI18nLocale } from '../../i18n/i18n';
+import { useSettingsPreferences } from '../../context/SettingsPreferencesContext';
 
 interface Reaction {
   emoji: string;
@@ -25,6 +31,8 @@ interface ReplyInfo {
 }
 
 interface MessageBubbleProps {
+  id: string;
+  conversationId: string;
   text?: string;
   isMe: boolean;
   senderLabel?: string;
@@ -33,10 +41,16 @@ interface MessageBubbleProps {
   readStatus?: 'sending' | 'sent' | 'delivered' | 'read';
   reactions?: Reaction[];
   mediaUri?: string;
-  mediaType?: 'image' | 'video';
+  mediaType?: 'image' | 'video' | 'document';
   uploadStatus?: 'uploading' | 'failed' | 'sent';
+  documentUri?: string;
+  documentName?: string;
+  documentMimeType?: string;
   voiceDurationMs?: number;
   voiceWaveform?: number[];
+  voiceContainer?: 'm4a' | 'ogg' | 'webm' | 'mp4';
+  voiceCodec?: 'aac' | 'opus' | 'mp3';
+  voiceModerationState?: 'pending' | 'allowed' | 'limited' | 'blocked';
   replyTo?: ReplyInfo | null;
   isFirstInCluster?: boolean;
   isLastInCluster?: boolean;
@@ -64,6 +78,8 @@ interface MessageBubbleProps {
 }
 
 function MessageBubbleBase({
+  id,
+  conversationId,
   text,
   isMe,
   senderLabel,
@@ -74,8 +90,14 @@ function MessageBubbleBase({
   mediaUri,
   mediaType,
   uploadStatus,
+  documentUri,
+  documentName,
+  documentMimeType,
   voiceDurationMs,
   voiceWaveform,
+  voiceContainer,
+  voiceCodec,
+  voiceModerationState,
   replyTo,
   isFirstInCluster = true,
   isLastInCluster = true,
@@ -90,11 +112,31 @@ function MessageBubbleBase({
   onReactionPress,
   onRetry,
   onMediaPress,
-  onReplyPress,
-}: MessageBubbleProps) {
-  const { colors, isDark } = useAppTheme();
+  onReplyPress }: MessageBubbleProps) {
+  const { colors } = useAppTheme();
   const { isEnabled: motionEnabled, spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { t } = useAppTranslation('messaging');
+  const { autoTranslateMessages } = useSettingsPreferences();
+
+  // AI-powered message translation (WhatsApp/Instagram pattern)
+  // Shows a "Translate" link for messages in a foreign language
+  const userLocale = getI18nLocale();
+  const {
+    translatedText,
+    isLoading: isTranslating,
+    isTranslated,
+    isForeignLanguage,
+    error: translationError,
+    translate,
+    revert,
+    retry,
+  } = useMessageTranslation({
+    messageId: id,
+    text,
+    userLocale,
+    autoTranslate: autoTranslateMessages,
+  });
 
   // Bubble enter animation — fade in + scale-up (spring, 250ms).
   // Only applied to genuinely new messages; historical messages pass
@@ -107,13 +149,10 @@ function MessageBubbleBase({
           return {
             animations: {
               opacity: withTiming(1, { duration: Motion.duration.normal }),
-              transform: [{ scale: withSpring(1, spring.settle) }],
-            },
+              transform: [{ scale: withSpring(1, spring.settle) }] },
             initialValues: {
               opacity: 0,
-              transform: [{ scale: 0.92 }],
-            },
-          };
+              transform: [{ scale: 0.92 }] } };
         }
       : undefined;
 
@@ -124,26 +163,17 @@ function MessageBubbleBase({
         'worklet';
         return {
           animations: {
-            transform: [{ scale: withSpring(1, spring.tap) }],
-          },
+            transform: [{ scale: withSpring(1, spring.tap) }] },
           initialValues: {
-            transform: [{ scale: 0.8 }],
-          },
-        };
+            transform: [{ scale: 0.8 }] } };
       }
     : undefined;
   const hasFailed = status === 'failed' || uploadStatus === 'failed';
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
   const isMedia = !!mediaUri;
 
-  const bubbleBg = isMe
-    ? colors.brand
-    : isAgent
-      ? `${colors.brand}0D`
-      : colors.surfaceAlt;
   const bubbleText = isMe ? colors.textInverse : colors.textPrimary;
-  const metaColor = isMe ? `${colors.textInverse}80` : colors.textMuted;
-  const bubbleBorder = undefined;
+  const metaColor = isMe ? colors.scrimTextTertiary : colors.textMuted;
 
   const isStandalone = isFirstInCluster && isLastInCluster;
   const isTop = isFirstInCluster && !isLastInCluster;
@@ -173,19 +203,24 @@ function MessageBubbleBase({
       : { borderTopLeftRadius: Radius.chat, borderTopRightRadius: Radius.chat, borderBottomLeftRadius: Radius.sm, borderBottomRightRadius: Radius.chat }
     : { borderTopLeftRadius: Radius.chat, borderTopRightRadius: Radius.chat, borderBottomLeftRadius: Radius.chat, borderBottomRightRadius: Radius.chat };
 
+  const senderColor = React.useMemo(() => {
+    if (isAgent) return colors.brand;
+    return colorForId(senderLabel || 'member');
+  }, [isAgent, senderLabel, colors.brand]);
+
   return (
     <Reanimated.View style={[styles.row, isMe && styles.rowRight]} entering={bubbleEntering}>
       {showAvatar && !isMe ? (
         isAgent ? (
-          <View style={[styles.agentAvatar, { backgroundColor: `${colors.brand}12`, borderColor: `${colors.brand}26` }]}>
+          <View style={[styles.agentAvatar, { backgroundColor: colors.brandSubtle, borderColor: colors.borderSubtle }]}>
             <Ionicons
-              name={(agentAvatar ?? 'cube-outline') as keyof typeof Ionicons.glyphMap}
+              name={(agentAvatar ?? 'bulb-outline') as keyof typeof Ionicons.glyphMap}
               size={14}
               color={colors.brand}
             />
           </View>
         ) : (
-          <View style={styles.avatar}>
+          <View style={[styles.avatar, { backgroundColor: senderColor }]}>
             <Text style={styles.avatarText}>{(senderLabel ?? '?')[0].toUpperCase()}</Text>
           </View>
         )
@@ -196,11 +231,10 @@ function MessageBubbleBase({
       <View style={styles.bubbleColumn}>
         {senderLabel && !isMe && isFirstInCluster ? (
           <View style={styles.senderLabelRow}>
-            <Text style={styles.senderName}>{senderLabel}</Text>
+            <Text style={[styles.senderName, { color: senderColor }]}>{senderLabel}</Text>
             {isAgent ? (
-              <View style={[styles.aiChip, { backgroundColor: `${colors.brand}12`, borderColor: `${colors.brand}26` }]}>
-                <Ionicons name="cube-outline" size={9} color={colors.brand} />
-                <Text style={[styles.aiChipText, { color: colors.brand }]}>AI</Text>
+              <View style={[styles.aiChip, { backgroundColor: colors.brandSubtle, borderColor: colors.borderSubtle }]}>
+                <Ionicons name="bulb-outline" size={10} color={colors.brand} />
               </View>
             ) : null}
           </View>
@@ -217,12 +251,11 @@ function MessageBubbleBase({
             { opacity: pressed ? 0.88 : 1 },
             hasFailed && styles.bubbleFailed,
             isDraft && styles.bubbleDraft,
-            !!bubbleBorder && { borderColor: bubbleBorder },
           ]}
         accessibilityRole="button"
         >
           {replyTo ? (
-            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? `${colors.textInverse}30` : colors.border }]} accessibilityRole="button">
+            <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? colors.scrimTextTertiary : colors.border }]} accessibilityRole="button">
               <Text style={[styles.replyName, { color: metaColor }]}>
                 {replyTo.senderName}
               </Text>
@@ -249,29 +282,122 @@ function MessageBubbleBase({
                   <View style={styles.uploadProgressBar}>
                     <ActivityIndicator size="small" color={colors.textInverse} />
                   </View>
-                  <Text style={styles.uploadText}>Sending…</Text>
                 </View>
               ) : null}
             </Pressable>
           ) : null}
 
+          {documentUri ? (
+            <Pressable
+              onPress={() => {
+                if (documentUri.startsWith('http')) {
+                  Linking.openURL(documentUri).catch(() => {});
+                }
+              }}
+              style={[styles.documentWrap, { backgroundColor: isMe ? 'rgba(255,255,255,0.12)' : colors.surfaceAlt }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Document: ${documentName ?? 'file'}`}
+            >
+              <View style={[styles.documentIconWrap, { backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : colors.brandSubtle }]}>
+                <Ionicons
+                  name={
+                    documentMimeType?.includes('pdf') ? 'document-text-outline'
+                    : documentMimeType?.includes('zip') || documentMimeType?.includes('compressed') ? 'archive-outline'
+                    : 'document-outline'
+                  }
+                  size={24}
+                  color={isMe ? colors.textInverse : colors.brand}
+                />
+              </View>
+              <View style={styles.documentInfo}>
+                <Text style={[styles.documentName, { color: bubbleText }]} numberOfLines={2}>
+                  {documentName ?? 'File'}
+                </Text>
+                {documentMimeType ? (
+                  <Text style={[styles.documentMeta, { color: metaColor }]} numberOfLines={1}>
+                    {documentMimeType}
+                  </Text>
+                ) : null}
+              </View>
+              <Ionicons name="download-outline" size={18} color={isMe ? colors.textInverse : colors.textMuted} />
+            </Pressable>
+          ) : null}
+
           {voiceDurationMs != null ? (
-            <VoiceMessageBubble
-              durationMs={voiceDurationMs}
-              isMe={isMe}
-              waveform={voiceWaveform}
-            />
+            <>
+              <VoiceMessageBubble
+                messageId={id}
+                conversationId={conversationId}
+                durationMs={voiceDurationMs}
+                isMe={isMe}
+                waveform={voiceWaveform}
+                container={voiceContainer}
+                codec={voiceCodec}
+                moderationState={voiceModerationState}
+              />
+              <VoiceTranscriptionPanel
+                conversationId={conversationId}
+                messageId={id}
+              />
+            </>
           ) : null}
 
           {text ? (
             <>
-              {isDraft ? (
-                <View style={styles.draftBadge}>
-                  <Ionicons name="create-outline" size={10} color={colors.textMuted} />
-                  <Text style={[styles.draftLabel, { color: colors.textMuted }]}>Draft</Text>
+              <Text style={[styles.messageText, { color: bubbleText }]}>{text}</Text>
+
+              {/* AI translation — WhatsApp/Telegram inline pattern: one
+                  subtle link, no meta chrome. */}
+              {isForeignLanguage && !isMe && !isDraft ? (
+                <View style={styles.translationRow}>
+                  {isTranslated && translatedText ? (
+                    <>
+                      <Text style={[styles.translatedText, { color: bubbleText }]}>
+                        {translatedText}
+                      </Text>
+                      <Pressable
+                        onPress={revert}
+                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('messaging.translation.showOriginal')}
+                      >
+                        <Text style={[styles.translationLink, { color: metaColor }]}>
+                          {t('messaging.translation.showOriginal')}
+                        </Text>
+                      </Pressable>
+                    </>
+                  ) : isTranslating ? (
+                    <View style={styles.translationLoadingRow}>
+                      <ActivityIndicator size={10} color={metaColor} />
+                      <Text style={[styles.translationLink, { color: metaColor }]}>
+                        {t('messaging.translation.translating')}
+                      </Text>
+                    </View>
+                  ) : translationError ? (
+                    <Pressable
+                      onPress={retry}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('messaging.translation.translate')}
+                    >
+                      <Text style={[styles.translationLink, { color: metaColor }]}>
+                        {t('messaging.translation.translationFailed')} · {t('messaging.translation.translate')}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      onPress={translate}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('messaging.translation.translate')}
+                    >
+                      <Text style={[styles.translationLink, { color: metaColor }]}>
+                        {t('messaging.translation.translate')}
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
               ) : null}
-              <Text style={[styles.messageText, { color: bubbleText }]}>{text}</Text>
             </>
           ) : null}
 
@@ -305,9 +431,8 @@ function MessageBubbleBase({
         </Pressable>
 
         {hasFailed && onRetry ? (
-          <Pressable onPress={onRetry} style={styles.retryBadge} accessibilityRole="button">
-            <Ionicons name="refresh" size={11} color={colors.danger} />
-            <Text style={styles.retryText}>Tap to retry</Text>
+          <Pressable onPress={onRetry} style={styles.retryBadge} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Retry sending message">
+            <Ionicons name="refresh" size={14} color={colors.danger} />
           </Pressable>
         ) : null}
 
@@ -322,8 +447,7 @@ function MessageBubbleBase({
             accessibilityRole="button"
             accessibilityLabel="Retry sending agent draft"
           >
-            <Ionicons name="refresh" size={11} color={colors.danger} />
-            <Text style={styles.retryText}>Tap to retry</Text>
+            <Ionicons name="refresh" size={14} color={colors.danger} />
           </Pressable>
         ) : null}
 
@@ -338,8 +462,7 @@ function MessageBubbleBase({
             accessibilityRole="button"
             accessibilityLabel="Send agent draft"
           >
-            <Ionicons name="send" size={11} color={colors.brand} />
-            <Text style={[styles.draftConfirmText, { color: colors.brand }]}>Send</Text>
+            <Ionicons name="send" size={14} color={colors.brand} />
           </Pressable>
         ) : null}
 
@@ -360,25 +483,23 @@ function MessageBubbleBase({
 
 export const MessageBubble = React.memo(MessageBubbleBase);
 
-const createStyles = (colors: any) => StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Space.sm,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   rowRight: {
-    flexDirection: 'row-reverse',
-  },
+    flexDirection: 'row-reverse' },
   avatar: {
     width: 28,
     height: 28,
     borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Space.xs,
-  },
+    borderWidth: 1.5,
+    borderColor: colors.background },
   agentAvatar: {
     width: 28,
     height: 28,
@@ -386,32 +507,25 @@ const createStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Space.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   avatarText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: 12,
+    fontFamily: FontFamily.bold,
+    color: '#FFFFFF' },
   avatarSpacer: {
-    width: 28,
-  },
+    width: 28 },
   bubbleColumn: {
     maxWidth: '75%',
-    gap: 3,
-  },
+    gap: 3 },
   senderLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
     marginBottom: 2,
-    marginLeft: Space.xs,
-  },
+    marginLeft: Space.xs },
   senderName: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold },
   aiChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -419,125 +533,84 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  aiChipText: {
-    fontSize: Type.meta.size,
-    lineHeight: Type.meta.lineHeight,
-    fontFamily: Typography.family.semibold,
-    letterSpacing: Type.label.letterSpacing,
-  },
+    borderWidth: StyleSheet.hairlineWidth },
   bubble: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.sm - 1,
-    gap: 2,
-  },
+    gap: 2 },
   bubbleMedia: {
     padding: 0,
     overflow: 'hidden',
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   bubbleMe: {
     backgroundColor: colors.brand,
-    alignSelf: 'flex-end',
-  },
+    alignSelf: 'flex-end' },
   bubbleAgent: {
-    alignSelf: 'flex-start',
-  },
+    alignSelf: 'flex-start' },
   bubbleThem: {
     backgroundColor: colors.surfaceAlt,
     alignSelf: 'flex-start',
-  },
-  bubbleFailed: {
-    backgroundColor: `${colors.danger}12`,
     borderWidth: 1,
-    borderColor: `${colors.danger}30`,
-  },
+    borderColor: colors.borderSubtle },
+  bubbleFailed: {
+    backgroundColor: colors.dangerSubtle,
+    borderWidth: Stroke.standard,
+    borderColor: colors.dangerBorder },
   bubbleDraft: {
     backgroundColor: `${colors.surfaceAlt}80`,
-    borderWidth: 1,
-    borderColor: `${colors.border}80`,
-    borderStyle: 'dashed',
-  },
-  draftBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginBottom: Space.xs,
-  },
-  draftLabel: {
-    fontSize: Type.meta.size - 2,
-    fontFamily: Typography.family.medium,
-    letterSpacing: Type.label.letterSpacing,
-  },
+    borderWidth: Stroke.standard,
+    borderColor: colors.borderSubtle },
   draftConfirmBadge: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
     marginTop: Space.xs,
     marginLeft: Space.xs,
-    paddingHorizontal: Space.sm - 1,
-    paddingVertical: Space.xs,
+    width: 32,
+    height: 32,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.brand}12`,
-    alignSelf: 'flex-start',
-    minHeight: 32,
-  },
-  draftConfirmText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-  },
+    backgroundColor: colors.brandSubtle,
+    alignSelf: 'flex-start' },
   replyBlock: {
     borderLeftWidth: 2,
     paddingLeft: Space.sm - 1,
     marginBottom: Space.xs,
-    gap: 1,
-  },
+    gap: 1 },
   replyName: {
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   replyText: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
-    lineHeight: Type.caption.lineHeight,
-  },
+    lineHeight: TypographyV2.meta.lineHeight },
   messageText: {
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     fontFamily: TypeStyles.body.fontFamily,
-    lineHeight: Type.body.lineHeight + 2,
-    letterSpacing: Type.body.letterSpacing,
-  },
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    letterSpacing: TypographyV2.body.letterSpacing },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 4,
     marginTop: 2,
-    minHeight: 14,
-  },
+    minHeight: 14 },
   metaRowMe: {
-    opacity: 0.7,
-  },
+    opacity: 0.7 },
   timestamp: {
-    fontSize: Type.meta.size - 1,
-    fontFamily: TypeStyles.body.fontFamily,
-  },
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: TypeStyles.body.fontFamily },
   statusWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-  },
+    gap: 2 },
   mediaWrap: {
     backgroundColor: 'transparent',
-    position: 'relative',
-  },
+    position: 'relative' },
   mediaImage: {
     width: '100%',
     minWidth: 200,
     maxWidth: 280,
-    aspectRatio: 1.1,
-  },
+    aspectRatio: AspectRatio.portrait },
   videoBadge: {
     position: 'absolute',
     top: '50%',
@@ -549,51 +622,34 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   uploadOverlay: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   uploadProgressBar: {
-    marginBottom: 2,
-  },
-  uploadText: {
-    color: colors.textInverse,
-    fontSize: Type.caption.size,
-    fontFamily: Typography.family.semibold,
-  },
+    marginBottom: 0 },
   retryBadge: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
     marginTop: Space.xs,
     marginLeft: Space.xs,
-    paddingHorizontal: Space.sm - 1,
-    paddingVertical: Space.xs,
+    width: 32,
+    height: 32,
     borderRadius: Radius.full,
-    backgroundColor: `${colors.danger}10`,
-    alignSelf: 'flex-start',
-  },
-  retryText: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.danger,
-  },
+    backgroundColor: colors.dangerSubtle,
+    alignSelf: 'flex-start' },
   reactions: {
     flexDirection: 'row',
     gap: 4,
     marginTop: 1,
-    marginLeft: Space.xs,
-  },
+    marginLeft: Space.xs },
   reactionsRight: {
     marginLeft: 0,
     marginRight: Space.xs,
-    alignSelf: 'flex-end',
-  },
+    alignSelf: 'flex-end' },
   reactionChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -602,17 +658,60 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderRadius: Radius.full,
     paddingHorizontal: Space.sm - 1,
     paddingVertical: Space.xs,
-    minHeight: 26,
-  },
+    minHeight: 26 },
   reactionChipActive: {
-    backgroundColor: `${colors.brand}12`,
-  },
+    backgroundColor: colors.brandSubtle },
   reactionEmoji: {
-    fontSize: Type.caption.size,
-  },
+    fontSize: TypographyV2.meta.size },
   reactionCount: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textSecondary,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
+  // ── AI translation UI ────────────────────────────────────────────
+  translationRow: {
+    marginTop: Space.xs,
+    gap: 3,
   },
+  translationLoadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  translatedText: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypeStyles.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight + 1,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    fontStyle: 'italic',
+  },
+  translationLink: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textDecorationLine: 'underline',
+  },
+  // ── Document attachment ───────────────────────────────────────────
+  documentWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    borderRadius: Radius.md,
+    padding: Space.sm,
+    marginBottom: Space.xs },
+  documentIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  documentInfo: {
+    flex: 1,
+    gap: 2 },
+  documentName: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight },
+  documentMeta: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
 });

@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Linking, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Text, View, StyleSheet, Linking, Pressable } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
@@ -10,7 +9,8 @@ import { SettingsRow } from '../components/settings/SettingsRow';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../theme/designTokens';
+import { Space, Radius } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { fetchPrivacyPreferences, updateActivityStatus, updateSearchVisibility } from '../services/accountApi';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 
@@ -107,19 +107,19 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen header={<FlagshipHeader title="Privacy & safety" onBack={() => navigation.goBack()} />}>
-      {/* Privacy posture hero — error card on fetch failure, skeleton during hydration, score when hydrated */}
+      {/* Privacy posture — flat rows, no card wrapper.
+          Error / hydrating / hydrated states all use SettingsRow so the
+          icon sits on a transparent 44pt hit target with no decorative circle. */}
       {fetchError ? (
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: colors.danger }]}>
-              <Ionicons name="cloud-offline-outline" size={20} color={colors.textInverse} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Couldn't load privacy settings</Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                Check your connection and try again.
-              </Text>
-            </View>
+        <SettingsSection title="Privacy posture">
+          <SettingsRow
+            icon="cloud-offline-outline"
+            iconColor={colors.danger}
+            title="Couldn't load privacy settings"
+            subtitle="Check your connection and try again."
+            isFirst
+            isLast
+          >
             <Pressable
               style={[styles.retryBtn, { borderColor: colors.brand }]}
               onPress={loadPrivacyPrefs}
@@ -128,38 +128,37 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
             >
               <Text style={[styles.retryBtnText, { color: colors.brand }]}>Retry</Text>
             </Pressable>
-          </View>
-        </View>
+          </SettingsRow>
+        </SettingsSection>
       ) : isHydrating ? (
-        <View style={[styles.heroCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: colors.border }]} />
-            <View style={styles.heroText}>
-              <View style={[styles.skeletonLine, { width: 120, height: Type.bodyStrong.size }]} />
-              <View style={[styles.skeletonLine, { width: 180, height: Type.caption.size, marginTop: Space.xs / 2 }]} />
-            </View>
+        <SettingsSection title="Privacy posture">
+          <View style={styles.skeletonWrap}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={[styles.skeletonBar, { width: i === 0 ? 180 : 220 }]} />
+            ))}
           </View>
-        </View>
+        </SettingsSection>
       ) : (
-        <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.heroRow}>
-            <View style={[styles.heroIcon, { backgroundColor: postureColor }]}>
-              <Ionicons name="checkmark-done-outline" size={20} color={colors.textInverse} />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>Privacy posture</Text>
-              <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
-                {activeCount} of {postureItems.length} protections active
+        <SettingsSection title="Privacy posture">
+          <SettingsRow
+            icon="checkmark-circle-outline"
+            iconColor={postureColor}
+            title="Privacy posture"
+            subtitle={`${activeCount} of ${postureItems.length} protections active`}
+            isFirst
+            isLast
+          >
+            {/* TODO: replace `${postureColor}18` with postureColorSubtle token when available */}
+            <View style={[styles.postureBadge, { backgroundColor: `${postureColor}18` }]}>
+              <Text style={[styles.postureBadgeText, { color: postureColor }]}>
+                {postureLabel}
               </Text>
             </View>
-            <View style={[styles.postureBadge, { backgroundColor: postureColor + '18' }]}>
-              <Text style={[styles.postureBadgeText, { color: postureColor }]}>{postureLabel}</Text>
-            </View>
-          </View>
-        </View>
+          </SettingsRow>
+        </SettingsSection>
       )}
 
-      <SettingsSection title="Visibility" noCard>
+      <SettingsSection title="Visibility">
         <SettingsRow
           icon="eye-outline"
           title="Private profile"
@@ -187,7 +186,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         />
       </SettingsSection>
 
-      <SettingsSection title="Shop activity" noCard>
+      <SettingsSection title="Shop activity">
         <SettingsRow
           icon="bag-outline"
           title="Holiday mode"
@@ -199,7 +198,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         />
       </SettingsSection>
 
-      <SettingsSection title="Messaging" noCard>
+      <SettingsSection title="Messaging">
         <SettingsRow
           icon="chatbubble-ellipses-outline"
           title="Chat privacy"
@@ -210,7 +209,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         />
       </SettingsSection>
 
-      <SettingsSection title="Blocked users" noCard>
+      <SettingsSection title="Blocked users">
         <SettingsRow
           icon="ban-outline"
           title="Manage blocked users"
@@ -225,7 +224,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           A marketplace that visibly educates users on safe trading practices
           builds reflective trust. No card wrapper — just a section title and
           checkmark rows, matching the flat composition used elsewhere. */}
-      <SettingsSection title="Trading safely" noCard>
+      <SettingsSection title="Trading safely">
         {SAFETY_TIPS.map((tip, i) => (
           <SettingsRow
             key={tip}
@@ -238,7 +237,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         ))}
       </SettingsSection>
 
-      <SettingsSection title="Data & analytics" noCard>
+      <SettingsSection title="Data & analytics">
         <SettingsRow
           icon="analytics-outline"
           title="Analytics opt-out"
@@ -250,7 +249,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         />
       </SettingsSection>
 
-      <SettingsSection title="Legal" noCard>
+      <SettingsSection title="Legal">
         <SettingsRow
           icon="document-text-outline"
           title="Privacy Policy"
@@ -258,7 +257,7 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
           isFirst
         />
         <SettingsRow
-          icon="shield-checkmark-outline"
+          icon="checkmark-circle-outline"
           title="Terms of Service"
           onPress={() => void handleOpenExternal('https://thryftverse.app/terms')}
           isLast
@@ -270,57 +269,27 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    heroCard: {
-      borderRadius: Radius.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      padding: Space.md,
-      marginBottom: Space.md,
-    },
-    heroRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.md,
-    },
-    heroIcon: {
-      width: Space.xxl,
-      height: Space.xxl,
-      borderRadius: Radius.full,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    heroText: { flex: 1 },
-    heroTitle: {
-      fontSize: Type.bodyStrong.size,
-      fontFamily: Typography.family.semibold,
-      letterSpacing: Type.body.letterSpacing,
-    },
-    heroSubtitle: {
-      fontSize: Type.caption.size,
-      fontFamily: Typography.family.regular,
-      marginTop: Space.xs / 2,
-    },
-    postureBadge: {
-      borderRadius: Radius.full,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-    },
-    postureBadgeText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-    },
-    skeletonLine: {
-      borderRadius: Radius.sm,
-      backgroundColor: colors.border,
-    },
     retryBtn: {
       borderWidth: StyleSheet.hairlineWidth + 0.5,
       borderRadius: Radius.full,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-    },
+      paddingVertical: Space.xs },
     retryBtnText: {
-      fontSize: Type.meta.size,
-      fontFamily: Typography.family.semibold,
-    },
-  });
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily },
+    skeletonWrap: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.lg,
+      gap: Space.md },
+    skeletonBar: {
+      height: 20,
+      borderRadius: Radius.sm,
+      backgroundColor: colors.surfaceAlt },
+    postureBadge: {
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.full },
+    postureBadgeText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily } });
 }

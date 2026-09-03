@@ -3,20 +3,18 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
+  useWindowDimensions,
   FlatList,
-  ViewToken,
-} from 'react-native';
+  ViewToken } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Typography, Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 export interface HeroItem {
   id: string;
@@ -34,7 +32,8 @@ interface Props {
 
 export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props) {
   const { colors, isDark } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
+  const { width: SCREEN_W } = useWindowDimensions();
+  const styles = React.useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList<HeroItem>>(null);
   const autoPlayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -66,8 +65,7 @@ export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props
   ).current;
 
   const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 60,
-  }).current;
+    itemVisiblePercentThreshold: 60 }).current;
 
   const renderItem = useCallback(
     ({ item }: { item: HeroItem }) => (
@@ -153,42 +151,37 @@ export function EditorialDiscoveryHero({ items, autoPlayInterval = 5000 }: Props
   );
 }
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, screenWidth: number) {
   return StyleSheet.create({
   slide: {
-    width: SCREEN_W,
-    height: SCREEN_W * 1.05,
-    position: 'relative',
-  },
+    width: screenWidth,
+    height: screenWidth * 1.05,
+    position: 'relative' },
   media: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   infoOverlay: {
     position: 'absolute',
     bottom: 52,
     left: Space.md,
-    right: 120,
-  },
+    right: 120 },
   heroTitle: {
     fontFamily: Typography.family.bold,
-    fontSize: Type.priceHero.size,
+    fontSize: TypographyV2.priceHero.size,
     color: colors.textPrimary,
     letterSpacing: -0.6,
     lineHeight: 34,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
+    textShadowRadius: 4 },
   heroSubtitle: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
+    fontSize: TypographyV2.body.size,
     color: colors.textSecondary,
     marginTop: Space.xs,
     textShadowColor: colors.shadow,
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
+    textShadowRadius: 3 },
   visitBtn: {
     position: 'absolute',
     bottom: 52,
@@ -199,31 +192,25 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.full,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
+    gap: 6 },
   visitBtnText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.caption.size,
-    color: colors.background,
-  },
+    fontSize: TypographyV2.meta.size,
+    color: colors.background },
   dotsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
     marginTop: 12,
-    marginBottom: Space.sm,
-  },
+    marginBottom: Space.sm },
   dot: {
     width: 6,
     height: 6,
     borderRadius: Radius.sm,
-    backgroundColor: colors.borderSubtle,
-  },
+    backgroundColor: colors.borderSubtle },
   dotActive: {
     width: 18,
     borderRadius: Radius.sm,
-    backgroundColor: colors.textPrimary,
-  },
-  });
+    backgroundColor: colors.textPrimary } });
 }

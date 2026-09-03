@@ -10,10 +10,9 @@ import Reanimated, {
   withTiming,
   runOnJS,
   useReducedMotion,
-  Easing,
-  type SharedValue,
-} from 'react-native-reanimated';
-import { Space, Radius, Type, Typography, Control, Stroke } from '../theme/designTokens';
+  type SharedValue } from 'react-native-reanimated';
+import { Space, Radius, Typography, Control, Stroke, Elevation } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
 import { IconGrammar } from '../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
@@ -24,7 +23,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { Motion } from '../theme/motionTokens';
 import type { CreatorLayer } from './composition';
-import { getLayerAccentColor, getLayerCategoryLabel } from '../components/poster/shared/layerAccents';
+import { getLayerAccentColor } from '../components/poster/shared/layerAccents';
 
 export interface CreatorLayersSheetProps {
   visible: boolean;
@@ -34,7 +33,7 @@ export interface CreatorLayersSheetProps {
 const LAYER_ICONS: Record<CreatorLayer['type'], React.ComponentProps<typeof Ionicons>['name']> = {
   media: 'images-outline',
   text: 'text-outline',
-  product: 'pricetag-outline',
+  product: 'bag-handle-outline',
   mention: 'at-outline',
   look: 'shirt-outline',
   vote: 'stats-chart-outline',
@@ -49,13 +48,12 @@ const LAYER_ICONS: Record<CreatorLayer['type'], React.ComponentProps<typeof Ioni
   music: 'musical-notes-outline',
   link: 'link-outline',
   location: 'location-outline',
-  hashtag: 'pricetag-outline',
+  hashtag: 'bag-handle-outline',
   time: 'time-outline',
-  weather: 'partly-sunny-outline',
-};
+  weather: 'partly-sunny-outline' };
 
-const THUMB = 40;
-const ROW_HEIGHT = 56;
+const THUMB = 48;
+const ROW_HEIGHT = 64;
 const ROW_GAP = Space.sm;
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -123,9 +121,8 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
     setDraggingId(id);
     if (!reduceMotion) {
       LayoutAnimation.configureNext({
-        duration: 300,
-        update: { type: LayoutAnimation.Types.easeInEaseOut },
-      });
+        duration: Motion.duration.slow,
+        update: { type: LayoutAnimation.Types.easeInEaseOut } });
     }
     reorderLayer(id, dir);
   }, [haptic, reorderLayer, reduceMotion]);
@@ -144,10 +141,9 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
     haptic.warning();
     if (!reduceMotion) {
       LayoutAnimation.configureNext({
-        duration: 250,
+        duration: Motion.duration.slow,
         update: { type: LayoutAnimation.Types.easeInEaseOut },
-        delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-      });
+        delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity } });
     }
     removeLayer(id);
   }, [haptic, reduceMotion, removeLayer]);
@@ -177,10 +173,9 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
       setOverflowLayer(null);
       if (!reduceMotion) {
         LayoutAnimation.configureNext({
-          duration: 300,
+          duration: Motion.duration.slow,
           update: { type: LayoutAnimation.Types.easeInEaseOut },
-          delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-        });
+          delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity } });
       }
       switch (action) {
         case 'front':
@@ -204,6 +199,34 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
     [overflowLayer, haptic, reorderLayer, duplicateLayer, removeLayer, reduceMotion],
   );
 
+  const handleReorderFromDrag = useCallback(
+    (startIdx: number, deltaRows: number) => {
+      const count = layers.length;
+      const targetIdx = Math.max(0, Math.min(count - 1, startIdx + deltaRows));
+      if (targetIdx === startIdx) return;
+      const dir: 'forward' | 'backward' = targetIdx > startIdx ? 'forward' : 'backward';
+      const steps = Math.abs(targetIdx - startIdx);
+      const layerId = layers[startIdx]?.id;
+      if (!layerId) return;
+      let stepCount = 0;
+      const doStep = () => {
+        if (stepCount >= steps) return;
+        stepCount += 1;
+        if (!reduceMotion) {
+          LayoutAnimation.configureNext({
+            duration: Motion.duration.normal,
+            update: { type: LayoutAnimation.Types.easeInEaseOut } });
+        }
+        reorderLayer(layerId, dir);
+        if (stepCount < steps) {
+          setTimeout(doStep, 16);
+        }
+      };
+      doStep();
+    },
+    [layers, reduceMotion, reorderLayer],
+  );
+
   const panGesture = useRef(
     Gesture.Pan()
       .activateAfterLongPress(300)
@@ -219,35 +242,7 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
         runOnJS(setReorderMode)(false);
         if (deltaRows !== 0 && dragStartIndex.value >= 0) {
           const startIdx = dragStartIndex.value;
-          const targetIdx = Math.max(0, Math.min(layers.length - 1, startIdx + deltaRows));
-          let dir: 'forward' | 'backward' | null = null;
-          if (targetIdx > startIdx) {
-            dir = 'forward';
-          } else if (targetIdx < startIdx) {
-            dir = 'backward';
-          }
-          if (dir) {
-            const steps = Math.abs(targetIdx - startIdx);
-            const layerId = layers[startIdx].id;
-            runOnJS((() => {
-              let count = 0;
-              const doStep = () => {
-                if (count >= steps) return;
-                count += 1;
-                if (!reduceMotion) {
-                  LayoutAnimation.configureNext({
-                    duration: 200,
-                    update: { type: LayoutAnimation.Types.easeInEaseOut },
-                  });
-                }
-                reorderLayer(layerId, dir as 'forward' | 'backward');
-                if (count < steps) {
-                  setTimeout(doStep, 16);
-                }
-              };
-              doStep();
-            }))();
-          }
+          runOnJS(handleReorderFromDrag)(startIdx, deltaRows);
         }
         dragStartIndex.value = -1;
       })
@@ -256,29 +251,25 @@ export function CreatorLayersSheet({ visible, onClose }: CreatorLayersSheetProps
   return (
     <SheetContainer visible={visible} onClose={handleClose} maxHeight={0.7}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>{reorderMode ? 'Reorder Layers' : 'Layers'}</Text>
-        {reorderMode ? (
-          <PressScale onPress={handleExitReorder} style={styles.doneBtn} accessibilityLabel="Done reordering" accessibilityHint="Exits reorder mode" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
-          </PressScale>
-        ) : (
-          <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close layers" accessibilityHint="Closes the layers panel" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
-          </PressScale>
-        )}
+        <PressScale onPress={handleClose} style={styles.closeBtn} accessibilityLabel="Close layers" accessibilityHint="Closes the layers panel" accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Ionicons name="close" size={IconGrammar.standard} color={colors.textSecondary} />
+        </PressScale>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>{reorderMode ? 'Reorder' : 'Layers'}</Text>
+        <PressScale onPress={reorderMode ? handleExitReorder : handleClose} style={styles.doneBtn} accessibilityLabel={reorderMode ? 'Done reordering' : 'Done'} accessibilityHint={reorderMode ? 'Exits reorder mode' : 'Closes the layers panel'} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={[styles.doneBtnText, { color: colors.brand }]}>Done</Text>
+        </PressScale>
       </View>
 
       <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent}>
         {layers.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No layers yet</Text>
-            <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>Add content from the dock below</Text>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No layers yet</Text>
           </View>
         ) : (
           <>
             {reorderMode && (
               <Text style={[styles.reorderHint, { color: colors.textMuted }]}>
-                Long-press a layer to drag, or use the arrows to reorder
+                Drag to reorder
               </Text>
             )}
             {layers.map((layer, index) => {
@@ -361,12 +352,10 @@ function LayerRow({
   onSelect,
   onReorder,
   onVisibility,
-  onLock,
   onQuickDelete,
   onQuickLock,
   onOverflow,
-  panGesture,
-}: LayerRowProps) {
+  panGesture }: LayerRowProps) {
   const rowAnimatedStyle = useAnimatedStyle(() => {
     if (!dragY || reduceMotion) {
       return { transform: [{ translateY: 0 }], opacity: 1, zIndex: 0, elevation: 0 };
@@ -375,8 +364,7 @@ function LayerRow({
       transform: [{ translateY: dragY.value }],
       opacity: 0.92,
       zIndex: 100,
-      elevation: 8,
-    };
+      elevation: 8 };
   });
 
   // Refined thumbnail appearance: subtle opacity fade (0→1, 150ms, ease-out).
@@ -386,7 +374,7 @@ function LayerRow({
     if (reduceMotion) {
       thumbOpacity.value = 1;
     } else {
-      thumbOpacity.value = withTiming(1, { duration: 150, easing: Easing.out(Easing.ease) });
+      thumbOpacity.value = withTiming(1, { duration: Motion.duration.deleteDismiss, easing: Motion.easing.entrance });
     }
   }, [reduceMotion, thumbOpacity]);
   const thumbAnimatedStyle = useAnimatedStyle(() => ({ opacity: thumbOpacity.value }));
@@ -397,29 +385,11 @@ function LayerRow({
         styles.layerRow,
         {
           borderBottomColor: colors.borderSubtle,
-          opacity: layer.locked ? 0.5 : (layer.hidden ? 0.3 : 1),
-        },
+          opacity: layer.locked ? 0.5 : (layer.hidden ? 0.3 : 1) },
+        isSelected && !reorderMode && { backgroundColor: colors.brandSubtle },
         isDragging && styles.layerRowDragging,
       ]}
     >
-      {isSelected && !reorderMode && <View style={[styles.selectionAccent, { backgroundColor: colors.brand }]} />}
-
-      {/* Drag handle */}
-      <PressScale
-        onLongPress={() => onLongPressRow(layer.id)}
-        style={styles.dragHandle}
-        accessibilityLabel="Drag handle, long press to reorder"
-        accessibilityHint="Long press then use arrows to move this layer"
-        accessibilityRole="button"
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <Ionicons
-          name="menu-outline"
-          size={IconGrammar.standard}
-          color={reorderMode ? colors.brand : colors.textMuted}
-        />
-      </PressScale>
-
       <PressScale
         onPress={() => { if (!reorderMode) onSelect(layer.id); }}
         onLongPress={() => onLongPressRow(layer.id)}
@@ -446,21 +416,12 @@ function LayerRow({
             </View>
           )}
         </Reanimated.View>
-        <View style={styles.layerInfo}>
-          <View style={styles.layerNameRow}>
-            <Ionicons
-              name={LAYER_ICONS[layer.type]}
-              size={IconGrammar.metadata}
-              color={layer.hidden ? colors.textMuted : getLayerAccentColor(layer.type)}
-            />
-            <Text
-              style={[styles.layerName, { color: isSelected && !reorderMode ? colors.brand : colors.textPrimary }, layer.hidden && { textDecorationLine: 'line-through', color: colors.textMuted }]}
-              numberOfLines={1}
-            >
-              {getLayerDisplayName(layer)}
-            </Text>
-          </View>
-        </View>
+        <Text
+          style={[styles.layerName, { color: colors.textPrimary }, layer.hidden && { textDecorationLine: 'line-through', color: colors.textMuted }]}
+          numberOfLines={1}
+        >
+          {getLayerDisplayName(layer)}
+        </Text>
       </PressScale>
 
       <View style={styles.rowActions}>
@@ -488,44 +449,13 @@ function LayerRow({
         ) : (
           <>
             <PressScale
-              onPress={() => onReorder(layer.id, 'forward')}
-              style={styles.actionBtn}
-              accessibilityLabel="Move layer up"
-              accessibilityRole="button"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons name="chevron-up" size={IconGrammar.standard} color={colors.textSecondary} />
-            </PressScale>
-            <PressScale
-              onPress={() => onReorder(layer.id, 'backward')}
-              style={styles.actionBtn}
-              accessibilityLabel="Move layer down"
-              accessibilityRole="button"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons name="chevron-down" size={IconGrammar.standard} color={colors.textSecondary} />
-            </PressScale>
-            <PressScale
               onPress={() => onVisibility(layer.id)}
               style={styles.actionBtn}
               accessibilityLabel={layer.hidden ? 'Show layer' : 'Hide layer'}
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={IconGrammar.standard} color={colors.textSecondary} />
-            </PressScale>
-            <PressScale
-              onPress={() => onLock(layer.id)}
-              style={styles.actionBtn}
-              accessibilityLabel={layer.locked ? 'Unlock layer' : 'Lock layer'}
-              accessibilityRole="button"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons
-                name={layer.locked ? 'lock-closed' : 'lock-open-outline'}
-                size={IconGrammar.standard}
-                color={layer.locked ? colors.warning : colors.textSecondary}
-              />
+              <Ionicons name={layer.hidden ? 'eye-off-outline' : 'eye-outline'} size={24} color={colors.textSecondary} />
             </PressScale>
             <PressScale
               onPress={() => onOverflow(layer)}
@@ -535,7 +465,17 @@ function LayerRow({
               accessibilityRole="button"
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="ellipsis-horizontal" size={IconGrammar.standard} color={colors.textSecondary} />
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.textMuted} />
+            </PressScale>
+            <PressScale
+              onLongPress={() => onLongPressRow(layer.id)}
+              style={styles.actionBtn}
+              accessibilityLabel="Drag handle, long press to reorder"
+              accessibilityHint="Long press then use arrows to move this layer"
+              accessibilityRole="button"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="reorder-three-outline" size={24} color={colors.textMuted} />
             </PressScale>
           </>
         )}
@@ -565,14 +505,12 @@ function LayerRow({
           icon: layer.locked ? 'lock-open-outline' : 'lock-closed',
           label: layer.locked ? 'Unlock' : 'Lock',
           onPress: () => onQuickLock(layer.id),
-          color: colors.commerceTrust,
-        }}
+          color: colors.commerceTrust }}
         rightAction={{
           icon: 'trash-outline',
           label: 'Delete',
           onPress: () => onQuickDelete(layer.id),
-          color: colors.danger,
-        }}
+          color: colors.danger }}
         swipeThreshold={80}
       >
         {rowContent}
@@ -600,8 +538,7 @@ function LayerOverflowActionSheet({
   colors,
   reduceMotion,
   onClose,
-  onAction,
-}: LayerOverflowActionSheetProps) {
+  onAction }: LayerOverflowActionSheetProps) {
   const translateY = useSharedValue(400);
   const backdropOpacity = useSharedValue(0);
   const mounted = useRef(false);
@@ -614,26 +551,24 @@ function LayerOverflowActionSheet({
         backdropOpacity.value = 1;
       } else {
         translateY.value = withSpring(0, Motion.spring.entrance);
-        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Easing.out(Easing.ease) });
+        backdropOpacity.value = withTiming(1, { duration: Motion.duration.normal, easing: Motion.easing.entrance });
       }
     } else if (mounted.current) {
       if (reduceMotion) {
         translateY.value = 400;
         backdropOpacity.value = 0;
       } else {
-        translateY.value = withTiming(400, { duration: Motion.duration.normal, easing: Easing.in(Easing.ease) });
+        translateY.value = withTiming(400, { duration: Motion.duration.normal, easing: Motion.easing.exit });
         backdropOpacity.value = withTiming(0, { duration: Motion.duration.normal });
       }
     }
   }, [layer, reduceMotion, translateY, backdropOpacity]);
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+    transform: [{ translateY: translateY.value }] }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
+    opacity: backdropOpacity.value }));
 
   if (!layer && !mounted.current) return null;
 
@@ -655,8 +590,7 @@ function LayerOverflowActionSheet({
           {
             backgroundColor: colors.surface,
             borderTopLeftRadius: Radius.xl,
-            borderTopRightRadius: Radius.xl,
-          },
+            borderTopRightRadius: Radius.xl },
           sheetStyle,
         ]}
       >
@@ -666,11 +600,6 @@ function LayerOverflowActionSheet({
         <Text style={[overflowStyles.title, { color: colors.textPrimary }]} numberOfLines={1}>
           {layer ? getLayerDisplayName(layer) : ''}
         </Text>
-        {layer && (
-          <Text style={[overflowStyles.subtitle, { color: colors.textMuted }]}>
-            {capitalizeFirst(getLayerCategoryLabel(layer.type))}
-          </Text>
-        )}
         {options.map((opt) => (
           <Pressable
             key={opt.key}
@@ -716,57 +645,38 @@ const overflowStyles = StyleSheet.create({
     right: 0,
     paddingTop: Space.xs,
     paddingBottom: Space.lg,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   handleContainer: {
     alignItems: 'center',
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   handle: {
     width: 32,
     height: 4,
-    borderRadius: Radius.sm,
-  },
+    borderRadius: Radius.md },
   title: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-    marginTop: Space.sm,
-  },
-  subtitle: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    marginTop: Space.xxs,
-    marginBottom: Space.sm,
-  },
+    fontSize: TypographyV2.sectionTitle.size,
+    marginTop: Space.sm },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
     paddingVertical: Space.md,
     borderRadius: Radius.md,
-    paddingHorizontal: Space.sm,
-  },
+    paddingHorizontal: Space.sm },
   optionText: {
     fontFamily: Typography.family.medium,
-    fontSize: Type.body.size,
-  },
+    fontSize: TypographyV2.body.size },
   cancelRow: {
     alignItems: 'center',
     paddingVertical: Space.md,
     borderRadius: Radius.md,
     marginTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'transparent',
-  },
+    borderTopColor: 'transparent' },
   cancelText: {
     fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
-});
-
-function capitalizeFirst(s: string): string {
-  return s.length > 0 ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-}
+    fontSize: TypographyV2.body.size } });
 
 function getLayerDisplayName(layer: CreatorLayer): string {
   switch (layer.type) {
@@ -835,19 +745,19 @@ function getLayerThumbnailSource(layer: CreatorLayer): { uri: string } | null {
 function getLayerColor(type: CreatorLayer['type'], colors: ThemeColors): string {
   switch (type) {
     case 'media': return colors.commerceTrust;
-    case 'text': return colors.antiqueGold;
+    case 'text': return colors.brand;
     case 'product': return colors.bronze;
     case 'mention': return colors.social;
     case 'look': return colors.discovery;
     case 'vote': return colors.success;
     case 'quiz': return colors.brand;
     case 'question': return colors.social;
-    case 'emojiSlider': return colors.antiqueGold;
+    case 'emojiSlider': return colors.brand;
     case 'countdown': return colors.bronze;
     case 'decorative': return colors.coownUp;
     case 'draw': return colors.brand;
     case 'gif': return colors.social;
-    case 'music': return colors.antiqueGold;
+    case 'music': return colors.brand;
     case 'link': return colors.brand;
     case 'location': return colors.discovery;
     case 'hashtag': return colors.social;
@@ -863,111 +773,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-  },
+    paddingVertical: Space.sm },
   title: {
+    flex: 1,
+    textAlign: 'center',
     fontFamily: Typography.family.semibold,
-    fontSize: Type.subtitle.size,
-  },
+    fontSize: TypographyV2.sectionTitle.size },
   closeBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    alignItems: 'center' },
   doneBtn: {
-    height: Control.hit,
-    paddingHorizontal: Space.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
-  doneBtnText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
-  },
-  reorderHint: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-    textAlign: 'center',
-    paddingVertical: Space.xs,
-    marginBottom: Space.sm,
-  },
-  scrollBody: {
-    paddingHorizontal: Space.md,
-  },
-  scrollContent: {
-    paddingBottom: Space.lg,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: Space.xl,
-    gap: Space.sm,
-  },
-  emptyText: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.bodyStrong.size,
-  },
-  emptySubtext: {
-    fontFamily: Typography.family.regular,
-    fontSize: Type.caption.size,
-  },
-  layerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.smMd,
-    borderBottomWidth: Stroke.hairline,
-    minHeight: ROW_HEIGHT,
-  },
-  layerRowDragging: {
-    opacity: 0.7,
-    borderRadius: Radius.lg,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-  },
-  dragHandle: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
+    alignItems: 'center' },
+  doneBtnText: {
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.bodyStrong.size },
+  reorderHint: {
+    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.meta.size,
+    textAlign: 'center',
+    paddingVertical: Space.xs,
+    marginBottom: Space.sm },
+  scrollBody: {
+    paddingHorizontal: Space.md },
+  scrollContent: {
+    paddingBottom: Space.lg },
+  emptyState: {
     alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
-  selectionAccent: {
-    position: 'absolute',
-    left: 0,
-    top: Space.xs,
-    bottom: Space.xs,
-    width: Stroke.emphasis,
-    borderRadius: Radius.sm,
-  },
+    paddingVertical: Space.xl },
+  emptyText: {
+    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.bodyStrong.size },
+  layerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.smMd,
+    borderBottomWidth: Stroke.hairline,
+    minHeight: ROW_HEIGHT },
+  layerRowDragging: {
+    opacity: 0.7,
+    ...Elevation.modal },
   rowMain: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    minHeight: Control.hit,
-  },
+    minHeight: Control.hit },
   thumbnail: {
     width: THUMB,
     height: THUMB,
-    borderRadius: Radius.sm,
+    borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
-  },
+    overflow: 'hidden' },
   thumbnailHidden: {
-    opacity: 0.5,
-  },
+    opacity: 0.5 },
   thumbnailImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   videoBadge: {
     position: 'absolute',
     bottom: Space.xxs,
@@ -976,8 +845,7 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   lockBadge: {
     position: 'absolute',
     top: Space.xxs,
@@ -986,39 +854,23 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: Radius.full,
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  layerInfo: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  layerNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-  },
+    alignItems: 'center' },
   layerName: {
-    fontFamily: Typography.family.semibold,
-    fontSize: Type.body.size,
     flex: 1,
-  },
+    fontFamily: Typography.family.regular,
+    fontSize: TypographyV2.body.size },
   rowActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   actionBtn: {
     width: Control.hit,
     height: Control.hit,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.sm,
-  },
+    alignItems: 'center' },
   actionBtnLarge: {
     width: 48,
     height: 48,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.md,
-  },
-});
+    borderRadius: Radius.md } });

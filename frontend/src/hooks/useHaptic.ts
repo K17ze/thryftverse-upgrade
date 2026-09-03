@@ -1,5 +1,8 @@
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
+
+import { HapticsEngine } from '../platform/haptics/HapticsEngine';
+import type { HapticPattern } from '../platform/haptics/types';
 import { HapticPatterns } from '../utils/hapticPatterns';
 
 /**
@@ -108,6 +111,47 @@ const haptic = {
   // specific UI event (like, purchase, bid, outbid, save, etc.).
   // See utils/hapticPatterns.ts for the full vocabulary.
   patterns: HapticPatterns,
+  // Play a named AHAP pattern through the platform HapticsEngine (Core
+  // Haptics on iOS, VibrationEffect on Android). Richer than the primitive
+  // impact/notification calls above — used for celebratory, error, and
+  // textured gesture feedback. No-op when the engine is unavailable.
+  playPattern: (name: HapticPattern) => {
+    switch (name) {
+      case 'confirm':
+        HapticsEngine.confirm();
+        break;
+      case 'reject':
+        HapticsEngine.reject();
+        break;
+      case 'gestureStart':
+        HapticsEngine.gestureStart();
+        break;
+      case 'gestureEnd':
+        HapticsEngine.gestureEnd();
+        break;
+      case 'segmentTick':
+        HapticsEngine.segmentTick();
+        break;
+      case 'toggleOn':
+        HapticsEngine.toggleOn();
+        break;
+      case 'toggleOff':
+        HapticsEngine.toggleOff();
+        break;
+      case 'increment':
+        HapticsEngine.increment();
+        break;
+      case 'decrement':
+        HapticsEngine.decrement();
+        break;
+      case 'successCelebration':
+        HapticsEngine.successCelebration();
+        break;
+      case 'errorShake':
+        HapticsEngine.errorShake();
+        break;
+    }
+  },
 };
 
 export function useHaptic() {

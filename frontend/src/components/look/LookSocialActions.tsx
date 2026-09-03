@@ -3,15 +3,18 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Type } from '../../theme/designTokens';
+import { Space } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useToast } from '../../context/ToastContext';
 import {
   likeLookOnApi,
   unlikeLookOnApi,
   saveLookOnApi,
-  unsaveLookOnApi,
-} from '../../services/looksApi';
+  unsaveLookOnApi } from '../../services/looksApi';
+
+import { AppIcon } from '../common/AppIcon';
+import { IconSize } from '../../theme/iconTokens';
 
 export interface LookSocialActionsProps {
   lookId: string;
@@ -24,6 +27,10 @@ export interface LookSocialActionsProps {
   onCommentPress: () => void;
   onSharePress: () => void;
   onSignInRequired?: () => void;
+  /** Fired after a successful like/unlike with the new state. */
+  onLikeChange?: (liked: boolean) => void;
+  /** Fired after a successful save/unsave with the new state. */
+  onSaveChange?: (saved: boolean) => void;
 }
 
 export function LookSocialActions({
@@ -37,7 +44,8 @@ export function LookSocialActions({
   onCommentPress,
   onSharePress,
   onSignInRequired,
-}: LookSocialActionsProps) {
+  onLikeChange,
+  onSaveChange }: LookSocialActionsProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
@@ -73,6 +81,7 @@ export function LookSocialActions({
         setLikeCount(res.likeCount);
         setLiked(true);
       }
+      onLikeChange?.(!prevLiked);
     } catch {
       setLiked(prevLiked);
       setLikeCount(prevCount);
@@ -80,7 +89,7 @@ export function LookSocialActions({
     } finally {
       setIsLikeBusy(false);
     }
-  }, [isLikeBusy, liked, likeCount, lookId, haptic, show, isAuthenticated, onSignInRequired]);
+  }, [isLikeBusy, liked, likeCount, lookId, haptic, show, isAuthenticated, onSignInRequired, onLikeChange]);
 
   const handleSave = useCallback(async () => {
     if (isSaveBusy) return;
@@ -100,13 +109,12 @@ export function LookSocialActions({
         const res = await unsaveLookOnApi(lookId);
         setSaveCount(res.saveCount);
         setSaved(false);
-        show('Removed from saved', 'info');
       } else {
         const res = await saveLookOnApi(lookId);
         setSaveCount(res.saveCount);
         setSaved(true);
-        show('Saved to closet', 'success');
       }
+      onSaveChange?.(!prevSaved);
     } catch {
       setSaved(prevSaved);
       setSaveCount(prevCount);
@@ -114,7 +122,7 @@ export function LookSocialActions({
     } finally {
       setIsSaveBusy(false);
     }
-  }, [isSaveBusy, saved, saveCount, lookId, haptic, show, isAuthenticated, onSignInRequired]);
+  }, [isSaveBusy, saved, saveCount, lookId, haptic, show, isAuthenticated, onSignInRequired, onSaveChange]);
 
   const handleComment = useCallback(() => {
     haptic.light();
@@ -139,10 +147,12 @@ export function LookSocialActions({
         accessibilityRole="button"
         accessibilityLabel={liked ? 'Unlike' : 'Like'}
       >
-        <Ionicons
-          name={liked ? 'heart' : 'heart-outline'}
-          size={22}
-          color={liked ? colors.danger : colors.textPrimary}
+        <AppIcon
+          name="heart"
+          size={IconSize.md}
+          color={liked ? 'danger' : 'textPrimary'}
+          focused={liked}
+          accessible={false}
         />
         <Text style={styles.actionText}>{likeCount}</Text>
       </AnimatedPressable>
@@ -154,7 +164,7 @@ export function LookSocialActions({
         accessibilityRole="button"
         accessibilityLabel={isAuthenticated ? 'View comments' : 'Sign in to comment'}
       >
-        <Ionicons name="chatbubble-outline" size={22} color={colors.textPrimary} />
+        <AppIcon name="comment" size={IconSize.md} color="textPrimary" accessible={false} />
         <Text style={styles.actionText}>{commentCount}</Text>
       </AnimatedPressable>
 
@@ -165,10 +175,12 @@ export function LookSocialActions({
         accessibilityRole="button"
         accessibilityLabel={saved ? 'Remove from saved' : 'Save'}
       >
-        <Ionicons
-          name={saved ? 'bookmark' : 'bookmark-outline'}
-          size={22}
-          color={saved ? colors.brand : colors.textPrimary}
+        <AppIcon
+          name="bookmark"
+          size={IconSize.md}
+          color={saved ? 'brand' : 'textPrimary'}
+          focused={saved}
+          accessible={false}
         />
         <Text style={styles.actionText}>{saveCount}</Text>
       </AnimatedPressable>
@@ -180,7 +192,7 @@ export function LookSocialActions({
         accessibilityRole="button"
         accessibilityLabel="Share"
       >
-        <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
+        <AppIcon name="share" size={IconSize.md} color="textPrimary" accessible={false} />
         <Text style={styles.actionText}>Share</Text>
       </AnimatedPressable>
     </View>
@@ -198,19 +210,15 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginTop: Space.lg,
     paddingVertical: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
+    borderTopColor: colors.border },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: Space.xs,
-  },
+    paddingVertical: Space.xs },
   actionText: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
-});
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary } });

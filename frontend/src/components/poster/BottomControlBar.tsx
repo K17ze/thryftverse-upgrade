@@ -19,7 +19,7 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 
-import { Radius, Space, Typography, Type } from '../../theme/designTokens';
+import { Radius, Space, Typography, Type, Stroke, Control } from '../../theme/designTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
 
@@ -106,10 +106,10 @@ export default function BottomControlBar({
                 resizeMode="cover"
               />
             ) : (
-              <Ionicons name="images-outline" size={20} color="#fff" />
+              <Ionicons name="images-outline" size={20} color={colors.scrimTextPrimary} />
             )}
             <View style={styles.galleryOverlay}>
-              <Ionicons name="chevron-up" size={14} color="#fff" />
+              <Ionicons name="chevron-up" size={14} color={colors.scrimTextPrimary} />
             </View>
           </Reanimated.View>
         </Pressable>
@@ -128,7 +128,7 @@ export default function BottomControlBar({
             accessibilityHint="Switches between front and back camera"
             accessibilityRole="button"
           >
-            <Ionicons name="sync-outline" size={22} color="#fff" />
+            <Ionicons name="sync-outline" size={22} color={colors.scrimTextPrimary} />
           </AnimatedPressable>
         )}
       </View>
@@ -162,7 +162,7 @@ function createStyles(colors: ThemeColors) {
     right: 0,
     paddingBottom: Space.lg,
     paddingHorizontal: Space.md,
-    gap: 12,
+    gap: Space.smMd,
   },
   bottomRow: {
     flexDirection: 'row',
@@ -172,20 +172,20 @@ function createStyles(colors: ThemeColors) {
     marginBottom: Space.sm,
   },
   galleryThumb: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.lg,
     backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: 'rgba(255,255,255,0.2)',
   },
   galleryOverlay: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
+    bottom: Space.xxs,
+    right: Space.xxs,
     width: 16,
     height: 16,
     borderRadius: Radius.md,
@@ -194,15 +194,15 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
   },
   flipBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     borderRadius: Radius.xxl,
     backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
   photoStrip: {
-    gap: 8,
+    gap: Space.sm,
     paddingHorizontal: Space.md,
     paddingBottom: Space.xs,
   },

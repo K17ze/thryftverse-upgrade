@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Type, Typography } from '../../theme/designTokens';
+import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 
 export interface CoOwnDiscoveryCardProps {
@@ -51,7 +52,7 @@ export function CoOwnDiscoveryCard({
             <CachedImage uri={imageUri} style={styles.image} contentFit="cover" transition={250} />
           ) : (
             <View style={[styles.image, styles.imageFallback]}>
-              <Ionicons name="cube-outline" size={28} color={colors.textMuted} />
+              <Ionicons name="image-outline" size={28} color={colors.textMuted} />
             </View>
           )}
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -80,7 +81,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
   },
   imageWrap: {
@@ -98,21 +99,21 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   statusDot: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: Space.sm,
+    right: Space.sm,
     width: 10,
     height: 10,
     borderRadius: Radius.sm,
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.surface,
   },
   content: {
     padding: Space.sm,
-    gap: 4,
+    gap: Space.xs,
   },
   title: {
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     lineHeight: 18,
     minHeight: 36,
@@ -123,20 +124,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 3,
   },
   unitPrice: {
-    fontSize: Type.subtitle.size,
-    fontFamily: Typography.family.bold,
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     color: colors.textPrimary,
     letterSpacing: -0.3,
   },
   perUnit: {
-    fontSize: Type.caption.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.textSecondary,
   },
   allocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 2,
+    gap: Space.sm,
+    marginTop: Space.xxs,
   },
   allocationBarBg: {
     flex: 1,
@@ -151,7 +152,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.brand,
   },
   allocationText: {
-    fontSize: Type.meta.size,
+    fontSize: TypographyV2.meta.size,
     fontWeight: '500',
     color: colors.textSecondary,
   },

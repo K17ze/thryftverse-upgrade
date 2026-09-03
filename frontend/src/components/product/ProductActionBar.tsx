@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, Type } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 import type { ListingCapabilities } from '../../platform/product';
@@ -22,8 +23,7 @@ export function ProductActionBar({
   onBuy,
   onOffer,
   onMessage,
-  onManage,
-}: ProductActionBarProps) {
+  onManage }: ProductActionBarProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: screenWidth } = useWindowDimensions();
@@ -171,42 +171,35 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: Space.md,
-  },
+    gap: Space.md },
   stackedContainer: {
     width: '100%',
     minWidth: 0,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   priceRow: {
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   priceSection: {
     flex: 1,
     flexShrink: 1,
-    minWidth: 0,
-  },
+    minWidth: 0 },
   priceLabel: {
-    fontSize: Type.meta.size,
-    fontFamily: Typography.family.regular,
-    color: colors.textMuted,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   priceValue: {
     minWidth: 0,
-    fontSize: Type.priceList.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.priceList.size,
+    fontFamily: TypographyV2.priceList.fontFamily,
+    color: colors.textPrimary },
   actionRow: {
     minWidth: 0,
     flexDirection: 'row',
     gap: Space.sm,
     flexShrink: 1,
-    alignItems: 'center',
-  },
+    alignItems: 'center' },
   offerBtn: {
     minHeight: 44,
     minWidth: 68,
@@ -216,8 +209,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   offerBtnFlex: {
     flex: 1,
     minWidth: 0,
@@ -227,14 +219,12 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   offerText: {
     minWidth: 0,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   buyBtn: {
     minHeight: 44,
     minWidth: 108,
@@ -244,8 +234,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   buyBtnFull: {
     minHeight: 48,
     paddingVertical: 14,
@@ -253,14 +242,12 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
     borderRadius: Radius.md,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   buyText: {
     minWidth: 0,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textInverse },
   messageBtn: {
     width: 44,
     minHeight: 44,
@@ -268,8 +255,7 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-  },
+    flexShrink: 0 },
   messageBtnFlex: {
     flex: 1,
     minWidth: 0,
@@ -281,20 +267,17 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   messageBtnText: {
     minWidth: 0,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textPrimary,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textPrimary },
   secondaryRow: {
     width: '100%',
     minWidth: 0,
     flexDirection: 'row',
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   manageBtn: {
     flexDirection: 'row',
     minHeight: 44,
@@ -306,15 +289,13 @@ function createStyles(colors: ThemeColors) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   manageText: {
     minWidth: 0,
     flexShrink: 1,
-    fontSize: Type.bodyStrong.size,
-    fontFamily: Typography.family.semibold,
-    color: colors.textInverse,
-  },
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    color: colors.textInverse },
   soldBadge: {
     minWidth: 0,
     flexDirection: 'row',
@@ -322,14 +303,11 @@ function createStyles(colors: ThemeColors) {
     gap: Space.xs,
     paddingVertical: 12,
     paddingHorizontal: Space.md,
-    flexShrink: 1,
-  },
+    flexShrink: 1 },
   soldText: {
     minWidth: 0,
     flexShrink: 1,
-    fontSize: Type.body.size,
-    fontFamily: Typography.family.medium,
-    color: colors.textSecondary,
-  },
-  });
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textSecondary } });
 }

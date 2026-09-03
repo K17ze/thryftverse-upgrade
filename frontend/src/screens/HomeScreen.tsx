@@ -4,15 +4,13 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  Dimensions,
   RefreshControl,
   Modal,
   Pressable,
   AppState,
   Platform,
   ScrollView,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import Reanimated, {
   useSharedValue,
@@ -20,12 +18,10 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
-  withTiming,
-} from 'react-native-reanimated';
+  withTiming } from 'react-native-reanimated';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { AppIcon } from '../components/common/AppIcon';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
@@ -61,12 +57,13 @@ import { toHomeDiscoveryItemVM, type HomeDiscoveryItemVM } from '../presentation
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, FontFamily, Stroke, Type, Typography, Elevation } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Elevation, Control, AvatarSize } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { useForYouFeed } from '../hooks/useForYouFeed';
+import { useRecommendationImpressions } from '../hooks/useRecommendationImpressions';
 import { markInteractive } from '../platform/monitoring';
 import { useFeatureFlag } from '../analytics';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
@@ -102,7 +99,9 @@ const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
 const POSTER_CARD_WIDTH = 76;
 const POSTER_CARD_HEIGHT = 135;
 const LISTING_CARD_CHROME_HEIGHT = 110;
-const SCREEN_WIDTH = Dimensions.get('window').width;
+// Look rail card dimensions — used in the feed interruption rail for Looks.
+const LOOK_CARD_WIDTH = 120;
+const LOOK_CARD_HEIGHT = 160;
 
 // Skeleton variation communicates loading without inventing media geometry.
 const SKELETON_HEIGHT_RATIOS = [1.25, 1.08, 1.32, 1.16] as const;
@@ -219,7 +218,7 @@ export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const notificationCount = useStore((state) => state.notificationCount);
   const isGuest = useIsGuest();
-  const { formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat, currencyCode } = useFormattedPrice();
   const haptic = useHaptic();
   const { requireAuth } = useSignupWall();
   const reducedMotionEnabled = useReducedMotion();
@@ -250,8 +249,20 @@ export default function HomeScreen() {
     activeIndex: activePlaybackIndex,
     viewabilityConfig: playbackViewabilityConfig,
     onViewableItemsChanged: onPlaybackViewableItemsChanged,
-    reset: resetPlayback,
-  } = useViewabilityPlayback(350);
+    reset: resetPlayback } = useViewabilityPlayback(350);
+
+  const {
+    onViewableItemsChanged: onImpressionViewableItemsChanged,
+    reset: resetImpressions } = useRecommendationImpressions(
+    React.useCallback(
+      (entries) => void forYouFeed.confirmImpressions(entries),
+      [forYouFeed.confirmImpressions],
+    ),
+  );
+
+  React.useEffect(() => {
+    resetImpressions();
+  }, [forYouFeed.requestId, resetImpressions]);
 
   const scrollY = useSharedValue(0);
   const lastScrollY = useSharedValue(0);
@@ -295,8 +306,7 @@ export default function HomeScreen() {
       }
 
       lastScrollY.value = e.contentOffset.y;
-    },
-  });
+    } });
 
   // Web fallback: plain JS scroll handler (Reanimated worklets not supported
   // on web with createAnimatedComponent). LIST_RENDERING_POLICY.md §2.5.
@@ -332,8 +342,7 @@ export default function HomeScreen() {
     const translateY = interpolate(scrollY.value, [0, 90], [0, -10], Extrapolation.CLAMP);
     return {
       opacity,
-      transform: [{ translateY }],
-    };
+      transform: [{ translateY }] };
   });
 
   const headerShadowStyle = useAnimatedStyle(() => {
@@ -342,8 +351,7 @@ export default function HomeScreen() {
     return {
       shadowOpacity,
       shadowRadius,
-      elevation: interpolate(scrollY.value, [0, 60], [0, 6], Extrapolation.CLAMP),
-    };
+      elevation: interpolate(scrollY.value, [0, 60], [0, 6], Extrapolation.CLAMP) };
   });
 
   React.useEffect(() => {
@@ -468,8 +476,7 @@ export default function HomeScreen() {
           title: l.title,
           sellerUsername: l.creator.username ?? undefined,
           sellerAvatar: l.creator.avatar ?? undefined,
-          taggedCount: l.tags?.length ?? 0,
-        }));
+          taggedCount: l.tags?.length ?? 0 }));
         setFeedLooks(lookItems);
       })
       .catch(() => { /* silent fail — looks are optional enrichment */ });
@@ -494,8 +501,7 @@ export default function HomeScreen() {
       getBackendSyncStatus({
         isSyncing,
         source,
-        hasError: Boolean(lastError),
-      }),
+        hasError: Boolean(lastError) }),
     [isSyncing, lastError, source],
   );
 
@@ -538,31 +544,16 @@ export default function HomeScreen() {
     return i === FEATURED_RHYTHM[pos % FEATURED_RHYTHM.length] - 1;
   }, []);
 
-  const exploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
-    return listings.map((listing, index) =>
-      toHomeDiscoveryItemVM(listing, {
-        isSaved: wishlist.includes(listing.id),
-        currency: 'GBP',
-        followedSellerIds: followedSellerIdsSet,
-      }),
-    ).map((vm, index) => ({
-      ...vm,
-      featured: computeFeatured(index),
-    }));
-  }, [listings, wishlist, followedSellerIdsSet, computeFeatured]);
-
   // Following feed: transform following listings into discovery VMs
   const followingExploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
     return followingFeed.listings.map((listing) =>
       toHomeDiscoveryItemVM(listing, {
         isSaved: wishlist.includes(listing.id),
-        currency: 'GBP',
-        followedSellerIds: followedSellerIdsSet,
-      }),
+        currency: currencyCode,
+        followedSellerIds: followedSellerIdsSet }),
     ).map((vm, index) => ({
       ...vm,
-      featured: computeFeatured(index),
-    }));
+      featured: computeFeatured(index) }));
   }, [followingFeed.listings, wishlist, followedSellerIdsSet, computeFeatured]);
 
   // For You feed: transform personalised recommendations into discovery VMs
@@ -570,18 +561,21 @@ export default function HomeScreen() {
     return forYouFeed.listings.map((listing) =>
       toHomeDiscoveryItemVM(listing, {
         isSaved: wishlist.includes(listing.id),
-        currency: 'GBP',
-        followedSellerIds: followedSellerIdsSet,
-      }),
+        currency: currencyCode,
+        followedSellerIds: followedSellerIdsSet }),
     ).map((vm, index) => ({
       ...vm,
-      featured: computeFeatured(index),
-    }));
+      featured: computeFeatured(index) }));
   }, [forYouFeed.listings, wishlist, followedSellerIdsSet, computeFeatured]);
 
-  // For You mode uses personalised recommendations; fall back to all listings
-  // when the recommendation feed is empty or errored with no cached results.
-  const effectiveForYouData = forYouFeed.listings.length > 0 ? forYouExploreData : exploreData;
+  // For You mode uses personalised recommendations. When the feed is empty
+  // or errored, we do NOT silently substitute general listings. The empty/
+  // error state renders an honest message and the user can pull to refresh
+  // or browse all via the Explore tab.
+  const effectiveForYouData = forYouFeed.listings.length > 0 ? forYouExploreData : [];
+  const forYouIsEmpty = feedMode === 'foryou' && !forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
+  const forYouHasError = feedMode === 'foryou' && forYouFeed.error !== null && forYouFeed.listings.length === 0;
+  const forYouIsDegraded = feedMode === 'foryou' && forYouFeed.serveMode === 'degraded_baseline' && forYouFeed.listings.length > 0;
 
   const activeFeedData = feedMode === 'following' ? followingExploreData : effectiveForYouData;
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
@@ -608,8 +602,7 @@ export default function HomeScreen() {
       result.splice(LOOKS_INJECT_INDEX, 0, {
         id: 'feed-looks-rail',
         type: 'looks',
-        looks: feedLooks,
-      } as LookFeedMarker);
+        looks: feedLooks } as LookFeedMarker);
     }
     return result;
   }, [activeFeedData, feedLooks, showFeedLoadingSkeleton, showFollowingLoading, showForYouLoading]);
@@ -636,8 +629,7 @@ export default function HomeScreen() {
   React.useEffect(() => {
     feedOpacity.value = 0;
     feedOpacity.value = withTiming(1, {
-      duration: reducedMotionEnabled ? 0 : Motion.duration.fast,
-    });
+      duration: reducedMotionEnabled ? 0 : Motion.duration.fast });
     // Reset viewability playback when the feed content swaps so a stale
     // activeIndex does not cause a now-offscreen video to keep playing.
     resetPlayback();
@@ -645,8 +637,7 @@ export default function HomeScreen() {
   }, [feedMode]);
 
   const feedOpacityStyle = useAnimatedStyle(() => ({
-    opacity: feedOpacity.value,
-  }));
+    opacity: feedOpacity.value }));
 
   const closePeek = React.useCallback(() => {
     setPeekItem(null);
@@ -698,12 +689,7 @@ export default function HomeScreen() {
               accessibilityHint="Opens poster story viewer"
             >
               {isUnwatched ? (
-                <LinearGradient
-                  colors={[colors.brand, colors.discovery]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.posterTileGradientRing}
-                >
+                <View style={styles.posterTileRing}>
                   <View style={styles.posterTileInner}>
                     <PosterStoryArtwork story={story} />
                     <View style={styles.posterShade} />
@@ -720,7 +706,7 @@ export default function HomeScreen() {
 
                     {story.totalFrameCount > 1 && (
                       <View style={styles.frameCountBadge} accessible={false}>
-                        <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
+                        <AppIcon name="layers" focused size={10} color={colors.scrimTextPrimary} />
                         <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                       </View>
                     )}
@@ -731,7 +717,7 @@ export default function HomeScreen() {
                       </View>
                     )}
                   </View>
-                </LinearGradient>
+                </View>
               ) : (
                 <View style={[styles.posterTile, styles.posterTileSeen]}>
                   <PosterStoryArtwork story={story} />
@@ -749,7 +735,7 @@ export default function HomeScreen() {
 
                   {story.totalFrameCount > 1 && (
                     <View style={styles.frameCountBadge} accessible={false}>
-                      <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
+                      <AppIcon name="layers" focused size={10} color={colors.scrimTextPrimary} />
                       <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                     </View>
                   )}
@@ -780,8 +766,8 @@ export default function HomeScreen() {
           style={styles.newListingsBanner}
           contentStyle={styles.newListingsBannerContent}
           titleStyle={styles.newListingsBannerText}
-          icon={<Ionicons name="arrow-up-circle-outline" size={14} color={colors.background} />}
-          trailingIcon={<Ionicons name="chevron-up" size={14} color={colors.background} />}
+          icon={<AppIcon name="arrowUp" size={14} color={colors.background} />}
+          trailingIcon={<AppIcon name="chevronUp" size={14} color={colors.background} />}
           iconContainerStyle={styles.newListingsBannerIconWrap}
           trailingIconContainerStyle={styles.newListingsBannerIconWrap}
           hapticFeedback="selection"
@@ -856,10 +842,10 @@ export default function HomeScreen() {
       // Looks rail — authored interruption of Look thumbnails
       if (isLookMarker(item)) {
         return (
-          <View style={[styles.flashListItem, { width: SCREEN_WIDTH }]}>
+          <View style={[styles.flashListItem, { width: windowWidth }]}>
             <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Space.xs }}>
-                <Text style={{ fontFamily: Typography.family.semibold, fontSize: Type.caption.size, color: colors.textPrimary }} maxFontSizeMultiplier={1.4}>
+                <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textPrimary }} maxFontSizeMultiplier={1.4}>
                   Looks to shop
                 </Text>
               </View>
@@ -868,20 +854,20 @@ export default function HomeScreen() {
                   <Pressable
                     key={look.id}
                     onPress={() => { haptic.light(); navigation.navigate('LookDetail', { lookId: look.id }); }}
-                    style={{ width: 120, borderRadius: Radius.lg, overflow: 'hidden' }}
+                    style={{ width: LOOK_CARD_WIDTH, borderRadius: Radius.lg, overflow: 'hidden' }}
                     accessibilityRole="button"
                     accessibilityLabel={`Open Look${look.title ? ` ${look.title}` : ''}${look.taggedCount ? `, ${look.taggedCount} tagged items` : ''}`}
                     accessibilityHint="Opens Look details"
                   >
                     <CachedImage
                       uri={look.mediaUri}
-                      style={{ width: 120, height: 160 }}
+                      style={{ width: LOOK_CARD_WIDTH, height: LOOK_CARD_HEIGHT }}
                       contentFit="cover"
-                      downscaleWidth={120}
+                      downscaleWidth={LOOK_CARD_WIDTH}
                     />
                     {look.taggedCount && look.taggedCount > 0 ? (
-                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: colors.overlay, borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: 2 }}>
-                        <Text style={{ color: colors.scrimTextPrimary, fontSize: 10, fontFamily: Typography.family.semibold }}>
+                      <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: colors.overlay, borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: Space.xxs }}>
+                        <Text style={{ color: colors.scrimTextPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily }}>
                           {look.taggedCount} items
                         </Text>
                       </View>
@@ -933,13 +919,13 @@ export default function HomeScreen() {
       <Reanimated.View style={[styles.floatingHeaderShell, headerHeightStyle, headerShadowStyle]}>
         <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
 
-        <View style={[styles.headerForeground, { paddingTop: insets.top + 2, paddingBottom: 8 }]}>
+        <View style={[styles.headerForeground, { paddingTop: insets.top + Space.xxs, paddingBottom: Space.sm }]}>
           <Reanimated.View style={[headerTitleStyle, styles.headerTitleWrap]}>
             <Text style={styles.brandTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.3}>Thryftverse</Text>
             {isGuest ? (
               <Pressable
                 onPress={() => navigation.navigate('AuthLanding')}
-                hitSlop={{ top: 4, bottom: 4, left: 0, right: 0 }}
+                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                 accessibilityRole="link"
                 accessibilityLabel="Browsing as guest. Tap to sign in."
                 accessibilityHint="Opens the sign-in screen"
@@ -971,16 +957,16 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens sell listing flow"
             >
-              <Ionicons name="add" size={24} color={colors.textPrimary} />
+              <AppIcon name="plus" size={24} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
-              onPress={() => rootNavigation?.navigate('MainTabs', { screen: 'Explore' })}
+              onPress={() => rootNavigation?.navigate('UnifiedDiscovery')}
               accessibilityLabel="Search and discover"
               accessibilityRole="button"
-              accessibilityHint="Opens search and discovery"
+              accessibilityHint="Opens discovery — explore items, looks, mood boards, editorials and more"
             >
-              <Ionicons name="search" size={22} color={colors.textPrimary} />
+              <AppIcon name="search" focused size={22} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -989,7 +975,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens notifications center"
             >
-              <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="notifications" size={22} color={colors.textPrimary} />
               {notificationCount > 0 && (
                 <View style={styles.notificationBadge} pointerEvents="none" accessible={false}>
                   <Text style={styles.notificationBadgeText} maxFontSizeMultiplier={1.5}>
@@ -1002,7 +988,7 @@ export default function HomeScreen() {
         </View>
       </Reanimated.View>
 
-      <Reanimated.View style={[styles.feedShell, feedOpacityStyle]}>
+      <Reanimated.View testID="home-feed-container" style={[styles.feedShell, feedOpacityStyle]}>
       <AnimatedFlashList
         ref={scrollRef}
         data={feedGridData}
@@ -1013,7 +999,10 @@ export default function HomeScreen() {
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         viewabilityConfig={playbackViewabilityConfig}
-        onViewableItemsChanged={onPlaybackViewableItemsChanged}
+        onViewableItemsChanged={(info: { changed: import('react-native').ViewToken[]; viewableItems: import('react-native').ViewToken[] }) => {
+          onPlaybackViewableItemsChanged(info);
+          onImpressionViewableItemsChanged(info);
+        }}
         onEndReached={() => {
           if (hasMore && !isLoadingMore) void loadMoreListings();
         }}
@@ -1073,10 +1062,10 @@ export default function HomeScreen() {
             {newHomeFeedEnabled ? (
               <View style={styles.editorialHeader}>
                 <Text style={styles.editorialEyebrow} numberOfLines={1}>
-                  Editor’s picks
+                  Fresh today
                 </Text>
                 <Text style={styles.editorialTitle} numberOfLines={1}>
-                  Today’s drops, handpicked
+                  New listings from sellers you follow
                 </Text>
               </View>
             ) : null}
@@ -1099,6 +1088,15 @@ export default function HomeScreen() {
               <OfflineBanner onRetry={() => void handleRefresh()} />
             ) : null}
 
+            {forYouIsDegraded ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: Space.xs }}>
+                <AppIcon name="info" size={16} color={colors.textSecondary} />
+                <Text style={{ flex: 1, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textSecondary }} maxFontSizeMultiplier={1.5}>
+                  Showing baseline listings — personalised feed is temporarily unavailable.
+                </Text>
+              </View>
+            ) : null}
+
             {showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading ? (
               renderExploreLoadingState()
             ) : feedGridData.length === 0 ? (
@@ -1106,7 +1104,6 @@ export default function HomeScreen() {
                 <View style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
-                    icon={followingFeed.hasFollowing ? 'pricetag-outline' : 'people-outline'}
                     title={followingFeed.hasFollowing ? 'No new drops yet' : 'Follow sellers to see their drops'}
                     subtitle={followingFeed.hasFollowing
                       ? 'Pull to refresh.'
@@ -1118,6 +1115,32 @@ export default function HomeScreen() {
                     onSecondaryCtaPress={followingFeed.hasFollowing ? () => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' }) : undefined}
                   />
                 </View>
+              ) : forYouHasError ? (
+                <View style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon="cloud-offline-outline"
+                    title="Couldn't load your feed"
+                    subtitle={forYouFeed.error ?? 'Pull to refresh or browse all listings.'}
+                    ctaLabel="Retry"
+                    onCtaPress={() => void forYouFeed.refresh()}
+                    secondaryCtaLabel="Browse all"
+                    onSecondaryCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                  />
+                </View>
+              ) : forYouIsEmpty ? (
+                <View style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon="thumbs-up-outline"
+                    title="No recommendations yet"
+                    subtitle="We're learning what you like. Browse listings and save items to build your feed."
+                    ctaLabel="Browse all"
+                    onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                    secondaryCtaLabel="Refresh"
+                    onSecondaryCtaPress={() => void forYouFeed.refresh()}
+                  />
+                </View>
               ) : (
                 // Premium empty state — backend returned zero items and we are not
                 // loading. Preserves the flagship layout instead of collapsing to
@@ -1125,7 +1148,6 @@ export default function HomeScreen() {
                 <View style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
-                    icon="cube-outline"
                     title="No drops live yet"
                     subtitle="Pull to refresh or browse categories."
                     ctaLabel="Browse all"
@@ -1141,12 +1163,12 @@ export default function HomeScreen() {
         ListFooterComponent={
           isLoadingMore ? (
             <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
-              <Text style={{ color: colors.textMuted, fontSize: 13 }} maxFontSizeMultiplier={1.8}>Loading more...</Text>
+              <Text style={{ color: colors.textMuted, fontSize: TypographyV2.meta.size }} maxFontSizeMultiplier={1.8}>Loading more...</Text>
             </View>
           ) : !hasMore && feedGridData.length > 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: Space.lg, gap: Space.sm }}>
               <View style={{ width: 40, height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
-              <Text style={{ color: colors.textMuted, fontSize: 12, fontFamily: Typography.family.regular }} maxFontSizeMultiplier={1.8}>
+              <Text style={{ color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily }} maxFontSizeMultiplier={1.8}>
                 You've reached the end
               </Text>
             </View>
@@ -1220,7 +1242,7 @@ export default function HomeScreen() {
                     align="center"
                     style={styles.peekPrimaryBtn}
                     titleStyle={styles.peekPrimaryText}
-                    icon={<Ionicons name="arrow-forward" size={14} color={colors.background} />}
+                    icon={<AppIcon name="forward" focused size={14} color={colors.background} />}
                     iconContainerStyle={styles.peekPrimaryIconWrap}
                     onPress={() => {
                       if (peekItem.routeId) {
@@ -1245,11 +1267,9 @@ export default function HomeScreen() {
 const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
+    backgroundColor: colors.background },
   feedShell: {
-    flex: 1,
-  },
+    flex: 1 },
   floatingHeaderShell: {
     position: 'absolute',
     top: 0,
@@ -1258,41 +1278,35 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     zIndex: 20,
     overflow: 'hidden',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-  },
+    borderBottomColor: colors.borderSubtle },
   headerForeground: {
     flex: 1,
     paddingHorizontal: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    justifyContent: 'space-between' },
   headerTitleWrap: {
     flex: 1,
-    paddingRight: Space.sm,
-  },
+    paddingRight: Space.sm },
   // Brand title: subtitle token (17/24/600) — lighter header chrome per AGENTS.md §4.
   brandTitle: {
     fontSize: TypographyV2.sectionTitle.size,
     lineHeight: TypographyV2.sectionTitle.lineHeight,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   // Guest indicator — a small, restrained text label below the brand title.
   // Not a banner; communicates state and provides a sign-in entry point.
   guestLabel: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
     letterSpacing: 0.1,
     color: colors.textMuted,
-    marginTop: 1,
-  },
+    marginTop: 1 },
   headerRight: {
     flexDirection: 'row',
-    gap: 2,
-  },
+    gap: Space.xxs },
   // Live shopping badge — additive entry point gated by the
   // live_shopping_enabled feature flag. A compact pill with a live dot so
   // it reads as a status indicator, not decorative chrome.
@@ -1304,51 +1318,44 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: Space.sm,
     marginRight: Space.xxs,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: `${colors.danger}14`,
-    alignSelf: 'center',
-  },
+    backgroundColor: colors.dangerSubtle,
+    alignSelf: 'center' },
   liveDot: {
     width: 6,
     height: 6,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: colors.danger,
-  },
+    backgroundColor: colors.danger },
   liveBadgeText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.danger,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
   // New home feed editorial header — additive section gated by the
   // new_home_feed feature flag. An eyebrow + title pair that introduces the
   // feed with an authored, curated voice.
   editorialHeader: {
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
-    gap: Space.xxs,
-  },
+    gap: Space.xxs },
   editorialEyebrow: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.brand,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase',
-  },
+    textTransform: 'uppercase' },
   editorialTitle: {
     fontSize: TypographyV2.sectionTitle.size,
     lineHeight: TypographyV2.sectionTitle.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.textPrimary,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-  },
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
   headerBtn: {
-    width: 44,
-    height: 44,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
+    justifyContent: 'center' },
   notificationBadge: {
     position: 'absolute',
     top: -2,
@@ -1359,49 +1366,42 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: Space.xs,
     borderWidth: Stroke.standard,
-    borderColor: colors.background,
-  },
+    borderColor: colors.background },
   notificationBadgeText: {
     color: colors.textInverse,
-    fontSize: 10,
+    fontSize: TypographyV2.meta.size,
     fontFamily: 'Inter_700Bold',
-    lineHeight: 12,
-    fontVariant: ['tabular-nums'],
-  },
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontVariant: ['tabular-nums'] },
   feedContent: {
-    paddingBottom: 120,
-  },
+    paddingBottom: 120 },
   feedTabBar: {
-    minHeight: 44,
+    minHeight: Control.hit,
     marginHorizontal: Space.md,
     marginBottom: Space.sm,
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
+    borderBottomColor: colors.border },
   feedTab: {
     minWidth: 76,
-    minHeight: 44,
+    minHeight: Control.hit,
     paddingHorizontal: Space.xxs,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.xs + Space.xxs,
-    position: 'relative',
-  },
+    position: 'relative' },
   feedTabLabel: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.medium,
-    color: colors.textMuted,
-  },
+    color: colors.textMuted },
   feedTabLabelActive: {
     fontFamily: FontFamily.semibold,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   feedTabCount: {
     minWidth: 20,
     height: 20,
@@ -1415,12 +1415,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: FontFamily.semibold,
     color: colors.textSecondary,
     backgroundColor: colors.surfaceAlt,
-    fontVariant: ['tabular-nums'],
-  },
+    fontVariant: ['tabular-nums'] },
   feedTabCountActive: {
     color: colors.textInverse,
-    backgroundColor: colors.textPrimary,
-  },
+    backgroundColor: colors.textPrimary },
   feedTabIndicator: {
     position: 'absolute',
     left: 0,
@@ -1428,13 +1426,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: -1,
     height: 2,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: colors.textPrimary,
-  },
+    backgroundColor: colors.textPrimary },
   newListingsBannerWrap: {
     marginTop: Space.xs,
     marginBottom: Space.sm + Space.xs,
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   newListingsBanner: {
     alignSelf: 'center',
     minHeight: 40,
@@ -1442,117 +1438,99 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.xs + Space.xs,
     borderRadius: RadiusRoleValue.pillAvatar,
     backgroundColor: colors.brand,
-    borderWidth: 0,
-  },
+    borderWidth: 0 },
   newListingsBannerContent: {
-    gap: Space.xs - Space.xxs,
-  },
+    gap: Space.xs - Space.xxs },
   newListingsBannerIconWrap: {
     width: 16,
     height: 16,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   newListingsBannerText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.background,
-    letterSpacing: 0.2,
-  },
+    letterSpacing: 0.2 },
 
   postersSection: {
     marginTop: 0,
-    paddingBottom: Space.sm,
-  },
+    paddingBottom: Space.sm },
   postersScroll: {
     paddingHorizontal: Space.md,
     paddingBottom: 2,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   feedStatusBanner: {
     marginTop: Space.sm,
     marginHorizontal: Space.md,
-    marginBottom: Space.xxs,
-  },
+    marginBottom: Space.xxs },
   posterCard: {
-    width: POSTER_CARD_WIDTH,
-  },
+    width: POSTER_CARD_WIDTH },
   posterTile: {
     width: POSTER_CARD_WIDTH,
     height: POSTER_CARD_HEIGHT,
     borderRadius: RadiusRoleValue.sheetDialog,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: colors.surfaceAlt,
-  },
-  // Gradient ring for unwatched stories — Instagram-style gradient border
-  // using brand + discovery accent colors. 2pt padding creates the ring
-  // thickness (Stroke.emphasis = 2, reserved for focus/selection per
-  // AGENTS.md §4 stroke grammar). The inner tile clips artwork to the
-  // sheetDialog radius while the outer gradient uses sheetDialog + 2.
-  posterTileGradientRing: {
+    backgroundColor: colors.surfaceAlt },
+  // Solid brand-color ring for unwatched stories — replaces the former
+  // decorative gradient ring. Per AGENTS.md §4: "decorative chrome over
+  // composition" is an AI tell. A solid 2pt brand border communicates
+  // "new/unwatched" without gradient decoration. Stroke.emphasis (2pt)
+  // is reserved for focus/selection per stroke grammar.
+  posterTileRing: {
     width: POSTER_CARD_WIDTH,
     height: POSTER_CARD_HEIGHT,
     borderRadius: RadiusRoleValue.sheetDialog + Stroke.emphasis,
-    padding: Stroke.emphasis,
-  },
+    borderWidth: Stroke.emphasis,
+    borderColor: colors.brand },
   posterTileInner: {
     flex: 1,
     borderRadius: RadiusRoleValue.sheetDialog,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   posterTileSeen: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
+    borderColor: colors.border },
   posterImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   posterTextArtwork: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Space.sm,
-    gap: Space.xs,
-  },
+    gap: Space.xs },
   posterTextArtworkCopy: {
     color: colors.scrimTextPrimary,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.bold,
     textAlign: 'center',
-    letterSpacing: -0.2,
-  },
+    letterSpacing: -0.2 },
   posterShade: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   posterAvatarOverlay: {
     position: 'absolute',
     top: 5,
     left: 5,
-    width: 24,
-    height: 24,
+    width: AvatarSize.inline,
+    height: AvatarSize.inline,
     borderRadius: Radius.full,
     overflow: 'hidden',
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.scrimTextPrimary,
-    ...Elevation.floating,
-  },
+    ...Elevation.floating },
   posterAvatarOverlayWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: Radius.full,
-  },
+    width: AvatarSize.inline,
+    height: AvatarSize.inline,
+    borderRadius: Radius.full },
   posterAvatarOverlayImage: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   posterTopRow: {
     position: 'absolute',
     top: 5,
@@ -1561,8 +1539,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 4,
-  },
+    gap: Space.xs },
   posterOwnerPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1571,24 +1548,20 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 3,
     borderRadius: Radius.lg,
     flex: 1,
-    gap: 4,
-  },
+    gap: Space.xs },
   posterOwnerAvatarWrap: {
     width: 14,
     height: 14,
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   posterOwnerAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.full,
-  },
+    borderRadius: Radius.full },
   posterOwnerName: {
     color: colors.scrimTextPrimary,
-    fontSize: 8,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
-    flex: 1,
-  },
+    flex: 1 },
   posterExpiryPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1596,28 +1569,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
+    paddingVertical: 3 },
   posterExpiryText: {
     color: colors.scrimTextPrimary,
-    fontSize: 9,
-    fontFamily: FontFamily.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold },
   posterBottomOverlay: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 8,
+    paddingHorizontal: Space.sm,
     paddingVertical: 7,
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   posterCaption: {
     color: colors.scrimTextPrimary,
-    fontSize: 9,
-    lineHeight: 12,
-    fontFamily: FontFamily.medium,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium },
   posterCreatorOverlay: {
     position: 'absolute',
     left: 5,
@@ -1626,35 +1595,31 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     minHeight: 22,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Space.xs,
     paddingHorizontal: 6,
     borderRadius: RadiusRoleValue.compactControl,
-    backgroundColor: colors.overlay,
-  },
+    backgroundColor: colors.overlay },
   posterCreatorName: {
     flex: 1,
     color: colors.scrimTextPrimary,
-    fontSize: 9,
-    lineHeight: 12,
-    fontFamily: FontFamily.semibold,
-  },
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold },
   frameCountBadge: {
     position: 'absolute',
     top: 6,
     right: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: Space.xxs,
     backgroundColor: colors.overlay,
     borderRadius: Radius.md,
     paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
+    paddingVertical: Space.xxs },
   frameCountBadgeText: {
     color: colors.scrimTextPrimary,
-    fontSize: 9,
-    fontFamily: FontFamily.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold },
   unwatchedBadge: {
     position: 'absolute',
     bottom: 6,
@@ -1662,50 +1627,41 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.brand,
     borderRadius: Radius.md,
     paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
+    paddingVertical: Space.xxs },
   unwatchedBadgeText: {
     color: colors.textInverse,
-    fontSize: 9,
-    fontFamily: FontFamily.bold,
-  },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.bold },
   posterFreshDot: {
     width: 7,
     height: 7,
     borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-  },
+    backgroundColor: colors.brand },
   posterSeenDot: {
     width: 7,
     height: 7,
     borderRadius: Radius.full,
-    backgroundColor: colors.border,
-  },
+    backgroundColor: colors.border },
 
   flashListItem: {
     paddingHorizontal: Space.xs,
-    paddingBottom: GRID_GAP,
-  },
+    paddingBottom: GRID_GAP },
   exploreLoadingGrid: {
     flexDirection: 'row',
     paddingHorizontal: Space.xs,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   exploreLoadingColumn: {
     flex: 1,
-    gap: Space.sm,
-  },
+    gap: Space.sm },
   // Skeleton tile wrapper: media-only silhouette matching the reduced tile.
   skeletonTileWrap: {
-    gap: Space.xs,
-  },
+    gap: Space.xs },
 
   peekBackdrop: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.md,
-  },
+    paddingHorizontal: Space.md },
   peekCard: {
     width: '100%',
     maxWidth: 420,
@@ -1713,58 +1669,46 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   peekMediaWrap: {
     width: '100%',
     height: 340,
-    backgroundColor: colors.surfaceAlt,
-  },
+    backgroundColor: colors.surfaceAlt },
   peekMedia: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%' },
   peekMeta: {
     paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
+    paddingVertical: 14 },
   peekTitle: {
-    fontSize: 19,
+    fontSize: TypographyV2.sectionTitle.size,
     fontFamily: FontFamily.bold,
     color: colors.textPrimary,
-    letterSpacing: -0.2,
-  },
+    letterSpacing: -0.2 },
   peekActionsRow: {
     marginTop: 14,
     flexDirection: 'row',
-    gap: 10,
-  },
+    gap: 10 },
   peekGhostBtn: {
     flex: 1,
-    height: 44,
+    height: Control.hit,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   peekGhostText: {
-    fontSize: 13,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    color: colors.textPrimary,
-  },
+    color: colors.textPrimary },
   peekPrimaryBtn: {
     flex: 1,
-    height: 44,
+    height: Control.hit,
     borderRadius: RadiusRoleValue.pillAvatar,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   peekPrimaryIconWrap: {
     width: 16,
     height: 16,
     borderRadius: Radius.full,
-    backgroundColor: 'transparent',
-  },
+    backgroundColor: 'transparent' },
   peekPrimaryText: {
-    fontSize: 13,
+    fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.bold,
-    color: colors.background,
-  },
-});
+    color: colors.background } });
