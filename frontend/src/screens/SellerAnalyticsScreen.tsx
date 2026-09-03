@@ -1,33 +1,46 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, LayoutChangeEvent } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius } from '../theme/designTokens';
+import { Space, Radius, Control, PressScale } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { EmptyState } from '../components/EmptyState';
 import { CachedImage } from '../components/CachedImage';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useStore } from '../store/useStore';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
-import { fetchSellerAnalytics, fetchTopPerformers, type SellerAnalytics, type TopPerformerListing } from '../services/commerceApi';
+import {
+  fetchSellerAnalytics,
+  fetchTopPerformers,
+  fetchDailyBreakdown,
+  type SellerAnalytics,
+  type TopPerformerListing,
+  type DailyBreakdownPoint,
+} from '../services/commerceApi';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
-import { track } from '../analytics';
+import { track, trackRaw } from '../analytics';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useA11yAudit } from '../hooks/useA11yAudit';
-
+import { useAppTranslation } from '../i18n/useAppTranslation';
+import { useToast } from '../context/ToastContext';
+import { useHaptic } from '../hooks/useHaptic';
+import { openShareSheet } from '../platform/share/shareSheet';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
 type Period = '7d' | '30d' | '90d';
 
 const PERIOD_OPTIONS: { key: Period; label: string }[] = [
-  { key: '7d', label: '7d' },
-  { key: '30d', label: '30d' },
-  { key: '90d', label: '90d' },
+  { key: '7d', label: '7D' },
+  { key: '30d', label: '30D' },
+  { key: '90d', label: '90D' },
 ];
 
 export default function SellerAnalyticsScreen() {
@@ -42,23 +55,36 @@ export default function SellerAnalyticsScreen() {
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [analytics, setAnalytics] = useState<SellerAnalytics | null>(null);
+  const [prevAnalytics, setPrevAnalytics] = useState<SellerAnalytics | null>(null);
   const [topPerformersData, setTopPerformersData] = useState<TopPerformerListing[]>([]);
+  const [dailyData, setDailyData] = useState<DailyBreakdownPoint[]>([]);
   const [period, setPeriod] = useState<Period>('30d');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isError, setIsError] = useState(false);
   const [partialError, setPartialError] = useState(false);
   const [topPerformersError, setTopPerformersError] = useState(false);
+  const [dailyError, setDailyError] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const { t } = useAppTranslation('commerce');
+  const { show: showToast } = useToast();
+  const haptic = useHaptic();
+
+  const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : 90;
 
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
       setPartialError(false);
       setTopPerformersError(false);
-      const [listingsRes, analyticsData, topData] = await Promise.all([
+      setDailyError(false);
+      const [listingsRes, analyticsData, prevData, topData, daily] = await Promise.all([
         fetchUserListingsFromApi(currentUser.id, { limit: 100 }),
         fetchSellerAnalytics(currentUser.id, period).catch(() => null),
+        fetchSellerAnalytics(currentUser.id, period, { offsetDays: periodDays }).catch(() => null),
         fetchTopPerformers(currentUser.id, 10).catch(() => null),
+        fetchDailyBreakdown(currentUser.id, period).catch(() => null),
       ]);
       setListings(listingsRes.items);
       if (analyticsData) {
@@ -66,21 +92,24 @@ export default function SellerAnalyticsScreen() {
       } else {
         setPartialError(true);
       }
-      // Top performers: use real API data only. No client-side fallback —
-      // presenting client-sorted listings as "top performers" is a truth
-      // defect (AGENTS.md §11). When the endpoint fails, show an honest
-      // error state for that section instead.
+      setPrevAnalytics(prevData ?? null);
       if (topData) {
         setTopPerformersData(topData);
       } else {
         setTopPerformersError(true);
         setTopPerformersData([]);
       }
+      if (daily) {
+        setDailyData(daily);
+      } else {
+        setDailyError(true);
+        setDailyData([]);
+      }
       setIsError(false);
     } catch {
       setIsError(true);
     }
-  }, [currentUser?.id, period]);
+  }, [currentUser?.id, period, periodDays]);
 
   useEffect(() => {
     let mounted = true;
@@ -98,8 +127,6 @@ export default function SellerAnalyticsScreen() {
   };
 
   // ── Primary outcome: net sales (revenue − refunds − fees) ──
-  // Falls back to gross revenue when ledger data is unavailable (completeness
-  // = 'partial'). The hero label changes to reflect which figure is shown.
   const heroLabel = useMemo(() => {
     if (!analytics) return 'Revenue';
     if (analytics.netSalesGbpMinor != null && analytics.completeness === 'complete') {
@@ -118,53 +145,131 @@ export default function SellerAnalyticsScreen() {
 
   const itemsSold = analytics?.itemsSold ?? null;
   const totalViews = analytics?.totalViews ?? null;
+  const totalLikes = analytics?.totalLikes ?? null;
+  const totalSaves = analytics?.totalSaves ?? null;
   const activeListings = analytics?.activeListings ?? null;
   const avgRating = analytics?.avgRating ?? null;
   const reviewCount = analytics?.reviewCount ?? 0;
 
-  // AOV — only meaningful when both revenue and items sold are real
   const avgOrderValue = useMemo<number | null>(() => {
     if (heroValue == null || itemsSold == null || itemsSold === 0) return null;
     return heroValue / itemsSold;
   }, [heroValue, itemsSold]);
 
-  // Conversion rate — period-scoped views vs period-scoped items sold.
-  // Both now come from real data sources (interactions table + orders).
   const conversionRate = useMemo<number | null>(() => {
     if (!analytics || totalViews == null || itemsSold == null) return null;
     return totalViews > 0 ? (itemsSold / totalViews) * 100 : 0;
   }, [analytics, totalViews, itemsSold]);
 
-  // ── Supporting KPIs as flat rows — no icons, label + value only ──
-  // Per anti-AI design policy: remove label-everything disease. The label
-  // is the label; an icon adds noise without information.
-  const kpiRows = useMemo(() => {
-    const rows: { label: string; value: string }[] = [
-      { label: 'Items sold', value: itemsSold != null ? String(itemsSold) : '—' },
+  const pctDelta = useCallback(
+    (current: number | null, previous: number | null): number | null => {
+      if (current == null || previous == null || previous === 0) return null;
+      return ((current - previous) / previous) * 100;
+    },
+    []
+  );
+
+  const viewsDelta = useMemo(
+    () => pctDelta(totalViews, prevAnalytics?.totalViews ?? null),
+    [pctDelta, totalViews, prevAnalytics]
+  );
+  const itemsSoldDelta = useMemo(
+    () => pctDelta(itemsSold, prevAnalytics?.itemsSold ?? null),
+    [pctDelta, itemsSold, prevAnalytics]
+  );
+  const revenueDelta = useMemo(
+    () => pctDelta(
+      heroValue,
+      prevAnalytics
+        ? (prevAnalytics.netSalesGbpMinor != null && prevAnalytics.completeness === 'complete'
+            ? prevAnalytics.netSalesGbpMinor / 100
+            : prevAnalytics.revenueGbpMinor / 100)
+        : null
+    ),
+    [pctDelta, heroValue, prevAnalytics]
+  );
+  const prevConversion = useMemo(() => {
+    if (!prevAnalytics) return null;
+    const pv = prevAnalytics.totalViews;
+    const ps = prevAnalytics.itemsSold;
+    if (pv == null || ps == null) return null;
+    return pv > 0 ? (ps / pv) * 100 : 0;
+  }, [prevAnalytics]);
+  const conversionDelta = useMemo(
+    () => pctDelta(conversionRate, prevConversion),
+    [pctDelta, conversionRate, prevConversion]
+  );
+
+  // ── Real daily chart data from the API ──
+  // No fabrication. The backend returns one row per day with real counts.
+  const chartData = useMemo(() => {
+    if (dailyData.length === 0) return [];
+    return dailyData;
+  }, [dailyData]);
+
+  const chartMaxViews = useMemo(
+    () => chartData.reduce((m, d) => (d.views > m ? d.views : m), 0),
+    [chartData]
+  );
+
+  const hasChartData = chartData.length > 0 && chartMaxViews > 0;
+
+  // ── Conversion funnel data ──
+  const funnelSteps = useMemo(() => {
+    const views = analytics?.totalViews ?? 0;
+    const likes = analytics?.totalLikes ?? 0;
+    const saves = analytics?.totalSaves ?? 0;
+    const purchases = analytics?.itemsSold ?? 0;
+    const max = views > 0 ? views : 1;
+    const steps = [
+      { label: 'Views', value: views, pctOfPrev: 100, widthPct: Math.max(2, (views / max) * 100) },
+      { label: 'Likes', value: likes, pctOfPrev: views > 0 ? (likes / views) * 100 : 0, widthPct: Math.max(2, (likes / max) * 100) },
+      { label: 'Saves', value: saves, pctOfPrev: likes > 0 ? (saves / likes) * 100 : (views > 0 ? (saves / views) * 100 : 0), widthPct: Math.max(2, (saves / max) * 100) },
+      { label: 'Purchases', value: purchases, pctOfPrev: saves > 0 ? (purchases / saves) * 100 : (views > 0 ? (purchases / views) * 100 : 0), widthPct: Math.max(2, (purchases / max) * 100) },
+    ];
+
+    // Identify the biggest drop-off step (lowest pctOfPrev, excluding the first)
+    let biggestDropIdx = -1;
+    let biggestDropPct = 101;
+    for (let i = 1; i < steps.length; i++) {
+      if (steps[i].pctOfPrev < biggestDropPct) {
+        biggestDropPct = steps[i].pctOfPrev;
+        biggestDropIdx = i;
+      }
+    }
+    return { steps, biggestDropIdx };
+  }, [analytics]);
+
+  // ── KPI grid cells — 2-column grid, value dominant, label recessed ──
+  const kpiCells = useMemo(() => {
+    const cells: { label: string; value: string; delta: number | null }[] = [
+      { label: 'Items sold', value: itemsSold != null ? String(itemsSold) : '—', delta: itemsSoldDelta },
       {
-        label: 'Avg order value',
+        label: 'Avg order',
         value: avgOrderValue != null ? formatFromFiat(avgOrderValue, currencyCode) : '—',
+        delta: null,
       },
       {
         label: 'Conversion',
         value: conversionRate != null ? `${conversionRate.toFixed(1)}%` : '—',
+        delta: conversionDelta,
       },
-      { label: 'Views', value: totalViews != null ? String(totalViews) : '—' },
+      { label: 'Views', value: totalViews != null ? totalViews.toLocaleString() : '—', delta: viewsDelta },
     ];
     if (activeListings != null) {
-      rows.push({ label: 'Active listings', value: String(activeListings) });
+      cells.push({ label: 'Active listings', value: String(activeListings), delta: null });
     }
     if (avgRating != null) {
-      rows.push({
+      cells.push({
         label: 'Avg rating',
         value: `${avgRating.toFixed(1)}${reviewCount > 0 ? ` (${reviewCount})` : ''}`,
+        delta: null,
       });
     }
-    return rows;
-  }, [itemsSold, avgOrderValue, conversionRate, totalViews, activeListings, avgRating, reviewCount, formatFromFiat, currencyCode]);
+    return cells;
+  }, [itemsSold, avgOrderValue, conversionRate, totalViews, activeListings, avgRating, reviewCount, formatFromFiat, currencyCode, itemsSoldDelta, conversionDelta, viewsDelta]);
 
   // ── Top listings — enriched with imageUrl from listings data ──
-  // Real API data only. No client-side fallback sort.
   const topPerformers = useMemo(() => {
     const listingMap = new Map(listings.map((l) => [l.id, l]));
     return topPerformersData.map((t) => {
@@ -202,53 +307,157 @@ export default function SellerAnalyticsScreen() {
   const hasZeroListings = listings.length === 0 && !isLoading && !isError;
 
   const handleListingPress = useCallback((listingId: string) => {
-    navigation.navigate('ItemDetail', { itemId: listingId });
+    navigation.navigate('ManageListing', { itemId: listingId });
   }, [navigation]);
 
-  // ── Loading state ──
+  const handleExport = useCallback(async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(start.getDate() - periodDays);
+
+      const report = {
+        generatedAt: now.toISOString(),
+        period,
+        dateRange: {
+          start: start.toISOString().split('T')[0],
+          end: now.toISOString().split('T')[0],
+          days: periodDays,
+        },
+        kpis: {
+          heroLabel,
+          heroValue,
+          itemsSold,
+          totalViews,
+          totalLikes,
+          totalSaves,
+          activeListings,
+          avgRating,
+          reviewCount,
+          avgOrderValue,
+          conversionRate,
+          revenueGbpMinor: analytics?.revenueGbpMinor ?? null,
+          netSalesGbpMinor: analytics?.netSalesGbpMinor ?? null,
+          refundsGbpMinor: analytics?.refundsGbpMinor ?? null,
+          feesGbpMinor: analytics?.feesGbpMinor ?? null,
+          responseRate: analytics?.responseRate ?? null,
+          positiveRatingPct: analytics?.positiveRatingPct ?? null,
+        },
+        dailyBreakdown: chartData,
+        topPerformers: topPerformers.map((p) => ({
+          id: p.id,
+          title: p.title,
+          priceGbp: p.price,
+          views: p.views,
+          likes: p.likes,
+        })),
+      };
+
+      const json = JSON.stringify(report, null, 2);
+      const fileName = `seller_report_${period}_${now.toISOString().split('T')[0]}.json`;
+      const dir = FileSystem.Paths?.document?.uri;
+      if (!dir) throw new Error('File system unavailable');
+      const fileUri = `${dir}${fileName}`;
+      await FileSystem.writeAsStringAsync(fileUri, json);
+
+      const result = await openShareSheet({
+        url: fileUri,
+        title: 'Seller report',
+        subject: `Seller analytics report — ${periodLabel}`,
+      });
+
+      if (result.success) {
+        haptic.success();
+        showToast(t('sellerAnalytics.exportSuccess'), 'success');
+        trackRaw('seller_report_exported', { period });
+      }
+    } catch {
+      haptic.error();
+      showToast(t('sellerAnalytics.exportFailed'), 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isExporting, periodDays, period, heroLabel, heroValue, itemsSold, totalViews, totalLikes, totalSaves, activeListings, avgRating, reviewCount, avgOrderValue, conversionRate, analytics, chartData, topPerformers, periodLabel, haptic, showToast, t]);
+
+  const exportButton = useMemo(() => (
+    <AnimatedPressable
+      style={styles.headerAction}
+      onPress={handleExport}
+      disabled={isExporting || !analytics}
+      accessibilityRole="button"
+      accessibilityLabel={t('sellerAnalytics.exportReport')}
+      accessibilityHint="Exports a JSON report via the system share sheet"
+      scaleValue={PressScale.icon}
+      hapticFeedback="light"
+      activeOpacity={0.62}
+    >
+      <Ionicons
+        name={isExporting ? 'hourglass-outline' : 'share-outline'}
+        size={20}
+        color={colors.textPrimary}
+        aria-hidden={true}
+      />
+    </AnimatedPressable>
+  ), [styles, handleExport, isExporting, analytics, t, colors.textPrimary]);
+
+  // ── Loading state — skeleton matches the actual populated layout ──
   if (isLoading) {
     return (
       <FlagshipScreen
-        header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
+        header={<FlagshipHeader title="Analytics" onBack={() => navigation.goBack()} />}
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          <View style={{ height: Space.md }} />
-          <View style={{ backgroundColor: colors.surfaceAlt, height: 12, width: '30%', borderRadius: Radius.sm }} />
-          <View style={{ height: Space.xs }} />
-          <View style={{ backgroundColor: colors.surfaceAlt, height: 34, width: '60%', borderRadius: Radius.sm }} />
-          <View style={{ height: Space.xs }} />
-          <View style={{ backgroundColor: colors.surfaceAlt, height: 13, width: '35%', borderRadius: Radius.sm }} />
-          <View style={{ height: Space.lg }} />
-          {/* Period tabs skeleton */}
-          <View style={{ flexDirection: 'row', gap: Space.lg }}>
-            {[0, 1, 2].map((i) => (
-              <View key={i} style={{ backgroundColor: colors.surfaceAlt, height: 16, width: 30, borderRadius: Radius.sm }} />
+          {/* Hero skeleton */}
+          <View style={styles.skeletonHero}>
+            <View style={styles.skeletonPeriodRow}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={styles.skeletonPeriodPill} />
+              ))}
+            </View>
+            <View style={{ height: Space.md }} />
+            <View style={[styles.skeletonBar, { width: '45%', height: 32 }]} />
+            <View style={{ height: Space.sm }} />
+            <View style={styles.skeletonMetricRow}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={{ flex: 1, gap: Space.xs }}>
+                  <View style={[styles.skeletonBar, { width: '60%', height: 16 }]} />
+                  <View style={[styles.skeletonBar, { width: '40%', height: 11 }]} />
+                </View>
+              ))}
+            </View>
+          </View>
+          {/* KPI grid skeleton */}
+          <View style={styles.skeletonKpiGrid}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={styles.skeletonKpiCell}>
+                <View style={[styles.skeletonBar, { width: '50%', height: 18 }]} />
+                <View style={{ height: Space.xs }} />
+                <View style={[styles.skeletonBar, { width: '70%', height: 11 }]} />
+              </View>
             ))}
           </View>
-          {/* KPI rows skeleton */}
-          <View style={{ height: Space.md }} />
-          {[0, 1, 2, 3].map((i) => (
-            <View key={i} style={styles.skeletonKpiRow}>
-              <View style={{ backgroundColor: colors.surfaceAlt, height: 14, width: '40%', borderRadius: Radius.sm }} />
-              <View style={{ flex: 1 }} />
-              <View style={{ backgroundColor: colors.surfaceAlt, height: 16, width: 60, borderRadius: Radius.sm }} />
-            </View>
-          ))}
+          {/* Chart skeleton */}
+          <View style={{ height: Space.lg }} />
+          <View style={[styles.skeletonBar, { width: '30%', height: 14 }]} />
+          <View style={{ height: Space.sm }} />
+          <View style={styles.skeletonChart} />
           {/* Top listings skeleton */}
           <View style={{ height: Space.lg }} />
-          <View style={{ backgroundColor: colors.surfaceAlt, height: 14, width: '35%', borderRadius: Radius.sm }} />
+          <View style={[styles.skeletonBar, { width: '25%', height: 14 }]} />
           <View style={{ height: Space.sm }} />
           {[0, 1, 2].map((i) => (
-            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}>
-              <View style={{ backgroundColor: colors.surfaceAlt, width: 56, height: 56, borderRadius: Radius.sm }} />
+            <View key={i} style={styles.skeletonListingRow}>
+              <View style={styles.skeletonThumb} />
               <View style={{ flex: 1, gap: Space.xs }}>
-                <View style={{ backgroundColor: colors.surfaceAlt, height: 14, width: '60%', borderRadius: Radius.sm }} />
-                <View style={{ backgroundColor: colors.surfaceAlt, height: 11, width: '35%', borderRadius: Radius.sm }} />
+                <View style={[styles.skeletonBar, { width: '60%', height: 14 }]} />
+                <View style={[styles.skeletonBar, { width: '35%', height: 11 }]} />
               </View>
-              <View style={{ backgroundColor: colors.surfaceAlt, height: 16, width: 50, borderRadius: Radius.sm }} />
+              <View style={[styles.skeletonBar, { width: 50, height: 16 }]} />
             </View>
           ))}
         </ScrollView>
@@ -260,7 +469,7 @@ export default function SellerAnalyticsScreen() {
   if (isError && listings.length === 0) {
     return (
       <FlagshipScreen
-        header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
+        header={<FlagshipHeader title="Analytics" onBack={() => navigation.goBack()} />}
       >
         <EmptyState
           icon="cloud-offline-outline"
@@ -279,7 +488,7 @@ export default function SellerAnalyticsScreen() {
     return (
       <FlagshipScreen
         ref={a11yRef}
-        header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
+        header={<FlagshipHeader title="Analytics" onBack={() => navigation.goBack()} />}
       >
         <EmptyState
           icon="analytics"
@@ -295,7 +504,13 @@ export default function SellerAnalyticsScreen() {
   return (
     <FlagshipScreen
       ref={a11yRef}
-      header={<FlagshipHeader title="Seller Analytics" onBack={() => navigation.goBack()} />}
+      header={
+        <FlagshipHeader
+          title="Analytics"
+          onBack={() => navigation.goBack()}
+          rightAction={exportButton}
+        />
+      }
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
@@ -303,8 +518,8 @@ export default function SellerAnalyticsScreen() {
         <OfflineBanner onRetry={() => void onRefresh()} />
       ) : null}
       {partialError ? (
-        <View style={{ paddingHorizontal: Space.md, paddingVertical: Space.sm, backgroundColor: colors.surfaceAlt }}>
-          <Text style={{ fontSize: TypographyV2.meta.size, color: colors.textMuted, lineHeight: TypographyV2.meta.lineHeight }}>
+        <View style={styles.partialBanner}>
+          <Text style={styles.partialText}>
             Analytics details couldn't be loaded — showing listing data only. Pull to retry.
           </Text>
         </View>
@@ -314,94 +529,242 @@ export default function SellerAnalyticsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
-        {/* ── Hero: net sales or revenue ──
-            One dominant object — the primary financial outcome.
-            No card, no chrome. The number IS the object. */}
+        {/* ══ HERO — composed object, period integrated ══
+            The number IS the object. Period selector sits directly above it.
+            Delta is a semantic indicator, not decoration. Supporting metrics
+            recede below. No eyebrow — the period selector provides context. */}
         <View style={styles.heroBlock}>
-          <Text style={[styles.heroEyebrow, { color: colors.textMuted }]}>
-            {heroLabel} · Last {periodLabel}
-          </Text>
-          <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
-            {heroValue != null ? formatFromFiat(heroValue, currencyCode) : '—'}
-          </Text>
-          <Text style={[styles.heroContext, { color: itemsSold != null && itemsSold > 0 ? colors.textSecondary : colors.textMuted }]}>
-            {itemsSold != null
-              ? itemsSold > 0
-                ? `${itemsSold} ${itemsSold === 1 ? 'item sold' : 'items sold'}`
-                : 'No sales in this period'
-              : '—'}
-          </Text>
-        </View>
+          {/* Period selector — segmented control, part of the hero */}
+          <View style={styles.periodSegment}>
+            {PERIOD_OPTIONS.map((opt) => {
+              const isActive = period === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  style={[
+                    styles.periodSegmentItem,
+                    isActive && { backgroundColor: colors.brand },
+                  ]}
+                  onPress={() => { haptics.tap(); setPeriod(opt.key); }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Period: ${opt.label}`}
+                  accessibilityState={{ selected: isActive }}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                >
+                  <Text style={[
+                    styles.periodSegmentText,
+                    { color: isActive ? colors.textInverse : colors.textMuted },
+                  ]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-        {/* ── Period selector — hairline tabs, no pill chrome ──
-            Per anti-AI design: no grey surface, no rounded pill.
-            Selected tab indicated by text weight + underline only. */}
-        <View style={styles.periodRow}>
-          {PERIOD_OPTIONS.map((opt) => {
-            const isActive = period === opt.key;
-            return (
-              <Pressable
-                key={opt.key}
-                style={styles.periodTab}
-                onPress={() => { haptics.tap(); setPeriod(opt.key); }}
-                accessibilityRole="button"
-                accessibilityLabel={`Period: ${opt.label}`}
-                accessibilityState={{ selected: isActive }}
-                hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
-              >
+          {/* Hero number — THE dominant object */}
+          <View style={styles.heroValueRow}>
+            <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
+              {heroValue != null ? formatFromFiat(heroValue, currencyCode) : '—'}
+            </Text>
+            {revenueDelta != null ? (
+              <View style={[
+                styles.deltaPill,
+                { backgroundColor: revenueDelta >= 0 ? colors.successSubtle : colors.dangerSubtle },
+              ]}>
                 <Text style={[
-                  styles.periodTabText,
-                  { color: isActive ? colors.textPrimary : colors.textMuted },
-                  isActive && styles.periodTabTextActive,
+                  styles.deltaPillText,
+                  { color: revenueDelta >= 0 ? colors.success : colors.danger },
                 ]}>
-                  {opt.label}
+                  {revenueDelta >= 0 ? '+' : ''}{revenueDelta.toFixed(0)}%
                 </Text>
-                {isActive ? (
-                  <View style={[styles.periodTabIndicator, { backgroundColor: colors.textPrimary }]} />
-                ) : null}
-              </Pressable>
-            );
-          })}
+              </View>
+            ) : null}
+          </View>
+          <Text style={[styles.heroLabel, { color: colors.textMuted }]}>
+            {heroLabel} · vs previous {periodLabel}
+          </Text>
+
+          {/* Supporting metrics — tight row, recede below the number */}
+          <View style={styles.heroMetricsRow}>
+            <View style={styles.heroMetricCell}>
+              <Text style={[styles.heroMetricValue, { color: colors.textPrimary }]}>
+                {itemsSold != null ? String(itemsSold) : '—'}
+              </Text>
+              <Text style={[styles.heroMetricLabel, { color: colors.textMuted }]}>
+                sold
+              </Text>
+            </View>
+            <View style={[styles.heroMetricDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.heroMetricCell}>
+              <Text style={[styles.heroMetricValue, { color: colors.textPrimary }]}>
+                {totalViews != null ? totalViews.toLocaleString() : '—'}
+              </Text>
+              <Text style={[styles.heroMetricLabel, { color: colors.textMuted }]}>
+                views
+              </Text>
+            </View>
+            <View style={[styles.heroMetricDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.heroMetricCell}>
+              <Text style={[styles.heroMetricValue, { color: colors.textPrimary }]}>
+                {conversionRate != null ? `${conversionRate.toFixed(1)}%` : '—'}
+              </Text>
+              <Text style={[styles.heroMetricLabel, { color: colors.textMuted }]}>
+                conv.
+              </Text>
+            </View>
+          </View>
         </View>
 
-        {/* ── KPI rows — flat, no icons, hairline dividers ──
-            Label on the left, value on the right. No card surface.
-            Per anti-AI design: remove label-everything disease. */}
-        <View style={styles.kpiList}>
-          {kpiRows.map((kpi) => (
-            <View key={kpi.label} style={styles.kpiRow}>
-              <Text style={[styles.kpiLabel, { color: colors.textSecondary }]}>{kpi.label}</Text>
-              <Text style={[styles.kpiValue, { color: colors.textPrimary }]}>{kpi.value}</Text>
+        {/* ══ KPI GRID — 2-column, value dominant, label recessed ══
+            No icons, no card chrome. Hairline dividers between cells.
+            Density without the list-like feel. */}
+        <View style={styles.kpiGrid}>
+          {kpiCells.map((kpi, i) => (
+            <View
+              key={kpi.label}
+              style={[
+                styles.kpiCell,
+                i % 2 === 1 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.borderSubtle },
+                i >= 2 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
+              ]}
+            >
+              <View style={styles.kpiCellValueRow}>
+                <Text style={[styles.kpiCellValue, { color: colors.textPrimary }]}>
+                  {kpi.value}
+                </Text>
+                {kpi.delta != null ? (
+                  <Text style={[
+                    styles.kpiCellDelta,
+                    { color: kpi.delta >= 0 ? colors.success : colors.danger },
+                  ]}>
+                    {kpi.delta >= 0 ? '+' : ''}{kpi.delta.toFixed(0)}%
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={[styles.kpiCellLabel, { color: colors.textMuted }]}>
+                {kpi.label}
+              </Text>
             </View>
           ))}
         </View>
 
-        {/* ── Top listings — media-first rows with hairline dividers ──
-            Larger thumbnails (56pt) for stronger media presence.
-            No card-on-card; flat rows on the canvas. */}
+        {/* ══ DAILY VIEWS — real data from the API, no fabrication ══
+            Area-style bar chart with the peak day labelled.
+            If the API returned no data or all zeros, show an honest state. */}
+        <View style={styles.chartSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Views</Text>
+            {hasChartData ? (
+              <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+                {totalViews != null ? totalViews.toLocaleString() : ''} total
+              </Text>
+            ) : null}
+          </View>
+          {dailyError ? (
+            <Text style={[styles.chartEmpty, { color: colors.textMuted }]}>
+              Couldn't load daily breakdown. Pull to retry.
+            </Text>
+          ) : hasChartData ? (
+            <DailyViewsChart
+              data={chartData}
+              maxViews={chartMaxViews}
+              barColor={colors.brand}
+              trackColor={colors.surfaceAlt}
+              labelColor={colors.textMuted}
+            />
+          ) : (
+            <Text style={[styles.chartEmpty, { color: colors.textMuted }]}>
+              No views in this period yet.
+            </Text>
+          )}
+        </View>
+
+        {/* ══ CONVERSION FUNNEL — connected stepped bars with drop-off ══
+            Each step shows value + step-to-step conversion %.
+            The biggest drop-off is highlighted with a danger tint. */}
+        {analytics && (analytics.totalViews > 0 || analytics.itemsSold > 0) ? (
+          <View style={styles.funnelSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Funnel</Text>
+              {conversionRate != null ? (
+                <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+                  {conversionRate.toFixed(1)}% view→purchase
+                </Text>
+              ) : null}
+            </View>
+            {funnelSteps.steps.map((step, idx) => {
+              const isBiggestDrop = idx === funnelSteps.biggestDropIdx && idx > 0;
+              return (
+                <View key={step.label} style={styles.funnelRow}>
+                  <View style={styles.funnelLabelRow}>
+                    <Text style={[styles.funnelLabel, { color: colors.textSecondary }]}>
+                      {step.label}
+                    </Text>
+                    <View style={styles.funnelValueRow}>
+                      <Text style={[styles.funnelValue, { color: colors.textPrimary }]}>
+                        {step.value.toLocaleString()}
+                      </Text>
+                      {idx > 0 ? (
+                        <Text style={[
+                          styles.funnelPct,
+                          { color: isBiggestDrop ? colors.danger : colors.textMuted },
+                        ]}>
+                          {step.pctOfPrev.toFixed(0)}%
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={[styles.funnelBarTrack, { backgroundColor: colors.surfaceAlt }]}>
+                    <View
+                      style={[
+                        styles.funnelBar,
+                        {
+                          width: `${step.widthPct}%`,
+                          backgroundColor: colors.brand,
+                          opacity: 1 - idx * 0.18,
+                        },
+                      ]}
+                    />
+                  </View>
+                  {isBiggestDrop ? (
+                    <Text style={[styles.funnelDropHint, { color: colors.danger }]}>
+                      Biggest drop-off
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* ══ TOP LISTINGS — media-first, rank, strong composition ══
+            72pt thumbnails for a media-first marketplace. Rank is a quiet
+            metadata element, not a decorative badge. */}
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Top listings</Text>
         </View>
         {topPerformersError ? (
-          <View style={styles.sectionErrorWrap}>
-            <Text style={[styles.sectionErrorText, { color: colors.textMuted }]}>
-              Couldn't load top listings. Pull to retry.
-            </Text>
-          </View>
+          <Text style={[styles.sectionError, { color: colors.textMuted }]}>
+            Couldn't load top listings. Pull to retry.
+          </Text>
         ) : topPerformers.length > 0 ? (
           <View>
-            {topPerformers.map((item) => (
+            {topPerformers.map((item, idx) => (
               <Pressable
                 key={item.id}
                 style={({ pressed }) => [
                   styles.topListingRow,
-                  { borderBottomColor: colors.border },
+                  { borderBottomColor: colors.borderSubtle },
                   pressed && { opacity: 0.6 },
                 ]}
                 onPress={() => handleListingPress(item.id)}
                 accessibilityRole="button"
-                accessibilityLabel={`Listing: ${item.title}, ${item.views} views, ${currencySymbol}${item.price.toFixed(0)}`}
+                accessibilityLabel={`Listing ${idx + 1}: ${item.title}, ${item.views} views, ${currencySymbol}${item.price.toFixed(0)}`}
               >
+                <Text style={[styles.rankLabel, { color: colors.textMuted }]}>
+                  {idx + 1}
+                </Text>
                 <View style={[styles.topListingThumb, { backgroundColor: colors.surfaceAlt }]}>
                   {item.imageUrl ? (
                     <CachedImage
@@ -416,10 +779,10 @@ export default function SellerAnalyticsScreen() {
                 <View style={styles.topListingInfo}>
                   <Text style={[styles.topListingRowTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
                   <Text style={[styles.topListingRowMeta, { color: colors.textMuted }]}>
-                    {item.views} views{item.likes > 0 ? ` · ${item.likes} likes` : ''}
+                    {item.views.toLocaleString()} views{item.likes > 0 ? ` · ${item.likes} likes` : ''}
                   </Text>
                 </View>
-                <Text style={[styles.topListingRowPrice, { color: colors.brand }]}>
+                <Text style={[styles.topListingRowPrice, { color: colors.textPrimary }]}>
                   {currencySymbol}{item.price.toFixed(0)}
                 </Text>
               </Pressable>
@@ -433,12 +796,14 @@ export default function SellerAnalyticsScreen() {
           />
         )}
 
-        {/* ── Needs attention — flat rows, only when present ── */}
+        {/* ══ NEEDS ATTENTION — actionable, clear issue label ══
+            The issue is stated as text, not decorated with warning color.
+            The row is pressable → takes the seller to manage the listing. */}
         {needsAttention.length > 0 ? (
           <View>
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Needs attention</Text>
-              <Text style={[styles.sectionHint, { color: colors.textMuted }]}>Low views</Text>
+              <Text style={[styles.sectionHint, { color: colors.textMuted }]}>Low engagement</Text>
             </View>
             <View>
               {needsAttention.map((item) => (
@@ -446,7 +811,7 @@ export default function SellerAnalyticsScreen() {
                   key={item.id}
                   style={({ pressed }) => [
                     styles.attentionRow,
-                    { borderBottomColor: colors.border },
+                    { borderBottomColor: colors.borderSubtle },
                     pressed && { opacity: 0.6 },
                   ]}
                   onPress={() => handleListingPress(item.id)}
@@ -466,13 +831,16 @@ export default function SellerAnalyticsScreen() {
                   </View>
                   <View style={styles.attentionInfo}>
                     <Text style={[styles.attentionTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
-                    <Text style={[styles.attentionIssue, { color: colors.warning }]}>
-                      {item.views} views
+                    <Text style={[styles.attentionIssue, { color: colors.textMuted }]}>
+                      {item.views} views · low engagement
                     </Text>
                   </View>
-                  <Text style={[styles.attentionPrice, { color: colors.textSecondary }]}>
-                    {currencySymbol}{item.price.toFixed(0)}
-                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={colors.textMuted}
+                    aria-hidden={true}
+                  />
                 </Pressable>
               ))}
             </View>
@@ -483,100 +851,324 @@ export default function SellerAnalyticsScreen() {
   );
 }
 
+// ── Daily Views Chart — real data, View-based, no chart library ──
+// Compact area-style bars showing the real per-day view counts from the API.
+// The peak day is marked. No fabrication, no Math.sin distribution.
+function DailyViewsChart({
+  data,
+  maxViews,
+  barColor,
+  trackColor,
+  labelColor,
+}: {
+  data: DailyBreakdownPoint[];
+  maxViews: number;
+  barColor: string;
+  trackColor: string;
+  labelColor: string;
+}) {
+  const [chartWidth, setChartWidth] = useState(0);
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    setChartWidth(e.nativeEvent.layout.width);
+  }, []);
+
+  // For periods > 30d, label every ~2 weeks. For 30d, label every ~week.
+  // For 7d, label every day.
+  const labelInterval = data.length <= 7 ? 1 : data.length <= 30 ? 7 : 14;
+
+  const peakIdx = useMemo(() => {
+    let peak = 0;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i].views > data[peak].views) peak = i;
+    }
+    return peak;
+  }, [data]);
+
+  // Show the peak day label only if there's room (chart width > 120)
+  const showPeakLabel = chartWidth > 120 && data[peakIdx]?.views > 0;
+
+  return (
+    <View onLayout={onLayout} style={{ marginTop: Space.sm }}>
+      {/* Bar chart */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 80, gap: 2 }}>
+        {data.map((d, i) => {
+          const ratio = maxViews > 0 ? d.views / maxViews : 0;
+          const isPeak = i === peakIdx && d.views > 0;
+          return (
+            <View key={i} style={{ flex: 1, height: '100%', justifyContent: 'flex-end' }}>
+              <View
+                style={{
+                  width: '100%',
+                  height: `${Math.max(ratio * 100, d.views > 0 ? 4 : 0)}%`,
+                  backgroundColor: barColor,
+                  opacity: isPeak ? 1 : 0.35 + ratio * 0.4,
+                  borderRadius: Radius.sm,
+                }}
+              />
+            </View>
+          );
+        })}
+      </View>
+      {/* Date labels — sparse, not every day */}
+      <View style={{ flexDirection: 'row', marginTop: Space.xs, height: 14 }}>
+        {data.map((d, i) => {
+          if (i % labelInterval !== 0 && i !== data.length - 1) {
+            return <View key={i} style={{ flex: 1 }} />;
+          }
+          const date = new Date(d.date);
+          const label = `${date.getMonth() + 1}/${date.getDate()}`;
+          return (
+            <View key={i} style={{ flex: labelInterval, alignItems: 'flex-start' }}>
+              <Text style={{
+                fontSize: TypographyV2.meta.size,
+                fontFamily: TypographyV2.meta.fontFamily,
+                color: labelColor,
+                fontVariant: ['tabular-nums' as any],
+              }}>
+                {label}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+      {/* Peak annotation */}
+      {showPeakLabel ? (
+        <Text style={{
+          fontSize: TypographyV2.meta.size,
+          fontFamily: TypographyV2.meta.fontFamily,
+          color: labelColor,
+          marginTop: Space.xs,
+        }}>
+          Peak: {data[peakIdx].views.toLocaleString()} views on{' '}
+          {new Date(data[peakIdx].date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scrollContent: {
       paddingHorizontal: Space.md,
-      paddingBottom: Space.xl },
+      paddingBottom: Space.xxl },
 
-    // ── Hero — flat, no card ──
+    // ── Header action ──
+    headerAction: {
+      width: Control.hit,
+      height: Control.hit,
+      justifyContent: 'center',
+      alignItems: 'center' },
+
+    // ── Hero — composed object ──
     heroBlock: {
       paddingVertical: Space.md },
-    heroEyebrow: {
+
+    // Period segmented control — part of the hero, not a separate section
+    periodSegment: {
+      flexDirection: 'row',
+      alignSelf: 'flex-start',
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.sm,
+      padding: 2,
+      marginBottom: Space.md },
+    periodSegmentItem: {
+      paddingVertical: Space.xs + 1,
+      paddingHorizontal: Space.sm + 2,
+      borderRadius: Radius.sm - 1,
+      minWidth: 44,
+      alignItems: 'center' },
+    periodSegmentText: {
       fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      marginBottom: Space.xs - 2 },
+      fontWeight: '600' },
+
+    // Hero number — THE dominant object
+    heroValueRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: Space.sm,
+      marginBottom: Space.xs },
     heroValue: {
       fontSize: TypographyV2.priceHero.size,
       lineHeight: TypographyV2.priceHero.lineHeight,
       fontFamily: TypographyV2.priceHero.fontFamily,
-      fontVariant: ['tabular-nums'] },
-    heroContext: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
       fontVariant: ['tabular-nums'],
-      marginTop: Space.xs - 2 },
+      letterSpacing: TypographyV2.priceHero.letterSpacing },
+    heroLabel: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      letterSpacing: TypographyV2.meta.letterSpacing },
 
-    // ── Period selector — hairline tabs, no pill ──
-    periodRow: {
-      flexDirection: 'row',
-      gap: Space.lg,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border },
-    periodTab: {
-      alignItems: 'center',
-      paddingVertical: Space.xs - 2 },
-    periodTabText: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily },
-    periodTabTextActive: {
-      fontFamily: TypographyV2.bodyStrong.fontFamily },
-    periodTabIndicator: {
-      height: 2,
-      width: '100%',
-      marginTop: Space.xxs,
-      borderRadius: 1 },
+    // Delta pill — semantic, not decorative
+    deltaPill: {
+      paddingVertical: 2,
+      paddingHorizontal: Space.sm,
+      borderRadius: Radius.sm,
+      alignSelf: 'center' },
+    deltaPillText: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600',
+      fontVariant: ['tabular-nums'] },
 
-    // ── KPI flat rows — no icons, no card ──
-    kpiList: {
-      marginTop: Space.sm },
-    kpiRow: {
+    // Supporting metrics — tight row, recede
+    heroMetricsRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: Space.sm + 2,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border },
-    kpiLabel: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily },
-    kpiValue: {
+      marginTop: Space.md,
+      paddingTop: Space.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle },
+    heroMetricCell: {
+      flex: 1,
+      gap: 0 },
+    heroMetricDivider: {
+      width: StyleSheet.hairlineWidth,
+      alignSelf: 'stretch' },
+    heroMetricValue: {
       fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
       fontFamily: TypographyV2.bodyStrong.fontFamily,
       fontVariant: ['tabular-nums'] },
+    heroMetricLabel: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily },
+
+    // ── KPI grid — 2-column, value dominant ──
+    kpiGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginTop: Space.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+      borderLeftWidth: StyleSheet.hairlineWidth,
+      borderLeftColor: colors.borderSubtle },
+    kpiCell: {
+      width: '50%',
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md,
+      borderRightWidth: StyleSheet.hairlineWidth,
+      borderRightColor: colors.borderSubtle,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle },
+    kpiCellValueRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: Space.xs },
+    kpiCellValue: {
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontVariant: ['tabular-nums'] },
+    kpiCellDelta: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600',
+      fontVariant: ['tabular-nums'] },
+    kpiCellLabel: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginTop: 2 },
 
     // ── Section headers ──
     sectionHeader: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'baseline',
       justifyContent: 'space-between',
       marginTop: Space.lg,
       marginBottom: Space.sm },
     sectionTitle: {
       fontSize: TypographyV2.sectionTitle.size,
-      fontFamily: TypographyV2.sectionTitle.fontFamily },
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      fontFamily: TypographyV2.sectionTitle.fontFamily,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing },
     sectionHint: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily },
-    sectionErrorWrap: {
-      paddingVertical: Space.md },
-    sectionErrorText: {
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontVariant: ['tabular-nums'] },
+    sectionError: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily },
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      paddingVertical: Space.md },
 
-    // ── Top listings — media-first rows ──
+    // ── Chart ──
+    chartSection: {
+      marginTop: Space.sm },
+    chartEmpty: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      paddingVertical: Space.md },
+
+    // ── Funnel ──
+    funnelSection: {
+      marginTop: Space.sm },
+    funnelRow: {
+      paddingVertical: Space.sm - 1,
+      gap: Space.xs },
+    funnelLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'space-between' },
+    funnelValueRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: Space.sm },
+    funnelLabel: {
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: TypographyV2.body.fontFamily },
+    funnelValue: {
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontVariant: ['tabular-nums'] },
+    funnelPct: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600',
+      fontVariant: ['tabular-nums'] },
+    funnelBarTrack: {
+      height: 6,
+      borderRadius: Radius.sm,
+      overflow: 'hidden' },
+    funnelBar: {
+      height: '100%',
+      borderRadius: Radius.sm },
+    funnelDropHint: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      marginTop: 1 },
+
+    // ── Top listings — media-first ──
     topListingRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.sm,
-      paddingVertical: Space.md,
+      paddingVertical: Space.sm + 2,
       borderBottomWidth: StyleSheet.hairlineWidth },
+    rankLabel: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600',
+      width: 16,
+      textAlign: 'center',
+      fontVariant: ['tabular-nums'] },
     topListingThumb: {
-      width: 56,
-      height: 56,
-      borderRadius: Radius.sm,
+      width: 72,
+      height: 72,
+      borderRadius: Radius.md,
       overflow: 'hidden' },
     topListingThumbImage: {
       width: '100%',
@@ -585,16 +1177,19 @@ function createStyles(colors: ThemeColors) {
       flex: 1 },
     topListingInfo: {
       flex: 1,
-      gap: Space.xs - 2 },
+      gap: Space.xs - 1 },
     topListingRowTitle: {
       fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       fontFamily: TypographyV2.body.fontFamily },
     topListingRowMeta: {
       fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: TypographyV2.meta.fontFamily,
       fontVariant: ['tabular-nums'] },
     topListingRowPrice: {
       fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
       fontFamily: TypographyV2.bodyStrong.fontFamily,
       fontVariant: ['tabular-nums'] },
 
@@ -606,8 +1201,8 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm + 2,
       borderBottomWidth: StyleSheet.hairlineWidth },
     attentionImageWrap: {
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       borderRadius: Radius.sm,
       overflow: 'hidden' },
     attentionImage: {
@@ -617,21 +1212,80 @@ function createStyles(colors: ThemeColors) {
       flex: 1 },
     attentionInfo: {
       flex: 1,
-      gap: Space.xs - 2 },
+      gap: Space.xs - 1 },
     attentionTitle: {
       fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       fontFamily: TypographyV2.body.fontFamily },
     attentionIssue: {
       fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: TypographyV2.meta.fontFamily },
     attentionPrice: {
       fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
       fontFamily: TypographyV2.body.fontFamily,
       fontVariant: ['tabular-nums'] },
 
+    // ── Partial error banner ──
+    partialBanner: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      backgroundColor: colors.surfaceAlt },
+    partialText: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted },
+
     // ── Skeleton ──
-    skeletonKpiRow: {
+    skeletonHero: {
+      paddingVertical: Space.md },
+    skeletonPeriodRow: {
+      flexDirection: 'row',
+      gap: Space.xs },
+    skeletonPeriodPill: {
+      backgroundColor: colors.surfaceAlt,
+      width: 44,
+      height: 24,
+      borderRadius: Radius.sm },
+    skeletonMetricRow: {
+      flexDirection: 'row',
+      paddingTop: Space.md,
+      marginTop: Space.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle },
+    skeletonKpiGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginTop: Space.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle },
+    skeletonKpiCell: {
+      width: '50%',
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md,
+      borderRightWidth: StyleSheet.hairlineWidth,
+      borderRightColor: colors.borderSubtle },
+    skeletonChart: {
+      height: 80,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.sm,
+      opacity: 0.5 },
+    skeletonListingRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: Space.sm + 2 } });
+      gap: Space.sm,
+      paddingVertical: Space.sm + 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle },
+    skeletonThumb: {
+      width: 72,
+      height: 72,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt },
+    skeletonBar: {
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.sm },
+  });
 }

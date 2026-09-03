@@ -47,7 +47,7 @@ import {
   FinancialNotificationRow,
   SystemNotificationRow } from '../components/notifications';
 
-import { Typography, Radius, Space, Stroke, Control } from '../theme/designTokens';
+import { Typography, Radius, Space, Stroke, Control, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -111,6 +111,10 @@ const OVERFLOW_FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'price', label: 'Prices' },
   { key: 'auction', label: 'Auctions' },
 ];
+
+// No per-filter icons — the label is the object (AGENTS.md §4 anti
+// label-everything). The filter sheet is a selection list, not a settings
+// catalogue: label + count + checkmark is the complete grammar.
 
 // Primary pill-style filter tabs — always visible at the top of the list.
 // The most useful commerce/social filters get direct one-tap access; the
@@ -399,6 +403,10 @@ export default function NotificationsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
+  // Tab/app badge propagation (§37.6): mark-as-read must update the global
+  // unread count immediately, not wait for the next app-state poll.
+  const notificationCount = useStore((state) => state.notificationCount);
+  const setNotificationCount = useStore((state) => state.setNotificationCount);
   const { isOffline } = useConnectivity();
   const { quietHours } = useSettingsPreferences();
   const { colors } = useAppTheme();
@@ -648,12 +656,13 @@ export default function NotificationsScreen() {
     setNotifications((previous) => previous.map((item) => ({ ...item, read: true })));
     try {
       await markAllNotificationsRead();
+      setNotificationCount(0);
       show('Marked all notifications as read', 'success');
     } catch {
       setNotifications(previousNotifications);
       show('Failed to mark all as read', 'error');
     }
-  }, [hasUnread, notifications, show]);
+  }, [hasUnread, notifications, show, setNotificationCount]);
 
   const handleOpenNotification = React.useCallback(
     async (notification: NotificationCard) => {
@@ -664,6 +673,7 @@ export default function NotificationsScreen() {
         );
         try {
           await markNotificationRead(notification.id);
+          setNotificationCount(Math.max(0, notificationCount - 1));
         } catch {
           setNotifications((previous) =>
             previous.map((item) => (item.id === notification.id ? { ...item, read: previousRead } : item))
@@ -684,7 +694,7 @@ export default function NotificationsScreen() {
 
       show('No linked destination for this notification yet.', 'info');
     },
-    [navigation, show]
+    [navigation, show, notifications, setNotifications, notificationCount, setNotificationCount]
   );
 
   const renderNotificationRow = useCallback(
@@ -925,27 +935,20 @@ export default function NotificationsScreen() {
         })}
       </View>
 
-      {/* Unread summary + quiet hours indicator */}
-      {unreadCount > 0 || quietActive ? (
+      {/* Quiet hours indicator — the only persistent meta row. The unread
+          count already lives in the Unread filter pill and section headers;
+          restating it here duplicates the heading (AGENTS.md §4). */}
+      {quietActive ? (
         <View style={styles.summaryBannerRow}>
-          {unreadCount > 0 ? (
-            <View style={styles.unreadSummaryBadge}>
-              <Text style={styles.unreadSummaryText}>
-                {unreadCount > 99 ? '99+' : unreadCount} unread {unreadCount === 1 ? 'notification' : 'notifications'}
-              </Text>
-            </View>
-          ) : null}
-          {quietActive ? (
-            <Pressable
-              style={styles.quietHoursBadge}
-              onPress={() => navigation.navigate('PushNotifications')}
-              accessibilityRole="button"
-              accessibilityLabel="Quiet hours active. Tap to manage."
-            >
-              <Ionicons name="moon" size={12} color={colors.textMuted} />
-              <Text style={styles.quietHoursText}>Quiet hours on</Text>
-            </Pressable>
-          ) : null}
+          <Pressable
+            style={styles.quietHoursBadge}
+            onPress={() => navigation.navigate('PushNotifications')}
+            accessibilityRole="button"
+            accessibilityLabel="Quiet hours active. Tap to manage."
+          >
+            <Ionicons name="moon" size={12} color={colors.textMuted} />
+            <Text style={styles.quietHoursText}>Quiet hours on</Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -1066,54 +1069,64 @@ export default function NotificationsScreen() {
       <BottomSheet
         visible={overflowVisible}
         onDismiss={() => setOverflowVisible(false)}
-        snapPoint={0.5}
+        snapPoint={0.65}
       >
         <View style={styles.overflowSheetContent}>
-          <Text style={styles.overflowSheetTitle}>Filter notifications</Text>
-          {OVERFLOW_FILTERS.map((filter) => {
-            const isActive = activeFilter === filter.key;
-            const count = filterCounts[filter.key] ?? 0;
-            return (
-              <AnimatedPressable
-                key={filter.key}
-                style={[
-                  styles.overflowRow,
-                  isActive && { backgroundColor: colors.brandSubtle },
-                ]}
-                onPress={() => {
-                  haptics.tap();
-                  setActiveFilter(filter.key);
-                  setOverflowVisible(false);
-                }}
-                activeOpacity={0.7}
-                scaleValue={0.96}
-                hapticFeedback="light"
-                accessibilityRole="button"
-                accessibilityLabel={`Filter: ${filter.label}${count > 0 ? `, ${count} items` : ''}`}
-                accessibilityState={{ selected: isActive }}
-              >
-                <Text
+          <View style={styles.overflowSheetHeader}>
+            <Text style={styles.overflowSheetTitle}>Filter notifications</Text>
+            <AnimatedPressable
+              onPress={() => setOverflowVisible(false)}
+              style={styles.overflowCloseBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close filter sheet"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
+            </AnimatedPressable>
+          </View>
+          <View style={styles.overflowList}>
+            {OVERFLOW_FILTERS.map((filter) => {
+              const isActive = activeFilter === filter.key;
+              const count = filterCounts[filter.key] ?? 0;
+              return (
+                <AnimatedPressable
+                  key={filter.key}
                   style={[
-                    styles.overflowRowText,
-                    { color: isActive ? colors.brand : colors.textPrimary },
-                    isActive && { fontFamily: Typography.family.semibold },
+                    styles.overflowRow,
+                    isActive && styles.overflowRowActive,
                   ]}
+                  onPress={() => {
+                    haptics.tap();
+                    setActiveFilter(filter.key);
+                    setOverflowVisible(false);
+                  }}
+                  activeOpacity={0.7}
+                  scaleValue={0.985}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Filter: ${filter.label}${count > 0 ? `, ${count} items` : ''}`}
+                  accessibilityState={{ selected: isActive }}
                 >
-                  {filter.label}
-                </Text>
-                <View style={styles.overflowRowRight}>
-                  {count > 0 ? (
-                    <Text style={[styles.overflowRowCount, { color: colors.textMuted }]}>
-                      {count}
-                    </Text>
-                  ) : null}
-                  {isActive ? (
-                    <Ionicons name="checkmark" size={18} color={colors.brand} />
-                  ) : null}
-                </View>
-              </AnimatedPressable>
-            );
-          })}
+                  <Text
+                    style={[
+                      styles.overflowRowText,
+                      isActive && styles.overflowRowTextActive,
+                    ]}
+                  >
+                    {filter.label}
+                  </Text>
+                  <View style={styles.overflowRowRight}>
+                    {count > 0 ? (
+                      <Text style={styles.overflowCountText}>{count}</Text>
+                    ) : null}
+                    {isActive ? (
+                      <Ionicons name="checkmark" size={16} color={colors.brand} />
+                    ) : null}
+                  </View>
+                </AnimatedPressable>
+              );
+            })}
+          </View>
         </View>
       </BottomSheet>
     </FlagshipScreen>
@@ -1216,15 +1229,6 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm + 2,
     paddingBottom: Space.xs },
-  unreadSummaryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 1,
-    minHeight: Control.chromeCompact },
-  unreadSummaryText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.brand },
   quietHoursBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1305,27 +1309,56 @@ function createStyles(colors: ThemeColors) {
     flex: 1 },
   overflowSheetContent: {
     paddingHorizontal: Space.md,
-    paddingVertical: Space.sm },
+    paddingTop: Space.xs,
+    paddingBottom: Space.xl },
+  overflowSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Space.md,
+    paddingHorizontal: Space.xs },
   overflowSheetTitle: {
     fontSize: TypographyV2.screenTitle.size,
-    fontFamily: TypographyV2.screenTitle.fontFamily,
-    color: colors.textPrimary,
-    marginBottom: Space.sm },
+    fontFamily: FontFamily.bold,
+    color: colors.textPrimary },
+  overflowCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  overflowList: {
+    gap: Space.xs },
+  // Selection row — the row IS the 44pt touch target. No icon container,
+  // no count pill: label left, count + checkmark right (Telegram/Instagram
+  // filter-sheet grammar). Count is quiet tabular metadata, not a badge.
   overflowRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border },
+    minHeight: Control.hit,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.sm + 2,
+    borderRadius: Radius.lg,
+    backgroundColor: 'transparent' },
+  overflowRowActive: {
+    backgroundColor: colors.surfaceAlt },
   overflowRowText: {
     fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.regular,
     color: colors.textPrimary },
+  overflowRowTextActive: {
+    fontFamily: FontFamily.semibold,
+    color: colors.brand },
   overflowRowRight: {
     flexDirection: 'row',
-    alignItems: 'center' },
-  overflowRowCount: {
+    alignItems: 'center',
+    gap: Space.xs },
+  overflowCountText: {
     fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
     color: colors.textMuted,
-    marginRight: Space.sm } });
+    fontVariant: ['tabular-nums'] },
+  });
 }

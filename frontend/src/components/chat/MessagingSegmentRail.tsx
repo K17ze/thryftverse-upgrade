@@ -26,13 +26,14 @@ export function MessagingSegmentRail({
   const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  // Only 3 scopes are visible in the first viewport (Primary, Buying,
-  // Selling). Additional classifiers (Requests, Unread, Archived, Groups)
-  // are surfaced behind a filter icon in the InboxScreen header.
+  // Primary scopes visible in the first viewport: Primary, Buying, Selling,
+  // and Requests. Additional classifiers (Unread, Archived, Groups) are
+  // surfaced behind a filter icon in the InboxScreen header.
   const segments: { key: MessagingSegment; label: string; badge?: number }[] = [
     { key: 'all', label: t('inbox.primary') },
     { key: 'buying', label: t('inbox.buying'), badge: buyingCount > 0 ? buyingCount : undefined },
     { key: 'selling', label: t('inbox.selling'), badge: sellingCount > 0 ? sellingCount : undefined },
+    { key: 'requests', label: t('inbox.requests'), badge: requestCount > 0 ? requestCount : undefined },
   ];
 
   return (

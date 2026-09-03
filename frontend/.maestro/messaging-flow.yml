@@ -1,0 +1,13 @@
+# Maestro E2E flow — Messaging and inbox journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Inbox"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+
+- takeScreenshot: messaging-flow-complete

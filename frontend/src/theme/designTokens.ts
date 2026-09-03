@@ -705,6 +705,10 @@ export const EditorMaterial = {
     overlay: 'rgba(0,0,0,0.30)',
     hairline: 'rgba(255,255,255,0.14)' } } as const satisfies Record<string, EditorMaterialSpec>;
 
+/** Theme-independent authored-media canvas. Creator tools use a dark canvas
+ * in both app themes so media, white glyphs and scrim text remain predictable. */
+export const EditorCanvas = '#0C0C0D';
+
 /**
  * @deprecated Role-based radii for editor chrome. Collapses into `Radius`
  * (Radius.sheet, Radius.rail). Kept for backward compatibility with external
@@ -788,5 +792,24 @@ export type {
   SemanticIconDef,
   OpticalOffset,
 } from './iconTokens';
+
+// ============================================================================
+// AVATAR PALETTE — deterministic avatar placeholder fills
+// Curated palette of 8 distinct, high-saturation fills (Telegram/WhatsApp
+// pattern). All are readable with white semibold initials on top (≥3:1
+// contrast). Chosen to be distinguishable in a dense chat list (hue spread
+// ~45°). Theme-neutral — identical in light and dark mode because the fills
+// are the recognition token, not a themed surface.
+// ============================================================================
+export const AVATAR_PALETTE: readonly string[] = [
+  '#E5484D', // red
+  '#F5A623', // amber
+  '#46A758', // green
+  '#0EA5E9', // sky
+  '#6366F1', // indigo
+  '#A855F7', // purple
+  '#EC4899', // pink
+  '#14B8A6', // teal
+];
 
 

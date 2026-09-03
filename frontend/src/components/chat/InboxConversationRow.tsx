@@ -30,6 +30,13 @@ export interface InboxConversationRowProps {
   draftText?: string;
   itemId?: string;
   itemThumbUri?: string | null;
+  /**
+   * Pre-built listing context thumbnail node (e.g. ListingContextThumbnail).
+   * When provided, takes priority over itemThumbUri — it handles the
+   * no-image fallback (bag icon) so marketplace conversations always show
+   * listing context even when the listing has no photo.
+   */
+  listingContextThumb?: React.ReactNode;
   avatarElement: React.ReactNode;
   isTyping?: boolean;
   onPress: () => void;
@@ -101,6 +108,7 @@ function InboxConversationRowBase({
   draftText,
   itemId,
   itemThumbUri,
+  listingContextThumb,
   avatarElement,
   isTyping,
   onPress,
@@ -221,7 +229,9 @@ function InboxConversationRowBase({
                 <View style={styles.unreadIndicator} />
               )
             ) : null}
-            {!unread && itemId && itemThumbUri ? (
+            {!unread && itemId && listingContextThumb ? (
+              listingContextThumb
+            ) : !unread && itemId && itemThumbUri ? (
               <CachedImage
                 uri={itemThumbUri}
                 style={styles.itemThumb}

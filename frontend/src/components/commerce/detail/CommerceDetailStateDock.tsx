@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Text, Pressable, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -248,7 +248,8 @@ export function CommerceDetailStateDock({
               they've scrolled past the hero. Small, quiet, no border.
               Per AGENTS.md: visible containment must have meaning. The
               thumbnail is informational, not a container. */}
-          {thumbnailUri && !stateBadge ? (
+          {/* Product thumbnail — only in stacked layout to prevent squishing price in horizontal dock */}
+          {shouldStack && thumbnailUri && !stateBadge ? (
             <CachedImage
               uri={thumbnailUri}
               style={styles.thumbnail}
@@ -261,6 +262,7 @@ export function CommerceDetailStateDock({
               <Text
                 style={[styles.originalValue, { color: colors.textMuted }]}
                 accessibilityRole="text"
+                numberOfLines={1}
               >
                 {originalValue}
               </Text>
@@ -269,6 +271,9 @@ export function CommerceDetailStateDock({
               <Text
                 style={[styles.value, { color: colors.textPrimary }]}
                 accessibilityRole="text"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
               >
                 {value}
               </Text>
@@ -466,13 +471,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    flexShrink: 1 },
+    flexShrink: 0,
+    minWidth: 84 },
   // Text cluster inside the value cluster — holds value, label, subtitle.
   // Needed so the thumbnail sits to the left and text stacks vertically.
   valueTextCluster: {
     flexDirection: 'column',
-    gap: Space.xs,
-    flexShrink: 1 },
+    gap: 2,
+    flexShrink: 0 },
   // Product thumbnail — tokenized via CommerceLayout.dockThumbnailSize.
   // Radius.md (8px) matches the primary action radius for visual coherence.
   thumbnail: {

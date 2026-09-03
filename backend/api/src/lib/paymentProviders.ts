@@ -767,7 +767,7 @@ function verifyStripeSignature(headers: Record<string, unknown>, rawBody: string
   }
 
   const stripe = new Stripe(config.stripeSecretKey, {
-    apiVersion: '2024-06-20',
+    apiVersion: '2026-08-26.dahlia',
   });
 
   try {

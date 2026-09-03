@@ -177,6 +177,12 @@ export const SemanticIconMap = {
   phone: { outline: 'phone-portrait-outline', filled: 'phone-portrait', description: 'Device & session' },
   desktop: { outline: 'desktop-outline', filled: 'desktop', description: 'Desktop & session' },
   chip: { outline: 'bulb-outline', filled: 'bulb', description: 'AI agents & assistants' },
+  tag: { outline: 'pricetag-outline', filled: 'pricetag', description: 'Listing tag & category' },
+  mailUnread: { outline: 'mail-unread-outline', filled: 'mail-unread', description: 'Unread messages' },
+  flag: { outline: 'flag-outline', filled: 'flag', description: 'Report / Flag content' },
+  pin: { outline: 'pin-outline', filled: 'pin', description: 'Pin conversation' },
+  notificationsOff: { outline: 'notifications-off-outline', filled: 'notifications-off', description: 'Muted notifications' },
+  arrowUp: { outline: 'arrow-up-circle-outline', filled: 'arrow-up-circle', description: 'Scroll up / Up action' },
 
   // Common Controls & Utilities
   close: { outline: 'close', filled: 'close-circle', description: 'Dismiss / Close' },
@@ -260,6 +266,12 @@ export type SemanticIconName =
   | 'phone'
   | 'desktop'
   | 'chip'
+  | 'tag'
+  | 'mailUnread'
+  | 'flag'
+  | 'pin'
+  | 'notificationsOff'
+  | 'arrowUp'
   | 'close'
   | 'closeCircle'
   | 'check'

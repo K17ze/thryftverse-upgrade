@@ -209,7 +209,16 @@
       "connectedServices": "Connected services",
       "helpLegal": "Help & legal",
       "advanced": "Advanced",
-      "account": "Account"
+      "account": "Account",
+      "profile": "Profile",
+      "accountSecurity": "Account & security",
+      "privacy": "Privacy",
+      "selling": "Selling",
+      "appearance": "Appearance",
+      "dataStorage": "Data & storage",
+      "support": "Support",
+      "about": "About",
+      "developer": "Developer"
     },
     "rows": {
       "verification": "Verification",
@@ -300,7 +309,10 @@
       "featureFlagsSubtitle": "Current flag values for QA",
       "autoTranslate": "Auto-translate messages",
       "autoTranslateEnabled": "Foreign messages translated automatically",
-      "autoTranslateDisabled": "Tap to translate foreign messages manually"
+      "autoTranslateDisabled": "Tap to translate foreign messages manually",
+      "enabled": "On",
+      "disabled": "Off",
+      "appVersion": "v{{version}}"
     },
     "toast": {
       "themeApplying": "Applying {{theme}} theme…",
@@ -383,7 +395,25 @@
       "statusDraft": "Draft",
       "statusActive": "Active",
       "statusPaused": "Paused",
-      "statusSold": "Sold"
+      "statusSold": "Sold",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "offlineChanges": "Offline changes",
+      "conflict": "Conflict",
+      "conflictTitle": "Listing edited elsewhere",
+      "conflictMessage": "This listing was edited on another device. Would you like to:",
+      "conflictKeepMine": "Keep my changes",
+      "conflictUseTheirs": "Use their changes",
+      "conflictCompare": "Compare changes",
+      "conflictCompareTitle": "Your changes vs their changes",
+      "draftFound": "Unsaved draft found",
+      "draftRestore": "Restore draft from {date}?",
+      "draftRestoreAction": "Restore",
+      "draftDiscard": "Discard draft",
+      "saveButton": "Save",
+      "retrySave": "Retry",
+      "savingButton": "Saving…",
+      "mediaUploading": "Uploading media…"
     },
     "create": {
       "title": "Sell",
@@ -466,6 +496,7 @@
       "typing": "{{name}} is typing...",
       "onlineNow": "Online now",
       "newMessages": "New messages",
+      "edited": "Edited",
       "undo": "Undo",
       "message": "Message",
       "mediaPress": "Media Press",
@@ -494,6 +525,7 @@
       "primary": "Primary",
       "buying": "Buying",
       "selling": "Selling",
+      "requests": "Requests",
       "tabBadge": "{{label}} tab{{plural}}",
       "newBadge": ", {{count}} new",
       "openConversation": "Open {{title}}",
@@ -576,6 +608,10 @@
       "chooseFromLibrary": "Choose from your library",
       "camera": "Camera",
       "takePhotoOrVideo": "Take a new photo or video",
+      "location": "Location",
+      "shareLocation": "Share a pinned location",
+      "document": "Document",
+      "shareDocument": "Share a file from your device",
       "makeOffer": "Make Offer",
       "product": "Product",
       "priceQuote": "Price Quote",
@@ -861,6 +897,18 @@
       "statusDelivered": "Delivered",
       "statusCancelled": "Cancelled",
       "statusRefunded": "Refunded"
+    },
+    "sellerAnalytics": {
+      "metricsTitle": "What do these metrics mean?",
+      "metricsExpand": "Show metric definitions",
+      "metricsCollapse": "Hide metric definitions",
+      "exportReport": "Export report",
+      "exporting": "Exporting…",
+      "exportSuccess": "Report exported",
+      "exportFailed": "Couldn't export report. Try again.",
+      "scopeListing": "Per listing",
+      "scopeSeller": "Per seller",
+      "scopePlatform": "Platform-wide"
     }
   },
   "myProfile": {
@@ -1747,6 +1795,103 @@
       "totalValue": "Total asset value",
       "ownershipPercent": "Your ownership",
       "distributions": "Distributions"
+    }
+  },
+  "stateCopy": {
+    "actions": {
+      "tryAgain": "Try again",
+      "refresh": "Refresh",
+      "clearFilters": "Clear filters"
+    },
+    "conversations": {
+      "loading": "Loading your conversations…",
+      "empty": "No conversations yet. Start one from a listing or profile.",
+      "emptyFiltered": "No conversations match this filter.",
+      "error": "Couldn't load your conversations. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached conversations.",
+      "stale": "These conversations may be out of date. Pull to refresh.",
+      "permissionDenied": "Sign in to see your conversations."
+    },
+    "messages": {
+      "loading": "Loading messages…",
+      "empty": "No messages yet. Say hello to start the conversation.",
+      "error": "Couldn't load messages. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached messages.",
+      "stale": "These messages may be out of date. Pull to refresh."
+    },
+    "listings": {
+      "loading": "Loading listings…",
+      "empty": "No listings yet. List your first item to start selling.",
+      "emptyFiltered": "No listings match these filters.",
+      "error": "Couldn't load listings. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached listings.",
+      "stale": "These listings may be out of date. Pull to refresh."
+    },
+    "inventory": {
+      "loading": "Loading your inventory…",
+      "empty": "No items in your inventory. List an item to get started.",
+      "emptyFiltered": "No items match these filters.",
+      "error": "Couldn't load your inventory. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached inventory.",
+      "stale": "Your inventory may be out of date. Pull to refresh."
+    },
+    "orders": {
+      "loading": "Loading your orders…",
+      "empty": "No orders yet. When you buy or sell something, your orders will show up here.",
+      "emptyFiltered": "No orders match these filters.",
+      "error": "Couldn't load your orders. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached orders.",
+      "stale": "These orders may be out of date. Pull to refresh."
+    },
+    "analytics": {
+      "loading": "Loading your analytics…",
+      "empty": "No analytics data yet. List an item to start tracking performance.",
+      "emptyFiltered": "No data for this period.",
+      "error": "Couldn't load your analytics. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached analytics.",
+      "stale": "This data may be out of date. Pull to refresh."
+    },
+    "wallet": {
+      "loading": "Loading your wallet…",
+      "empty": "No wallet activity yet. Your balance and transactions will appear here.",
+      "emptyFiltered": "No transactions match these filters.",
+      "error": "Couldn't load your wallet. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached wallet data.",
+      "stale": "Your wallet balance may be out of date. Pull to refresh."
+    },
+    "search": {
+      "loading": "Searching…",
+      "empty": "No results found. Try a different search term.",
+      "emptyFiltered": "No results match these filters.",
+      "error": "Search isn't available right now. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Search requires a connection.",
+      "stale": "These results may be out of date. Search again to refresh."
+    },
+    "sellerHub": {
+      "loading": "Loading your seller dashboard…",
+      "empty": "No seller activity yet. List an item to start selling.",
+      "emptyFiltered": "No data for this period.",
+      "error": "Couldn't load your seller dashboard. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached seller data.",
+      "stale": "This data may be out of date. Pull to refresh."
+    },
+    "profile": {
+      "loading": "Loading profile…",
+      "empty": "This profile has no public activity yet.",
+      "emptyFiltered": "No listings match these filters.",
+      "error": "Couldn't load this profile. Check your connection and try again.",
+      "errorRecovery": "Try again",
+      "offline": "You're offline. Showing cached profile data.",
+      "stale": "This profile may be out of date. Pull to refresh."
     }
   }
 }

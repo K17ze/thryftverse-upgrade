@@ -1,15 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, Typography, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke, FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
-import { useAppTheme } from '../../theme/ThemeContext';
+import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { CachedImage } from '../CachedImage';
 import { CommerceStateCard, CommerceStateType } from './CommerceStateCard';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 
-interface OfferData {
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface OfferData {
+  offerId?: string;
   price: number;
   originalPrice: number;
   status?: 'pending' | 'declined' | 'countered' | 'accepted' | 'expired' | 'cancelled';
@@ -17,13 +21,45 @@ interface OfferData {
   expiresAt?: string;
   /** Counter-offer chain depth (0 = initial offer, 1 = first counter, etc.) */
   counterRound?: number;
+  /** Product anchor context */
+  itemId?: string;
+  itemTitle?: string;
+  itemImage?: string | null;
+  itemBrand?: string | null;
+  itemSize?: string | null;
+  itemCondition?: string | null;
 }
 
-interface MarketplaceChatCardProps {
+export interface ListingShareData {
+  id: string;
+  title: string;
+  price: number;
+  originalPrice?: number;
+  image: string;
+  brand?: string;
+  size?: string;
+  condition?: string;
+  sellerUsername?: string;
+  sellerRating?: number;
+  isSold?: boolean;
+}
+
+export interface PurchaseStatusData {
+  orderId?: string;
+  orderShortId?: string;
+  itemTitle?: string;
+  itemImage?: string | null;
+  amount?: number;
+  deliveryEstimate?: string;
+}
+
+export interface MarketplaceChatCardProps {
   type: 'offer' | 'purchase_status' | 'listing_share' | 'safety_notice' | 'system' | 'commerce_state';
   isMe?: boolean;
   senderLabel?: string;
   offer?: OfferData;
+  listing?: ListingShareData;
+  purchaseStatus?: PurchaseStatusData;
   text?: string;
   systemTitle?: string;
   systemVerified?: boolean;
@@ -42,15 +78,14 @@ interface MarketplaceChatCardProps {
   onDecline?: () => void;
   onCounter?: () => void;
   onViewListing?: () => void;
+  onMakeOffer?: () => void;
   onViewOrder?: () => void;
   /** Called when the offer countdown reaches zero */
   onExpire?: () => void;
 }
 
-/**
- * Formats a remaining time delta into a compact countdown string.
- * "23h 14m" for >1h, "14m 32s" for <1h, "expired" for <=0.
- */
+// ── Helper Functions ─────────────────────────────────────────────────────────
+
 function formatCountdown(msRemaining: number): string {
   if (msRemaining <= 0) return 'expired';
   const totalSeconds = Math.floor(msRemaining / 1000);
@@ -62,17 +97,13 @@ function formatCountdown(msRemaining: number): string {
   return `${seconds}s`;
 }
 
-function getExpiryTone(msRemaining: number, colors: any): { color: string; icon: keyof typeof Ionicons.glyphMap } {
+function getExpiryTone(msRemaining: number, colors: ThemeColors): { color: string; icon: keyof typeof Ionicons.glyphMap } {
   if (msRemaining <= 0) return { color: colors.textMuted, icon: 'time-outline' };
   if (msRemaining <= 60 * 60 * 1000) return { color: colors.danger, icon: 'timer-outline' };
   if (msRemaining <= 12 * 60 * 60 * 1000) return { color: colors.warning, icon: 'timer-outline' };
   return { color: colors.textSecondary, icon: 'time-outline' };
 }
 
-/**
- * Live countdown hook — ticks every second, returns ms remaining.
- * Calls onExpire exactly once when the countdown hits zero.
- */
 function useOfferCountdown(expiresAt: string | undefined, onExpire?: () => void): number {
   const [msRemaining, setMsRemaining] = useState(() => {
     if (!expiresAt) return Infinity;
@@ -97,11 +128,15 @@ function useOfferCountdown(expiresAt: string | undefined, onExpire?: () => void)
   return msRemaining;
 }
 
+// ── Component ────────────────────────────────────────────────────────────────
+
 export function MarketplaceChatCard({
   type,
   isMe = false,
   senderLabel,
   offer,
+  listing,
+  purchaseStatus,
   text,
   systemTitle,
   systemVerified = false,
@@ -112,14 +147,15 @@ export function MarketplaceChatCard({
   onDecline,
   onCounter,
   onViewListing,
+  onMakeOffer,
   onViewOrder,
   onExpire,
 }: MarketplaceChatCardProps) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
   const { currencySymbol } = useFormattedPrice();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
-  // Stable callback so the countdown hook doesn't re-run every render
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const handleExpire = useCallback(() => {
     onExpire?.();
   }, [onExpire]);
@@ -128,87 +164,243 @@ export function MarketplaceChatCard({
   const isExpired = offer?.expiresAt ? msRemaining <= 0 : false;
   const effectiveStatus = isExpired && offer?.status === 'pending' ? 'expired' : offer?.status;
 
+  // ── 1. IN-CHAT OFFER CARD (Grailed & Instagram Direct 2026 standard) ───────
   if (type === 'offer' && offer) {
     const status = effectiveStatus;
     const priceLabel = formattedPrice ?? `${currencySymbol}${offer.price.toFixed(2)}`;
     const origLabel = formattedOriginalPrice ?? `${currencySymbol}${offer.originalPrice.toFixed(2)}`;
     const showCountdown = offer.expiresAt && (status === 'pending' || status === 'countered');
     const tone = getExpiryTone(msRemaining, colors);
-    const counterRoundLabel = offer.counterRound && offer.counterRound > 0
-      ? t('offers.counterRound', { round: offer.counterRound })
-      : null;
-    const discountPct = offer.originalPrice > offer.price
-      ? Math.round(((offer.originalPrice - offer.price) / offer.originalPrice) * 100)
-      : 0;
-    const isPending = !isMe && (status === undefined || status === 'pending') && !isExpired;
+    const counterRoundLabel =
+      offer.counterRound && offer.counterRound > 0
+        ? t('offers.counterRound', { round: offer.counterRound })
+        : null;
+    const discountPct =
+      offer.originalPrice > offer.price
+        ? Math.round(((offer.originalPrice - offer.price) / offer.originalPrice) * 100)
+        : 0;
+
+    const isPending = (status === undefined || status === 'pending') && !isExpired;
+    const hasProductContext = !!(offer.itemTitle || offer.itemImage || offer.itemBrand);
+
     return (
-      <View style={[styles.offerBlock, isMe && styles.offerBlockMe]}>
-        {senderLabel && !isMe ? (
-          <Text style={styles.offerSender}>{senderLabel}</Text>
-        ) : null}
-        {counterRoundLabel && (
-          <View style={styles.counterRoundRow}>
-            <Ionicons name="swap-horizontal" size={11} color={colors.textMuted} />
-            <Text style={styles.counterRoundText}>{counterRoundLabel}</Text>
-          </View>
+      <View
+        style={[
+          styles.offerCard,
+          isMe ? styles.offerCardMe : styles.offerCardThem,
+        ]}
+      >
+        {/* Product Media Anchor Header */}
+        {hasProductContext && (
+          <AnimatedPressable
+            style={styles.offerItemHeader}
+            onPress={onViewListing}
+            disabled={!onViewListing}
+            activeOpacity={0.85}
+            scaleValue={0.99}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel={offer.itemTitle ?? 'View listing'}
+          >
+            {offer.itemImage ? (
+              <CachedImage uri={offer.itemImage} style={styles.offerItemThumb} contentFit="cover" />
+            ) : (
+              <View style={[styles.offerItemThumb, styles.offerItemThumbFallback]}>
+                <Ionicons name="shirt-outline" size={16} color={colors.textMuted} />
+              </View>
+            )}
+            <View style={styles.offerItemMeta}>
+              {offer.itemBrand && (
+                <Text style={styles.offerBrandEyebrow} numberOfLines={1}>
+                  {offer.itemBrand.toUpperCase()}
+                </Text>
+              )}
+              <Text style={styles.offerItemTitle} numberOfLines={1}>
+                {offer.itemTitle ?? 'Listing negotiation'}
+              </Text>
+              {(offer.itemSize || offer.itemCondition) && (
+                <View style={styles.offerTagRow}>
+                  {offer.itemSize && (
+                    <Text style={styles.offerTagText}>{offer.itemSize}</Text>
+                  )}
+                  {offer.itemSize && offer.itemCondition && (
+                    <Text style={styles.offerTagDot}>·</Text>
+                  )}
+                  {offer.itemCondition && (
+                    <Text style={styles.offerTagText}>{offer.itemCondition}</Text>
+                  )}
+                </View>
+              )}
+            </View>
+            {onViewListing && (
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            )}
+          </AnimatedPressable>
         )}
-        <View style={styles.offerPriceRow}>
-          <View style={styles.offerPriceIdentity}>
-            <Text style={styles.offerPrice} numberOfLines={1}>{priceLabel}</Text>
-            <Text style={styles.offerStrike} numberOfLines={1}>{origLabel}</Text>
-            {discountPct >= 5 ? (
+
+        {/* Sender Label (if in group or incoming) */}
+        {senderLabel && !isMe && !hasProductContext && (
+          <Text style={styles.offerSender}>{senderLabel}</Text>
+        )}
+
+        {/* Price Hero Section */}
+        <View style={styles.offerHeroBody}>
+          <View style={styles.offerHeroTop}>
+            <Text style={styles.offerHeroEyebrow}>
+              {counterRoundLabel ? counterRoundLabel.toUpperCase() : 'OFFER AMOUNT'}
+            </Text>
+            {showCountdown && (
+              <View style={[styles.offerUrgencyChip, { backgroundColor: `${tone.color}14` }]}>
+                <Ionicons name={tone.icon} size={11} color={tone.color} />
+                <Text style={[styles.offerUrgencyText, { color: tone.color }]}>
+                  {formatCountdown(msRemaining)}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.offerPriceRow}>
+            <Text style={styles.offerPrice} numberOfLines={1}>
+              {priceLabel}
+            </Text>
+            {offer.originalPrice > offer.price && (
+              <Text style={styles.offerStrike} numberOfLines={1}>
+                {origLabel}
+              </Text>
+            )}
+            {discountPct >= 5 && (
               <View style={styles.offerDiscountBadge}>
                 <Text style={styles.offerDiscountText}>-{discountPct}%</Text>
               </View>
-            ) : null}
+            )}
           </View>
         </View>
-        {/* Expiry countdown — live timer */}
-        {showCountdown ? (
-          <View style={[styles.offerExpiryRow, { backgroundColor: `${tone.color}12` }]}>
-            <Ionicons name={tone.icon} size={11} color={tone.color} />
-            <Text style={[styles.offerExpiryText, { color: tone.color }]}>
-              {t('offers.expiresIn', { time: formatCountdown(msRemaining) })}
-            </Text>
-          </View>
-        ) : null}
-        {status === 'declined' && (
-          <View style={styles.offerStatusRow}>
-            <Ionicons name="close-circle-outline" size={13} color={colors.danger} />
-            <Text style={[styles.offerStatusText, { color: colors.danger }]}>{t('offers.declined')}</Text>
-          </View>
-        )}
+
+        {/* Status Indicators */}
         {status === 'accepted' && (
-          <View style={styles.offerStatusRow}>
-            <Ionicons name="checkmark-circle-outline" size={13} color={colors.success} />
-            <Text style={[styles.offerStatusText, { color: colors.success }]}>{t('offers.accepted')}</Text>
-          </View>
-        )}
-        {status === 'expired' && (
-          <View style={styles.offerStatusRow}>
-            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-            <Text style={[styles.offerStatusText, { color: colors.textMuted }]}>{t('offers.expired')}</Text>
-          </View>
-        )}
-        {!status && isMe && (
-          <View style={styles.offerStatusRow}>
-            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-            <Text style={[styles.offerStatusText, { color: colors.textMuted }]}>{t('offers.waitingForResponse')}</Text>
-          </View>
-        )}
-        {/* Action buttons — only show when pending and not expired */}
-        {isPending && (
-          <View style={styles.offerActions}>
-            <AnimatedPressable style={styles.offerPass} onPress={onDecline} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="light" accessibilityRole="button" accessibilityLabel={t('offers.declineOffer')}>
-              <Text style={styles.offerPassText} numberOfLines={1}>{t('offers.pass')}</Text>
-            </AnimatedPressable>
-            {onCounter && (
-              <AnimatedPressable style={styles.offerCounter} onPress={onCounter} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="light" accessibilityRole="button" accessibilityLabel={t('offers.counterOffer')}>
-                <Text style={styles.offerCounterText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.88}>{t('offers.counter')}</Text>
+          <View style={[styles.offerStatusBanner, styles.offerStatusAccepted]}>
+            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+            <View style={styles.offerStatusTextWrap}>
+              <Text style={[styles.offerStatusTitle, { color: colors.success }]}>
+                {t('offers.accepted')}
+              </Text>
+              <Text style={styles.offerStatusSubtitle}>
+                Agreed at {priceLabel}
+              </Text>
+            </View>
+            {onViewOrder && (
+              <AnimatedPressable
+                style={styles.offerStatusActionBtn}
+                onPress={onViewOrder}
+                activeOpacity={0.8}
+                scaleValue={0.96}
+                hapticFeedback="light"
+              >
+                <Text style={styles.offerStatusActionText}>View Order</Text>
               </AnimatedPressable>
             )}
-            <AnimatedPressable style={styles.offerAccept} onPress={onAccept} activeOpacity={0.85} scaleValue={0.96} hapticFeedback="medium" accessibilityRole="button" accessibilityLabel={t('offers.acceptOffer')}>
-              <Text style={styles.offerAcceptText} numberOfLines={1}>{t('offers.accept')}</Text>
+          </View>
+        )}
+
+        {status === 'declined' && (
+          <View style={[styles.offerStatusBanner, styles.offerStatusDeclined]}>
+            <Ionicons name="close-circle-outline" size={16} color={colors.danger} />
+            <View style={styles.offerStatusTextWrap}>
+              <Text style={[styles.offerStatusTitle, { color: colors.danger }]}>
+                {t('offers.declined')}
+              </Text>
+              <Text style={styles.offerStatusSubtitle}>
+                Offer was not accepted
+              </Text>
+            </View>
+            {onCounter && !isMe && (
+              <AnimatedPressable
+                style={styles.offerStatusActionBtn}
+                onPress={onCounter}
+                activeOpacity={0.8}
+                scaleValue={0.96}
+                hapticFeedback="light"
+              >
+                <Text style={styles.offerStatusActionText}>New Offer</Text>
+              </AnimatedPressable>
+            )}
+          </View>
+        )}
+
+        {status === 'expired' && (
+          <View style={[styles.offerStatusBanner, styles.offerStatusExpired]}>
+            <Ionicons name="time-outline" size={16} color={colors.textMuted} />
+            <View style={styles.offerStatusTextWrap}>
+              <Text style={[styles.offerStatusTitle, { color: colors.textMuted }]}>
+                {t('offers.expired')}
+              </Text>
+              <Text style={styles.offerStatusSubtitle}>
+                No response within 24h
+              </Text>
+            </View>
+            {onCounter && (
+              <AnimatedPressable
+                style={styles.offerStatusActionBtn}
+                onPress={onCounter}
+                activeOpacity={0.8}
+                scaleValue={0.96}
+                hapticFeedback="light"
+              >
+                <Text style={styles.offerStatusActionText}>Retry</Text>
+              </AnimatedPressable>
+            )}
+          </View>
+        )}
+
+        {/* Sender Outgoing State: Waiting for response */}
+        {isPending && isMe && (
+          <View style={styles.offerWaitingRow}>
+            <Ionicons name="paper-plane-outline" size={13} color={colors.textSecondary} />
+            <Text style={styles.offerWaitingText}>
+              Offer sent · Waiting for seller response
+            </Text>
+          </View>
+        )}
+
+        {/* Recipient Incoming State: Action buttons */}
+        {isPending && !isMe && (
+          <View style={styles.offerActions}>
+            <AnimatedPressable
+              style={styles.offerPass}
+              onPress={onDecline}
+              activeOpacity={0.8}
+              scaleValue={0.96}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={t('offers.declineOffer')}
+            >
+              <Text style={styles.offerPassText}>{t('offers.pass')}</Text>
+            </AnimatedPressable>
+
+            {onCounter && (
+              <AnimatedPressable
+                style={styles.offerCounter}
+                onPress={onCounter}
+                activeOpacity={0.85}
+                scaleValue={0.96}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel={t('offers.counterOffer')}
+              >
+                <Text style={styles.offerCounterText}>{t('offers.counter')}</Text>
+              </AnimatedPressable>
+            )}
+
+            <AnimatedPressable
+              style={styles.offerAccept}
+              onPress={onAccept}
+              activeOpacity={0.85}
+              scaleValue={0.96}
+              hapticFeedback="medium"
+              accessibilityRole="button"
+              accessibilityLabel={t('offers.acceptOffer')}
+            >
+              <Text style={styles.offerAcceptText}>{t('offers.accept')}</Text>
             </AnimatedPressable>
           </View>
         )}
@@ -216,30 +408,137 @@ export function MarketplaceChatCard({
     );
   }
 
-  if (type === 'purchase_status' && text) {
-    const lines = text.split('\n');
+  // ── 2. PRODUCT SHARE CARD (Pinterest & Instagram Direct 2026 standard) ─────
+  if (type === 'listing_share' && listing) {
+    const displayPrice = formattedPrice ?? `${currencySymbol}${listing.price.toFixed(2)}`;
     return (
-      <View style={styles.statusInline}>
-        <View style={styles.statusInlineIcon}>
-          <Ionicons name="bag-handle-outline" size={16} color={colors.textSecondary} />
+      <View style={[styles.shareCard, isMe ? styles.shareCardMe : styles.shareCardThem]}>
+        {/* Editorial Product Image with floating price badge */}
+        <View style={styles.shareImageContainer}>
+          <CachedImage uri={listing.image} style={styles.shareImage} contentFit="cover" />
+          <View style={styles.shareFloatingPill}>
+            <Text style={styles.shareFloatingPrice}>{displayPrice}</Text>
+            {listing.condition && (
+              <>
+                <View style={styles.sharePillDot} />
+                <Text style={styles.shareFloatingCondition}>{listing.condition}</Text>
+              </>
+            )}
+          </View>
+          {listing.isSold && (
+            <View style={styles.shareSoldOverlay}>
+              <Text style={styles.shareSoldText}>SOLD</Text>
+            </View>
+          )}
         </View>
-        <View style={styles.statusInlineCopy}>
-          <Text style={styles.statusInlineTitle}>{lines[0]}</Text>
-          {lines.length > 1 ? <Text style={styles.statusInlineBody}>{lines.slice(1).join('\n')}</Text> : null}
+
+        {/* Product Details */}
+        <View style={styles.shareContent}>
+          {listing.brand && (
+            <Text style={styles.shareBrandEyebrow} numberOfLines={1}>
+              {listing.brand.toUpperCase()}
+            </Text>
+          )}
+          <Text style={styles.shareTitle} numberOfLines={2}>
+            {listing.title}
+          </Text>
+
+          {/* Seller / Trust row */}
+          {listing.sellerUsername && (
+            <View style={styles.shareSellerRow}>
+              <Ionicons name="person-circle-outline" size={14} color={colors.textSecondary} />
+              <Text style={styles.shareSellerText}>@{listing.sellerUsername}</Text>
+              {listing.sellerRating && (
+                <View style={styles.shareRatingChip}>
+                  <Ionicons name="star" size={10} color="#F59E0B" />
+                  <Text style={styles.shareRatingText}>{listing.sellerRating.toFixed(1)}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Action Dock */}
+          <View style={styles.shareActions}>
+            <AnimatedPressable
+              style={styles.sharePrimaryBtn}
+              onPress={onViewListing}
+              activeOpacity={0.85}
+              scaleValue={0.97}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={`View ${listing.title}`}
+            >
+              <Text style={styles.sharePrimaryText}>View item</Text>
+              <Ionicons name="arrow-forward" size={13} color={colors.textInverse} />
+            </AnimatedPressable>
+
+            {onMakeOffer && !listing.isSold && (
+              <AnimatedPressable
+                style={styles.shareSecondaryBtn}
+                onPress={onMakeOffer}
+                activeOpacity={0.85}
+                scaleValue={0.97}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Make an offer"
+              >
+                <Text style={styles.shareSecondaryText}>Make offer</Text>
+              </AnimatedPressable>
+            )}
+          </View>
         </View>
       </View>
     );
   }
 
+  // ── 3. PURCHASE & ORDER CONFIRMATION ─────────────────────────────────────────
+  if (type === 'purchase_status') {
+    const lines = (text || '').split('\n');
+    const headerTitle = lines[0] || 'Order Confirmed';
+    const bodyCopy = lines.slice(1).join('\n');
+    return (
+      <View style={styles.purchaseReceiptCard}>
+        <View style={styles.purchaseReceiptHeader}>
+          <View style={[styles.receiptIconCircle, { backgroundColor: `${colors.success}18` }]}>
+            <Ionicons name="checkmark" size={16} color={colors.success} />
+          </View>
+          <View style={styles.receiptTitleWrap}>
+            <Text style={styles.receiptTitle}>{headerTitle}</Text>
+            {bodyCopy ? <Text style={styles.receiptBody}>{bodyCopy}</Text> : null}
+          </View>
+        </View>
+        {onViewOrder && (
+          <AnimatedPressable
+            style={styles.receiptActionRow}
+            onPress={onViewOrder}
+            activeOpacity={0.8}
+            scaleValue={0.98}
+            hapticFeedback="light"
+          >
+            <Text style={styles.receiptActionText}>View order receipt</Text>
+            <Ionicons name="chevron-forward" size={13} color={colors.brand} />
+          </AnimatedPressable>
+        )}
+      </View>
+    );
+  }
+
+  // ── 4. TRUST & SAFETY NOTICE BANNER ──────────────────────────────────────────
   if (type === 'safety_notice' && text) {
     return (
-      <View style={styles.noticeInline}>
-        <Ionicons name="checkmark-done-outline" size={14} color={colors.textMuted} />
-        <Text style={styles.noticeInlineText}>{text}</Text>
+      <View style={styles.safetyCard}>
+        <View style={styles.safetyIconSquircle}>
+          <Ionicons name="shield-checkmark" size={16} color="#0D9488" />
+        </View>
+        <View style={styles.safetyContent}>
+          <Text style={styles.safetyHeadline}>ThryftVerse Buyer Protection</Text>
+          <Text style={styles.safetyBody}>{text}</Text>
+        </View>
       </View>
     );
   }
 
+  // ── 5. COMMERCE LOGISTICS STATE CARD ─────────────────────────────────────────
   if (type === 'commerce_state' && commerceState) {
     return (
       <CommerceStateCard
@@ -255,23 +554,17 @@ export function MarketplaceChatCard({
     );
   }
 
+  // ── 6. FROSTED SYSTEM NOTICE PILL ───────────────────────────────────────────
   if (type === 'system') {
     return (
-      <View style={styles.systemEvent}>
-        <View style={styles.systemEventIcon}>
-          <Ionicons name="checkmark-done-outline" size={16} color={colors.textSecondary} />
-        </View>
-        <View style={styles.systemEventCopy}>
-          <View style={styles.systemEventHeading}>
-            {systemTitle ? <Text style={styles.systemEventTitle}>{systemTitle}</Text> : null}
-            {systemVerified ? (
-              <View style={styles.verifiedPill} accessibilityLabel={t('offers.verifiedSystemUpdate')}>
-                <Ionicons name="checkmark" size={10} color={colors.textSecondary} />
-                <Text style={styles.verifiedText}>{t('offers.verified')}</Text>
-              </View>
-            ) : null}
-          </View>
-          {text ? <Text style={styles.systemEventText}>{text}</Text> : null}
+      <View style={styles.systemPillWrap}>
+        <View style={styles.systemPill}>
+          {systemVerified && (
+            <Ionicons name="shield-checkmark" size={11} color={colors.brand} style={{ marginRight: 4 }} />
+          )}
+          <Text style={styles.systemPillText}>
+            {text || systemTitle}
+          </Text>
         </View>
       </View>
     );
@@ -280,291 +573,533 @@ export function MarketplaceChatCard({
   return null;
 }
 
-function StatusBadge({ tone, label, icon }: { tone: 'positive' | 'negative' | 'neutral'; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }) {
-  const { colors } = useAppTheme();
-  const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const toneColors = {
-    positive: { text: colors.success },
-    negative: { text: colors.danger },
-    neutral: { text: colors.textMuted },
-  };
-  const c = toneColors[tone];
-  return (
-    <View style={styles.offerStatusRow}>
-      <Ionicons name={icon} size={12} color={c.text} />
-      <Text style={[styles.offerStatusText, { color: c.text }]}>{label}</Text>
-    </View>
-  );
-}
+// ── Styles ───────────────────────────────────────────────────────────────────
 
-const createStyles = (colors: any) => StyleSheet.create({
-  offerBlock: {
-    width: '85%',
-    maxWidth: 340,
-    minWidth: 0,
-    gap: Space.xs + 1,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    padding: Space.md - 2,
-    marginHorizontal: Space.md,
-  },
-  offerBlockMe: {
-    alignSelf: 'flex-end',
-    backgroundColor: colors.surface,
-  },
-  offerSender: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textSecondary,
-  },
-  offerPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  offerPriceIdentity: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Space.xs + 1,
-  },
-  offerPrice: {
-    fontSize: TypographyV2.priceList.size,
-    fontFamily: TypographyV2.priceList.fontFamily,
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: -0.3,
-  },
-  offerStrike: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    textDecorationLine: 'line-through',
-    flexShrink: 1,
-  },
-  offerDiscountBadge: {
-    backgroundColor: colors.successSubtle,
-    borderRadius: Radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 2,
-  },
-  offerDiscountText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: Typography.family.bold,
-    color: colors.success,
-    fontVariant: ['tabular-nums'],
-  },
-  offerStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  offerStatusText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-  },
-  counterRoundRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-  },
-  counterRoundText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    letterSpacing: 0.3,
-  },
-  offerExpiryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Space.sm - 1,
-    paddingVertical: Space.xs + 1,
-    borderRadius: Radius.full,
-    alignSelf: 'flex-start',
-  },
-  offerExpiryText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 0.2,
-    fontVariant: ['tabular-nums'],
-  },
-  offerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginTop: Space.sm - 1,
-    paddingTop: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  offerPass: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.xs,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
-  offerPassText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textSecondary,
-  },
-  offerCounter: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.xs,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
-  offerCounterText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textPrimary,
-  },
-  offerAccept: {
-    flex: 1.3,
-    minWidth: 0,
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.xs,
-    borderRadius: Radius.md,
-    backgroundColor: colors.brand,
-  },
-  offerAcceptText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textInverse,
-  },
-  statusInline: {
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 340,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm + 1,
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.sm + 2,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  statusInlineIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  statusInlineCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  statusInlineTitle: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textPrimary,
-    textAlign: 'left',
-  },
-  statusInlineBody: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textSecondary,
-    textAlign: 'left',
-    lineHeight: TypographyV2.meta.lineHeight + 2,
-  },
-  noticeInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    alignSelf: 'center',
-    maxWidth: '85%',
-    paddingVertical: Space.xs + 1,
-    paddingHorizontal: Space.md,
-  },
-  noticeInlineText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-  },
-  systemEvent: {
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 340,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.sm + 1,
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.sm + 2,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  systemEventIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  systemEventCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 3,
-  },
-  systemEventHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: Space.xs,
-  },
-  systemEventTitle: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textPrimary,
-    textAlign: 'left',
-    flexShrink: 1,
-  },
-  systemEventText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textSecondary,
-    textAlign: 'left',
-    lineHeight: TypographyV2.meta.lineHeight + 2,
-  },
-  verifiedPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: Space.xs + 1,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
-  verifiedText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textSecondary,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    // ── Offer Card Styles ─────────────────────────────
+    offerCard: {
+      width: '88%',
+      maxWidth: 340,
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      padding: Space.md - 2,
+      gap: Space.sm,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    offerCardThem: {
+      alignSelf: 'flex-start',
+      borderBottomLeftRadius: 3,
+    },
+    offerCardMe: {
+      alignSelf: 'flex-end',
+      borderBottomRightRadius: 3,
+      backgroundColor: colors.surfaceAlt,
+      borderColor: colors.border,
+    },
+    offerSender: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      color: colors.textSecondary,
+      marginBottom: 2,
+    },
+    offerItemHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingBottom: Space.sm - 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    offerItemThumb: {
+      width: 48,
+      height: 48,
+      borderRadius: Radius.md - 2,
+      backgroundColor: colors.surfaceAlt,
+    },
+    offerItemThumbFallback: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+    },
+    offerItemMeta: {
+      flex: 1,
+      gap: 2,
+    },
+    offerBrandEyebrow: {
+      fontSize: 9,
+      fontFamily: FontFamily.bold,
+      color: colors.textMuted,
+      letterSpacing: 1.1,
+    },
+    offerItemTitle: {
+      fontSize: 13,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+    },
+    offerTagRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    offerTagText: {
+      fontSize: 11,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+    },
+    offerTagDot: {
+      fontSize: 11,
+      color: colors.textMuted,
+    },
+    offerHeroBody: {
+      gap: 4,
+    },
+    offerHeroTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    offerHeroEyebrow: {
+      fontSize: 10,
+      fontFamily: FontFamily.semibold,
+      color: colors.textMuted,
+      letterSpacing: 0.8,
+    },
+    offerUrgencyChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: Radius.full,
+    },
+    offerUrgencyText: {
+      fontSize: 11,
+      fontFamily: FontFamily.medium,
+      fontVariant: ['tabular-nums'],
+    },
+    offerPriceRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: Space.xs + 2,
+    },
+    offerPrice: {
+      fontSize: 24,
+      fontFamily: FontFamily.bold,
+      color: colors.textPrimary,
+      fontVariant: ['tabular-nums'],
+      letterSpacing: -0.4,
+    },
+    offerStrike: {
+      fontSize: 13,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
+      textDecorationLine: 'line-through',
+      fontVariant: ['tabular-nums'],
+    },
+    offerDiscountBadge: {
+      backgroundColor: colors.successSubtle,
+      borderRadius: Radius.sm,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      marginLeft: 2,
+    },
+    offerDiscountText: {
+      fontSize: 11,
+      fontFamily: FontFamily.bold,
+      color: colors.success,
+      fontVariant: ['tabular-nums'],
+    },
+    offerWaitingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingTop: Space.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+    },
+    offerWaitingText: {
+      fontSize: 12,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+    },
+    offerStatusBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      padding: Space.sm,
+      borderRadius: Radius.md,
+      marginTop: 2,
+    },
+    offerStatusAccepted: {
+      backgroundColor: `${colors.success}14`,
+    },
+    offerStatusDeclined: {
+      backgroundColor: `${colors.danger}12`,
+    },
+    offerStatusExpired: {
+      backgroundColor: colors.surfaceAlt,
+    },
+    offerStatusTextWrap: {
+      flex: 1,
+      gap: 1,
+    },
+    offerStatusTitle: {
+      fontSize: 12,
+      fontFamily: FontFamily.semibold,
+    },
+    offerStatusSubtitle: {
+      fontSize: 11,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+    },
+    offerStatusActionBtn: {
+      backgroundColor: colors.surface,
+      paddingHorizontal: Space.sm,
+      paddingVertical: 5,
+      borderRadius: Radius.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+    },
+    offerStatusActionText: {
+      fontSize: 11,
+      fontFamily: FontFamily.medium,
+      color: colors.textPrimary,
+    },
+    offerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs + 2,
+      marginTop: Space.xs,
+      paddingTop: Space.sm - 2,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+    },
+    offerPass: {
+      paddingHorizontal: Space.sm,
+      minHeight: 38,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    offerPassText: {
+      fontSize: 13,
+      fontFamily: FontFamily.medium,
+      color: colors.textMuted,
+    },
+    offerCounter: {
+      flex: 1,
+      minHeight: 38,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    offerCounterText: {
+      fontSize: 13,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+    },
+    offerAccept: {
+      flex: 1.3,
+      minHeight: 38,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: Radius.md,
+      backgroundColor: colors.brand,
+    },
+    offerAcceptText: {
+      fontSize: 13,
+      fontFamily: FontFamily.semibold,
+      color: colors.textInverse,
+    },
+
+    // ── Listing Share Card Styles ─────────────────────
+    shareCard: {
+      width: '88%',
+      maxWidth: 320,
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.06,
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    shareCardThem: {
+      alignSelf: 'flex-start',
+      borderBottomLeftRadius: 3,
+    },
+    shareCardMe: {
+      alignSelf: 'flex-end',
+      borderBottomRightRadius: 3,
+    },
+    shareImageContainer: {
+      width: '100%',
+      aspectRatio: 1.2,
+      backgroundColor: colors.surfaceAlt,
+      position: 'relative',
+    },
+    shareImage: {
+      width: '100%',
+      height: '100%',
+    },
+    shareFloatingPill: {
+      position: 'absolute',
+      bottom: 10,
+      left: 10,
+      backgroundColor: 'rgba(0,0,0,0.72)',
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: Radius.full,
+      gap: 6,
+    },
+    shareFloatingPrice: {
+      fontSize: 13,
+      fontFamily: FontFamily.bold,
+      color: '#FFFFFF',
+      fontVariant: ['tabular-nums'],
+    },
+    sharePillDot: {
+      width: 3,
+      height: 3,
+      borderRadius: 1.5,
+      backgroundColor: 'rgba(255,255,255,0.6)',
+    },
+    shareFloatingCondition: {
+      fontSize: 11,
+      fontFamily: FontFamily.medium,
+      color: 'rgba(255,255,255,0.85)',
+    },
+    shareSoldOverlay: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    shareSoldText: {
+      fontSize: 16,
+      fontFamily: FontFamily.bold,
+      color: '#FFFFFF',
+      letterSpacing: 2,
+    },
+    shareContent: {
+      padding: Space.md - 2,
+      gap: 6,
+    },
+    shareBrandEyebrow: {
+      fontSize: 9,
+      fontFamily: FontFamily.bold,
+      color: colors.textMuted,
+      letterSpacing: 1.1,
+    },
+    shareTitle: {
+      fontSize: 14,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+      lineHeight: 18,
+    },
+    shareSellerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 2,
+    },
+    shareSellerText: {
+      fontSize: 12,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+    },
+    shareRatingChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      backgroundColor: colors.surfaceAlt,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderRadius: Radius.sm,
+    },
+    shareRatingText: {
+      fontSize: 10,
+      fontFamily: FontFamily.bold,
+      color: colors.textPrimary,
+    },
+    shareActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      marginTop: Space.xs + 2,
+      paddingTop: Space.xs + 2,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+    },
+    sharePrimaryBtn: {
+      flex: 1,
+      minHeight: 36,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: colors.brand,
+      borderRadius: Radius.md,
+      paddingHorizontal: Space.sm,
+    },
+    sharePrimaryText: {
+      fontSize: 12,
+      fontFamily: FontFamily.semibold,
+      color: colors.textInverse,
+    },
+    shareSecondaryBtn: {
+      flex: 1,
+      minHeight: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceAlt,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: Radius.md,
+      paddingHorizontal: Space.sm,
+    },
+    shareSecondaryText: {
+      fontSize: 12,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+    },
+
+    // ── Purchase Receipt Styles ───────────────────────
+    purchaseReceiptCard: {
+      alignSelf: 'center',
+      width: '90%',
+      maxWidth: 340,
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      padding: Space.md - 2,
+      gap: Space.sm,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.04,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    purchaseReceiptHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+    },
+    receiptIconCircle: {
+      width: 32,
+      height: 32,
+      borderRadius: Radius.full,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    receiptTitleWrap: {
+      flex: 1,
+      gap: 2,
+    },
+    receiptTitle: {
+      fontSize: 13,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+    },
+    receiptBody: {
+      fontSize: 12,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+      lineHeight: 16,
+    },
+    receiptActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingTop: Space.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+    },
+    receiptActionText: {
+      fontSize: 12,
+      fontFamily: FontFamily.semibold,
+      color: colors.brand,
+    },
+
+    // ── Safety Card Styles ────────────────────────────
+    safetyCard: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.sm,
+      alignSelf: 'center',
+      width: '90%',
+      maxWidth: 340,
+      backgroundColor: `${colors.brandSubtle ?? colors.surfaceAlt}`,
+      borderRadius: Radius.md,
+      padding: Space.sm + 2,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+    },
+    safetyIconSquircle: {
+      width: 28,
+      height: 28,
+      borderRadius: Radius.sm,
+      backgroundColor: '#CCFBF1',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    safetyContent: {
+      flex: 1,
+      gap: 2,
+    },
+    safetyHeadline: {
+      fontSize: 12,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+    },
+    safetyBody: {
+      fontSize: 11,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+      lineHeight: 15,
+    },
+
+    // ── System Notice Pill Styles ─────────────────────
+    systemPillWrap: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginVertical: Space.xs + 2,
+      paddingHorizontal: Space.md,
+      width: '100%',
+    },
+    systemPill: {
+      flexDirection: 'row',
+      backgroundColor: colors.surfaceAlt,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs + 1,
+      borderRadius: Radius.full,
+      maxWidth: '86%',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    systemPillText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: TypographyV2.meta.lineHeight,
+    },
+  });

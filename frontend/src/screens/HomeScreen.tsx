@@ -21,7 +21,7 @@ import Reanimated, {
   withTiming } from 'react-native-reanimated';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { AppIcon } from '../components/common/AppIcon';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
@@ -706,7 +706,7 @@ export default function HomeScreen() {
 
                     {story.totalFrameCount > 1 && (
                       <View style={styles.frameCountBadge} accessible={false}>
-                        <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
+                        <AppIcon name="layers" focused size={10} color={colors.scrimTextPrimary} />
                         <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                       </View>
                     )}
@@ -735,7 +735,7 @@ export default function HomeScreen() {
 
                   {story.totalFrameCount > 1 && (
                     <View style={styles.frameCountBadge} accessible={false}>
-                      <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
+                      <AppIcon name="layers" focused size={10} color={colors.scrimTextPrimary} />
                       <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                     </View>
                   )}
@@ -766,8 +766,8 @@ export default function HomeScreen() {
           style={styles.newListingsBanner}
           contentStyle={styles.newListingsBannerContent}
           titleStyle={styles.newListingsBannerText}
-          icon={<Ionicons name="arrow-up-circle-outline" size={14} color={colors.background} />}
-          trailingIcon={<Ionicons name="chevron-up" size={14} color={colors.background} />}
+          icon={<AppIcon name="arrowUp" size={14} color={colors.background} />}
+          trailingIcon={<AppIcon name="chevronUp" size={14} color={colors.background} />}
           iconContainerStyle={styles.newListingsBannerIconWrap}
           trailingIconContainerStyle={styles.newListingsBannerIconWrap}
           hapticFeedback="selection"
@@ -957,7 +957,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens sell listing flow"
             >
-              <Ionicons name="add" size={24} color={colors.textPrimary} />
+              <AppIcon name="plus" size={24} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -966,7 +966,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens discovery — explore items, looks, mood boards, editorials and more"
             >
-              <Ionicons name="search" size={22} color={colors.textPrimary} />
+              <AppIcon name="search" focused size={22} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -975,7 +975,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens notifications center"
             >
-              <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
+              <AppIcon name="notifications" size={22} color={colors.textPrimary} />
               {notificationCount > 0 && (
                 <View style={styles.notificationBadge} pointerEvents="none" accessible={false}>
                   <Text style={styles.notificationBadgeText} maxFontSizeMultiplier={1.5}>
@@ -1090,7 +1090,7 @@ export default function HomeScreen() {
 
             {forYouIsDegraded ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: Space.xs }}>
-                <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+                <AppIcon name="info" size={16} color={colors.textSecondary} />
                 <Text style={{ flex: 1, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textSecondary }} maxFontSizeMultiplier={1.5}>
                   Showing baseline listings — personalised feed is temporarily unavailable.
                 </Text>
@@ -1242,7 +1242,7 @@ export default function HomeScreen() {
                     align="center"
                     style={styles.peekPrimaryBtn}
                     titleStyle={styles.peekPrimaryText}
-                    icon={<Ionicons name="arrow-forward" size={14} color={colors.background} />}
+                    icon={<AppIcon name="forward" focused size={14} color={colors.background} />}
                     iconContainerStyle={styles.peekPrimaryIconWrap}
                     onPress={() => {
                       if (peekItem.routeId) {

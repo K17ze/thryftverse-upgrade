@@ -20,6 +20,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import { addScreenshotListener } from 'expo-screen-capture';
 import { track } from '../../analytics';
 import { getAppNavigationRef } from '../monitoring/appNavigation';
@@ -60,6 +61,11 @@ export function useScreenshotTracking(): void {
   };
 
   useEffect(() => {
+    // expo-screen-capture's addScreenshotListener is not available on web —
+    // the native module is not linked and the function is undefined. Skip
+    // the subscription entirely on web.
+    if (Platform.OS === 'web') return;
+
     const subscription = addScreenshotListener(() => {
       handleScreenshotRef.current();
     });

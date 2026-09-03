@@ -6,6 +6,7 @@ import { Space, Typography, Radius, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AppIcon } from '../common/AppIcon';
 import { IconSize } from '../../theme/iconTokens';
+import { t } from '../../i18n';
 
 type SaveStage =
   | 'idle'
@@ -13,6 +14,18 @@ type SaveStage =
   | 'updating_listing'
   | 'completed'
   | 'failed_recoverable';
+
+/**
+ * Coarse save-state used to drive the save-button label and affordance.
+ * Layered on top of the existing manual-save `SaveStage` so the original
+ * flow is untouched.
+ *
+ * - 'saved'   — form is clean and the last save succeeded (green check).
+ * - 'saving'  — an autosave or manual save is in flight (spinner).
+ * - 'offline' — device is offline and there are unsaved changes (amber).
+ * - 'dirty'   — form has changes; normal "Save" label.
+ */
+type SaveState = 'saved' | 'saving' | 'offline' | 'dirty';
 
 interface EditListingFooterProps {
   isSaving: boolean;
@@ -22,6 +35,8 @@ interface EditListingFooterProps {
   onPreview: () => void;
   onSave: () => void;
   bottomInset: number;
+  /** Coarse save state driving the button label. Defaults to 'dirty'. */
+  saveState?: SaveState;
 }
 
 function getStageText(stage: SaveStage): string | null {
@@ -46,11 +61,26 @@ export function EditListingFooter({
   errorMsg,
   onPreview,
   onSave,
-  bottomInset }: EditListingFooterProps) {
+  bottomInset,
+  saveState = 'dirty' }: EditListingFooterProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const stageText = getStageText(saveStage);
   const showFeedback = stageText !== null || (errorMsg !== null && saveStage !== 'idle');
+
+  // State-aware save button label + affordance. The manual save flow
+  // (`isSaving` / `saveStage`) still drives the spinner during an active
+  // upload/patch; this layer only changes the resting label.
+  const saving = isSaving || saveState === 'saving';
+  const saveLabel = saving
+    ? t('listing.edit.savingButton')
+    : saveState === 'saved'
+      ? t('listing.edit.saved')
+      : saveState === 'offline'
+        ? t('listing.edit.offlineChanges')
+        : t('listing.edit.saveButton');
+  const saveAffordance: 'default' | 'success' | 'warning' =
+    saveState === 'saved' ? 'success' : saveState === 'offline' ? 'warning' : 'default';
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(bottomInset, Space.sm) }]}>
@@ -92,25 +122,35 @@ export function EditListingFooter({
         <Pressable
           style={[
             styles.saveBtn,
+            saveAffordance === 'success' && styles.saveBtnSuccess,
+            saveAffordance === 'warning' && styles.saveBtnWarning,
             saveDisabled && styles.saveBtnDisabled,
           ]}
           onPress={onSave}
           disabled={saveDisabled}
           accessibilityRole="button"
-          accessibilityLabel="Save changes"
+          accessibilityLabel={saveLabel}
           accessibilityState={{ disabled: saveDisabled }}
         >
-          {isSaving ? (
+          {saving ? (
             <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
-            <Text
-              style={[
-                styles.saveText,
-                saveDisabled && styles.saveTextDisabled,
-              ]}
-            >
-              Save changes
-            </Text>
+            <>
+              {saveAffordance === 'success' && (
+                <AppIcon name="checkmark-circle" size={14} color="textInverse" opticalCenter accessible={false} />
+              )}
+              {saveAffordance === 'warning' && (
+                <AppIcon name="cloud-offline-outline" size={14} color="textInverse" opticalCenter accessible={false} />
+              )}
+              <Text
+                style={[
+                  styles.saveText,
+                  saveDisabled && styles.saveTextDisabled,
+                ]}
+              >
+                {saveLabel}
+              </Text>
+            </>
           )}
         </Pressable>
       </View>
@@ -161,7 +201,13 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.xxl,
     backgroundColor: colors.brand,
     alignItems: 'center',
-    justifyContent: 'center' },
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6 },
+  saveBtnSuccess: {
+    backgroundColor: colors.success },
+  saveBtnWarning: {
+    backgroundColor: colors.warning },
   saveBtnDisabled: {
     backgroundColor: colors.surfaceAlt },
   saveText: {

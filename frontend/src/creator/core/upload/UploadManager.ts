@@ -108,6 +108,7 @@ export class UploadManager {
   /** Interval handle for the periodic stall-detection checker. Stored so it
    *  could be cleared if the manager is ever torn down. */
   private stallCheckInterval: ReturnType<typeof setInterval> | undefined;
+  private hydrationPromise: Promise<void> | null = null;
 
   constructor(
     jobStore: UploadJobStore,
@@ -143,11 +144,7 @@ export class UploadManager {
    * auto-processing) to begin.
    */
   async queueUpload(params: QueueUploadParams): Promise<string> {
-    // Hydrate cache on first call.
-    if (this.jobsCache.size === 0) {
-      const all = await this.jobStore.loadJobs();
-      for (const j of all) this.jobsCache.set(j.id, j);
-    }
+    await this.hydrate();
 
     // Idempotency: check for an existing job with the same key.
     const existingJob = this.findExistingJob(params);
@@ -228,11 +225,7 @@ export class UploadManager {
     if (this.processing) return;
     this.processing = true;
     try {
-      // Hydrate the cache from storage on first run.
-      if (this.jobsCache.size === 0) {
-        const all = await this.jobStore.loadJobs();
-        for (const j of all) this.jobsCache.set(j.id, j);
-      }
+      await this.hydrate();
 
       while (this.activeUploads.size < this.maxConcurrent) {
         const next = this.pickNextJob();
@@ -295,15 +288,45 @@ export class UploadManager {
 
   /** Get all jobs for a project (from the in-memory cache, hydrated lazily). */
   async getJobs(projectId: string): Promise<UploadJob[]> {
-    if (this.jobsCache.size === 0) {
-      const all = await this.jobStore.loadJobs();
-      for (const j of all) this.jobsCache.set(j.id, j);
-    }
+    await this.hydrate();
     const result: UploadJob[] = [];
     for (const job of this.jobsCache.values()) {
       if (job.projectId === projectId) result.push(job);
     }
     return result;
+  }
+
+  /** Restore persisted jobs after process start and resume recoverable work. */
+  async resumePendingJobs(): Promise<void> {
+    await this.hydrate();
+    for (const job of this.jobsCache.values()) {
+      if (job.status === 'uploading' || job.status === 'stalled') {
+        await this.persistState(job.id, { status: 'queued', error: undefined });
+      }
+    }
+    await this.processQueue();
+  }
+
+  /** Stop timers and abort active work when the JS runtime is torn down. */
+  dispose(): void {
+    if (this.stallCheckInterval) clearInterval(this.stallCheckInterval);
+    this.stallCheckInterval = undefined;
+    for (const controller of this.activeUploads.values()) controller.abort();
+    this.activeUploads.clear();
+  }
+
+  private async hydrate(): Promise<void> {
+    if (this.jobsCache.size > 0) return;
+    if (!this.hydrationPromise) {
+      this.hydrationPromise = this.jobStore.loadJobs()
+        .then((jobs) => {
+          for (const job of jobs) this.jobsCache.set(job.id, job);
+        })
+        .finally(() => {
+          this.hydrationPromise = null;
+        });
+    }
+    await this.hydrationPromise;
   }
 
   /** True when every job for a project is in the `completed` state. */

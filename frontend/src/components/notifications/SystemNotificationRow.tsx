@@ -5,7 +5,8 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import {
   NotificationRowBase,
   NotificationStatusIcon,
-  NotificationActionButton } from './NotificationRowBase';
+  NotificationActionButton,
+  NotificationThumbnail } from './NotificationRowBase';
 import {
   FontFamily } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
@@ -61,16 +62,18 @@ export function SystemNotificationRow({
   const accentColor = colors[visual.accentKey] ?? colors.brand;
   const isUnread = !event.readAt;
 
-  const subject = event.objectRef?.label ?? readPayloadString(event.payload, 'ticketSubject') ?? event.title;
-  const status = readPayloadString(event.payload, 'resolutionStatus') ?? readPayloadString(event.payload, 'status');
-
-  // The status is the actionable signal — it is the TITLE when no curated
-  // title exists. If the backend provides a specific title, use it; otherwise
-  // fall back to the status label. The subject is context → body.
+  // Title vs Body deduplication:
   const titleText = event.title || visual.statusLabel;
-  const bodyText = status ? `${subject} · ${status}` : subject;
+  const rawBody = event.body?.trim();
+  const bodyText = rawBody && rawBody !== titleText
+    ? rawBody
+    : visual.statusLabel !== titleText
+      ? visual.statusLabel
+      : event.eventType.replace(/_/g, ' ');
 
-  const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${event.requiresAction ? 'Action required. ' : ''}${visual.statusLabel}${subject ? `: ${subject}` : ''}. ${time}${visual.actionLabel ? `. Button: ${visual.actionLabel}` : ''}`;
+  const objectImage = event.objectRef?.imageUrl ?? event.imageUrl;
+
+  const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${event.requiresAction ? 'Action required. ' : ''}${titleText}. ${bodyText}. ${time}${visual.actionLabel ? `. Button: ${visual.actionLabel}` : ''}`;
 
   const leading = (
     <NotificationStatusIcon
@@ -86,6 +89,13 @@ export function SystemNotificationRow({
       onPress={onAction ?? onPress}
       colors={colors}
       variant="primary"
+    />
+  ) : objectImage ? (
+    <NotificationThumbnail
+      uri={objectImage}
+      colors={colors}
+      fallbackIcon="information-circle-outline"
+      size={44}
     />
   ) : undefined;
 

@@ -1,10 +1,14 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 
 
 import { TypographyV2 } from '../../theme/typography.v2';import {
   View,
   Text,
-  StyleSheet } from "react-native";
+  TextInput,
+  Pressable,
+  StyleSheet,
+  type ViewStyle,
+  type TextStyle } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -79,6 +83,14 @@ export interface ChatMessageRowProps {
   onScrollToMessage: (msgId: string) => void;
   onDismissWarning: (msgId: string) => void;
   isNewMessage: (id: string) => boolean;
+  /** P2-03: The id of the message currently being edited inline, or null. */
+  editingMessageId?: string | null;
+  /** P2-03: Begin inline editing for the given message. */
+  onStartEdit?: (msg: Message) => void;
+  /** P2-03: Persist the edited text. Called with the message id and new text. */
+  onSaveEdit?: (messageId: string, text: string) => void;
+  /** P2-03: Abort inline editing without saving. */
+  onCancelEdit?: () => void;
 }
 
 export function ChatMessageRow({
@@ -107,7 +119,11 @@ export function ChatMessageRow({
   onRetryAgentDraft,
   onScrollToMessage,
   onDismissWarning,
-  isNewMessage }: ChatMessageRowProps) {
+  isNewMessage,
+  editingMessageId,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit }: ChatMessageRowProps) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
   const { currencyCode } = useFormattedPrice();
@@ -195,7 +211,52 @@ export function ChatMessageRow({
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.brand,
       letterSpacing: 0.3,
-      textTransform: 'uppercase' } }), [colors]);
+      textTransform: 'uppercase' },
+
+    editedLabel: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
+      marginTop: 2 },
+
+    editedLabelRight: {
+      alignSelf: 'flex-end',
+      marginRight: 4 },
+
+    editContainer: {
+      maxWidth: '80%',
+      borderRadius: Radius.lg,
+      borderWidth: Stroke.emphasis,
+      borderColor: colors.brand,
+      backgroundColor: colors.surfaceAlt,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      gap: Space.xs },
+
+    editInput: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary,
+      minHeight: 40,
+      paddingVertical: 0,
+      paddingHorizontal: 0 },
+
+    editActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      gap: Space.sm },
+
+    editActionBtn: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.md },
+
+    editSaveBtn: {
+      backgroundColor: colors.brand },
+
+    editActionLabel: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily } }), [colors]);
 
   const prevMsg = messages[index - 1];
   const nextMsg = messages[index + 1];
@@ -373,6 +434,65 @@ export function ChatMessageRow({
           onDecline={() => onDeclineOffer(msg.id)}
           onCounter={() => onCounterOffer(msg.id, msg.offer?.price, msg.offer?.originalPrice)}
           onExpire={() => onOfferExpired(msg.id)}
+          onViewListing={() => {
+            if (msg.offer?.itemId) {
+              navigation.navigate("ItemDetail", { itemId: msg.offer.itemId });
+            }
+          }}
+          onViewOrder={() => {
+            if (msg.offer?.offerId) {
+              navigation.navigate("OrderDetail", { orderId: msg.offer.offerId });
+            }
+          }}
+        />
+      </View>
+    );
+    return dateSeparator ? (
+      <View key={msg.id + "_group"}>
+        {dateSeparator}
+        {content}
+      </View>
+    ) : (
+      content
+    );
+  }
+
+  // Product / listing share message — Pinterest & Instagram Direct standard
+  if (msg.type === "listing_share" && msg.listing) {
+    const isMe = msg.sender === "me";
+    const content = (
+      <View
+        key={msg.id}
+        style={[
+          styles.msgRow,
+          isMe && styles.msgRowRight,
+          { marginTop: spacingTop, marginBottom },
+        ]}
+      >
+        <MarketplaceChatCard
+          type="listing_share"
+          isMe={isMe}
+          listing={msg.listing}
+          formattedPrice={formatFromFiat(msg.listing.price, currencyCode, {
+            displayMode: "fiat",
+          })}
+          formattedOriginalPrice={
+            msg.listing.originalPrice
+              ? formatFromFiat(msg.listing.originalPrice, currencyCode, {
+                  displayMode: "fiat",
+                })
+              : undefined
+          }
+          onViewListing={() => {
+            navigation.navigate("ItemDetail", { itemId: msg.listing!.id });
+          }}
+          onMakeOffer={() => {
+            navigation.navigate("MakeOffer", {
+              itemId: msg.listing!.id,
+              price: msg.listing!.price,
+              title: msg.listing!.title,
+            });
+          }}
         />
       </View>
     );
@@ -390,6 +510,8 @@ export function ChatMessageRow({
   const isMedia = msg.type === "media" && msg.mediaUri;
   const isVoice = msg.type === "voice" && msg.voiceUri;
   if (!msg.text && !isMedia && !isVoice) return null;
+
+  const isEditing = editingMessageId === msg.id && !isMedia && !isVoice;
 
   const bubble = (
     <View style={[styles.selectionRow, isMe && styles.selectionRowRight]}>
@@ -424,6 +546,17 @@ export function ChatMessageRow({
           { marginTop: spacingTop, marginBottom },
         ]}
       >
+        {isEditing ? (
+          <InlineMessageEditor
+            initialText={msg.text ?? ""}
+            isMe={isMe}
+            colors={colors}
+            styles={styles}
+            onSave={(text) => onSaveEdit?.(msg.id, text)}
+            onCancel={() => onCancelEdit?.()}
+          />
+        ) : (
+          <>
         <MessageBubble
           id={msg.id}
           conversationId={conversationId ?? ''}
@@ -515,6 +648,20 @@ export function ChatMessageRow({
           showAvatar={!isMe && isFirstInCluster}
           isNew={isNewMessage(msg.id)}
         />
+        {/* P2-03: "Edited" label — small muted text below edited text
+            messages. Shown only when the message has been edited and is not
+            currently in inline edit mode. */}
+        {msg.isEdited && !isMedia && !isVoice && (
+          <Text
+            style={[
+              styles.editedLabel,
+              isMe && styles.editedLabelRight,
+            ]}
+            accessibilityLabel="Edited"
+          >
+            {t('conversation.edited')}
+          </Text>
+        )}
         {!isMedia && !isVoice &&
           (() => {
             const url = extractFirstUrl(msg.text ?? "");
@@ -546,6 +693,8 @@ export function ChatMessageRow({
             />
           </View>
         )}
+          </>
+        )}
       </View>
     </View>
   );
@@ -560,4 +709,96 @@ export function ChatMessageRow({
   }
 
   return bubble;
+}
+
+// -- P2-03: Inline message editor --
+// Replaces the message bubble with a TextInput pre-filled with the current
+// text. Save/Cancel buttons persist or abort the edit. The editor is a leaf
+// component with its own local text state so keystrokes are not blocked by
+// parent re-renders.
+
+export interface InlineEditStyles {
+  editContainer: ViewStyle;
+  editInput: TextStyle;
+  editActions: ViewStyle;
+  editActionBtn: ViewStyle;
+  editSaveBtn: ViewStyle;
+  editActionLabel: TextStyle;
+}
+
+export interface InlineMessageEditorProps {
+  initialText: string;
+  isMe: boolean;
+  colors: import("../../theme/ThemeContext").ThemeColors;
+  styles: InlineEditStyles;
+  onSave: (text: string) => void;
+  onCancel: () => void;
+}
+
+export function InlineMessageEditor({
+  initialText,
+  isMe,
+  colors,
+  styles,
+  onSave,
+  onCancel,
+}: InlineMessageEditorProps) {
+  const [text, setText] = useState(initialText);
+  const trimmed = text.trim();
+  const canSave = trimmed.length > 0 && trimmed !== initialText.trim();
+
+  return (
+    <View
+      style={[
+        styles.editContainer,
+        isMe && { alignSelf: 'flex-end' },
+      ]}
+    >
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        style={styles.editInput}
+        autoFocus
+        multiline
+        maxLength={4000}
+        accessibilityLabel="Edit message"
+        underlineColorAndroid="transparent"
+      />
+      <View style={styles.editActions}>
+        <Pressable
+          style={styles.editActionBtn}
+          onPress={onCancel}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel edit"
+        >
+          <Text
+            style={[
+              styles.editActionLabel,
+              { color: colors.textSecondary },
+            ]}
+          >
+            {'Cancel'}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.editActionBtn, styles.editSaveBtn]}
+          onPress={() => canSave && onSave(text)}
+          disabled={!canSave}
+          accessibilityRole="button"
+          accessibilityLabel="Save edit"
+          accessibilityState={{ disabled: !canSave }}
+        >
+          <Text
+            style={[
+              styles.editActionLabel,
+              { color: colors.textInverse },
+              !canSave && { opacity: 0.5 },
+            ]}
+          >
+            {'Save'}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 }

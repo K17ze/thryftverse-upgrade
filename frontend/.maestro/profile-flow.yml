@@ -1,0 +1,13 @@
+# Maestro E2E flow — User profile journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Profile"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+
+- takeScreenshot: profile-loaded

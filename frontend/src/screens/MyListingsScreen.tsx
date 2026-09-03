@@ -9,7 +9,7 @@ import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
-import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState, DenseListScreen } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadges';
 import { useStore } from '../store/useStore';
@@ -79,7 +79,7 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
       )}
       <View style={styles.rowBody}>
         <Text style={styles.rowTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.rowPrice}>{formatFromFiat(item.priceGbp, currencyCode)}</Text>
+        <Text style={styles.rowPrice}>{formatFromFiat(item.priceGbp, currencyCode, { displayMode: 'fiat' })}</Text>
         <View style={styles.rowMeta}>
           {/* Status pill — only visible containment on this row (status boundary) */}
           <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '40' }]}>
@@ -261,12 +261,12 @@ export default function MyListingsScreen() {
           <FlagshipMetricLine
             icon="wallet"
             label={t('myListings.statAvgPrice')}
-            value={formatFromFiat(analytics.avgActivePrice, currencyCode)}
+            value={formatFromFiat(analytics.avgActivePrice, currencyCode, { displayMode: 'fiat' })}
           />
           <FlagshipMetricLine
             icon="trending"
             label={t('myListings.statActiveValue')}
-            value={formatFromFiat(analytics.totalActiveValue, currencyCode)}
+            value={formatFromFiat(analytics.totalActiveValue, currencyCode, { displayMode: 'fiat' })}
           />
         </View>
 
@@ -393,48 +393,48 @@ export default function MyListingsScreen() {
   };
 
   return (
-    <FlagshipScreen
+    <DenseListScreen
+      testID="my-listings-screen"
       header={<FlagshipHeader title={headerTitle} onBack={() => navigation.goBack()} />}
-      scrollEnabled={false}
-      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
-    >
-      <OfflineBanner onRetry={() => void onRefresh()} />
-      {listings.length === 0 ? (
-        <View style={styles.body}>
-          <EmptyState
-            icon="bag-handle-outline"
-            title={t('myListings.noListings')}
-            subtitle={emptySubtitle}
-            ctaLabel={t('myListings.startSelling')}
-            onCtaPress={() => navigation.navigate('Sell')}
-          />
-        </View>
-      ) : (
-        <FlashList
-          data={filteredListings}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
-          ListHeaderComponent={
-            <View>
-              {renderHeader()}
-              {renderFilterBar()}
-              {/* Listing count for current filter */}
-              <View style={styles.listingsHeaderRow}>
-                <Text style={styles.listingsHeaderText}>
-                  {t('myListings.listingCount', { count: filteredListings.length, word: filteredListings.length === 1 ? t('myListings.listingWord') : t('myListings.listingWordPlural') })}
-                  {activeTab !== 'all' ? ` · ${TABS.find(t2 => t2.key === activeTab)?.label}` : ''}
-                </Text>
+      banner={<OfflineBanner onRetry={() => void onRefresh()} />}
+      list={
+        listings.length === 0 ? (
+          <View style={styles.body}>
+            <EmptyState
+              icon="bag-handle-outline"
+              title={t('myListings.noListings')}
+              subtitle={emptySubtitle}
+              ctaLabel={t('myListings.startSelling')}
+              onCtaPress={() => navigation.navigate('Sell')}
+            />
+          </View>
+        ) : (
+          <FlashList
+            data={filteredListings}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.list}
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
+            ListHeaderComponent={
+              <View>
+                {renderHeader()}
+                {renderFilterBar()}
+                {/* Listing count for current filter */}
+                <View style={styles.listingsHeaderRow}>
+                  <Text style={styles.listingsHeaderText}>
+                    {t('myListings.listingCount', { count: filteredListings.length, word: filteredListings.length === 1 ? t('myListings.listingWord') : t('myListings.listingWordPlural') })}
+                    {activeTab !== 'all' ? ` · ${TABS.find(t2 => t2.key === activeTab)?.label}` : ''}
+                  </Text>
+                </View>
               </View>
-            </View>
-          }
-          ListEmptyComponent={renderFilteredEmpty()}
-          renderItem={renderListingItem}
-          // Performance: long seller lists; FlashList v2 handles recycling
-          // automatically.
-        />
-      )}
-    </FlagshipScreen>
+            }
+            ListEmptyComponent={renderFilteredEmpty()}
+            renderItem={renderListingItem}
+            // Performance: long seller lists; FlashList v2 handles recycling
+            // automatically.
+          />
+        )
+      }
+    />
   );
 }
 

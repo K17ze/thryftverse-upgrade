@@ -84,11 +84,16 @@ export function AuctionNotificationRow({
       : null;
   const bidPrefix = currentBid != null ? 'Current bid' : minimumNextBid != null ? 'Next bid' : null;
 
-  // The description carries the urgency + object label only; the bid amount
-  // is rendered as a dedicated tabular-figures element (the visual anchor).
-  const description = `${visual.urgencyLabel} · ${objectLabel}`;
+  // Deduplicate title vs body: Avoid repeating "Auction won" in both lines.
+  const titleText = event.title || visual.urgencyLabel;
+  const rawBody = event.body?.trim();
+  const description = rawBody && rawBody !== titleText
+    ? rawBody
+    : objectLabel && objectLabel !== 'this auction'
+      ? objectLabel
+      : event.objectRef?.label ?? 'Auction update';
 
-  const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${event.requiresAction ? 'Action required. ' : ''}${visual.urgencyLabel} on ${objectLabel}${bidAmount ? `. ${bidPrefix} ${bidAmount}` : ''}. ${time}. Button: ${visual.actionLabel}`;
+  const accessibilityLabel = `${isUnread ? 'Unread. ' : ''}${event.requiresAction ? 'Action required. ' : ''}${titleText} on ${objectLabel}${bidAmount ? `. ${bidPrefix} ${bidAmount}` : ''}. ${time}${event.requiresAction ? `. Button: ${visual.actionLabel}` : ''}`;
 
   const leading = (
     <NotificationStatusIcon
@@ -98,14 +103,21 @@ export function AuctionNotificationRow({
     />
   );
 
-  const trailing = (
+  const trailing = event.requiresAction ? (
     <NotificationActionButton
       label={visual.actionLabel}
       onPress={onAction ?? onPress}
       colors={colors}
       variant="primary"
     />
-  );
+  ) : objectImage ? (
+    <NotificationThumbnail
+      uri={objectImage}
+      colors={colors}
+      fallbackIcon="trophy-outline"
+      size={44}
+    />
+  ) : undefined;
 
   return (
     <NotificationRowBase
@@ -119,7 +131,7 @@ export function AuctionNotificationRow({
       accessibilityLabel={accessibilityLabel}
     >
       <Text style={[styles.title, isUnread && styles.titleUnread]} numberOfLines={1}>
-        {event.title || visual.urgencyLabel}
+        {titleText}
       </Text>
       <Text style={styles.body} numberOfLines={2}>
         {description}

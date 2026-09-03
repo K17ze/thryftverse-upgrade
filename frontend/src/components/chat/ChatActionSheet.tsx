@@ -7,12 +7,14 @@ import { useAppTheme } from "../../theme/ThemeContext";
 import { AnimatedPressable } from "../AnimatedPressable";
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 
-export type ChatAction = "gallery" | "camera" | "agent";
+export type ChatAction = "gallery" | "camera" | "document" | "location" | "agent" | "offer" | "share_listing";
 
 interface ChatActionSheetProps {
   visible: boolean;
   onClose: () => void;
   onSelect: (action: ChatAction) => void;
+  hasLinkedListing?: boolean;
+  isSeller?: boolean;
 }
 
 interface ActionDef {
@@ -27,7 +29,10 @@ interface ActionDef {
 export function ChatActionSheet({
   visible,
   onClose,
-  onSelect }: ChatActionSheetProps) {
+  onSelect,
+  hasLinkedListing = false,
+  isSeller = false,
+}: ChatActionSheetProps) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
   const actions = useMemo<ActionDef[]>(
@@ -43,12 +48,37 @@ export function ChatActionSheet({
         label: t('attachments.camera'),
         description: t('attachments.takePhotoOrVideo') },
       {
+        id: "document",
+        icon: "document-attach-outline",
+        label: "File",
+        description: "Send PDF, ZIP, or other file" },
+      ...(hasLinkedListing && !isSeller
+        ? [
+            {
+              id: "offer" as ChatAction,
+              icon: "pricetag-outline" as const,
+              label: "Make an offer",
+              description: "Propose a price to the seller",
+            },
+          ]
+        : []),
+      ...(hasLinkedListing
+        ? [
+            {
+              id: "share_listing" as ChatAction,
+              icon: "bag-handle-outline" as const,
+              label: "Share listing",
+              description: "Send product card into conversation",
+            },
+          ]
+        : []),
+      {
         id: "agent",
         icon: 'bulb-outline',
         label: t('agentPicker.addAssistant'),
         description: t('agentPicker.addAssistantDescription') },
     ],
-    [t],
+    [t, hasLinkedListing, isSeller],
   );
 
   return (

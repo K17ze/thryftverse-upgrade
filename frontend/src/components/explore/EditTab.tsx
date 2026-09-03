@@ -4,19 +4,16 @@ import {
   Text,
   StyleSheet,
   ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Stroke, Elevation} from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
-import { useToast } from '../../context/ToastContext';
 import { useBackendData } from '../../context/BackendDataContext';
 import { fetchTrendingListings, type TrendingListing } from '../../services/marketApi';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
@@ -44,20 +41,16 @@ export default function EditTab() {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const { show } = useToast();
   const { listings } = useBackendData();
 
   const [trending, setTrending] = React.useState<TrendingListing[]>([]);
-  const [trendingLoading, setTrendingLoading] = React.useState(true);
   const [trendingWindow, setTrendingWindow] = React.useState<'24h' | '7d' | '30d'>('24h');
 
   React.useEffect(() => {
     let cancelled = false;
-    setTrendingLoading(true);
     fetchTrendingListings({ window: trendingWindow, limit: 20 })
       .then((items) => { if (!cancelled) setTrending(items); })
-      .catch(() => { if (!cancelled) setTrending([]); })
-      .finally(() => { if (!cancelled) setTrendingLoading(false); });
+      .catch(() => { if (!cancelled) setTrending([]); });
     return () => { cancelled = true; };
   }, [trendingWindow]);
 
@@ -195,23 +188,6 @@ export default function EditTab() {
         </View>
       )}
 
-      {/* Style Quiz */}
-      <View style={{ marginTop: Space.lg }}>
-        <DiscoverySectionHeader
-          kicker="Personalise"
-          title="Find Your Aesthetic"
-        />
-        <AnimatedPressable style={styles.quizCard} onPress={() => navigation.navigate('StyleQuiz')} activeOpacity={0.92}>
-          <View style={styles.quizContent}>
-            <Text style={styles.quizTitle}>Discover your style</Text>
-            <Text style={styles.quizSub}>Take a short quiz to tailor your Explore feed to your preferences.</Text>
-          </View>
-          <View style={styles.quizIconWrap}>
-            <Ionicons name="color-palette-outline" size={28} color={colors.brand} />
-          </View>
-        </AnimatedPressable>
-      </View>
-
       <View style={{ height: 100 }} />
     </ScrollView>
   );
@@ -271,38 +247,5 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
     letterSpacing: TypographyV2.meta.letterSpacing },
   windowTabTextActive: {
-    color: colors.textInverse },
-
-  /* Quiz Card */
-  quizCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    marginHorizontal: Space.md,
-    padding: Space.md,
-    gap: Space.sm,
-    ...Elevation.subtle },
-  quizContent: {
-    flex: 1,
-    gap: 4 },
-  quizTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: TypographyV2.sectionTitle.fontFamily,
-    color: colors.textPrimary,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing },
-  quizSub: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textSecondary,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    lineHeight: 18 },
-  quizIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center' } });
+    color: colors.textInverse } });
 }

@@ -1,5 +1,5 @@
 import type { CreatorDocument, CreatorLayer, CreatorPage } from './composition';
-import { POSTER_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_BACKGROUND, POSTER_DEFAULT_BACKGROUND } from './composition';
+import { safeValidateDocument, POSTER_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_ASPECT_RATIO, LOOK_DEFAULT_BACKGROUND, POSTER_DEFAULT_BACKGROUND } from './composition';
 import type { LookMediaEntry } from '../services/looksApi';
 
 // ── Look viewer adapter ────────────────────────────────────────────
@@ -12,6 +12,7 @@ export interface LookViewData {
   mediaType?: 'image' | 'video';
   /** Additional carousel slides beyond the primary mediaUrl. */
   mediaUrls?: LookMediaEntry[];
+  compositionDocument?: unknown;
   visibility?: 'public' | 'followers' | 'private';
   tags: Array<{
     id: string;
@@ -24,6 +25,10 @@ export interface LookViewData {
 
 export function lookToDocument(look: LookViewData): CreatorDocument {
   const layers: CreatorLayer[] = [];
+  const authoritative = safeValidateDocument(look.compositionDocument);
+  if (authoritative.success && authoritative.data?.type === 'look' && authoritative.data.id === look.id) {
+    return authoritative.data;
+  }
 
   layers.push({
     id: 'media_primary',
@@ -152,6 +157,7 @@ export interface PosterFrameViewData {
 export interface PosterStoryViewData {
   id: string;
   frames: PosterFrameViewData[];
+  compositionDocument?: unknown;
   audience?: 'public' | 'private';
   allowReplies?: boolean;
   allowReactions?: boolean;
@@ -184,6 +190,10 @@ function pOptions(p: Record<string, unknown>): Array<{ id: string; label: string
 }
 
 export function posterStoryToDocument(story: PosterStoryViewData): CreatorDocument {
+  const authoritative = safeValidateDocument(story.compositionDocument);
+  if (authoritative.success && authoritative.data?.type === 'poster' && authoritative.data.id === story.id) {
+    return authoritative.data;
+  }
   const pages: CreatorPage[] = story.frames.map((frame) => {
     const layers: CreatorLayer[] = [];
 

@@ -18,11 +18,13 @@ import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { ActionSheet } from '../components/sheets/ActionSheet';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
 import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
 import {
   addConversationMembersOnApi,
+  fetchGroupSettingsFromApi,
   removeConversationMemberOnApi,
   leaveGroupOnApi,
   promoteConversationMemberOnApi,
@@ -30,6 +32,7 @@ import {
   transferConversationOwnershipOnApi } from '../services/chatApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
+import { useChatGroupMembershipEvent } from '../services/realtimeClient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupMembers'>;
 
@@ -46,10 +49,28 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
+  const reconcileGroupMembershipEvent = useStore((state) => state.reconcileGroupMembershipEvent);
+
+  useChatGroupMembershipEvent(conversationId, (event) => {
+    const removedUserId = event.type === 'chat.member.removed'
+      ? event.payload.memberUserId
+      : event.type === 'chat.member.left'
+        ? event.payload.actorUserId
+        : null;
+    reconcileGroupMembershipEvent(event);
+    if (removedUserId && removedUserId === currentUser?.id) {
+      deleteConversation(conversationId);
+      navigation.reset({ index: 0, routes: [{ name: 'MainTabs', params: { screen: 'Inbox' } }] });
+    }
+  });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState(false);
+  const [memberActionMenu, setMemberActionMenu] = useState<{
+    member: { id: string; name: string; role: MemberRole };
+    actions: Array<{ label: string; destructive?: boolean; onPress: () => void }>;
+  } | null>(null);
 
   // Add-members flow state
   const [showAddMembers, setShowAddMembers] = useState(false);
@@ -98,6 +119,27 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   }, [conversation, currentUser?.id]);
 
   const canManage = currentRole === 'owner' || currentRole === 'admin';
+  const [canAddMembers, setCanAddMembers] = useState(canManage);
+
+  useEffect(() => {
+    let active = true;
+    if (canManage) {
+      setCanAddMembers(true);
+      return () => {
+        active = false;
+      };
+    }
+    fetchGroupSettingsFromApi(conversationId)
+      .then((snapshot) => {
+        if (active) setCanAddMembers(snapshot.capabilities.canAddMembers);
+      })
+      .catch(() => {
+        if (active) setCanAddMembers(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [canManage, conversationId]);
 
   // Determine roles from memberRoles / ownerId
   const members = useMemo(() => {
@@ -323,48 +365,20 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   const handleMemberLongPress = (member: { id: string; name: string; role: MemberRole }) => {
     if (!canManage || member.id === currentUser?.id) return;
     const isOwner = currentUser?.id === conversation?.ownerId;
-    const options: Array<{ text: string; onPress?: () => void; style?: 'destructive' | 'cancel' }> = [
-      { text: 'Cancel', style: 'cancel' },
-    ];
+    const actions: Array<{ label: string; destructive?: boolean; onPress: () => void }> = [];
 
     if (member.role === 'member') {
-      options.unshift({
-        text: 'Promote to admin',
-        onPress: () => handlePromoteMember(member.id, member.name) });
-      options.unshift({
-        text: 'Remove from group',
-        style: 'destructive',
-        onPress: () => handleRemoveMember(member.id, member.name) });
+      actions.push({ label: 'Promote to admin', onPress: () => handlePromoteMember(member.id, member.name) });
     } else if (member.role === 'admin') {
-      options.unshift({
-        text: 'Demote to member',
-        onPress: () => handleDemoteMember(member.id, member.name) });
-      options.unshift({
-        text: 'Remove from group',
-        style: 'destructive',
-        onPress: () => handleRemoveMember(member.id, member.name) });
+      actions.push({ label: 'Demote to member', onPress: () => handleDemoteMember(member.id, member.name) });
     }
+    actions.push({ label: 'Remove from group', destructive: true, onPress: () => handleRemoveMember(member.id, member.name) });
 
     // Only owner can transfer ownership
     if (isOwner && member.id !== currentUser?.id) {
-      options.unshift({
-        text: 'Transfer ownership',
-        style: 'destructive',
-        onPress: () => handleTransferOwnership(member.id, member.name) });
+      actions.push({ label: 'Transfer ownership', destructive: true, onPress: () => handleTransferOwnership(member.id, member.name) });
     }
-
-    // Map the action menu to ConfirmationSheet — first non-cancel button
-    // becomes the confirm action.
-    const firstAction = options.find((o) => o.style !== 'cancel' && o.onPress);
-    if (firstAction) {
-      setConfirmSheet({
-        visible: true,
-        title: member.name,
-        message: firstAction.text,
-        confirmLabel: firstAction.text,
-        variant: firstAction.style === 'destructive' ? 'danger' : 'default',
-        onConfirm: () => { firstAction.onPress?.(); } });
-    }
+    setMemberActionMenu({ member, actions });
   };
 
   const handleLeaveGroup = () => {
@@ -429,7 +443,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         />
 
         {/* Add members section */}
-        {canManage && !showAddMembers && (
+        {canAddMembers && !showAddMembers && (
           <AnimatedPressable
             onPress={() => setShowAddMembers(true)}
             activeOpacity={0.7}
@@ -634,6 +648,32 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         variant={confirmSheet.variant ?? 'danger'}
         onConfirm={confirmSheet.onConfirm}
       />
+      <ActionSheet
+        visible={memberActionMenu !== null}
+        onDismiss={() => setMemberActionMenu(null)}
+      >
+        {memberActionMenu && (
+          <View style={styles.memberActionSheet}>
+            <Text style={styles.memberActionTitle}>{memberActionMenu.member.name}</Text>
+            {memberActionMenu.actions.map((action) => (
+              <Pressable
+                key={action.label}
+                style={({ pressed }) => [styles.memberActionRow, pressed && styles.memberActionRowPressed]}
+                onPress={() => {
+                  setMemberActionMenu(null);
+                  action.onPress();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+              >
+                <Text style={[styles.memberActionLabel, action.destructive && styles.memberActionLabelDanger]}>
+                  {action.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </ActionSheet>
     </FlagshipScreen>
   );
 }
@@ -845,5 +885,26 @@ function createStyles(colors: ThemeColors) {
   leaveText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
+  memberActionSheet: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm },
+  memberActionTitle: {
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    color: colors.textPrimary,
+    paddingVertical: Space.smMd },
+  memberActionRow: {
+    minHeight: Control.hit,
+    justifyContent: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border },
+  memberActionRowPressed: {
+    opacity: 0.58 },
+  memberActionLabel: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    color: colors.textPrimary },
+  memberActionLabelDanger: {
     color: colors.danger } });
 }

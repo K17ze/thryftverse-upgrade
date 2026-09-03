@@ -106,8 +106,8 @@ const SPEED_MODES = [
 ];
 
 const ROW_HEIGHT = 52; // ≥44pt touch target
-const ICON_SIZE = 22;
-const ROW_ICON_SIZE = 20;
+const ICON_SIZE = IconGrammar.standard;
+const ROW_ICON_SIZE = IconGrammar.standard;
 
 // ── Component ──────────────────────────────────────────────────────
 

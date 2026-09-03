@@ -17,7 +17,7 @@ import { Motion } from '../../theme/motionTokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
 
-export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'delete' | 'retry' | 'report';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'edit' | 'delete' | 'retry' | 'report';
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -26,6 +26,8 @@ interface MessageContextMenuProps {
   messageText?: string;
   isOwnMessage?: boolean;
   isFailed?: boolean;
+  /** P2-03: Whether the message is still within the edit window. */
+  canEdit?: boolean;
 }
 
 export function MessageContextMenu({
@@ -35,6 +37,7 @@ export function MessageContextMenu({
   messageText,
   isOwnMessage,
   isFailed,
+  canEdit,
 }: MessageContextMenuProps) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
@@ -47,8 +50,9 @@ export function MessageContextMenu({
       isOwnMessage: Boolean(isOwnMessage),
       isFailed: Boolean(isFailed),
       messageText,
+      canEdit: Boolean(canEdit),
     });
-  }, [messageText, isOwnMessage, isFailed]);
+  }, [messageText, isOwnMessage, isFailed, canEdit]);
   const slideAnim = React.useRef(new Animated.Value(screenHeight)).current;
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 

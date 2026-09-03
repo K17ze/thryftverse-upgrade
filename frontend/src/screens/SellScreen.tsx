@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,70 +7,34 @@ import {
   Pressable,
   Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
+import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, FontFamily, DockConstants, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
-import { AppInput } from '../components/ui/AppInput';
-import { AnimatedPressable } from '../components/AnimatedPressable';
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
 import { AppIcon } from '../components/common/AppIcon';
 import { AppIconButton } from '../components/common/AppIconButton';
 import { IconSize } from '../theme/iconTokens';
-import { CURRENCIES } from '../constants/currencies';
-import { useStore, useIsGuest } from '../store/useStore';
-import { useSignupWall } from '../hooks/useSignupWall';
+import { useIsGuest } from '../store/useStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { useSellerTrust } from '../platform/product';
-import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { useCurrencyPref } from '../hooks/useCurrencyPref';
-import { useToast } from '../context/ToastContext';
 import { useA11yAudit } from '../hooks/useA11yAudit';
 import { DebouncedTextInput } from '../components/ui/DebouncedTextInput';
 import { sanitizeDecimalInput, calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
 import {
-  getPickerOptionsForMode,
-  computeCoOwnPricing,
-  evaluatePriceVsMarket,
-  computeDiscount,
   buildContextualPhotoPrompts,
   formatShippingSummary,
-  formatReviewSummary,
-  sanitizeShareCountInput,
-  type PickerMode } from '../utils/sellScreenLogic';
+  formatReviewSummary } from '../utils/sellScreenLogic';
 import { haptics } from '../utils/haptics';
-import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
-import type { MediaUploadAsset } from '../utils/mediaUploadAsset';
-import { uploadMedia } from '../services/mediaUpload';
-import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
 import { EmptyState } from '../components/EmptyState';
-import { ListingModeSelector, ListingMode, getListingModeFromLabel, getListingModeLabel } from '../components/listing/ListingModeSelector';
+import { ListingModeSelector } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
-import { useListingAutofill } from '../hooks/useListingAutofill';
-import { useSoldComps } from '../hooks/useSoldComps';
-import { useConnectivity } from '../hooks/useConnectivity';
-import { useOfflineQueue } from '../lib/offlineQueue';
-import { fetchWithAuth, getApiBaseUrl } from '../lib/apiClient';
-import { useBackendData } from '../context/BackendDataContext';
-import { useTaxonomy } from '../context/TaxonomyContext';
-import { useFeatureFlag, trackFunnelStep } from '../analytics';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
-import type { AutocompleteSuggestion } from '../services/searchAutocompleteApi';
-import {
-  evaluateListingCompleteness,
-  type ListingFieldValues,
-  type ListingFieldKey } from '../contracts/listingCategoryPolicy';
 import { t } from '../i18n';
-import { useSellFormState } from '../hooks/sell/useSellFormState';
-import { useListingPublishPipeline } from '../hooks/sell/useListingPublishPipeline';
-import { useSellDraftPersistence } from '../hooks/sell/useSellDraftPersistence';
-import { useTagAutocomplete } from '../hooks/sell/useTagAutocomplete';
+import { useSellScreenData, useSellScreenForm, useSellScreenActions } from '../hooks/sell';
 import AuctionFieldsSection from '../components/sell/AuctionFieldsSection';
-import SellerTipsBanner from '../components/sell/SellerTipsBanner';
 import ShippingPickerSheet from '../components/sell/ShippingPickerSheet';
 import TagInputWithSuggestions from '../components/sell/TagInputWithSuggestions';
 
@@ -78,25 +42,105 @@ export default function SellScreen() {
   const a11yRef = useRef<any>(null);
   useA11yAudit(a11yRef, 'SellScreen');
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<any>();
   const { colors, isDark } = useAppTheme();
   const isGuest = useIsGuest();
-  const { requireAuth } = useSignupWall();
   const reducedMotion = useReducedMotion();
 
-  // Guest gating: creating a listing requires an account. Show the soft
-  // signup wall and dismiss the sell screen back to where the user came
-  // from. The wall is rendered by the SignupWallProvider at the app root,
-  // so it persists after this screen unmounts.
-  useEffect(() => {
-    if (isGuest) {
-      requireAuth('create_listing');
-      navigation.goBack();
-    } else {
-      trackFunnelStep('listing_creation', 'listing_started');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // ── Domain hooks (3-hook pattern: data → form → actions) ──
+  const data = useSellScreenData({ isGuest });
+  const form = useSellScreenForm({
+    values: data.values,
+    photos: data.photos,
+    soldComps: data.soldComps,
+    errors: data.errors,
+    errorMsg: data.errorMsg,
+    setErrors: data.setErrors,
+    setErrorMsg: data.setErrorMsg,
+  });
+  const actions = useSellScreenActions({ data, form });
+
+  // ── Destructure for render ──
+  const {
+    navigation,
+    values,
+    setters,
+    photos,
+    mediaDraftItems,
+    queueState,
+    errors,
+    setErrors,
+    errorMsg,
+    pickerMode,
+    setPickerMode,
+    autofillSuggestion,
+    autofillDismissed,
+    setAutofillDismissed,
+    photoGuideCollapsed,
+    setPhotoGuideCollapsed,
+    draftSavedVisible,
+    currency,
+    currencySymbol,
+    tagSuggestions,
+    tagSuggestionsVisible,
+    setTagSuggestionsVisible,
+    setTagSuggestions,
+    soldComps,
+    hasDraftContent,
+    aiListingAssistEnabled,
+  } = data;
+
+  const {
+    title, desc, price, originalPrice, tags, tagInput, category, brand, size, condition,
+    shippingMethod, shippingPayer, shippingSheetOpen, listingMode,
+    shareCountInput, sharePriceInput, offeringWindowHours, authPhotos,
+    startingBid, reservePrice, auctionDurationHours,
+  } = values;
+
+  const {
+    setTitle, setDesc, setOriginalPrice, setTagInput,
+    setShippingMethod, setShippingPayer, setShippingSheetOpen,
+    setSharePriceInput, setOfferingWindowHours,
+    setAuthPhotos, setStartingBid, setReservePrice, setAuctionDurationHours,
+  } = setters;
+
+  const {
+    completeness,
+    publishReady,
+    completenessLabel,
+    recommendedLabel,
+    hasValidPrice,
+    numericPrice,
+    hasValidStartingBid,
+    numericStartingBid,
+    parsedShareCount,
+    parsedSharePrice,
+    priceVsMarket,
+    hasDiscount,
+    discountPercent,
+  } = form;
+
+  const {
+    handleTagSubmit,
+    removeTag,
+    handleTagSuggestionPick,
+    handleApplyAutofill,
+    handlePickFromLibrary,
+    handlePickFromCamera,
+    removeItem,
+    handleRetryItem,
+    handleReorderIds,
+    handleSetCover,
+    handlePriceChange,
+    handleShareCountChange,
+    getPickerOptions,
+    getPickerSelected,
+    handlePickerSelect,
+    handlePreview,
+    isPublishing,
+    publicationStage,
+    handlePublish,
+    publishDisabled,
+  } = actions;
 
   // Theme-aware color overrides for the static styles. The static
   // StyleSheet contains only non-color properties; colors are applied
@@ -138,544 +182,9 @@ export default function SellScreen() {
     fieldRequiredHint: { color: colors.textMuted },
     autofillCard: { backgroundColor: colors.brandSubtle },
     autofillTitle: { color: colors.textPrimary },
-    autofillChip: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
     autofillChipLabel: { color: colors.textMuted },
     autofillChipValue: { color: colors.textPrimary },
     autofillApplyBtn: { borderColor: colors.brandBorder, backgroundColor: colors.brandSubtle } }), [colors]);
-
-  const updateSellDraft = useStore((s) => s.updateSellDraft);
-  const currentUser = useStore((s) => s.currentUser);
-  const { data: sellerTrust } = useSellerTrust(currentUser?.id);
-
-  const [photos, setPhotos] = useState<string[]>([]);
-
-  const { values, setters } = useSellFormState();
-  const {
-    title, desc, price, originalPrice, tags, tagInput, category, brand, size, condition,
-    shippingMethod, shippingPayer, shippingSheetOpen, listingMode, coOwnEnabled,
-    shareCountInput, sharePriceInput, offeringWindowHours, authPhotos,
-    startingBid, reservePrice, auctionDurationHours } = values;
-  const {
-    setTitle, setDesc, setPrice, setOriginalPrice, setTags, setTagInput, setCategory,
-    setBrand, setSize, setCondition, setShippingMethod, setShippingPayer, setShippingSheetOpen,
-    setListingMode, setCoOwnEnabled, setShareCountInput, setSharePriceInput, setOfferingWindowHours,
-    setAuthPhotos, setStartingBid, setReservePrice, setAuctionDurationHours } = setters;
-
-  const {
-    tagSuggestions, tagSuggestionsVisible, setTagSuggestionsVisible, setTagSuggestions } = useTagAutocomplete(tagInput);
-
-  const [pickerMode, setPickerMode] = useState<PickerMode>(null);
-
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const [mediaDraftItems, setMediaDraftItems] = useState<ListingMediaDraftItem[]>([]);
-
-  const uploadQueueRef = useRef(new MediaUploadQueue());
-  const [queueState, setQueueState] = useState(uploadQueueRef.current.getState());
-  useEffect(() => {
-    const unsub = uploadQueueRef.current.subscribe((s) => setQueueState(s));
-    return () => { unsub(); };
-  }, []);
-
-  const currency = useCurrencyPref();
-  const currencySymbol = CURRENCIES[currency.currencyCode].symbol;
-  const { isOffline, isConnected } = useConnectivity();
-  const { show: showToast } = useToast();
-
-  // ── Network-restoration flush ──
-  // When the device transitions from offline → online, flush the persisted
-  // offline queue so any write mutations the user authored while disconnected
-  // (e.g. a listing creation that was queued instead of submitted) are
-  // replayed immediately. If any queued items were successfully processed,
-  // surface a toast so the user knows their listing has been published.
-  const prevConnectedRef = useRef<boolean | null>(null);
-  useEffect(() => {
-    const wasConnected = prevConnectedRef.current;
-    prevConnectedRef.current = isConnected ?? null;
-
-    // Only flush on the false → true transition, not on every connectivity
-    // event or the initial null → true seed.
-    if (wasConnected === false && isConnected === true) {
-      const queue = useOfflineQueue.getState();
-      const countBefore = queue.queue.length;
-      if (countBefore === 0) return;
-
-      // Replay queued mutations through the same authenticated fetch
-      // pipeline used by live requests. The offline queue stores full URLs
-      // (baseUrl + path), but `fetchWithAuth` prepends the API base URL
-      // itself, so strip the base URL to recover the path. This ensures
-      // replayed writes carry a valid Authorization header and benefit from
-      // the 401 token-refresh logic — without it, a queued mutation would
-      // be sent with no auth header and silently dropped as a 401.
-      const apiBaseUrl = getApiBaseUrl();
-      queue
-        .flushQueue(async (url, init) => {
-          const path = typeof url === 'string' && url.startsWith(apiBaseUrl)
-            ? url.slice(apiBaseUrl.length)
-            : String(url);
-          return fetchWithAuth(path, init ?? undefined);
-        })
-        .then(() => {
-          const countAfter = useOfflineQueue.getState().queue.length;
-          if (countAfter < countBefore) {
-            showToast('Your listing has been published', 'success');
-          }
-        })
-        .catch(() => {
-          // Flush failures are non-fatal — the queue retains the items and
-          // the exponential-backoff retry logic will try again on the next
-          // flush or app foreground.
-        });
-    }
-  }, [isConnected, showToast]);
-
-  // ── Draft persistence (restore on mount, persist on change) ──
-  // Owns the transient "Saved" indicator state and the draft save/load
-  // effects. Restores any persisted draft from the store on mount, then
-  // persists on every change with a subtle 1.5s "Saved" flash.
-  const { draftSavedVisible } = useSellDraftPersistence(
-    { photos, mediaDraftItems, ...values },
-    { setMediaDraftItems, setPhotos, ...setters },
-  );
-
-  // AI autofill suggestions from first photo filename
-  const autofillSuggestion = useListingAutofill(mediaDraftItems);
-  const [autofillDismissed, setAutofillDismissed] = useState(false);
-  const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(true);
-  const [sellerTipsDismissed, setSellerTipsDismissed] = useState(false);
-
-  // Feature flag — gates the enhanced AI listing assist banner. Defaults to
-  // false (current autofill-only behaviour) when PostHog is not loaded.
-  const aiListingAssistEnabled = useFeatureFlag('ai_listing_assist');
-
-  // ── New seller detection ──
-  // Per research: new seller tips/guidance if first-time seller.
-  // Uses real backend data (completedSales) — no fabricated thresholds.
-  const isNewSeller = !sellerTrust?.completedSales || sellerTrust.completedSales === 0;
-
-  // ── Draft content detection ──
-  // Shows a "draft in progress" hint when the user has meaningful draft
-  // content (at least a title or photos). The draft is auto-restored on
-  // mount, so this confirms to the user that their previous work is back.
-  const hasDraftContent = useMemo(() =>
-    Boolean(title.trim() || mediaDraftItems.length > 0 || price.trim()),
-    [title, mediaDraftItems.length, price],
-  );
-
-  // Reset dismiss when photos change (new photo -> new suggestions)
-  useEffect(() => {
-    if (mediaDraftItems.length === 0) {
-      setAutofillDismissed(false);
-    }
-  }, [mediaDraftItems.length]);
-
-  const handleApplyAutofill = useCallback(() => {
-    if (autofillSuggestion.title && !title) setTitle(autofillSuggestion.title);
-    if (autofillSuggestion.brand && !brand) setBrand(autofillSuggestion.brand);
-    if (autofillSuggestion.category && !category) setCategory(autofillSuggestion.category);
-    setAutofillDismissed(true);
-    haptics.tap();
-  }, [autofillSuggestion, title, brand, category]);
-
-  // Sold comparables for pricing guidance -- derived from real backend data
-  const { listings: backendListings } = useBackendData();
-  const soldComps = useSoldComps(backendListings, category || undefined, brand || undefined);
-
-  // Taxonomy — single source of truth for category/brand/size/condition
-  // picker vocabulary. Replaces the per-screen hard-coded arrays that had
-  // diverged from the canonical set (audit P2 #25).
-  const { categories, conditions, sizes, brands } = useTaxonomy();
-  const pickerTaxonomy = useMemo(
-    () => ({
-      category: categories.filter((n) => n.parentId === null).map((n) => n.name),
-      brand: brands.map((n) => n.name),
-      size: sizes.map((n) => n.name),
-      condition: conditions.map((n) => n.name) }),
-    [categories, conditions, sizes, brands],
-  );
-
-  /* -- co-own bidirectional math -- */
-  useEffect(() => {
-    if (listingMode !== 'co_own') return;
-    const { calculatedPrice, calculatedSharePrice } = computeCoOwnPricing(price, shareCountInput, sharePriceInput);
-    if (calculatedPrice !== null && calculatedPrice !== price) {
-      setPrice(calculatedPrice);
-      return;
-    }
-    if (calculatedSharePrice !== null && calculatedSharePrice !== sharePriceInput) {
-      setSharePriceInput(calculatedSharePrice);
-    }
-  }, [price, shareCountInput, sharePriceInput, listingMode]);
-
-  useEffect(() => {
-    setCoOwnEnabled(listingMode === 'co_own');
-  }, [listingMode]);
-
-  /* -- validation computed -- */
-  const hasBasePhotos = photos.length > 0;
-  const hasRequiredDetails = Boolean(title.trim() && category && size && condition);
-  const hasDescription = desc.trim().length >= 10;
-  const numericPrice = Number(sanitizeDecimalInput(price));
-  const hasValidPrice = Number.isFinite(numericPrice) && numericPrice > 0;
-  const numericStartingBid = Number(sanitizeDecimalInput(startingBid));
-  const hasValidStartingBid = Number.isFinite(numericStartingBid) && numericStartingBid > 0;
-  const parsedShareCount = Math.floor(Number(shareCountInput));
-  const hasValidShareCount = Number.isFinite(parsedShareCount) && parsedShareCount > 0;
-  const parsedSharePrice = Number(sanitizeDecimalInput(sharePriceInput));
-  const hasValidSharePrice = Number.isFinite(parsedSharePrice) && parsedSharePrice > 0;
-  const coOwnFinancialReady = listingMode !== 'co_own' || (hasValidShareCount && hasValidSharePrice);
-  const coOwnAuthReady = listingMode !== 'co_own' || authPhotos.length > 0;
-
-  const priceVsMarket = useMemo(() => {
-    return evaluatePriceVsMarket(soldComps.hasComps, hasValidPrice, numericPrice, soldComps.minPrice, soldComps.maxPrice);
-  }, [soldComps, hasValidPrice, numericPrice]);
-
-  // ── Category-aware completeness (Phase 5 WP7) ──
-  // Truthful completeness indicators based on the category policy, not
-  // universal brand/size assumptions. Brandless vintage and sizeless home
-  // goods are valid when the policy says so.
-  const completeness = useMemo(() => {
-    const values: ListingFieldValues = {
-      title: title.trim() || null,
-      description: desc.trim() || null,
-      price: numericPrice > 0 ? numericPrice : null,
-      category: category || null,
-      brand: brand || null,
-      size: size || null,
-      condition: condition || null,
-      images: photos.length > 0 ? photos : null,
-      shippingMethod: shippingMethod || null,
-      shippingPayer: shippingPayer || null };
-    return evaluateListingCompleteness(values);
-  }, [title, desc, numericPrice, category, brand, size, condition, photos, shippingMethod, shippingPayer]);
-
-  const publishReady = useMemo(() => {
-    // Category-aware: use the policy's canActivate as the base floor,
-    // then add mode-specific financial requirements.
-    if (!completeness.canActivate) return false;
-    if (!hasDescription) return false;
-    if (listingMode === 'auction') return hasValidStartingBid;
-    if (listingMode === 'co_own') return hasValidPrice && coOwnFinancialReady && coOwnAuthReady;
-    return hasValidPrice;
-  }, [completeness, hasDescription, listingMode, hasValidPrice, hasValidStartingBid, coOwnFinancialReady, coOwnAuthReady]);
-
-  // Human-readable field labels for the completeness indicator
-  const fieldLabelMap: Record<ListingFieldKey, string> = {
-    title: 'title',
-    description: 'description',
-    price: 'price',
-    category: 'category',
-    subcategory: 'subcategory',
-    brand: 'brand',
-    size: 'size',
-    condition: 'condition',
-    images: 'photos',
-    shippingMethod: 'shipping method',
-    shippingPayer: 'shipping payer' };
-
-  const completenessLabel = useMemo(() => completeness.canActivate
-    ? 'Ready to publish'
-    : `Missing: ${completeness.missingRequired.map((f) => fieldLabelMap[f]).join(', ')}`,
-    [completeness.canActivate, completeness.missingRequired, fieldLabelMap]);
-
-  const recommendedLabel = useMemo(() => completeness.missingRecommended.length > 0
-    ? `Suggested: ${completeness.missingRecommended.map((f) => fieldLabelMap[f]).join(', ')}`
-    : null,
-    [completeness.missingRecommended, fieldLabelMap]);
-
-  useEffect(() => {
-    if (publishReady && (errorMsg || Object.keys(errors).length > 0)) {
-      setErrorMsg(null);
-      setErrors({});
-    }
-  }, [publishReady, errorMsg, errors]);
-
-  /* -- tag handling -- */
-  const handleTagSubmit = useCallback(() => {
-    const raw = tagInput.trim().toLowerCase();
-    if (!raw) return;
-    const parts = raw.split(/[,\s]+/).filter(Boolean);
-    const next = [...new Set([...tags, ...parts])].slice(0, 8);
-    setTags(next);
-    setTagInput('');
-    haptics.tap();
-  }, [tagInput, tags]);
-
-  const removeTag = useCallback((tag: string) => {
-    setTags((prev) => prev.filter((x) => x !== tag));
-  }, []);
-
-  const handleTagSuggestionPick = useCallback((suggestion: AutocompleteSuggestion) => {
-    const raw = suggestion.query.trim().toLowerCase();
-    if (!raw) return;
-    const parts = raw.split(/[,\s]+/).filter(Boolean);
-    setTags((prev) => [...new Set([...prev, ...parts])].slice(0, 8));
-    setTagInput('');
-    setTagSuggestions([]);
-    setTagSuggestionsVisible(false);
-    haptics.tap();
-  }, []);
-
-  /* -- photo handling -- */
-  const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
-    setMediaDraftItems((prev) => {
-      if (prev.some((m) => m.uri === asset.uri)) return prev;
-      const draftItem: ListingMediaDraftItem = {
-        id: asset.id,
-        uri: asset.uri,
-        kind: asset.kind,
-        source: 'local',
-        fileName: asset.fileName,
-        mimeType: asset.mimeType,
-        fileSize: asset.fileSize,
-        width: asset.width,
-        height: asset.height,
-        durationMs: asset.durationMs,
-        status: 'draft' };
-      const next = [...prev, draftItem].slice(0, 10);
-      // Keep photos in sync for backward compat
-      setPhotos(next.map((m) => m.uri));
-      if (listingMode === 'co_own' && coOwnEnabled && authPhotos.length === 0) {
-        setAuthPhotos(next.filter((m) => m.kind === 'image').map((m) => m.uri).slice(0, 2));
-      }
-      return next;
-    });
-  }, [listingMode, coOwnEnabled, authPhotos.length]);
-
-  const handlePickFromLibrary = useCallback(async () => {
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setErrorMsg(t('listing.create.errorGalleryAccess'));
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-        allowsMultipleSelection: true,
-        allowsEditing: false,
-        quality: 0.9 });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const assets = result.assets.map(convertPickerAsset);
-        const existing = mediaDraftItems.map((m) => ({
-          id: m.id,
-          uri: m.uri,
-          fileName: m.fileName ?? 'existing',
-          mimeType: m.mimeType ?? 'image/jpeg',
-          kind: m.kind,
-          fileSize: m.fileSize,
-          width: m.width,
-          height: m.height,
-          durationMs: m.durationMs }));
-        const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
-
-        if (validation.errors.length > 0) {
-          const skipped = validation.errors.map((e) => e.message).join('. ');
-          if (skipped) setErrorMsg(skipped);
-        }
-
-        for (const asset of validation.assets) {
-          appendPhotoAsset(asset);
-        }
-        if (validation.assets.length > 0) {
-          haptics.success();
-        }
-      }
-    } catch (e) {
-      setErrorMsg(t('listing.create.errorPhotoLibrary'));
-    }
-  }, [appendPhotoAsset, mediaDraftItems]);
-
-  const handlePickFromCamera = useCallback(async () => {
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        setErrorMsg(t('listing.create.errorCameraAccess'));
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-        quality: 0.9 });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        const asset = convertPickerAsset(result.assets[0]);
-        const existing = mediaDraftItems.map((m) => ({
-          id: m.id,
-          uri: m.uri,
-          fileName: m.fileName ?? 'existing',
-          mimeType: m.mimeType ?? 'image/jpeg',
-          kind: m.kind,
-          fileSize: m.fileSize,
-          width: m.width,
-          height: m.height,
-          durationMs: m.durationMs }));
-        const validation = validateMediaAssets([asset], existing, { maxTotalCount: 10 });
-        if (validation.errors.length > 0) {
-          setErrorMsg(validation.errors.map((e) => e.message).join('. '));
-        }
-        for (const a of validation.assets) {
-          appendPhotoAsset(a);
-        }
-        if (validation.assets.length > 0) {
-          haptics.success();
-        }
-      }
-    } catch (e) {
-      setErrorMsg(t('listing.create.errorCamera'));
-    }
-  }, [appendPhotoAsset, mediaDraftItems]);
-
-  const removeItem = useCallback((itemId: string) => {
-    setMediaDraftItems((prev) => {
-      const item = prev.find((m) => m.id === itemId);
-      if (!item) return prev;
-      const removedUri = item.publicUrl || item.uri;
-      setPhotos((ps) => ps.filter((u) => u !== removedUri));
-      return prev.filter((m) => m.id !== itemId);
-    });
-    haptics.tap();
-  }, []);
-
-  const handleRetryItem = useCallback((itemId: string) => {
-    const queue = uploadQueueRef.current;
-    const ok = queue.retryItem(itemId);
-    if (ok) {
-      setMediaDraftItems((prev) =>
-        prev.map((m) =>
-          m.id === itemId ? { ...m, status: 'pending', error: undefined } : m
-        )
-      );
-      haptics.tap();
-    } else {
-      haptics.warning();
-    }
-  }, []);
-
-  const handleReorderIds = useCallback((newOrderedIds: string[]) => {
-    setMediaDraftItems((prev) => {
-      const itemMap = new Map(prev.map((m) => [m.id, m]));
-      const reordered = newOrderedIds.map((id) => itemMap.get(id)).filter(Boolean) as ListingMediaDraftItem[];
-      setPhotos(reordered.map((m) => m.publicUrl || m.uri));
-      return reordered;
-    });
-    haptics.tap();
-  }, []);
-
-  // ── Set as cover ──
-  // Per audit 04 P0: "Add cover-photo semantics and explicit reorder affordance."
-  // Moves the selected item to position 0 (cover) and shifts the previous
-  // cover and intervening items down. This is an explicit, discoverable
-  // action — not only achievable via drag reorder.
-  const handleSetCover = useCallback((itemId: string) => {
-    setMediaDraftItems((prev) => {
-      const idx = prev.findIndex((m) => m.id === itemId);
-      if (idx <= 0) return prev; // already cover or not found
-      const next = [...prev];
-      const [item] = next.splice(idx, 1);
-      next.unshift(item);
-      setPhotos(next.map((m) => m.publicUrl || m.uri));
-      return next;
-    });
-    haptics.press();
-  }, []);
-
-  const handlePriceChange = useCallback((text: string) => {
-    setPrice(sanitizeDecimalInput(text));
-  }, []);
-
-  const handleShareCountChange = useCallback((value: string) => {
-    setShareCountInput(sanitizeShareCountInput(value));
-  }, []);
-
-  /* -- publish pipeline (media-upload → create-listing → attach-media) -- */
-  const { isPublishing, publicationStage, handlePublish } = useListingPublishPipeline({
-    listingMode,
-    title,
-    desc,
-    price,
-    originalPrice,
-    category,
-    brand,
-    size,
-    condition,
-    startingBid,
-    shareCountInput,
-    sharePriceInput,
-    offeringWindowHours,
-    authPhotos,
-    shippingMethod,
-    shippingPayer,
-    photos,
-    mediaDraftItems,
-    completeness,
-    isOffline,
-    currentUser,
-    navigation,
-    uploadQueueRef,
-    setMediaDraftItems,
-    setPhotos,
-    setErrors,
-    setErrorMsg });
-
-  /* -- picker helpers -- */
-  const getPickerOptions = useCallback(() => {
-    return getPickerOptionsForMode(pickerMode, pickerTaxonomy);
-  }, [pickerMode, pickerTaxonomy]);
-
-  const getPickerSelected = useCallback(() => {
-    switch (pickerMode) {
-      case 'Category': return category;
-      case 'Brand': return brand;
-      case 'Size': return size;
-      case 'Condition': return condition;
-      case 'Format': return getListingModeLabel(listingMode);
-      default: return '';
-    }
-  }, [pickerMode, category, brand, size, condition, listingMode]);
-
-  const handlePickerSelect = useCallback((val: string) => {
-    if (pickerMode === 'Category') { setCategory(val); updateSellDraft({ categoryId: val, subcategoryId: undefined }); }
-    if (pickerMode === 'Brand') { setBrand(val); updateSellDraft({ brand: val }); }
-    if (pickerMode === 'Size') { setSize(val); updateSellDraft({ size: val }); }
-    if (pickerMode === 'Condition') { setCondition(val); updateSellDraft({ condition: val }); }
-    if (pickerMode === 'Format') {
-      const newMode = getListingModeFromLabel(val);
-      setListingMode(newMode);
-      updateSellDraft({ listingMode: newMode });
-      haptics.press();
-    }
-    setPickerMode(null);
-    if (pickerMode !== 'Format') {
-      haptics.tap();
-    }
-  }, [pickerMode, updateSellDraft]);
-
-  /* -- computed values -- */
-  const { hasDiscount, discountPercent } = useMemo(
-    () => computeDiscount(originalPrice, price),
-    [originalPrice, price],
-  );
-
-  const publishDisabled = isPublishing || (!publishReady && !isPublishing);
-
-  /* -- preview handler -- */
-  const handlePreview = useCallback(() => {
-    haptics.press();
-    navigation.navigate('ListingPreview', {
-      preview: {
-        title: title.trim(),
-        price: Number(sanitizeDecimalInput(price)) || undefined,
-        originalPrice: originalPrice ? Number(sanitizeDecimalInput(originalPrice)) : undefined,
-        brand: brand || undefined,
-        condition: condition || undefined,
-        category: category || undefined,
-        size: size || undefined,
-        description: desc.trim() || undefined,
-        photos,
-        shippingMethod: shippingMethod || undefined,
-        shippingPayer: shippingPayer || undefined,
-        listingMode },
-      origin: 'sell' });
-  }, [title, price, originalPrice, brand, condition, category, size, desc, photos, shippingMethod, shippingPayer, listingMode, navigation]);
 
   return (
     <SafeAreaView ref={a11yRef} testID="sell-screen" style={[styles.root, themed.root]} edges={['top']}>
@@ -866,43 +375,6 @@ export default function SellScreen() {
                 <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>{t('listing.create.hub')}</Text>
               </Pressable>
             </View>
-          )}
-
-          {/* -- 2c. IMPORT A SHOP -- secondary action below the primary
-              listing flow. A single flat row (not a card) with a hairline
-              separator above. Restrained — does not compete with the
-              primary camera/listing action (blueprint §5.1). -- */}
-          {!hasDraftContent && (
-            <AnimatedPressable
-              style={styles.importShopRow}
-              onPress={() => { haptics.tap(); navigation.navigate('CatalogImportStart'); }}
-              activeOpacity={0.85}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel="Import a shop"
-              accessibilityHint="Bring your existing listings from eBay or a file"
-            >
-              <View style={[styles.importShopSeparator, { backgroundColor: colors.borderSubtle }]} />
-              <View style={styles.importShopContent}>
-                <AppIcon name="download" size={IconSize.lg} color="brand" opticalCenter accessible={false} />
-                <View style={styles.importShopText}>
-                  <Text style={[styles.importShopTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {t('listing.create.importShop')}
-                  </Text>
-                  <Text style={[styles.importShopSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {t('listing.create.importShopSubtitle')}
-                  </Text>
-                </View>
-              </View>
-            </AnimatedPressable>
-          )}
-
-          {/* -- 2d. NEW SELLER TIPS -- */}
-          {/* Per research: new seller tips/guidance if first-time seller.
-              Dismissible, only shows when isNewSeller and not dismissed.
-              Flat inline — no card chrome (§4 surface budget). */}
-          {isNewSeller && !sellerTipsDismissed && !hasDraftContent && (
-            <SellerTipsBanner onDismiss={() => setSellerTipsDismissed(true)} />
           )}
 
           {/* -- 2c. TITLE FIELD (first identity field, in first viewport) -- */}
@@ -2074,32 +1546,4 @@ const styles = StyleSheet.create({
   sellQuickActionLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-
-  /* -- import a shop row (flat, hairline-separated, 44pt target) -- */
-  importShopRow: {
-    paddingHorizontal: Space.md,
-    minHeight: Control.hit,
-    justifyContent: 'center' },
-  importShopSeparator: {
-    height: Stroke.hairline,
-    marginBottom: Space.sm + Space.xs },
-  importShopContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    minHeight: Control.hit },
-  importShopText: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: Space.xxs },
-  importShopTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: FontFamily.semibold,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing },
-  importShopSubtitle: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-    lineHeight: TypographyV2.meta.lineHeight,
     letterSpacing: TypographyV2.meta.letterSpacing } });

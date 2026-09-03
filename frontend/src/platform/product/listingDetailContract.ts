@@ -301,7 +301,7 @@ export function buildCapabilities(
   currentUserId?: string
 ): ListingCapabilities {
   const isOwner = !!currentUserId && listing.sellerId === currentUserId;
-  const status = listing.status ?? (listing.isSold ? 'sold' : 'unknown');
+  const status = listing.status ?? (listing.isSold ? 'sold' : 'active');
   const isSold = status === 'sold';
   let unavailableReason: ListingCapabilities['unavailableReason'] = null;
   if (isSold) unavailableReason = 'sold';

@@ -1,0 +1,28 @@
+# Maestro E2E flow — Checkout journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    label: "Explore"
+    timeout: 5000
+
+- tapOn:
+    point: 25%, 40%
+
+- assertVisible:
+    text: ".*"
+    timeout: 8000
+
+- runFlow:
+    when:
+      visible: "Buy now"
+    commands:
+      - tapOn: "Buy now"
+      - assertVisible: "Checkout"
+      - takeScreenshot: checkout-sheet-open
+
+- takeScreenshot: checkout-flow-complete

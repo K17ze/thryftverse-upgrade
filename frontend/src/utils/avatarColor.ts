@@ -11,22 +11,7 @@
  * accessibility-conscious: every fill has ≥3:1 contrast against white
  * initials text.
  */
-
-/**
- * Curated palette of 8 distinct, high-saturation fills.
- * All are readable with white semibold initials on top (≥3:1 contrast).
- * Chosen to be distinguishable in a dense chat list (hue spread ~45°).
- */
-const AVATAR_PALETTE: readonly string[] = [
-  '#E5484D', // red
-  '#F5A623', // amber
-  '#46A758', // green
-  '#0EA5E9', // sky
-  '#6366F1', // indigo
-  '#A855F7', // purple
-  '#EC4899', // pink
-  '#14B8A6', // teal
-];
+import { AVATAR_PALETTE } from '../theme/designTokens';
 
 /**
  * FNV-1a hash — fast, deterministic, no dependencies.

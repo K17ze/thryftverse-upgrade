@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { validateGtin } from '../../lib/extraction/candidatePipeline.js';
+import { validateGtin } from '../lib/extraction/candidatePipeline.js';
 
 describe('validateGtin', () => {
   // ── Valid GTINs (verified check digits) ──────────────────────────────────

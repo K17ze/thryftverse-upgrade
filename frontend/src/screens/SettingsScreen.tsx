@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Linking, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -44,7 +44,7 @@ import { useFeatureFlag, type FeatureFlagKey } from '../analytics';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 // All feature flags defined in src/analytics/types.ts. Listed here so the
-// debug view shows every flag the app can evaluate — QA can verify flag
+// debug view shows every flag the app can evaluate ΓÇö QA can verify flag
 // states without navigating to each consuming screen.
 const ALL_FEATURE_FLAGS: FeatureFlagKey[] = [
   'new_home_feed',
@@ -62,7 +62,7 @@ const ALL_FEATURE_FLAGS: FeatureFlagKey[] = [
  *
  * Renders each flag name and its current boolean value. Shown only inside
  * the developer-gated "Advanced" section so ordinary consumers never see
- * implementation detail. Uses the existing `useFeatureFlag` hook — no new
+ * implementation detail. Uses the existing `useFeatureFlag` hook ΓÇö no new
  * hooks, no new dependencies.
  */
 function FeatureFlagDebugSection() {
@@ -79,7 +79,7 @@ function FeatureFlagDebugSection() {
   );
 }
 
-/** Single flag row — calls the hook and renders the live value. */
+/** Single flag row ΓÇö calls the hook and renders the live value. */
 function FeatureFlagRow({ flagKey }: { flagKey: FeatureFlagKey }) {
   const { colors } = useAppTheme();
   const enabled = useFeatureFlag(flagKey);
@@ -156,12 +156,12 @@ interface DestinationMeta {
   showSection?: boolean;
 }
 
-// Route metadata for search — searchTerms hold only additional synonyms not already
+// Route metadata for search ΓÇö searchTerms hold only additional synonyms not already
 // covered by the label or section title (the filter checks all three fields).
 // Section names mirror the visible settings grouping so search results stay
 // consistent with the browsable hierarchy.
 const ROUTE_METADATA: DestinationMeta[] = [
-  // ── Your account (profile, security, privacy) ──
+  // ΓöÇΓöÇ Your account (profile, security, privacy) ΓöÇΓöÇ
   { key: 'EditProfile', label: 'Edit profile & account', searchTerms: 'avatar name bio username email phone password 2fa two factor', section: 'Your account', showSection: true },
   { key: 'Verification', label: 'Verify your identity', searchTerms: 'identity dac7 tax badge seller trust kyc', section: 'Your account' },
   { key: 'ChangePassword', label: 'Change password', searchTerms: '2fa two factor security', section: 'Your account' },
@@ -174,7 +174,7 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'ChatSettings', label: 'Chat privacy', searchTerms: 'who can message messaging', section: 'Your account' },
   { key: 'DataPrivacy', label: 'Data & privacy', searchTerms: 'gdpr retention third party cookies', section: 'Your account' },
   { key: 'BlockedUsers', label: 'Blocked users', searchTerms: 'block unblock', section: 'Your account' },
-  // ── Buying & selling (payments, payouts, orders, co-own, disputes) ──
+  // ΓöÇΓöÇ Buying & selling (payments, payouts, orders, co-own, disputes) ΓöÇΓöÇ
   { key: 'SavedAddresses', label: 'Saved addresses', searchTerms: 'delivery shipping', section: 'Buying & selling', showSection: true },
   { key: 'Payments', label: 'Payment methods', searchTerms: 'card bank', section: 'Buying & selling' },
   { key: 'Closet', label: 'Saved & collections', searchTerms: 'closet wishlist', section: 'Buying & selling' },
@@ -185,23 +185,23 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'CoOwnRecurringOrders', label: 'Auto-invest plans', searchTerms: 'recurring orders co-own', section: 'Buying & selling' },
   { key: 'CoOwnTaxDocuments', label: 'Tax documents', searchTerms: 'statements cgt co-own', section: 'Buying & selling' },
   { key: 'ResolutionCentre', label: 'Resolution Centre', searchTerms: 'dispute resolution', section: 'Buying & selling' },
-  // ── Notifications ──
+  // ΓöÇΓöÇ Notifications ΓöÇΓöÇ
   { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push alerts', section: 'Notifications', showSection: true },
   { key: 'EmailNotifications', label: 'Email preferences', searchTerms: '', section: 'Notifications' },
   { key: 'NotificationPreferences', label: 'Notification preferences', searchTerms: 'push offers price drop marketing quiet hours', section: 'Notifications' },
-  // ── Experience (appearance, language, currency, accessibility, recommendations) ──
+  // ΓöÇΓöÇ Experience (appearance, language, currency, accessibility, recommendations) ΓöÇΓöÇ
   { key: 'Personalisation', label: 'Content preferences', searchTerms: 'feed personalisation appearance content preferences', section: 'Experience', showSection: true },
   { key: 'AIPreferences', label: 'Recommendations', searchTerms: 'listing suggestions photo enhancement title price autocomplete sell recommendations', section: 'Experience' },
   { key: 'YourAlgorithm', label: 'Your feed', searchTerms: 'feed recommendations topics signals transparency algorithm', section: 'Experience' },
   { key: 'AccessibilitySettings', label: 'Accessibility', searchTerms: 'text size reduced motion high contrast screen reader', section: 'Experience' },
-  // ── Connected services (normal product destination) ──
+  // ΓöÇΓöÇ Connected services (normal product destination) ΓöÇΓöÇ
   { key: 'BotDirectory', label: 'Agents', searchTerms: 'agent assistant browse catalogue deploy permissions', section: 'Connected services', showSection: true },
   { key: 'AIAgentIntegration', label: 'Connections', searchTerms: 'openai anthropic claude gemini endpoint byok provider credentials api connections', section: 'Connected services' },
   { key: 'CustomBots', label: 'Your agents', searchTerms: 'custom agents created deployed manage draft published', section: 'Connected services' },
-  // ── Help & legal (support, safety, terms, about) ──
+  // ΓöÇΓöÇ Help & legal (support, safety, terms, about) ΓöÇΓöÇ
   { key: 'HelpSupport', label: 'Help Centre', searchTerms: 'support faq contact', section: 'Help & legal', showSection: true },
   { key: 'About', label: 'About Thryftverse', searchTerms: 'version', section: 'Help & legal' },
-  // ── Advanced (developer-only tools, not consumer features) ──
+  // ΓöÇΓöÇ Advanced (developer-only tools, not consumer features) ΓöÇΓöÇ
   { key: 'RuntimeSmokeTest', label: 'Runtime smoke test', searchTerms: 'diagnostic developer debug', section: 'Advanced', showSection: true },
 ];
 
@@ -240,7 +240,7 @@ export default function SettingsScreen({ navigation }: Props) {
   const [isTogglingPush, setIsTogglingPush] = React.useState(false);
   const [isHydrating, setIsHydrating] = React.useState(!useStore.persist.hasHydrated());
 
-  // Probe biometric hardware availability so the toggle subtitle is truthful —
+  // Probe biometric hardware availability so the toggle subtitle is truthful ΓÇö
   // "Not available on this device" when the device has no enrolled biometric,
   // rather than showing a toggle that silently does nothing.
   const { isAvailable: isBiometricAvailable } = useBiometricGate();
@@ -324,7 +324,7 @@ export default function SettingsScreen({ navigation }: Props) {
     if (nextPreference === themePreference) return;
     setThemePickerVisible(false);
     setIsApplyingTheme(true);
-    show(`Applying ${getThemePreferenceLabel(nextPreference)} theme…`, 'info');
+    show(`Applying ${getThemePreferenceLabel(nextPreference)} themeΓÇª`, 'info');
     await updateThemePreference(nextPreference, { reloadApp: true });
     // If reload fails (e.g. production without expo-updates), fall back to
     // the reactive context update so useAppTheme consumers still re-render.
@@ -398,11 +398,11 @@ export default function SettingsScreen({ navigation }: Props) {
   const isSearching = searchQuery.trim().length > 0;
   const q = searchQuery.toLowerCase().trim();
 
-  // ── Developer eligibility gate ──
+  // ΓöÇΓöÇ Developer eligibility gate ΓöÇΓöÇ
   // The "Advanced" section is hidden from ordinary consumers.
   // It is revealed only when the user has enabled developer mode
-  // (Settings → About → tap version 7 times). Per spec 18, developer mode
-  // keeps only raw debugging tools — not consumer agent features, which now
+  // (Settings ΓåÆ About ΓåÆ tap version 7 times). Per spec 18, developer mode
+  // keeps only raw debugging tools ΓÇö not consumer agent features, which now
   // live in the normal "Connected services" section above.
   const showAdvancedDeveloper = developerMode;
 
@@ -425,8 +425,8 @@ export default function SettingsScreen({ navigation }: Props) {
 
   const notificationSummary = `${pushEnabledCount}/${pushTotalCount} categories`;
 
-  // ── Search overlay ──
-  // Search is now inline — a search field at the top of the settings list
+  // ΓöÇΓöÇ Search overlay ΓöÇΓöÇ
+  // Search is now inline ΓÇö a search field at the top of the settings list
   // that filters settings in-place. No separate overlay screen needed.
 
   return (
@@ -439,10 +439,10 @@ export default function SettingsScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── Offline banner ── */}
+      {/* ΓöÇΓöÇ Offline banner ΓöÇΓöÇ */}
       <OfflineBanner />
 
-      {/* ── INLINE SEARCH — filters settings in-place ── */}
+      {/* ΓöÇΓöÇ INLINE SEARCH ΓÇö filters settings in-place ΓöÇΓöÇ */}
       <View style={{ marginBottom: Space.md }}>
         <AppSearchBar
           placeholder={ts('search.placeholder')}
@@ -453,10 +453,10 @@ export default function SettingsScreen({ navigation }: Props) {
       </View>
 
       {isHydrating ? (
-        /* ── HYDRATION SKELETON — persist store loading user/session data ── */
+        /* ΓöÇΓöÇ HYDRATION SKELETON ΓÇö persist store loading user/session data ΓöÇΓöÇ */
         <SettingsListSkeleton />
       ) : isSearching ? (
-        /* ── SEARCH RESULTS — flat filtered list ── */
+        /* ΓöÇΓöÇ SEARCH RESULTS ΓÇö flat filtered list ΓöÇΓöÇ */
         <SettingsSection title={searchResults.length > 0 ? ts('search.results') : ts('search.allSettings')} noCard>
           {searchResults.length === 0 ? (
             <View style={styles.emptySearch}>
@@ -482,11 +482,11 @@ export default function SettingsScreen({ navigation }: Props) {
         </SettingsSection>
       ) : (
         <>
-          {/* ── IDENTITY — compact flat row, no card ── */}
+          {/* ΓöÇΓöÇ IDENTITY ΓÇö compact flat row, no card ΓöÇΓöÇ */}
           <FlatRow
             label={displayName}
             labelStyle={{ color: colors.textPrimary }}
-            secondary={username ? `@${username}${currentUser?.email ? ` · ${currentUser.email}` : ''}` : (currentUser?.email ?? 'Not signed in')}
+            secondary={username ? `@${username}${currentUser?.email ? ` ┬╖ ${currentUser.email}` : ''}` : (currentUser?.email ?? 'Not signed in')}
             imageUri={avatarUri ?? undefined}
             imageSize={48}
             imageRadius={24}
@@ -497,9 +497,9 @@ export default function SettingsScreen({ navigation }: Props) {
             style={{ paddingVertical: Space.sm }}
           />
 
-          {/* ── Verification prompt — shows when identity/seller verification
+          {/* ΓöÇΓöÇ Verification prompt ΓÇö shows when identity/seller verification
               is not yet complete. Email verification alone does not grant
-              a trust badge (P0-UI-3). ── */}
+              a trust badge (P0-UI-3). ΓöÇΓöÇ */}
           {!currentUser?.identityVerified && !currentUser?.sellerVerified ? (
             <SettingsRow
               glyph="verified-check"
@@ -512,10 +512,10 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           ) : null}
 
-          {/* ── ACCOUNT HEALTH INDICATOR — compact status pills ──
+          {/* ΓöÇΓöÇ ACCOUNT HEALTH INDICATOR ΓÇö compact status pills ΓöÇΓöÇ
               Shows completed security steps at a glance. Each pill is a
               checkmark + label. Incomplete steps are omitted (not shown as
-              red warnings — the verification prompt above handles that). */}
+              red warnings ΓÇö the verification prompt above handles that). */}
           {currentUser ? (
             <View style={styles.healthRow}>
               {currentUser.emailVerified ? (
@@ -551,7 +551,7 @@ export default function SettingsScreen({ navigation }: Props) {
             </View>
           ) : null}
 
-          {/* ── YOUR ACCOUNT (profile, security, privacy) ── */}
+          {/* ΓöÇΓöÇ YOUR ACCOUNT (profile, security, privacy) ΓöÇΓöÇ */}
           <SettingsSection title={ts('sections.yourAccount')}>
             <SettingsRow
               glyph="verified-check"
@@ -657,7 +657,7 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── BUYING & SELLING (payments, payouts, orders, co-own, disputes) ── */}
+          {/* ΓöÇΓöÇ BUYING & SELLING (payments, payouts, orders, co-own, disputes) ΓöÇΓöÇ */}
           <SettingsSection title={ts('sections.buyingSelling')}>
             <SettingsRow
               icon="location"
@@ -720,7 +720,7 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── NOTIFICATIONS ── */}
+          {/* ΓöÇΓöÇ NOTIFICATIONS ΓöÇΓöÇ */}
           <SettingsSection title={ts('sections.notifications')}>
             <SettingsRow
               icon="notifications"
@@ -752,7 +752,7 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── EXPERIENCE (appearance, language, currency, accessibility, recommendations) ── */}
+          {/* ΓöÇΓöÇ EXPERIENCE (appearance, language, currency, accessibility, recommendations) ΓöÇΓöÇ */}
           <SettingsSection title={ts('sections.experience')}>
             <SettingsRow
               glyph="theme-palette"
@@ -819,10 +819,10 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── CONNECTED SERVICES ── */}
+          {/* ΓöÇΓöÇ CONNECTED SERVICES ΓöÇΓöÇ */}
           {/* Per spec 18: Agents are a normal product destination, not hidden
               behind developer mode. Create Agent is intentionally excluded from
-              Settings — it lives in the Agents home and profile menu. */}
+              Settings ΓÇö it lives in the Agents home and profile menu. */}
           <SettingsSection title={ts('sections.connectedServices')}>
             <SettingsRow
               icon="people"
@@ -846,7 +846,7 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── HELP & LEGAL (support, safety, terms, about) ── */}
+          {/* ΓöÇΓöÇ HELP & LEGAL (support, safety, terms, about) ΓöÇΓöÇ */}
           <SettingsSection title={ts('sections.helpLegal')}>
 
             <SettingsRow
@@ -874,10 +874,10 @@ export default function SettingsScreen({ navigation }: Props) {
             />
           </SettingsSection>
     
-          {/* ── ADVANCED (developer-only) ── */}
-          {/* Per spec 18: Developer mode keeps only raw debugging tools — not
+          {/* ΓöÇΓöÇ ADVANCED (developer-only) ΓöÇΓöÇ */}
+          {/* Per spec 18: Developer mode keeps only raw debugging tools ΓÇö not
               consumer agent features, which now live in "Connected services"
-              above. Gated behind developer mode (Settings → About → tap version
+              above. Gated behind developer mode (Settings ΓåÆ About ΓåÆ tap version
               7 times) so ordinary consumers never see implementation technology. */}
           {showAdvancedDeveloper ? (
             <SettingsSection title={ts('sections.advanced')}>
@@ -898,12 +898,12 @@ export default function SettingsScreen({ navigation }: Props) {
             </SettingsSection>
           ) : null}
 
-          {/* Feature flag debug view — read-only flag status for QA teams.
+          {/* Feature flag debug view ΓÇö read-only flag status for QA teams.
               Shown only when developer mode is enabled (Advanced section). */}
           {showAdvancedDeveloper ? <FeatureFlagDebugSection /> : null}
     
-          {/* ── DESTRUCTIVE ACTIONS — separate group at the bottom ── */}
-          {/* Per AGENTS.md §4 and App Store 5.1.1(v): destructive actions sit
+          {/* ΓöÇΓöÇ DESTRUCTIVE ACTIONS ΓÇö separate group at the bottom ΓöÇΓöÇ */}
+          {/* Per AGENTS.md ┬º4 and App Store 5.1.1(v): destructive actions sit
               at the bottom of the settings list, separated from benign rows.
               Sign Out and Delete Account are grouped together with danger color. */}
           <SettingsSection title={ts('sections.account')}>
@@ -928,7 +928,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
       {/* BottomSheetPickers MUST be rendered OUTSIDE FlagshipScreen's
           ScrollView. When inside the ScrollView, absoluteFill fills the
-          scrollable content container — not the screen viewport — so the
+          scrollable content container ΓÇö not the screen viewport ΓÇö so the
           sheet renders below the fold and is invisible to the user. */}
       <BottomSheetPicker
         visible={currencyPickerVisible}
@@ -962,14 +962,14 @@ export default function SettingsScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   searchField: {
     height: 48 },
-  // ── Search empty state ──
+  // ΓöÇΓöÇ Search empty state ΓöÇΓöÇ
   emptySearch: {
     paddingVertical: Space.lg,
     alignItems: 'center' },
   emptySearchText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.regular },
-  // ── Account health indicator ──
+  // ΓöÇΓöÇ Account health indicator ΓöÇΓöÇ
   healthRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

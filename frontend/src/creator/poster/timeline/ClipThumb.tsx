@@ -162,6 +162,8 @@ export const ClipThumb = React.memo(function ClipThumb({
         onPress={() => { haptic.selection(); onPress(); }}
         onPressIn={() => setIsPressed(true)}
         onPressOut={() => setIsPressed(false)}
+        accessibilityRole="button"
+        accessibilityLabel={`Select clip, ${formatTimecode(clip.durationMs)}`}
         style={[
           clipStyles.container,
           {
@@ -244,6 +246,9 @@ export const ClipThumb = React.memo(function ClipThumb({
                 style={[clipStyles.trimHandle, clipStyles.trimHandleStart, { backgroundColor: colors.brand }]}
                 accessibilityLabel="Trim start"
                 accessibilityRole="adjustable"
+                accessibilityValue={{ min: 0, max: clip.trimEndMs - 100, now: clip.trimStartMs, unit: 'milliseconds' }}
+                accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                onAccessibilityAction={(event) => onTrimCommit('start', event.nativeEvent.actionName === 'increment' ? 1000 : -1000)}
               />
             </GestureDetector>
           </View>
@@ -255,6 +260,9 @@ export const ClipThumb = React.memo(function ClipThumb({
                 style={[clipStyles.trimHandle, clipStyles.trimHandleEnd, { backgroundColor: colors.brand }]}
                 accessibilityLabel="Trim end"
                 accessibilityRole="adjustable"
+                accessibilityValue={{ min: clip.trimStartMs + 100, max: clip.trimEndMs + 60000, now: clip.trimEndMs, unit: 'milliseconds' }}
+                accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                onAccessibilityAction={(event) => onTrimCommit('end', event.nativeEvent.actionName === 'increment' ? 1000 : -1000)}
               />
             </GestureDetector>
           </View>

@@ -166,6 +166,13 @@ function normalizeConfiguredBaseUrlForPlatform(url: string) {
     return normalized.replace(/^http:\/\/(localhost|127\.0\.0\.1)/i, 'http://10.0.2.2');
   }
 
+  // On web and iOS, 10.0.2.2 (the Android emulator host bridge) is
+  // unreachable. Convert it back to localhost so the browser can reach
+  // the dev server running on the host machine.
+  if ((Platform.OS === 'web' || Platform.OS === 'ios') && /^http:\/\/10\.0\.2\.2(?=[:/]|$)/i.test(normalized)) {
+    return normalized.replace(/^http:\/\/10\.0\.2\.2/i, 'http://localhost');
+  }
+
   return normalized;
 }
 

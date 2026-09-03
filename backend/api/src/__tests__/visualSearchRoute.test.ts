@@ -296,7 +296,7 @@ describe('Telemetry privacy — URL hash stored, not raw URL', () => {
       String(c[0]).includes('INSERT INTO visual_search_requests'),
     );
     expect(insertCall).toBeDefined();
-    const insertArgs = insertCall![1] as unknown[];
+    const insertArgs = (insertCall as unknown as unknown[])[1] as unknown[];
     // Args: [id, image_url]. The image_url column must hold the hash.
     const storedUrlValue = insertArgs[1];
     expect(typeof storedUrlValue).toBe('string');

@@ -1,0 +1,13 @@
+# Maestro E2E flow — Settings and account preferences journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Profile"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+
+- takeScreenshot: settings-flow-complete

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, RefreshControl, Pressable } from 'react-native';
+import type { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -16,7 +16,8 @@ import {
   FlagshipState,
   FlagshipFormSection,
   FlagshipNavigationRow,
-  FlagshipMetricLine } from '../components/flagship';
+  FlagshipMetricLine,
+  TaskQueueScreen } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { useStore } from '../store/useStore';
 import { useSellerTrust } from '../platform/product';
@@ -224,24 +225,14 @@ export default function SellerHubScreen() {
   };
 
   return (
-    <FlagshipScreen
+    <TaskQueueScreen
       testID="seller-hub-screen"
       header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />}
-      scrollEnabled={false}
-      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
-    >
-      <OfflineBanner onRetry={() => void onRefresh()} />
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
-      >
-        {/* ════════════════════════════════════════════════════════════════
-            FIRST VIEWPORT — task-first, money second
-            Per Report 17 §6.1: one critical task if real, then money posture,
-            then drill-down. Not a 2×2 grid of KPI cards.
-            ════════════════════════════════════════════════════════════════ */}
-
+      banner={<OfflineBanner onRetry={() => void onRefresh()} />}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
+      contentContainerStyle={{ paddingHorizontal: 0 }}
+      urgentTask={
+        <>
         {/* ── Verification status — only when it gates a real capability ── */}
         {!isVerified && (
           <Pressable
@@ -327,8 +318,10 @@ export default function SellerHubScreen() {
             <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
           </Pressable>
         )}
-
-        {/* ── Money posture — available, processing, held ──
+        </>
+      }
+    >
+      {/* ── Money posture — available, processing, held ──
             Per Report 17 §6.1: "{currencySymbol}428 available {currencySymbol}91 processing {currencySymbol}35 held"
             Flat metric lines, not cards. One line per state.
             Asking-price inventory value is NOT shown here — it's not money. */}
@@ -600,17 +593,11 @@ export default function SellerHubScreen() {
             accessibilityHint="Opens verification settings"
           />
         </FlagshipFormSection>
-      </ScrollView>
-    </FlagshipScreen>
+    </TaskQueueScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContent: {
-    paddingHorizontal: 0,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xxl },
-
   /* ── Verification banner ── */
   verificationBanner: {
     flexDirection: 'row',

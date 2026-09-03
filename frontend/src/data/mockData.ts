@@ -130,8 +130,9 @@ export const MOCK_LISTINGS: Listing[] = [
     originalPrice: 90,
     priceWithProtection: 51.10,
     images: [
-      '',
-      '',
+      'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?auto=format&fit=crop&w=800&q=80',
     ],
     likes: 14,
     views: 180,
@@ -417,6 +418,24 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     unread: false,
     messages: [
       {
+        id: 'm0',
+        senderId: 'u1',
+        type: 'listing_share',
+        timestamp: '19/03/2026',
+        listing: {
+          id: 'l2',
+          title: 'AMI Striped Shirt',
+          brand: 'AMI',
+          size: 'M',
+          condition: 'Very good',
+          price: 48,
+          originalPrice: 90,
+          image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=800&q=80',
+          sellerUsername: 'mariefullery',
+          sellerRating: 4.8,
+        },
+      },
+      {
         id: 'm1',
         senderId: 'u1',
         text: "Hi, I'm mariefullery",
@@ -435,6 +454,13 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
         senderId: 'u1',
         offerPrice: 35,
         originalPrice: 48,
+        offer: {
+          offerPrice: 35,
+          originalPrice: 48,
+          status: 'pending',
+          expiresAt: new Date(Date.now() + 1000 * 60 * 45).toISOString(),
+          counterRound: 1,
+        },
         timestamp: '19/03/2026',
       },
       {

@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
-import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import {
+  executeListingCommand,
+  type ListingCommand,
+} from '../lib/listingCommandService.js';
 
 type SellerHubRouteDependencies = {
   app: FastifyInstance;
@@ -79,12 +83,14 @@ interface SellerOverviewV2 {
 
 interface BatchCommandItem {
   listingId: string;
+  expectedVersion?: number;
 }
 
 interface BatchCommandResult {
   listingId: string;
-  state: 'applied' | 'rejected' | 'unknown';
+  state: 'applied' | 'rejected' | 'conflict' | 'unknown';
   code?: string;
+  currentStatus?: string;
 }
 
 interface BatchCommandResponse {
@@ -92,6 +98,104 @@ interface BatchCommandResponse {
   batchId: string;
   state: 'complete' | 'partial';
   results: BatchCommandResult[];
+}
+
+interface BatchJobRow {
+  id: string;
+  seller_id: string;
+  request_hash: string;
+  status: string;
+  is_stale?: boolean;
+}
+
+interface BatchItemRow {
+  listing_id: string;
+  status: string;
+  reason: string | null;
+  current_status: string | null;
+}
+
+function hashBatchRequest(command: string, items: BatchCommandItem[]): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      command,
+      items: items.map((item) => ({
+        listingId: item.listingId,
+        expectedVersion: item.expectedVersion ?? null,
+      })),
+    }))
+    .digest('hex');
+}
+
+function commandForItem(
+  command: 'pause' | 'resume' | 'delete' | 'mark_sold_external',
+  item: BatchCommandItem,
+  actorId: string,
+): ListingCommand {
+  return {
+    type: command,
+    listingId: item.listingId,
+    actorId,
+    reason: 'seller_hub',
+  } as ListingCommand;
+}
+
+async function readBatchResponse(
+  db: Pool,
+  jobId: string,
+): Promise<BatchCommandResponse> {
+  const jobResult = await db.query<{ status: string }>(
+    `SELECT status FROM listing_batch_jobs WHERE id = $1 LIMIT 1`,
+    [jobId],
+  );
+  const itemResult = await db.query<BatchItemRow>(
+    `SELECT listing_id, status, reason, current_status
+       FROM listing_batch_items
+      WHERE batch_job_id = $1
+      ORDER BY created_at ASC, listing_id ASC`,
+    [jobId],
+  );
+
+  const results = itemResult.rows.map<BatchCommandResult>((item) => {
+    if (item.status === 'applied') {
+      return {
+        listingId: item.listing_id,
+        state: 'applied',
+        currentStatus: item.current_status ?? undefined,
+      };
+    }
+    if (item.status === 'rejected') {
+      return {
+        listingId: item.listing_id,
+        state: 'rejected',
+        code: item.reason ?? 'rejected',
+        currentStatus: item.current_status ?? undefined,
+      };
+    }
+    if (item.status === 'conflict' && item.reason !== 'server_error') {
+      return {
+        listingId: item.listing_id,
+        state: 'conflict',
+        code: item.reason ?? 'conflict',
+        currentStatus: item.current_status ?? undefined,
+      };
+    }
+    return {
+      listingId: item.listing_id,
+      state: 'unknown',
+      code: item.reason ?? (item.status === 'pending' ? 'processing' : 'server_error'),
+      currentStatus: item.current_status ?? undefined,
+    };
+  });
+
+  const finished = jobResult.rows[0]?.status === 'completed';
+  const allApplied = finished && results.length > 0 && results.every((item) => item.state === 'applied');
+  return {
+    ok: true,
+    batchId: jobId,
+    state: allApplied ? 'complete' : 'partial',
+    results,
+  };
 }
 
 export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDependencies) => {
@@ -576,22 +680,14 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
 
     const sellerId = request.authUser.userId;
 
-    const bodySchema = {
-      idempotencyKey: (v: unknown) => typeof v === 'string' && v.length >= 4,
-      command: (v: unknown) => v === 'pause' || v === 'resume' || v === 'delete',
-      items: (v: unknown) => Array.isArray(v) && v.every(
-        (item: any) => item && typeof item.listingId === 'string' && item.listingId.length >= 2,
-      ),
-    };
-
     const body = request.body as any;
     if (!body || typeof body.idempotencyKey !== 'string' || body.idempotencyKey.length < 4) {
       reply.code(400);
       return { ok: false, error: 'idempotencyKey is required (min 4 chars)' };
     }
-    if (!['pause', 'resume', 'delete'].includes(body.command)) {
+    if (!['pause', 'resume', 'delete', 'mark_sold_external'].includes(body.command)) {
       reply.code(400);
-      return { ok: false, error: 'command must be pause, resume, or delete' };
+      return { ok: false, error: 'command must be pause, resume, delete, or mark_sold_external' };
     }
     if (!Array.isArray(body.items) || body.items.length === 0) {
       reply.code(400);
@@ -602,66 +698,168 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       return { ok: false, error: 'Maximum 200 items per batch' };
     }
 
-    const command: 'pause' | 'resume' | 'delete' = body.command;
-    const items: BatchCommandItem[] = body.items;
-    const batchId = randomUUID();
-    const results: BatchCommandResult[] = [];
-
-    // Execute each item independently. A failure on one item does NOT
-    // affect the others — this is the core correctness fix.
-    for (const item of items) {
-      try {
-        // Verify ownership before mutating
-        const existing = await db.query<{ seller_id: string; status: string }>(
-          `SELECT seller_id, status FROM listings WHERE id = $1 LIMIT 1`,
-          [item.listingId],
-        );
-
-        if (!existing.rowCount || existing.rows.length === 0) {
-          results.push({ listingId: item.listingId, state: 'rejected', code: 'not_found' });
-          continue;
-        }
-
-        if (existing.rows[0].seller_id !== sellerId) {
-          results.push({ listingId: item.listingId, state: 'rejected', code: 'forbidden' });
-          continue;
-        }
-
-        if (command === 'delete') {
-          await db.query(
-            `UPDATE listings SET status = 'deleted', updated_at = NOW() WHERE id = $1`,
-            [item.listingId],
-          );
-        } else {
-          const nextStatus = command === 'pause' ? 'paused' : 'active';
-          // Only allow pause/resume on active/paused listings
-          const currentStatus = existing.rows[0].status;
-          if (currentStatus !== 'active' && currentStatus !== 'paused') {
-            results.push({ listingId: item.listingId, state: 'rejected', code: 'invalid_status' });
-            continue;
-          }
-          await db.query(
-            `UPDATE listings SET status = $2, updated_at = NOW() WHERE id = $1`,
-            [item.listingId, nextStatus],
-          );
-        }
-
-        results.push({ listingId: item.listingId, state: 'applied' });
-      } catch (err) {
-        // Unknown outcome — the server may or may not have committed.
-        // The UI must reconcile by re-fetching, not by assuming failure.
-        results.push({ listingId: item.listingId, state: 'unknown', code: 'server_error' });
-      }
+    const command = body.command as 'pause' | 'resume' | 'delete' | 'mark_sold_external';
+    const items: BatchCommandItem[] = body.items.map((item: any) => ({
+      listingId: item.listingId,
+      expectedVersion: Number.isInteger(item.expectedVersion) && item.expectedVersion > 0
+        ? item.expectedVersion
+        : undefined,
+    }));
+    if (items.some((item) => typeof item.listingId !== 'string' || item.listingId.length < 2)) {
+      reply.code(400);
+      return { ok: false, error: 'Each item must include a valid listingId' };
+    }
+    if (new Set(items.map((item) => item.listingId)).size !== items.length) {
+      reply.code(400);
+      return { ok: false, error: 'A listing can appear only once in a batch' };
     }
 
-    const hasFailures = results.some((r) => r.state !== 'applied');
-    const response: BatchCommandResponse = {
-      ok: true,
-      batchId,
-      state: hasFailures ? 'partial' : 'complete',
-      results,
-    };
+    const requestHash = hashBatchRequest(command, items);
+    // Migration 231 has a global uniqueness constraint. Prefixing the opaque
+    // client key keeps it seller-scoped and prevents cross-account collisions.
+    const durableKey = `${sellerId}:${body.idempotencyKey}`;
+    const initClient = await db.connect();
+    let jobId = '';
+    let shouldProcess = true;
+    try {
+      await initClient.query('BEGIN');
+      const existingJob = await initClient.query<BatchJobRow>(
+        `SELECT id, seller_id, request_hash, status,
+                created_at < NOW() - INTERVAL '30 seconds' AS is_stale
+           FROM listing_batch_jobs
+          WHERE idempotency_key = $1
+          LIMIT 1
+          FOR UPDATE`,
+        [durableKey],
+      );
 
-    return response;
+      if (existingJob.rowCount) {
+        const existing = existingJob.rows[0];
+        if (existing.seller_id !== sellerId || existing.request_hash !== requestHash) {
+          await initClient.query('ROLLBACK');
+          reply.code(409);
+          return {
+            ok: false,
+            error: 'This idempotency key was already used for a different request',
+            code: 'IDEMPOTENCY_KEY_REUSED',
+          };
+        }
+        jobId = existing.id;
+        shouldProcess = existing.status !== 'completed'
+          && (existing.status !== 'processing' || Boolean(existing.is_stale));
+        if (shouldProcess) {
+          await initClient.query(
+            `UPDATE listing_batch_jobs SET status = 'processing' WHERE id = $1`,
+            [jobId],
+          );
+        }
+      } else {
+        const insertedJob = await initClient.query<{ id: string }>(
+          `INSERT INTO listing_batch_jobs (
+             idempotency_key, request_hash, seller_id, command, status, total_items
+           )
+           VALUES ($1, $2, $3, $4, 'processing', $5)
+           RETURNING id`,
+          [durableKey, requestHash, sellerId, command, items.length],
+        );
+        jobId = insertedJob.rows[0].id;
+        for (const item of items) {
+          await initClient.query(
+            `INSERT INTO listing_batch_items (batch_job_id, listing_id, status)
+             VALUES ($1, $2, 'pending')`,
+            [jobId, item.listingId],
+          );
+        }
+      }
+      await initClient.query('COMMIT');
+    } catch (error) {
+      await initClient.query('ROLLBACK');
+      app.log.error({ err: error, sellerId, command }, 'Failed to initialise listing batch command');
+      reply.code(500);
+      return { ok: false, error: 'Failed to start listing update' };
+    } finally {
+      initClient.release();
+    }
+
+    // A concurrent replay returns the durable state as it stands. Pending
+    // rows become `unknown`, prompting reconciliation rather than duplication.
+    if (!shouldProcess) {
+      return readBatchResponse(db, jobId);
+    }
+
+    const pendingRows = await db.query<{ listing_id: string }>(
+      `SELECT listing_id
+         FROM listing_batch_items
+        WHERE batch_job_id = $1 AND status = 'pending'
+        ORDER BY created_at ASC, listing_id ASC`,
+      [jobId],
+    );
+    const itemById = new Map(items.map((item) => [item.listingId, item]));
+
+    // Execute independently, but always through the canonical state machine.
+    for (const pending of pendingRows.rows) {
+      const item = itemById.get(pending.listing_id) ?? { listingId: pending.listing_id };
+      const ownership = await db.query<{ seller_id: string }>(
+        `SELECT seller_id FROM listings WHERE id = $1 LIMIT 1`,
+        [item.listingId],
+      );
+      if (!ownership.rowCount) {
+        await db.query(
+          `UPDATE listing_batch_items
+              SET status = 'rejected', reason = 'not_found', current_status = 'unknown'
+            WHERE batch_job_id = $1 AND listing_id = $2 AND status = 'pending'`,
+          [jobId, item.listingId],
+        );
+        continue;
+      }
+      if (ownership.rows[0].seller_id !== sellerId) {
+        await db.query(
+          `UPDATE listing_batch_items
+              SET status = 'rejected', reason = 'forbidden', current_status = 'unknown'
+            WHERE batch_job_id = $1 AND listing_id = $2 AND status = 'pending'`,
+          [jobId, item.listingId],
+        );
+        continue;
+      }
+
+      const result = await executeListingCommand(
+        db,
+        commandForItem(command, item, sellerId),
+        item.expectedVersion,
+      );
+      await db.query(
+        `UPDATE listing_batch_items
+            SET status = $3, reason = $4, current_status = $5
+          WHERE batch_job_id = $1 AND listing_id = $2 AND status = 'pending'`,
+        [
+          jobId,
+          item.listingId,
+          result.status,
+          result.status === 'applied' ? null : result.reason,
+          result.status === 'applied' ? result.newStatus : result.currentStatus,
+        ],
+      );
+    }
+
+    await db.query(
+      `UPDATE listing_batch_jobs job
+          SET status = 'completed',
+              completed_at = NOW(),
+              applied_count = counts.applied_count,
+              rejected_count = counts.rejected_count,
+              conflict_count = counts.conflict_count
+         FROM (
+           SELECT
+             COUNT(*) FILTER (WHERE status = 'applied')::int AS applied_count,
+             COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected_count,
+             COUNT(*) FILTER (WHERE status = 'conflict')::int AS conflict_count
+           FROM listing_batch_items
+           WHERE batch_job_id = $1
+         ) counts
+        WHERE job.id = $1`,
+      [jobId],
+    );
+
+    return readBatchResponse(db, jobId);
   });
 };

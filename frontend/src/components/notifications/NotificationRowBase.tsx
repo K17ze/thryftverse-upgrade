@@ -124,8 +124,10 @@ export function NotificationRowBase({
 
       {/* Body — title + description + aggregated badge */}
       <View style={styles.body}>
-        <View style={styles.headerRow}>
-          {children}
+        <View style={styles.contentHeaderRow}>
+          <View style={styles.textContentWrap}>
+            {children}
+          </View>
           {/* Timestamp — right-aligned, top-right of the body column */}
           <Text
             style={[styles.time, { color: timeColor }]}
@@ -134,28 +136,16 @@ export function NotificationRowBase({
             {time}
           </Text>
         </View>
-        <View style={styles.metaRow}>
-          {aggregatedCount && aggregatedCount > 1 ? (
+        {aggregatedCount && aggregatedCount > 1 ? (
+          <View style={styles.metaRow}>
             <View style={styles.aggregatedBadge}>
               <Text style={styles.aggregatedText}>+{aggregatedCount - 1}</Text>
             </View>
-          ) : null}
-          {deliveryConfig ? (
-            <View style={styles.deliveryStatus}>
-              <Ionicons
-                name={deliveryConfig.icon}
-                size={16}
-                color={colors[deliveryConfig.colorKey]}
-              />
-              <Text style={[styles.deliveryStatusText, { color: colors[deliveryConfig.colorKey] }]}>
-                {deliveryConfig.label}
-              </Text>
-            </View>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
       </View>
 
-      {/* Trailing slot — action button or chevron */}
+      {/* Trailing slot — action button or item thumbnail */}
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
     </AnimatedPressable>
   );
@@ -294,6 +284,15 @@ function createStyles(colors: ThemeColors) {
     body: {
       flex: 1,
       gap: Space.xs / 2 },
+    contentHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: Space.sm },
+    textContentWrap: {
+      flex: 1,
+      flexDirection: 'column',
+      gap: 2 },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',

@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, ActivityIndicator, Pressable, Share } from 'react-native';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { ScrollView, StyleSheet, Text, View, ActivityIndicator, Pressable, Share, Linking } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -15,15 +15,21 @@ import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Control, Radius, Space, TypeStyles, FontFamily } from '../theme/designTokens';
+import { Control, Radius, Space, Stroke, TypeStyles, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import {
   deleteConversationOnApi,
   createGroupInviteLinkOnApi,
+  fetchGroupInviteLinksOnApi,
+  revokeGroupInviteLinkOnApi,
   archiveConversationOnApi,
-  type GroupInviteLink } from '../services/chatApi';
+  fetchConversationMediaFromApi,
+  fetchGroupSettingsFromApi,
+  type GroupInviteLink,
+  type GroupSettingsCapabilities } from '../services/chatApi';
 import { parseApiError } from '../lib/apiClient';
 import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
+import { useChatGroupMembershipEvent } from '../services/realtimeClient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 
@@ -56,6 +62,21 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const [isArchiving, setIsArchiving] = useState(false);
   const [isTogglingMute, setIsTogglingMute] = useState(false);
   const [inviteLink, setInviteLink] = useState<GroupInviteLink | null>(null);
+  const [activeInviteSummary, setActiveInviteSummary] = useState<GroupInviteLink | null>(null);
+  const displayedInviteSummary = inviteLink ?? activeInviteSummary;
+  const reconcileGroupMembershipEvent = useStore((state) => state.reconcileGroupMembershipEvent);
+
+  useChatGroupMembershipEvent(conversationId, (event) => {
+    const removedUserId = event.type === 'chat.member.removed'
+      ? event.payload.memberUserId
+      : event.type === 'chat.member.left'
+        ? event.payload.actorUserId
+        : null;
+    reconcileGroupMembershipEvent(event);
+    if (removedUserId && removedUserId === currentUser?.id) {
+      navigation.reset({ index: 0, routes: [{ name: 'MainTabs', params: { screen: 'Inbox' } }] });
+    }
+  });
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
     title: string;
@@ -73,10 +94,35 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const connectedAgentCount = conversation?.botIds?.length ?? 0;
   const isMuted = mutedIds.includes(conversationId);
   const currentRole = currentUser?.id ? conversation?.memberRoles?.[currentUser.id] : undefined;
-  const canManageIdentity = Boolean(
+  const isGroupManager = Boolean(
     currentUser?.id
     && (conversation?.ownerId === currentUser.id || currentRole === 'owner' || currentRole === 'admin'),
   );
+  const [groupCapabilities, setGroupCapabilities] = useState<GroupSettingsCapabilities | null>(null);
+  const canEditGroupInfo = groupCapabilities?.canEditGroupInfo ?? isGroupManager;
+  const canAddMembers = groupCapabilities?.canAddMembers ?? isGroupManager;
+
+  useEffect(() => {
+    let active = true;
+    fetchGroupSettingsFromApi(conversationId)
+      .then((snapshot) => {
+        if (active) setGroupCapabilities(snapshot.capabilities);
+      })
+      .catch(() => {
+        // Existing role-derived access remains the honest fallback while the
+        // settings endpoint is unavailable. Mutations are still server-gated.
+      });
+    return () => {
+      active = false;
+    };
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!canAddMembers) return;
+    fetchGroupInviteLinksOnApi(conversationId)
+      .then((links) => setActiveInviteSummary(links.find((link) => !link.isExpired && !link.isRevoked) ?? null))
+      .catch(() => setActiveInviteSummary(null));
+  }, [canAddMembers, conversationId]);
 
   const memberProfiles = useMemo(
     () => conversation?.participantProfiles ?? [],
@@ -90,6 +136,43 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
       .slice(-30)
       .reverse();
   }, [conversation?.messages]);
+
+  // Shared media is fetched from the live endpoint the first time the media
+  // tab opens (live-signs §37.2): local cached messages only cover the page
+  // of history already in the store, so a media tab driven solely by local
+  // state silently hides older media. While loading, local items render as
+  // instant first paint; the endpoint result replaces them when ready.
+  const [remoteMedia, setRemoteMedia] = useState<
+    Array<{ id: string; mediaUri: string; mediaType: 'image' | 'video' | 'document'; senderUserId: string | null; createdAt: string; documentName?: string; documentMimeType?: string }>
+  >([]);
+  const [mediaState, setMediaState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const mediaRequestSeq = useRef(0);
+
+  useEffect(() => {
+    if (activeTab !== 'media' || mediaState !== 'idle') return;
+    const seq = ++mediaRequestSeq.current;
+    setMediaState('loading');
+    fetchConversationMediaFromApi(conversationId, { limit: 90 })
+      .then((items) => {
+        if (mediaRequestSeq.current !== seq) return; // stale response — ignore
+        setRemoteMedia(items);
+        setMediaState('ready');
+      })
+      .catch(() => {
+        if (mediaRequestSeq.current !== seq) return;
+        setMediaState('error');
+      });
+  }, [activeTab, mediaState, conversationId]);
+
+  const mediaItems = useMemo(() => {
+    if (mediaState === 'ready') return remoteMedia;
+    return recentMedia;
+  }, [mediaState, remoteMedia, recentMedia]);
+
+  const retryMediaFetch = useCallback(() => {
+    mediaRequestSeq.current += 1;
+    setMediaState('idle');
+  }, []);
 
   if (!conversation || conversation.type !== 'group') {
     return (
@@ -113,6 +196,11 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     avatar: member.avatar }));
 
   const leaveGroup = () => {
+    if (conversation.ownerId === currentUser?.id || currentRole === 'owner') {
+      show('Transfer ownership before leaving this group.', 'info');
+      navigation.navigate('GroupMembers', { conversationId });
+      return;
+    }
     setConfirmSheet({
       visible: true,
       title: 'Leave group?',
@@ -195,12 +283,36 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
       const link = await createGroupInviteLinkOnApi(conversationId, {
         expiresInHours: 72 });
       setInviteLink(link);
+      setActiveInviteSummary(link);
       show('Invite link created', 'success');
     } catch (err) {
       show(parseApiError(err, 'Could not create invite link. Try again.').message, 'error');
     } finally {
       setIsGeneratingInvite(false);
     }
+  };
+
+  const handleRevokeInviteLink = () => {
+    const link = inviteLink ?? activeInviteSummary;
+    if (!link?.id) return;
+    setConfirmSheet({
+      visible: true,
+      title: 'Revoke invite link?',
+      message: 'Anyone using this link will no longer be able to join with it.',
+      confirmLabel: 'Revoke link',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((state) => ({ ...state, visible: false }));
+        try {
+          await revokeGroupInviteLinkOnApi(conversationId, link.id);
+          setInviteLink(null);
+          setActiveInviteSummary(null);
+          show('Invite link revoked', 'info');
+        } catch (error) {
+          show(parseApiError(error, 'Could not revoke invite link.').message, 'error');
+        }
+      },
+    });
   };
 
   const handleCopyInviteLink = async () => {
@@ -224,6 +336,19 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     }
   };
 
+  const handleQuickShare = async () => {
+    haptic.light();
+    try {
+      if (inviteLink) {
+        await Share.share({ message: `Join ${conversation.title || 'our group'} on ThryftVerse: ${inviteLink.inviteLink}` });
+      } else {
+        await Share.share({ message: `Join ${conversation.title || 'our group'} on ThryftVerse!` });
+      }
+    } catch {
+      // user cancelled
+    }
+  };
+
   const selectTab = (key: TabKey) => {
     if (key === activeTab) return;
     haptic.selection();
@@ -236,7 +361,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         <FlagshipHeader
           title="Group details"
           onBack={() => navigation.goBack()}
-          rightAction={canManageIdentity ? (
+          rightAction={canEditGroupInfo ? (
             <AnimatedPressable
               onPress={() => navigation.navigate('EditGroup', { conversationId })}
               style={styles.headerAction}
@@ -260,76 +385,83 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           { paddingBottom: Math.max(insets.bottom, Space.xl) + Space.lg },
         ]}
       >
-        {/* Cover photo — full-width banner when a cover photo is set.
-            Falls back to the group avatar as a centered mosaic (120pt)
-            when no cover photo, matching the WhatsApp/Telegram pattern. */}
+        {/* Hero — WhatsApp/Telegram composition.
+            When a cover photo exists: full-width banner with the circular
+            group avatar overlapping the bottom edge. When no cover but an
+            avatar exists: centered hero avatar on a tinted surface.
+            Never stretch a circular avatar into a banner. */}
         {coverPhoto ? (
-          <View style={styles.coverWrap}>
-            <CachedImage
-              uri={coverPhoto}
-              style={styles.coverImage}
-              contentFit="cover"
-              downscaleWidth={720}
-            />
-            {canManageIdentity && (
-              <AnimatedPressable
-                style={styles.coverEditBadge}
-                onPress={() => navigation.navigate('EditGroup', { conversationId })}
-                activeOpacity={0.7}
-                scaleValue={0.94}
-                hapticFeedback="light"
-                accessibilityRole="button"
-                accessibilityLabel="Change cover photo"
-              >
-                <Ionicons name="camera-outline" size={17} color={colors.scrimTextPrimary} />
-              </AnimatedPressable>
-            )}
-          </View>
-        ) : groupAvatar ? (
-          /* If no cover photo but avatar is set, show avatar as the banner */
-          <View style={styles.coverWrap}>
-            <CachedImage
-              uri={groupAvatar}
-              style={styles.coverImage}
-              contentFit="cover"
-              downscaleWidth={720}
-            />
-            {canManageIdentity && (
-              <AnimatedPressable
-                style={styles.coverEditBadge}
-                onPress={() => navigation.navigate('EditGroup', { conversationId })}
-                activeOpacity={0.7}
-                scaleValue={0.94}
-                hapticFeedback="light"
-                accessibilityRole="button"
-                accessibilityLabel="Add cover photo"
-              >
-                <Ionicons name="camera-outline" size={17} color={colors.scrimTextPrimary} />
-              </AnimatedPressable>
-            )}
+          <View style={styles.heroSection}>
+            <View style={styles.coverWrap}>
+              <CachedImage
+                uri={coverPhoto}
+                style={styles.coverImage}
+                contentFit="cover"
+                downscaleWidth={720}
+              />
+              {canEditGroupInfo && (
+                <AnimatedPressable
+                  style={styles.coverEditBadge}
+                  onPress={() => navigation.navigate('EditGroup', { conversationId })}
+                  activeOpacity={0.7}
+                  scaleValue={0.94}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel="Change cover photo"
+                >
+                  <Ionicons name="camera-outline" size={17} color={colors.scrimTextPrimary} />
+                </AnimatedPressable>
+              )}
+            </View>
+            <View style={styles.heroAvatarOverlap}>
+              <View style={styles.heroAvatarWrap}>
+                <GroupAvatarMosaic
+                  members={avatarMembers}
+                  groupPhoto={groupAvatar}
+                  fallbackInitials={conversation.title || 'Group'}
+                  groupId={conversation.id}
+                  size={92}
+                />
+                {canEditGroupInfo && (
+                  <AnimatedPressable
+                    style={styles.avatarEditBadge}
+                    onPress={() => navigation.navigate('EditGroup', { conversationId })}
+                    activeOpacity={0.7}
+                    scaleValue={0.94}
+                    hapticFeedback="light"
+                    accessibilityRole="button"
+                    accessibilityLabel="Change group photo"
+                  >
+                    <Ionicons name="camera" size={15} color={colors.textInverse} />
+                  </AnimatedPressable>
+                )}
+              </View>
+            </View>
           </View>
         ) : (
-          <View style={styles.coverFallback}>
-            <GroupAvatarMosaic
-              members={avatarMembers}
-              groupPhoto={undefined}
-              fallbackInitials={conversation.title || 'Group'}
-              groupId={conversation.id}
-              size={120}
-            />
-            {canManageIdentity && (
-              <AnimatedPressable
-                style={styles.coverEditBadge}
-                onPress={() => navigation.navigate('EditGroup', { conversationId })}
-                activeOpacity={0.7}
-                scaleValue={0.94}
-                hapticFeedback="light"
-                accessibilityRole="button"
-                accessibilityLabel="Add group photo"
-              >
-                <Ionicons name="camera-outline" size={17} color={colors.scrimTextPrimary} />
-              </AnimatedPressable>
-            )}
+          <View style={styles.heroAvatarContainer}>
+            <View style={styles.heroAvatarWrap}>
+              <GroupAvatarMosaic
+                members={avatarMembers}
+                groupPhoto={groupAvatar}
+                fallbackInitials={conversation.title || 'Group'}
+                groupId={conversation.id}
+                size={104}
+              />
+              {canEditGroupInfo && (
+                <AnimatedPressable
+                  style={styles.avatarEditBadge}
+                  onPress={() => navigation.navigate('EditGroup', { conversationId })}
+                  activeOpacity={0.7}
+                  scaleValue={0.94}
+                  hapticFeedback="light"
+                  accessibilityRole="button"
+                  accessibilityLabel="Add group photo"
+                >
+                  <Ionicons name="camera" size={15} color={colors.textInverse} />
+                </AnimatedPressable>
+              )}
+            </View>
           </View>
         )}
 
@@ -350,16 +482,89 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           </Text>
         </View>
 
-        {/* Tab bar — segmented control with underline indicator.
-            Flat, hairline dividers, transparent backgrounds. */}
-        <View style={styles.tabBar}>
+        {/* Quick Action Dock — Telegram/WhatsApp 2026 flagship pattern */}
+        <View style={styles.quickActionDock}>
+          <AnimatedPressable
+            style={styles.quickActionItem}
+            onPress={toggleMute}
+            activeOpacity={0.7}
+            scaleValue={0.94}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel={isMuted ? 'Unmute group' : 'Mute group'}
+          >
+            <View style={[styles.quickActionIcon, isMuted && styles.quickActionIconActive]}>
+              <Ionicons
+                name={isMuted ? 'notifications-off-outline' : 'notifications-outline'}
+                size={22}
+                color={isMuted ? colors.brand : colors.textPrimary}
+              />
+            </View>
+            <Text style={[styles.quickActionLabel, isMuted && styles.quickActionLabelActive]}>
+              {isMuted ? 'Unmute' : 'Mute'}
+            </Text>
+          </AnimatedPressable>
+
+          {canAddMembers ? (
+            <AnimatedPressable
+              style={styles.quickActionItem}
+              onPress={() => navigation.navigate('GroupMembers', { conversationId })}
+              activeOpacity={0.7}
+              scaleValue={0.94}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Add members to group"
+            >
+              <View style={styles.quickActionIcon}>
+                <Ionicons name="person-add-outline" size={22} color={colors.textPrimary} />
+              </View>
+              <Text style={styles.quickActionLabel}>Add</Text>
+            </AnimatedPressable>
+          ) : (
+            <AnimatedPressable
+              style={styles.quickActionItem}
+              onPress={handleQuickShare}
+              activeOpacity={0.7}
+              scaleValue={0.94}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Share invite link"
+            >
+              <View style={styles.quickActionIcon}>
+                <Ionicons name="link-outline" size={22} color={colors.textPrimary} />
+              </View>
+              <Text style={styles.quickActionLabel}>Invite</Text>
+            </AnimatedPressable>
+          )}
+
+          <AnimatedPressable
+            style={styles.quickActionItem}
+            onPress={handleQuickShare}
+            activeOpacity={0.7}
+            scaleValue={0.94}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Share group"
+          >
+            <View style={styles.quickActionIcon}>
+              <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
+            </View>
+            <Text style={styles.quickActionLabel}>Share</Text>
+          </AnimatedPressable>
+        </View>
+
+        {/* Tab bar — iOS 18 / Telegram segmented pill control */}
+        <View style={styles.tabSegmentContainer}>
           {TABS.map((tab) => {
             const active = tab.key === activeTab;
             return (
-              <Pressable
+              <AnimatedPressable
                 key={tab.key}
-                style={styles.tab}
+                style={[styles.tabPill, active && styles.tabPillActive]}
                 onPress={() => selectTab(tab.key)}
+                activeOpacity={0.8}
+                scaleValue={0.97}
+                hapticFeedback="selection"
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={tab.label}
@@ -367,8 +572,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
                 <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
                   {tab.label}
                 </Text>
-                {active ? <View style={styles.tabIndicator} /> : null}
-              </Pressable>
+              </AnimatedPressable>
             );
           })}
         </View>
@@ -379,7 +583,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
               memberProfiles={memberProfiles}
               memberRoles={conversation.memberRoles}
               currentUserId={currentUser?.id}
-              canManageIdentity={canManageIdentity}
+              canAddMembers={canAddMembers}
               memberCount={memberCount}
               onViewAll={() => navigation.navigate('GroupMembers', { conversationId })}
               onAddMembers={() => navigation.navigate('GroupMembers', { conversationId })}
@@ -388,7 +592,10 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 
           {activeTab === 'media' && (
             <MediaTab
-              mediaItems={recentMedia}
+              mediaItems={mediaItems}
+              isLoading={mediaState === 'loading' && mediaItems.length === 0}
+              hasError={mediaState === 'error'}
+              onRetry={retryMediaFetch}
               onViewAll={() => navigation.navigate('SharedConversationMedia', { conversationId })}
               onOpenMedia={(uri, mediaType, senderLabel, timestamp, messageId) =>
                 navigation.navigate('ChatMediaPreview', {
@@ -403,16 +610,21 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 
           {activeTab === 'settings' && (
             <SettingsTab
+              canManageGroup={isGroupManager}
+              canAddMembers={canAddMembers}
+              onManagePermissions={() => navigation.navigate('GroupPermissions', { conversationId })}
               isMuted={isMuted}
               isTogglingMute={isTogglingMute}
               onToggleMute={toggleMute}
               isArchiving={isArchiving}
               onArchive={archive}
               inviteLink={inviteLink}
+              activeInviteSummary={activeInviteSummary}
               isGeneratingInvite={isGeneratingInvite}
               onGenerateInvite={handleGenerateInviteLink}
               onCopyInvite={handleCopyInviteLink}
               onShareInvite={handleShareInviteLink}
+              onRevokeInvite={handleRevokeInviteLink}
               onQuickReplies={() => navigation.navigate('ManageQuickReplies', { role: 'seller' })}
               onManageAgents={() => navigation.navigate('GroupBotManagement', { conversationId })}
               connectedAgentCount={connectedAgentCount}
@@ -445,14 +657,14 @@ function MembersTab({
   memberProfiles,
   memberRoles,
   currentUserId,
-  canManageIdentity,
+  canAddMembers,
   memberCount,
   onViewAll,
   onAddMembers }: {
   memberProfiles: Array<{ id: string; username: string; displayName?: string | null; avatar?: string | null }>;
   memberRoles?: Record<string, 'owner' | 'admin' | 'member'>;
   currentUserId?: string;
-  canManageIdentity: boolean;
+  canAddMembers: boolean;
   memberCount: number;
   onViewAll: () => void;
   onAddMembers: () => void;
@@ -469,7 +681,7 @@ function MembersTab({
 
   return (
     <View style={styles.paddedContent}>
-      {canManageIdentity && (
+      {canAddMembers && (
         <AnimatedPressable
           style={styles.addMembersRow}
           onPress={onAddMembers}
@@ -567,17 +779,70 @@ const styles_memberAvatar = StyleSheet.create({
 // ---------------------------------------------------------------------------
 function MediaTab({
   mediaItems,
+  isLoading = false,
+  hasError = false,
+  onRetry,
   onViewAll,
   onOpenMedia }: {
-  mediaItems: Array<{ id: string; mediaUri?: string; mediaType?: 'image' | 'video'; senderId?: string; timestamp?: string }>;
+  mediaItems: Array<{ id: string; mediaUri?: string; mediaType?: 'image' | 'video' | 'document'; senderId?: string; timestamp?: string; documentName?: string; documentMimeType?: string }>;
+  /** True only while the endpoint is in flight AND nothing can render yet. */
+  isLoading?: boolean;
+  hasError?: boolean;
+  onRetry?: () => void;
   onViewAll: () => void;
-  onOpenMedia: (uri: string, mediaType?: 'image' | 'video', senderLabel?: string, timestamp?: string, messageId?: string) => void;
+  onOpenMedia: (uri: string, mediaType?: 'image' | 'video' | 'document', senderLabel?: string, timestamp?: string, messageId?: string) => void;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const grid = mediaItems.slice(0, 9);
 
-  if (grid.length === 0) {
+  // Split into visual media (images/videos) and documents
+  const visualMedia = mediaItems.filter((m) => m.mediaType !== 'document');
+  const documents = mediaItems.filter((m) => m.mediaType === 'document');
+  const grid = visualMedia.slice(0, 9);
+  const docList = documents.slice(0, 5);
+
+  // Loading — skeleton tiles match the final 3-column grid geometry exactly,
+  // so decode causes no layout shift (AGENTS.md §14, Design.md performance).
+  if (isLoading) {
+    return (
+      <View style={styles.paddedContent} accessibilityLabel="Loading shared media">
+        <View style={styles.mediaGrid}>
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <View key={`skeleton-${i}`} style={[styles.mediaTile, styles.mediaTileSkeleton]} />
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  // Error with nothing to show — inline recovery, user-safe copy, no raw
+  // backend error (§11, §14). With cached items present, the grid stays
+  // usable and the failure surfaces as a quiet retry row instead.
+  if (hasError && grid.length === 0 && docList.length === 0) {
+    return (
+      <View style={styles.mediaEmpty}>
+        <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
+        <Caption color={colors.textMuted} style={styles.mediaEmptyText}>
+          Couldn't load shared media
+        </Caption>
+        {onRetry ? (
+          <AnimatedPressable
+            style={styles.mediaRetryButton}
+            onPress={onRetry}
+            activeOpacity={0.7}
+            scaleValue={0.97}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading shared media"
+          >
+            <Text style={styles.mediaRetryText}>Retry</Text>
+          </AnimatedPressable>
+        ) : null}
+      </View>
+    );
+  }
+
+  if (grid.length === 0 && docList.length === 0) {
     return (
       <View style={styles.mediaEmpty}>
         <Ionicons name="images-outline" size={28} color={colors.textMuted} />
@@ -618,7 +883,65 @@ function MediaTab({
           );
         })}
       </View>
-      {mediaItems.length > 9 && (
+      {docList.length > 0 && (
+        <View style={styles.docListWrap}>
+          <Caption color={colors.textMuted} style={styles.docListHeader}>Files</Caption>
+          {docList.map((item) => (
+            <AnimatedPressable
+              key={item.id}
+              onPress={() => {
+                if (item.mediaUri?.startsWith('http')) {
+                  Linking.openURL(item.mediaUri).catch(() => {});
+                }
+              }}
+              style={styles.docRow}
+              activeOpacity={0.7}
+              scaleValue={0.98}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={`Open file: ${item.documentName ?? 'file'}`}
+            >
+              <View style={[styles.docIconWrap, { backgroundColor: colors.brandSubtle }]}>
+                <Ionicons
+                  name={
+                    item.documentMimeType?.includes('pdf') ? 'document-text-outline'
+                    : item.documentMimeType?.includes('zip') || item.documentMimeType?.includes('compressed') ? 'archive-outline'
+                    : 'document-outline'
+                  }
+                  size={20}
+                  color={colors.brand}
+                />
+              </View>
+              <View style={styles.docInfo}>
+                <Text style={[styles.docName, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {item.documentName ?? 'File'}
+                </Text>
+                {item.documentMimeType ? (
+                  <Text style={[styles.docMeta, { color: colors.textMuted }]} numberOfLines={1}>
+                    {item.documentMimeType}
+                  </Text>
+                ) : null}
+              </View>
+              <Ionicons name="download-outline" size={18} color={colors.textMuted} />
+            </AnimatedPressable>
+          ))}
+        </View>
+      )}
+      {hasError ? (
+        <AnimatedPressable
+          style={styles.mediaErrorRow}
+          onPress={onRetry}
+          activeOpacity={0.7}
+          scaleValue={0.985}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading newer shared media"
+        >
+          <Ionicons name="refresh" size={14} color={colors.textMuted} />
+          <Text style={styles.mediaErrorText}>Some media may be missing — retry</Text>
+        </AnimatedPressable>
+      ) : null}
+      {(visualMedia.length > 9 || documents.length > 5) && (
         <AnimatedPressable
           style={styles.viewAllRow}
           onPress={onViewAll}
@@ -640,16 +963,21 @@ function MediaTab({
 // Settings tab — Conversation, Chat history, Invite, Membership sections
 // ---------------------------------------------------------------------------
 function SettingsTab({
+  canManageGroup,
+  canAddMembers,
+  onManagePermissions,
   isMuted,
   isTogglingMute,
   onToggleMute,
   isArchiving,
   onArchive,
   inviteLink,
+  activeInviteSummary,
   isGeneratingInvite,
   onGenerateInvite,
   onCopyInvite,
   onShareInvite,
+  onRevokeInvite,
   onQuickReplies,
   onManageAgents,
   connectedAgentCount,
@@ -658,16 +986,21 @@ function SettingsTab({
   onLeaveGroup,
   isDeleting,
   onDeleteForMe }: {
+  canManageGroup: boolean;
+  canAddMembers: boolean;
+  onManagePermissions: () => void;
   isMuted: boolean;
   isTogglingMute: boolean;
   onToggleMute: () => void;
   isArchiving: boolean;
   onArchive: () => void;
   inviteLink: GroupInviteLink | null;
+  activeInviteSummary: GroupInviteLink | null;
   isGeneratingInvite: boolean;
   onGenerateInvite: () => void;
   onCopyInvite: () => void;
   onShareInvite: () => void;
+  onRevokeInvite: () => void;
   onQuickReplies: () => void;
   onManageAgents: () => void;
   connectedAgentCount: number;
@@ -679,9 +1012,22 @@ function SettingsTab({
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const displayedInviteSummary = inviteLink ?? activeInviteSummary;
 
   return (
     <View style={styles.paddedContent}>
+      {canManageGroup ? (
+        <ChatInfoSection title="Group controls">
+          <ChatInfoRow
+            icon="people-outline"
+            label="Group permissions"
+            subtitle="Who can edit info, send messages and add members"
+            onPress={onManagePermissions}
+            showChevron
+          />
+        </ChatInfoSection>
+      ) : null}
+
       <ChatInfoSection title="Conversation">
         <ChatInfoRow
           icon="chatbubble-ellipses-outline"
@@ -698,20 +1044,6 @@ function SettingsTab({
         />
       </ChatInfoSection>
 
-      <ChatInfoSection title="AI agents">
-        <ChatInfoRow
-          icon="bulb-outline"
-          label="Manage AI agents"
-          subtitle={
-            connectedAgentCount > 0
-              ? `${connectedAgentCount} agent${connectedAgentCount === 1 ? '' : 's'} connected`
-              : 'Deploy assistants for moderation, styling, or shopping help'
-          }
-          onPress={onManageAgents}
-          showChevron
-        />
-      </ChatInfoSection>
-
       <ChatInfoSection title="Chat history">
         <ChatInfoRow
           icon="archive-outline"
@@ -722,44 +1054,75 @@ function SettingsTab({
         />
       </ChatInfoSection>
 
-      <ChatInfoSection title="Invite">
+      {canAddMembers ? <ChatInfoSection title="Invite">
         <ChatInfoRow
           icon="link-outline"
           label="Invite via link"
-          subtitle={inviteLink ? 'Link ready · tap to share' : 'Create a shareable invite link'}
+          subtitle={displayedInviteSummary ? 'Active link · manage below' : 'Create a shareable invite link'}
           onPress={onGenerateInvite}
-          showChevron={!inviteLink}
+          showChevron={!displayedInviteSummary}
           trailing={isGeneratingInvite ? <ActivityIndicator size="small" color={colors.brand} /> : undefined}
         />
-        {inviteLink && (
+        {displayedInviteSummary && (
           <View style={styles.inviteLinkCard}>
-            <Text style={styles.inviteLinkText} numberOfLines={2}>{inviteLink.inviteLink}</Text>
-            <View style={styles.inviteLinkActions}>
-              <Pressable
-                onPress={onCopyInvite}
-                style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Copy invite link"
-              >
-                <Ionicons name="copy-outline" size={16} color={colors.brand} />
-                <Text style={styles.inviteActionText}>Copy</Text>
-              </Pressable>
-              <Pressable
-                onPress={onShareInvite}
-                style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Share invite link"
-              >
-                <Ionicons name="share-outline" size={16} color={colors.brand} />
-                <Text style={styles.inviteActionText}>Share</Text>
-              </Pressable>
-            </View>
+            <Text style={styles.inviteLinkText} numberOfLines={2}>
+              {displayedInviteSummary.inviteLink || `${displayedInviteSummary.tokenPreview}...`}
+            </Text>
+            {inviteLink && (
+              <View style={styles.inviteLinkActions}>
+                <Pressable
+                  onPress={onCopyInvite}
+                  style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy invite link"
+                >
+                  <Ionicons name="copy-outline" size={16} color={colors.brand} />
+                  <Text style={styles.inviteActionText}>Copy</Text>
+                </Pressable>
+                <Pressable
+                  onPress={onShareInvite}
+                  style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share invite link"
+                >
+                  <Ionicons name="share-outline" size={16} color={colors.brand} />
+                  <Text style={styles.inviteActionText}>Share</Text>
+                </Pressable>
+              </View>
+            )}
             <Caption color={colors.textMuted} style={styles.inviteExpiry}>
-              Expires in 72 hours
+              {displayedInviteSummary.isExpired
+                ? 'Expired'
+                : `Expires ${new Date(displayedInviteSummary.expiresAt).toLocaleDateString()}`}
+              {` · ${displayedInviteSummary.useCount}/${displayedInviteSummary.maxUses || '∞'} uses`}
             </Caption>
+            <Pressable
+              onPress={onRevokeInvite}
+              style={({ pressed }) => [styles.inviteRevokeButton, pressed && styles.inviteActionPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Revoke invite link"
+            >
+              <Text style={styles.inviteRevokeText}>Revoke link</Text>
+            </Pressable>
           </View>
         )}
-      </ChatInfoSection>
+      </ChatInfoSection> : null}
+
+      {canManageGroup || connectedAgentCount > 0 ? (
+        <ChatInfoSection title="Advanced">
+          <ChatInfoRow
+            icon="extension-puzzle-outline"
+            label="Automations"
+            subtitle={
+              connectedAgentCount > 0
+                ? `${connectedAgentCount} connected`
+                : 'Moderation, styling and shopping assistants'
+            }
+            onPress={onManageAgents}
+            showChevron
+          />
+        </ChatInfoSection>
+      ) : null}
 
       <ChatInfoSection title="Membership" danger>
         <ChatInfoRow
@@ -807,18 +1170,36 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center' },
   coverWrap: {
     width: '100%',
-    height: 220,
+    height: 200,
     position: 'relative' },
   coverImage: {
     width: '100%',
     height: '100%' },
-  coverFallback: {
-    width: '100%',
-    height: 220,
+  heroSection: {
+    position: 'relative' },
+  heroAvatarOverlap: {
+    alignItems: 'center',
+    marginTop: -46,
+    marginBottom: Space.xs },
+  heroAvatarContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
+    paddingTop: Space.lg,
+    paddingBottom: Space.xs },
+  heroAvatarWrap: {
     position: 'relative' },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 30,
+    height: 30,
+    borderRadius: Radius.full,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: colors.background },
   coverEditBadge: {
     position: 'absolute',
     bottom: Space.sm + 2,
@@ -838,51 +1219,81 @@ function createStyles(colors: ThemeColors) {
   groupName: {
     maxWidth: '88%',
     color: colors.textPrimary,
-    fontFamily: TypeStyles.title.fontFamily,
+    fontFamily: FontFamily.bold,
     fontSize: TypographyV2.screenTitle.size,
     lineHeight: TypographyV2.screenTitle.lineHeight,
     letterSpacing: TypographyV2.screenTitle.letterSpacing },
   description: {
     maxWidth: '84%',
     color: colors.textSecondary,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: FontFamily.regular,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.size + 6,
     textAlign: 'center',
     marginTop: Space.xs },
   identityMeta: {
     color: colors.textMuted,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: FontFamily.medium,
     fontSize: TypographyV2.meta.size,
     marginTop: Space.xs / 2 + 1 },
-  // ── Tab bar ──
-  tabBar: {
+  quickActionDock: {
     flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border },
-  tab: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Space.sm + 2,
-    position: 'relative' },
-  tabLabel: {
-    color: colors.textMuted,
+    gap: Space.md,
+    marginTop: Space.sm,
+    marginBottom: Space.xs,
+    paddingHorizontal: Space.md },
+  quickActionItem: {
+    alignItems: 'center',
+    gap: 5,
+    minWidth: 58 },
+  // Quick actions: transparent 44pt targets with 22pt glyphs (Design.md
+  // control anatomy — containment is not the hit target). Persistent fill is
+  // reserved for the muted state, where the fill IS the status signal.
+  quickActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center' },
+  quickActionIconActive: {
+    backgroundColor: colors.brandSubtle },
+  quickActionLabel: {
+    fontSize: TypographyV2.meta.size - 1,
     fontFamily: FontFamily.medium,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight },
+    color: colors.textSecondary },
+  quickActionLabelActive: {
+    color: colors.brand },
+  tabSegmentContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: Radius.full,
+    padding: 3,
+    marginHorizontal: Space.md,
+    marginTop: Space.sm,
+    marginBottom: Space.xs },
+  tabPill: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.full },
+  tabPillActive: {
+    backgroundColor: colors.background,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2 },
+  tabLabel: {
+    color: colors.textSecondary,
+    fontFamily: FontFamily.medium,
+    fontSize: TypographyV2.meta.size },
   tabLabelActive: {
     color: colors.textPrimary,
-    fontFamily: FontFamily.semibold },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: '25%',
-    right: '25%',
-    height: 2,
-    backgroundColor: colors.textPrimary,
-    borderRadius: 1 },
+    fontFamily: FontFamily.bold },
   tabContent: {
     flex: 1 },
   // ── Members tab ──
@@ -969,6 +1380,33 @@ function createStyles(colors: ThemeColors) {
   mediaTileImage: {
     width: '100%',
     height: '100%' },
+  // Skeleton tile — same geometry as a real tile (aspectRatio 1, same radius),
+  // so the loading → ready transition causes zero layout shift.
+  mediaTileSkeleton: {
+    backgroundColor: colors.surfaceAlt },
+  mediaRetryButton: {
+    minHeight: 36,
+    paddingHorizontal: Space.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.full,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    marginTop: Space.xs },
+  mediaRetryText: {
+    color: colors.brand,
+    fontFamily: FontFamily.semibold,
+    fontSize: TypographyV2.meta.size },
+  mediaErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs + 1,
+    minHeight: Control.hit,
+    paddingHorizontal: Space.sm },
+  mediaErrorText: {
+    color: colors.textMuted,
+    fontFamily: FontFamily.regular,
+    fontSize: TypographyV2.meta.size },
   mediaVideoBadge: {
     position: 'absolute',
     bottom: Space.xs,
@@ -986,6 +1424,35 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm },
   mediaEmptyText: {
     textAlign: 'center' },
+  // ── Document list in media tab ──
+  docListWrap: {
+    marginTop: Space.lg,
+    gap: Space.xs },
+  docListHeader: {
+    marginBottom: Space.xs },
+  docRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border },
+  docIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  docInfo: {
+    flex: 1,
+    gap: 2 },
+  docName: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: TypographyV2.body.fontFamily,
+    lineHeight: TypographyV2.body.lineHeight },
+  docMeta: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   // ── Invite link card ──
   inviteLinkCard: {
     backgroundColor: colors.surfaceAlt,
@@ -1014,5 +1481,14 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.brand },
   inviteExpiry: {
-    fontSize: TypographyV2.meta.size } });
+    fontSize: TypographyV2.meta.size },
+  inviteRevokeButton: {
+    alignSelf: 'flex-start',
+    minHeight: Control.hit,
+    justifyContent: 'center',
+    paddingHorizontal: Space.sm },
+  inviteRevokeText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    color: colors.danger } });
 }

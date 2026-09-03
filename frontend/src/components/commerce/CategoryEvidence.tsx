@@ -30,9 +30,6 @@ export function CategoryEvidence({ groups }: CategoryEvidenceProps) {
               {group.summary && !hasMultipleItems && (
                 <Text style={styles.primarySummary}>{group.summary}</Text>
               )}
-              {group.summary && hasMultipleItems && (
-                <Text style={styles.primarySummary}>{group.summary}</Text>
-              )}
               {hasMultipleItems && (
                 <View style={styles.factsList}>
                   {group.items.map((item) => (

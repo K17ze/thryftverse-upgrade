@@ -145,7 +145,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     overlay: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0, 0, 0, 0.4)',
+      backgroundColor: colors.overlay,
     },
     sheet: {
       position: 'absolute',

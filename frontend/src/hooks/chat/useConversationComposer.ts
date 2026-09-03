@@ -57,6 +57,16 @@ export function useConversationComposer({
     uri: string;
     mediaType: "image" | "video";
   } | null>(null);
+  const [pendingDocument, setPendingDocument] = useState<{
+    uri: string;
+    name: string;
+    mimeType?: string;
+  } | null>(null);
+  const [pendingLocation, setPendingLocation] = useState<{
+    lat: number;
+    lng: number;
+    label?: string;
+  } | null>(null);
   const [reactingToMessage, setReactingToMessage] = useState<Message | null>(null);
 
   // Typing indicator publisher (P0 #1 / P2 #56).
@@ -264,6 +274,31 @@ export function useConversationComposer({
         } catch {
           show("Could not open camera.", "error");
         }
+      } else if (type === "document") {
+        try {
+          const DocumentPicker = await import("expo-document-picker");
+          const result = await DocumentPicker.getDocumentAsync({
+            multiple: false,
+            copyToCacheDirectory: true,
+          });
+          if (!result.canceled && result.assets?.[0]?.uri) {
+            const asset = result.assets[0];
+            setPendingDocument({
+              uri: asset.uri,
+              name: asset.name,
+              mimeType: asset.mimeType,
+            });
+            haptic.light();
+          }
+        } catch {
+          show("Document picker is unavailable on this build.", "error");
+        }
+      } else if (type === "location") {
+        // TODO(P2-02): Wire expo-location foreground permission + reverse
+        // geocode for a human-readable label. expo-location is not yet in
+        // the dependency set; once added, request permissions, fetch the
+        // current position, and call setPendingLocation with the coords.
+        show("Location sharing is coming soon.", "info");
       }
     },
     [show, haptic],
@@ -283,6 +318,10 @@ export function useConversationComposer({
     setIsVoiceRecording,
     pendingAttachment,
     setPendingAttachment,
+    pendingDocument,
+    setPendingDocument,
+    pendingLocation,
+    setPendingLocation,
     reactingToMessage,
     setReactingToMessage,
     searchQuery,

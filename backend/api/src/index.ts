@@ -33,7 +33,7 @@ import {
 
 // Shared Stripe instance for Connect operations
 const stripe = config.stripeSecretKey
-  ? new Stripe(config.stripeSecretKey, { apiVersion: '2024-06-20' })
+  ? new Stripe(config.stripeSecretKey, { apiVersion: '2026-08-26.dahlia' })
   : null;
 import {
   db,
@@ -519,12 +519,14 @@ void app.register(cors, {
   allowedHeaders: [
     'Content-Type',
     'Authorization',
+    'X-Request-Id',
     'X-Service-Token',
     'X-Security-Admin-Token',
     'X-Decision-Service-Token',
     'Stripe-Signature',
   ],
   credentials: false,
+  strictPreflight: false,
   // Expose the correlation-id response header so browser clients can read it
   // for log correlation / support. Set on every response via onRequest + onSend.
   exposedHeaders: ['X-Request-Id'],
@@ -6996,7 +6998,7 @@ async function createGatewayPaymentIntent(input: {
 
   if (input.gatewayId === 'stripe_americas' && config.stripeSecretKey) {
     const stripe = new Stripe(config.stripeSecretKey, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2026-08-26.dahlia',
     });
 
     // Build Stripe PaymentIntent params
@@ -7297,7 +7299,7 @@ async function createGatewayRefund(input: {
   // ── Stripe ──────────────────────────────────────────────────────────
   if (input.gatewayId === 'stripe_americas' && config.stripeSecretKey) {
     const stripe = new Stripe(config.stripeSecretKey, {
-      apiVersion: '2024-06-20',
+      apiVersion: '2026-08-26.dahlia',
     });
 
     const created = await stripe.refunds.create(
@@ -34537,7 +34539,7 @@ app.post('/payments/disputes/:disputeId/evidence', async (request, reply) => {
     // Submit evidence to the provider when supported.
     if (payload.submitToProvider && dispute.gateway_id === 'stripe_americas' && config.stripeSecretKey) {
       const stripe = new Stripe(config.stripeSecretKey, {
-        apiVersion: '2024-06-20',
+        apiVersion: '2026-08-26.dahlia',
       });
       try {
         const evidenceResponse = await stripe.disputes.update(

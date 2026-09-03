@@ -563,6 +563,12 @@ interface LookProjectionInput {
   primaryMediaType: 'image' | 'video';
   primaryFinalizationId: string;
   primaryMediaAssetId: string | null;
+  additionalMedia?: Array<{
+    url: string;
+    mediaType: 'image' | 'video';
+    finalizationId?: string;
+    mediaAssetId?: string | null;
+  }>;
   compositionDocument: unknown;
   visibility: string;
   payloadHash: string;
@@ -598,6 +604,24 @@ async function createLookProjection(
       input.payloadHash,
     ],
   );
+  for (const [position, media] of (input.additionalMedia ?? []).entries()) {
+    await client.query(
+      `INSERT INTO look_media (
+         id, look_id, media_url, media_type, position,
+         media_finalization_id, media_asset_id
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        `look_media_${crypto.randomUUID()}`,
+        lookId,
+        media.url,
+        media.mediaType,
+        position + 1,
+        media.finalizationId ?? null,
+        media.mediaAssetId ?? null,
+      ],
+    );
+  }
   return lookId;
 }
 
@@ -1000,6 +1024,7 @@ export async function publishCreatorDocumentTransaction(
             mediaFinalizationId?: string;
             mediaAssetId?: string;
             mediaType?: 'image' | 'video';
+            isCaption?: boolean;
             caption?: string;
             backgroundColor?: string;
             text?: string;
@@ -1137,6 +1162,21 @@ export async function publishCreatorDocumentTransaction(
           code: 'NO_MEDIA',
         };
       }
+      const additionalMedia = (doc.pages ?? [])
+        .flatMap((page) => page.layers)
+        .filter((layer) => layer.type === 'media' && layer.id !== firstMediaLayer?.id)
+        .map((layer) => {
+          const verified = verifiedMediaByLayer.get(`${layer.id}::primary`);
+          return verified
+            ? {
+                url: verified.resolvedUrl,
+                mediaType: verified.contentType.startsWith('video/') ? 'video' as const : 'image' as const,
+                finalizationId: verified.finalizationId,
+                mediaAssetId: verified.mediaAssetId,
+              }
+            : null;
+        })
+        .filter((media): media is NonNullable<typeof media> => media !== null);
       targetId = await createLookProjection(client, {
         documentId,
         creatorId: actorUserId,
@@ -1146,6 +1186,7 @@ export async function publishCreatorDocumentTransaction(
         primaryMediaType: primaryMedia.contentType.startsWith('video/') ? 'video' : 'image',
         primaryFinalizationId: primaryMedia.finalizationId,
         primaryMediaAssetId: primaryMedia.mediaAssetId,
+        additionalMedia,
         compositionDocument: command.compositionDocument,
         visibility: command.audience,
         payloadHash,
@@ -1157,13 +1198,19 @@ export async function publishCreatorDocumentTransaction(
       // selected as the frame's primary media.
       const frames = (doc.pages ?? []).map((page, index) => {
         const mediaLayer = page.layers.find((l) => l.type === 'media');
+        const captionLayer = page.layers.find(
+          (layer) => layer.type === 'text'
+            && (layer.payload.isCaption === true || layer.id.startsWith('caption_')),
+        );
         const verified = mediaLayer
           ? verifiedMediaByLayer.get(`${mediaLayer.id}::primary`) ?? null
           : null;
         return {
           id: page.id,
-          mediaType: verified?.contentType.startsWith('video/') ? 'video' as const : 'image' as const,
-          caption: mediaLayer?.payload.caption ?? '',
+          mediaType: mediaLayer
+            ? (verified?.contentType.startsWith('video/') ? 'video' as const : 'image' as const)
+            : 'text' as const,
+          caption: captionLayer?.payload.text ?? mediaLayer?.payload.caption ?? '',
           backgroundColor: null,
           durationMs: page.durationMs ?? 5000,
           sortOrder: index,

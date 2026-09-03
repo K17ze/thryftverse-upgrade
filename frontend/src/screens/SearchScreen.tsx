@@ -10,7 +10,7 @@ import {
   Pressable,
   Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { AppIcon } from '../components/common/AppIcon';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -242,7 +242,7 @@ export default function SearchScreen() {
           accessibilityRole="button"
           accessibilityLabel="Search"
         >
-          <Ionicons name="search" size={20} color={colors.textMuted} />
+          <AppIcon name="search" focused size={20} color={colors.textMuted} />
           <TextInput
             ref={searchInputRef}
             style={styles.searchInput}
@@ -263,7 +263,7 @@ export default function SearchScreen() {
               accessibilityRole="button"
               accessibilityLabel="Clear search"
             >
-              <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+              <AppIcon name="closeCircle" focused size={20} color={colors.textMuted} />
             </Pressable>
           )}
         </Pressable>
@@ -273,7 +273,7 @@ export default function SearchScreen() {
           accessibilityLabel="Visual search"
           accessibilityRole="button"
         >
-          <Ionicons name="camera-outline" size={20} color={colors.textPrimary} />
+          <AppIcon name="camera" size={20} color={colors.textPrimary} />
         </AnimatedPressable>
       </View>
 

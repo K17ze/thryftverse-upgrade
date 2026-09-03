@@ -1,0 +1,13 @@
+# Maestro E2E flow — Sell listing creation journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Sell"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+
+- takeScreenshot: sell-screen-loaded

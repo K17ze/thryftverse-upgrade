@@ -19,7 +19,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import * as DocumentPicker from 'expo-document-picker';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import {
   Space,
@@ -112,6 +111,7 @@ export default function CatalogImportConsentScreen() {
   const handleChooseFile = useCallback(async () => {
     setUploadError(null);
     try {
+      const DocumentPicker = await import('expo-document-picker');
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
         multiple: false });

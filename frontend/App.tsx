@@ -53,6 +53,7 @@ import {
   subscribeThemePreferenceChange,
 } from './src/theme/themePreference';
 import { restoreAuthSession } from './src/services/authApi';
+import { resumeCreatorUploads } from './src/creator/core/upload';
 import { useStore } from './src/store/useStore';
 import { joinGroupByInviteOnApi } from './src/services/chatApi';
 import { initChatOutboxDrain, drainChatOutbox } from './src/services/chatOutbox';
@@ -321,11 +322,13 @@ export default function App() {
   // P0.14: Mount the application-owned chat outbox drain. NetInfo reconnects
   // flush pending messages; an AppState listener re-drains on foreground.
   React.useEffect(() => {
+    resumeCreatorUploads().catch(() => undefined);
     initChatOutboxDrain();
     drainChatOutbox().catch(() => undefined);
     initOutboxDrain();
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
+        resumeCreatorUploads().catch(() => undefined);
         drainChatOutbox().catch(() => undefined);
         runSyncListingDraft();
       }

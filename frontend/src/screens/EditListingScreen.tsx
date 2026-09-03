@@ -8,6 +8,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -18,6 +19,7 @@ import { IconSize } from '../theme/iconTokens';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useConnectivity } from '../hooks/useConnectivity';
 import { CURRENCIES } from '../constants/currencies';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
@@ -27,6 +29,8 @@ import { haptics } from '../utils/haptics';
 import { useStore } from '../store/useStore';
 
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
+import { BottomSheet } from '../components/BottomSheet';
+import { AppButton } from '../components/ui/AppButton';
 import { fetchListingByIdFromApi, patchListingOnApi, createListingImageOnApi } from '../services/listingsApi';
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
@@ -57,6 +61,31 @@ interface EditListingRouteParams {
   itemId: string;
   focus?: SectionFocus;
 }
+
+/* ── Autosave draft ──
+   Persisted to AsyncStorage so a seller doesn't lose work after a crash,
+   force-quit, or accidental navigation. Best-effort: write failures are
+   swallowed and never block the user. */
+interface EditListingDraft {
+  title: string;
+  description: string;
+  price: string;
+  originalPrice: string;
+  category: string;
+  brand: string;
+  size: string;
+  condition: string;
+  shippingMethod: 'standard' | 'express' | null;
+  shippingPayer: 'buyer' | 'seller' | null;
+  /** Epoch ms when the draft was last written. */
+  savedAt: number;
+  /** Server `updatedAt` captured when the draft was started — used to
+      decide whether the draft is newer than the server copy. */
+  baseUpdatedAt: string | null;
+}
+
+const draftKey = (itemId: string) => `editListingDraft:${itemId}`;
+const AUTOSAVE_DEBOUNCE_MS = 2000;
 
 export default function EditListingScreen() {
   const insets = useSafeAreaInsets();
@@ -115,6 +144,7 @@ export default function EditListingScreen() {
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
+  const { isOffline } = useConnectivity();
 
   const { categories, conditions, sizes, brands } = useTaxonomy();
   const categoryOptions = useMemo(
@@ -156,6 +186,29 @@ export default function EditListingScreen() {
     onConfirm: () => void;
     variant: 'default' | 'danger';
   }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
+
+  /* ── autosave / conflict state ── */
+  // The server `updatedAt` captured when the listing was first loaded.
+  // Compared against a fresh fetch before saving to detect concurrent
+  // edits from another device/session.
+  const mountUpdatedAtRef = useRef<string | null>(null);
+  // True while a debounced autosave is writing the draft to storage.
+  const [isAutosaving, setIsAutosaving] = useState(false);
+  // True once the form has been clean-and-saved at least once since the
+  // last edit — drives the green "Saved" resting state.
+  const [isCleanSaved, setIsCleanSaved] = useState(false);
+  // Conflict-resolution sheet state.
+  const [conflictSheet, setConflictSheet] = useState<{
+    visible: boolean;
+    serverUpdatedAt: string;
+    onKeepMine: () => void;
+    onUseTheirs: () => void;
+  } | null>(null);
+  // Restore-draft prompt state.
+  const [restoreSheet, setRestoreSheet] = useState<{
+    visible: boolean;
+    draft: EditListingDraft;
+  } | null>(null);
 
   // Media state — stable-ID based
   const [mediaItems, setMediaItems] = useState<ListingMediaDraftItem[]>([]);
@@ -199,21 +252,48 @@ export default function EditListingScreen() {
     setIsLoading(true);
     setLoadError(false);
     fetchListingByIdFromApi(itemId)
-      .then((res) => {
+      .then(async (res) => {
         if (!mounted) return;
         if (res.ok && res.listing) {
           const l = res.listing;
+          const serverUpdatedAt = l.updatedAt ?? l.createdAt ?? null;
+          mountUpdatedAtRef.current = serverUpdatedAt;
           setListing(l);
-          setTitle(l.title ?? '');
-          setDescription(l.description ?? '');
-          setPrice(String(l.priceGbp ?? ''));
-          setOriginalPrice(l.originalPriceGbp ? String(l.originalPriceGbp) : '');
-          setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
-          setBrand(l.brand ?? '');
-          setSize(l.size ?? '');
-          setCondition(l.condition ?? '');
-          setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
-          setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
+
+          // Check for a persisted draft. Only offer to restore when the
+          // draft is newer than the server copy (i.e. the user made
+          // changes that never made it to the server).
+          let appliedDraft = false;
+          try {
+            const raw = await AsyncStorage.getItem(draftKey(itemId));
+            if (raw) {
+              const draft = JSON.parse(raw) as EditListingDraft;
+              const serverMs = serverUpdatedAt ? Date.parse(serverUpdatedAt) : 0;
+              const draftMs = draft.savedAt ?? 0;
+              if (draftMs > serverMs) {
+                setRestoreSheet({ visible: true, draft });
+                appliedDraft = true;
+              } else {
+                // Stale draft — clear it so it doesn't resurface.
+                void AsyncStorage.removeItem(draftKey(itemId));
+              }
+            }
+          } catch {
+            // Best-effort: ignore storage read errors.
+          }
+
+          if (!appliedDraft) {
+            setTitle(l.title ?? '');
+            setDescription(l.description ?? '');
+            setPrice(String(l.priceGbp ?? ''));
+            setOriginalPrice(l.originalPriceGbp ? String(l.originalPriceGbp) : '');
+            setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
+            setBrand(l.brand ?? '');
+            setSize(l.size ?? '');
+            setCondition(l.condition ?? '');
+            setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
+            setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
+          }
           const initialPhotos = l.images ?? (l.imageUrl ? [l.imageUrl] : []);
           const items: ListingMediaDraftItem[] = initialPhotos.map((uri: string, i: number) => ({
             id: `remote_${itemId}_${i}`,
@@ -262,6 +342,66 @@ export default function EditListingScreen() {
       mediaItems.some((m) => m.source === 'local')
     );
   }, [listing, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, mediaItems]);
+
+  /* ── debounced autosave draft ──
+     Writes the text-field form state to AsyncStorage 2s after the user
+     stops editing. Media is intentionally excluded — local asset URIs are
+     transient and can't be re-attached reliably across sessions. The
+     autosave is best-effort: failures are swallowed so they never block
+     the user. Layered ON TOP of the manual save; it does not replace it. */
+  useEffect(() => {
+    if (!listing) return;
+    if (!hasChanges) return;
+    // Mark dirty as soon as the user edits so the resting "Saved" state
+    // doesn't persist after a new edit.
+    setIsCleanSaved(false);
+    const timer = setTimeout(() => {
+      const draft: EditListingDraft = {
+        title,
+        description,
+        price,
+        originalPrice,
+        category,
+        brand,
+        size,
+        condition,
+        shippingMethod,
+        shippingPayer,
+        savedAt: Date.now(),
+        baseUpdatedAt: mountUpdatedAtRef.current,
+      };
+      setIsAutosaving(true);
+      AsyncStorage.setItem(draftKey(itemId), JSON.stringify(draft))
+        .catch(() => { /* best-effort */ })
+        .finally(() => setIsAutosaving(false));
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [listing, hasChanges, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, itemId]);
+
+  /* ── restore-draft handler ── */
+  const handleRestoreDraft = useCallback(() => {
+    const sheet = restoreSheet;
+    setRestoreSheet((s) => s ? { ...s, visible: false } : null);
+    if (!sheet) return;
+    const d = sheet.draft;
+    setTitle(d.title);
+    setDescription(d.description);
+    setPrice(d.price);
+    setOriginalPrice(d.originalPrice);
+    setCategory(d.category);
+    setBrand(d.brand);
+    setSize(d.size);
+    setCondition(d.condition);
+    setShippingMethod(d.shippingMethod);
+    setShippingPayer(d.shippingPayer);
+    haptics.tap();
+  }, [restoreSheet]);
+
+  const handleDiscardDraft = useCallback(() => {
+    setRestoreSheet((s) => s ? { ...s, visible: false } : null);
+    void AsyncStorage.removeItem(draftKey(itemId)).catch(() => {});
+    haptics.tap();
+  }, [itemId]);
 
   /* ── media handling ── */
   const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
@@ -472,15 +612,13 @@ export default function EditListingScreen() {
     return '';
   }, [title, category, brand, size, condition, description, price, mediaItems, editCompleteness]);
 
-  /* ── save handler ── */
-  const handleSave = useCallback(async () => {
-    const error = validate();
-    if (error) {
-      setErrorMsg(error);
-      setSaveStage('failed_recoverable');
-      haptics.error();
-      return;
-    }
+  /* ── save handler ──
+     The manual save flow is preserved exactly. Autosave/conflict logic is
+     layered on top: before applying the save we re-fetch the listing and
+     compare its `updatedAt` to the value captured at mount. If they
+     differ, the listing was edited on another device and we surface a
+     conflict-resolution sheet instead of silently overwriting it. */
+  const performSave = useCallback(async () => {
     if (!isOwner) {
       setErrorMsg(t('listing.edit.noPermission'));
       setSaveStage('failed_recoverable');
@@ -571,8 +709,11 @@ export default function EditListingScreen() {
         coverFinalizationId });
 
       setSaveStage('completed');
+      setIsCleanSaved(true);
       haptics.success();
       showToast(t('listing.edit.updated'), 'success');
+      // Clear the persisted draft — the server now holds the latest copy.
+      void AsyncStorage.removeItem(draftKey(itemId)).catch(() => {});
       // Refresh feed + invalidate cached detail so the edit propagates
       // immediately when the user returns to the feed or profile.
       void refreshListings();
@@ -585,7 +726,93 @@ export default function EditListingScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [validate, isOwner, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, showToast, navigation]);
+  }, [isOwner, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, showToast, navigation, refreshListings, queryClient]);
+
+  /* ── reload listing from server (conflict: "Use their changes") ── */
+  const reloadFromServer = useCallback(async () => {
+    setConflictSheet(null);
+    setIsSaving(true);
+    try {
+      const res = await fetchListingByIdFromApi(itemId);
+      if (res.ok && res.listing) {
+        const l = res.listing;
+        mountUpdatedAtRef.current = l.updatedAt ?? l.createdAt ?? null;
+        setListing(l);
+        setTitle(l.title ?? '');
+        setDescription(l.description ?? '');
+        setPrice(String(l.priceGbp ?? ''));
+        setOriginalPrice(l.originalPriceGbp ? String(l.originalPriceGbp) : '');
+        setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
+        setBrand(l.brand ?? '');
+        setSize(l.size ?? '');
+        setCondition(l.condition ?? '');
+        setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
+        setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
+        const initialPhotos = l.images ?? (l.imageUrl ? [l.imageUrl] : []);
+        const items: ListingMediaDraftItem[] = initialPhotos.map((uri: string, i: number) => ({
+          id: `remote_${itemId}_${i}`,
+          uri,
+          kind: 'image' as const,
+          source: 'remote' as const,
+          status: 'uploaded' as const,
+          publicUrl: uri }));
+        setMediaItems(items);
+        setIsCleanSaved(true);
+        void AsyncStorage.removeItem(draftKey(itemId)).catch(() => {});
+        showToast(t('listing.edit.updated'), 'success');
+      } else {
+        showToast(t('listing.edit.couldNotLoad'), 'error');
+      }
+    } catch {
+      showToast(t('listing.edit.couldNotLoad'), 'error');
+    } finally {
+      setIsSaving(false);
+      setSaveStage('idle');
+    }
+  }, [itemId, showToast]);
+
+  const handleSave = useCallback(async () => {
+    const error = validate();
+    if (error) {
+      setErrorMsg(error);
+      setSaveStage('failed_recoverable');
+      haptics.error();
+      return;
+    }
+
+    // Conflict detection: re-fetch the listing and compare its updatedAt
+    // to the value captured at mount. Skip the check when offline (the
+    // fetch would fail anyway) or when we have no baseline timestamp.
+    if (!isOffline && mountUpdatedAtRef.current) {
+      try {
+        const fresh = await fetchListingByIdFromApi(itemId);
+        if (fresh.ok && fresh.listing) {
+          const serverUpdatedAt = fresh.listing.updatedAt ?? fresh.listing.createdAt ?? null;
+          if (serverUpdatedAt && serverUpdatedAt !== mountUpdatedAtRef.current) {
+            // The listing was edited elsewhere since this screen opened.
+            setConflictSheet({
+              visible: true,
+              serverUpdatedAt,
+              onKeepMine: () => {
+                setConflictSheet(null);
+                // Force save — update the baseline so a subsequent save
+                // doesn't re-trigger the conflict prompt.
+                mountUpdatedAtRef.current = serverUpdatedAt;
+                void performSave();
+              },
+              onUseTheirs: reloadFromServer,
+            });
+            return;
+          }
+        }
+      } catch {
+        // Network hiccup during the pre-save check — proceed with the
+        // save; the server will reject it if there's a real conflict.
+      }
+    }
+
+    void performSave();
+  }, [validate, isOffline, itemId, performSave, reloadFromServer]);
 
   /* ── preview handler ── */
   const handlePreview = useCallback(() => {
@@ -668,6 +895,14 @@ export default function EditListingScreen() {
   }, [hasDiscount, originalPrice, price]);
 
   const saveDisabled = !hasChanges || isSaving;
+
+  /* ── coarse save state for the footer button ── */
+  const saveState: 'saved' | 'saving' | 'offline' | 'dirty' = useMemo(() => {
+    if (isSaving || isAutosaving) return 'saving';
+    if (isOffline && hasChanges) return 'offline';
+    if (!hasChanges && isCleanSaved) return 'saved';
+    return 'dirty';
+  }, [isSaving, isAutosaving, isOffline, hasChanges, isCleanSaved]);
 
   /* ── sold comparables for pricing guidance ── */
   const { listings: backendListings } = useBackendData();
@@ -1304,6 +1539,7 @@ export default function EditListingScreen() {
           onPreview={handlePreview}
           onSave={handleSave}
           bottomInset={insets.bottom}
+          saveState={saveState}
         />
       )}
 
@@ -1327,6 +1563,66 @@ export default function EditListingScreen() {
         onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
         variant={confirmSheet.variant}
       />
+
+      {/* ── Restore unsaved draft prompt ── */}
+      {restoreSheet && (
+        <ConfirmationSheet
+          visible={restoreSheet.visible}
+          onDismiss={handleDiscardDraft}
+          title={t('listing.edit.draftFound')}
+          message={t('listing.edit.draftRestore', { date: new Date(restoreSheet.draft.savedAt).toLocaleString() })}
+          confirmLabel={t('listing.edit.draftRestoreAction')}
+          cancelLabel={t('listing.edit.draftDiscard')}
+          onConfirm={handleRestoreDraft}
+          onCancel={handleDiscardDraft}
+        />
+      )}
+
+      {/* ── Conflict resolution sheet ──
+          Three options: keep my changes (force save), use their changes
+          (reload), or compare. Compare re-fetches and reloads so the user
+          can see the server version before deciding whether to re-apply. */}
+      {conflictSheet && (
+        <BottomSheet
+          visible={conflictSheet.visible}
+          onDismiss={() => setConflictSheet(null)}
+          variant="transaction"
+          snapPoint={0.46}
+        >
+          <View style={styles.conflictContainer} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+            <Text style={[styles.conflictTitle, { color: colors.textPrimary }]} accessibilityRole="header">
+              {t('listing.edit.conflictTitle')}
+            </Text>
+            <Text style={[styles.conflictMessage, { color: colors.textSecondary }]}>
+              {t('listing.edit.conflictMessage')}
+            </Text>
+            <View style={styles.conflictActions}>
+              <AppButton
+                title={t('listing.edit.conflictKeepMine')}
+                onPress={conflictSheet.onKeepMine}
+                variant="primary"
+                size="lg"
+                style={styles.conflictBtn}
+                accessibilityLabel={t('listing.edit.conflictKeepMine')}
+              />
+              <AppButton
+                title={t('listing.edit.conflictUseTheirs')}
+                onPress={conflictSheet.onUseTheirs}
+                variant="ghost"
+                size="md"
+                accessibilityLabel={t('listing.edit.conflictUseTheirs')}
+              />
+              <AppButton
+                title={t('listing.edit.conflictCompare')}
+                onPress={conflictSheet.onUseTheirs}
+                variant="ghost"
+                size="md"
+                accessibilityLabel={t('listing.edit.conflictCompare')}
+              />
+            </View>
+          </View>
+        </BottomSheet>
+      )}
     </FlagshipScreen>
   );
 }
@@ -1606,4 +1902,27 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    lineHeight: TypographyV2.meta.lineHeight - 1 } });
+    lineHeight: TypographyV2.meta.lineHeight - 1 },
+
+  /* -- conflict resolution sheet -- */
+  conflictContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: Space.lg },
+  conflictTitle: {
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+    marginBottom: Space.sm },
+  conflictMessage: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
+    marginBottom: Space.lg },
+  conflictActions: {
+    gap: Space.sm },
+  conflictBtn: {
+    borderRadius: Radius.lg,
+    marginBottom: Space.xs } });

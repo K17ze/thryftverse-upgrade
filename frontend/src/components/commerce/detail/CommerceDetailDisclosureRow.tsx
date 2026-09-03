@@ -60,6 +60,7 @@ export function CommerceDetailDisclosureRow({
       ]}
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole="button"
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
     >
       <View style={styles.labelCluster}>
         {leadingIcon ? (

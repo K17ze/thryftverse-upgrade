@@ -154,7 +154,7 @@ export function CreatorToolDock({
   }, [haptic, onMore]);
 
   const toolSize = 44;
-  const toolIconSize = 23;
+  const toolIconSize = IconGrammar.standard;
   const toolGap = Space.sm;
 
   const labelColor = colors.textSecondary;

@@ -2956,6 +2956,7 @@ app.get('/listings/:listingId', async (request, reply) => {
     shipping_method: string | null;
     shipping_payer: string | null;
     created_at: string;
+    updated_at: string | null;
     media_frozen_at: string | null;
     seller_username: string | null;
     sustainability_grade: string | null;
@@ -2967,7 +2968,7 @@ app.get('/listings/:listingId', async (request, reply) => {
         l.id, l.seller_id, l.title, l.description, l.price_gbp, l.image_url,
         l.status, l.category, l.brand, l.size, l.condition,
         l.original_price_gbp, l.shipping_method, l.shipping_payer, l.created_at,
-        l.media_frozen_at,
+        l.updated_at, l.media_frozen_at,
         l.sustainability_grade, l.material_composition, l.weight_kg::text,
         u.username AS seller_username
       FROM listings l
@@ -3069,6 +3070,7 @@ app.get('/listings/:listingId', async (request, reply) => {
       shippingMethod: row.shipping_method,
       shippingPayer: row.shipping_payer,
       createdAt: row.created_at,
+      updatedAt: row.updated_at ?? row.created_at,
       mediaFrozenAt: row.media_frozen_at,
       sustainabilityGrade: row.sustainability_grade,
       materialComposition: row.material_composition,

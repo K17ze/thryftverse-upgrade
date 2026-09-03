@@ -1,9 +1,9 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView } from 'react-native';
+  StyleSheet } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
@@ -19,7 +19,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
-import { useToast } from '../../context/ToastContext';
 import { EmptyState } from '../EmptyState';
 import { formatCountdown } from '../../data/tradeHub';
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
@@ -122,25 +121,21 @@ export default function PulseTab() {
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const { show } = useToast();
   const { listings } = useBackendData();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const formatPrice = React.useCallback((n: number) => formatFromFiat(n, currencyCode, { displayMode: 'fiat' }), [formatFromFiat, currencyCode]);
   const customAuctions = useStore((state) => state.customAuctions);
   const auctionRuntime = useStore((state) => state.auctionRuntime);
 
-  // Trending state (merged from EditTab to preserve trending rail + style quiz)
+  // Trending state
   const [trending, setTrending] = React.useState<TrendingListing[]>([]);
-  const [trendingLoading, setTrendingLoading] = React.useState(true);
   const [trendingWindow, setTrendingWindow] = React.useState<'24h' | '7d' | '30d'>('24h');
 
   React.useEffect(() => {
     let cancelled = false;
-    setTrendingLoading(true);
     fetchTrendingListings({ window: trendingWindow, limit: 20 })
       .then((items) => { if (!cancelled) setTrending(items); })
-      .catch(() => { if (!cancelled) setTrending([]); })
-      .finally(() => { if (!cancelled) setTrendingLoading(false); });
+      .catch(() => { if (!cancelled) setTrending([]); });
     return () => { cancelled = true; };
   }, [trendingWindow]);
 
@@ -167,7 +162,7 @@ export default function PulseTab() {
   }, [trending, listings]);
 
   const [now, setNow] = useState(() => Date.now());
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<any>(null);
   useScrollToTop(scrollRef);
 
   const liveAuctions = useMemo<LiveAuctionItem[]>(() => {
@@ -243,6 +238,130 @@ export default function PulseTab() {
     navigation.navigate('PulseFeed');
   };
 
+  // ── Infinite loop feed ──────────────────────────────────────────────
+  // The activity feed loops: when the user reaches the end, we append the
+  // same items again (with deduplicated keys via a cycle index). This gives
+  // an infinite scroll discovery experience without requiring a backend
+  // pagination endpoint for the activity feed.
+  const cycleRef = useRef(0);
+  const [feedItems, setFeedItems] = useState<ActivityItem[]>([]);
+
+  useEffect(() => {
+    if (activities.length === 0) {
+      setFeedItems([]);
+      return;
+    }
+    // Seed the feed with the first cycle of activities
+    setFeedItems(activities);
+    cycleRef.current = 1;
+  }, [activities]);
+
+  const handleEndReached = useCallback(() => {
+    if (activities.length === 0) return;
+    cycleRef.current += 1;
+    const cycle = cycleRef.current;
+    setFeedItems((prev) => [
+      ...prev,
+      ...activities.map((item) => ({
+        ...item,
+        id: `${item.id}__cycle${cycle}`,
+      })),
+    ]);
+  }, [activities]);
+
+  const renderActivityItem = useCallback(
+    ({ item }: { item: ActivityItem }) => (
+      <ActivityCard
+        item={item}
+        onPress={() => handleActivityPress(item)}
+        colors={colors}
+        styles={styles}
+        formatPrice={formatPrice}
+      />
+    ),
+    [colors, styles, formatPrice, handleActivityPress],
+  );
+
+  const keyExtractor = useCallback((item: ActivityItem) => item.id, []);
+
+  const ListHeader = useMemo(() => {
+    if (trendingListings.length === 0 && liveAuctions.length === 0) return null;
+    return (
+      <>
+        {/* Trending Now Rail */}
+        {trendingListings.length > 0 && (
+          <View>
+            <DiscoverySectionHeader
+              title="Popular this week"
+              actionLabel="See all"
+              onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' })}
+            />
+            <HorizontalRail contentContainerStyle={styles.trendingScroll}>
+              {trendingListings.map((item) => (
+                <TrendingRailItem
+                  key={item.id}
+                  item={item}
+                  onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'Pulse' }); }}
+                  styles={styles}
+                  formatPrice={formatPrice}
+                />
+              ))}
+            </HorizontalRail>
+            <View style={styles.windowTabs}>
+              {(['24h', '7d', '30d'] as const).map((w) => {
+                const isActive = trendingWindow === w;
+                return (
+                  <AnimatedPressable
+                    key={w}
+                    style={[styles.windowTab, isActive && styles.windowTabActive]}
+                    onPress={() => { haptic.selection(); setTrendingWindow(w); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.windowTabText, isActive && styles.windowTabTextActive]}>
+                      {w === '24h' ? '24 hours' : w === '7d' ? '7 days' : '30 days'}
+                    </Text>
+                  </AnimatedPressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Live Now Rail */}
+        {liveAuctions.length > 0 && (
+          <View>
+            <DiscoverySectionHeader
+              title="Live Now"
+              actionLabel="View all"
+              onAction={handleViewAll}
+            />
+            <HorizontalRail contentContainerStyle={styles.liveScroll}>
+              {liveAuctions.map((auction) => (
+                <LiveNowCard
+                  key={auction.id}
+                  auction={auction}
+                  now={now}
+                  onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'auction', canonicalId: auction.id, sourceSurface: 'Pulse' }); }}
+                  styles={styles}
+                  formatPrice={formatPrice}
+                />
+              ))}
+            </HorizontalRail>
+          </View>
+        )}
+
+        {/* Live Feed header — sits above the FlashList data rows */}
+        <View style={{ marginTop: Space.lg }}>
+          <DiscoverySectionHeader
+            title="Live Feed"
+            actionLabel="View all"
+            onAction={handleViewAll}
+          />
+        </View>
+      </>
+    );
+  }, [trendingListings, liveAuctions, trendingWindow, now, colors, styles, haptic, navigation, formatPrice, handleViewAll]);
+
   if (activities.length === 0 && liveAuctions.length === 0 && trendingListings.length === 0) {
     return (
       <EmptyState
@@ -256,97 +375,17 @@ export default function PulseTab() {
   }
 
   return (
-    <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-      {/* Trending Now Rail (merged from EditTab) */}
-      {trendingListings.length > 0 && (
-        <View>
-          <DiscoverySectionHeader
-            title="Popular this week"
-            actionLabel="See all"
-            onAction={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Trending' })}
-          />
-          <HorizontalRail contentContainerStyle={styles.trendingScroll}>
-            {trendingListings.map((item) => (
-              <TrendingRailItem
-                key={item.id}
-                item={item}
-                onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'Pulse' }); }}
-                styles={styles}
-                formatPrice={formatPrice}
-              />
-            ))}
-          </HorizontalRail>
-          {/* Window tabs below the first rail so the first viewport shows
-              media, not chrome (audit §3.4, §4.5). */}
-          <View style={styles.windowTabs}>
-            {(['24h', '7d', '30d'] as const).map((w) => {
-              const isActive = trendingWindow === w;
-              return (
-                <AnimatedPressable
-                  key={w}
-                  style={[styles.windowTab, isActive && styles.windowTabActive]}
-                  onPress={() => { haptic.selection(); setTrendingWindow(w); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.windowTabText, isActive && styles.windowTabTextActive]}>
-                    {w === '24h' ? '24 hours' : w === '7d' ? '7 days' : '30 days'}
-                  </Text>
-                </AnimatedPressable>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
-      {/* Live Now Rail */}
-      {liveAuctions.length > 0 && (
-        <View>
-          <DiscoverySectionHeader
-            title="Live Now"
-            actionLabel="View all"
-            onAction={handleViewAll}
-          />
-          <HorizontalRail contentContainerStyle={styles.liveScroll}>
-            {liveAuctions.map((auction) => (
-              <LiveNowCard
-                key={auction.id}
-                auction={auction}
-                now={now}
-                onPress={() => { haptic.light(); openProductDetail(navigation, { referenceKind: 'auction', canonicalId: auction.id, sourceSurface: 'Pulse' }); }}
-                styles={styles}
-                formatPrice={formatPrice}
-              />
-            ))}
-          </HorizontalRail>
-        </View>
-      )}
-
-      {/* Activity feed */}
-      <View style={{ marginTop: Space.lg }}>
-        <DiscoverySectionHeader
-          title="Live Feed"
-          actionLabel="View all"
-          onAction={handleViewAll}
-        />
-        {activities.map((item) => (
-          <ActivityCard key={item.id} item={item} onPress={() => handleActivityPress(item)} colors={colors} styles={styles} formatPrice={formatPrice} />
-        ))}
-      </View>
-
-      {/* Style Quiz (merged from EditTab) */}
-      <View style={{ marginTop: Space.lg }}>
-        <DiscoverySectionHeader
-          title="Find Your Aesthetic"
-        />
-        <AnimatedPressable style={styles.quizCard} onPress={() => navigation.navigate('StyleQuiz')} activeOpacity={0.92} accessibilityRole="button" accessibilityLabel="Take the style quiz">
-          <Ionicons name="color-palette-outline" size={22} color={colors.brand} aria-hidden={true} />
-          <Text style={styles.quizActionText}>Take the style quiz</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-        </AnimatedPressable>
-      </View>
-
-      <View style={{ height: 100 }} />
-    </ScrollView>
+    <FlashList
+      ref={scrollRef}
+      data={feedItems}
+      renderItem={renderActivityItem}
+      keyExtractor={keyExtractor}
+      ListHeaderComponent={ListHeader}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+      onEndReached={handleEndReached}
+      onEndReachedThreshold={0.7}
+    />
   );
 }
 
@@ -491,20 +530,5 @@ function createStyles(colors: ThemeColors) {
     color: colors.textSecondary,
     letterSpacing: TypographyV2.meta.letterSpacing },
   windowTabTextActive: {
-    color: colors.textInverse },
-
-  /* Style Quiz — flat action row, hairline separator (no surface card) */
-  quizCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Space.md,
-    gap: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border },
-  quizActionText: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    color: colors.textPrimary,
-    letterSpacing: TypographyV2.body.letterSpacing } });
+    color: colors.textInverse } });
 }

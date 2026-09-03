@@ -14,13 +14,14 @@ export interface Message {
   systemTitle?: string;
   timestamp: string;
   itemImage?: string;
-  type?: 'text' | 'offer' | 'system' | 'commerce_state' | 'voice';
+  type?: 'text' | 'offer' | 'system' | 'commerce_state' | 'voice' | 'listing_share' | 'purchase_status';
   sender?: 'me' | 'other' | 'system';
-  offer?: { originalPrice: number; offerPrice: number; status: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled'; expiresAt?: string; counterRound?: number };
+  offer?: { originalPrice: number; offerPrice: number; status: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled'; expiresAt?: string; counterRound?: number; itemId?: string; itemTitle?: string; itemImage?: string | null; itemBrand?: string | null; itemSize?: string | null; itemCondition?: string | null };
+  listing?: { id: string; title: string; price: number; originalPrice?: number; image: string; brand?: string; size?: string; condition?: string; sellerUsername?: string; sellerRating?: number; isSold?: boolean };
   reactions?: MessageReaction[];
   replyToMessageId?: string;
   mediaUri?: string;
-  mediaType?: 'image' | 'video';
+  mediaType?: 'image' | 'video' | 'document';
   uploadStatus?: 'uploading' | 'failed' | 'sent';
   // Voice messages — report 19.
   voiceUri?: string;
@@ -29,6 +30,12 @@ export interface Message {
   voiceContainer?: 'm4a' | 'ogg' | 'webm' | 'mp4';
   voiceCodec?: 'aac' | 'opus' | 'mp3';
   voiceModerationState?: 'pending' | 'allowed' | 'limited' | 'blocked';
+  /** P2-03: True when the message has been edited by its sender. */
+  isEdited?: boolean;
+  /** P2-03: ISO timestamp of the most recent edit (null/undefined when never edited). */
+  editedAt?: string | null;
+  /** P2-03: Monotonic edit revision counter (0 = never edited, 1+ = edited N times). */
+  editVersion?: number;
   /** ID of the bot/agent that authored this message (agent conversations). */
   botId?: string;
   /** True when the message was generated in demo mode (clearly labelled). */
@@ -42,6 +49,12 @@ export interface Message {
     trackingNumber?: string | null;
     carrier?: string | null;
   };
+  /** P2-02: Pinned location shared in chat (expo-location). */
+  location?: { lat: number; lng: number; label?: string };
+  /** P2-02: Document attachment (expo-document-picker). */
+  documentUri?: string;
+  documentName?: string;
+  documentMimeType?: string;
 }
 
 export type ConversationType = 'dm' | 'group';

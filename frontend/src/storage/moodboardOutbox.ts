@@ -21,7 +21,7 @@
  *   6. On network error — the row stays `pending` for the next drain.
  */
 
-import { getDb } from './db';
+import { getDb, isDbAvailable } from './db';
 import { fetchJson } from '../lib/apiClient';
 import type { MoodboardOperationResponse } from '../services/moodboardApi';
 
@@ -47,6 +47,7 @@ export async function enqueueMoodboardOperation(input: {
   payload: Record<string, unknown>;
   baseRev: number;
 }): Promise<void> {
+  if (!isDbAvailable()) return;
   const db = await getDb();
   db.execute(
     `INSERT OR REPLACE INTO mutation_outbox
@@ -65,6 +66,7 @@ export async function enqueueMoodboardOperation(input: {
  * (non-outbox) API call succeeds, so the row is not re-pushed by the drain.
  */
 export async function removeMoodboardOutboxOperation(operationId: string): Promise<void> {
+  if (!isDbAvailable()) return;
   const db = await getDb();
   db.execute(
     `DELETE FROM mutation_outbox WHERE operation_id = ? AND entity_type = 'moodboard';`,
@@ -77,6 +79,7 @@ export async function removeMoodboardOutboxOperation(operationId: string): Promi
  * Returns the number of rows successfully pushed.
  */
 export async function drainMoodboardOutbox(): Promise<{ pushed: number; conflicts: number; errors: number }> {
+  if (!isDbAvailable()) return { pushed: 0, conflicts: 0, errors: 0 };
   const db = await getDb();
   const result = db.execute(
     `SELECT seq, operation_id, entity_id, operation, payload_json, base_rev, state, attempt_count
@@ -175,6 +178,7 @@ export async function drainMoodboardOutbox(): Promise<{ pushed: number; conflict
  * Returns the count of pending moodboard outbox rows for UI display.
  */
 export async function getMoodboardOutboxPendingCount(): Promise<number> {
+  if (!isDbAvailable()) return 0;
   const db = await getDb();
   const result = db.execute(
     `SELECT COUNT(*) AS count

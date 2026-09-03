@@ -1,0 +1,34 @@
+appId: com.thryftverse.app
+name: "PDP — VoiceOver accessibility"
+tags:
+  - accessibility
+  - voiceover
+---
+- launchApp:
+    clearState: true
+# Navigate to a product detail page (via deep link or browse)
+- openLink: "thryftverse://listing/test-listing-id"
+# Verify key elements have accessibility labels
+- assertVisible:
+    label: "Product image gallery"
+- assertVisible:
+    label: "Product title"
+- assertVisible:
+    label: "Product price"
+- assertVisible:
+    label: "Seller information"
+- assertVisible:
+    label: "Add to cart button"
+# Test image gallery swipe
+- swipe:
+    direction: LEFT
+    label: "Swipe to next product image"
+# Verify new image is announced
+- assertVisible:
+    label: "Product image gallery"
+# Test description scroll
+- swipe:
+    direction: UP
+    label: "Scroll down to read description"
+- assertVisible:
+    label: "Product description"

@@ -18,6 +18,7 @@
 import React from 'react';
 import { Svg, Path, G } from 'react-native-svg';
 import type { StyleProp, ViewStyle } from 'react-native';
+import { useAppTheme } from '../../theme/ThemeContext';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -121,11 +122,13 @@ export type AppGlyphName = keyof typeof APP_GLYPH_REGISTRY;
 export function AppGlyph({
   name,
   size = 24,
-  color = '#000000',
+  color,
   style,
   accessibilityLabel,
   testID,
 }: AppGlyphProps): React.ReactElement {
+  const { colors } = useAppTheme();
+  const resolvedColor = color ?? colors.textPrimary;
   const paths: ReadonlyArray<string> = APP_GLYPH_REGISTRY[name];
 
   if (!paths || paths.length === 0) {
@@ -147,7 +150,7 @@ export function AppGlyph({
       accessibilityRole={accessibilityLabel ? 'image' : undefined}
       testID={testID}
     >
-      <G color={color}>
+      <G color={resolvedColor}>
         {paths.map((d, i) => (
           <Path
             key={i}

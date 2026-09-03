@@ -288,6 +288,7 @@ const CommentRow = React.memo(function CommentRow({
       onLongPress={handleLongPress}
       delayLongPress={400}
       disabled={isPending || isFailed}
+      accessibilityRole="button"
       accessibilityActions={[{ name: 'longpress', label: 'Show comment actions' }]}
       onAccessibilityAction={(e) => {
         if (e.nativeEvent.actionName === 'longpress') handleLongPress();
@@ -1055,7 +1056,7 @@ export function LookCommentsSheet({
 
       {/* Long-press context menu — destructive actions live one level deep */}
       <Modal transparent visible={menuComment !== null} animationType="fade" onRequestClose={closeMenu}>
-        <Pressable style={styles.menuBackdrop} onPress={closeMenu} accessibilityLabel="Close menu">
+        <Pressable style={styles.menuBackdrop} onPress={closeMenu} accessibilityRole="button" accessibilityLabel="Close menu">
           <View style={styles.menuSheet}>
             <Text style={styles.menuTitle} numberOfLines={1}>
               {menuComment?.author.username ?? 'Comment'}

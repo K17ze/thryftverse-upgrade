@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   fetchConversationFromApi,
+  fetchGroupSettingsFromApi,
   leaveGroupOnApi,
   updateConversationOnApi } from '../services/chatApi';
 import { classifyNetworkError, parseApiError } from '../lib/apiClient';
@@ -79,10 +80,35 @@ export default function EditGroupScreen({ navigation, route }: Props) {
   const pendingSaveKeyRef = useRef<string | null>(null);
 
   const role = currentUser?.id ? conversation?.memberRoles?.[currentUser.id] : undefined;
-  const canManage = Boolean(
+  const isGroupManager = Boolean(
     currentUser?.id
     && (conversation?.ownerId === currentUser.id || role === 'owner' || role === 'admin'),
   );
+  const [editPermission, setEditPermission] = useState<'loading' | 'allowed' | 'restricted'>(
+    isGroupManager ? 'allowed' : 'loading',
+  );
+  const canEditGroup = editPermission === 'allowed';
+
+  useEffect(() => {
+    let active = true;
+    if (isGroupManager) {
+      setEditPermission('allowed');
+      return () => {
+        active = false;
+      };
+    }
+    setEditPermission('loading');
+    fetchGroupSettingsFromApi(conversationId)
+      .then((snapshot) => {
+        if (active) setEditPermission(snapshot.capabilities.canEditGroupInfo ? 'allowed' : 'restricted');
+      })
+      .catch(() => {
+        if (active) setEditPermission('restricted');
+      });
+    return () => {
+      active = false;
+    };
+  }, [conversationId, isGroupManager]);
   const initialAvatar = conversation?.avatar ?? null;
   const initialCoverPhoto = conversation?.coverPhoto ?? null;
   const hasChanges = name.trim() !== (conversation?.title ?? '').trim()
@@ -109,7 +135,20 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     );
   }
 
-  if (!canManage) {
+  if (editPermission === 'loading') {
+    return (
+      <FlagshipScreen
+        header={<FlagshipHeader title="Edit group" onBack={() => navigation.goBack()} />}
+        scrollEnabled={false}
+      >
+        <View style={styles.center} accessibilityLabel="Checking group permissions">
+          <ActivityIndicator color={colors.textPrimary} />
+        </View>
+      </FlagshipScreen>
+    );
+  }
+
+  if (!canEditGroup) {
     return (
       <FlagshipScreen
         header={<FlagshipHeader title="Group identity" onBack={() => navigation.goBack()} />}
@@ -118,7 +157,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         <View style={styles.center}>
           <Ionicons name="lock-closed-outline" size={24} color={colors.textMuted} />
           <Caption color={colors.textMuted} style={styles.permissionCopy}>
-            Only group owners and admins can change the group name or photo.
+            An owner or admin has limited group-info editing to admins.
           </Caption>
         </View>
       </FlagshipScreen>
@@ -185,6 +224,20 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     const idempotencyKey = pendingSaveKeyRef.current ?? createStableId('group-edit');
     pendingSaveKeyRef.current = idempotencyKey;
 
+    // Optimistic store update — write the local preview URIs to the store
+    // immediately so GroupChatInfoScreen reflects the change the instant we
+    // navigate back, even before the API round-trip completes. The server
+    // response below reconciles the final canonical URLs.
+    const optimisticAvatar = groupMedia.avatarDisplayUri ?? avatar;
+    const optimisticCover = groupMedia.coverDisplayUri ?? coverPhoto;
+    upsertConversation({
+      ...conversation,
+      title: trimmedName,
+      description: description.trim() || undefined,
+      avatar: optimisticAvatar ?? undefined,
+      coverPhoto: optimisticCover ?? undefined,
+    });
+
     try {
       const updates: {
         title?: string;
@@ -211,12 +264,20 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         updates,
         idempotencyKey,
       );
+      // Reconcile with server-confirmed canonical URLs. Append a cache-buster
+      // so expo-image fetches the new image rather than serving a stale
+      // memory-disk cache entry from the previous URL.
       upsertConversation({
         ...conversation,
         title: updated.title,
         description: updated.description ?? undefined,
-        avatar: updated.avatar ?? undefined,
-        coverPhoto: updated.coverPhoto ?? undefined });
+        avatar: updated.avatar
+          ? `${updated.avatar}${updated.avatar.includes('?') ? '&' : '?'}t=${Date.now()}`
+          : undefined,
+        coverPhoto: updated.coverPhoto
+          ? `${updated.coverPhoto}${updated.coverPhoto.includes('?') ? '&' : '?'}t=${Date.now()}`
+          : undefined,
+      });
       pendingSaveKeyRef.current = null;
       haptic.success();
       show('Group details updated.', 'success');
@@ -250,8 +311,12 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         ...conversation,
         title: serverTitle,
         description: serverDescription || undefined,
-        avatar: serverAvatar ?? undefined,
-        coverPhoto: serverCoverPhoto ?? undefined,
+        avatar: serverAvatar
+          ? `${serverAvatar}${serverAvatar.includes('?') ? '&' : '?'}t=${Date.now()}`
+          : undefined,
+        coverPhoto: serverCoverPhoto
+          ? `${serverCoverPhoto}${serverCoverPhoto.includes('?') ? '&' : '?'}t=${Date.now()}`
+          : undefined,
         ownerId: serverConversation.ownerId,
         participantIds: serverConversation.participantIds,
         memberRoles: Object.fromEntries(
@@ -609,7 +674,7 @@ function createStyles(colors: ThemeColors) {
       width: '100%' },
     coverTarget: {
       width: '100%',
-      height: 180,
+      height: 200,
       position: 'relative' },
     coverImage: {
       width: '100%',

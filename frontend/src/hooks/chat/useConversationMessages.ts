@@ -30,6 +30,7 @@ import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,
   deleteConversationMessageOnApi,
+  editConversationMessageOnApi,
   mapApiMessageToConversationMessage,
 } from "../../services/chatApi";
 import { uploadMedia } from "../../services/mediaUpload";
@@ -37,6 +38,7 @@ import { enqueueChatMessage, drainChatOutbox } from "../../services/chatOutbox";
 import {
   useChatMessageEvent,
   useChatMessageDeletedEvent,
+  useChatMessageEditedEvent,
   useChatReactionEvent,
   useChatReadReceiptEvent,
   realtimePayloadToMessage,
@@ -49,6 +51,11 @@ import { containsOffPlatformPaymentPattern } from "../../utils/chatSafetyWarning
 import { isVideoUri } from "../../utils/media";
 import { makeStableId, createStableId } from "../../utils/createStableId";
 import { t } from "../../i18n";
+
+/** P2-03: Edit window — must match the backend default (15 minutes). Used
+ *  only for frontend UX (hiding the edit action after the window closes);
+ *  the backend enforces it authoritatively. */
+const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 import type { SuggestedReply } from "../../services/chatAgentsApi";
 import type { SupportedCurrencyCode } from "../../constants/currencies";
 import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
@@ -157,6 +164,9 @@ export function useConversationMessages({
   const [confirmation, setConfirmation] = useState<ConversationConfirmationRequest | null>(null);
   const clearConfirmation = useCallback(() => setConfirmation(null), []);
   const [composerSending, setComposerSending] = useState(false);
+  // P2-03: The id of the message currently being edited inline. When set,
+  // ChatMessageRow replaces that message's bubble with a TextInput.
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   // Ref mirror of the local message list so async callbacks (e.g.
   // confirmAgentDraft) can read the latest messages without re-subscribing.
@@ -409,6 +419,39 @@ export function useConversationMessages({
     ),
   );
 
+  // P2-03: Consume edit realtime events — reconcile the edited body and the
+  // "Edited" label when another participant (or this user's second device)
+  // edits a message. Skips the optimistic edit the editor already applied.
+  useChatMessageEditedEvent(
+    conversationId,
+    useCallback(
+      (event: {
+        messageId: string;
+        body: string;
+        editVersion: number;
+        editedAt: string | null;
+        editedBy: string;
+      }) => {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== event.messageId) return m;
+            // Skip if we already have a newer or equal revision (optimistic
+            // edit applied locally before the realtime echo arrived).
+            if ((m.editVersion ?? 0) >= event.editVersion) return m;
+            return {
+              ...m,
+              text: event.body,
+              isEdited: true,
+              editedAt: event.editedAt,
+              editVersion: event.editVersion,
+            };
+          }),
+        );
+      },
+      [],
+    ),
+  );
+
   // P0.9: Consume reaction realtime events — update the local message's
   // reactions when another participant adds or removes a reaction.
   useChatReactionEvent(
@@ -492,7 +535,7 @@ export function useConversationMessages({
   // P0.14: Drain the chat outbox on mount — in case messages were queued
   // while offline and the user is now opening the conversation.
   useEffect(() => {
-    void drainChatOutbox();
+    void drainChatOutbox().catch(() => undefined);
   }, []);
 
   // NOTE: confirmAgentDraft is defined after `appendToConversationStore`
@@ -774,7 +817,7 @@ export function useConversationMessages({
             clientMessageId,
             text: caption ?? "",
             metadata: { mediaUri: canonicalUrl, type: mediaType },
-          });
+          }).catch(() => undefined);
         });
 
       if (!pushPermissionAskedRef.current) {
@@ -845,7 +888,7 @@ export function useConversationMessages({
             clientMessageId,
             text: '',
             metadata: { mediaUri: canonicalUrl, type: 'voice', ...voiceMetadata },
-          });
+          }).catch(() => undefined);
         });
     },
     [conversationId, show],
@@ -893,7 +936,7 @@ export function useConversationMessages({
           // re-upload the local draft if still a file:// URI.
           const alreadyUploaded = msg.voiceUri.startsWith('http');
           setTimeout(() => {
-            sendVoiceMessage(
+            void sendVoiceMessage(
               msgId,
               {
                 uri: alreadyUploaded ? msg.voiceUri! : msg.voiceUri!,
@@ -915,16 +958,30 @@ export function useConversationMessages({
         // pass it so sendMediaMessage skips re-upload and only retries the
         // message send with the same clientMessageId.
         const alreadyUploaded = msg.mediaUri.startsWith('http');
-        setTimeout(
-          () => sendMediaMessage(
-            msgId,
-            msg.mediaUri!,
-            msg.mediaType!,
-            msg.text || undefined,
-            alreadyUploaded ? msg.mediaUri : undefined,
-          ),
-          0,
-        );
+        if (msg.mediaType === 'document') {
+          setTimeout(
+            () => void sendDocumentMessage(
+              msgId,
+              msg.mediaUri!,
+              msg.documentName ?? 'File',
+              msg.documentMimeType,
+              msg.text || undefined,
+              alreadyUploaded ? msg.mediaUri : undefined,
+            ),
+            0,
+          );
+        } else {
+          setTimeout(
+            () => void sendMediaMessage(
+              msgId,
+              msg.mediaUri!,
+              msg.mediaType as "image" | "video",
+              msg.text || undefined,
+              alreadyUploaded ? msg.mediaUri : undefined,
+            ),
+            0,
+          );
+        }
         return prev.map((m) =>
           m.id === msgId ? { ...m, uploadStatus: "uploading" as const } : m,
         );
@@ -1008,10 +1065,112 @@ export function useConversationMessages({
       appendToConversationStore(outgoing, currentUser?.id ?? "me");
       haptic.success();
       scheduleScrollToEnd();
-      sendMediaMessage(outgoing.id, uri, mediaType, outgoing.text || undefined);
+      void sendMediaMessage(outgoing.id, uri, mediaType, outgoing.text || undefined);
       setPendingAttachment(null);
     },
     [createMediaMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendMediaMessage],
+  );
+
+  // ── Document message send ───────────────────────────────────────────
+  // Documents (PDF, ZIP, etc.) are uploaded via the same media platform,
+  // then sent as type: 'document' with documentName/documentMimeType in
+  // metadata. The backend stores them in chat_message_attachments with
+  // kind='document'.
+  const sendDocumentMessage = useCallback(
+    async (msgId: string, uri: string, fileName: string, mimeType?: string, caption?: string, existingCanonicalUrl?: string) => {
+      if (!conversationId) return;
+      const clientMessageId = createStableId('cmsg');
+
+      let canonicalUrl: string;
+      if (existingCanonicalUrl && existingCanonicalUrl.startsWith('http')) {
+        canonicalUrl = existingCanonicalUrl;
+      } else {
+        try {
+          const uploaded = await uploadMedia(uri, 'uploads');
+          canonicalUrl = uploaded.publicUrl;
+        } catch {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
+            ),
+          );
+          show("Upload failed. Tap to retry.", "error");
+          return;
+        }
+      }
+
+      sendConversationMessageOnApi(
+        conversationId,
+        caption ?? "",
+        { documentUri: canonicalUrl, documentName: fileName, documentMimeType: mimeType, mediaUri: canonicalUrl, mediaType: 'document' },
+        clientMessageId,
+        { type: 'document', mediaUri: canonicalUrl },
+      )
+        .then((serverMsg) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const, documentUri: canonicalUrl } : m,
+            ),
+          );
+        })
+        .catch(() => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId ? { ...m, status: "reconciling" as const, uploadStatus: "sent" as const, documentUri: canonicalUrl } : m,
+            ),
+          );
+          enqueueChatMessage({
+            conversationId,
+            text: caption ?? "",
+            metadata: { documentUri: canonicalUrl, documentName: fileName, documentMimeType: mimeType, mediaUri: canonicalUrl, mediaType: 'document' },
+            clientMessageId,
+            type: 'document',
+            mediaUri: canonicalUrl,
+          });
+        });
+    },
+    [conversationId, setMessages, show],
+  );
+
+  const createDocumentMessage = useCallback(
+    (uri: string, fileName: string, mimeType?: string): Message => {
+      return {
+        id: makeStableId('msg_doc', 7),
+        type: "media",
+        sender: "me",
+        senderLabel: currentUser?.username ?? "you",
+        text: "",
+        mediaUri: uri,
+        mediaType: "image",
+        uploadStatus: "uploading",
+        documentUri: uri,
+        documentName: fileName,
+        documentMimeType: mimeType,
+      };
+    },
+    [currentUser?.username],
+  );
+
+  const handleSendPendingDocument = useCallback(
+    (
+      caption: string,
+      pendingDocument: { uri: string; name: string; mimeType?: string } | null,
+      setPendingDocument: (v: null) => void,
+    ) => {
+      if (!pendingDocument) return;
+      const { uri, name, mimeType } = pendingDocument;
+      const outgoing = createDocumentMessage(uri, name, mimeType);
+      if (caption) {
+        outgoing.text = caption;
+      }
+      pushMessage(outgoing);
+      appendToConversationStore(outgoing, currentUser?.id ?? "me");
+      haptic.success();
+      scheduleScrollToEnd();
+      void sendDocumentMessage(outgoing.id, uri, name, mimeType, outgoing.text || undefined);
+      setPendingDocument(null);
+    },
+    [createDocumentMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendDocumentMessage],
   );
 
   const scheduleUndoClear = useCallback(() => {
@@ -1125,6 +1284,80 @@ export function useConversationMessages({
       }
     },
     [conversationId, haptic, show, scheduleUndoClear],
+  );
+
+  // P2-03: Inline message editing. The hook owns the editing message id so
+  // ChatMessageRow can swap the bubble for a TextInput. `saveEdit` applies an
+  // optimistic update (new text + isEdited label), calls the API, and reverts
+  // to the prior text on failure. The realtime echo is reconciled by
+  // `useChatMessageEditedEvent` above (skipped when the optimistic revision
+  // already matches).
+  const startEdit = useCallback((msg: Message) => {
+    setEditingMessageId(msg.id);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingMessageId(null);
+  }, []);
+
+  const saveEdit = useCallback(
+    async (messageId: string, newText: string) => {
+      const trimmed = newText.trim();
+      const target = messagesRef.current.find((m) => m.id === messageId);
+      if (!target || !conversationId) {
+        setEditingMessageId(null);
+        return;
+      }
+      if (!trimmed || trimmed === (target.text ?? "")) {
+        // No-op edit — just close the editor.
+        setEditingMessageId(null);
+        return;
+      }
+
+      const previousText = target.text;
+      const previousEditVersion = target.editVersion ?? 0;
+      const nextEditVersion = previousEditVersion + 1;
+
+      // Optimistic update — apply the new text and "Edited" label immediately.
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                text: trimmed,
+                isEdited: true,
+                editedAt: new Date().toISOString(),
+                editVersion: nextEditVersion,
+              }
+            : m,
+        ),
+      );
+      setEditingMessageId(null);
+      haptic.light();
+
+      try {
+        await editConversationMessageOnApi(conversationId, messageId, trimmed);
+        // The realtime echo reconciles editVersion/editedAt from the server.
+        // No further local mutation needed.
+      } catch {
+        // Revert to the pre-edit state.
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  text: previousText,
+                  isEdited: previousEditVersion > 0,
+                  editedAt: m.editedAt,
+                  editVersion: previousEditVersion,
+                }
+              : m,
+          ),
+        );
+        show("Failed to edit message. Please try again.", "error");
+      }
+    },
+    [conversationId, haptic, show],
   );
 
   // When the user is at the bottom, record the seen message count so
@@ -1242,9 +1475,16 @@ export function useConversationMessages({
     handleRetrySendMessage,
     createMediaMessage,
     handleSendPendingAttachment,
+    sendDocumentMessage,
+    createDocumentMessage,
+    handleSendPendingDocument,
     handleUndoDelete,
     handleBulkDelete,
     handleDeleteMessage,
+    editingMessageId,
+    startEdit,
+    cancelEdit,
+    saveEdit,
     confirmation,
     clearConfirmation,
     dateSeparatorIndices,

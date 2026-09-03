@@ -64,7 +64,7 @@ export function ReviewSummaryBlock({ summary }: ReviewSummaryBlockProps) {
             return (
               <View key={star} style={styles.distRow}>
                 <Text style={styles.distStar}>{star}</Text>
-                <AppIcon name="star" focused size={IconSize.micro} color="#F59E0B" opticalCenter accessible={false} />
+                <AppIcon name="star" focused size={IconSize.micro} color={colors.warning} opticalCenter accessible={false} />
                 <View style={styles.distTrack}>
                   <View style={[styles.distFill, { width: `${Math.round(pct * 100)}%` }]} />
                 </View>

@@ -1,0 +1,32 @@
+appId: com.thryftverse.app
+name: "Checkout — TalkBack accessibility"
+tags:
+  - accessibility
+  - talkback
+---
+- launchApp:
+    clearState: true
+# Navigate to checkout (via deep link or cart)
+- openLink: "thryftverse://checkout/test-listing-id"
+# Verify checkout elements are accessible
+- assertVisible:
+    label: "Checkout title"
+- assertVisible:
+    label: "Delivery address section"
+- assertVisible:
+    label: "Payment method section"
+- assertVisible:
+    label: "Order total"
+# Test address selection
+- tapOn:
+    label: "Delivery address section"
+- assertVisible:
+    label: "Address selection"
+# Test payment method
+- tapOn:
+    label: "Payment method section"
+- assertVisible:
+    label: "Payment method options"
+# Verify place order button is accessible
+- assertVisible:
+    label: "Place order button"

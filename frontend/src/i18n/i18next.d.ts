@@ -39,6 +39,7 @@ declare module 'i18next' {
       report: (typeof flattenedResources)['report'];
       appeal: (typeof flattenedResources)['appeal'];
       coOwn: (typeof flattenedResources)['coOwn'];
+      stateCopy: (typeof flattenedResources)['stateCopy'];
     };
   }
 }

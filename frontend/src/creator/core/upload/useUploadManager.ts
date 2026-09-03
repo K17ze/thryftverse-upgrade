@@ -11,10 +11,14 @@ import type { QueueUploadParams, UploadJob, UploadEventListener, ProjectProgress
 let sharedStore: UploadJobStore | null = null;
 let sharedManager: UploadManager | null = null;
 
-function getSharedManager(): UploadManager {
+export function getSharedManager(): UploadManager {
   if (!sharedStore) sharedStore = new UploadJobStore();
   if (!sharedManager) sharedManager = new UploadManager(sharedStore);
   return sharedManager;
+}
+
+export async function resumeCreatorUploads(): Promise<void> {
+  await getSharedManager().resumePendingJobs();
 }
 
 /** Parameters accepted by the hook's `queueUpload`. */

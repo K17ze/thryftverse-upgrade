@@ -829,7 +829,17 @@ export function CommerceMediaStage({
     }
   }, [activeIndex, mediaItems]);
 
-  const heroHeight = Math.min(screenHeight * heightFraction, screenWidth * 1.35);
+  // Preserve the authored product crop when the API provides intrinsic media
+  // dimensions. The bounded fallback keeps legacy callers stable.
+  const heroHeight = React.useMemo(() => {
+    const firstMedia = mediaItems[0];
+    const width = firstMedia?.width;
+    const height = firstMedia?.height;
+    if (width && height && width > 0 && height > 0) {
+      return Math.min(screenWidth * (height / width), screenWidth * 1.35);
+    }
+    return Math.min(screenHeight * heightFraction, screenWidth * 1.35);
+  }, [heightFraction, mediaItems, screenHeight, screenWidth]);
 
   const heroStyle = useAnimatedStyle(() => {
     if (reducedMotion) {

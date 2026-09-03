@@ -89,16 +89,18 @@ export async function fetchSellerHubOverview(): Promise<SellerHubOverview> {
 
 // ── Batch command types ──
 
-export type SellerHubBatchCommand = 'pause' | 'resume' | 'delete';
+export type SellerHubBatchCommand = 'pause' | 'resume' | 'delete' | 'mark_sold_external';
 
 export interface SellerHubBatchItem {
   listingId: string;
+  expectedVersion?: number;
 }
 
 export interface SellerHubBatchResult {
   listingId: string;
-  state: 'applied' | 'rejected' | 'unknown';
+  state: 'applied' | 'rejected' | 'conflict' | 'unknown';
   code?: string;
+  currentStatus?: string;
 }
 
 export interface SellerHubBatchResponse {

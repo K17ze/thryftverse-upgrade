@@ -4,6 +4,36 @@ import { fetchJson } from '../lib/apiClient';
 type ApiConversationType = 'dm' | 'group';
 type ApiSenderType = 'user' | 'bot' | 'system';
 
+interface ApiConversationContextPayload {
+  listing?: {
+    id: string;
+    title: string;
+    price: number;
+    currency: string;
+    imageUrl?: string;
+    status: 'active' | 'sold' | 'paused' | 'deleted';
+    condition?: string;
+  };
+  offer?: {
+    id: string;
+    amount: number;
+    currency: string;
+    status: 'pending' | 'countered' | 'accepted' | 'rejected' | 'expired' | 'withdrawn';
+    expiresAt: string;
+  };
+  order?: {
+    id: string;
+    status: 'pending' | 'paid' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'refunded';
+    totalAmount: number;
+    currency: string;
+    createdAt: string;
+  };
+  protection?: {
+    status: 'active' | 'expired' | 'claimed' | 'resolved';
+    expiresAt?: string;
+  };
+}
+
 interface ApiConversationPayload {
   id: string;
   type: ApiConversationType;
@@ -32,6 +62,7 @@ interface ApiConversationPayload {
   requestStatus?: 'pending' | 'accepted' | 'declined';
   pinnedRank?: number;
   markedUnread?: boolean;
+  context?: ApiConversationContextPayload | null;
 }
 
 interface ApiMessageReaction {
@@ -53,6 +84,7 @@ export interface ApiMessagePayload {
   editVersion?: number;
   editedAt?: string;
   reactions?: ApiMessageReaction[];
+  scamWarning?: boolean;
 }
 
 // Voice message receipt — the canonical voice metadata returned by the
@@ -124,6 +156,31 @@ export interface GroupInviteLink {
   expiresAt: string;
   maxUses: number;
   useCount: number;
+  revokedAt?: string | null;
+  isExpired?: boolean;
+  isRevoked?: boolean;
+}
+
+export type GroupPermissionScope = 'admins' | 'everyone';
+
+export interface GroupSettings {
+  editGroupInfo: GroupPermissionScope;
+  sendMessages: GroupPermissionScope;
+  addMembers: GroupPermissionScope;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+
+export interface GroupSettingsCapabilities {
+  canManage: boolean;
+  canEditGroupInfo: boolean;
+  canSendMessages: boolean;
+  canAddMembers: boolean;
+}
+
+export interface GroupSettingsSnapshot {
+  settings: GroupSettings;
+  capabilities: GroupSettingsCapabilities;
 }
 
 function normalizeMemberRoles(
@@ -156,6 +213,10 @@ export function mapApiMessageToConversationMessage(payload: ApiMessagePayload): 
   const voice = (payload as ApiMessagePayload & { voice?: VoiceMessageReceipt }).voice;
   const isVoice = Boolean(voice) || meta.voiceMessage === true || meta.mediaType === 'voice';
 
+  const isOffer = meta.type === 'offer' || meta.offerPrice != null || meta.offer != null;
+  const isListingShare = meta.type === 'listing_share' || meta.listing != null;
+  const isCommerceState = meta.type === 'commerce_state' || meta.commerceState != null;
+
   return {
     id: payload.id,
     senderId,
@@ -167,10 +228,16 @@ export function mapApiMessageToConversationMessage(payload: ApiMessagePayload): 
       ? 'system'
       : isVoice
         ? 'voice'
-        : 'text',
+        : isOffer
+          ? 'offer'
+          : isListingShare
+            ? 'listing_share'
+            : isCommerceState
+              ? 'commerce_state'
+              : 'text',
     sender: payload.senderType === 'system' ? 'system' : 'other',
     mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
-    mediaType: meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
+    mediaType: (meta.mediaType === 'image' || meta.mediaType === 'video' || meta.mediaType === 'document') ? meta.mediaType : undefined,
     voiceUri: typeof meta.mediaUri === 'string' && isVoice ? meta.mediaUri : undefined,
     voiceDurationMs: voice?.durationMs ?? (typeof meta.durationMs === 'number' ? meta.durationMs : undefined),
     voiceWaveform: voice?.waveform?.samples,
@@ -179,6 +246,30 @@ export function mapApiMessageToConversationMessage(payload: ApiMessagePayload): 
     voiceModerationState: voice?.moderationState,
     replyToMessageId: payload.replyToMessageId,
     reactions: payload.reactions?.map((r) => ({ emoji: r.emoji, userIds: r.userIds })),
+    isEdited: (payload.editVersion ?? 0) > 0 || undefined,
+    editedAt: payload.editedAt ?? undefined,
+    editVersion: payload.editVersion,
+    offerPrice: typeof meta.offerPrice === 'number' ? meta.offerPrice : undefined,
+    originalPrice: typeof meta.originalPrice === 'number' ? meta.originalPrice : undefined,
+    offerStatus: typeof meta.offerStatus === 'string' ? (meta.offerStatus as any) : undefined,
+    offer: (meta.offer as any) ?? (meta.offerPrice != null ? {
+      offerPrice: Number(meta.offerPrice),
+      originalPrice: Number(meta.originalPrice ?? meta.offerPrice),
+      status: (meta.offerStatus as any) ?? 'pending',
+      expiresAt: meta.expiresAt as string | undefined,
+      counterRound: meta.counterRound as number | undefined,
+      itemId: meta.itemId as string | undefined,
+      itemTitle: meta.itemTitle as string | undefined,
+      itemImage: meta.itemImage as string | undefined,
+      itemBrand: meta.itemBrand as string | undefined,
+      itemSize: meta.itemSize as string | undefined,
+      itemCondition: meta.itemCondition as string | undefined,
+    } : undefined),
+    listing: meta.listing as any,
+    commerceState: meta.commerceState as any,
+    documentUri: typeof meta.documentUri === 'string' ? meta.documentUri : undefined,
+    documentName: typeof meta.documentName === 'string' ? meta.documentName : undefined,
+    documentMimeType: typeof meta.documentMimeType === 'string' ? meta.documentMimeType : undefined,
   };
 }
 
@@ -331,13 +422,65 @@ export async function fetchConversationMessagesFromApi(
   };
 }
 
+export async function fetchConversationMediaFromApi(
+  conversationId: string,
+  options?: { limit?: number }
+): Promise<
+  Array<{
+    id: string;
+    mediaUri: string;
+    mediaType: 'image' | 'video' | 'document';
+    senderUserId: string | null;
+    createdAt: string;
+    documentName?: string;
+    documentMimeType?: string;
+  }>
+> {
+  const limit = options?.limit ?? 90;
+  const payload = await fetchJson<{
+    ok: true;
+    items: Array<{
+      id: string;
+      mediaUri: string;
+      mediaType: 'image' | 'video' | 'document';
+      senderUserId: string | null;
+      createdAt: string;
+      documentName?: string;
+      documentMimeType?: string;
+    }>;
+  }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/media?limit=${limit}`,
+  );
+  return payload.items;
+}
+
+export async function markMessageReadOnApi(
+  conversationId: string,
+  messageId: string,
+): Promise<{ ok: true; receipt: { messageId: string; userId: string; readAt: string } }> {
+  return fetchJson<{ ok: true; receipt: { messageId: string; userId: string; readAt: string } }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/read`,
+    { method: 'POST' },
+  );
+}
+
+export async function fetchMessageReceiptsFromApi(
+  conversationId: string,
+  messageId: string,
+): Promise<Array<{ userId: string; readAt: string }>> {
+  const payload = await fetchJson<{ ok: true; items: Array<{ userId: string; readAt: string }> }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/receipts`,
+  );
+  return payload.items;
+}
+
 export async function sendConversationMessageOnApi(
   conversationId: string,
   text: string,
   metadata?: Record<string, unknown>,
   clientMessageId?: string,
   options?: {
-    type?: 'text' | 'image' | 'video' | 'voice';
+    type?: 'text' | 'image' | 'video' | 'voice' | 'document';
     mediaUri?: string;
     replyToMessageId?: string;
   },
@@ -390,6 +533,28 @@ export async function deleteConversationMessageOnApi(
     `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}?scope=${scope}`,
     { method: 'DELETE' }
   );
+}
+
+/**
+ * P2-03: Edit a message body. Sender-only, enforced server-side within a
+ * 15-minute edit window. Returns the updated message (with incremented
+ * editVersion and editedAt). The caller applies an optimistic update and
+ * reverts on failure.
+ */
+export async function editConversationMessageOnApi(
+  conversationId: string,
+  messageId: string,
+  text: string,
+): Promise<Message> {
+  const payload = await fetchJson<{ ok: true; message: ApiMessagePayload }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    },
+  );
+  return mapApiMessageToConversationMessage(payload.message);
 }
 
 export async function deleteConversationOnApi(
@@ -624,6 +789,40 @@ export async function fetchConversationMembersFromApi(conversationId: string): P
   return payload.items;
 }
 
+export async function fetchGroupSettingsFromApi(
+  conversationId: string,
+): Promise<GroupSettingsSnapshot> {
+  const payload = await fetchJson<{
+    ok: true;
+    conversationId: string;
+    settings: GroupSettings;
+    capabilities: GroupSettingsCapabilities;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/group-settings`);
+
+  return {
+    settings: payload.settings,
+    capabilities: payload.capabilities,
+  };
+}
+
+export async function updateGroupSettingsOnApi(
+  conversationId: string,
+  updates: Partial<Pick<GroupSettings, 'editGroupInfo' | 'sendMessages' | 'addMembers'>>,
+): Promise<GroupSettings> {
+  const payload = await fetchJson<{
+    ok: true;
+    conversationId: string;
+    changed: boolean;
+    settings: GroupSettings;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/group-settings`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+
+  return payload.settings;
+}
+
 export async function createGroupInviteLinkOnApi(
   conversationId: string,
   input?: {
@@ -658,6 +857,52 @@ export async function createGroupInviteLinkOnApi(
     maxUses: payload.invite.maxUses,
     useCount: payload.invite.useCount,
   };
+}
+
+export async function fetchGroupInviteLinksOnApi(
+  conversationId: string,
+): Promise<GroupInviteLink[]> {
+  const payload = await fetchJson<{
+    ok: true;
+    conversationId: string;
+    items: Array<{
+      id: string;
+      tokenPreview: string;
+      createdBy: string;
+      maxUses: number;
+      useCount: number;
+      expiresAt: string;
+      revokedAt: string | null;
+      isExpired: boolean;
+      isRevoked: boolean;
+    }>;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/invite-links?limit=20`, {
+    method: 'GET',
+  });
+  return payload.items.map((item) => ({
+    id: item.id,
+    inviteLink: '',
+    tokenPreview: item.tokenPreview,
+    createdBy: item.createdBy,
+    ownerId: '',
+    expiresAt: item.expiresAt,
+    maxUses: item.maxUses,
+    useCount: item.useCount,
+    revokedAt: item.revokedAt,
+    isExpired: item.isExpired,
+    isRevoked: item.isRevoked,
+  }));
+}
+
+export async function revokeGroupInviteLinkOnApi(
+  conversationId: string,
+  inviteId: string,
+): Promise<boolean> {
+  const payload = await fetchJson<{ ok: true; revoked: boolean }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/invite-links/${encodeURIComponent(inviteId)}`,
+    { method: 'DELETE' },
+  );
+  return payload.revoked;
 }
 
 export async function joinGroupByInviteOnApi(inviteToken: string): Promise<{

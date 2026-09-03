@@ -231,7 +231,7 @@ export const AppIconButton = memo(function AppIconButton({
             borderRadius: containerVisualSize / 2,
           },
           isContained && {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+            backgroundColor: colors.surfaceAlt,
           },
           isTinted && {
             backgroundColor: selected ? colors.brandSubtle : 'transparent',

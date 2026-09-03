@@ -1617,6 +1617,43 @@ interface GetCoOwnAssetResponse {
   item: MarketCoOwnAsset;
 }
 
+// ── Co-own asset summary for listing detail ──
+// Lightweight response from GET /co-own/assets/by-listing/:listingId —
+// enough to render a "Buy Shares" section on the listing detail screen
+// without loading the full asset detail.
+export interface CoOwnAssetSummary {
+  id: string;
+  listingId: string;
+  issuerId: string;
+  title: string;
+  imageUrl: string | null;
+  totalUnits: number;
+  availableUnits: number;
+  unitPriceGbp: number;
+  isOpen: boolean;
+  createdAt: string;
+  issuer: {
+    username: string;
+    displayName: string | null;
+    avatar: string | null;
+  } | null;
+}
+
+export async function fetchCoOwnAssetByListingId(
+  listingId: string
+): Promise<CoOwnAssetSummary | null> {
+  try {
+    const payload = await fetchJson<{
+      ok: true;
+      asset: CoOwnAssetSummary;
+    }>(`/co-own/assets/by-listing/${encodeURIComponent(listingId)}`);
+    return payload.asset;
+  } catch {
+    // 404 means no co-own asset exists for this listing — return null
+    return null;
+  }
+}
+
 export async function fetchCoOwnAssetById(assetId: string): Promise<MarketCoOwnAsset> {
   try {
     const payload = await fetchJson<GetCoOwnAssetResponse>(

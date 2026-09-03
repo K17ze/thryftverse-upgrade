@@ -796,10 +796,15 @@ export interface SellerAnalytics {
 
 export async function fetchSellerAnalytics(
   sellerId: string,
-  period: '7d' | '30d' | '90d' = '30d'
+  period: '7d' | '30d' | '90d' = '30d',
+  options?: { offsetDays?: number }
 ): Promise<SellerAnalytics> {
+  const offsetDays = options?.offsetDays ?? 0;
+  const qs = offsetDays > 0
+    ? `period=${period}&offsetDays=${offsetDays}`
+    : `period=${period}`;
   const payload = await fetchJson<{ ok: true; analytics: SellerAnalytics }>(
-    `/sellers/${encodeURIComponent(sellerId)}/analytics?period=${period}`
+    `/sellers/${encodeURIComponent(sellerId)}/analytics?${qs}`
   );
   return payload.analytics;
 }
@@ -824,4 +829,25 @@ export async function fetchTopPerformers(
     `/sellers/${encodeURIComponent(sellerId)}/analytics/top-performers?limit=${limit}`
   );
   return payload.items;
+}
+
+/* ─── Daily Breakdown — real per-day engagement ─── */
+
+export interface DailyBreakdownPoint {
+  /** ISO date string (YYYY-MM-DD) */
+  date: string;
+  views: number;
+  likes: number;
+  saves: number;
+  sales: number;
+}
+
+export async function fetchDailyBreakdown(
+  sellerId: string,
+  period: '7d' | '30d' | '90d' = '30d'
+): Promise<DailyBreakdownPoint[]> {
+  const payload = await fetchJson<{ ok: true; days: DailyBreakdownPoint[] }>(
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/daily?period=${period}`
+  );
+  return payload.days;
 }

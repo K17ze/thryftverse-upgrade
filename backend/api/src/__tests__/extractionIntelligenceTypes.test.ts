@@ -12,7 +12,7 @@ import {
   EXTRACTION_OUTCOMES,
   EMPTY_OUTCOMES,
   PRODUCTIVE_OUTCOMES,
-} from '../../domain/catalogImports/extractionIntelligenceTypes.js';
+} from '../domain/catalogImports/extractionIntelligenceTypes.js';
 
 describe('Extraction Intelligence Types', () => {
   // ── Job states ───────────────────────────────────────────────────────────

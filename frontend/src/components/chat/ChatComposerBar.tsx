@@ -58,8 +58,6 @@ interface ChatComposerBarProps {
 
 const MAX_INPUT_HEIGHT = 120;
 const MAX_CHARS = 2000;
-const CHAR_WARN_THRESHOLD = 1500;
-const CHAR_DANGER_THRESHOLD = 1800;
 
 export function ChatComposerBar({
   value,
@@ -88,9 +86,6 @@ export function ChatComposerBar({
   const hasText = value.trim().length > 0;
   const canSend = (hasText || attachments.length > 0) && !isSending && !disabled;
   const showQuickReplies = quickReplies.length > 0 && !hasText && attachments.length === 0 && !isVoiceRecording;
-  const charCount = value.length;
-  const showCharCount = charCount > CHAR_WARN_THRESHOLD;
-  const charCountColor = charCount >= MAX_CHARS ? colors.danger : charCount >= CHAR_DANGER_THRESHOLD ? colors.warning : colors.textMuted;
 
   return (
     <View style={styles.root}>
@@ -146,10 +141,7 @@ export function ChatComposerBar({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachmentStrip} contentContainerStyle={styles.attachmentStripContent}>
           {attachments.map((att, i) => (
             <View key={i} style={styles.attachmentChip}>
-              <Ionicons name={att.type === 'video' ? 'videocam-outline' : 'image-outline'} size={16} color={colors.textSecondary} />
-              <Text style={styles.attachmentChipText} numberOfLines={1}>
-                {att.type === 'video' ? 'Video' : 'Photo'}
-              </Text>
+              <Ionicons name={att.type === 'video' ? 'videocam-outline' : 'image-outline'} size={18} color={colors.textSecondary} />
               {onRemoveAttachment ? (
                 <Pressable
                   onPress={() => onRemoveAttachment(i)}
@@ -227,11 +219,6 @@ export function ChatComposerBar({
               accessibilityRole="text"
               onSubmitEditing={canSend ? onSend : undefined}
             />
-            {showCharCount ? (
-              <Text style={[styles.charCount, { color: charCountColor }]}>
-                {charCount}/{MAX_CHARS}
-              </Text>
-            ) : null}
           </View>
         )}
 
@@ -250,7 +237,7 @@ export function ChatComposerBar({
             {isSending ? (
               <ActivityIndicator size="small" color={colors.textInverse} />
             ) : (
-              <Ionicons name="arrow-up" size={20} color={canSend ? colors.textInverse : colors.textMuted} />
+              <Ionicons name="send" size={18} color={canSend ? colors.textInverse : colors.textMuted} />
             )}
           </AnimatedPressable>
         ) : onCameraPress ? (
@@ -345,16 +332,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    paddingHorizontal: Space.sm + 1,
-    paddingVertical: 5,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs + 1,
     borderRadius: Radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border },
-  attachmentChipText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: colors.textSecondary },
   quickReplyStrip: {
     maxHeight: 48 },
   quickReplyContent: {
@@ -400,12 +383,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     borderRadius: Radius.xl,
     justifyContent: 'center' },
-  charCount: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    textAlign: 'right',
-    paddingTop: 2,
-    paddingBottom: 2 },
   input: {
     flex: 1,
     fontSize: TypographyV2.body.size,

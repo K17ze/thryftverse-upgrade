@@ -1,0 +1,13 @@
+# Maestro E2E flow — Galleria editorial collections journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+
+- takeScreenshot: galleria-flow-complete

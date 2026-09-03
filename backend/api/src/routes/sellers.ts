@@ -40,6 +40,7 @@ const appealBodySchema = z.object({
  *   GET  /sellers/:sellerId/reviews                    — review summary + list
  *   GET  /sellers/:sellerId/analytics                  — seller performance dashboard
  *   GET  /sellers/:sellerId/analytics/top-performers   — top performing listings
+ *   GET  /sellers/:sellerId/analytics/daily            — real per-day engagement breakdown
  *   GET  /sellers/:sellerId/standards                  — inspect operational metrics & tier defects (gate 12)
  *   POST /sellers/:sellerId/standards/appeal           — appeal an operational defect (gate 12)
  */
@@ -448,15 +449,25 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
 
     const querySchema = z.object({
       period: z.enum(['7d', '30d', '90d']).default('30d'),
+      // Offset the window back in time by N days to fetch a prior period
+      // for period-over-period comparison. 0 = current period (default).
+      offsetDays: z.coerce.number().int().min(0).max(365).default(0),
     });
-    const { period } = querySchema.parse(request.query);
+    const { period, offsetDays } = querySchema.parse(request.query);
 
-    const intervalMap: Record<string, string> = {
-      '7d': "INTERVAL '7 days'",
-      '30d': "INTERVAL '30 days'",
-      '90d': "INTERVAL '90 days'",
-    };
-    const interval = intervalMap[period];
+    const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 };
+    const days = daysMap[period];
+    // Bounded window: [NOW() - (days+offset), NOW() - offset).
+    // When offsetDays === 0 this collapses to the original half-open bound
+    // (>= NOW() - days), preserving backward compatibility.
+    const startBound = `NOW() - INTERVAL '${days + offsetDays} days'`;
+    const endBound = offsetDays > 0 ? `NOW() - INTERVAL '${offsetDays} days'` : null;
+    // Build a column-specific range predicate. The values are derived from
+    // validated integers, so interpolation here is safe (no user strings).
+    const inPeriod = (col: string) =>
+      endBound
+        ? `${col} >= ${startBound} AND ${col} < ${endBound}`
+        : `${col} >= ${startBound}`;
 
     // ── Parallel query block ──────────────────────────────────────────
     // All four queries are independent — run them concurrently to eliminate
@@ -486,7 +497,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
               COUNT(i.id) FILTER (WHERE i.action = 'save') AS total_saves
             FROM listings l
             LEFT JOIN interactions i ON i.listing_id = l.id
-              AND i.created_at >= NOW() - ${interval}
+              AND ${inPeriod('i.created_at')}
             WHERE l.seller_id = $1
           `,
           [sellerId]
@@ -505,7 +516,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             WHERE seller_id = $1
               AND status IN ('paid', 'shipped', 'delivered')
               AND paid_at IS NOT NULL
-              AND paid_at >= NOW() - ${interval}
+              AND ${inPeriod('paid_at')}
           `,
           [sellerId]
         ),
@@ -517,7 +528,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           `
             SELECT AVG(r.rating) AS avg_rating, COUNT(r.id) AS review_count
             FROM order_reviews r
-            WHERE r.seller_id = $1 AND r.created_at > NOW() - ${interval}
+            WHERE r.seller_id = $1 AND ${inPeriod('r.created_at')}
           `,
           [sellerId]
         ),
@@ -558,7 +569,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             )
             AND source_type = 'refund'
             AND direction = 'debit'
-            AND created_at >= NOW() - ${interval}
+            AND ${inPeriod('created_at')}
           `,
           [sellerId]
         ),
@@ -574,7 +585,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             AND source_type = 'order_payment'
             AND direction = 'debit'
             AND line_type = 'platform_fee'
-            AND created_at >= NOW() - ${interval}
+            AND ${inPeriod('created_at')}
           `,
           [sellerId]
         ),
@@ -691,6 +702,99 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           engagementScore: views + likes * 3 + saves * 5,
         };
       }),
+    };
+  });
+
+  // GET /sellers/:sellerId/analytics/daily — real per-day engagement breakdown
+  // Returns one row per day in the period with views, likes, saves, and sales
+  // counted from the interactions and orders tables. This replaces the
+  // client-side fabricated chart shape (Math.sin distribution) with real data.
+  app.get('/sellers/:sellerId/analytics/daily', async (request, reply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const { sellerId } = sellerIdParamsSchema.parse(request.params);
+
+    if (request.authUser.userId !== sellerId) {
+      reply.code(403);
+      return { ok: false, error: 'You can only view your own analytics' };
+    }
+
+    const dailyQuerySchema = z.object({
+      period: z.enum(['7d', '30d', '90d']).default('30d'),
+    });
+    const { period } = dailyQuerySchema.parse(request.query);
+    const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 };
+    const days = daysMap[period];
+
+    // Generate the full date series so every day is represented even when
+    // there are zero interactions (a gap in the series is not "no data" —
+    // it's zero activity). We use generate_series to produce the spine,
+    // then left-join interactions and orders onto it.
+    const result = await readDb.query<{
+      day: string;
+      views: string | number;
+      likes: string | number;
+      saves: string | number;
+      sales: string | number;
+    }>(
+      `
+        WITH day_spine AS (
+          SELECT generate_series(
+            (CURRENT_DATE - (${days} - 1) * INTERVAL '1 day')::date,
+            CURRENT_DATE::date,
+            INTERVAL '1 day'
+          )::date AS day
+        ),
+        engagement AS (
+          SELECT
+            i.created_at::date AS day,
+            COUNT(*) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views,
+            COUNT(*) FILTER (WHERE i.action = 'wishlist') AS likes,
+            COUNT(*) FILTER (WHERE i.action = 'save') AS saves
+          FROM interactions i
+          JOIN listings l ON l.id = i.listing_id
+          WHERE l.seller_id = $1
+            AND i.created_at >= CURRENT_DATE - (${days} - 1) * INTERVAL '1 day'
+          GROUP BY i.created_at::date
+        ),
+        sales AS (
+          SELECT
+            paid_at::date AS day,
+            COUNT(*) AS sales
+          FROM orders
+          WHERE seller_id = $1
+            AND status IN ('paid', 'shipped', 'delivered')
+            AND paid_at IS NOT NULL
+            AND paid_at >= CURRENT_DATE - (${days} - 1) * INTERVAL '1 day'
+          GROUP BY paid_at::date
+        )
+        SELECT
+          ds.day::text AS day,
+          COALESCE(e.views, 0)::bigint AS views,
+          COALESCE(e.likes, 0)::bigint AS likes,
+          COALESCE(e.saves, 0)::bigint AS saves,
+          COALESCE(s.sales, 0)::bigint AS sales
+        FROM day_spine ds
+        LEFT JOIN engagement e ON e.day = ds.day
+        LEFT JOIN sales s ON s.day = ds.day
+        ORDER BY ds.day ASC
+      `,
+      [sellerId]
+    );
+
+    return {
+      ok: true,
+      period,
+      days: result.rows.map((row) => ({
+        date: row.day,
+        views: Number(row.views),
+        likes: Number(row.likes),
+        saves: Number(row.saves),
+        sales: Number(row.sales),
+      })),
     };
   });
 

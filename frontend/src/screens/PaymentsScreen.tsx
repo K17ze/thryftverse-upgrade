@@ -373,16 +373,6 @@ export default function PaymentsScreen({ navigation }: Props) {
               />
             )}
           </SettingsSection>
-          {!defaultMethod && (
-            <AppButton
-              title="Add payment method"
-              onPress={() => setAddCardSheetVisible(true)}
-              variant="primary"
-              hapticFeedback="medium"
-              accessibilityLabel="Add payment method"
-              style={styles.addPaymentMethodBtn}
-            />
-          )}
 
           {/* Preferences — flat row with toggle, no card wrapper */}
           <SettingsSection title={t('payments.section.preferences')}>
@@ -493,8 +483,6 @@ function createStyles(colors: ThemeColors) {
     borderRadius: Radius.md,
     marginTop: Space.xs,
     alignSelf: 'flex-start' },
-  addPaymentMethodBtn: {
-    marginTop: Space.sm },
   addBtnContent: {
     gap: Space.sm },
   addIconWrap: {

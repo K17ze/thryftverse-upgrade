@@ -177,7 +177,7 @@ export type RootStackParamList = {
   DistributionHistory: { assetId?: string } | undefined;
 
   // ── Chat & Messaging ──
-  Inbox: undefined;
+  Inbox: { filterItemId?: string } | undefined;
   Chat: {
     conversationId: string;
     focusQuery?: string;
@@ -197,6 +197,7 @@ export type RootStackParamList = {
   GroupChat: { groupId: string; groupName: string };
   GroupChatInfo: { conversationId: string };
   GroupMembers: { conversationId: string };
+  GroupPermissions: { conversationId: string };
   GroupBotManagement: { conversationId: string };
   BotDirectory: undefined;
   BotDetail: { botId: string; conversationId?: string };
@@ -391,7 +392,7 @@ export type RootStackParamList = {
   CoOwnRecurringOrders: undefined;
 
   // ── Chat & Messaging ── (media preview)
-  ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };
+  ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video' | 'document'; senderLabel?: string; timestamp?: string; messageId?: string };
 
   // ── Commerce ── (collection editing)
   // UI-18 — Reference-perfect product UX
@@ -473,7 +474,7 @@ export type RootStackParamList = {
   Verification: undefined;
   VerificationStatus: undefined;
   // Seller analytics (entry via MyListings)
-  SellerAnalytics: undefined;
+  SellerAnalytics: { listingId?: string; listingTitle?: string } | undefined;
   // Seller Hub — unified seller management dashboard
   SellerHub: undefined;
   // Creator analytics — creator-side performance insights (views, engagement, timeline)
@@ -566,6 +567,7 @@ export const ROOT_STACK_ROUTES = [
   'GroupChat',
   'GroupChatInfo',
   'GroupMembers',
+  'GroupPermissions',
   'GroupBotManagement',
   'BotDirectory',
   'BotDetail',

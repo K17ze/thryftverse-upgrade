@@ -366,6 +366,8 @@ export interface ListingApiItem {
   shippingMethod: string | null;
   shippingPayer: string | null;
   createdAt: string;
+  /** Server-side last-update timestamp; used for edit conflict detection. */
+  updatedAt?: string | null;
   /** M07: When media was frozen (cannot be silently swapped). */
   mediaFrozenAt?: string | null;
   seller?: ListingSeller | null;

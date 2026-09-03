@@ -1,0 +1,34 @@
+appId: com.thryftverse.app
+name: "Chat — VoiceOver accessibility"
+tags:
+  - accessibility
+  - voiceover
+---
+- launchApp:
+    clearState: true
+# Navigate to inbox
+- tapOn:
+    label: "Inbox tab"
+# Verify conversation list is accessible
+- assertVisible:
+    label: "Conversation list"
+# Tap first conversation
+- tapOn:
+    text: ".*"
+    index: 0
+    label: "First conversation"
+# Verify chat screen elements are accessible
+- assertVisible:
+    label: "Message input field"
+- assertVisible:
+    label: "Send button"
+# Type a message
+- tapOn:
+    label: "Message input field"
+- inputText: "Hello, is this available?"
+# Send
+- tapOn:
+    label: "Send button"
+# Verify message appears
+- assertVisible:
+    text: "Hello, is this available?"

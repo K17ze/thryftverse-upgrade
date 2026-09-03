@@ -295,6 +295,7 @@ export default function AppNavigator() {
       <Stack.Screen name="GroupChat" getComponent={() => require('../screens/GroupChatScreen').default} />
       <Stack.Screen name="GroupChatInfo" getComponent={() => require('../screens/GroupChatInfoScreen').default} />
       <Stack.Screen name="GroupMembers" getComponent={() => require('../screens/GroupMembersScreen').default} />
+      <Stack.Screen name="GroupPermissions" getComponent={() => require('../screens/GroupPermissionsScreen').default} />
       <Stack.Screen name="GroupBotManagement" getComponent={() => require('../screens/GroupBotManagementScreen').default} />
       <Stack.Screen name="BotDirectory" getComponent={() => require('../screens/BotDirectoryScreen').default} />
       <Stack.Screen name="BotDetail" getComponent={() => require('../screens/BotDetailScreen').default} />

@@ -153,7 +153,7 @@ export function ChatTopBar({
               {avatarUrl ? (
                 <CachedImage uri={avatarUrl} style={styles.avatarImage} contentFit="cover" />
               ) : variant === 'group' ? (
-                <Text style={[styles.avatarText, { color: '#FFFFFF' }]}>{initials ?? 'G'}</Text>
+                <Text style={[styles.avatarText, { color: colors.scrimTextPrimary }]}>{initials ?? 'G'}</Text>
               ) : (
                 <Text style={styles.avatarText}>{initials ?? '?'}</Text>
               )}

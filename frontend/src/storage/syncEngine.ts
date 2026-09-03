@@ -19,7 +19,7 @@
  */
 
 import { fetchJson } from '../lib/apiClient';
-import { getDb } from './db';
+import { getDb, isDbAvailable } from './db';
 
 /** Per-domain sync cursor persisted in the `sync_cursor` table. */
 export interface SyncCursor {
@@ -79,6 +79,9 @@ const inFlight = new Set<string>();
  * the domain has never been synced.
  */
 export async function getSyncCursor(domain: string): Promise<SyncCursor> {
+  if (!isDbAvailable()) {
+    return { domain, lastRev: 0, lastSyncedAt: 0, freshnessTtlMs: 300_000 };
+  }
   const db = await getDb();
   const result = db.execute(
     'SELECT domain, last_rev, last_synced_at, freshness_ttl_ms FROM sync_cursor WHERE domain = ?;',
@@ -105,6 +108,7 @@ export async function getSyncCursor(domain: string): Promise<SyncCursor> {
  * Persist the sync cursor after a successful pull + apply.
  */
 async function saveSyncCursor(cursor: SyncCursor): Promise<void> {
+  if (!isDbAvailable()) return;
   const db = await getDb();
   db.execute(
     `INSERT OR REPLACE INTO sync_cursor (domain, last_rev, last_synced_at, freshness_ttl_ms)
@@ -164,6 +168,7 @@ export async function applyDeltas(
   deltas: SyncDelta[],
 ): Promise<void> {
   if (deltas.length === 0) return;
+  if (!isDbAvailable()) return;
   const db = await getDb();
   const renameMap = DOMAIN_COLUMN_RENAME[domain] ?? {};
 
@@ -212,6 +217,7 @@ export async function applyDeltas(
  *   - `gone`       → mark the local entity deleted and remove the outbox row.
  */
 export async function pushOutbox(): Promise<void> {
+  if (!isDbAvailable()) return;
   const db = await getDb();
   // Only drain 'pending' rows. 'pushing' rows are already in-flight (a
   // concurrent drain marked them); 'conflict' rows require a pull

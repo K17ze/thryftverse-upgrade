@@ -1993,7 +1993,7 @@ app.post('/payments/disputes/:disputeId/evidence', async (request, reply) => {
     // Submit evidence to the provider when supported.
     if (payload.submitToProvider && dispute.gateway_id === 'stripe_americas' && config.stripeSecretKey) {
       const stripe = new Stripe(config.stripeSecretKey, {
-        apiVersion: '2024-06-20',
+        apiVersion: '2026-08-26.dahlia',
       });
       try {
         const evidenceResponse = await stripe.disputes.update(

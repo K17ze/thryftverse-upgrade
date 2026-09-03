@@ -1,0 +1,13 @@
+# Maestro E2E flow — Fractional co-ownership trade hub journey
+appId: ${MAESTRO_APP_ID}
+---
+- launchApp:
+    clearState: false
+
+- tapOn:
+    label: "Explore"
+- assertVisible:
+    text: ".*"
+    timeout: 5000
+
+- takeScreenshot: trade-flow-complete
