@@ -187,9 +187,16 @@ export function useConversationMessages({
   // count shown on the scroll-to-bottom FAB (Instagram/WhatsApp pattern).
   const seenMessageCountRef = useRef(0);
 
-  // Sync local messages when hydrated store messages change
+  // Sync local messages when hydrated store messages change.
+  // Guard against setting the same array reference — prevents an
+  // infinite loop when the parent passes a stable reference but the
+  // effect fires due to other state changes causing a re-render.
+  const lastHydratedRef = useRef<typeof hydratedMessages | null>(null);
   useEffect(() => {
-    setMessages(hydratedMessages);
+    if (lastHydratedRef.current !== hydratedMessages) {
+      lastHydratedRef.current = hydratedMessages;
+      setMessages(hydratedMessages);
+    }
   }, [hydratedMessages]);
 
   // NetInfo listener — offline state + reconcile on reconnect

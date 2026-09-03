@@ -88,7 +88,7 @@ export default function SellerFulfilmentScreen() {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const { orderId } = route.params;
+  const { orderId } = route.params ?? {};
 
   const [order, setOrder] = useState<CommerceOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);

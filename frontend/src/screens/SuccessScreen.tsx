@@ -28,7 +28,7 @@ type RouteT = RouteProp<RootStackParamList, 'Success'>;;
 export default function SuccessScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { orderId } = route.params;
+  const { orderId } = route.params ?? {};
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();

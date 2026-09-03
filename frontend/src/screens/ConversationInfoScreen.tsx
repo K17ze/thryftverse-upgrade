@@ -25,7 +25,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ConversationInfo'>;
 
 export default function ConversationInfoScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
-  const { conversationId } = route.params;
+  const { conversationId } = route.params ?? {};
 
   const t = useMemo(() => ({
     avatar: { backgroundColor: colors.surfaceAlt },

@@ -39,7 +39,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'GroupMembers'>;
 type MemberRole = 'owner' | 'admin' | 'member';
 
 export default function GroupMembersScreen({ navigation, route }: Props) {
-  const { conversationId } = route.params;
+  const { conversationId } = route.params ?? {};
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();

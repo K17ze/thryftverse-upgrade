@@ -108,7 +108,7 @@ export default function AIPhotoEnhancementScreen({ navigation, route }: Props) {
   /** Media stage width — screen minus the scroll content horizontal padding. */
   const MEDIA_WIDTH = SCREEN_W - Space.md * 2;
 
-  const imageUri = route.params.imageUri;
+  const imageUri = route.params?.imageUri;
 
   const [phase, setPhase] = useState<ScreenPhase>('checking');
   const [capability, setCapability] = useState<EnhancementCapability | null>(null);

@@ -68,7 +68,7 @@ export default function ManageListingScreen() {
   const { currencyCode, formatFromFiat } = useFormattedPrice();
   const reducedMotion = useReducedMotion();
   const { show } = useToast();
-  const { itemId } = route.params;
+  const { itemId } = route.params ?? {};
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
 

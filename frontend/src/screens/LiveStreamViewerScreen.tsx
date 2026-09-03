@@ -150,7 +150,7 @@ export function LiveStreamViewerScreen() {
   const styles = useMemo(() => createStyles(colors, SCREEN_HEIGHT), [colors, SCREEN_HEIGHT]);
   const { t } = useAppTranslation('liveStreamViewer');
 
-  const sessionId = route.params.sessionId;
+  const sessionId = route.params?.sessionId;
 
   // ── Real-time state ──
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');

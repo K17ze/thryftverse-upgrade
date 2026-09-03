@@ -92,7 +92,7 @@ export default function LookDetailScreen() {
   const styles = useMemo(() => createStyles(colors, SCREEN_W), [colors, SCREEN_W]);
   useVisuallyComplete('LookDetail');
 
-  const { lookId } = route.params;
+  const { lookId } = route.params ?? {};
 
   const [look, setLook] = useState<LookApiItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);

@@ -78,7 +78,7 @@ const OUTCOME_PREVIEW: Record<string, string> = {
   other: 'Our team will review and respond.' };
 
 export default function OrderSupportScreen({ navigation, route }: Props) {
-  const { orderId, categoryId } = route.params;
+  const { orderId, categoryId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();

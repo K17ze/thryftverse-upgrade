@@ -267,7 +267,7 @@ function formatDate(iso: string): string {
 // COMPONENT
 // ============================================================================
 export default function SupportCaseDetailScreen({ navigation, route }: Props) {
-  const { caseId } = route.params;
+  const { caseId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();

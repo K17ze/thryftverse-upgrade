@@ -138,7 +138,7 @@ export default function EditListingScreen() {
     soldCompsAction: { color: colors.brand } }), [colors]);
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { itemId, focus } = route.params as EditListingRouteParams;
+  const { itemId, focus } = (route.params as EditListingRouteParams) ?? {};
   const { show: showToast } = useToast();
   const { currencyCode } = useCurrencyPref();
   const currencySymbol = CURRENCIES[currencyCode].symbol;

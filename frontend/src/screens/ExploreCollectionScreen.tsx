@@ -37,7 +37,7 @@ export default function ExploreCollectionScreen() {
   const savedProducts = useStore((state) => state.savedProducts);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
 
-  const { title, subtitle, source } = route.params;
+  const { title, subtitle, source } = route.params ?? {};
 
   const [backendListings, setBackendListings] = useState<Listing[] | null>(null);
   const [isFetching, setIsFetching] = useState(false);

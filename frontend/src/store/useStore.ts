@@ -1523,7 +1523,7 @@ export const useStore = create<StoreState>()(
           : event.payload.actorUserId;
         return {
           ...conversation,
-          participantIds: conversation.participantIds.filter((id) => id !== memberId),
+          participantIds: (conversation.participantIds ?? []).filter((id) => id !== memberId),
           participantProfiles: conversation.participantProfiles?.filter((profile) => profile.id !== memberId),
           memberRoles: Object.fromEntries(
             Object.entries(conversation.memberRoles ?? {}).filter(([id]) => id !== memberId),

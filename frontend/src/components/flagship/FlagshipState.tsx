@@ -36,7 +36,7 @@ export interface FlagshipStateProps {
 const DEFAULT_TITLES: Record<string, string> = {
   loading: 'Loading',
   empty: 'Nothing here yet',
-  error: 'Something went wrong',
+  error: 'Could not load this',
   offline: 'You are offline',
   unavailable: 'Not available' };
 

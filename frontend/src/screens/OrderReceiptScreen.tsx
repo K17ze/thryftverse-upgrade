@@ -78,7 +78,7 @@ export default function OrderReceiptScreen() {
     nextStepTextMuted: { color: colors.textMuted },
     viewDetailBtnText: { color: colors.brand } }), [colors]);
 
-  const { orderId } = route.params;
+  const { orderId } = route.params ?? {};
 
   const [order, setOrder] = useState<CommerceOrder | null>(null);
   const [isLoading, setIsLoading] = useState(true);

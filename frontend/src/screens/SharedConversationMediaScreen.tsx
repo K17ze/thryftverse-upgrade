@@ -49,7 +49,7 @@ type MediaItem = {
 type Filter = 'all' | 'photos' | 'videos';
 
 export default function SharedConversationMediaScreen({ navigation, route }: Props) {
-  const { conversationId } = route.params as { conversationId: string };
+  const { conversationId } = (route.params as { conversationId: string }) ?? {};
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const { width } = useWindowDimensions();

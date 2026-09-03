@@ -59,7 +59,7 @@ export default function AppealScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { decisionId } = route.params;
+  const { decisionId } = route.params ?? {};
   const { isOffline } = useConnectivity();
   const { t } = useAppTranslation('appeal');
 

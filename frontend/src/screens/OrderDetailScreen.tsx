@@ -76,7 +76,7 @@ export default function OrderDetailScreen() {
   const route = useRoute<RouteT>();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const { listings } = useBackendData();
-  const { orderId } = route.params;
+  const { orderId } = route.params ?? {};
   const { show } = useToast();
   const { colors, isDark } = useAppTheme();
 

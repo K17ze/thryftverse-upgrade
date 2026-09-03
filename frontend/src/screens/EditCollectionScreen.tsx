@@ -25,7 +25,7 @@ import { useBackendData } from '../context/BackendDataContext';
 type Props = NativeStackScreenProps<RootStackParamList, 'EditCollection'>;
 
 export default function EditCollectionScreen({ navigation, route }: Props) {
-  const { collectionId } = route.params;
+  const { collectionId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();

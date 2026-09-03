@@ -402,7 +402,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       fontSize: TypographyV2.body.size,
       fontFamily: TypographyV2.body.fontFamily } }), [colors]);
 
-  const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params;
+  const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params ?? {};
 
   const currentUser = useStore((state) => state.currentUser);
 

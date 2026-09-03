@@ -54,7 +54,7 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     previewValidUntil,
     maxReserved1ze,
     marketDataTimestamp,
-  } = route.params;
+  } = route.params ?? {};
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { isVeryCompact: isCompactDock } = useBreakpoint();

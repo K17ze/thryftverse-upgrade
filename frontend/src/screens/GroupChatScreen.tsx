@@ -77,7 +77,7 @@ function toEmojiReactions(
 }
 
 export default function GroupChatScreen({ navigation, route }: Props) {
-  const { groupId, groupName } = route.params;
+  const { groupId, groupName } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();

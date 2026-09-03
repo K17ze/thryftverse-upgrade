@@ -114,7 +114,7 @@ export default function AuctionDetailScreen() {
     auctionId,
     openBidSheet: shouldOpenBidSheet,
     initialBidAmount,
-  } = route.params;
+  } = route.params ?? {};
   const { show } = useToast();
   const { requireAuth } = useSignupWall();
   const { formatFromFiat, currencySymbol } = useFormattedPrice();

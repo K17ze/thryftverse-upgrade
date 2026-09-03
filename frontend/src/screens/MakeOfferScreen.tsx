@@ -47,7 +47,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'MakeOffer'>;
 export default function MakeOfferScreen({ navigation, route }: Props) {
   const a11yRef = useRef<any>(null);
   useA11yAudit(a11yRef, 'MakeOfferScreen');
-  const { itemId, price, title } = route.params;
+  const { itemId, price, title } = route.params ?? {};
   const { colors } = useAppTheme();
   const { currencySymbol, formatFromFiat } = useFormattedPrice();
   const { currencyCode, fxRates } = useCurrencyContext();
@@ -61,10 +61,10 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expiryHours, setExpiryHours] = useState(48);
   const [showReview, setShowReview] = useState(false);
-  const isCounterOffer = route.params.counterOffer ?? false;
-  const previousOffer = route.params.previousOffer;
-  const counterRound = route.params.counterRound ?? 0;
-  const parentOfferId = route.params.parentOfferId;
+  const isCounterOffer = route.params?.counterOffer ?? false;
+  const previousOffer = route.params?.previousOffer;
+  const counterRound = route.params?.counterRound ?? 0;
+  const parentOfferId = route.params?.parentOfferId;
   const idempotencyKeyRef = React.useRef<string | null>(null);
   const isMountedRef = useRef(true);
   const { reconcile } = useUnknownOutcomeReconciliation();

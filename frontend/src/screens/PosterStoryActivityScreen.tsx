@@ -174,7 +174,7 @@ export default function PosterStoryActivityScreen({ navigation, route }: Props) 
   const { show } = useToast();
   const haptic = useHaptic();
   const { spring } = useMotionConfig();
-  const storyId = route.params.storyId;
+  const storyId = route.params?.storyId;
 
   const [activity, setActivity] = useState<ActivityData | null>(null);
   const [isLoading, setIsLoading] = useState(true);

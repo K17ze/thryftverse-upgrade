@@ -30,7 +30,7 @@ import { t } from '../i18n';
 type Props = NativeStackScreenProps<RootStackParamList, 'ListingPreview'>;
 
 export default function ListingPreviewScreen({ navigation, route }: Props) {
-  const { preview, origin } = route.params;
+  const { preview, origin } = route.params ?? {};
   const insets = useSafeAreaInsets();
   const { currencyCode, formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((s) => s.currentUser);

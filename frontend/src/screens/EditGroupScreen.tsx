@@ -36,7 +36,7 @@ import { createStableId } from '../utils/createStableId';
 type Props = NativeStackScreenProps<RootStackParamList, 'EditGroup'>;
 
 export default function EditGroupScreen({ navigation, route }: Props) {
-  const { conversationId } = route.params;
+  const { conversationId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();

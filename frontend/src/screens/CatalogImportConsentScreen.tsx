@@ -76,7 +76,7 @@ export default function CatalogImportConsentScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const route = useRoute<ConsentRoute>();
-  const { source } = route.params;
+  const { source } = route.params ?? {};
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const styles = useMemo(() => createStyles(colors), [colors]);

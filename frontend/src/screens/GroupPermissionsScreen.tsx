@@ -50,7 +50,7 @@ const FALLBACK_SETTINGS: GroupSettings = {
 };
 
 export default function GroupPermissionsScreen({ navigation, route }: Props) {
-  const { conversationId } = route.params;
+  const { conversationId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();

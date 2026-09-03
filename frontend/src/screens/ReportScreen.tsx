@@ -103,7 +103,7 @@ export default function ReportScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { type, targetId } = route.params;
+  const { type, targetId } = route.params ?? {};
   const toggleBlocked = useStore((s) => s.toggleBlockedUser);
   const isBlocked = useStore((s) =>
     targetId ? s.blockedUsers.includes(targetId) : false

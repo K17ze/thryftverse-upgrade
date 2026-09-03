@@ -96,7 +96,7 @@ function formatContextId(id: string): string {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 export default function SupportConversationScreen({ navigation, route }: Props) {
-  const { conversationId, contextKind, contextId } = route.params;
+  const { conversationId, contextKind, contextId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();

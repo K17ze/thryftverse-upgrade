@@ -45,7 +45,7 @@ export default function PosterHighlightViewerScreen({ route, navigation }: Props
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
-  const { highlightId } = route.params;
+  const { highlightId } = route.params ?? {};
 
   const [highlight, setHighlight] = React.useState<PosterHighlight | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);

@@ -38,7 +38,7 @@ const RATING_LABELS = ['Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
 export default function WriteReviewScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { orderId, initialRating } = route.params;
+  const { orderId, initialRating } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();

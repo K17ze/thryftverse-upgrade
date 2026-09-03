@@ -93,7 +93,7 @@ export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { itemId } = route.params;
+  const { itemId } = route.params ?? {};
   const { colors, isDark } = useAppTheme();
   const reducedMotionEnabled = useReducedMotion();
   const { isOffline } = useConnectivity();

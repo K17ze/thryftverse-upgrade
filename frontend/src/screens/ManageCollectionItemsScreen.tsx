@@ -27,7 +27,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ManageCollectionItems'>
 
 export default function ManageCollectionItemsScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
-  const { collectionId } = route.params;
+  const { collectionId } = route.params ?? {};
   const haptic = useHaptic();
   const { show } = useToast();
   const { currencyCode, formatFromFiat } = useFormattedPrice();

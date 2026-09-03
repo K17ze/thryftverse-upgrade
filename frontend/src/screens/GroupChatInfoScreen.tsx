@@ -42,7 +42,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 ];
 
 export default function GroupChatInfoScreen({ navigation, route }: Props) {
-  const { conversationId } = route.params;
+  const { conversationId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();

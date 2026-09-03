@@ -104,7 +104,7 @@ function formatTime(ts: string | number): string {
 }
 
 export default function SupportTicketDetailScreen({ navigation, route }: Props) {
-  const { ticketId } = route.params;
+  const { ticketId } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
