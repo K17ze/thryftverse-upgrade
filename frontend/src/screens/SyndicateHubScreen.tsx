@@ -804,19 +804,6 @@ export default function CoOwnHubScreen() {
           onLearnMore={() => navigation.navigate('CoOwnOnboarding')}
           learnMoreLabel="Read full guide"
         />
-        <AnimatedPressable
-          onPress={() => {
-            haptics.tap();
-            navigation.navigate('MarketLedger');
-          }}
-          style={styles.ledgerLink}
-          accessibilityRole="button"
-          accessibilityLabel="View market ledger"
-        >
-          <Ionicons name="receipt-outline" size={18} color={colors.textSecondary} />
-          <Text style={[styles.ledgerLinkText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>Market ledger</Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-        </AnimatedPressable>
       </View>
     );
   }, [
@@ -1198,17 +1185,5 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
-  },
-  ledgerLink: {
-    minHeight: Control.hit,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  ledgerLinkText: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: TypographyV2.body.fontFamily,
   },
 });

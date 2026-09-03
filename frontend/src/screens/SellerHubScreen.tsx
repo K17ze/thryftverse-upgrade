@@ -572,6 +572,14 @@ export default function SellerHubScreen() {
             accessibilityLabel="Auctions"
             accessibilityHint="Opens the seller auction centre"
           />
+          <FlagshipNavigationRow
+            title="Market ledger"
+            subtitle="Trade history and settlement log"
+            icon="receipt-outline"
+            onPress={() => navigation.navigate('MarketLedger')}
+            accessibilityLabel="View market ledger"
+            accessibilityHint="Opens the market ledger"
+          />
         </FlagshipFormSection>
 
         {/* Account -- payouts + verification */}
