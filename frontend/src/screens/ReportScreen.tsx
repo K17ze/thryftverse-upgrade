@@ -19,6 +19,7 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { uploadMedia } from '../services/mediaUpload';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useAppTranslation } from '../i18n/useAppTranslation';
+import { track } from '../analytics';
 
 type EvidenceState = 'uploading' | 'attached' | 'submitted';
 
@@ -266,6 +267,7 @@ export default function ReportScreen({ navigation, route }: Props) {
       setEvidenceItems((prev) => prev.map((it) => ({ ...it, state: 'submitted' as const })));
       setSubmittedAt(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
       setIsSubmitted(true);
+      track('report_submitted', { target_id: targetId, reason: selectedReason });
     } catch {
       show(t('toast.reportFailed'), 'error');
     } finally {

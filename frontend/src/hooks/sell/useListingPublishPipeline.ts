@@ -205,6 +205,7 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
       haptics.success();
       // Performance mark: listing creation complete.
       performance.mark('listing:create:complete');
+      track('listing_published', { listing_id: result.listingId });
       if (result.context.mode === 'sell_now') {
         track('listing_created', { category, price_range: numericPrice <= 20 ? 'low' : numericPrice <= 50 ? 'mid' : numericPrice <= 100 ? 'high' : 'premium' });
         navigation.replace('ListingSuccess', {

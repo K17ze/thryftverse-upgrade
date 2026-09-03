@@ -100,6 +100,7 @@ import {
   AuctionRulesSheet,
 } from '../components/auction';
 import { useAuctionDetail } from '../hooks/useAuctionDetail';
+import { track } from '../analytics/track';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'AuctionDetail'>;
@@ -184,6 +185,10 @@ export default function AuctionDetailScreen() {
   const [mediaViewerVisible, setMediaViewerVisible] = React.useState(false);
   const [fullscreenMediaIndex, setFullscreenMediaIndex] = React.useState(0);
   const [overflowVisible, setOverflowVisible] = React.useState(false);
+
+  React.useEffect(() => {
+    track('auction_viewed', { auction_id: auctionId });
+  }, [auctionId]);
 
   const currentUser = useStore((state) => state.currentUser);
   const upsertConversation = useStore((state) => state.upsertConversation);
@@ -416,6 +421,14 @@ export default function AuctionDetailScreen() {
   const handlePressRelatedAuction = React.useCallback((id: string) => {
     navigation.push('AuctionDetail', { auctionId: id });
   }, [navigation]);
+
+  const handleTrackBid = React.useCallback(
+    async (gbpAmount: number, idempotencyKey: string, maxBidGbp?: number) => {
+      await handleSubmitBid(gbpAmount, idempotencyKey, maxBidGbp);
+      track('auction_bid_placed', { auction_id: auctionId, bid_amount: gbpAmount });
+    },
+    [auctionId, handleSubmitBid],
+  );
 
   // ── Canonical media array ──
   // Per spec 02_AUCTION §7: render the canonical media array through
@@ -1417,7 +1430,7 @@ export default function AuctionDetailScreen() {
           currencyCode={currencyCode}
           fxRates={fxRates}
           formatFromFiat={formatFromFiat}
-          onSubmitBid={handleSubmitBid}
+          onSubmitBid={handleTrackBid}
           onRefreshDetail={refreshDetailForTransaction}
           onReviewBuyNow={() => {
             setBidSheetVisible(false);
@@ -1488,6 +1501,8 @@ export default function AuctionDetailScreen() {
         onDismiss={social.closeShare}
         url={`https://thryftverse.com/auction/${auction.id}`}
         title={auction.title}
+        contentType="auction"
+        contentId={auction.id}
       />
 
       <ConfirmationSheet

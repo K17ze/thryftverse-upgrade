@@ -76,6 +76,7 @@ import {
   settleLot,
   type LotStatus } from '../services/liveShoppingApi';
 import { useAppTranslation } from '../i18n/useAppTranslation';
+import { track } from '../analytics';
 
 // ---------------------------------------------------------------------------
 // Component
@@ -205,6 +206,7 @@ export function LiveStreamViewerScreen() {
         const lot = connected.lots[connected.currentLotIndex] ?? null;
         setCurrentLot(lot);
         setConnectionState('live');
+        track('live_stream_viewed', { stream_id: sessionId });
 
         // Load chat history
         const history = await fetchStreamChatHistory(sessionId);
@@ -285,6 +287,7 @@ export function LiveStreamViewerScreen() {
     haptic.medium();
     try {
       const result = await placeStreamBid(sessionId, currentLot.id, amount);
+      track('live_bid_placed', { stream_id: sessionId, bid_amount: amount });
       setLastBidId(result.clientBidId);
       setLastBidAmount(amount);
       if (result.success) {

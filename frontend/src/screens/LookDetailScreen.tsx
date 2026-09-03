@@ -29,6 +29,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { useToast } from '../context/ToastContext';
 import { useAnalyticsEvent } from '../hooks/useAnalyticsEvent';
+import { track } from '../analytics';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import type { SupportedCurrencyCode } from '../constants/currencies';
 import { EmptyState } from '../components/EmptyState';
@@ -179,6 +180,10 @@ export default function LookDetailScreen() {
   useEffect(() => {
     loadLook();
   }, [loadLook]);
+
+  useEffect(() => {
+    track('look_viewed', { look_id: lookId });
+  }, [lookId]);
 
   // Fetch the creator's public profile (for follow state + provenance) and
   // the related-looks masonry grid. These run after the look loads.

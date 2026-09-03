@@ -472,7 +472,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const handleFollowToggle = useCallback(() => {
     haptic.light();
     if (!requireAuth('follow_seller')) return;
-    if (targetUserId && viewer) followMutation.mutate(!viewer.isFollowing);
+    if (targetUserId && viewer) {
+      followMutation.mutate(!viewer.isFollowing);
+      track('follow_toggled', { user_id: targetUserId, action: !viewer.isFollowing ? 'follow' : 'unfollow' });
+    }
   }, [requireAuth, targetUserId, viewer, followMutation, haptic]);
   const handleMore = useCallback(() => setMoreSheetVisible(true), []);
   const handleReport = useCallback(() => { setMoreSheetVisible(false); setReportSheetVisible(true); }, []);

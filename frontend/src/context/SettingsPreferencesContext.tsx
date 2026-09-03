@@ -16,6 +16,7 @@ import {
 } from '../preferences/settingsPreferences';
 import { mapLanguageOptionToLocale, mapLocaleToLanguageOption, setI18nLocale, hydratePersistedLocale } from '../i18n';
 import { setAnalyticsOptOut } from '../lib/telemetry';
+import { setAnalyticsOptOut as setGateOptOut } from '../analytics/analyticsGate';
 import { makeStableId } from '../utils/createStableId';
 
 interface SettingsPreferencesContextValue {
@@ -117,9 +118,10 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
         setRecommendationPersonalizationState(settingsPreferences.recommendationPersonalization);
         setThirdPartySharingState(settingsPreferences.thirdPartySharing);
         setAutoTranslateMessagesState(settingsPreferences.autoTranslateMessages);
-        // Sync the telemetry module so opt-out is respected before the
-        // first React re-render commits.
+        // Sync the telemetry module and the PostHog analytics gate so
+        // opt-out is respected before the first React re-render commits.
         setAnalyticsOptOut(settingsPreferences.analyticsOptOut);
+        setGateOptOut(settingsPreferences.analyticsOptOut);
       })
       .catch(() => {
         // Keep defaults when persistence is unavailable.
@@ -243,15 +245,18 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
 
   const setAnalyticsOptOutPref = React.useCallback((optOut: boolean) => {
     setAnalyticsOptOutState(optOut);
-    // Keep the telemetry module flag in sync so every trackTelemetryEvent
-    // call honours the preference immediately.
+    // Keep the telemetry module flag and the PostHog analytics gate in
+    // sync so every trackTelemetryEvent call and every PostHog capture
+    // honours the preference immediately.
     setAnalyticsOptOut(optOut);
+    setGateOptOut(optOut);
   }, []);
 
   const toggleAnalyticsOptOut = React.useCallback(() => {
     setAnalyticsOptOutState((prev) => {
       const next = !prev;
       setAnalyticsOptOut(next);
+      setGateOptOut(next);
       return next;
     });
   }, []);

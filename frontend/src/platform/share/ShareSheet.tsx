@@ -31,6 +31,7 @@ import {
   shareToWhatsApp,
   shareToTelegram,
   shareToSystemSheet } from './SocialShare';
+import { track } from '../../analytics';
 import type { ShareSheetProps, SocialShareTarget } from './types';
 
 // ============================================================================
@@ -128,6 +129,8 @@ export function ShareSheet({ visible, onClose, shareParams }: ShareSheetProps) {
               url: listing.deepLink });
             break;
         }
+
+        track('item_shared', { listing_id: listing.listingId, platform: target });
       } catch {
         // All SocialShare functions handle errors internally, but guard
         // against any unexpected rejections so the sheet never crashes.

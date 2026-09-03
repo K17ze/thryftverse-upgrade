@@ -54,6 +54,7 @@ import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { createStableId } from '../utils/createStableId';
 import { useUnknownOutcomeReconciliation } from '../hooks/useUnknownOutcomeReconciliation';
 import { t } from '../i18n';
+import { track } from '../analytics';
 
 
 type WithdrawStep = 'form' | 'confirm' | 'success' | 'unknown_outcome';
@@ -529,6 +530,8 @@ export default function WithdrawScreen() {
                 enteredDisplayAmount: numericAmountDisplay,
                 enteredDisplayCurrency: currencyCode,
                 payoutMode: 'sale_proceeds_only' } };
+
+      track('withdrawal_initiated', { amount: amountGbp, currency: payoutCurrency });
 
       const payoutResponse = await createPayoutRequest(currentUser.id, payoutRequestInput);
 

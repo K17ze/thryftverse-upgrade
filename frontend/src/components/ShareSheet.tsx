@@ -23,6 +23,7 @@ import { AnimatedPressable } from './AnimatedPressable';
 import { CachedImage } from './CachedImage';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
+import { track } from '../analytics';
 
 interface ShareOption {
   id: string;
@@ -36,13 +37,13 @@ interface ShareSheetProps {
   onDismiss: () => void;
   url: string;
   title?: string;
-  /** Optional image URI to include in share */
   imageUri?: string;
-  /** Optional subtitle (e.g., brand + price) */
   subtitle?: string;
+  contentType?: string;
+  contentId?: string;
 }
 
-export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', imageUri, subtitle }: ShareSheetProps) {
+export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', imageUri, subtitle, contentType = 'generic', contentId }: ShareSheetProps) {
   const { colors } = useAppTheme();
   const { show } = useToast();
   const haptic = useHaptic();
@@ -50,22 +51,31 @@ export function ShareSheet({ visible, onDismiss, url, title = 'Check this out', 
   const handleCopyLink = React.useCallback(async () => {
     haptic.medium();
     await Clipboard.setStringAsync(url);
+    track('share_completed', { platform: 'copy_link', content_type: contentType, outcome: 'success' });
+    if (contentId && contentType === 'listing') {
+      track('item_shared', { listing_id: contentId, platform: 'copy_link' });
+    }
     show('Link copied to clipboard', 'success');
     onDismiss();
-  }, [url, show, haptic, onDismiss]);
+  }, [url, show, haptic, onDismiss, contentType, contentId]);
 
   const handleNativeShare = React.useCallback(async () => {
     haptic.medium();
+    track('share_initiated', { platform: 'system', content_type: contentType });
     try {
       await Share.share({
         url: Platform.OS === 'ios' ? url : undefined,
         message: Platform.OS === 'android' ? `${title}\n${url}` : title }, {
         dialogTitle: title });
+      track('share_completed', { platform: 'system', content_type: contentType, outcome: 'success' });
+      if (contentId && contentType === 'listing') {
+        track('item_shared', { listing_id: contentId, platform: 'system' });
+      }
     } catch {
-      // User cancelled share
+      track('share_completed', { platform: 'system', content_type: contentType, outcome: 'cancelled' });
     }
     onDismiss();
-  }, [url, title, haptic, onDismiss]);
+  }, [url, title, haptic, onDismiss, contentType, contentId]);
 
   const options: ShareOption[] = React.useMemo(() => [
     {

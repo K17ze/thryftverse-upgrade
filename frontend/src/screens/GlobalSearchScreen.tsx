@@ -577,6 +577,12 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
     navigation.push('ItemDetail', { itemId: listingId });
   };
 
+  const handleOpenSearchResult = (listingId: string) => {
+    const position = discoverListings.findIndex((listing) => listing.id === listingId);
+    track('search_result_tapped', { listing_id: listingId, query: normalizedQuery, position });
+    handleOpenRecommendation(listingId);
+  };
+
   const handleOpenRecommendationSeller = (sellerId: string) => {
     openProfile(navigation, sellerId, currentUser?.id);
   };
@@ -1336,7 +1342,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
-                            onPress={() => handleOpenRecommendation(listing.id)}
+                            onPress={() => handleOpenSearchResult(listing.id)}
                             accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, currencyCode, { displayMode: 'fiat' })}`}
                             accessibilityRole="button"
                           >
@@ -1358,7 +1364,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
-                            onPress={() => handleOpenRecommendation(listing.id)}
+                            onPress={() => handleOpenSearchResult(listing.id)}
                             accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, currencyCode, { displayMode: 'fiat' })}`}
                             accessibilityRole="button"
                           >

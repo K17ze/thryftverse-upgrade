@@ -26,6 +26,7 @@ import { IconSize } from '../theme/iconTokens';
 import { getOrder, CommerceOrder } from '../services/commerceApi';
 import { getOrderReview, createOrderReview, OrderReview } from '../services/reviewApi';
 import { parseApiError } from '../lib/apiClient';
+import { track } from '../analytics';
 import { CachedImage } from '../components/CachedImage';
 import { getListingCoverUri } from '../utils/media';
 import { uploadMedia } from '../services/mediaUpload';
@@ -129,6 +130,7 @@ export default function WriteReviewScreen() {
     setIsUnknownOutcome(false);
     try {
       await createOrderReview(orderId, rating, review.trim() || undefined, photoUris.length > 0 ? photoUris : undefined);
+      track('review_written', { seller_id: order!.sellerId, rating });
       haptic.success();
       show('Review published', 'success');
       navigation.goBack();

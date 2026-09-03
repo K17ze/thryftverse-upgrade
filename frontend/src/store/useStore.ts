@@ -8,10 +8,11 @@ import { MOCK_CHAT_BOTS, MOCK_CONVERSATIONS } from '../data/mockData';
 import { ENABLE_RUNTIME_MOCKS } from '../constants/runtimeFlags';
 import { makeStableId } from '../utils/createStableId';
 import { setSentryUser } from '../platform/monitoring/sentry';
-import { identifyUser, resetIdentity } from '../analytics';
+import { identifyUser, resetIdentity, track } from '../analytics';
 import { appStorage } from '../storage/mmkv';
 import { updateUserAccountPreferences, updateUserPostagePreferences, fetchPostagePreferences, updateUserPersonalisation, updateChatPrivacy } from '../services/accountApi';
 import { addToCoOwnWatchlist, removeFromCoOwnWatchlist } from '../services/marketApi';
+import type { ChatGroupMembershipEvent } from '../services/realtimeClient';
 import {
   fetchSystemBotsFromApi,
   fetchCustomBotsFromApi,
@@ -528,6 +529,7 @@ interface StoreState {
   markConversationsLoaded: () => void;
   availableChatBots: ChatBot[];
   upsertConversation: (conversation: Conversation) => void;
+  reconcileGroupMembershipEvent: (event: ChatGroupMembershipEvent) => void;
   markConversationRead: (id: string) => void;
   toggleConversationUnread: (id: string) => void;
   archiveConversation: (id: string) => void;
@@ -696,6 +698,7 @@ export const useStore = create<StoreState>()(
     persistLocalAuthSnapshot(null, false);
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
+    track('user_logged_out');
     resetIdentity();
   },
   updateUserProfile: (updates) =>
@@ -1493,6 +1496,41 @@ export const useStore = create<StoreState>()(
         ...deriveConversationStateArrays(nextConversations),
       };
     }),
+  reconcileGroupMembershipEvent: (event) =>
+    set((state) => ({
+      conversations: state.conversations.map((conversation) => {
+        if (conversation.id !== event.payload.conversationId) return conversation;
+        if (event.type === 'chat.member.role_updated') {
+          return {
+            ...conversation,
+            memberRoles: { ...conversation.memberRoles, [event.payload.memberUserId]: event.payload.newRole },
+          };
+        }
+        if (event.type === 'chat.group.ownership_transferred') {
+          const previousOwnerId = conversation.ownerId;
+          return {
+            ...conversation,
+            ownerId: event.payload.newOwnerId,
+            memberRoles: {
+              ...conversation.memberRoles,
+              ...(previousOwnerId ? { [previousOwnerId]: 'admin' as const } : {}),
+              [event.payload.newOwnerId]: 'owner' as const,
+            },
+          };
+        }
+        const memberId = event.type === 'chat.member.removed'
+          ? event.payload.memberUserId
+          : event.payload.actorUserId;
+        return {
+          ...conversation,
+          participantIds: conversation.participantIds.filter((id) => id !== memberId),
+          participantProfiles: conversation.participantProfiles?.filter((profile) => profile.id !== memberId),
+          memberRoles: Object.fromEntries(
+            Object.entries(conversation.memberRoles ?? {}).filter(([id]) => id !== memberId),
+          ),
+        };
+      }),
+    })),
   markConversationRead: (id) => {
     set((state) => ({
       conversations: state.conversations.map((c) =>

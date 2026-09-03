@@ -63,6 +63,7 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useRealtimeEvent } from '../platform/realtime/useRealtimeEvent';
 import { useStore } from '../store/useStore';
+import { track } from '../analytics';
 import { useToast } from '../context/ToastContext';
 import { isDbAvailable } from '../storage/db';
 import { enqueueMoodboardOperation } from '../storage/moodboardOutbox';
@@ -581,6 +582,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
         const mb = await createMoodboard('Untitled moodboard', DEFAULT_THEME_ID);
         setMoodboard(mb);
         setActiveThemeId(mb.theme);
+        track('moodboard_created', { moodboard_id: mb.id });
       }
     } catch {
       setError('We couldn\u2019t load the moodboard editor. Try again.');

@@ -66,6 +66,7 @@ import { formatCoOwnIze } from '../utils/currency';
 import { parseGbpToMinor, minorToGbp } from '../utils/money';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { useCoOwnFeatureFlags } from '../hooks/useCoOwnFeatureFlags';
+import { track } from '../analytics/track';
 import { t } from '../i18n';
 
 
@@ -396,6 +397,8 @@ export default function TradeScreen() {
       return;
     }
 
+    track('coown_trade_started', { asset_id: asset.id, side });
+
     setIsSubmittingOrder(true);
     if (!idempotencyKeyRef.current) {
       idempotencyKeyRef.current = createStableId('reserve');
@@ -432,6 +435,12 @@ export default function TradeScreen() {
         idempotencyKey });
       const reserved = reservationResponse.reservation;
       haptic.medium();
+      track('coown_order_placed', {
+        asset_id: asset.id,
+        side,
+        units: quote.quantity,
+        price_gbp: effectiveLimitPrice,
+      });
       navigation.navigate('TradeConfirm', {
         assetId: asset.id,
         assetTitle: asset.title,

@@ -25,6 +25,8 @@
  */
 
 import { getPostHogClient } from './PostHogProvider';
+import { isAnalyticsEnabled } from './analyticsGate';
+import { sanitizeEvent } from './piiSanitizer';
 import type { EventName, EventProperties } from './types';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -81,9 +83,17 @@ export function track<E extends EventName>(
   event: E,
   properties?: PropertiesFor<E>,
 ): void {
+  if (!isAnalyticsEnabled()) return;
   const client = getPostHogClient();
   if (!client) return;
-  client.capture(event, properties as PostHogProperties | undefined);
+  const sanitized = sanitizeEvent(
+    event,
+    properties as Record<string, unknown> | undefined,
+  );
+  client.capture(
+    sanitized.eventName,
+    sanitized.properties as PostHogProperties | undefined,
+  );
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -114,9 +124,14 @@ export function trackRaw(
   event: string,
   properties?: Record<string, EventPropertyValue>,
 ): void {
+  if (!isAnalyticsEnabled()) return;
   const client = getPostHogClient();
   if (!client) return;
-  client.capture(event, properties as PostHogProperties | undefined);
+  const sanitized = sanitizeEvent(event, properties as Record<string, unknown> | undefined);
+  client.capture(
+    sanitized.eventName,
+    sanitized.properties as PostHogProperties | undefined,
+  );
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -152,8 +167,15 @@ export function trackFunnelStep(
   step: string,
   properties?: Record<string, EventPropertyValue>,
 ): void {
+  if (!isAnalyticsEnabled()) return;
   const client = getPostHogClient();
   if (!client) return;
-  const props: PostHogProperties = { funnel, ...(properties as PostHogProperties | undefined) };
-  client.capture(step, props);
+  const sanitized = sanitizeEvent(step, {
+    funnel,
+    ...(properties as Record<string, unknown> | undefined),
+  });
+  client.capture(
+    sanitized.eventName,
+    sanitized.properties as PostHogProperties | undefined,
+  );
 }

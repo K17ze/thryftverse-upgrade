@@ -40,6 +40,7 @@ import { haptics } from '../utils/haptics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { isSustainableGrade } from '../utils/sustainabilityScore';
 import { useFeatureFlag } from '../analytics';
+import { track } from '../analytics/track';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useTaxonomy } from '../context/TaxonomyContext';
 
@@ -363,6 +364,25 @@ export default function FilterScreen() {
       sustainableOnly,
       priceMin: parsedMin != null && !Number.isNaN(parsedMin) ? parsedMin : null,
       priceMax: parsedMax != null && !Number.isNaN(parsedMax) ? parsedMax : null });
+    track('filter_applied', { filter_name: 'sort', filter_value: activeSort });
+    for (const brand of selectedBrands) {
+      track('filter_applied', { filter_name: 'brand', filter_value: brand });
+    }
+    for (const size of selectedSizes) {
+      track('filter_applied', { filter_name: 'size', filter_value: size });
+    }
+    if (selectedCondition !== 'Any') {
+      track('filter_applied', { filter_name: 'condition', filter_value: selectedCondition });
+    }
+    if (sustainableOnly) {
+      track('filter_applied', { filter_name: 'sustainableOnly', filter_value: true });
+    }
+    if (parsedMin != null && !Number.isNaN(parsedMin)) {
+      track('filter_applied', { filter_name: 'priceMin', filter_value: parsedMin });
+    }
+    if (parsedMax != null && !Number.isNaN(parsedMax)) {
+      track('filter_applied', { filter_name: 'priceMax', filter_value: parsedMax });
+    }
     closeBottomSheet();
   };
 

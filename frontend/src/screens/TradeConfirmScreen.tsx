@@ -22,6 +22,7 @@ import {
   CoOwnRiskDisclosure,
 } from '../components/coown';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { track } from '../analytics/track';
 import { t } from '../i18n';
 
 
@@ -176,6 +177,12 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         show('Order executed on CO-OWN engine.', 'success');
       }
       if (remoteOrder.aml?.alertId) show('Trade is flagged for AML review.', 'info');
+      track('coown_order_filled', {
+        asset_id: assetId,
+        order_id: String(remoteOrder.order.id),
+        units: quantity,
+        price_gbp: remoteOrder.order.unitPriceGbp,
+      });
       navigation.navigate('CoOwnHub');
     } catch (error) {
       const parsedError = parseApiError(error, 'Unable to submit order');

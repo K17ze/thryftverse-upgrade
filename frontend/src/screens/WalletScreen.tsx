@@ -42,6 +42,7 @@ import { WalletTransactionHistory } from '../components/wallet/WalletTransaction
 import { AddMoneySheet } from '../components/wallet/AddMoneySheet';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { t } from '../i18n';
+import { track } from '../analytics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Wallet'>;
 
@@ -165,6 +166,8 @@ export default function WalletScreen({ navigation }: Props) {
     const cleanup = loadBalance();
     return cleanup;
   }, [loadBalance]);
+
+  React.useEffect(() => { track('wallet_viewed'); }, []);
 
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);

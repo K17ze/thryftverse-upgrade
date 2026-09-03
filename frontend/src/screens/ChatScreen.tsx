@@ -5,6 +5,7 @@ import { AnimatedPressable } from "../components/AnimatedPressable";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   Pressable,
   Dimensions,
@@ -13,7 +14,7 @@ import {
 
 import { FlashList } from "@shopify/flash-list";
 
-import { Ionicons } from "@expo/vector-icons";
+import { AppIcon } from "../components/common/AppIcon";
 
 import {
   useSafeAreaInsets,
@@ -34,6 +35,8 @@ import { getListingCoverUri } from "../utils/media";
 
 import { useStore } from "../store/useStore";
 
+import { track } from "../analytics";
+
 import {
   clearComposerStateOnApi,
   reportConversationOnApi } from "../services/chatApi";
@@ -48,7 +51,7 @@ import { KeyboardStickyView } from "../platform/keyboard/KeyboardProvider";
 
 import { ChatComposerBar } from "../components/chat/ChatComposerBar";
 
-import { ChatMessageRow } from "../components/chat/ChatMessageRow";
+import { ChatMessageRow, InlineMessageEditor, type InlineEditStyles } from "../components/chat/ChatMessageRow";
 
 import { ChatTopBar } from "../components/chat/ChatTopBar";
 
@@ -59,6 +62,7 @@ import {
   ChatActionSheet } from "../components/chat/ChatActionSheet";
 
 import { AttachmentReviewSheet } from "../components/chat/AttachmentReviewSheet";
+import { DocumentReviewSheet } from "../components/chat/DocumentReviewSheet";
 
 import { MessageContextMenu } from "../components/chat/MessageContextMenu";
 
@@ -129,7 +133,10 @@ import {
   DEFAULT_SELLER_QUICK_REPLIES,
   DEFAULT_BUYER_QUICK_REPLIES,
   formatDateSeparator,
-  formatMessageTime } from "../hooks/chat";
+  formatMessageTime,
+} from "../hooks/chat";
+import { createStableId } from "../utils/createStableId";
+import { sendConversationMessageOnApi } from "../services/chatApi";
 import { useTypingIndicator, useChatGroupIdentityEvent } from "../services/realtimeClient";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -347,7 +354,53 @@ export default function ChatScreen({ navigation, route }: Props) {
       flex: 1,
       minHeight: Math.floor(
         Dimensions.get('window').height * MESSAGE_LIST_MIN_HEIGHT_RATIO,
-      ) } }), [colors]);
+      ) },
+
+    // P2-03: Inline message editing — "Edited" label + editor styles.
+    editedLabel: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
+      marginTop: 2 },
+
+    editedLabelRight: {
+      alignSelf: 'flex-end',
+      marginRight: 4 },
+
+    editContainer: {
+      maxWidth: '80%',
+      borderRadius: Radius.lg,
+      borderWidth: Stroke.emphasis,
+      borderColor: colors.brand,
+      backgroundColor: colors.surfaceAlt,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      gap: Space.xs },
+
+    editInput: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary,
+      minHeight: 40,
+      paddingVertical: 0,
+      paddingHorizontal: 0 },
+
+    editActions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      gap: Space.sm },
+
+    editActionBtn: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.md },
+
+    editSaveBtn: {
+      backgroundColor: colors.brand },
+
+    editActionLabel: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily } }), [colors]);
 
   const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params;
 
@@ -417,6 +470,13 @@ export default function ChatScreen({ navigation, route }: Props) {
     return map;
   }, [conversation?.participantProfiles, currentUser?.id, currentUser?.username]);
 
+  // Linked listing context for rich product negotiation cards
+  const linkedListing = useMemo(() => {
+    const itemId = routeItemId ?? conversation?.itemId;
+    if (!itemId) return null;
+    return listings.find((l) => l.id === itemId) ?? null;
+  }, [routeItemId, conversation?.itemId, listings]);
+
   const profileMediaOverrides = useStore(
     (state) => state.profileMediaOverrides,
   );
@@ -442,63 +502,87 @@ export default function ChatScreen({ navigation, route }: Props) {
       if (entry.offerPrice !== undefined && entry.originalPrice !== undefined) {
         return {
           id: entry.id,
-
           type: "offer",
-
           sender,
-
           senderId: resolvedSenderId,
-
           senderLabel,
-
           offer: {
             price: entry.offerPrice,
-
             originalPrice: entry.originalPrice,
+            status: (entry.offer?.status ?? entry.offerStatus) as
+              | "pending"
+              | "declined"
+              | "countered"
+              | "accepted"
+              | "expired"
+              | "cancelled"
+              | undefined,
+            expiresAt: entry.offer?.expiresAt,
+            counterRound: entry.offer?.counterRound,
+            itemId: linkedListing?.id,
+            itemTitle: linkedListing?.title,
+            itemImage: linkedListing?.images?.[0],
+            itemBrand: linkedListing?.brand ?? undefined,
+            itemSize: linkedListing?.size ?? undefined,
+          },
+          text: entry.text,
+          date: entry.timestamp,
+        };
+      }
 
-            status: entry.offerStatus as "pending" | "declined" | "countered" | "accepted" | "expired" | "cancelled" | undefined },
-
-          text: entry.text };
+      if (entry.type === "listing_share") {
+        return {
+          id: entry.id,
+          type: "listing_share",
+          sender,
+          senderId: resolvedSenderId,
+          senderLabel,
+          listing: entry.listing ?? (linkedListing ? {
+            id: linkedListing.id,
+            title: linkedListing.title,
+            price: linkedListing.price,
+            originalPrice: linkedListing.originalPrice,
+            image: linkedListing.images[0],
+            brand: linkedListing.brand ?? undefined,
+            size: linkedListing.size ?? undefined,
+            condition: linkedListing.condition ?? undefined,
+            sellerUsername: conversation?.participantProfiles?.[0]?.username,
+            sellerRating: 4.8,
+            isSold: linkedListing.isSold,
+          } : undefined),
+          date: entry.timestamp,
+        };
       }
 
       return {
         id: entry.id,
-
         type:
           entry.isSystem || entry.type === "system"
             ? "system"
             : entry.mediaUri
               ? "media"
               : "text",
-
         sender,
-
         senderId: resolvedSenderId,
-
         senderLabel,
-
         text: entry.text ?? entry.systemTitle ?? "",
-
         isSystem: entry.isSystem,
-
         systemTitle: entry.systemTitle,
-
         date: entry.timestamp,
-
         reactions: entry.reactions?.map((r) => ({
           emoji: r.emoji,
-
           count: r.userIds.length,
-
-          reactedByMe: r.userIds.includes(currentUser?.id ?? "me") })),
-
+          reactedByMe: r.userIds.includes(currentUser?.id ?? "me"),
+        })),
         mediaUri: entry.mediaUri,
-
         mediaType: entry.mediaType,
-
-        uploadStatus: entry.uploadStatus };
+        uploadStatus: entry.uploadStatus,
+        documentUri: entry.documentUri,
+        documentName: entry.documentName,
+        documentMimeType: entry.documentMimeType,
+      };
     });
-  }, [botLookup, conversation?.messages, currentUser?.id, userLookup]);
+  }, [botLookup, conversation?.messages, conversation?.participantProfiles, currentUser?.id, linkedListing, userLookup, t]);
 
   // Early ref for composer hydration — updated after useConversationMessages
   // returns. useConversationComposer only reads this inside effects, so an
@@ -523,6 +607,8 @@ export default function ChatScreen({ navigation, route }: Props) {
     setIsVoiceRecording,
     pendingAttachment,
     setPendingAttachment,
+    pendingDocument,
+    setPendingDocument,
     reactingToMessage,
     setReactingToMessage,
     searchQuery,
@@ -580,13 +666,15 @@ export default function ChatScreen({ navigation, route }: Props) {
   // so the chat header and info screen stay current without a refetch.
   const upsertConversation = useStore((state) => state.upsertConversation);
   useChatGroupIdentityEvent(conversationId, (payload) => {
+    if (!conversation) return;
     upsertConversation({
+      ...conversation,
       id: payload.conversationId,
-      title: payload.title ?? undefined,
-      description: payload.description ?? undefined,
-      avatar: payload.avatar ?? undefined,
-      coverPhoto: payload.coverPhoto ?? undefined,
-    } as any);
+      title: payload.title ?? conversation.title,
+      description: payload.description ?? conversation.description,
+      avatar: payload.avatar !== undefined ? (payload.avatar ?? undefined) : conversation.avatar,
+      coverPhoto: payload.coverPhoto !== undefined ? (payload.coverPhoto ?? undefined) : conversation.coverPhoto,
+    });
   });
 
   const { formatFromFiat, currencyCode } = useFormattedPrice();
@@ -622,9 +710,14 @@ export default function ChatScreen({ navigation, route }: Props) {
     handleRetrySendMessage,
     createMediaMessage,
     handleSendPendingAttachment: hookSendPendingAttachment,
+    handleSendPendingDocument: hookSendPendingDocument,
     handleUndoDelete,
     handleBulkDelete: hookBulkDelete,
     handleDeleteMessage,
+    editingMessageId,
+    startEdit,
+    cancelEdit,
+    saveEdit,
     confirmation: conversationConfirmation,
     clearConfirmation: clearConversationConfirmation,
     dateSeparatorIndices,
@@ -711,7 +804,10 @@ export default function ChatScreen({ navigation, route }: Props) {
   const handleSend = useCallback(() => {
     notifyStoppedTyping();
     hookSendMessage(input, replyTo, setInput, setReplyTo);
-  }, [hookSendMessage, input, replyTo, setInput, setReplyTo, notifyStoppedTyping]);
+    if (conversationId) {
+      track('message_sent', { conversation_id: conversationId, message_type: 'text' });
+    }
+  }, [hookSendMessage, input, replyTo, setInput, setReplyTo, notifyStoppedTyping, conversationId]);
 
   // Adapter: wrap hookHandleMessageListScroll for FlashList's NativeSyntheticEvent type
   const handleMessageListScroll = useCallback(
@@ -845,8 +941,19 @@ export default function ChatScreen({ navigation, route }: Props) {
   const handleSendPendingAttachment = useCallback(
     (caption: string) => {
       hookSendPendingAttachment(caption, pendingAttachment, setPendingAttachment);
+      if (pendingAttachment && conversationId) {
+        track('message_sent', { conversation_id: conversationId, message_type: pendingAttachment.mediaType });
+      }
     },
-    [hookSendPendingAttachment, pendingAttachment, setPendingAttachment],
+    [hookSendPendingAttachment, pendingAttachment, setPendingAttachment, conversationId],
+  );
+
+  // Adapter: bind pending document state to hookSendPendingDocument's signature
+  const handleSendPendingDocument = useCallback(
+    (caption: string) => {
+      hookSendPendingDocument(caption, pendingDocument, setPendingDocument);
+    },
+    [hookSendPendingDocument, pendingDocument, setPendingDocument],
   );
 
   const mediaTypeLabel = (t: "image" | "video") =>
@@ -1029,6 +1136,65 @@ export default function ChatScreen({ navigation, route }: Props) {
             onDecline={() => handleDeclineOffer(msg.id)}
             onCounter={() => handleCounterOffer(msg.id, msg.offer?.price, msg.offer?.originalPrice)}
             onExpire={() => handleOfferExpired(msg.id)}
+            onViewListing={() => {
+              if (msg.offer?.itemId) {
+                navigation.navigate("ItemDetail", { itemId: msg.offer.itemId });
+              }
+            }}
+            onViewOrder={() => {
+              if (msg.offer?.offerId) {
+                navigation.navigate("OrderDetail", { orderId: msg.offer.offerId });
+              }
+            }}
+          />
+        </View>
+      );
+      return dateSeparator ? (
+        <View key={msg.id + "_group"}>
+          {dateSeparator}
+          {content}
+        </View>
+      ) : (
+        content
+      );
+    }
+
+    // Product / listing share message — Pinterest & Instagram Direct standard
+    if (msg.type === "listing_share" && msg.listing) {
+      const isMe = msg.sender === "me";
+      const content = (
+        <View
+          key={msg.id}
+          style={[
+            styles.msgRow,
+            isMe && styles.msgRowRight,
+            { marginTop: spacingTop, marginBottom },
+          ]}
+        >
+          <MarketplaceChatCard
+            type="listing_share"
+            isMe={isMe}
+            listing={msg.listing}
+            formattedPrice={formatFromFiat(msg.listing.price, currencyCode, {
+              displayMode: "fiat",
+            })}
+            formattedOriginalPrice={
+              msg.listing.originalPrice
+                ? formatFromFiat(msg.listing.originalPrice, currencyCode, {
+                    displayMode: "fiat",
+                  })
+                : undefined
+            }
+            onViewListing={() => {
+              navigation.navigate("ItemDetail", { itemId: msg.listing!.id });
+            }}
+            onMakeOffer={() => {
+              navigation.navigate("MakeOffer", {
+                itemId: msg.listing!.id,
+                price: msg.listing!.price,
+                title: msg.listing!.title,
+              });
+            }}
           />
         </View>
       );
@@ -1046,6 +1212,8 @@ export default function ChatScreen({ navigation, route }: Props) {
     const isMedia = msg.type === "media" && msg.mediaUri;
     const isVoice = msg.type === "voice" && msg.voiceUri;
     if (!msg.text && !isMedia && !isVoice) return null;
+
+    const isEditing = editingMessageId === msg.id && !isMedia && !isVoice;
 
     const bubble = (
       <View style={[styles.selectionRow, isMe && styles.selectionRowRight]}>
@@ -1068,7 +1236,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             accessibilityState={{ selected: selectedMessageIds.has(msg.id) }}
           >
             {selectedMessageIds.has(msg.id) ? (
-              <Ionicons name="checkmark" size={14} color={colors.textInverse} />
+              <AppIcon name="check" size={14} color={colors.textInverse} />
             ) : null}
           </AnimatedPressable>
         ) : null}
@@ -1080,7 +1248,18 @@ export default function ChatScreen({ navigation, route }: Props) {
             { marginTop: spacingTop, marginBottom },
           ]}
         >
-          <MessageBubble
+        {isEditing ? (
+          <InlineMessageEditor
+            initialText={msg.text ?? ""}
+            isMe={isMe}
+            colors={colors}
+            styles={styles as unknown as InlineEditStyles}
+            onSave={(text) => saveEdit(msg.id, text)}
+            onCancel={() => cancelEdit()}
+          />
+        ) : (
+          <>
+        <MessageBubble
             id={msg.id}
             conversationId={conversationId ?? ''}
             text={msg.text ?? ""}
@@ -1154,6 +1333,9 @@ export default function ChatScreen({ navigation, route }: Props) {
             mediaUri={msg.mediaUri}
             mediaType={msg.mediaType}
             uploadStatus={msg.uploadStatus}
+            documentUri={msg.documentUri}
+            documentName={msg.documentName}
+            documentMimeType={msg.documentMimeType}
             voiceDurationMs={msg.voiceDurationMs}
             voiceWaveform={msg.voiceWaveform}
             voiceContainer={msg.voiceContainer}
@@ -1171,6 +1353,17 @@ export default function ChatScreen({ navigation, route }: Props) {
             showAvatar={!isMe && isFirstInCluster}
             isNew={isNewMessage(msg.id)}
           />
+          {msg.isEdited && !isMedia && !isVoice && (
+            <Text
+              style={[
+                styles.editedLabel,
+                isMe && styles.editedLabelRight,
+              ]}
+              accessibilityLabel="Edited"
+            >
+              {'Edited'}
+            </Text>
+          )}
           {!isMedia && !isVoice &&
             (() => {
               const url = extractFirstUrl(msg.text ?? "");
@@ -1202,6 +1395,8 @@ export default function ChatScreen({ navigation, route }: Props) {
               />
             </View>
           )}
+          </>
+        )}
         </View>
       </View>
     );
@@ -1243,12 +1438,6 @@ export default function ChatScreen({ navigation, route }: Props) {
         .slice(0, 2)
         .toUpperCase() ?? "G")
     : sellerHandle.slice(0, 2).toUpperCase();
-
-  const linkedListing = useMemo(() => {
-    const itemId = routeItemId ?? conversation?.itemId;
-    if (!itemId) return null;
-    return listings.find((l) => l.id === itemId) ?? null;
-  }, [routeItemId, conversation?.itemId, listings]);
 
   // Conversation-level safety warning (triggered by conversation state,
   // e.g. off-platform payment requests in messages). This is distinct
@@ -1421,14 +1610,15 @@ export default function ChatScreen({ navigation, route }: Props) {
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >
-            <Ionicons
+            <AppIcon
               name={
                 conversationSafetyWarning.level === "danger"
                   ? "warning"
                   : conversationSafetyWarning.level === "caution"
-                    ? "alert-circle-outline"
-                    : "lock-closed-outline"
+                    ? "alert"
+                    : "lock"
               }
+              focused={conversationSafetyWarning.level === "danger"}
               size={14}
               color={
                 conversationSafetyWarning.level === "danger"
@@ -1531,7 +1721,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               accessibilityLabel="Exit selection mode"
               accessibilityHint="Closes the message selection toolbar"
             >
-              <Ionicons
+              <AppIcon
                 name="close-outline"
                 size={24}
                 color={colors.textPrimary}
@@ -1553,7 +1743,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityHint="Permanently removes the selected messages from this conversation"
             >
-              <Ionicons name="trash-outline" size={Control.icon} color={colors.danger} />
+              <AppIcon name="trash" size={Control.icon} color={colors.danger} />
             </AnimatedPressable>
           </View>
         ) : null}
@@ -1731,7 +1921,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityHint="Hides suggested replies for this conversation"
               >
-                <Ionicons name="close" size={15} color={colors.textMuted} />
+                <AppIcon name="close" size={15} color={colors.textMuted} />
               </Pressable>
             </View>
           )}
@@ -1759,8 +1949,8 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityHint="Open agent management"
               >
-                <Ionicons
-                  name={(deployedChatAgents[0]?.avatar as keyof typeof Ionicons.glyphMap) || 'bag-handle-outline'}
+                <AppIcon
+                  name={(deployedChatAgents[0]?.avatar as string) || 'pricetag'}
                   size={13}
                   color={colors.brand}
                 />
@@ -1841,7 +2031,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           visible={attachmentPickerVisible && !composerSending}
           onClose={() => setAttachmentPickerVisible(false)}
           onSelect={(action) => {
-            if (action === "gallery" || action === "camera") {
+            if (action === "gallery" || action === "camera" || action === "document" || action === "location") {
               handleAttachmentSelect(action);
             } else if (action === "agent") {
               setChatAgentPickerVisible(true);
@@ -1856,6 +2046,16 @@ export default function ChatScreen({ navigation, route }: Props) {
             mediaType={pendingAttachment.mediaType}
             onClose={() => setPendingAttachment(null)}
             onSend={handleSendPendingAttachment}
+          />
+        )}
+
+        {pendingDocument && !composerSending && (
+          <DocumentReviewSheet
+            visible={!!pendingDocument}
+            fileName={pendingDocument.name}
+            mimeType={pendingDocument.mimeType}
+            onClose={() => setPendingDocument(null)}
+            onSend={handleSendPendingDocument}
           />
         )}
 
@@ -1889,6 +2089,9 @@ export default function ChatScreen({ navigation, route }: Props) {
               }
               case "reply":
                 setReplyTo(selectedMessage);
+                break;
+              case "edit":
+                startEdit(selectedMessage);
                 break;
               case "react":
                 setReactingToMessage(selectedMessage);
@@ -1939,6 +2142,12 @@ export default function ChatScreen({ navigation, route }: Props) {
             selectedMessage?.status === "failed" ||
             selectedMessage?.uploadStatus === "failed"
           }
+          canEdit={
+            selectedMessage?.sender === "me" &&
+            !!selectedMessage?.text &&
+            !!selectedMessage.date &&
+            Date.now() - new Date(selectedMessage.date).getTime() < 15 * 60 * 1000
+          }
         />
 
         <ConfirmationSheet
@@ -1951,14 +2160,14 @@ export default function ChatScreen({ navigation, route }: Props) {
           onConfirm={() => {
             const req = conversationConfirmation;
             clearConversationConfirmation();
-            if (req) void req.onConfirm();
+            if (req) Promise.resolve(req.onConfirm()).catch(() => undefined);
           }}
           onCancel={
             conversationConfirmation?.onCancel
               ? () => {
                   const req = conversationConfirmation;
                   clearConversationConfirmation();
-                  if (req?.onCancel) void req.onCancel();
+                  if (req?.onCancel) Promise.resolve(req.onCancel()).catch(() => undefined);
                 }
               : undefined
           }

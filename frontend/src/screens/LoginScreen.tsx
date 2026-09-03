@@ -15,6 +15,7 @@ import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Motion } from '../theme/motionTokens';
 import { markInteractive } from '../platform/monitoring';
+import { track } from '../analytics';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { Space, Radius, Stroke, Control, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -94,6 +95,7 @@ export default function LoginScreen() {
       try {
         const result = await loginWithGoogleIdToken(idToken);
         login(result.storeUser);
+        track('user_logged_in', { method: 'google' });
         setTwoFactorEnabled(result.user.twoFactorEnabled);
         navigation.replace('MainTabs');
         markInteractive({ surface: 'login_complete_google' });
@@ -140,6 +142,7 @@ export default function LoginScreen() {
       if (!credential.identityToken) throw new Error('Missing Apple identity token');
       const result = await loginWithAppleIdentityToken(credential.identityToken);
       login(result.storeUser);
+      track('user_logged_in', { method: 'apple' });
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
       markInteractive({ surface: 'login_complete_apple' });
@@ -228,6 +231,7 @@ export default function LoginScreen() {
         recoveryCode: recoveryCode.trim() || undefined });
 
       login(result.storeUser);
+      track('user_logged_in', { method: 'email' });
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
       // EAS Observe: login has completed and the user is being routed into the
@@ -358,6 +362,7 @@ export default function LoginScreen() {
         code: normalizedCode });
 
       login(result.storeUser);
+      track('user_logged_in', { method: 'email' });
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
       // EAS Observe: OTP login has completed and the user is being routed
@@ -429,6 +434,7 @@ export default function LoginScreen() {
         recoveryCode: otpUseRecovery ? recoveryCode : undefined });
 
       login(result.storeUser);
+      track('user_logged_in', { method: 'email' });
       setTwoFactorEnabled(result.user.twoFactorEnabled);
       navigation.replace('MainTabs');
       markInteractive({ surface: 'login_complete_otp' });

@@ -18,6 +18,7 @@
  */
 
 import { getPostHogClient, getDeviceInfo, getPlatform } from './PostHogProvider';
+import { isAnalyticsEnabled } from './analyticsGate';
 import type { UserIdentity } from './types';
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -59,6 +60,7 @@ type PostHogProperties = Record<string, string | number | boolean | null>;
  *   `username`, and `plan` are optional but recommended for enrichment.
  */
 export function identifyUser(user: UserIdentity): void {
+  if (!isAnalyticsEnabled()) return;
   const client = getPostHogClient();
   if (!client) return;
 

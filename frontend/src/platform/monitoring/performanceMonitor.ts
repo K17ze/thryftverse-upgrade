@@ -332,10 +332,8 @@ export function reportScreenPerformance(
   if (!isPerformanceTelemetrySampled) return;
 
   try {
-    const { getPostHogClient } = require('../../analytics/PostHogProvider');
-    const client = getPostHogClient();
-    if (!client) return;
-    client.capture('screen_performance', {
+    const { trackRaw } = require('../../analytics/track');
+    trackRaw('screen_performance', {
       screen_name: screenName,
       screen_load_time: Math.round(metrics.screen_load_time),
       frame_drop_count: metrics.frame_drop_count,

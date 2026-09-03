@@ -59,6 +59,7 @@ import {
 import { queryClient, queryKeys } from '../platform/server';
 import { CreatorDraftService } from './drafts';
 import { useStore } from '../store/useStore';
+import { track } from '../analytics';
 
 // ── Shared publish-command builder ──────────────────────────────────
 // A single pure function that constructs the PublishCommand from a
@@ -801,6 +802,9 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
         setPublishState({ tag: 'success', publishedId: targetId });
         CreatorAnalytics.publishSuccess(workingDoc.type, targetId);
+        if (workingDoc.type === 'look') {
+          track('look_created', { look_id: targetId });
+        }
       }
     } catch (err: unknown) {
       publishGuardRef.current.fail();
@@ -1431,6 +1435,7 @@ function SuccessView({
         <Pressable
           onPress={onView}
           style={localStyles.viewLink}
+          accessibilityRole="link"
           accessibilityLabel="View post"
           accessibilityHint="Opens the published content"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}

@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
+import { track } from '../analytics';
 import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -98,6 +99,7 @@ export default function CreateCollectionScreen() {
         }
       }
       show('Collection created', 'success');
+      track('collection_created', { collection_id: newId });
       setIsSubmitting(false);
       navigation.replace('CollectionDetail', { collectionId: newId });
     } catch {

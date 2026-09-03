@@ -222,6 +222,8 @@ export default function CheckoutScreen() {
   const isMountedRef = useRef(true);
   const paymentAttemptRef = useRef(0);
   const navigationHandledRef = useRef(false);
+  const stageRef = useRef<CheckoutStage>(stage);
+  useEffect(() => { stageRef.current = stage; }, [stage]);
 
   const item = listings.find((l) => l.id === itemId);
 
@@ -462,6 +464,16 @@ export default function CheckoutScreen() {
     useCallback(() => {
       void hydrateCheckout();
     }, [hydrateCheckout])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        if (!navigationHandledRef.current) {
+          track('checkout_abandoned', { item_id: itemId, stage: stageRef.current });
+        }
+      };
+    }, [itemId])
   );
 
   const handleRefreshCheckout = useCallback(async () => {
