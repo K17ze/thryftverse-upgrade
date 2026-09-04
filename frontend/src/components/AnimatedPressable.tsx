@@ -8,6 +8,7 @@ import {
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
+  withSpring,
   withTiming,
   cancelAnimation,
 } from 'react-native-reanimated';
@@ -51,8 +52,19 @@ const DEFAULT_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 /**
  * AnimatedPressable — the canonical pressable surface for ThryftVerse.
  *
- * Press feedback is opacity-only (no spring scale). Haptics still fire on
- * activation. Reduced motion collapses the opacity timing to 0ms.
+ * Every tap feels native via:
+ *   - asymmetric spring-based scale feedback (0.97–0.985 per AGENTS §17, §27.9):
+ *     press-down uses a fast, snappy spring (spring.tap); release uses a
+ *     slower, gentler spring (spring.press). This separates "sluggish" from
+ *     "twitchy" (2026 micro-interaction research).
+ *   - asymmetric opacity timing: 80ms press-down / 160ms release
+ *   - haptic grammar gated by platform + reduced-motion (useHaptic)
+ *   - 44pt hit target via default hitSlop
+ *   - accessibility role/label/state
+ *
+ * Reduced motion: the spring is critically damped (settles instantly) and the
+ * opacity timing collapses to 0ms, so the press still communicates state
+ * change without visible travel (AGENTS §17, §27.2).
  */
 export function AnimatedPressable({
   children,
@@ -72,12 +84,9 @@ export function AnimatedPressable({
   hitSlop,
   ...rest
 }: Props) {
-  // scaleValue is retained as a prop for API compatibility but no longer
-  // drives a visual transform. It is still used for autoHaptic intensity.
-  void scaleValue;
-
   const haptic = useHaptic();
-  const { duration, isEnabled } = useMotionConfig();
+  const { spring, duration, isEnabled } = useMotionConfig();
+  const scale = useSharedValue(1);
   const opacity = useSharedValue(1);
 
   // Cancel any in-flight animations on unmount. Without this, Reanimated's
@@ -88,9 +97,10 @@ export function AnimatedPressable({
   // for a dead view tag.
   React.useEffect(() => {
     return () => {
+      cancelAnimation(scale);
       cancelAnimation(opacity);
     };
-  }, [opacity]);
+  }, [scale, opacity]);
 
   const triggerHapticFeedback = React.useCallback(() => {
     if (autoHaptic && scaleValue < 1) {
@@ -123,6 +133,7 @@ export function AnimatedPressable({
   const animStyle = useAnimatedStyle(() => {
     'worklet';
     return {
+      transform: [{ scale: scale.value }],
       opacity: opacity.value,
     };
   });
@@ -135,10 +146,13 @@ export function AnimatedPressable({
     [accessibilityState, disabled]
   );
 
-  // Press feedback timing: opacity uses the touch duration (80ms) so the
-  // highlight arrives within the 100ms feedback budget (AGENTS §27.2).
-  // Under reduced motion this collapses to 0ms via `duration.touch`.
-  const pressOpacityMs = isEnabled ? duration.touch : 0;
+  // Asymmetric press timing (2026 micro-interaction research):
+  // press-down is fast (80ms) so the feedback arrives within the 100ms
+  // budget; release is slower (160ms) so the surface settles naturally
+  // instead of snapping back — this separates "sluggish" from "twitchy".
+  // Under reduced motion both collapse to 0ms.
+  const pressDownOpacityMs = isEnabled ? duration.touch : 0;
+  const pressReleaseOpacityMs = isEnabled ? duration.pressRelease : 0;
 
   return (
     <AnimatedNativePressable
@@ -149,9 +163,14 @@ export function AnimatedPressable({
       hitSlop={hitSlop ?? DEFAULT_HIT_SLOP}
       onPressIn={(event) => {
         if (!disabled && !disableAnimation) {
-          if (typeof activeOpacity === 'number') {
-            opacity.value = withTiming(activeOpacity, { duration: pressOpacityMs });
-          }
+          // Press-down: fast, snappy spring (spring.tap — higher stiffness)
+          // so the scale change arrives within the 80ms feedback budget.
+          // When reduced motion is on, the spring is critically damped so
+          // the scale change is effectively instant.
+          scale.value = withSpring(scaleValue, spring.tap);
+        }
+        if (typeof activeOpacity === 'number') {
+          opacity.value = withTiming(activeOpacity, { duration: pressDownOpacityMs });
         }
         // Haptic moved to onPress — firing on press-in triggers haptics
         // on aborted scroll gestures (AGENTS.md P1-UI-2 fix).
@@ -161,9 +180,12 @@ export function AnimatedPressable({
       }}
       onPressOut={(event) => {
         if (!disableAnimation) {
-          if (typeof activeOpacity === 'number') {
-            opacity.value = withTiming(1, { duration: pressOpacityMs });
-          }
+          // Release: slower, gentler spring (spring.press — lower stiffness)
+          // so the surface settles naturally over ~160ms instead of snapping.
+          scale.value = withSpring(1, spring.press);
+        }
+        if (typeof activeOpacity === 'number') {
+          opacity.value = withTiming(1, { duration: pressReleaseOpacityMs });
         }
         if (onPressOut) {
           onPressOut(event);

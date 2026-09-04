@@ -59,7 +59,7 @@ import {
 import { queryClient, queryKeys } from '../platform/server';
 import { CreatorDraftService } from './drafts';
 import { useStore } from '../store/useStore';
-import { track } from '../analytics';
+import { isExportAvailable, exportDocumentImage } from './export/mediaExportService';
 
 // ── Shared publish-command builder ──────────────────────────────────
 // A single pure function that constructs the PublishCommand from a
@@ -645,6 +645,59 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
       setPublishState({ tag: 'processing' });
       progressWidth.value = reduceMotion ? 0.75 : withSpring(0.75, spring.entrance);
 
+      // ── Export pipeline: render composition to a canonical image ──
+      // When the native export module is linked, render the first page
+      // to a PNG via Skia offscreen surface and upload it as the
+      // canonical published asset. This produces a faithful render of
+      // the authored composition (overlays, filters, layers burned in)
+      // rather than relying on the source media alone.
+      if (isExportAvailable() && workingDoc.pages.length > 0) {
+        try {
+          const firstPage = workingDoc.pages[0];
+          const exported = await exportDocumentImage(workingDoc, firstPage.id, {
+            quality: 'feed',
+            onProgress: (p) => {
+              // Map export progress into the 0.75–0.85 range
+              const mapped = 0.75 + p * 0.1;
+              progressWidth.value = reduceMotion ? mapped : withSpring(mapped, spring.entrance);
+            },
+          });
+          if (exported) {
+            // Upload the rendered image through the upload manager so
+            // it follows the same durable retry path as source media.
+            const exportAssetId = `export::${firstPage.id}`;
+            await uploadManager.queueUpload({
+              projectId: workingDoc.id,
+              assetId: exportAssetId,
+              localPath: exported.uri,
+              mimeType: 'image/png',
+              assetType: 'image',
+              maxRetries: 3,
+              folder: workingDoc.type === 'look' ? 'looks' : 'posters',
+            });
+            const exportJobs = await uploadManager.waitForCompletion();
+            const exportJob = exportJobs.find((j) => j.assetId === exportAssetId);
+            if (exportJob?.status === 'completed' && exportJob.remoteUrl) {
+              // Store the exported render URL in the document metadata
+              // so the publication orchestrator can use it as the
+              // canonical published image.
+              workingDoc = {
+                ...workingDoc,
+                metadata: {
+                  ...workingDoc.metadata,
+                  exportedRenderUrl: exportJob.remoteUrl,
+                  exportedRenderWidth: exported.width,
+                  exportedRenderHeight: exported.height,
+                },
+              };
+            }
+          }
+        } catch (exportErr) {
+          // Export failure is non-fatal — fall back to source media.
+          console.warn('Skia export failed, falling back to source media:', exportErr);
+        }
+      }
+
       const postUploadValidation = validateForPublish(workingDoc);
       if (!postUploadValidation.valid) {
         throw new Error(postUploadValidation.errors.join('; '));
@@ -802,9 +855,6 @@ export function CreatorPublishSheet({ visible, onClose, editingLookId, onOpenPre
         progressWidth.value = reduceMotion ? 1 : withSpring(1, spring.success);
         setPublishState({ tag: 'success', publishedId: targetId });
         CreatorAnalytics.publishSuccess(workingDoc.type, targetId);
-        if (workingDoc.type === 'look') {
-          track('look_created', { look_id: targetId });
-        }
       }
     } catch (err: unknown) {
       publishGuardRef.current.fail();
@@ -1435,7 +1485,7 @@ function SuccessView({
         <Pressable
           onPress={onView}
           style={localStyles.viewLink}
-          accessibilityRole="link"
+          accessibilityRole="button"
           accessibilityLabel="View post"
           accessibilityHint="Opens the published content"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -1828,6 +1878,7 @@ function PublishReview({
   return (
     <View style={styles.reviewBody}>
       <ScrollView style={styles.scrollBody} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <Text style={styles.sectionLabel}>Preview</Text>
         <Pressable
           onPress={onOpenPreview}
           disabled={!onOpenPreview}
@@ -1850,6 +1901,7 @@ function PublishReview({
           )}
         </Pressable>
 
+        <Text style={styles.sectionLabel}>Caption</Text>
         <TextInput
           style={styles.captionInput}
           placeholder="Write a caption…"
@@ -1874,6 +1926,7 @@ function PublishReview({
           </Reanimated.View>
         )}
 
+        <Text style={styles.sectionLabel}>Audience</Text>
         <View style={styles.audienceSegment} accessibilityRole="radiogroup" accessibilityLabel="Audience visibility">
           {audienceOptions.map((opt) => {
             const isActive = document.metadata.visibility === opt.key;
@@ -2019,6 +2072,13 @@ function createStyles(colors: ThemeColorsType) {
     scrollContent: {
       paddingBottom: Space.xl,
       gap: Space.sm },
+    sectionLabel: {
+      fontFamily: Typography.family.medium,
+      fontSize: TypographyV2.meta.size,
+      color: colors.textSecondary,
+      letterSpacing: 0.2,
+      marginTop: Space.xs,
+      textTransform: 'uppercase' },
     captionInput: {
       fontSize: TypographyV2.body.size,
       fontFamily: TypographyV2.body.fontFamily,
@@ -2026,7 +2086,12 @@ function createStyles(colors: ThemeColorsType) {
       color: colors.textPrimary,
       minHeight: 80,
       textAlignVertical: 'top',
-      padding: 0 },
+      paddingHorizontal: Space.sm,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.hairline,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.surfaceAlt },
     captionCount: {
       alignSelf: 'flex-end',
       fontFamily: Typography.family.medium,

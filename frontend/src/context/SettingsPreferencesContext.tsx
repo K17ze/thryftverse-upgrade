@@ -15,9 +15,9 @@ import {
   SupportedLanguageOption,
 } from '../preferences/settingsPreferences';
 import { mapLanguageOptionToLocale, mapLocaleToLanguageOption, setI18nLocale, hydratePersistedLocale } from '../i18n';
-import { setAnalyticsOptOut } from '../lib/telemetry';
+import { setAnalyticsOptOut as setTelemetryOptOut } from '../lib/telemetry';
 import { setAnalyticsOptOut as setGateOptOut } from '../analytics/analyticsGate';
-import { patchPrivacyConsent } from '../services/consentApi';
+import { fetchPrivacyConsent, patchPrivacyConsent } from '../services/consentApi';
 import { makeStableId } from '../utils/createStableId';
 
 interface SettingsPreferencesContextValue {
@@ -99,10 +99,6 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
           return;
         }
 
-        // The dedicated locale key takes precedence — it may have been
-        // set on a previous launch and is hydrated early in app startup.
-        // If the settings preferences have a different language (older
-        // persistence format), the dedicated key wins.
         const localeToLanguage = mapLocaleToLanguageOption(persistedLocale) as SupportedLanguageOption;
         const isSupportedLanguageOption = LANGUAGE_OPTIONS.includes(localeToLanguage);
         setLanguage(isSupportedLanguageOption ? localeToLanguage : settingsPreferences.language);
@@ -119,9 +115,7 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
         setRecommendationPersonalizationState(settingsPreferences.recommendationPersonalization);
         setThirdPartySharingState(settingsPreferences.thirdPartySharing);
         setAutoTranslateMessagesState(settingsPreferences.autoTranslateMessages);
-        // Sync the telemetry module and the PostHog analytics gate so
-        // opt-out is respected before the first React re-render commits.
-        setAnalyticsOptOut(settingsPreferences.analyticsOptOut);
+        setTelemetryOptOut(settingsPreferences.analyticsOptOut);
         setGateOptOut(settingsPreferences.analyticsOptOut);
       })
       .catch(() => {
@@ -131,6 +125,20 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
         if (isMounted) {
           setIsHydrated(true);
         }
+      });
+
+    fetchPrivacyConsent()
+      .then((consent) => {
+        if (!isMounted) return;
+        setAnalyticsOptOutState(consent.analyticsOptOut);
+        setPersonalizedAdsState(consent.personalisedAds);
+        setRecommendationPersonalizationState(consent.recommendationPersonalisation);
+        setThirdPartySharingState(consent.partnerSharing);
+        setTelemetryOptOut(consent.analyticsOptOut);
+        setGateOptOut(consent.analyticsOptOut);
+      })
+      .catch(() => {
+        // Backend unreachable — local preferences remain in effect.
       });
 
     return () => {
@@ -246,23 +254,15 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
 
   const setAnalyticsOptOutPref = React.useCallback((optOut: boolean) => {
     setAnalyticsOptOutState(optOut);
-    // Keep the telemetry module flag and the PostHog analytics gate in
-    // sync so every trackTelemetryEvent call and every PostHog capture
-    // honours the preference immediately.
-    setAnalyticsOptOut(optOut);
+    setTelemetryOptOut(optOut);
     setGateOptOut(optOut);
-    // Persist to the backend so the opt-out survives device resets and
-    // is enforced server-side (GDPR / privacy compliance).
-    patchPrivacyConsent({ analyticsOptOut: optOut }).catch(() => {
-      // Best-effort sync — the local flag is already set. The backend
-      // will be reconciled on next consent fetch.
-    });
+    patchPrivacyConsent({ analyticsOptOut: optOut }).catch(() => {});
   }, []);
 
   const toggleAnalyticsOptOut = React.useCallback(() => {
     setAnalyticsOptOutState((prev) => {
       const next = !prev;
-      setAnalyticsOptOut(next);
+      setTelemetryOptOut(next);
       setGateOptOut(next);
       patchPrivacyConsent({ analyticsOptOut: next }).catch(() => {});
       return next;
@@ -287,14 +287,17 @@ export function SettingsPreferencesProvider({ children }: { children: React.Reac
 
   const setPersonalizedAds = React.useCallback((enabled: boolean) => {
     setPersonalizedAdsState(enabled);
+    patchPrivacyConsent({ personalisedAds: enabled }).catch(() => {});
   }, []);
 
   const setRecommendationPersonalization = React.useCallback((enabled: boolean) => {
     setRecommendationPersonalizationState(enabled);
+    patchPrivacyConsent({ recommendationPersonalisation: enabled }).catch(() => {});
   }, []);
 
   const setThirdPartySharing = React.useCallback((enabled: boolean) => {
     setThirdPartySharingState(enabled);
+    patchPrivacyConsent({ partnerSharing: enabled }).catch(() => {});
   }, []);
 
   const setAutoTranslateMessages = React.useCallback((enabled: boolean) => {

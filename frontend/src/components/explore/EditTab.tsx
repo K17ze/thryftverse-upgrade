@@ -19,6 +19,7 @@ import { fetchTrendingListings, type TrendingListing } from '../../services/mark
 import { DiscoverySectionHeader } from '../discover/DiscoverySectionHeader';
 import { HorizontalRail } from '../HorizontalRail';
 import { useFormattedPrice } from '../../hooks/useFormattedPrice';
+import { openProductDetail } from '../../platform/product/openProductDetail';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -136,7 +137,10 @@ export default function EditTab() {
               <TrendingRailItem
                 key={item.id}
                 item={item}
-                onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+                onPress={() => {
+                  haptic.light();
+                  openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'EditTabTrending' });
+                }}
                 styles={styles}
               />
             ))}
@@ -158,7 +162,10 @@ export default function EditTab() {
               <TrendingRailItem
                 key={item.id}
                 item={item}
-                onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+                onPress={() => {
+                  haptic.light();
+                  openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'EditTabNewArrivals' });
+                }}
                 styles={styles}
               />
             ))}
@@ -180,7 +187,10 @@ export default function EditTab() {
               <TrendingRailItem
                 key={item.id}
                 item={item}
-                onPress={() => { haptic.light(); navigation.push('ItemDetail', { itemId: item.id }); }}
+                onPress={() => {
+                  haptic.light();
+                  openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'EditTabPriceDrops' });
+                }}
                 styles={styles}
               />
             ))}

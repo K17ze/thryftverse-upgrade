@@ -2028,11 +2028,14 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
   );
 
   const overflowSections = useMemo(() => {
-    const sectionFor = (id: string): 'Create' | 'Edit' | 'Arrange' | 'Project' => {
-      if (['draw', 'stickers', 'product', 'add-frame', 'music'].includes(id)) return 'Create';
-      if (['front', 'back', 'duplicate', 'layers'].includes(id)) return 'Arrange';
-      if (['preview', 'safe-zone', 'templates', 'drafts', 'settings', 'manage-frames'].includes(id)) return 'Project';
-      return 'Edit';
+    const sectionFor = (id: string): 'Advanced editing' | 'Accessibility' | 'Project' => {
+      if (['draw', 'replace', 'crop', 'adjust', 'effects', 'auto', 'cutout', 'animation', 'speed-curve', 'reverse', 'freeze-frame', 'audio-fade', 'duplicate', 'delete', 'edit-clip'].includes(id)) {
+        return 'Advanced editing';
+      }
+      if (['move-precisely', 'arrange-precisely', 'safe-zone', 'a11yMove', 'a11yZOrder', 'layers'].includes(id)) {
+        return 'Accessibility';
+      }
+      return 'Project';
     };
     const tools: ToolDefinition[] = hasMultipleFrames
       ? [
@@ -2047,7 +2050,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           },
         ]
       : activeOverflowTools.filter((tool) => tool.id !== 'delete');
-    return (['Create', 'Edit', 'Arrange', 'Project'] as const)
+    return (['Advanced editing', 'Accessibility', 'Project'] as const)
       .map((title) => ({
         title,
         tools: tools.filter((tool) => sectionFor(tool.id) === title),
@@ -2700,13 +2703,14 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               contentContainerStyle={styles.overflowScrollContent}
               keyboardShouldPersistTaps="handled"
             >
-              {/* Groups separated by Space.md; items within each group by Space.sm.
-                  No section labels — the items are self-evident. */}
               {overflowSections.map((section, sectionIndex) => (
                 <View
                   key={section.title}
                   style={[styles.overflowGroup, sectionIndex > 0 && styles.overflowGroupGap]}
                 >
+                  <Text style={[styles.overflowSectionTitle, { color: colors.textMuted }]}>
+                    {section.title}
+                  </Text>
                   {section.tools.map((tool) => (
                     <OverflowItem
                       key={tool.id}
@@ -2720,6 +2724,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 </View>
               ))}
               <View style={[styles.overflowGroup, styles.overflowGroupGap]}>
+                <Text style={[styles.overflowSectionTitle, { color: colors.textMuted }]}>Accessibility</Text>
                 <OverflowItem
                   icon="accessibility-outline"
                   label="Move precisely"
@@ -2730,6 +2735,9 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                   label="Arrange precisely"
                   onPress={() => { openSheet('a11yZOrder'); closeSheet(); }}
                 />
+              </View>
+              <View style={[styles.overflowGroup, styles.overflowGroupGap]}>
+                <Text style={[styles.overflowSectionTitle, { color: colors.textMuted }]}>Project</Text>
                 <OverflowItem
                   icon="help-circle-outline"
                   label="Help & shortcuts"
@@ -2738,6 +2746,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
               </View>
               {overflowDestructive.length > 0 && (
                 <View style={[styles.overflowGroup, styles.overflowGroupGap]}>
+                  <Text style={[styles.overflowSectionTitle, { color: colors.textMuted }]}>Advanced editing</Text>
                   {overflowDestructive.map((tool) => (
                     <OverflowItem
                       key={tool.id}
@@ -3309,7 +3318,7 @@ function createStyles(colors: ThemeColors) {
   publishBtn: {
     height: 36,
     borderRadius: RadiusRoleValue.pillAvatar,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -3555,6 +3564,14 @@ function createStyles(colors: ThemeColors) {
   },
   overflowGroupGap: {
     marginTop: Space.md,
+  },
+  overflowSectionTitle: {
+    marginLeft: Space.sm,
+    marginBottom: Space.xs,
+    fontSize: 11,
+    letterSpacing: 0.08,
+    textTransform: 'uppercase',
+    fontWeight: '600',
   },
   overflowBackdrop: {
     ...StyleSheet.absoluteFill,

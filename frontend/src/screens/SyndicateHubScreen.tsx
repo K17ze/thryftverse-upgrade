@@ -122,7 +122,7 @@ export default function CoOwnHubScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -365,7 +365,7 @@ export default function CoOwnHubScreen() {
   );
 
   const formatLocal = React.useCallback((valueGbp: number) => (
-    formatFromFiat(valueGbp, currencyCode, { displayMode: 'fiat', fiatFractionDigits: 2 })
+    formatFromFiat(valueGbp, 'GBP', { displayMode: 'fiat', fiatFractionDigits: 2 })
   ), [formatFromFiat]);
 
   const highlightAssets = React.useMemo(() => {

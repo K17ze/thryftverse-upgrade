@@ -210,8 +210,13 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <Text style={[styles.permissionBannerText, { color: colors.textSecondary }]}>
             Push is blocked by device settings.
           </Text>
-          <Pressable onPress={() => Linking.openSettings()} accessibilityRole="button">
-            <Text style={[styles.permissionBannerAction, { color: colors.brand }]}>Open Settings</Text>
+          <Pressable
+            onPress={() => Linking.openSettings()}
+            accessibilityRole="button"
+            accessibilityLabel="Open device settings"
+            hitSlop={8}
+          >
+            <Text style={[styles.permissionBannerAction, { color: colors.brand }]}>Open settings</Text>
           </Pressable>
         </View>
       )}
@@ -221,7 +226,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <SettingsRow
             icon="notifications-outline"
             title="Enable push notifications"
-            subtitle="Master switch for all push alerts"
             toggleValue={masterOn}
             onToggle={(v) => void handleMasterToggle(v)}
             isFirst
@@ -242,8 +246,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <>
           <SettingsRow
             icon="cash-outline"
-            title="Offer notifications"
-            subtitle="When buyers make an offer on your item"
+            title="Offers"
             toggleValue={!!toggles.offers}
             onToggle={() => void toggleCategory('offers')}
             disabled={!masterOn}
@@ -252,8 +255,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="chatbubble-outline"
-            title="Message notifications"
-            subtitle="When someone sends you a message"
+            title="Messages"
             toggleValue={!!toggles.messages}
             onToggle={() => void toggleCategory('messages')}
             disabled={!masterOn}
@@ -261,8 +263,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="heart-outline"
-            title="Listing notifications"
-            subtitle="New listings from sellers you follow"
+            title="New listings"
             toggleValue={!!toggles.wishlist}
             onToggle={() => void toggleCategory('wishlist')}
             disabled={!masterOn}
@@ -270,8 +271,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="car-outline"
-            title="Order notifications"
-            subtitle="Shipping and delivery status changes"
+            title="Order updates"
             toggleValue={!!toggles.orderUpdates}
             onToggle={() => void toggleCategory('orderUpdates')}
             disabled={!masterOn}
@@ -280,7 +280,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <SettingsRow
             icon="trophy-outline"
             title="Auction alerts"
-            subtitle="Outbid, auction ending, and auction won alerts"
             toggleValue={!!toggles.auctionAlerts}
             onToggle={() => void toggleCategory('auctionAlerts')}
             disabled={!masterOn}
@@ -288,8 +287,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="cash-outline"
-            title="Price drop alerts"
-            subtitle="For items on your wishlist"
+            title="Price drops"
             toggleValue={!!toggles.priceDrops}
             onToggle={() => void toggleCategory('priceDrops')}
             disabled={!masterOn}
@@ -297,8 +295,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="megaphone-outline"
-            title="Marketing notifications"
-            subtitle="Promotions, features and announcements"
+            title="Marketing"
             toggleValue={!!toggles.news}
             onToggle={() => void toggleCategory('news')}
             disabled={!masterOn}
@@ -314,7 +311,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <SettingsRow
             icon="moon-outline"
             title="Do Not Disturb"
-            subtitle="Pause non-urgent notifications during set hours"
             toggleValue={quietHours.enabled}
             onToggle={() => { haptic.selection(); setQuietHours({ enabled: !quietHours.enabled }); }}
             isFirst
@@ -388,7 +384,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           {quietHours.enabled ? (
             <SettingsInfoBanner
               icon="moon-outline"
-              text={`Urgent alerts (order updates, security) still arrive during quiet hours. Non-urgent push notifications are silenced on this device between ${formatHour(quietHours.startHour)} and ${formatHour(quietHours.endHour)}. This setting applies to this device only.`}
+              text={`Urgent alerts still arrive. Non-urgent push is silenced between ${formatHour(quietHours.startHour)} and ${formatHour(quietHours.endHour)} on this device.`}
             />
           ) : null}
         </SettingsSection>
@@ -398,7 +394,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <SettingsRow
             icon="eye-off-outline"
             title="Notification preview"
-            subtitle="Show message content in notification previews"
             toggleValue={showPreview}
             onToggle={handleShowPreviewChange}
             isFirst
@@ -411,7 +406,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <SettingsRow
             icon="notifications-outline"
             title="Send test notification"
-            subtitle="Verify your notification settings are working"
             onPress={handleTestNotification}
             isFirst
             isLast

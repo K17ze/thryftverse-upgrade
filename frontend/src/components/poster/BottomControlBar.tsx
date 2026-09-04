@@ -180,7 +180,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     overflow: 'hidden',
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: colors.scrimTextTertiary,
   },
   galleryOverlay: {
     position: 'absolute',

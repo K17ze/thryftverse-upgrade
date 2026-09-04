@@ -23,6 +23,9 @@ class CandidateItem(BaseModel):
     quality_score: FiniteFloat = Field(default=0.5, ge=0, le=1)
     popularity_score: FiniteFloat = Field(default=0, ge=0, le=1)
     seller_trust_score: FiniteFloat = Field(default=0.5, ge=0, le=1)
+    # G8: Seller's median response time in hours. Lower = faster.
+    # Used to compute the response_velocity ranking feature.
+    seller_response_hours: FiniteFloat | None = Field(default=None, ge=0, le=720)
     available: bool = True
 
 

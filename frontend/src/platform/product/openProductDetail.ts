@@ -46,13 +46,17 @@ export function resolveProductDestination(ref: ProductReference): {
   }
 }
 
+export type ProductNavTarget =
+  | NativeStackNavigationProp<RootStackParamList>
+  | { navigate: (screen: any, params?: any) => void };
+
 /**
  * Navigate to the correct product detail screen for a given reference.
  * Drop-in replacement for ad-hoc `navigation.navigate('ItemDetail', ...)`
  * calls that bypassed the canonical resolver.
  */
 export function openProductDetail(
-  navigation: NativeStackNavigationProp<RootStackParamList>,
+  navigation: ProductNavTarget,
   ref: ProductReference,
 ): void {
   const dest = resolveProductDestination(ref);

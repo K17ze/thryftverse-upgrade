@@ -343,7 +343,7 @@ export default function CreateCoOwnScreen() {
         <View style={styles.listingMeta}>
           <Text style={[styles.listingTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
           <Text style={[styles.listingPrice, { color: colors.textSecondary }]}>
-            {formatFromFiat(item.priceGbp, currencyCode, { displayMode: 'fiat' })}
+            {formatFromFiat(item.priceGbp, 'GBP', { displayMode: 'fiat' })}
           </Text>
         </View>
         {selected && (
@@ -463,7 +463,7 @@ export default function CreateCoOwnScreen() {
                       {selectedListing.title}
                     </Text>
                     <Text style={[styles.previewPrice, { color: colors.textSecondary }]}>
-                      {formatFromFiat(selectedListing.priceGbp, currencyCode, { displayMode: 'fiat' })}
+                      {formatFromFiat(selectedListing.priceGbp, 'GBP', { displayMode: 'fiat' })}
                     </Text>
                   </View>
                 </View>
@@ -487,7 +487,7 @@ export default function CreateCoOwnScreen() {
                 <View style={styles.contextInfo}>
                   <Text style={[styles.contextTitle, { color: colors.textPrimary }]} numberOfLines={1}>{selectedListing?.title}</Text>
                   <Text style={[styles.contextPrice, { color: colors.textSecondary }]}>
-                    {selectedListing ? formatFromFiat(selectedListing.priceGbp, currencyCode, { displayMode: 'fiat' }) : '—'}
+                    {selectedListing ? formatFromFiat(selectedListing.priceGbp, 'GBP', { displayMode: 'fiat' }) : '—'}
                   </Text>
                 </View>
               </View>
@@ -648,7 +648,7 @@ export default function CreateCoOwnScreen() {
                 <View style={styles.estimatedRow}>
                   <View>
                     <Text style={[styles.estimatedValue, { color: colors.textPrimary }]}>
-                      {estimatedValue > 0 ? formatFromFiat(estimatedValue, currencyCode, { displayMode: 'fiat' }) : '—'}
+                      {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
                     </Text>
                     <Text style={[styles.estimatedSub, { color: colors.textMuted }]}>
                       {estimatedValueIze > 0 ? `${formatIzeAmount(estimatedValueIze)} stablecoin` : ''}
@@ -721,7 +721,7 @@ export default function CreateCoOwnScreen() {
                 <View style={[styles.totalRow, { borderColor: colors.border }]}>
                   <Text style={[styles.totalKey, { color: colors.textPrimary }]} numberOfLines={1}>Total value</Text>
                   <Text style={[styles.totalValue, { color: colors.textPrimary }]} numberOfLines={1}>
-                    {estimatedValue > 0 ? formatFromFiat(estimatedValue, currencyCode, { displayMode: 'fiat' }) : '—'}
+                    {estimatedValue > 0 ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' }) : '—'}
                   </Text>
                 </View>
               </View>
@@ -751,7 +751,7 @@ export default function CreateCoOwnScreen() {
                     </Text>
                     <Text style={[styles.recourseLiabilityValue, { color: colors.textPrimary }]}>
                       {estimatedValue > 0
-                        ? formatFromFiat(estimatedValue, currencyCode, { displayMode: 'fiat' })
+                        ? formatFromFiat(estimatedValue, 'GBP', { displayMode: 'fiat' })
                         : '—'}
                     </Text>
                   </View>

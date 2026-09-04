@@ -1,4 +1,4 @@
-export const MAX_MEMBERS = 50;
+export const MAX_MEMBERS = 48;
 export const MIN_MEMBERS = 1;
 export const SEARCH_DEBOUNCE_MS = 350;
 

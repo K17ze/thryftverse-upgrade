@@ -67,21 +67,12 @@ export default function BotDirectoryScreen({ navigation }: Props) {
     [selectedCategory, systemAgents]
   );
 
-  const directorySubtitle = aiCapability
-    ? aiCapability.capabilityLevel === 'provider_backed'
-      ? 'AI specialists for your group conversations'
-      : aiCapability.capabilityLevel === 'heuristic_baseline'
-      ? 'Heuristic specialists for your group conversations'
-      : 'Assistant unavailable on this deployment'
-    : 'Specialists for your group conversations';
-
   return (
     <FlagshipScreen
       scrollEnabled={false}
       header={
         <FlagshipHeader
           title="Agents"
-          subtitle={directorySubtitle}
           onBack={() => navigation.goBack()}
           rightAction={
             <AnimatedPressable
@@ -114,25 +105,23 @@ export default function BotDirectoryScreen({ navigation }: Props) {
           hapticFeedback="light"
           accessibilityRole="button"
           accessibilityLabel="Open your agents"
+          accessibilityHint="View and manage your custom agents"
         >
           <View style={styles.leadingIcon}>
             <Ionicons name="person-outline" size={24} color={colors.textPrimary} />
           </View>
           <View style={styles.yourAgentsCopy}>
             <Text style={styles.yourAgentsTitle}>Your agents</Text>
-            <Text style={styles.yourAgentsDetail} numberOfLines={2}>
+            <Text style={styles.yourAgentsDetail} numberOfLines={1}>
               {publishedCount > 0
-                ? `${publishedCount} published · create, tune, and review access`
-                : 'Create a private agent with its own instructions and voice'}
+                ? `${publishedCount} published`
+                : 'Create a private agent'}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
         </AnimatedPressable>
 
-        <View style={styles.sectionIntro}>
-          <Text style={styles.sectionTitle}>ThryftVerse agents</Text>
-          <Text style={styles.sectionDetail}>Built-in help for common chat workflows.</Text>
-        </View>
+        <View style={styles.sectionIntro} accessible={false} />
 
         <ScrollView
           horizontal
@@ -148,6 +137,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                 style={[styles.filterChip, selected && styles.filterChipSelected]}
                 scaleValue={0.96}
                 hapticFeedback="selection"
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 accessibilityRole="tab"
                 accessibilityLabel={category.label}
                 accessibilityState={{ selected }}
@@ -189,6 +179,7 @@ export default function BotDirectoryScreen({ navigation }: Props) {
                   hapticFeedback="light"
                   accessibilityRole="button"
                   accessibilityLabel={`View ${agent.name}`}
+                  accessibilityHint="Opens the agent detail screen"
                 >
                   <View style={styles.leadingIcon}>
                     <AgentIcon
@@ -268,15 +259,6 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingTop: Space.xl,
     paddingBottom: Space.sm },
-  sectionTitle: {
-    color: colors.textPrimary,
-    fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.sectionTitle.size },
-  sectionDetail: {
-    marginTop: Space.xs - 2,
-    color: colors.textMuted,
-    fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.meta.size },
   filters: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,

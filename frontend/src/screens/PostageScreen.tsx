@@ -87,7 +87,7 @@ export default function PostageScreen({ navigation }: Props) {
   const updatePostagePreferences = useStore((state) => state.updatePostagePreferences);
   const hydratePostagePreferences = useStore((state) => state.hydratePostagePreferences);
   const savedAddress = useStore((state) => state.savedAddress);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   const [carriers, setCarriers] = useState<CarrierRowData[]>([]);
   const [carrierScopeLabel, setCarrierScopeLabel] = useState<string | null>(null);
@@ -164,7 +164,7 @@ export default function PostageScreen({ navigation }: Props) {
         </Text>
         <Text style={[styles.summarySubtitle, { color: colors.textSecondary }]}>
           {selectedCarrier
-            ? `${t('postage.carrier.from', { price: formatFromFiat(selectedCarrier.priceFromGbp, currencyCode, { displayMode: 'fiat' }), eta: formatEta(selectedCarrier.etaMinDays, selectedCarrier.etaMaxDays) })}${selectedCarrier.tracking ? t('postage.carrier.trackingSuffix') : ''}`
+            ? `${t('postage.carrier.from', { price: formatFromFiat(selectedCarrier.priceFromGbp, 'GBP', { displayMode: 'fiat' }), eta: formatEta(selectedCarrier.etaMinDays, selectedCarrier.etaMaxDays) })}${selectedCarrier.tracking ? t('postage.carrier.trackingSuffix') : ''}`
             : t('postage.summary.selectCarrierHint')}
         </Text>
       </View>
@@ -223,7 +223,7 @@ export default function PostageScreen({ navigation }: Props) {
               hapticFeedback="light"
               accessibilityRole="radio"
               accessibilityState={{ checked: c.selected }}
-              accessibilityLabel={`${t('postage.carrier.a11yLabel', { label: c.label, price: formatFromFiat(c.priceFromGbp, currencyCode, { displayMode: 'fiat' }), eta: formatEta(c.etaMinDays, c.etaMaxDays) })}${c.tracking ? t('postage.carrier.trackingIncludedSuffix') : ''}`}
+              accessibilityLabel={`${t('postage.carrier.a11yLabel', { label: c.label, price: formatFromFiat(c.priceFromGbp, 'GBP', { displayMode: 'fiat' }), eta: formatEta(c.etaMinDays, c.etaMaxDays) })}${c.tracking ? t('postage.carrier.trackingIncludedSuffix') : ''}`}
             >
               <View style={styles.carrierText}>
                 <Text
@@ -236,7 +236,7 @@ export default function PostageScreen({ navigation }: Props) {
                   {c.label}
                 </Text>
                 <Text style={[styles.carrierMeta, { color: colors.textMuted }]}>
-                  from {formatFromFiat(c.priceFromGbp, currencyCode, { displayMode: 'fiat' })} · {formatEta(c.etaMinDays, c.etaMaxDays)}
+                  from {formatFromFiat(c.priceFromGbp, 'GBP', { displayMode: 'fiat' })} · {formatEta(c.etaMinDays, c.etaMaxDays)}
                   {c.tracking ? ' · tracking' : ''}
                 </Text>
               </View>

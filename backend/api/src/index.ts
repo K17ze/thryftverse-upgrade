@@ -20,7 +20,6 @@ import {
   normalizedRoutePath,
   type ApiVersion,
 } from './lib/apiVersioning.js';
-import { hashGroupCreatePayload as chatGroupHashPayload } from './lib/chatGroupIdempotency.js';
 import { validateCompositionDocument } from './lib/compositionValidation.js';
 import { performUserErasure } from './lib/userErasure.js';
 import {
@@ -244,6 +243,7 @@ import { registerSecurityRoutes } from './routes/security.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerCollectionRoutes } from './routes/collections.js';
 import { registerSearchRoutes } from './routes/search.js';
+import { registerUserRoutes } from './routes/users.js';
 import { createKysely } from './lib/kysely.js';
 import { encryptMessageBody, resolveMessageBody } from './lib/messageEncryption.js';
 import { registerCreatorDocumentRoutes } from './routes/creatorDocuments.js';
@@ -308,6 +308,8 @@ import { registerAdminAuditRoutes } from './routes/adminAudit.js';
 import { registerRetentionRoutes } from './routes/retention.js';
 import { registerOpsConsoleRoutes } from './routes/opsConsole.js';
 import { registerBotsRoutes } from './routes/bots.js';
+import { registerChatRoutes } from './routes/chat.js';
+import { registerCoOwnRoutes } from './routes/coOwn.js';
 import { registerV2Routes } from './routes/v2.js';
 import { registerSellerRoutes } from './routes/sellers.js';
 import { registerStorefrontRoutes } from './routes/storefronts.js';
@@ -361,7 +363,6 @@ import {
   getPersistedSellerRiskTier,
 } from './lib/sellerRiskTiering.js';
 import type { SellerRiskTier } from './lib/sellerRiskTiering.js';
-import { COOWN_POLICY, COMMERCE_POLICY_VERSION } from './lib/commercePolicies.js';
 import { compensateTerminalCommercePayment } from './lib/commerceCheckoutLifecycle.js';
 import {
   appendDomainEvent,
@@ -410,7 +411,7 @@ const app = Fastify({
       },
     },
   },
-  // ── Request correlation ID (2026 August Node.js production best practices) ──
+  // â”€â”€ Request correlation ID (2026 August Node.js production best practices) â”€â”€
   // Honour an incoming x-request-id header, otherwise generate a UUID.
   requestIdHeader: 'x-request-id',
   genReqId: (req) => {
@@ -419,7 +420,7 @@ const app = Fastify({
     return crypto.randomUUID();
   },
   rewriteUrl: (request) => normalizeVersionedUrl(request.url ?? '/').url,
-  // ── Server-level DoS hardening (2026 August Fastify security best practices) ──
+  // â”€â”€ Server-level DoS hardening (2026 August Fastify security best practices) â”€â”€
   // 1 MB global body limit. The rawBody parser below raises this to 2 MB for
   // webhook routes that need to verify larger signed payloads.
   bodyLimit: 1 * 1024 * 1024,
@@ -436,14 +437,14 @@ const app = Fastify({
   forceCloseConnections: 'idle',
 });
 
-// ── Correlation ID response header ────────────────────────────────────
+// â”€â”€ Correlation ID response header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Echo the request ID back on every response so clients can reference it
 // when correlating logs or reporting issues.
 app.addHook('onRequest', async (request, reply) => {
   reply.header('x-request-id', request.id);
 });
 
-// ── Structured request-completion logging ─────────────────────────────
+// â”€â”€ Structured request-completion logging â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Fastify's built-in logger already emits request/response lines, but we
 // add an explicit onResponse hook so every completed request is logged with
 // the correlation ID, method, URL, status code and response time.
@@ -457,14 +458,14 @@ app.addHook('onResponse', async (request, reply) => {
   }, 'request completed');
 });
 
-// ── Sentry breadcrumb on errors ───────────────────────────────────────
+// â”€â”€ Sentry breadcrumb on errors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // When Sentry is configured, capture a breadcrumb for every request error
 // so the error event in Sentry includes the request context.
 app.addHook('onError', async (request, reply, error) => {
   if (config.sentryDsn) {
     Sentry.addBreadcrumb({
       category: 'request',
-      message: `${request.method} ${request.url} → ${reply.statusCode}`,
+      message: `${request.method} ${request.url} â†’ ${reply.statusCode}`,
       level: 'error',
       data: { reqId: request.id, error: error.message },
     });
@@ -489,7 +490,7 @@ void app.register(fastifyRawBody, {
   runFirst: true,
 });
 
-// ── Security Headers (Helmet) & CORS ─────────────────────────────────
+// â”€â”€ Security Headers (Helmet) & CORS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Registered before rate-limit and routes so every response inherits headers.
 // Helmet locks down CSP to 'none' (this is a JSON API, not a webpage).
 void app.register(helmet, {
@@ -507,7 +508,7 @@ void app.register(helmet, {
   referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
 });
 
-// CORS — env-driven allowlist. Defaults to empty (no browser origins) which is
+// CORS â€” env-driven allowlist. Defaults to empty (no browser origins) which is
 // correct for a native-mobile API. Set CORS_ALLOWED_ORIGINS to enable web clients.
 // In development, when no origins are configured, allow all origins so the Expo
 // web target / browser preview can reach the API without extra env setup.
@@ -533,16 +534,16 @@ void app.register(cors, {
   maxAge: 86400,
 });
 
-// ── Rate-limiting strategy ──────────────────────────────────────────
+// â”€â”€ Rate-limiting strategy â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Per 2026 August OWASP API security best practices, the global rate limit
 // below is a baseline only. Sensitive routes override it with stricter
 // per-route limits via `config.rateLimit`:
-//   • Auth routes (login, signup, password reset, OTP, 2FA) — 3-5 req/min
+//   â€¢ Auth routes (login, signup, password reset, OTP, 2FA) â€” 3-5 req/min
 //     to blunt brute-force, account-creation spam and email enumeration.
-//   • Write routes (create listing, place bid, send message) — 20-30 req/min
+//   â€¢ Write routes (create listing, place bid, send message) â€” 20-30 req/min
 //     to prevent spam while allowing legitimate burst activity.
-//   • Read routes (get listing, search) — rely on the looser global limit.
-//   • Webhook routes (Stripe et al.) — exempt (`rateLimit: false`) because
+//   â€¢ Read routes (get listing, search) â€” rely on the looser global limit.
+//   â€¢ Webhook routes (Stripe et al.) â€” exempt (`rateLimit: false`) because
 //     providers send bursts of callbacks that must not be throttled.
 void app.register(rateLimit, {
   global: true,
@@ -569,12 +570,12 @@ void app.register(rateLimit, {
       retryAfterSeconds: Math.ceil(context.ttl / 1000),
     };
   },
-  // IPv6-safe key generator — fixes GHSA-grpc-p53c-r64v where IPv6 address
+  // IPv6-safe key generator â€” fixes GHSA-grpc-p53c-r64v where IPv6 address
   // rotation bypasses rate limits. We bucket by the /64 prefix (first 4
   // groups) so rotated addresses from the same /64 are counted together.
   keyGenerator: (request) => {
     const ip = request.ip;
-    // Normalize IPv6 — strip the interface suffix and lowercase so rotated
+    // Normalize IPv6 â€” strip the interface suffix and lowercase so rotated
     // IPv6 addresses from the same /64 are bucketed together.
     // See GHSA-grpc-p53c-r64v: @fastify/rate-limit <= 11.1.0 was vulnerable.
     if (ip.includes(':')) {
@@ -589,7 +590,7 @@ void app.register(rateLimit, {
   },
 });
 
-// ── User-based rate limiting for authenticated endpoints ─────────────
+// â”€â”€ User-based rate limiting for authenticated endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // In addition to the global IP-based rate limit above, authenticated
 // requests are subject to a per-user limit (200 requests per minute by
 // default). This prevents a single compromised account from exhausting
@@ -624,7 +625,7 @@ const userRateLimitHook = async (request: FastifyRequest, reply: FastifyReply) =
   }
 };
 
-// ── Production auth gate for /documentation and /metrics ─────────────
+// â”€â”€ Production auth gate for /documentation and /metrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // In production, the Swagger UI (/documentation) and Prometheus metrics
 // (/metrics) endpoints expose operational detail that must not be publicly
 // accessible. When ADMIN_TOKEN is configured, requests must present it as a
@@ -640,7 +641,7 @@ const docsAuthHook = async (request: FastifyRequest, reply: FastifyReply) => {
   }
 };
 
-// ── OpenAPI / Swagger auto-documentation ────────────────────────────
+// â”€â”€ OpenAPI / Swagger auto-documentation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Registered BEFORE route definitions so @fastify/swagger can collect route
 // schemas and generate the OpenAPI 3.0 spec. The Swagger UI is served at
 // /documentation and the raw OpenAPI JSON at /documentation/json.
@@ -696,7 +697,7 @@ void app.register(swaggerUi, {
   },
 });
 
-// ── Body size limit ──────────────────────────────────────────────────
+// â”€â”€ Body size limit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.addContentTypeParser(
   'application/json',
   { parseAs: 'string', bodyLimit: 2 * 1024 * 1024 },
@@ -973,7 +974,7 @@ function calculateWalletTopupFeeBreakdown(grossFiatAmount: number): {
   };
 }
 
-// ── Canonical auction lifecycle resolver ──
+// â”€â”€ Canonical auction lifecycle resolver â”€â”€
 // Precedence: cancelled_at > settled_at > winner terminal (Buy Now) > scheduled end > scheduled start > live
 
 export type CanonicalLifecycle =
@@ -1009,17 +1010,17 @@ export function resolveCanonicalLifecycle(input: CanonicalLifecycleInput): Canon
   const startsAt = new Date(input.startsAt).getTime();
   const endsAt = new Date(input.endsAt).getTime();
 
-  // 1. Cancelled — highest precedence, overrides everything
+  // 1. Cancelled â€” highest precedence, overrides everything
   if (input.cancelledAt) {
     return { lifecycle: 'cancelled', terminalReason: 'cancelled' };
   }
 
-  // 2. Settled — explicit settlement overrides date-based status
+  // 2. Settled â€” explicit settlement overrides date-based status
   if (input.settledAt) {
     return { lifecycle: 'settled', terminalReason: 'settled' };
   }
 
-  // 3. Winner set (Buy Now terminal) — auction is ended regardless of dates
+  // 3. Winner set (Buy Now terminal) â€” auction is ended regardless of dates
   if (input.winnerBidderId) {
     return { lifecycle: 'ended', terminalReason: 'buy_now' };
   }
@@ -1038,7 +1039,7 @@ export function resolveCanonicalLifecycle(input: CanonicalLifecycleInput): Canon
   return { lifecycle: 'live', terminalReason: null };
 }
 
-// ── Atomic idempotency claims ──
+// â”€â”€ Atomic idempotency claims â”€â”€
 
 function computeRequestHash(payload: Record<string, unknown>): string {
   const canonical = JSON.stringify(payload, Object.keys(payload).sort());
@@ -1087,7 +1088,7 @@ async function claimIdempotency(
   if (isEmptyBody) {
     return { claimed: true };
   }
-  // Existing claim with a stored response — replay it
+  // Existing claim with a stored response â€” replay it
   return {
     claimed: false,
     existing: {
@@ -1328,7 +1329,7 @@ function isPublicRoute(method: string, path: string) {
     return true;
   }
 
-  // Public discovery feeds — both use optional auth (request.authUser?.userId ?? null)
+  // Public discovery feeds â€” both use optional auth (request.authUser?.userId ?? null)
   // and only return published/active content for unauthenticated viewers.
   if (method === 'GET' && path === '/feed/home') {
     return true;
@@ -1442,7 +1443,7 @@ function isPublicRoute(method: string, path: string) {
 
   // Ops console routes use a separate workforce identity plane (JWT audience
   // "thryftverse-ops") and their own deny-by-default authorization middleware.
-  // Consumer auth must not interfere — these routes are public to the consumer
+  // Consumer auth must not interfere â€” these routes are public to the consumer
   // preHandler but gated by workforce auth inside the route module.
   if (path.startsWith('/ops/v1/')) {
     return true;
@@ -1751,7 +1752,7 @@ app.setErrorHandler((error, request, reply) => {
     return;
   }
 
-  // Fastify JSON Schema validation errors — return the same consistent
+  // Fastify JSON Schema validation errors â€” return the same consistent
   // "Invalid request payload" response shape as Zod errors so clients
   // receive a uniform 400 regardless of which validation layer caught the
   // issue. The `validation` property is set by Fastify/Ajv when schema
@@ -2016,433 +2017,6 @@ interface OnezeReconciliationRow {
 
 export function createRuntimeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
-}
-
-type ChatConversationType = 'dm' | 'group';
-type ChatSenderType = 'user' | 'bot' | 'system';
-type ChatGroupMemberRole = 'owner' | 'admin' | 'member';
-
-interface ChatConversationAccessRow {
-  id: string;
-  type: ChatConversationType;
-  title: string | null;
-  owner_id: string;
-  item_id: string | null;
-}
-
-interface ChatGroupMembershipRoleRow {
-  role: ChatGroupMemberRole;
-}
-
-interface OwnedGroupAvatarReceipt {
-  finalization_id: string;
-  finalization_url: string;
-  finalization_status: string;
-  content_type: string;
-  folder: string;
-  scope: string;
-  owner_id: string;
-  media_asset_id: string | null;
-  media_asset_status: string | null;
-  canonical_url: string | null;
-}
-
-function buildGroupInviteLink(inviteToken: string): string {
-  return `thryftverse://group-invite?token=${encodeURIComponent(inviteToken)}`;
-}
-
-async function ensureChatConversationAccess(
-  client: DbQueryable,
-  conversationId: string,
-  userId: string
-): Promise<ChatConversationAccessRow> {
-  const result = await client.query<ChatConversationAccessRow>(
-    `
-      SELECT c.id, c.type, c.title, c.owner_id, c.item_id
-      FROM chat_conversations c
-      INNER JOIN chat_members cm
-        ON cm.conversation_id = c.id
-      WHERE c.id = $1
-        AND cm.user_id = $2
-      LIMIT 1
-    `,
-    [conversationId, userId]
-  );
-
-  if (!result.rowCount) {
-    throw createApiError('CHAT_CONVERSATION_NOT_FOUND', 'Conversation not found', {
-      conversationId,
-      userId,
-    });
-  }
-
-  return result.rows[0];
-}
-
-async function ensureGroupConversationAccess(
-  client: DbQueryable,
-  conversationId: string,
-  userId: string
-): Promise<ChatConversationAccessRow> {
-  const conversation = await ensureChatConversationAccess(client, conversationId, userId);
-
-  if (conversation.type !== 'group') {
-    throw createApiError('CHAT_CONVERSATION_INVALID', 'This action is available only for group conversations', {
-      conversationId,
-      conversationType: conversation.type,
-    });
-  }
-
-  return conversation;
-}
-
-async function resolveGroupConversationMembershipRole(
-  client: DbQueryable,
-  conversationId: string,
-  userId: string
-): Promise<ChatGroupMemberRole | null> {
-  const result = await client.query<ChatGroupMembershipRoleRow>(
-    `
-      SELECT role
-      FROM chat_members
-      WHERE conversation_id = $1
-        AND user_id = $2
-      LIMIT 1
-    `,
-    [conversationId, userId]
-  );
-
-  return result.rows[0]?.role ?? null;
-}
-
-async function ensureGroupManagementAccess(
-  client: DbQueryable,
-  conversationId: string,
-  userId: string,
-  platformRole?: AuthRole
-): Promise<ChatConversationAccessRow> {
-  const conversation = await ensureGroupConversationAccess(client, conversationId, userId);
-
-  if (platformRole === 'admin' || conversation.owner_id === userId) {
-    return conversation;
-  }
-
-  const membershipRole = await resolveGroupConversationMembershipRole(client, conversationId, userId);
-  if (membershipRole === 'owner' || membershipRole === 'admin') {
-    return conversation;
-  }
-
-  throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only group owners/admins can perform this action', {
-    actorUserId: userId,
-    conversationId,
-    ownerId: conversation.owner_id,
-    membershipRole,
-  });
-}
-
-async function ensureOwnedGroupMediaReceipt(
-  client: DbQueryable,
-  input: {
-    actorUserId: string;
-    finalizationId: string;
-    mediaUrl: string;
-    folder: 'avatars' | 'covers';
-    scope: 'avatar' | 'cover';
-  }
-): Promise<void> {
-  const result = await client.query<OwnedGroupAvatarReceipt>(
-    `
-      SELECT
-        uf.id AS finalization_id,
-        uf.public_url AS finalization_url,
-        uf.status AS finalization_status,
-        uf.content_type,
-        uf.folder,
-        uf.scope,
-        uf.owner_id,
-        ma.id AS media_asset_id,
-        ma.status AS media_asset_status,
-        ma.canonical_url
-      FROM upload_finalizations uf
-      LEFT JOIN media_assets ma ON ma.upload_finalization_id = uf.id
-      WHERE uf.id = $1
-      LIMIT 1
-    `,
-    [input.finalizationId]
-  );
-
-  const receipt = result.rows[0];
-  const invalidAssetStatuses = new Set([
-    'upload_expired',
-    'integrity_failed',
-    'quarantined',
-    'rejected',
-    'revoked',
-    'deleted',
-  ]);
-  const urlMatchesReceipt = Boolean(
-    receipt
-    && (input.mediaUrl === receipt.finalization_url || input.mediaUrl === receipt.canonical_url)
-  );
-
-  const label = input.folder === 'covers' ? 'cover photo' : 'group photo';
-  if (
-    !receipt
-    || receipt.owner_id !== input.actorUserId
-    || receipt.finalization_status !== 'finalized'
-    || !receipt.content_type.startsWith('image/')
-    || receipt.folder !== input.folder
-    || receipt.scope !== input.scope
-    || !receipt.media_asset_id
-    || (receipt.media_asset_status !== null && invalidAssetStatuses.has(receipt.media_asset_status))
-    || !urlMatchesReceipt
-  ) {
-    throw createApiError(
-      'CHAT_GROUP_AVATAR_INVALID',
-      `Group ${label} must be a finalized image uploaded by the current user`,
-      { finalizationId: input.finalizationId }
-    );
-  }
-}
-
-// Backward-compatible alias for existing call sites that upload avatars.
-async function ensureOwnedGroupAvatarReceipt(
-  client: DbQueryable,
-  input: {
-    actorUserId: string;
-    finalizationId: string;
-    avatarUrl: string;
-  }
-): Promise<void> {
-  return ensureOwnedGroupMediaReceipt(client, {
-    actorUserId: input.actorUserId,
-    finalizationId: input.finalizationId,
-    mediaUrl: input.avatarUrl,
-    folder: 'avatars',
-    scope: 'avatar',
-  });
-}
-
-// ── Chat message serialization ───────────────────────────────────────────
-// P0.1/P0.7/P0.8/P0.9: Canonical message serializer that includes all
-// lifecycle fields — clientMessageId, replyToMessageId, reactions, edit
-// state, deleted state. Used by both the list and create routes so the
-// contract is identical everywhere.
-
-interface ChatMessageRow {
-  id: string;
-  sender_type: ChatSenderType;
-  sender_user_id: string | null;
-  sender_bot_id: string | null;
-  body: string;
-  body_ciphertext: string | null;
-  key_version: number | null;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-  client_message_id: string | null;
-  reply_to_message_id: string | null;
-  deleted_for_everyone_at: string | null;
-  edit_version: number;
-  edited_at: string | null;
-}
-
-function formatReactionsMap(
-  reactionsByMessage: Map<string, Map<string, string[]>>,
-  messageId: string,
-): Array<{ emoji: string; userIds: string[] }> {
-  const byEmoji = reactionsByMessage.get(messageId);
-  if (!byEmoji) return [];
-  return Array.from(byEmoji.entries()).map(([emoji, userIds]) => ({ emoji, userIds }));
-}
-
-// Batch serializer — loads reactions for all messages in a single query to
-// avoid N+1. Used by the list route which returns multiple messages.
-async function serializeChatMessageRows(
-  rows: ChatMessageRow[],
-  actorUserId: string,
-): Promise<Record<string, unknown>[]> {
-  if (rows.length === 0) return [];
-
-  const messageIds = rows.map((r) => r.id);
-  const reactionsResult = await db.query<{ message_id: string; emoji: string; user_id: string }>(
-    `SELECT message_id, emoji, user_id FROM chat_message_reactions WHERE message_id = ANY($1::text[])`,
-    [messageIds]
-  );
-
-  const reactionsByMessage = new Map<string, Map<string, string[]>>();
-  for (const r of reactionsResult.rows) {
-    let byEmoji = reactionsByMessage.get(r.message_id);
-    if (!byEmoji) {
-      byEmoji = new Map();
-      reactionsByMessage.set(r.message_id, byEmoji);
-    }
-    const existing = byEmoji.get(r.emoji);
-    if (existing) existing.push(r.user_id);
-    else byEmoji.set(r.emoji, [r.user_id]);
-  }
-
-  // Voice message binding — load in one batch to avoid N+1. Returns the
-  // canonical voice metadata so the client can render a real waveform (or
-  // an honest progress line when samples are not yet ready) and a duration.
-  const voiceResult = await db.query<{
-    message_id: string;
-    duration_ms: number;
-    bytes: string;
-    container: string;
-    codec: string;
-    waveform_samples: number[] | null;
-    waveform_sample_count: number | null;
-    waveform_algorithm_version: number | null;
-    moderation_state: string;
-  }>(
-    `SELECT message_id, duration_ms, bytes::text, container, codec,
-            waveform_samples, waveform_sample_count, waveform_algorithm_version,
-            moderation_state
-     FROM voice_messages
-     WHERE message_id = ANY($1::text[])`,
-    [messageIds]
-  );
-  const voiceByMessage = new Map<string, {
-    durationMs: number;
-    bytes: number;
-    container: string;
-    codec: string;
-    waveform: number[] | null;
-    waveformSampleCount: number | null;
-    waveformAlgorithmVersion: number | null;
-    moderationState: string;
-  }>();
-  for (const r of voiceResult.rows) {
-    voiceByMessage.set(r.message_id, {
-      durationMs: r.duration_ms,
-      bytes: Number(r.bytes),
-      container: r.container,
-      codec: r.codec,
-      waveform: Array.isArray(r.waveform_samples) ? r.waveform_samples : null,
-      waveformSampleCount: r.waveform_sample_count,
-      waveformAlgorithmVersion: r.waveform_algorithm_version,
-      moderationState: r.moderation_state,
-    });
-  }
-
-  return rows.map((row) => {
-    const baseReturn: Record<string, unknown> = {
-      id: row.id,
-      senderType: row.sender_type,
-      senderUserId: row.sender_user_id,
-      senderBotId: row.sender_bot_id,
-      body: row.body,
-      metadata: row.metadata ?? {},
-      createdAt: row.created_at,
-      clientMessageId: row.client_message_id ?? undefined,
-      replyToMessageId: row.reply_to_message_id ?? undefined,
-      deletedForEveryoneAt: row.deleted_for_everyone_at ?? undefined,
-      editVersion: row.edit_version,
-      editedAt: row.edited_at ?? undefined,
-      reactions: formatReactionsMap(reactionsByMessage, row.id),
-    };
-    const voice = voiceByMessage.get(row.id);
-    if (voice) {
-      baseReturn.voice = voice;
-    }
-    return baseReturn;
-  });
-}
-
-// Single-message serializer — for the create route where only one message
-// is returned. Uses the batch serializer with a single-element array.
-async function serializeChatMessageRow(
-  row: ChatMessageRow,
-  actorUserId: string,
-): Promise<Record<string, unknown>> {
-  const results = await serializeChatMessageRows([row], actorUserId);
-  return results[0];
-}
-
-async function listChatParticipantIds(client: DbQueryable, conversationId: string): Promise<string[]> {
-  const result = await client.query<{ user_id: string }>(
-    `
-      SELECT user_id
-      FROM chat_members
-      WHERE conversation_id = $1
-      ORDER BY joined_at ASC
-    `,
-    [conversationId]
-  );
-
-  return result.rows.map((row) => row.user_id);
-}
-
-async function listChatBotIds(client: DbQueryable, conversationId: string): Promise<string[]> {
-  const result = await client.query<{ bot_id: string }>(
-    `
-      SELECT bot_id
-      FROM chat_bot_installs
-      WHERE conversation_id = $1
-        AND status = 'active'
-      ORDER BY installed_at ASC
-    `,
-    [conversationId]
-  );
-
-  return result.rows.map((row) => row.bot_id);
-}
-
-async function appendSystemChatMessage(
-  client: DbQueryable,
-  input: {
-    conversationId: string;
-    text: string;
-    metadata?: Record<string, unknown>;
-  }
-): Promise<{ id: string; createdAt: string }> {
-  const messageId = createRuntimeId('chatmsg');
-  // PII encryption dual-write: encrypt the body before INSERT. On failure,
-  // store plaintext so the backfill worker can encrypt later.
-  let bodyToStore = input.text;
-  let bodyCiphertext: string | null = null;
-  let keyVersion: number | null = null;
-  try {
-    const encrypted = await encryptMessageBody(messageId, input.text);
-    bodyCiphertext = encrypted.ciphertext;
-    keyVersion = encrypted.keyVersion;
-    bodyToStore = '[encrypted]';
-  } catch (err) {
-    logger.warn(
-      { messageId, err: err instanceof Error ? err.message : String(err) },
-      'messageEncryption.encryptFailed — storing plaintext for backfill',
-    );
-  }
-  const result = await client.query<{ id: string; created_at: string }>(
-    `
-      INSERT INTO chat_messages (
-        id,
-        conversation_id,
-        sender_type,
-        sender_user_id,
-        sender_bot_id,
-        body,
-        body_ciphertext,
-        key_version,
-        metadata
-      )
-      VALUES ($1, $2, 'system', NULL, NULL, $3, $4, $5, $6::jsonb)
-      RETURNING id, created_at::text
-    `,
-    [
-      messageId,
-      input.conversationId,
-      bodyToStore,
-      bodyCiphertext,
-      keyVersion,
-      toJsonString(input.metadata ?? {}),
-    ]
-  );
-
-  return {
-    id: result.rows[0].id,
-    createdAt: result.rows[0].created_at,
-  };
 }
 
 function toPaymentIntentPayload(row: PaymentIntentRow) {
@@ -3291,11 +2865,11 @@ async function saveWalletIdempotentResponse(
   );
 }
 
-// ── Co-Own order idempotency (spec 10 §1) ──
+// â”€â”€ Co-Own order idempotency (spec 10 Â§1) â”€â”€
 // Prevents duplicate order placement on network retry. The client generates
 // a stable idempotency key per order attempt and reuses it across retries.
 
-// ── P0.3: Per-asset market sequence allocation ──
+// â”€â”€ P0.3: Per-asset market sequence allocation â”€â”€
 // Every public book mutation (new order, cancel, partial fill, expiry) must
 // advance this sequence exactly once. The sequence is allocated inside the
 // same transaction as the mutation, guaranteeing atomicity. Snapshot and
@@ -3304,7 +2878,7 @@ async function allocateMarketSequence(
   client: DbQueryable,
   assetId: string
 ): Promise<number> {
-  // Upsert with RETURNING — atomically allocates the next sequence number.
+  // Upsert with RETURNING â€” atomically allocates the next sequence number.
   // If the row doesn't exist, it's created with next_sequence=1 and we get 1.
   // If it exists, next_sequence is incremented and we get the new value.
   const result = await client.query<{ next_sequence: string }>(
@@ -3320,7 +2894,7 @@ async function allocateMarketSequence(
   return Number(result.rows[0].next_sequence);
 }
 
-// ── P0.6: Reservation idempotency ──
+// â”€â”€ P0.6: Reservation idempotency â”€â”€
 // Mirrors the order idempotency pattern. The reservation endpoint accepts an
 // idempotency key; this stores the response so a retry returns the original
 // reservation instead of creating a duplicate.
@@ -3508,80 +3082,6 @@ function hashCoOwnOrderPayload(payload: {
       reservationId: payload.reservationId ?? null,
     }))
     .digest('hex');
-}
-
-export function hashGroupCreatePayload(payload: unknown): string {
-  return chatGroupHashPayload(payload);
-}
-
-async function getChatGroupIdempotentResponse(
-  client: DbQueryable,
-  input: {
-    creatorId: string;
-    idempotencyKey: string;
-    requestHash: string;
-  }
-): Promise<Record<string, unknown> | null> {
-  const result = await client.query<{
-    request_hash: string;
-    response_payload: Record<string, unknown>;
-  }>(
-    `
-      SELECT request_hash, response_payload
-      FROM chat_group_idempotency_keys
-      WHERE creator_id = $1
-        AND idempotency_key = $2
-      LIMIT 1
-    `,
-    [input.creatorId, input.idempotencyKey]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    return null;
-  }
-
-  if (row.request_hash !== input.requestHash) {
-    throw createApiError(
-      'IDEMPOTENCY_KEY_REUSED',
-      'Idempotency key was already used with a different request payload'
-    );
-  }
-
-  return row.response_payload;
-}
-
-async function saveChatGroupIdempotentResponse(
-  client: DbQueryable,
-  input: {
-    creatorId: string;
-    idempotencyKey: string;
-    requestHash: string;
-    conversationId: string;
-    responsePayload: Record<string, unknown>;
-  }
-): Promise<void> {
-  await client.query(
-    `
-      INSERT INTO chat_group_idempotency_keys (
-        creator_id,
-        idempotency_key,
-        request_hash,
-        conversation_id,
-        response_payload
-      )
-      VALUES ($1, $2, $3, $4, $5::jsonb)
-      ON CONFLICT (creator_id, idempotency_key)
-      DO NOTHING
-    `,
-    [
-      input.creatorId,
-      input.idempotencyKey,
-      input.requestHash,
-      input.conversationId,
-      toJsonString(input.responsePayload),
-    ]
-  );
 }
 
 async function ensureWallet(
@@ -5050,20 +4550,7 @@ async function appendLedgerEntry(
     amountGbp?: number;
     amount?: number;
     currency?: string;
-    sourceType:
-      | 'order_payment'
-      | 'order_delivery'
-      | 'payout'
-      | 'refund'
-      | 'adjustment'
-      | 'mint'
-      | 'burn'
-      | 'coOwn_trade'
-      | 'buyout'
-      | 'reserve_reconcile'
-      | 'reserve_hold'
-      | 'reserve_release'
-      | 'transfer';
+    sourceType: string;
     sourceId: string;
     lineType: string;
     metadata?: Record<string, unknown>;
@@ -5923,7 +5410,7 @@ async function releaseCommerceOrderEscrowToSeller(
     },
   });
 
-  // ── Rolling reserve for new sellers + risk-tier reserve ───────────────
+  // â”€â”€ Rolling reserve for new sellers + risk-tier reserve â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // New sellers get a rolling reserve (Etsy pattern). Sellers flagged with
   // an elevated/high risk tier (P3.5) get an additional reserve. The
   // effective reserve is the higher of the new-seller reserve and the
@@ -5944,7 +5431,7 @@ async function releaseCommerceOrderEscrowToSeller(
     reserveReason = 'new_seller';
   }
 
-  // Apply risk-tier reserve (P3.5) — take the higher of the two.
+  // Apply risk-tier reserve (P3.5) â€” take the higher of the two.
   let persistedTier: SellerRiskTier = 'standard';
   try {
     const tierInfo = await getPersistedSellerRiskTier(client, input.sellerId);
@@ -5954,7 +5441,7 @@ async function releaseCommerceOrderEscrowToSeller(
     }
     persistedTier = tierInfo.tier;
   } catch {
-    // seller_risk_tiers table may not exist yet — fail safe (no tier reserve).
+    // seller_risk_tiers table may not exist yet â€” fail safe (no tier reserve).
   }
 
   if (effectiveReservePct > 0) {
@@ -6538,10 +6025,10 @@ async function applyOrderParcelEvent(
             [order.id, scheduledAt]
           );
         }
-        // Escrow is NOT released yet — it will be released by the sweep
+        // Escrow is NOT released yet â€” it will be released by the sweep
         // when the hold expires and no dispute/claim is open.
       } else {
-        // No hold configured — release immediately (backward compatible)
+        // No hold configured â€” release immediately (backward compatible)
         const release = await releaseCommerceOrderEscrowToSeller(client, {
           orderId: order.id,
           sellerId: order.seller_id,
@@ -6562,7 +6049,7 @@ async function applyOrderParcelEvent(
       }
     }
 
-    // ── Seller first-sale review queue ──────────────────────────────────
+    // â”€â”€ Seller first-sale review queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // If this is the seller's first sale, enqueue a review so the team
     // can verify the seller before escrow is released. The review must
     // be approved before the escrow release sweep pays out.
@@ -6589,7 +6076,7 @@ async function applyOrderParcelEvent(
         // Don't fail the delivery if the review table doesn't exist yet.
       }
 
-      // ── Per-seller risk-tier refresh + high-tier review (P3.5) ───────
+      // â”€â”€ Per-seller risk-tier refresh + high-tier review (P3.5) â”€â”€â”€â”€â”€â”€â”€
       // Recompute the seller's sale velocity and persist the risk tier so
       // the escrow release sweep can apply the tier reserve. If the seller
       // is flagged high-risk, enqueue a manual review before escrow release
@@ -6615,7 +6102,7 @@ async function applyOrderParcelEvent(
               order.seller_id,
               order.id,
               Math.round(tierMetrics.salesCount24h),
-              `High-risk tier: ${tierMetrics.salesCount24h} sales / £${tierMetrics.salesGbp24h.toFixed(2)} in 24h (avg ${tierMetrics.avgSalesPerDay7d.toFixed(1)}/day)`,
+              `High-risk tier: ${tierMetrics.salesCount24h} sales / Â£${tierMetrics.salesGbp24h.toFixed(2)} in 24h (avg ${tierMetrics.avgSalesPerDay7d.toFixed(1)}/day)`,
             ]
           );
         }
@@ -6623,7 +6110,7 @@ async function applyOrderParcelEvent(
         // Don't fail the delivery if the risk tier table doesn't exist yet.
       }
 
-      // ── Per-seller risk-tier refresh + high-tier review (P3.5) ───────
+      // â”€â”€ Per-seller risk-tier refresh + high-tier review (P3.5) â”€â”€â”€â”€â”€â”€â”€
       // Recompute the seller's sale velocity and persist the risk tier so
       // the escrow release sweep can apply the tier reserve. If the seller
       // is flagged high-risk, enqueue a manual review before escrow release
@@ -6649,7 +6136,7 @@ async function applyOrderParcelEvent(
               order.seller_id,
               order.id,
               Math.round(tierMetrics.salesCount24h),
-              `High-risk tier: ${tierMetrics.salesCount24h} sales / £${tierMetrics.salesGbp24h.toFixed(2)} in 24h (avg ${tierMetrics.avgSalesPerDay7d.toFixed(1)}/day)`,
+              `High-risk tier: ${tierMetrics.salesCount24h} sales / Â£${tierMetrics.salesGbp24h.toFixed(2)} in 24h (avg ${tierMetrics.avgSalesPerDay7d.toFixed(1)}/day)`,
             ]
           );
         }
@@ -6977,12 +6464,12 @@ async function createGatewayPaymentIntent(input: {
     moneyConversionVersion: providerMoney.trace.conversionVersion,
   };
 
-  // ── 1ZE internal gateway ───────────────────────────────────────────
-  // 1ZE marketplace payment is atomic — no external provider is needed.
+  // â”€â”€ 1ZE internal gateway â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // 1ZE marketplace payment is atomic â€” no external provider is needed.
   // The create function only records the intent; the actual 1ZE wallet
   // debit happens in settlePaymentIntent() when the intent is settled.
   // This keeps 1ZE flowing through the SAME commerce escrow as card
-  // payments: buyer 1ZE → commerce escrow (GBP) → seller payable.
+  // payments: buyer 1ZE â†’ commerce escrow (GBP) â†’ seller payable.
   if (input.gatewayId === 'oneze_internal') {
     const internalRef = `oneze_internal_${input.intentId}`;
     return {
@@ -7011,7 +6498,7 @@ async function createGatewayPaymentIntent(input: {
       customer: input.stripeCustomerId ?? undefined,
       payment_method: input.stripePaymentMethodId ?? undefined,
       metadata: toStripeMetadata(baseMetadata),
-      // ── Stripe Radar fraud scoring ──────────────────────────────────
+      // â”€â”€ Stripe Radar fraud scoring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // Pass the radar session ID from the frontend SDK so Stripe can
       // score the transaction for fraud risk. High-risk intents are
       // flagged for manual review.
@@ -7209,9 +6696,9 @@ async function createGatewayPaymentIntent(input: {
     };
   }
 
-  // ── 1ZE internal wallet gateway ────────────────────────────────────
+  // â”€â”€ 1ZE internal wallet gateway â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // 1ZE is just another payment method at checkout, like Visa or PayPal.
-  // The intent is created as 'succeeded' because the 1ZE debit is atomic —
+  // The intent is created as 'succeeded' because the 1ZE debit is atomic â€”
   // no external processor round-trip is needed. The actual wallet debit
   // and escrow credit happen in settlePaymentIntent(), flowing through the
   // same commerce escrow, dispute resolution, and seller protection as
@@ -7249,7 +6736,7 @@ async function createGatewayPaymentIntent(input: {
 
 /**
  * Create a provider-backed refund for a settled payment intent.
- * Mirrors createGatewayPaymentIntent — one branch per provider.
+ * Mirrors createGatewayPaymentIntent â€” one branch per provider.
  * Returns the provider refund reference and initial status so the caller
  * can upsert into payment_refunds and queue notifications.
  *
@@ -7296,7 +6783,7 @@ async function createGatewayRefund(input: {
     moneyConversionVersion: providerMoney.trace.conversionVersion,
   };
 
-  // ── Stripe ──────────────────────────────────────────────────────────
+  // â”€â”€ Stripe â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (input.gatewayId === 'stripe_americas' && config.stripeSecretKey) {
     const stripe = new Stripe(config.stripeSecretKey, {
       apiVersion: '2026-08-26.dahlia',
@@ -7326,7 +6813,7 @@ async function createGatewayRefund(input: {
     };
   }
 
-  // ── Razorpay ────────────────────────────────────────────────────────
+  // â”€â”€ Razorpay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // The stored providerIntentRef is the Razorpay order_id. Razorpay refunds
   // operate on payments, not orders, so we fetch the captured payment for
   // the order first, then refund it.
@@ -7379,7 +6866,7 @@ async function createGatewayRefund(input: {
     };
   }
 
-  // ── Mollie ──────────────────────────────────────────────────────────
+  // â”€â”€ Mollie â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // The stored providerIntentRef is the Mollie payment ID. Mollie refunds
   // are created against the payment.
   if (input.gatewayId === 'mollie_eu' && config.mollieApiKey) {
@@ -7411,7 +6898,7 @@ async function createGatewayRefund(input: {
     };
   }
 
-  // ── Flutterwave ─────────────────────────────────────────────────────
+  // â”€â”€ Flutterwave â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // The stored providerIntentRef is the tx_ref string. Flutterwave refunds
   // require the numeric transaction ID, so we look up the transaction by
   // tx_ref first, then refund.
@@ -7487,7 +6974,7 @@ async function createGatewayRefund(input: {
     };
   }
 
-  // ── Tap ──────────────────────────────────────────────────────────────
+  // â”€â”€ Tap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // The stored providerIntentRef is the Tap charge ID. Tap refunds are
   // created via POST /v2/refunds with the charge_id.
   if (input.gatewayId === 'tap_gulf' && config.tapSecretKey) {
@@ -7539,7 +7026,7 @@ async function createGatewayRefund(input: {
     };
   }
 
-  // ── Mock (dev only) ──────────────────────────────────────────────────
+  // â”€â”€ Mock (dev only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (config.nodeEnv !== 'production' && config.apiEnableMockWebhooks) {
     return {
       providerRefundRef: createRuntimeId(`refund_${input.gatewayId}`),
@@ -7869,36 +7356,36 @@ async function settlePaymentIntent(
         );
       }
 
-      // ── 1ZE internal gateway: debit buyer's 1ZE wallet ──────────────
+      // â”€â”€ 1ZE internal gateway: debit buyer's 1ZE wallet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       // For oneze_internal commerce payments, the buyer pays with 1ZE
       // from their wallet. The GBP total is converted to 1ZE units using
-      // the at-par pricing engine (GBP → USD → 1ZE, where 1 1ZE = $1).
+      // the at-par pricing engine (GBP â†’ USD â†’ 1ZE, where 1 1ZE = $1).
       // The debit happens here so the 1ZE flows through the SAME commerce
-      // escrow as card payments: buyer 1ZE → commerce escrow (GBP) →
+      // escrow as card payments: buyer 1ZE â†’ commerce escrow (GBP) â†’
       // seller payable.
       if (updatedIntent.gateway_id === 'oneze_internal') {
         const onezeArchEnabled = await onezeArchitectureTablesAvailable(client);
         if (!onezeArchEnabled) {
           throw createApiError(
             'PAYMENT_PROVIDER_UNAVAILABLE',
-            '1ZE wallet architecture is not available — cannot settle oneze_internal payment',
+            '1ZE wallet architecture is not available â€” cannot settle oneze_internal payment',
             { gatewayId: updatedIntent.gateway_id, orderId: paidOrder.id }
           );
         }
 
         const totalGbp = roundTo(Number(paidOrder.total_gbp), 2);
-        // At-par pricing: resolve GBP → USD FX rate (1 1ZE = $1 USD).
+        // At-par pricing: resolve GBP â†’ USD FX rate (1 1ZE = $1 USD).
         const gbpPricingQuote = await resolveCountryPricingQuoteByCurrency(client, 'GBP');
         const gbpToUsdRate = gbpPricingQuote.fxRate;
         if (!Number.isFinite(gbpToUsdRate) || gbpToUsdRate <= 0) {
           throw createApiError(
             'PAYMENT_PROVIDER_UNAVAILABLE',
-            'Unable to resolve GBP→USD FX rate for 1ZE debit',
+            'Unable to resolve GBPâ†’USD FX rate for 1ZE debit',
             { gatewayId: updatedIntent.gateway_id, orderId: paidOrder.id }
           );
         }
 
-        // GBP → USD (at par with 1ZE): 1ZE amount = GBP / fxRate
+        // GBP â†’ USD (at par with 1ZE): 1ZE amount = GBP / fxRate
         const izeAmount = Number((totalGbp / gbpToUsdRate).toFixed(6));
         if (!Number.isFinite(izeAmount) || izeAmount <= 0) {
           throw createApiError(
@@ -7913,7 +7400,7 @@ async function settlePaymentIntent(
         const walletTxId = createRuntimeId('wtx');
 
         // Debit the buyer's 1ZE wallet. applyWalletLedgerDelta throws
-        // WALLET_INSUFFICIENT_BALANCE if the balance is too low — this
+        // WALLET_INSUFFICIENT_BALANCE if the balance is too low â€” this
         // aborts the settlement transaction before any escrow entries
         // or shipment provisioning occur.
         await applyWalletLedgerDelta(client, {
@@ -7934,7 +7421,7 @@ async function settlePaymentIntent(
             izeAmount,
             debitUnits,
             pricingSource: 'fixed_par:GBP:1ZE',
-            conversionTrace: 'GBP→USD(at-par)→1ZE',
+            conversionTrace: 'GBPâ†’USD(at-par)â†’1ZE',
           },
         });
       }
@@ -8066,7 +7553,7 @@ async function markIntentFailed(
       [intentId, failureCode, failureMessage]
     );
   } catch {
-    // Best-effort — the intent stays in provider_submission_pending
+    // Best-effort â€” the intent stays in provider_submission_pending
     // for recovery by the background worker.
   }
 }
@@ -9174,7 +8661,7 @@ async function queueUserNotification(input: {
       // P0 FIX: Re-evaluate push preference before re-enqueueing. A previously
       // queued event may have been suppressed by a preference change since the
       // original insert. Re-enqueueing without re-checking would defeat
-      // suppression — the retry would send a push the user opted out of.
+      // suppression â€” the retry would send a push the user opted out of.
       if (existingEvent?.status === 'queued') {
         const retryCategory = mapEventToPushCategory(existingEvent.event_type);
         let retryShouldPush = false; // fail closed for unmapped types
@@ -9197,7 +8684,7 @@ async function queueUserNotification(input: {
             route: existingEvent.route,
           });
         } else {
-          // Preference now suppresses this event — mark it suppressed
+          // Preference now suppresses this event â€” mark it suppressed
           await db.query(
             `UPDATE notification_events SET status = 'suppressed', suppression_reason = 'preference' WHERE id = $1`,
             [existingEvent.id]
@@ -9212,14 +8699,14 @@ async function queueUserNotification(input: {
 
   const insertedEventId = insertResult.rows[0].id;
 
-  // Push preference check — fail closed for unknown event types.
+  // Push preference check â€” fail closed for unknown event types.
   // Unknown events (mapEventToPushCategory returns null) are in-app only;
   // they never bypass preferences with shouldPush=true.
   const pushCategory = mapEventToPushCategory(eventType);
   let shouldPush = false;
   let suppressionReason: string | null = null;
   if (!pushCategory) {
-    // Unknown event type — in-app only, no push
+    // Unknown event type â€” in-app only, no push
     shouldPush = false;
     suppressionReason = 'unmapped_event_type';
   } else {
@@ -9307,7 +8794,7 @@ async function queueUserNotification(input: {
 }
 
 function formatGbpAmount(amountGbp: number): string {
-  return `£${roundTo(Math.max(0, amountGbp), 2).toFixed(2)}`;
+  return `Â£${roundTo(Math.max(0, amountGbp), 2).toFixed(2)}`;
 }
 
 async function queueCommercePaymentNotifications(input: {
@@ -9625,7 +9112,7 @@ async function processPushQueueJob(job: {
   let ticketedCount = 0;
   let ticketErrorCount = 0;
 
-  // Preview policy enforcement — transform title/body based on user preference.
+  // Preview policy enforcement â€” transform title/body based on user preference.
   let pushTitle = job.title;
   let pushBody = job.body;
   const previewCategory = mapEventToPushCategory(job.eventType ?? 'generic');
@@ -9886,7 +9373,7 @@ async function processDomainOutboxEvent(event: DomainOutboxEvent): Promise<void>
     await queueUserNotification({
       userId: recipientId,
       title: 'New counter-offer',
-      body: `${formatGbpAmount(payload.offerPriceGbp)} · round ${payload.counterRound}`,
+      body: `${formatGbpAmount(payload.offerPriceGbp)} Â· round ${payload.counterRound}`,
       eventType: 'offer_countered',
       payload: {
         event: 'offer_countered',
@@ -10318,7 +9805,7 @@ function startScheduledPublicationSweepScheduler(): void {
     });
   };
 
-  // Run every 30 seconds — the SLO target is "within 60 seconds of due time".
+  // Run every 30 seconds â€” the SLO target is "within 60 seconds of due time".
   scheduledPublicationSweepTimer = setInterval(enqueueSweep, 30_000);
   scheduledPublicationSweepTimer.unref?.();
 
@@ -12290,12 +11777,12 @@ function stopOpsAlertingScheduler(): void {
   opsAlertingTimer = null;
 }
 
-// ── Fraud shadow scoring service (Phase 6) ───────────────────────────
+// â”€â”€ Fraud shadow scoring service (Phase 6) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Shared across all fraud check call sites. When FRAUD_SHADOW_ENABLED is
 // false, this is null and shadow scoring is skipped entirely. When enabled,
 // every fraud check also scores the event with the shadow ML model and logs
 // both scores to fraud_scoring_ledger. The shadow score NEVER affects the
-// user-facing fraud decision — the rule engine remains the champion.
+// user-facing fraud decision â€” the rule engine remains the champion.
 const fraudShadowService = config.fraudShadowEnabled
   ? new FraudShadowScoringService({
       db,
@@ -12305,13 +11792,13 @@ const fraudShadowService = config.fraudShadowEnabled
     })
   : null;
 
-// ── IP reputation provider (FR-09) ───────────────────────────────────
+// â”€â”€ IP reputation provider (FR-09) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // When IP_REPUTATION_PROVIDER is 'noop' (default), the noOp provider
-// returns 'unknown' for all queries — the system never fabricates a
+// returns 'unknown' for all queries â€” the system never fabricates a
 // clean reputation. Production wires 'spur', 'maxmind', or 'composite'.
 const ipReputationProvider = createIpReputationProvider(config, app.log);
 
-// ── Health & metrics routes (extracted to routes/health.ts) ──────────
+// â”€â”€ Health & metrics routes (extracted to routes/health.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 registerHealthRoutes({
   app,
   db,
@@ -12427,7 +11914,7 @@ app.get('/ops/reconciliation/latest', async (request, reply) => {
   };
 });
 
-// ── Per-intent reconciliation items (drill-down) ────────────────────────
+// â”€â”€ Per-intent reconciliation items (drill-down) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.get('/ops/reconciliation/per-intent', async (request, reply) => {
   const securityAdminError = ensureSecurityAdminAccess(request, reply);
   if (securityAdminError) {
@@ -12465,7 +11952,7 @@ app.get('/ops/reconciliation/per-intent', async (request, reply) => {
   };
 });
 
-// ── Seller first-sale review queue ──────────────────────────────────────
+// â”€â”€ Seller first-sale review queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Lists pending first-sale reviews for admin action.
 app.get('/ops/seller-first-sale-reviews', async (request, reply) => {
   const securityAdminError = ensureSecurityAdminAccess(request, reply);
@@ -12543,7 +12030,7 @@ app.post('/ops/seller-first-sale-reviews/:reviewId/action', async (request, repl
   return { ok: true, review: updated.rows[0] };
 });
 
-// ── Escrow release sweep ────────────────────────────────────────────────
+// â”€â”€ Escrow release sweep â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Releases seller escrow for orders whose buyer-protection hold has expired.
 // Called by a cron worker or manually by an admin. Skips orders with open
 // disputes to prevent releasing funds that may need to be reversed.
@@ -12622,7 +12109,7 @@ app.post('/ops/escrow/release-sweep', async (request, reply) => {
           continue;
         }
       } catch {
-        // Table may not exist yet — skip this check.
+        // Table may not exist yet â€” skip this check.
       }
 
       if (await ledgerTablesAvailable(client)) {
@@ -12868,7 +12355,7 @@ app.post('/ops/oneze/auto-adjust', async (request, reply) => {
   }
 });
 
-// ── Security key rotation route (extracted to routes/security.ts) ────
+// â”€â”€ Security key rotation route (extracted to routes/security.ts) â”€â”€â”€â”€
 registerSecurityRoutes({
   app,
   ensureSecurityAdminAccess,
@@ -12907,7 +12394,7 @@ type ProfileUserRow = {
   updated_at: string;
 };
 
-// ── Auth routes (extracted to routes/auth.ts) ────────────────────────
+// â”€â”€ Auth routes (extracted to routes/auth.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 registerAuthRoutes({ app, db, redis, fraudShadowService, ipReputationProvider });
 
 function normalizeAuthRole(role: string | null | undefined): AuthRole {
@@ -12966,11 +12453,11 @@ function toPublicProfilePayload(row: ProfileUserRow & {
     coverVideo: row.cover_video,
     role: normalizeAuthRole(row.role),
     emailVerified: Boolean(row.email_verified_at),
-    // Identity/KYC verification — distinct from email verification.
+    // Identity/KYC verification â€” distinct from email verification.
     // Derived from seller_trust_evidence (code='identity_checked', state='active', not expired).
-    // Null when no evidence exists — never defaulted to true.
+    // Null when no evidence exists â€” never defaulted to true.
     identityVerified: row.identity_verified === true ? true : undefined,
-    // Seller standards verification — distinct from email/identity.
+    // Seller standards verification â€” distinct from email/identity.
     // Derived from seller_trust_evidence (code='top_rated' or 'trader_verified', active, not expired).
     sellerVerified: row.seller_verified === true ? true : undefined,
     createdAt: row.created_at,
@@ -13149,7 +12636,7 @@ app.patch('/compliance/profile/:userId', async (request, reply) => {
   };
 });
 
-// ── DAC7 Tax Information ──
+// â”€â”€ DAC7 Tax Information â”€â”€
 
 // GET /compliance/dac7/:userId
 // Returns the user's DAC7 tax information.
@@ -13562,7 +13049,7 @@ app.get('/compliance/age-assurance/:userId', async (request, reply) => {
     level = 'self_declared';
   }
 
-  // Real-time status — must not be cached.
+  // Real-time status â€” must not be cached.
   reply.header('Cache-Control', 'no-store');
 
   return {
@@ -13575,2409 +13062,30 @@ app.get('/compliance/age-assurance/:userId', async (request, reply) => {
     },
   };
 });
-
-app.get('/users/:userId/capabilities', async (request, reply) => {
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-
-  const actorUserId = resolveAuthenticatedUserId(request, userId);
-  await ensureUserExists(actorUserId);
-
-  const profile = await getOrCreateComplianceProfile(db, actorUserId);
-  const capabilities = resolveCountryCapabilities({
-    countryCode: profile.countryCode,
-    residencyCountryCode: profile.residencyCountryCode,
-  });
-
-  return {
-    ok: true,
-    userId: actorUserId,
-    profile: {
-      countryCode: profile.countryCode,
-      residencyCountryCode: profile.residencyCountryCode,
-      kycStatus: profile.kycStatus,
-    },
-    capabilities,
-  };
-});
-
-/* ─── Profile endpoints ─── */
-
-app.get('/users/me', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query<ProfileUserRow>(
-    `
-      SELECT
-        id, username, email, display_name, bio, location, website, phone, avatar, cover_photo, cover_video,
-        role, email_verified_at, two_factor_enabled, created_at, updated_at
-      FROM users
-      WHERE id = $1
-      LIMIT 1
-    `,
-    [request.authUser.userId]
-  );
-
-  const user = result.rows[0];
-  if (!user) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  return {
-    ok: true,
-    user: toProfilePayload(user),
-  };
-});
-
-app.patch('/users/me', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    displayName: z.string().trim().min(1).max(120).optional(),
-    username: z.string().trim().min(3).max(32).optional(),
-    bio: z.string().trim().max(500).optional(),
-    location: z.string().trim().max(120).optional(),
-    website: z.string().trim().max(255).optional(),
-    phone: z.string().trim().max(30).optional(),
-    // Media fields accept either a verified asset ID (preferred) or a URL
-    // string (legacy). When an asset ID is provided, the backend verifies
-    // ownership and publishable status before persisting. When a URL string
-    // is provided, it is validated against the user's own upload_finalizations
-    // to prevent binding another user's media or an external URL.
-    avatar: z.union([z.string().trim().max(2048), z.null()]).optional(),
-    coverPhoto: z.union([z.string().trim().max(2048), z.null()]).optional(),
-    coverVideo: z.union([z.string().trim().max(2048), z.null()]).optional(),
-    avatarAssetId: z.string().min(2).max(200).optional(),
-    coverAssetId: z.string().min(2).max(200).optional(),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  // ── Resolve media URLs from verified assets when asset IDs are provided ──
-  // This is the authoritative path: the backend verifies that the asset
-  // belongs to the user and is in a publishable state, then resolves the
-  // canonical URL. The user cannot bind another owner's asset or an
-  // external URL.
-  let resolvedAvatarUrl: string | null | undefined;
-  let resolvedCoverUrl: string | null | undefined;
-
-  if (payload.avatarAssetId !== undefined) {
-    const assetResult = await db.query<{
-      canonical_url: string | null;
-      original_object_url: string;
-      status: string;
-      media_kind: string;
-    }>(
-      `SELECT canonical_url, original_object_url, status, media_kind
-       FROM media_assets
-       WHERE id = $1 AND owner_id = $2
-       LIMIT 1`,
-      [payload.avatarAssetId, request.authUser.userId]
-    );
-    const asset = assetResult.rows[0];
-    if (!asset) {
-      reply.code(422);
-      return { ok: false, error: 'Avatar asset not found or not owned by you' };
-    }
-    if (asset.media_kind !== 'image') {
-      reply.code(422);
-      return { ok: false, error: 'Avatar must be an image' };
-    }
-    // Accept publishable or published status. For non-gated environments,
-    // integrity_verified is also accepted (the asset exists and is owned).
-    if (asset.status === 'rejected' || asset.status === 'quarantined' || asset.status === 'revoked') {
-      reply.code(422);
-      return { ok: false, error: 'Avatar asset is not in a usable state', code: 'MEDIA_NOT_USABLE' };
-    }
-    resolvedAvatarUrl = asset.canonical_url ?? asset.original_object_url;
-  } else if (payload.avatar !== undefined) {
-    // Legacy URL path: validate the URL belongs to the user's own uploads.
-    // Null clears the avatar. Empty/external URLs are rejected.
-    if (payload.avatar === null) {
-      resolvedAvatarUrl = null;
-    } else {
-      const urlCheck = await db.query<{ id: string }>(
-        `SELECT id FROM upload_finalizations
-         WHERE owner_id = $1 AND (public_url = $2 OR canonical_url = $2)
-         LIMIT 1`,
-        [request.authUser.userId, payload.avatar]
-      );
-      if ((urlCheck.rowCount ?? 0) === 0) {
-        reply.code(422);
-        return {
-          ok: false,
-          error: 'Avatar URL must reference your own uploaded media. Use avatarAssetId for verified binding.',
-          code: 'MEDIA_NOT_OWNED',
-        };
-      }
-      resolvedAvatarUrl = payload.avatar;
-    }
-  }
-
-  if (payload.coverAssetId !== undefined) {
-    const assetResult = await db.query<{
-      canonical_url: string | null;
-      original_object_url: string;
-      status: string;
-      media_kind: string;
-    }>(
-      `SELECT canonical_url, original_object_url, status, media_kind
-       FROM media_assets
-       WHERE id = $1 AND owner_id = $2
-       LIMIT 1`,
-      [payload.coverAssetId, request.authUser.userId]
-    );
-    const asset = assetResult.rows[0];
-    if (!asset) {
-      reply.code(422);
-      return { ok: false, error: 'Cover asset not found or not owned by you' };
-    }
-    if (asset.media_kind !== 'image' && asset.media_kind !== 'video') {
-      reply.code(422);
-      return { ok: false, error: 'Cover must be an image or video' };
-    }
-    if (asset.status === 'rejected' || asset.status === 'quarantined' || asset.status === 'revoked') {
-      reply.code(422);
-      return { ok: false, error: 'Cover asset is not in a usable state', code: 'MEDIA_NOT_USABLE' };
-    }
-    resolvedCoverUrl = asset.canonical_url ?? asset.original_object_url;
-  } else if (payload.coverPhoto !== undefined) {
-    if (payload.coverPhoto === null) {
-      resolvedCoverUrl = null;
-    } else {
-      const urlCheck = await db.query<{ id: string }>(
-        `SELECT id FROM upload_finalizations
-         WHERE owner_id = $1 AND (public_url = $2 OR canonical_url = $2)
-         LIMIT 1`,
-        [request.authUser.userId, payload.coverPhoto]
-      );
-      if ((urlCheck.rowCount ?? 0) === 0) {
-        reply.code(422);
-        return {
-          ok: false,
-          error: 'Cover URL must reference your own uploaded media. Use coverAssetId for verified binding.',
-          code: 'MEDIA_NOT_OWNED',
-        };
-      }
-      resolvedCoverUrl = payload.coverPhoto;
-    }
-  }
-
-  const allowed: Record<string, unknown> = {};
-  if (payload.displayName !== undefined) allowed.display_name = payload.displayName;
-  if (payload.username !== undefined) allowed.username = payload.username;
-  if (payload.bio !== undefined) allowed.bio = payload.bio;
-  if (payload.location !== undefined) allowed.location = payload.location;
-  if (payload.website !== undefined) allowed.website = payload.website;
-  if (payload.phone !== undefined) allowed.phone = payload.phone;
-  if (resolvedAvatarUrl !== undefined) allowed.avatar = resolvedAvatarUrl;
-  if (resolvedCoverUrl !== undefined) allowed.cover_photo = resolvedCoverUrl;
-  if (payload.coverVideo !== undefined) allowed.cover_video = payload.coverVideo;
-
-  if (Object.keys(allowed).length === 0) {
-    reply.code(400);
-    return { ok: false, error: 'No fields provided to update' };
-  }
-
-  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
-  const values = Object.values(allowed);
-
-  await db.query(
-    `
-      UPDATE users
-      SET ${setClauses.join(', ')}, updated_at = NOW()
-      WHERE id = $1
-    `,
-    [request.authUser.userId, ...values]
-  );
-
-  // ── Record media bindings for verified assets ──────────────────────
-  // This creates an authoritative binding record in media_bindings, enabling
-  // cache invalidation and lifecycle management (detach old binding when a
-  // new one is set).
-  if (payload.avatarAssetId) {
-    try {
-      await db.query(
-        `INSERT INTO media_bindings (id, media_asset_id, owner_id, target_type, target_ref_id, role, sort_order)
-         VALUES ($1, $2, $3, 'profile', $4, 'avatar', 0)
-         ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
-         DO UPDATE SET removed_at = NULL, sort_order = EXCLUDED.sort_order`,
-        [`mbind_profile_${request.authUser.userId}_avatar`, payload.avatarAssetId, request.authUser.userId, request.authUser.userId]
-      );
-      // Soft-remove any previous avatar bindings from different assets.
-      await db.query(
-        `UPDATE media_bindings SET removed_at = NOW()
-         WHERE target_type = 'profile' AND target_ref_id = $1 AND role = 'avatar'
-           AND media_asset_id <> $2 AND removed_at IS NULL`,
-        [request.authUser.userId, payload.avatarAssetId]
-      );
-    } catch { /* non-fatal — binding is a projection */ }
-  }
-  if (payload.coverAssetId) {
-    try {
-      await db.query(
-        `INSERT INTO media_bindings (id, media_asset_id, owner_id, target_type, target_ref_id, role, sort_order)
-         VALUES ($1, $2, $3, 'profile', $4, 'cover', 0)
-         ON CONFLICT (media_asset_id, target_type, target_ref_id, role)
-         DO UPDATE SET removed_at = NULL, sort_order = EXCLUDED.sort_order`,
-        [`mbind_profile_${request.authUser.userId}_cover`, payload.coverAssetId, request.authUser.userId, request.authUser.userId]
-      );
-      await db.query(
-        `UPDATE media_bindings SET removed_at = NOW()
-         WHERE target_type = 'profile' AND target_ref_id = $1 AND role = 'cover'
-           AND media_asset_id <> $2 AND removed_at IS NULL`,
-        [request.authUser.userId, payload.coverAssetId]
-      );
-    } catch { /* non-fatal — binding is a projection */ }
-  }
-
-  const result = await db.query<ProfileUserRow>(
-    `
-      SELECT
-        id, username, email, display_name, bio, location, website, phone, avatar, cover_photo, cover_video,
-        role, email_verified_at, two_factor_enabled, created_at, updated_at
-      FROM users
-      WHERE id = $1
-      LIMIT 1
-    `,
-    [request.authUser.userId]
-  );
-
-  const user = result.rows[0];
-  if (!user) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  return {
-    ok: true,
-    user: toProfilePayload(user),
-  };
-});
-
-app.patch('/users/me/preferences', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    holidayMode: z.boolean().optional(),
-    privateProfile: z.boolean().optional(),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const allowed: Record<string, unknown> = {};
-  if (payload.holidayMode !== undefined) allowed.holiday_mode = payload.holidayMode;
-  if (payload.privateProfile !== undefined) allowed.private_profile = payload.privateProfile;
-
-  if (Object.keys(allowed).length === 0) {
-    reply.code(400);
-    return { ok: false, error: 'No fields provided to update' };
-  }
-
-  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
-  const values = Object.values(allowed);
-
-  const result = await db.query<{ holiday_mode: boolean; private_profile: boolean }>(
-    `
-      UPDATE users
-      SET ${setClauses.join(', ')}, updated_at = NOW()
-      WHERE id = $1
-      RETURNING holiday_mode, private_profile
-    `,
-    [request.authUser.userId, ...values]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  return {
-    ok: true,
-    preferences: {
-      holidayMode: row.holiday_mode,
-      privateProfile: row.private_profile,
-    },
-  };
-});
-
-// GET /users/me/postage — fetch the current user's postage settings
-app.get('/users/me/postage', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query<{
-    postage_carrier_key: string;
-    postage_free_shipping: boolean;
-    postage_bundle_discount: boolean;
-  }>(
-    `
-      SELECT postage_carrier_key, postage_free_shipping, postage_bundle_discount
-      FROM users
-      WHERE id = $1
-    `,
-    [request.authUser.userId]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  return {
-    ok: true,
-    postage: {
-      carrierKey: row.postage_carrier_key,
-      freeShipping: row.postage_free_shipping,
-      bundleDiscount: row.postage_bundle_discount,
-    },
-  };
-});
-
-app.patch('/users/me/postage', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    carrierKey: z.string().trim().min(1).max(64).optional(),
-    freeShipping: z.boolean().optional(),
-    bundleDiscount: z.boolean().optional(),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const allowed: Record<string, unknown> = {};
-  if (payload.carrierKey !== undefined) allowed.postage_carrier_key = payload.carrierKey;
-  if (payload.freeShipping !== undefined) allowed.postage_free_shipping = payload.freeShipping;
-  if (payload.bundleDiscount !== undefined) allowed.postage_bundle_discount = payload.bundleDiscount;
-
-  if (Object.keys(allowed).length === 0) {
-    reply.code(400);
-    return { ok: false, error: 'No fields provided to update' };
-  }
-
-  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
-  const values = Object.values(allowed);
-
-  const result = await db.query<{
-    postage_carrier_key: string;
-    postage_free_shipping: boolean;
-    postage_bundle_discount: boolean;
-  }>(
-    `
-      UPDATE users
-      SET ${setClauses.join(', ')}, updated_at = NOW()
-      WHERE id = $1
-      RETURNING postage_carrier_key, postage_free_shipping, postage_bundle_discount
-    `,
-    [request.authUser.userId, ...values]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  return {
-    ok: true,
-    postage: {
-      carrierKey: row.postage_carrier_key,
-      freeShipping: row.postage_free_shipping,
-      bundleDiscount: row.postage_bundle_discount,
-    },
-  };
-});
-
-// GET /users/me/sessions — list all active (non-revoked) sessions for the current user
-app.get('/users/me/sessions', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query<{
-    id: string;
-    user_agent: string | null;
-    ip_address: string | null;
-    created_at: string;
-    last_seen_at: string | null;
-    revoked_at: string | null;
-  }>(
-    `
-      SELECT id, user_agent, ip_address, created_at, last_seen_at, revoked_at
-      FROM user_sessions
-      WHERE user_id = $1 AND revoked_at IS NULL
-      ORDER BY created_at DESC
-    `,
-    [request.authUser.userId]
-  );
-
-  const currentSessionId = request.authUser.sessionId ?? null;
-
-  function parseDeviceInfo(userAgent: string | null): { deviceName: string; platform: string } {
-    if (!userAgent) {
-      return { deviceName: 'Unknown device', platform: 'Unknown' };
-    }
-    const ua = userAgent.toLowerCase();
-    let platform = 'Unknown';
-    if (ua.includes('iphone') || ua.includes('ipad') || ua.includes('ios')) {
-      platform = 'iOS';
-    } else if (ua.includes('android')) {
-      platform = 'Android';
-    } else if (ua.includes('mobile')) {
-      platform = 'Mobile';
-    } else if (ua.includes('mozilla') || ua.includes('chrome') || ua.includes('safari') || ua.includes('edge') || ua.includes('firefox')) {
-      platform = 'Web';
-    }
-
-    let deviceName = 'Unknown device';
-    if (platform === 'iOS') {
-      if (ua.includes('ipad')) {
-        deviceName = 'iPad';
-      } else if (ua.includes('iphone')) {
-        deviceName = 'iPhone';
-      } else {
-        deviceName = 'iOS device';
-      }
-    } else if (platform === 'Android') {
-      deviceName = 'Android device';
-    } else if (platform === 'Web') {
-      if (ua.includes('edg/')) {
-        deviceName = 'Edge browser';
-      } else if (ua.includes('chrome/') && !ua.includes('edg/')) {
-        deviceName = 'Chrome browser';
-      } else if (ua.includes('firefox/')) {
-        deviceName = 'Firefox browser';
-      } else if (ua.includes('safari/') && !ua.includes('chrome/')) {
-        deviceName = 'Safari browser';
-      } else {
-        deviceName = 'Web browser';
-      }
-    } else {
-      deviceName = userAgent;
-    }
-
-    return { deviceName, platform };
-  }
-
-  const sessions = result.rows.map((row) => {
-    const { deviceName, platform } = parseDeviceInfo(row.user_agent);
-    return {
-      id: row.id,
-      userAgent: row.user_agent,
-      ipAddress: row.ip_address,
-      createdAt: row.created_at,
-      lastSeenAt: row.last_seen_at,
-      isCurrent: currentSessionId ? row.id === currentSessionId : false,
-      deviceName,
-      platform,
-    };
-  });
-
-  return { ok: true, sessions };
-});
-
-// DELETE /users/me/sessions/:sessionId — revoke a specific session for the current user
-app.delete('/users/me/sessions/:sessionId', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const paramsSchema = z.object({ sessionId: z.string().min(1) });
-  const { sessionId } = paramsSchema.parse(request.params);
-
-  const sessionResult = await db.query<{ id: string }>(
-    `
-      UPDATE user_sessions
-      SET revoked_at = NOW()
-      WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
-      RETURNING id
-    `,
-    [sessionId, request.authUser.userId]
-  );
-
-  if (sessionResult.rows.length === 0) {
-    const existing = await db.query<{ revoked_at: string | null }>(
-      `SELECT revoked_at FROM user_sessions WHERE id = $1 AND user_id = $2 LIMIT 1`,
-      [sessionId, request.authUser.userId]
-    );
-
-    if (existing.rows.length === 0) {
-      reply.code(404);
-      return { ok: false, error: 'Session not found' };
-    }
-
-    reply.code(404);
-    return { ok: false, error: 'Session already revoked' };
-  }
-
-  await db.query(
-    `
-      UPDATE refresh_tokens
-      SET revoked_at = COALESCE(revoked_at, NOW())
-      WHERE session_id = $1 AND revoked_at IS NULL
-    `,
-    [sessionId]
-  );
-
-  return { ok: true };
-});
-
-// DELETE /users/me/sessions/others — revoke all other sessions (not the current one)
-app.delete('/users/me/sessions/others', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  let keepSessionId: string | null = request.authUser.sessionId ?? null;
-
-  if (!keepSessionId) {
-    const latestResult = await db.query<{ id: string }>(
-      `
-        SELECT id FROM user_sessions
-        WHERE user_id = $1 AND revoked_at IS NULL
-        ORDER BY created_at DESC
-        LIMIT 1
-      `,
-      [request.authUser.userId]
-    );
-
-    keepSessionId = latestResult.rows[0]?.id ?? null;
-  }
-
-  if (!keepSessionId) {
-    return { ok: true, revokedCount: 0 };
-  }
-
-  const revokeResult = await db.query<{ id: string }>(
-    `
-      UPDATE user_sessions
-      SET revoked_at = NOW()
-      WHERE user_id = $1 AND revoked_at IS NULL AND id <> $2
-      RETURNING id
-    `,
-    [request.authUser.userId, keepSessionId]
-  );
-
-  const revokedSessionIds = revokeResult.rows.map((row) => row.id);
-
-  if (revokedSessionIds.length > 0) {
-    await db.query(
-      `
-        UPDATE refresh_tokens
-        SET revoked_at = COALESCE(revoked_at, NOW())
-        WHERE user_id = $1
-          AND revoked_at IS NULL
-          AND session_id = ANY($2::text[])
-      `,
-      [request.authUser.userId, revokedSessionIds]
-    );
-  }
-
-  return { ok: true, revokedCount: revokedSessionIds.length };
-});
-
-// GET /users/me/personalisation — retrieve the current user's feed personalisation preferences
-app.get('/users/me/personalisation', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query<{
-    personalisation_gender_filter: string[];
-    personalisation_categories_pref: string;
-    personalisation_brands_pref: string;
-    personalisation_members_pref: string;
-  }>(
-    `
-      SELECT personalisation_gender_filter, personalisation_categories_pref,
-             personalisation_brands_pref, personalisation_members_pref
-      FROM users WHERE id = $1 LIMIT 1
-    `,
-    [request.authUser.userId]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  return {
-    ok: true,
-    personalisation: {
-      genderFilter: row.personalisation_gender_filter,
-      categoriesAndSizesPref: row.personalisation_categories_pref,
-      brandsPref: row.personalisation_brands_pref,
-      membersPref: row.personalisation_members_pref,
-    },
-  };
-});
-
-// PATCH /users/me/personalisation — sync feed personalisation preferences
-app.patch('/users/me/personalisation', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    genderFilter: z.array(z.string()).min(0).max(20).optional(),
-    categoriesAndSizesPref: z.string().trim().min(1).max(64).optional(),
-    brandsPref: z.string().trim().min(1).max(64).optional(),
-    membersPref: z.string().trim().min(1).max(64).optional(),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const allowed: Record<string, unknown> = {};
-  if (payload.genderFilter !== undefined) allowed.personalisation_gender_filter = payload.genderFilter;
-  if (payload.categoriesAndSizesPref !== undefined) allowed.personalisation_categories_pref = payload.categoriesAndSizesPref;
-  if (payload.brandsPref !== undefined) allowed.personalisation_brands_pref = payload.brandsPref;
-  if (payload.membersPref !== undefined) allowed.personalisation_members_pref = payload.membersPref;
-
-  if (Object.keys(allowed).length === 0) {
-    reply.code(400);
-    return { ok: false, error: 'No fields provided to update' };
-  }
-
-  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
-  const values = Object.values(allowed);
-
-  const result = await db.query<{
-    personalisation_gender_filter: string[];
-    personalisation_categories_pref: string;
-    personalisation_brands_pref: string;
-    personalisation_members_pref: string;
-  }>(
-    `
-      UPDATE users
-      SET ${setClauses.join(', ')}, updated_at = NOW()
-      WHERE id = $1
-      RETURNING personalisation_gender_filter, personalisation_categories_pref,
-                personalisation_brands_pref, personalisation_members_pref
-    `,
-    [request.authUser.userId, ...values]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  return {
-    ok: true,
-    personalisation: {
-      genderFilter: row.personalisation_gender_filter,
-      categoriesAndSizesPref: row.personalisation_categories_pref,
-      brandsPref: row.personalisation_brands_pref,
-      membersPref: row.personalisation_members_pref,
-    },
-  };
-});
-
-/* ── Chat Privacy Sync ── */
-
-// GET /users/me/chat-privacy — retrieve chat privacy settings
-app.get('/users/me/chat-privacy', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query<{
-    read_receipts_enabled: boolean;
-    allow_messages_from: string;
-    offers_in_chat_enabled: boolean;
-    order_updates_in_chat_enabled: boolean;
-  }>(
-    `SELECT read_receipts_enabled, allow_messages_from, offers_in_chat_enabled, order_updates_in_chat_enabled FROM users WHERE id = $1`,
-    [request.authUser.userId]
-  );
-
-  if (result.rows.length === 0) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  return {
-    ok: true,
-    chatPrivacy: {
-      readReceiptsEnabled: result.rows[0].read_receipts_enabled,
-      allowMessagesFrom: result.rows[0].allow_messages_from,
-      offersInChatEnabled: result.rows[0].offers_in_chat_enabled,
-      orderUpdatesInChatEnabled: result.rows[0].order_updates_in_chat_enabled,
-    },
-  };
-});
-
-// PATCH /users/me/chat-privacy — update chat privacy settings
-app.patch('/users/me/chat-privacy', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    readReceiptsEnabled: z.boolean().optional(),
-    allowMessagesFrom: z.enum(['everyone', 'following', 'nobody']).optional(),
-    offersInChatEnabled: z.boolean().optional(),
-    orderUpdatesInChatEnabled: z.boolean().optional(),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const allowed: Record<string, unknown> = {};
-  if (payload.readReceiptsEnabled !== undefined) allowed.read_receipts_enabled = payload.readReceiptsEnabled;
-  if (payload.allowMessagesFrom !== undefined) allowed.allow_messages_from = payload.allowMessagesFrom;
-  if (payload.offersInChatEnabled !== undefined) allowed.offers_in_chat_enabled = payload.offersInChatEnabled;
-  if (payload.orderUpdatesInChatEnabled !== undefined) allowed.order_updates_in_chat_enabled = payload.orderUpdatesInChatEnabled;
-
-  if (Object.keys(allowed).length === 0) {
-    reply.code(400);
-    return { ok: false, error: 'No fields provided to update' };
-  }
-
-  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
-  const values = Object.values(allowed);
-
-  const result = await db.query<{ read_receipts_enabled: boolean; allow_messages_from: string; offers_in_chat_enabled: boolean; order_updates_in_chat_enabled: boolean }>(
-    `UPDATE users SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $1
-     RETURNING read_receipts_enabled, allow_messages_from, offers_in_chat_enabled, order_updates_in_chat_enabled`,
-    [request.authUser.userId, ...values]
-  );
-
-  if (result.rows.length === 0) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  return {
-    ok: true,
-    chatPrivacy: {
-      readReceiptsEnabled: result.rows[0].read_receipts_enabled,
-      allowMessagesFrom: result.rows[0].allow_messages_from,
-      offersInChatEnabled: result.rows[0].offers_in_chat_enabled,
-      orderUpdatesInChatEnabled: result.rows[0].order_updates_in_chat_enabled,
-    },
-  };
-});
-
-/* ── Activity Status ── */
-
-// PATCH /users/me/activity-status — toggle online status visibility
-app.patch('/users/me/activity-status', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({ visible: z.boolean() });
-  const { visible } = bodySchema.parse(request.body ?? {});
-
-  await db.query(
-    `UPDATE users SET activity_status_visible = $2, updated_at = NOW() WHERE id = $1`,
-    [request.authUser.userId, visible]
-  );
-
-  return { ok: true, activityStatusVisible: visible };
-});
-
-/* ── Search Visibility ── */
-
-// PATCH /users/me/search-visibility — toggle search visibility
-app.patch('/users/me/search-visibility', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({ visibility: z.enum(['visible', 'hidden']) });
-  const { visibility } = bodySchema.parse(request.body ?? {});
-
-  await db.query(
-    `UPDATE users SET search_visibility = $2, updated_at = NOW() WHERE id = $1`,
-    [request.authUser.userId, visibility]
-  );
-
-  return { ok: true, searchVisibility: visibility };
-});
-
-/* ── Locale Preferences ── */
-
-// PATCH /users/me/locale — sync language/currency/region preferences
-app.patch('/users/me/locale', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    locale: z.string().trim().min(2).max(10).optional(),
-    currencyCode: z.string().trim().length(3).optional(),
-    regionCode: z.string().trim().min(2).max(5).optional(),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const allowed: Record<string, unknown> = {};
-  if (payload.locale !== undefined) allowed.locale = payload.locale;
-  if (payload.currencyCode !== undefined) allowed.currency_code = payload.currencyCode.toUpperCase();
-  if (payload.regionCode !== undefined) allowed.region_code = payload.regionCode;
-
-  if (Object.keys(allowed).length === 0) {
-    reply.code(400);
-    return { ok: false, error: 'No fields provided to update' };
-  }
-
-  const setClauses = Object.keys(allowed).map((key, idx) => `${key} = $${idx + 2}`);
-  const values = Object.values(allowed);
-
-  const result = await db.query<{ locale: string | null; currency_code: string; region_code: string | null }>(
-    `UPDATE users SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $1
-     RETURNING locale, currency_code, region_code`,
-    [request.authUser.userId, ...values]
-  );
-
-  if (result.rows.length === 0) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  return {
-    ok: true,
-    locale: {
-      locale: result.rows[0].locale,
-      currencyCode: result.rows[0].currency_code,
-      regionCode: result.rows[0].region_code,
-    },
-  };
-});
-
-/* ── Connected Accounts ── */
-
-// GET /users/me/connected-accounts — list linked OAuth providers
-app.get('/users/me/connected-accounts', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query<{
-    id: string;
-    provider: string;
-    provider_email: string | null;
-    linked_at: string;
-    metadata: Record<string, unknown> | null;
-  }>(
-    `SELECT id, provider, provider_email, linked_at, metadata
-     FROM user_connected_accounts
-     WHERE user_id = $1 AND unlinked_at IS NULL
-     ORDER BY linked_at ASC`,
-    [request.authUser.userId]
-  );
-
-  return {
-    ok: true,
-    accounts: result.rows.map((row) => ({
-      id: row.id,
-      provider: row.provider,
-      providerEmail: row.provider_email,
-      linkedAt: row.linked_at,
-      metadata: row.metadata,
-    })),
-  };
-});
-
-// DELETE /users/me/connected-accounts/:id — unlink a connected account
-app.delete('/users/me/connected-accounts/:id', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const paramsSchema = z.object({ id: z.string().min(1) });
-  const { id } = paramsSchema.parse(request.params);
-
-  // Check the user has another auth method (password or another connected account)
-  const userResult = await db.query<{ password_hash: string | null }>(
-    `SELECT password_hash FROM users WHERE id = $1`,
-    [request.authUser.userId]
-  );
-
-  if (userResult.rows.length === 0) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  const otherAccountsResult = await db.query(
-    `SELECT COUNT(*)::int AS count FROM user_connected_accounts
-     WHERE user_id = $1 AND id != $2 AND unlinked_at IS NULL`,
-    [request.authUser.userId, id]
-  );
-
-  const hasPassword = userResult.rows[0].password_hash != null;
-  const hasOtherAccounts = otherAccountsResult.rows[0].count > 0;
-
-  if (!hasPassword && !hasOtherAccounts) {
-    reply.code(400);
-    return {
-      ok: false,
-      error: 'Cannot unlink your only authentication method. Set a password first.',
-    };
-  }
-
-  const result = await db.query(
-    `UPDATE user_connected_accounts SET unlinked_at = NOW() WHERE id = $1 AND user_id = $2 AND unlinked_at IS NULL`,
-    [id, request.authUser.userId]
-  );
-
-  if (result.rowCount === 0) {
-    reply.code(404);
-    return { ok: false, error: 'Connected account not found' };
-  }
-
-  return { ok: true };
-});
-
-/* ── Email Notification Preferences ── */
-
-// GET /users/me/email-preferences — retrieve per-category email preferences
-app.get('/users/me/email-preferences', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query(
-    `SELECT * FROM user_email_preferences WHERE user_id = $1`,
-    [request.authUser.userId]
-  );
-
-  if (result.rows.length === 0) {
-    // Return defaults
-    return {
-      ok: true,
-      preferences: {
-        orderUpdates: true,
-        messageNotifications: true,
-        priceDropAlerts: true,
-        newListingsFromFollowing: true,
-        marketing: false,
-        securityAlerts: true,
-        distributionNotices: true,
-        corporateActionNotices: true,
-      },
-    };
-  }
-
-  const row = result.rows[0] as Record<string, unknown>;
-  return {
-    ok: true,
-    preferences: {
-      orderUpdates: row.order_updates,
-      messageNotifications: row.message_notifications,
-      priceDropAlerts: row.price_drop_alerts,
-      newListingsFromFollowing: row.new_listings_from_following,
-      marketing: row.marketing,
-      securityAlerts: row.security_alerts,
-      distributionNotices: row.distribution_notices,
-      corporateActionNotices: row.corporate_action_notices,
-    },
-  };
-});
-
-// PUT /users/me/email-preferences — update per-category email preferences
-app.put('/users/me/email-preferences', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    orderUpdates: z.boolean().optional(),
-    messageNotifications: z.boolean().optional(),
-    priceDropAlerts: z.boolean().optional(),
-    newListingsFromFollowing: z.boolean().optional(),
-    marketing: z.boolean().optional(),
-    securityAlerts: z.boolean().optional(),
-    distributionNotices: z.boolean().optional(),
-    corporateActionNotices: z.boolean().optional(),
-  });
-
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const columns: Record<string, boolean> = {};
-  if (payload.orderUpdates !== undefined) columns.order_updates = payload.orderUpdates;
-  if (payload.messageNotifications !== undefined) columns.message_notifications = payload.messageNotifications;
-  if (payload.priceDropAlerts !== undefined) columns.price_drop_alerts = payload.priceDropAlerts;
-  if (payload.newListingsFromFollowing !== undefined) columns.new_listings_from_following = payload.newListingsFromFollowing;
-  if (payload.marketing !== undefined) columns.marketing = payload.marketing;
-  if (payload.securityAlerts !== undefined) columns.security_alerts = payload.securityAlerts;
-  if (payload.distributionNotices !== undefined) columns.distribution_notices = payload.distributionNotices;
-  if (payload.corporateActionNotices !== undefined) columns.corporate_action_notices = payload.corporateActionNotices;
-
-  if (Object.keys(columns).length === 0) {
-    reply.code(400);
-    return { ok: false, error: 'No fields provided to update' };
-  }
-
-  const setClauses = Object.keys(columns).map((key, idx) => `${key} = $${idx + 2}`);
-  const values = Object.values(columns);
-
-  await db.query(
-    `INSERT INTO user_email_preferences (user_id, ${Object.keys(columns).join(', ')})
-     VALUES ($1, ${values.map((_, idx) => `$${idx + 2}`).join(', ')})
-     ON CONFLICT (user_id) DO UPDATE SET ${setClauses.join(', ')}, updated_at = NOW()`,
-    [request.authUser.userId, ...values]
-  );
-
-  return { ok: true };
-});
-
-/* ── Co-Own Price Alerts ── */
-
-// GET /co-own/price-alerts — list user's Co-Own price alerts
-app.get('/co-own/price-alerts', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query<{
-    id: string;
-    asset_id: string;
-    condition: string;
-    target_price_gbp_minor: string | number;
-    active: boolean;
-    triggered_at: string | null;
-    created_at: string;
-  }>(
-    `SELECT id, asset_id, condition, target_price_gbp_minor, active, triggered_at, created_at
-     FROM coown_price_alerts WHERE user_id = $1 ORDER BY created_at DESC`,
-    [request.authUser.userId]
-  );
-
-  return {
-    ok: true,
-    alerts: result.rows.map((row) => ({
-      id: row.id,
-      assetId: row.asset_id,
-      condition: row.condition,
-      targetPriceGbpMinor: Number(row.target_price_gbp_minor),
-      active: row.active,
-      triggeredAt: row.triggered_at,
-      createdAt: row.created_at,
-    })),
-  };
-});
-
-// POST /co-own/price-alerts — create a Co-Own price alert
-app.post('/co-own/price-alerts', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    assetId: z.string().min(2).max(128),
-    condition: z.enum(['above', 'below']),
-    targetPriceGbpMinor: z.number().int().positive(),
-  });
-
-  const { assetId, condition, targetPriceGbpMinor } = bodySchema.parse(request.body ?? {});
-
-  const result = await db.query<{
-    id: string;
-    created_at: string;
-  }>(
-    `INSERT INTO coown_price_alerts (user_id, asset_id, condition, target_price_gbp_minor)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (user_id, asset_id, condition, target_price_gbp_minor) WHERE active = TRUE
-     DO UPDATE SET active = TRUE, updated_at = NOW()
-     RETURNING id, created_at`,
-    [request.authUser.userId, assetId, condition, targetPriceGbpMinor]
-  );
-
-  reply.code(201);
-  return {
-    ok: true,
-    alert: {
-      id: result.rows[0].id,
-      assetId,
-      condition,
-      targetPriceGbpMinor,
-      active: true,
-      createdAt: result.rows[0].created_at,
-    },
-  };
-});
-
-// DELETE /co-own/price-alerts/:id — delete a Co-Own price alert
-app.delete('/co-own/price-alerts/:id', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const paramsSchema = z.object({ id: z.string().min(1) });
-  const { id } = paramsSchema.parse(request.params);
-
-  await db.query(
-    `DELETE FROM coown_price_alerts WHERE id = $1 AND user_id = $2`,
-    [id, request.authUser.userId]
-  );
-
-  return { ok: true };
-});
-
-// PATCH /co-own/price-alerts/:id — toggle active state of a Co-Own price alert
-app.patch('/co-own/price-alerts/:id', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const paramsSchema = z.object({ id: z.string().min(1) });
-  const { id } = paramsSchema.parse(request.params);
-
-  const bodySchema = z.object({
-    active: z.boolean(),
-  });
-  const { active } = bodySchema.parse(request.body ?? {});
-
-  const result = await db.query<{
-    id: string;
-    asset_id: string;
-    condition: string;
-    target_price_gbp_minor: string | number;
-    active: boolean;
-    triggered_at: string | null;
-    created_at: string;
-  }>(
-    `UPDATE coown_price_alerts
-     SET active = $3, updated_at = NOW()
-     WHERE id = $1 AND user_id = $2
-     RETURNING id, asset_id, condition, target_price_gbp_minor, active, triggered_at, created_at`,
-    [id, request.authUser.userId, active]
-  );
-
-  if (result.rows.length === 0) {
-    reply.code(404);
-    return { ok: false, error: 'Alert not found' };
-  }
-
-  const row = result.rows[0];
-  return {
-    ok: true,
-    alert: {
-      id: row.id,
-      assetId: row.asset_id,
-      condition: row.condition,
-      targetPriceGbpMinor: Number(row.target_price_gbp_minor),
-      active: row.active,
-      triggeredAt: row.triggered_at,
-      createdAt: row.created_at,
-    },
-  };
-});
-
-/* ── Co-Own Price History (OHLCV) ── */
-
-// GET /co-own/assets/:assetId/price-history — aggregated OHLCV candles
-app.get('/co-own/assets/:assetId/price-history', async (request) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
-  const { assetId } = paramsSchema.parse(request.params);
-
-  const querySchema = z.object({
-    interval: z.enum(['1h', '4h', '1d', '1w']).default('1d'),
-    limit: z.coerce.number().int().min(1).max(500).default(100),
-  });
-  const { interval, limit } = querySchema.parse(request.query);
-
-  // First try the pre-aggregated table
-  const cached = await db.query<{
-    bucket_start: string;
-    open_gbp_minor: string | number;
-    high_gbp_minor: string | number;
-    low_gbp_minor: string | number;
-    close_gbp_minor: string | number;
-    volume_units: string | number;
-    trade_count: string | number;
-  }>(
-    `SELECT bucket_start, open_gbp_minor, high_gbp_minor, low_gbp_minor, close_gbp_minor,
-            volume_units, trade_count
-     FROM coown_price_history
-     WHERE asset_id = $1 AND interval = $2
-     ORDER BY bucket_start DESC
-     LIMIT $3`,
-    [assetId, interval, limit]
-  );
-
-  if (cached.rows.length > 0) {
-    return {
-      ok: true,
-      interval,
-      candles: cached.rows.reverse().map((row) => ({
-        timestamp: row.bucket_start,
-        openGbpMinor: Number(row.open_gbp_minor),
-        highGbpMinor: Number(row.high_gbp_minor),
-        lowGbpMinor: Number(row.low_gbp_minor),
-        closeGbpMinor: Number(row.close_gbp_minor),
-        volumeUnits: Number(row.volume_units),
-        tradeCount: Number(row.trade_count),
-      })),
-    };
-  }
-
-  // Fallback: aggregate from executions in real-time
-  const intervalClause: Record<string, string> = {
-    '1h': "date_trunc('hour', executed_at)",
-    '4h': "date_trunc('hour', executed_at) - (EXTRACT(HOUR FROM executed_at)::int % 4) * INTERVAL '1 hour'",
-    '1d': "date_trunc('day', executed_at)",
-    '1w': "date_trunc('week', executed_at)",
-  };
-
-  const result = await db.query<{
-    bucket_start: string;
-    open_gbp_minor: string | number;
-    high_gbp_minor: string | number;
-    low_gbp_minor: string | number;
-    close_gbp_minor: string | number;
-    volume_units: string | number;
-    trade_count: string | number;
-  }>(
-    `SELECT
-       ${intervalClause[interval]} AS bucket_start,
-       (array_agg(price_gbp_minor ORDER BY executed_at ASC))[1] AS open_gbp_minor,
-       MAX(price_gbp_minor) AS high_gbp_minor,
-       MIN(price_gbp_minor) AS low_gbp_minor,
-       (array_agg(price_gbp_minor ORDER BY executed_at DESC))[1] AS close_gbp_minor,
-       SUM(units)::int AS volume_units,
-       COUNT(*)::int AS trade_count
-     FROM coown_executions
-     WHERE asset_id = $1
-     GROUP BY 1
-     ORDER BY bucket_start DESC
-     LIMIT $2`,
-    [assetId, limit]
-  );
-
-  return {
-    ok: true,
-    interval,
-    candles: result.rows.reverse().map((row) => ({
-      timestamp: row.bucket_start,
-      openGbpMinor: Number(row.open_gbp_minor),
-      highGbpMinor: Number(row.high_gbp_minor),
-      lowGbpMinor: Number(row.low_gbp_minor),
-      closeGbpMinor: Number(row.close_gbp_minor),
-      volumeUnits: Number(row.volume_units),
-      tradeCount: Number(row.trade_count),
-    })),
-  };
-});
-
-/* ── Co-Own Governance Voting ── */
-
-// GET /co-own/corporate-actions/:actionId/votes — list votes for a governance action
-app.get('/co-own/corporate-actions/:actionId/votes', async (request) => {
-  const paramsSchema = z.object({ actionId: z.string().min(2).max(128) });
-  const { actionId } = paramsSchema.parse(request.params);
-
-  const result = await db.query<{
-    vote: string;
-    voting_power_units: string | number;
-    count: string | number;
-    total_power: string | number;
-  }>(
-    `SELECT vote, SUM(voting_power_units)::bigint AS voting_power_units,
-            COUNT(*)::int AS count,
-            SUM(SUM(voting_power_units)) OVER ()::bigint AS total_power
-     FROM coown_governance_votes
-     WHERE corporate_action_id = $1
-     GROUP BY vote
-     ORDER BY vote`,
-    [actionId]
-  );
-
-  const summary = result.rows.map((row) => ({
-    vote: row.vote,
-    votingPowerUnits: Number(row.voting_power_units),
-    voteCount: Number(row.count),
-  }));
-
-  const totalPower = result.rows.length > 0 ? Number(result.rows[0].total_power) : 0;
-
-  // Check if the current user has voted
-  const authUserId = request.authUser?.userId;
-  let myVote: string | null = null;
-  if (authUserId) {
-    const myVoteResult = await db.query<{ vote: string }>(
-      `SELECT vote FROM coown_governance_votes WHERE corporate_action_id = $1 AND user_id = $2`,
-      [actionId, authUserId]
-    );
-    if (myVoteResult.rows.length > 0) myVote = myVoteResult.rows[0].vote;
-  }
-
-  return {
-    ok: true,
-    summary,
-    totalVotingPower: totalPower,
-    myVote,
-  };
-});
-
-// POST /co-own/corporate-actions/:actionId/vote — cast a governance vote
-app.post('/co-own/corporate-actions/:actionId/vote', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const paramsSchema = z.object({ actionId: z.string().min(2).max(128) });
-  const { actionId } = paramsSchema.parse(request.params);
-
-  const bodySchema = z.object({
-    assetId: z.string().min(2).max(128),
-    vote: z.enum(['for', 'against', 'abstain']),
-    rationale: z.string().trim().max(2000).optional(),
-  });
-
-  const { assetId, vote, rationale } = bodySchema.parse(request.body ?? {});
-
-  // Verify the user holds units of this asset
-  const holdingsResult = await db.query<{ units: string | number }>(
-    `SELECT COALESCE(SUM(units), 0)::bigint AS units
-     FROM coown_holdings
-     WHERE asset_id = $1 AND holder_user_id = $2`,
-    [assetId, request.authUser.userId]
-  );
-
-  const votingPower = Number(holdingsResult.rows[0]?.units ?? 0);
-  if (votingPower === 0) {
-    reply.code(403);
-    return { ok: false, error: 'You must hold units of this asset to vote' };
-  }
-
-  // Verify the corporate action is a governance type and still open
-  const actionResult = await db.query<{ status: string; action_type: string }>(
-    `SELECT status, action_type FROM coown_corporate_actions WHERE id = $1`,
-    [actionId]
-  );
-
-  if (actionResult.rows.length === 0) {
-    reply.code(404);
-    return { ok: false, error: 'Corporate action not found' };
-  }
-
-  if (actionResult.rows[0].action_type !== 'governance') {
-    reply.code(400);
-    return { ok: false, error: 'Voting is only available for governance actions' };
-  }
-
-  if (actionResult.rows[0].status !== 'open') {
-    reply.code(400);
-    return { ok: false, error: 'Voting has closed for this action' };
-  }
-
-  // Upsert the vote (user can change their vote while open)
-  const result = await db.query<{ created_at: string }>(
-    `INSERT INTO coown_governance_votes (corporate_action_id, user_id, asset_id, vote, voting_power_units, rationale)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (corporate_action_id, user_id)
-     DO UPDATE SET vote = $4, voting_power_units = $5, rationale = $6, created_at = NOW()
-     RETURNING created_at`,
-    [actionId, request.authUser.userId, assetId, vote, votingPower, rationale ?? null]
-  );
-
-  return {
-    ok: true,
-    vote: {
-      actionId,
-      vote,
-      votingPowerUnits: votingPower,
-      createdAt: result.rows[0].created_at,
-    },
-  };
-});
-
-/* ── Co-Own DRIP ── */
-
-// GET /co-own/drip/enrollments — list user's DRIP enrollments
-app.get('/co-own/drip/enrollments', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query<{
-    asset_id: string;
-    enrolled: boolean;
-    enrolled_at: string | null;
-  }>(
-    `SELECT asset_id, enrolled, enrolled_at FROM coown_drip_enrollments WHERE user_id = $1`,
-    [request.authUser.userId]
-  );
-
-  return {
-    ok: true,
-    enrollments: result.rows.map((row) => ({
-      assetId: row.asset_id,
-      enrolled: row.enrolled,
-      enrolledAt: row.enrolled_at,
-    })),
-  };
-});
-
-// POST /co-own/drip/enroll — enroll or unenroll from DRIP for an asset
-app.post('/co-own/drip/enroll', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    assetId: z.string().min(2).max(128),
-    enrolled: z.boolean(),
-  });
-
-  const { assetId, enrolled } = bodySchema.parse(request.body ?? {});
-
-  await db.query(
-    `INSERT INTO coown_drip_enrollments (user_id, asset_id, enrolled, enrolled_at)
-     VALUES ($1, $2, $3, CASE WHEN $3 THEN NOW() ELSE NULL END)
-     ON CONFLICT (user_id, asset_id)
-     DO UPDATE SET enrolled = $3, enrolled_at = CASE WHEN $3 THEN NOW() ELSE NULL END, updated_at = NOW()`,
-    [request.authUser.userId, assetId, enrolled]
-  );
-
-  return { ok: true, assetId, enrolled };
-});
-
-/* ── Co-Own Recurring Orders ── */
-
-// GET /co-own/recurring-orders — list user's recurring orders
-app.get('/co-own/recurring-orders', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const result = await db.query<{
-    id: string;
-    asset_id: string;
-    side: string;
-    units_per_execution: number;
-    frequency: string;
-    next_execution_at: string;
-    max_price_gbp_minor: string | number | null;
-    active: boolean;
-    executions_count: number;
-    created_at: string;
-  }>(
-    `SELECT id, asset_id, side, units_per_execution, frequency, next_execution_at,
-            max_price_gbp_minor, active, executions_count, created_at
-     FROM coown_recurring_orders WHERE user_id = $1 ORDER BY created_at DESC`,
-    [request.authUser.userId]
-  );
-
-  return {
-    ok: true,
-    orders: result.rows.map((row) => ({
-      id: row.id,
-      assetId: row.asset_id,
-      side: row.side,
-      unitsPerExecution: row.units_per_execution,
-      frequency: row.frequency,
-      nextExecutionAt: row.next_execution_at,
-      maxPriceGbpMinor: row.max_price_gbp_minor == null ? null : Number(row.max_price_gbp_minor),
-      active: row.active,
-      executionsCount: row.executions_count,
-      createdAt: row.created_at,
-    })),
-  };
-});
-
-// POST /co-own/recurring-orders — create a recurring order
-app.post('/co-own/recurring-orders', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    assetId: z.string().min(2).max(128),
-    unitsPerExecution: z.number().int().min(1).max(10000),
-    frequency: z.enum(['weekly', 'biweekly', 'monthly']),
-    maxPriceGbpMinor: z.number().int().positive().optional(),
-  });
-
-  const { assetId, unitsPerExecution, frequency, maxPriceGbpMinor } = bodySchema.parse(request.body ?? {});
-
-  const nextExecutionDate = new Date();
-  if (frequency === 'weekly') nextExecutionDate.setDate(nextExecutionDate.getDate() + 7);
-  else if (frequency === 'biweekly') nextExecutionDate.setDate(nextExecutionDate.getDate() + 14);
-  else nextExecutionDate.setMonth(nextExecutionDate.getMonth() + 1);
-
-  const result = await db.query<{
-    id: string;
-    next_execution_at: string;
-    created_at: string;
-  }>(
-    `INSERT INTO coown_recurring_orders
-       (user_id, asset_id, side, units_per_execution, frequency, next_execution_at, max_price_gbp_minor)
-     VALUES ($1, $2, 'buy', $3, $4, $5, $6)
-     RETURNING id, next_execution_at, created_at`,
-    [request.authUser.userId, assetId, unitsPerExecution, frequency, nextExecutionDate, maxPriceGbpMinor ?? null]
-  );
-
-  reply.code(201);
-  return {
-    ok: true,
-    order: {
-      id: result.rows[0].id,
-      assetId,
-      side: 'buy',
-      unitsPerExecution,
-      frequency,
-      nextExecutionAt: result.rows[0].next_execution_at,
-      maxPriceGbpMinor: maxPriceGbpMinor ?? null,
-      active: true,
-      executionsCount: 0,
-      createdAt: result.rows[0].created_at,
-    },
-  };
-});
-
-// DELETE /co-own/recurring-orders/:id — cancel a recurring order
-app.delete('/co-own/recurring-orders/:id', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const paramsSchema = z.object({ id: z.string().min(1) });
-  const { id } = paramsSchema.parse(request.params);
-
-  await db.query(
-    `UPDATE coown_recurring_orders SET active = FALSE, updated_at = NOW() WHERE id = $1 AND user_id = $2`,
-    [id, request.authUser.userId]
-  );
-
-  return { ok: true };
-});
-
-/* ── Co-Own Tax Documents ── */
-
-// GET /users/me/co-own/tax-documents — generate annual tax statement
-app.get('/users/me/co-own/tax-documents', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const querySchema = z.object({
-    taxYear: z.string().regex(/^\d{4}-\d{4}$/).optional(),
-  });
-  const { taxYear } = querySchema.parse(request.query);
-
-  // Determine UK tax year (April 6 to April 5)
-  let startDate: string;
-  let endDate: string;
-  if (taxYear) {
-    const [startYear] = taxYear.split('-');
-    startDate = `${startYear}-04-06`;
-    endDate = `${parseInt(startYear) + 1}-04-05`;
-  } else {
-    const now = new Date();
-    const currentYear = now.getMonth() < 3 || (now.getMonth() === 3 && now.getDate() < 6)
-      ? now.getFullYear() - 1
-      : now.getFullYear();
-    startDate = `${currentYear}-04-06`;
-    endDate = `${currentYear + 1}-04-05`;
-  }
-
-  // Get all executions for the user in the tax year
-  const buysResult = await db.query<{
-    asset_id: string;
-    total_gbp_minor: string | number;
-    units: string | number;
-    execution_count: string | number;
-  }>(
-    `SELECT asset_id,
-            SUM(price_gbp_minor * units)::bigint AS total_gbp_minor,
-            SUM(units)::int AS units,
-            COUNT(*)::int AS execution_count
-     FROM coown_executions
-     WHERE buyer_user_id = $1 AND executed_at >= $2 AND executed_at < $3
-     GROUP BY asset_id`,
-    [request.authUser.userId, startDate, endDate]
-  );
-
-  const sellsResult = await db.query<{
-    asset_id: string;
-    total_gbp_minor: string | number;
-    units: string | number;
-    execution_count: string | number;
-  }>(
-    `SELECT asset_id,
-            SUM(price_gbp_minor * units)::bigint AS total_gbp_minor,
-            SUM(units)::int AS units,
-            COUNT(*)::int AS execution_count
-     FROM coown_executions
-     WHERE seller_user_id = $1 AND executed_at >= $2 AND executed_at < $3
-     GROUP BY asset_id`,
-    [request.authUser.userId, startDate, endDate]
-  );
-
-  // Get distributions in the tax year
-  const distributionsResult = await db.query<{
-    asset_id: string;
-    total_gbp_minor: string | number;
-    count: string | number;
-  }>(
-    `SELECT asset_id,
-            SUM(amount_gbp_minor)::bigint AS total_gbp_minor,
-            COUNT(*)::int AS count
-     FROM coown_distributions
-     WHERE recipient_user_id = $1 AND created_at >= $2 AND created_at < $3
-     GROUP BY asset_id`,
-    [request.authUser.userId, startDate, endDate]
-  );
-
-  const totalBuys = buysResult.rows.reduce((sum, r) => sum + Number(r.total_gbp_minor), 0);
-  const totalSells = sellsResult.rows.reduce((sum, r) => sum + Number(r.total_gbp_minor), 0);
-  const totalDistributions = distributionsResult.rows.reduce((sum, r) => sum + Number(r.total_gbp_minor), 0);
-  const realizedPnl = totalSells - totalBuys;
-
-  return {
-    ok: true,
-    taxDocument: {
-      taxYear: taxYear ?? `${startDate.slice(0, 4)}-${endDate.slice(0, 4)}`,
-      startDate,
-      endDate,
-      currency: 'GBP',
-      summary: {
-        totalPurchasesGbpMinor: totalBuys,
-        totalSalesGbpMinor: totalSells,
-        totalDistributionsGbpMinor: totalDistributions,
-        realizedPnlGbpMinor: realizedPnl,
-      },
-      purchases: buysResult.rows.map((r) => ({
-        assetId: r.asset_id,
-        totalGbpMinor: Number(r.total_gbp_minor),
-        units: Number(r.units),
-        executionCount: Number(r.execution_count),
-      })),
-      sales: sellsResult.rows.map((r) => ({
-        assetId: r.asset_id,
-        totalGbpMinor: Number(r.total_gbp_minor),
-        units: Number(r.units),
-        executionCount: Number(r.execution_count),
-      })),
-      distributions: distributionsResult.rows.map((r) => ({
-        assetId: r.asset_id,
-        totalGbpMinor: Number(r.total_gbp_minor),
-        count: Number(r.count),
-      })),
-      generatedAt: new Date().toISOString(),
-    },
-  };
+registerUserRoutes({ app, db, readDb, resolveAuthenticatedUserId, ensureUserExists, toProfilePayload, toPublicProfilePayload, queueUserNotification });
+
+registerCoOwnRoutes({
+  app,
+  db,
+  resolveAuthenticatedUserId,
+  ensureUserExists,
+  createApiError,
+  getApiError,
+  createRuntimeId,
+  toJsonString,
+  roundTo,
+  parseQueryBoolean,
+  appendComplianceAuditSafe,
+  queueUserNotification,
+  getOnezeMintBurnHaltState,
+  ledgerTablesAvailable,
+  ensureLedgerAccount,
+  appendLedgerEntry,
 });
 
 registerSellerRoutes({ app, db, readDb });
 
 registerStorefrontRoutes({ app, db, readDb, resolveAuthenticatedUserId });
-
-// Idempotent follow (POST /users/:userId/follow) — creates follow only if absent.
-app.post('/users/:userId/follow', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-  const followerId = request.authUser.userId;
-
-  if (followerId === userId) {
-    reply.code(400);
-    return { ok: false, error: 'Cannot follow yourself' };
-  }
-
-  // Check block state — cannot follow if blocked by target
-  const blockedByTarget = await readDb.query<{ id: string }>(
-    `SELECT id FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2 LIMIT 1`,
-    [userId, followerId]
-  );
-  if ((blockedByTarget.rowCount ?? 0) > 0) {
-    reply.code(403);
-    return { ok: false, error: 'Cannot follow this user', code: 'BLOCKED_BY_TARGET' };
-  }
-
-  const followId = `follow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const inserted = await db.query<{ id: string }>(
-    `INSERT INTO user_follows (id, follower_id, following_id, created_at)
-     VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (follower_id, following_id) DO NOTHING
-     RETURNING id`,
-    [followId, followerId, userId]
-  );
-
-  if ((inserted.rowCount ?? 0) > 0) {
-    // Queue a follow notification to the followed user
-    try {
-      const followerRow = await readDb.query<{ username: string; display_name: string | null; avatar: string | null }>(
-        `SELECT username, display_name, avatar FROM users WHERE id = $1 LIMIT 1`,
-        [followerId]
-      );
-      const follower = followerRow.rows[0];
-      const followerName = follower?.display_name || follower?.username || 'Someone';
-      await queueUserNotification({
-        userId,
-        title: 'New follower',
-        body: `${followerName} started following you`,
-        eventType: 'follow_received',
-        actorUserId: followerId,
-        imageUrl: follower?.avatar ?? undefined,
-        payload: { followerId },
-        route: { screen: 'UserProfile', params: { userId: followerId } },
-        idempotencyKey: `follow_received_${followerId}_${userId}`,
-        metadata: { source: 'user_follow' },
-      });
-    } catch (notifErr) {
-      app.log.error({ err: notifErr }, 'Failed to queue follow_received notification');
-    }
-  }
-
-  return { ok: true, isFollowing: true };
-});
-
-// Idempotent unfollow (DELETE /users/:userId/follow) — removes follow only if present.
-app.delete('/users/:userId/follow', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-  const followerId = request.authUser.userId;
-
-  await db.query(
-    `DELETE FROM user_follows WHERE follower_id = $1 AND following_id = $2`,
-    [followerId, userId]
-  );
-
-  return { ok: true, isFollowing: false };
-});
-
-app.get('/users/:userId/profile', async (request, reply) => {
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-
-  const viewerUserId = request.authUser?.userId ?? null;
-
-  // ── Fetch the target user row with privacy-relevant columns ──────────
-  const result = await db.query<ProfileUserRow & {
-    private_profile: boolean;
-    holiday_mode: boolean;
-    away_message: string | null;
-  }>(
-    `
-      SELECT
-        u.id, u.username, u.email, u.display_name, u.bio, u.location, u.website, u.phone,
-        u.avatar, u.cover_photo, u.cover_video, u.role, u.email_verified_at,
-        u.two_factor_enabled, u.created_at, u.updated_at,
-        u.private_profile, u.holiday_mode, u.away_message
-      FROM users u
-      WHERE u.id = $1
-      LIMIT 1
-    `,
-    [userId]
-  );
-
-  const user = result.rows[0];
-  if (!user) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  // ── Block state (both directions) ────────────────────────────────────
-  // If the viewer blocked the target, the viewer chose not to see them —
-  // we still return the profile but with restricted viewer permissions.
-  // If the target blocked the viewer, the target's existence is not
-  // disclosed to the viewer (404) unless the viewer is a moderator/admin.
-  let blockedByViewer = false;
-  let blockedByTarget = false;
-
-  if (viewerUserId && viewerUserId !== userId) {
-    const blockResult = await readDb.query<{ viewer_blocked: boolean; target_blocked: boolean }>(
-      `SELECT
-         EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2) AS viewer_blocked,
-         EXISTS (SELECT 1 FROM user_blocks WHERE blocker_id = $2 AND blocked_id = $1) AS target_blocked`,
-      [viewerUserId, userId]
-    );
-    const blockRow = blockResult.rows[0];
-    blockedByViewer = blockRow?.viewer_blocked ?? false;
-    blockedByTarget = blockRow?.target_blocked ?? false;
-  }
-
-  // If the target blocked the viewer, do not disclose the profile.
-  // Return 404 — existence disclosure is not allowed for blocked viewers.
-  if (blockedByTarget) {
-    reply.code(404);
-    return { ok: false, error: 'User not found' };
-  }
-
-  // ── Determine viewer relationship ────────────────────────────────────
-  const isSelf = viewerUserId === userId;
-  let isFollowing = false;
-  if (viewerUserId && !isSelf) {
-    const followResult = await readDb.query<{ id: string }>(
-      `SELECT id FROM user_follows WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
-      [viewerUserId, userId]
-    );
-    isFollowing = (followResult.rowCount ?? 0) > 0;
-  }
-
-  // ── Privacy policy: private_profile ──────────────────────────────────
-  // A private profile hides social content (Looks, creations) and detailed
-  // stats from non-followers. Identity, shop listings, and basic counts
-  // remain visible because they are commerce-obligated (DSA traceability).
-  // Self-viewers see everything regardless of the private preference.
-  const isPrivate = user.private_profile === true;
-  const canViewSocialContent = isSelf || !isPrivate || isFollowing;
-  const canViewShop = true; // Shop is always visible (commerce obligation)
-
-  // ── Compute stats ────────────────────────────────────────────────────
-  // Active and sold listing counts are commerce-obligated and always visible.
-  // Follower/following counts are visible unless the profile is private and
-  // the viewer is not following.
-  const statsResult = await readDb.query<{
-    active_listings: string;
-    sold_listings: string;
-    published_looks: string;
-    followers: string;
-    following: string;
-    review_count: string;
-    avg_rating: string | null;
-  }>(
-    `SELECT
-       (SELECT COUNT(*)::text FROM listings WHERE seller_id = $1 AND status = 'active') AS active_listings,
-       (SELECT COUNT(*)::text FROM listings WHERE seller_id = $1 AND status = 'sold') AS sold_listings,
-       (SELECT COUNT(*)::text FROM looks WHERE creator_id = $1 AND status = 'published') AS published_looks,
-       (SELECT COUNT(*)::text FROM user_follows WHERE following_id = $1) AS followers,
-       (SELECT COUNT(*)::text FROM user_follows WHERE follower_id = $1) AS following,
-       (SELECT COUNT(*)::text FROM order_reviews WHERE seller_id = $1) AS review_count,
-       (SELECT AVG(rating)::numeric(3,2) FROM order_reviews WHERE seller_id = $1) AS avg_rating`,
-    [userId]
-  );
-
-  const statsRow = statsResult.rows[0];
-  const activeListingCount = Number(statsRow?.active_listings ?? '0');
-  const soldListingCount = Number(statsRow?.sold_listings ?? '0');
-  const publishedLookCount = canViewSocialContent
-    ? Number(statsRow?.published_looks ?? '0')
-    : 0;
-  const followerCount = canViewSocialContent
-    ? Number(statsRow?.followers ?? '0')
-    : 0;
-  const followingCount = canViewSocialContent
-    ? Number(statsRow?.following ?? '0')
-    : 0;
-  const reviewCount = Number(statsRow?.review_count ?? '0');
-  const ratingAverage = statsRow?.avg_rating ? Number(statsRow.avg_rating) : null;
-
-  // ── Trust evidence (fail-closed) ─────────────────────────────────────
-  // Only active, non-expired evidence rows produce verification flags.
-  // No evidence → undefined (not false, to distinguish "not checked" from
-  // "checked and failed"). The frontend renders nothing for undefined.
-  let identityVerified = false;
-  let sellerVerified = false;
-  // DSA Article 30 trader classification — projected from compliance records.
-  // This is a legally required disclosure: buyers must know whether they are
-  // transacting with a trader (business) or a non-trader (private individual).
-  // The classification is derived from user_compliance_profiles.kyc_status
-  // and the trader_type field, not from self-attestation.
-  let traderClassification: 'trader' | 'non_trader' | null = null;
-  let traderLegalName: string | null = null;
-  let traderContactEmail: string | null = null;
-  let traderRegistrationNumber: string | null = null;
-  let traderAddress: string | null = null;
-  let traderVatNumber: string | null = null;
-
-  if (canViewShop) {
-    const evidenceResult = await readDb.query<{ code: string }>(
-      `SELECT code FROM seller_trust_evidence
-       WHERE seller_id = $1 AND state = 'active'
-         AND (expires_at IS NULL OR expires_at > NOW())`,
-      [userId]
-    );
-    for (const row of evidenceResult.rows) {
-      if (row.code === 'identity_checked') identityVerified = true;
-      if (row.code === 'trader_verified' || row.code === 'top_rated') sellerVerified = true;
-    }
-
-    // ── DSA Article 30: Trader disclosure from compliance records ──────
-    // Only traders (verified businesses) have their legal details disclosed.
-    // Non-traders (private individuals) are classified as such without
-    // exposing any personal details. The classification is authoritative —
-    // derived from KYC verification, not self-attestation.
-    const complianceResult = await readDb.query<{
-      trader_type: string | null;
-      kyc_status: string;
-      legal_name: string | null;
-      contact_email: string | null;
-      registration_number: string | null;
-      business_address: string | null;
-      vat_number: string | null;
-    }>(
-      `SELECT trader_type, kyc_status, legal_name, contact_email,
-              registration_number, business_address, vat_number
-       FROM user_compliance_profiles
-       WHERE user_id = $1
-       ORDER BY updated_at DESC
-       LIMIT 1`,
-      [userId]
-    );
-    const compliance = complianceResult.rows[0];
-    if (compliance) {
-      // A user is classified as a trader when:
-      // 1. trader_type is explicitly 'business'/'trader', OR
-      // 2. KYC status is 'verified' and trader_type is not 'private'.
-      if (compliance.trader_type === 'business' || compliance.trader_type === 'trader') {
-        traderClassification = 'trader';
-        // Only disclose legal details for verified traders.
-        if (compliance.kyc_status === 'verified') {
-          traderLegalName = compliance.legal_name;
-          traderContactEmail = compliance.contact_email;
-          traderRegistrationNumber = compliance.registration_number;
-          traderAddress = compliance.business_address;
-          traderVatNumber = compliance.vat_number;
-        }
-      } else if (compliance.trader_type === 'private' || compliance.trader_type === 'individual') {
-        traderClassification = 'non_trader';
-      }
-    }
-  }
-
-  // ── Can message? ─────────────────────────────────────────────────────
-  // Can message if: authenticated, not self, not blocked by viewer, and
-  // not blocked by target (already returned 404 above if blocked by target).
-  const canMessage = Boolean(
-    viewerUserId &&
-    !isSelf &&
-    !blockedByViewer &&
-    !blockedByTarget
-  );
-
-  // ── Build the public profile payload ─────────────────────────────────
-  const publicUser = toPublicProfilePayload({
-    ...user,
-    identity_verified: identityVerified,
-    seller_verified: sellerVerified,
-  });
-
-  return {
-    ok: true,
-    user: publicUser,
-    stats: {
-      activeListingCount,
-      soldListingCount,
-      publishedLookCount,
-      followerCount,
-      followingCount,
-      reviewCount,
-      ratingAverage,
-    },
-    viewer: {
-      isSelf,
-      isFollowing,
-      isBlocked: blockedByViewer,
-      isBlockedByTarget: blockedByTarget,
-      canMessage,
-      canViewSocialContent,
-      canViewShop,
-    },
-    // ── DSA Article 30: Trader disclosure ──────────────────────────────
-    // Legally required disclosure of trader status. 'trader' = business,
-    // 'non_trader' = private individual. Legal details are only disclosed
-    // for verified traders. Null when no compliance record exists.
-    trader: traderClassification
-      ? {
-          classification: traderClassification,
-          legalName: traderLegalName,
-          contactEmail: traderContactEmail,
-          registrationNumber: traderRegistrationNumber,
-          address: traderAddress,
-          vatNumber: traderVatNumber,
-        }
-      : undefined,
-    // Authoritative away state — only present when holiday mode is on.
-    // The frontend uses this to show the away banner with the seller's message.
-    away: user.holiday_mode
-      ? {
-          holidayMode: true,
-          awayMessage: user.away_message ?? null,
-        }
-      : undefined,
-    // ── Storefront summary (published only) ────────────────────────────
-    // Included when the seller has a published storefront. Draft/paused
-    // storefronts are owner-only and never appear in the public projection.
-    // The summary contains the announcement, section titles, and featured
-    // listing IDs — enough for the profile to render the shop module
-    // without a separate /storefronts/:sellerId call.
-    ...(canViewShop ? await loadStorefrontSummary(readDb, userId) : {}),
-  };
-});
-
-// ── Follow counts + follower/following lists ─────────────────────────
-
-// Helper: load a published storefront summary for the public profile aggregate.
-// Returns an empty object when no published storefront exists, so the spread
-// in the aggregate return is a no-op.
-async function loadStorefrontSummary(
-  readDb: Pool,
-  sellerId: string
-): Promise<{ storefront?: { announcement: string | null; sections: { kind: string; title: string; sortOrder: number }[]; featuredListingIds: string[] } }> {
-  const sfResult = await readDb.query<{ id: string; announcement: string | null }>(
-    `SELECT id, announcement FROM storefronts
-     WHERE seller_id = $1 AND status = 'published' LIMIT 1`,
-    [sellerId]
-  );
-  if (!sfResult.rowCount) return {};
-
-  const sf = sfResult.rows[0];
-  const sectionsResult = await readDb.query<{ kind: string; title: string; sort_order: number }>(
-    `SELECT kind, title, sort_order FROM storefront_sections
-     WHERE storefront_id = $1 ORDER BY sort_order ASC`,
-    [sf.id]
-  );
-  const featuredResult = await readDb.query<{ listing_id: string }>(
-    `SELECT listing_id FROM storefront_featured_listings
-     WHERE storefront_id = $1 ORDER BY rank ASC`,
-    [sf.id]
-  );
-
-  return {
-    storefront: {
-      announcement: sf.announcement,
-      sections: sectionsResult.rows.map((s) => ({
-        kind: s.kind,
-        title: s.title,
-        sortOrder: s.sort_order,
-      })),
-      featuredListingIds: featuredResult.rows.map((r) => r.listing_id),
-    },
-  };
-}
-
-app.get('/users/:userId/follow-counts', async (request, reply) => {
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-
-  const result = await readDb.query<{ followers: string; following: string }>(
-    `SELECT
-       (SELECT COUNT(*)::text FROM user_follows WHERE following_id = $1) AS followers,
-       (SELECT COUNT(*)::text FROM user_follows WHERE follower_id = $1) AS following`,
-    [userId]
-  );
-
-  return {
-    ok: true,
-    followerCount: Number(result.rows[0]?.followers ?? '0'),
-    followingCount: Number(result.rows[0]?.following ?? '0'),
-  };
-});
-
-app.get('/users/:userId/followers', async (request, reply) => {
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(100).default(40),
-    cursor: z.string().optional(),
-  });
-  const { userId } = paramsSchema.parse(request.params);
-  const { limit, cursor } = querySchema.parse(request.query ?? {});
-
-  const conditions: string[] = ['f.following_id = $1'];
-  const args: unknown[] = [userId];
-  if (cursor) {
-    conditions.push(`f.created_at < $${args.length + 1}`);
-    args.push(cursor);
-  }
-  const fetchLimit = limit + 1;
-
-  const result = await readDb.query<{
-    id: string;
-    username: string;
-    display_name: string | null;
-    avatar: string | null;
-    created_at: string;
-  }>(
-    `SELECT u.id, u.username, u.display_name, u.avatar, f.created_at
-     FROM user_follows f
-     JOIN users u ON u.id = f.follower_id
-     WHERE ${conditions.join(' AND ')}
-     ORDER BY f.created_at DESC
-     LIMIT $${args.length + 1}`,
-    [...args, fetchLimit]
-  );
-
-  const hasMore = result.rows.length > limit;
-  const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
-  const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
-
-  // Resolve isFollowing for the authenticated viewer so the client can
-  // derive FollowButton state from server data instead of mutation vars.
-  const viewerUserId = request.authUser?.userId;
-  let followingSet = new Set<string>();
-  if (viewerUserId && rows.length > 0) {
-    const followingResult = await readDb.query<{ following_id: string }>(
-      `SELECT following_id FROM user_follows WHERE follower_id = $1 AND following_id = ANY($2::text[])`,
-      [viewerUserId, rows.map((r) => r.id)]
-    );
-    followingSet = new Set(followingResult.rows.map((r) => r.following_id));
-  }
-
-  return {
-    items: rows.map((row) => ({
-      id: row.id,
-      username: row.username,
-      displayName: row.display_name,
-      avatar: row.avatar,
-      isFollowing: followingSet.has(row.id),
-    })),
-    nextCursor,
-  };
-});
-
-app.get('/users/:userId/following', async (request, reply) => {
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(100).default(40),
-    cursor: z.string().optional(),
-  });
-  const { userId } = paramsSchema.parse(request.params);
-  const { limit, cursor } = querySchema.parse(request.query ?? {});
-
-  const conditions: string[] = ['f.follower_id = $1'];
-  const args: unknown[] = [userId];
-  if (cursor) {
-    conditions.push(`f.created_at < $${args.length + 1}`);
-    args.push(cursor);
-  }
-  const fetchLimit = limit + 1;
-
-  const result = await readDb.query<{
-    id: string;
-    username: string;
-    display_name: string | null;
-    avatar: string | null;
-    created_at: string;
-  }>(
-    `SELECT u.id, u.username, u.display_name, u.avatar, f.created_at
-     FROM user_follows f
-     JOIN users u ON u.id = f.following_id
-     WHERE ${conditions.join(' AND ')}
-     ORDER BY f.created_at DESC
-     LIMIT $${args.length + 1}`,
-    [...args, fetchLimit]
-  );
-
-  const hasMore = result.rows.length > limit;
-  const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
-  const nextCursor = hasMore && rows.length > 0 ? rows[rows.length - 1].created_at : null;
-
-  // Resolve isFollowing for the authenticated viewer so the client can
-  // derive FollowButton state from server data instead of mutation vars.
-  const viewerUserId = request.authUser?.userId;
-  let followingSet = new Set<string>();
-  if (viewerUserId && rows.length > 0) {
-    const followingResult = await readDb.query<{ following_id: string }>(
-      `SELECT following_id FROM user_follows WHERE follower_id = $1 AND following_id = ANY($2::text[])`,
-      [viewerUserId, rows.map((r) => r.id)]
-    );
-    followingSet = new Set(followingResult.rows.map((r) => r.following_id));
-  }
-
-  return {
-    items: rows.map((row) => ({
-      id: row.id,
-      username: row.username,
-      displayName: row.display_name,
-      avatar: row.avatar,
-      isFollowing: followingSet.has(row.id),
-    })),
-    nextCursor,
-  };
-});
-
-// ── Block / unblock ──────────────────────────────────────────────────
-
-app.post('/users/:userId/block', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-  const blockerId = request.authUser.userId;
-
-  if (blockerId === userId) {
-    reply.code(400);
-    return { ok: false, error: 'Cannot block yourself' };
-  }
-
-  const blockId = `block_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  await db.query(
-    `INSERT INTO user_blocks (id, blocker_id, blocked_id, created_at)
-     VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
-    [blockId, blockerId, userId]
-  );
-
-  // Remove any follow relationship in either direction
-  await db.query(
-    `DELETE FROM user_follows WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)`,
-    [blockerId, userId]
-  );
-
-  return { ok: true, isBlocked: true };
-});
-
-app.post('/users/:userId/unblock', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-  const blockerId = request.authUser.userId;
-
-  await db.query(
-    `DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2`,
-    [blockerId, userId]
-  );
-
-  return { ok: true, isBlocked: false };
-});
-
-// ── Report user ──────────────────────────────────────────────────────
-
-app.post('/users/:userId/report', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const bodySchema = z.object({
-    reason: z.enum([
-      'spam', 'inappropriate', 'counterfeit', 'unresponsive', 'harassment',
-      'off_platform', 'hate_speech', 'prohibited', 'scam', 'misinformation',
-      'privacy', 'impersonation', 'minor_safety', 'other',
-    ]),
-    details: z.string().min(1).max(2000).optional(),
-  });
-  const { userId } = paramsSchema.parse(request.params);
-  const body = bodySchema.parse(request.body ?? {});
-  const reporterId = request.authUser.userId;
-
-  if (reporterId === userId) {
-    reply.code(400);
-    return { ok: false, error: 'Cannot report yourself' };
-  }
-
-  const reportId = `report_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  await db.query(
-    `INSERT INTO user_reports (id, reporter_id, reported_id, reason, details, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-    [reportId, reporterId, userId, body.reason, body.details ?? null]
-  );
-
-  reply.code(201);
-  return { ok: true, reportId };
-});
-
-app.get('/users/search', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const querySchema = z.object({
-    q: z.string().trim().min(2).max(50),
-    limit: z.coerce.number().int().min(1).max(20).default(20),
-    cursor: z.string().optional(),
-  });
-  const { q, limit, cursor } = querySchema.parse(request.query ?? {});
-
-  const result = await db.query<{ id: string; username: string; display_name: string | null; avatar: string | null; is_following: boolean }>(
-    `
-      WITH params AS (SELECT $1::text AS q)
-      SELECT
-        u.id,
-        u.username,
-        u.display_name,
-        u.avatar,
-        EXISTS (
-          SELECT 1 FROM user_follows f
-          WHERE f.follower_id = $2 AND f.following_id = u.id
-        ) AS is_following
-      FROM users u, params
-      WHERE u.id <> $2
-        AND u.id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = $2)
-        AND u.is_erased = FALSE
-        AND u.deleted_at IS NULL
-        AND u.search_visibility = 'visible'
-        AND (u.username ILIKE '%' || params.q || '%' OR u.display_name ILIKE '%' || params.q || '%')
-        AND ($3::text IS NULL OR u.username > $3)
-      ORDER BY
-        CASE
-          WHEN LOWER(u.username) = LOWER(params.q) THEN 1
-          WHEN LOWER(u.username) LIKE LOWER(params.q) || '%' THEN 2
-          WHEN LOWER(u.display_name) LIKE LOWER(params.q) || '%' THEN 3
-          WHEN LOWER(u.username) LIKE '%' || LOWER(params.q) || '%' THEN 4
-          ELSE 5
-        END,
-        u.username ASC
-      LIMIT $4
-    `,
-    [q, request.authUser.userId, cursor ?? null, limit]
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      username: row.username,
-      displayName: row.display_name,
-      avatar: row.avatar,
-      isFollowing: row.is_following,
-    })),
-    nextCursor: result.rows.length === limit ? result.rows[result.rows.length - 1].username : undefined,
-  };
-});
 
 app.post('/compliance/kyc/sessions', async (request, reply) => {
   const bodySchema = z.object({
@@ -16255,11 +13363,11 @@ app.post('/compliance/kyc/webhooks/stripe', async (request, reply) => {
                 [caseId, redactedUserId, session.id]
               );
             } catch (redactionError) {
-              // redaction_status / redacted_at columns may not exist yet —
+              // redaction_status / redacted_at columns may not exist yet â€”
               // a migration is required to add them to kyc_cases.
               request.log.warn(
                 { err: redactionError, caseId, userId: redactedUserId },
-                'KYC redaction update failed (redaction_status/redacted_at columns may be missing — migration required)'
+                'KYC redaction update failed (redaction_status/redacted_at columns may be missing â€” migration required)'
               );
             }
 
@@ -17823,7 +14931,7 @@ app.get('/users/me/export', async (request, reply) => {
   }
 });
 
-// ── Async DSAR export (Art. 12(3) — async delivery for large histories) ──
+// â”€â”€ Async DSAR export (Art. 12(3) â€” async delivery for large histories) â”€â”€
 
 app.post('/users/me/export/async', async (request, reply) => {
   if (!request.authUser) {
@@ -17952,31 +15060,117 @@ app.delete('/users/me', async (request, reply) => {
   }
 
   const bodySchema = z.object({
+    password: z.string().min(1),
+    confirmPhrase: z.string().min(1),
     reason: z.string().max(500).optional(),
+    totpCode: z.string().optional(),
   });
   const payload = bodySchema.parse(request.body ?? {});
 
+  if (payload.confirmPhrase !== 'DELETE') {
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'Confirmation phrase does not match',
+    };
+  }
+
   const userId = request.authUser.userId;
-  const gdprRequestId = createComplianceId('gdpr_erasure');
   const ipAddress = resolveRequestIpAddress(request);
   const userAgent = resolveRequestUserAgent(request);
 
   const client = await db.connect();
 
   let erasureSideEffects: { listingIds: string[] } = { listingIds: [] };
+  let gdprRequestId = '';
 
   try {
-    await client.query('BEGIN');
-
-    const userExists = await client.query('SELECT id FROM users WHERE id = $1 LIMIT 1', [userId]);
-    if (!userExists.rowCount) {
-      await client.query('ROLLBACK');
+    // Re-authenticate the account owner before any erasure work. A stolen
+    // session alone must never be sufficient to permanently delete an account.
+    const reauthRow = await client.query<{ password_hash: string | null; two_factor_enabled: boolean }>(
+      'SELECT password_hash, two_factor_enabled FROM users WHERE id = $1 LIMIT 1',
+      [userId]
+    );
+    if (!reauthRow.rowCount) {
       reply.code(404);
       return {
         ok: false,
         error: 'User not found',
       };
     }
+
+    const storedHash = reauthRow.rows[0].password_hash;
+    if (!storedHash || !(await verifyPassword(payload.password, storedHash))) {
+      await appendComplianceAuditSafe(request, {
+        eventType: 'gdpr.erasure.reauth.failed',
+        subjectUserId: userId,
+        payload: { reason: 'password_mismatch' },
+      });
+      reply.code(403);
+      return {
+        ok: false,
+        error: 'Password verification failed',
+      };
+    }
+
+    if (reauthRow.rows[0].two_factor_enabled) {
+      const totpCode = payload.totpCode?.replace(/\s+/g, '');
+      if (!totpCode || totpCode.length < 6) {
+        await appendComplianceAuditSafe(request, {
+          eventType: 'gdpr.erasure.reauth.failed',
+          subjectUserId: userId,
+          payload: { reason: 'totp_required' },
+        });
+        reply.code(403);
+        return {
+          ok: false,
+          error: 'Two-factor authentication code is required',
+        };
+      }
+
+      const factorRow = await client.query<{ secret_ciphertext: string }>(
+        'SELECT secret_ciphertext FROM user_totp_factors WHERE user_id = $1 LIMIT 1',
+        [userId]
+      );
+      let totpValid = false;
+      if (factorRow.rowCount) {
+        const decrypted = await decryptJsonPayload<{ secret: string }>(
+          factorRow.rows[0].secret_ciphertext,
+          `totp-factor:${userId}`
+        );
+        if (decrypted?.secret && typeof decrypted.secret === 'string') {
+          totpValid = verifyTotp(decrypted.secret, totpCode, {
+            stepSeconds: 30,
+            digits: 6,
+            window: 1,
+          });
+        }
+      }
+      if (!totpValid) {
+        await appendComplianceAuditSafe(request, {
+          eventType: 'gdpr.erasure.reauth.failed',
+          subjectUserId: userId,
+          payload: { reason: 'totp_invalid' },
+        });
+        reply.code(403);
+        return {
+          ok: false,
+          error: 'Invalid two-factor authentication code',
+        };
+      }
+    }
+
+    await appendComplianceAuditSafe(request, {
+      eventType: 'gdpr.erasure.reauth.completed',
+      subjectUserId: userId,
+      payload: {
+        twoFactorVerified: reauthRow.rows[0].two_factor_enabled,
+      },
+    });
+
+    gdprRequestId = createComplianceId('gdpr_erasure');
+
+    await client.query('BEGIN');
 
     await client.query(
       `
@@ -18028,7 +15222,7 @@ app.delete('/users/me', async (request, reply) => {
 
   // Remove the user's listings from the search index (post-commit, fire-and-forget).
   // The erasure flow sets listings.status='deleted' but does not touch the
-  // search index — this cleanup ensures stale/attributable data is removed.
+  // search index â€” this cleanup ensures stale/attributable data is removed.
   for (const listingId of erasureSideEffects.listingIds) {
     void removeListingFromIndex(listingId).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -18151,7 +15345,7 @@ app.get('/listings', async (request) => {
       const decoded = JSON.parse(Buffer.from(params.cursor, 'base64').toString('utf-8'));
       cursorData = { sortValue: decoded.sortValue, id: decoded.id };
     } catch {
-      // Invalid cursor — ignore it, start from beginning
+      // Invalid cursor â€” ignore it, start from beginning
     }
   }
 
@@ -18297,27 +15491,27 @@ app.get('/listings', async (request) => {
   };
 });
 
-// ── Search extended routes ────────────────────────────────────────
+// â”€â”€ Search extended routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 registerSearchExtendedRoutes({ app, readDb, redis });
 
 registerFeedRoutes({ app, db, readDb });
 
 registerVisualSearchRoutes({ app, db, readDb });
 
-// ── Posters API ────────────────────────────────────────────────────
+// â”€â”€ Posters API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 registerPosterRoutes({ app, db, resolveAuthenticatedUserId });
 
 
 
-// ── Looks API ──────────────────────────────────────────────────────
+// â”€â”€ Looks API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 registerLookRoutes({ app, db, resolveAuthenticatedUserId });
 
-// ── Catalogue Import API ───────────────────────────────────────────
+// â”€â”€ Catalogue Import API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 registerCatalogImportRoutes({ app, db, readDb });
 
-// ── Listings API ───────────────────────────────────────────────────
+// â”€â”€ Listings API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.post('/listings', {
   config: {
     rateLimit: {
@@ -18325,11 +15519,11 @@ app.post('/listings', {
       timeWindow: '1 minute',
     },
   },
-  // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
+  // Fastify JSON Schema â€” framework-level defence-in-depth per OWASP API
   // security best practices. Validates structure before the handler runs;
   // Zod in the handler provides semantic validation (URL format, etc.).
   // additionalProperties omitted (defaults to true) so clients sending extra
-  // fields are not rejected — Zod strips unknown keys in the handler.
+  // fields are not rejected â€” Zod strips unknown keys in the handler.
   schema: {
     body: {
       type: 'object',
@@ -18383,7 +15577,7 @@ app.post('/listings', {
     return { ok: false, error: 'A verified cover upload is required' };
   }
 
-  // Category-aware activation validation — only for active listings.
+  // Category-aware activation validation â€” only for active listings.
   // Drafts bypass validation so sellers can save incomplete work.
   const targetStatus = payload.status ?? 'active';
   if (targetStatus === 'active') {
@@ -18656,9 +15850,9 @@ app.post('/listings', {
       }
     }
 
-    // Fraud check — non-blocking: score and log, don't reject unless high risk.
+    // Fraud check â€” non-blocking: score and log, don't reject unless high risk.
     // Catches bulk listing creation (counterfeit/non-existent goods) and
-    // new-account listing velocity (AGENTS.md §11 — truthful signals).
+    // new-account listing velocity (AGENTS.md Â§11 â€” truthful signals).
     try {
       const fraudResult = await checkFraudNonBlocking(
         redis,
@@ -18674,17 +15868,17 @@ app.post('/listings', {
         fraudShadowService,
       );
       // Listing events map to `allow_low_risk_flow` when the fraud service
-      // is unavailable — listing creation continues and can be reviewed
+      // is unavailable â€” listing creation continues and can be reviewed
       // post-hoc. No caller action needed beyond the audit log already
       // written by checkFraudNonBlocking.
       if (fraudResult.evaluationStatus === 'unavailable') {
         request.log.warn(
           { userId: actorUserId, policyAction: fraudResult.policyAction, reasonCode: fraudResult.reasonCode },
-          'Listing fraud check unavailable — continuing with failover policy'
+          'Listing fraud check unavailable â€” continuing with failover policy'
         );
       }
     } catch {
-      // Fraud check failures must never break listing creation (AGENTS.md §6).
+      // Fraud check failures must never break listing creation (AGENTS.md Â§6).
     }
 
     reply.code(201);
@@ -18712,7 +15906,7 @@ app.get('/listings/:listingId', async (request, reply) => {
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const { listingId } = paramsSchema.parse(request.params);
 
-  // T03: Authorization — non-public listings require authentication.
+  // T03: Authorization â€” non-public listings require authentication.
   // Only `active` and `sold` listings are publicly viewable. `draft`,
   // `paused`, and `deleted` listings are visible only to the seller.
   await optionalAuthenticate(request, '/listings/:listingId');
@@ -18784,7 +15978,7 @@ app.get('/listings/:listingId', async (request, reply) => {
   ).toFixed(2));
   const estimatedTotal = Number((itemPrice + buyerProtectionFee).toFixed(2));
 
-  // Per spec 04_DIRECT §5: backend-backed engagement summary.
+  // Per spec 04_DIRECT Â§5: backend-backed engagement summary.
   // Query Q&A count from the listing_qa table if it exists.
   let questionCount = 0;
   try {
@@ -18794,7 +15988,7 @@ app.get('/listings/:listingId', async (request, reply) => {
     );
     questionCount = qaResult.rows[0] ? Number(qaResult.rows[0].count) : 0;
   } catch {
-    // listing_qa table may not exist yet — default to 0.
+    // listing_qa table may not exist yet â€” default to 0.
     questionCount = 0;
   }
 
@@ -18854,7 +16048,7 @@ app.get('/listings/:listingId', async (request, reply) => {
             location: null,
           }
         : null,
-      // Per spec 04_DIRECT §5: backend-backed engagement summary.
+      // Per spec 04_DIRECT Â§5: backend-backed engagement summary.
       // The frontend must not fabricate question counts.
       engagement: {
         listingId,
@@ -19312,7 +16506,7 @@ app.get('/listings/:listingId/related', async (request, reply) => {
   };
 });
 
-// ── Sectioned recommendations ─────────────────────────────────────
+// â”€â”€ Sectioned recommendations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const COMPLEMENTARY_CATEGORY_MAP: Record<string, string[]> = {
   tops: ['bottoms', 'outerwear', 'shoes', 'bags'],
@@ -19557,7 +16751,7 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
       sections.push({
         key: 'same_size_condition',
         title: 'Your size and condition',
-        subtitle: `Size ${source.size} · ${source.condition}`,
+        subtitle: `Size ${source.size} Â· ${source.condition}`,
         reason: 'Same size and condition',
         personalised: false,
         items,
@@ -20443,7 +17637,7 @@ app.post('/listing-images', async (request, reply) => {
   }
 });
 
-// ── M05: Poster verification ──
+// â”€â”€ M05: Poster verification â”€â”€
 // Marks a listing image's poster URL as verified. The verifier (seller
 // or admin) confirms the poster URL is accessible and represents the
 // video. This makes the poster trust backend-backed rather than
@@ -20485,7 +17679,7 @@ app.post('/listing-images/:imageId/verify-poster', async (request, reply) => {
   return { ok: true, verifiedAt: new Date().toISOString() };
 });
 
-// ── M07: Media freeze ──
+// â”€â”€ M07: Media freeze â”€â”€
 // Freezes media for a listing so it cannot be silently swapped while
 // the item is live. The seller can unfreeze (e.g. to replace a media
 // item) but the action is auditable.
@@ -20573,7 +17767,7 @@ registerMediaEmbeddingRoutes({ app, db, createApiError });
 
 registerImporterExtractionRoutes({ app, db, readDb });
 
-// Extraction Intelligence — converged extraction domain (migration 192).
+// Extraction Intelligence â€” converged extraction domain (migration 192).
 // Server-owned model identity, bound media, honest outcomes, revision-checked
 // field decisions that converge into canonical normalised_fields/provenance.
 registerExtractionIntelligenceRoutes({ app, db, readDb });
@@ -20583,3420 +17777,8 @@ registerExtractionIntelligenceRoutes({ app, db, readDb });
 // AI-powered chat message translation (WhatsApp/Instagram inline translate pattern)
 registerChatTranslateRoutes({ app, db, ensureUserExists, redisClient: redis });
 
-app.post('/chat/dm', async (request, reply) => {
-  const bodySchema = z.object({
-    recipientUserId: z.string().trim().min(2).max(120),
-    itemId: z.string().trim().min(2).max(120).optional(),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const payload = bodySchema.parse(request.body ?? {});
-
-  if (payload.recipientUserId === actorUserId) {
-    reply.code(400);
-    return { ok: false, error: 'Cannot create a DM with yourself' };
-  }
-
-  await ensureUserExists(payload.recipientUserId);
-  const participantIds = [actorUserId, payload.recipientUserId].sort();
-  const dmPairKey = [
-    participantIds[0],
-    participantIds[1],
-    payload.itemId ?? '',
-  ].join('\u001f');
-
-  if (payload.itemId) {
-    const listingResult = await db.query<{ id: string }>(
-      `SELECT id FROM listings WHERE id = $1 LIMIT 1`,
-      [payload.itemId]
-    );
-    if (!listingResult.rowCount) {
-      throw createApiError('LISTING_NOT_FOUND', 'Listing not found for DM context', {
-        itemId: payload.itemId,
-      });
-    }
-  }
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(
-      `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
-      [dmPairKey],
-    );
-
-    const blockResult = await client.query(
-      `SELECT 1
-       FROM user_blocks
-       WHERE (blocker_id = $1 AND blocked_id = $2)
-          OR (blocker_id = $2 AND blocked_id = $1)
-       LIMIT 1`,
-      [actorUserId, payload.recipientUserId],
-    );
-    if (blockResult.rowCount) {
-      await client.query('ROLLBACK');
-      reply.code(403);
-      return {
-        ok: false,
-        error: 'A direct conversation is unavailable for these participants',
-        code: 'DM_BLOCKED',
-      };
-    }
-
-    // P0.13: Enforce recipient privacy — check allow_messages_from.
-    // 'everyone' → accepted immediately. 'following' → pending if not
-    // mutually following. 'nobody' → pending (request must be accepted).
-    const recipientPrivacy = await client.query<{ allow_messages_from: string }>(
-      `SELECT allow_messages_from FROM users WHERE id = $1 LIMIT 1`,
-      [payload.recipientUserId]
-    );
-    const recipientAllowMessages = recipientPrivacy.rows[0]?.allow_messages_from ?? 'everyone';
-    let requestStatus: 'pending' | 'accepted' = 'accepted';
-
-    if (recipientAllowMessages === 'nobody') {
-      requestStatus = 'pending';
-    } else if (recipientAllowMessages === 'following') {
-      // Check if the recipient follows the actor (mutual follow = accepted)
-      const followResult = await client.query<{ id: string }>(
-        `SELECT id FROM user_follows
-         WHERE follower_id = $1 AND following_id = $2 LIMIT 1`,
-        [payload.recipientUserId, actorUserId]
-      );
-      if (!followResult.rowCount) {
-        requestStatus = 'pending';
-      }
-    }
-
-    const existingResult = await client.query<{ id: string }>(
-      `
-        SELECT c.id
-        FROM chat_conversations c
-        WHERE c.type = 'dm'
-          AND (
-            c.dm_pair_key = $4
-            OR (
-              c.item_id IS NOT DISTINCT FROM $1
-              AND EXISTS (
-                SELECT 1 FROM chat_members cm1
-                WHERE cm1.conversation_id = c.id AND cm1.user_id = $2
-              )
-              AND EXISTS (
-                SELECT 1 FROM chat_members cm2
-                WHERE cm2.conversation_id = c.id AND cm2.user_id = $3
-              )
-            )
-          )
-        ORDER BY (c.dm_pair_key = $4) DESC, c.created_at, c.id
-        LIMIT 1
-      `,
-      [payload.itemId ?? null, actorUserId, payload.recipientUserId, dmPairKey]
-    );
-
-    if (existingResult.rowCount) {
-      await client.query(
-        `UPDATE chat_conversations
-         SET dm_pair_key = COALESCE(dm_pair_key, $2)
-         WHERE id = $1`,
-        [existingResult.rows[0].id, dmPairKey],
-      );
-      // P0.13: Fetch the actor's request status for this conversation so the
-      // client knows whether messages can be sent or are pending acceptance.
-      const actorState = await client.query<{ request_status: string }>(
-        `SELECT request_status FROM chat_conversation_user_state
-         WHERE user_id = $1 AND conversation_id = $2 LIMIT 1`,
-        [actorUserId, existingResult.rows[0].id]
-      );
-      const existingRequestStatus = actorState.rows[0]?.request_status ?? 'accepted';
-      await client.query('COMMIT');
-      const conversationId = existingResult.rows[0].id;
-      reply.code(200);
-      return {
-        ok: true,
-        conversation: {
-          id: conversationId,
-          type: 'dm' as const,
-          title: null,
-          itemId: payload.itemId ?? null,
-          ownerId: actorUserId,
-          participantIds: [actorUserId, payload.recipientUserId],
-          requestStatus: existingRequestStatus,
-        },
-      };
-    }
-
-    const conversationId = createRuntimeId('chatdm');
-
-    await client.query(
-      `
-        INSERT INTO chat_conversations (
-          id, type, title, owner_id, item_id, metadata, dm_pair_key
-        )
-        VALUES ($1, 'dm', NULL, $2, $3, $4::jsonb, $5)
-      `,
-      [
-        conversationId,
-        actorUserId,
-        payload.itemId ?? null,
-        toJsonString({ createdVia: 'chat_dm_api' }),
-        dmPairKey,
-      ]
-    );
-
-    await client.query(
-      `INSERT INTO chat_members (conversation_id, user_id, role) VALUES ($1, $2, 'owner')`,
-      [conversationId, actorUserId]
-    );
-    await client.query(
-      `INSERT INTO chat_members (conversation_id, user_id, role) VALUES ($1, $2, 'member')`,
-      [conversationId, payload.recipientUserId]
-    );
-
-    // P0.13: Create per-user conversation state with the correct request
-    // status. The sender is always 'accepted' (they initiated). The recipient
-    // gets 'pending' if their privacy settings require it.
-    await client.query(
-      `INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status)
-       VALUES ($1, $2, 'accepted')
-       ON CONFLICT (user_id, conversation_id) DO NOTHING`,
-      [actorUserId, conversationId]
-    );
-    await client.query(
-      `INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, conversation_id)
-       DO UPDATE SET request_status = EXCLUDED.request_status, updated_at = NOW()`,
-      [payload.recipientUserId, conversationId, requestStatus]
-    );
-
-    await client.query(
-      `UPDATE chat_conversations SET updated_at = NOW() WHERE id = $1`,
-      [conversationId]
-    );
-
-    await client.query('COMMIT');
-
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.dm.created',
-      payload: {
-        conversationId,
-        ownerId: actorUserId,
-        participantIds: [actorUserId, payload.recipientUserId],
-        requestStatus,
-      },
-    });
-
-    // Only notify the recipient if the request is accepted (pending requests
-    // appear in the Requests inbox, not as push notifications)
-    if (requestStatus === 'accepted') {
-      try {
-        await queueUserNotification({
-          userId: payload.recipientUserId,
-          title: 'New conversation',
-          body: 'Someone started a conversation with you.',
-          payload: {
-            conversationId,
-            event: 'chat_dm_created',
-          },
-          metadata: {
-            source: 'chat.dm.create',
-          },
-        });
-      } catch (error) {
-        request.log.error(
-          { err: error, conversationId, recipientUserId: payload.recipientUserId },
-          'Failed to queue DM notification'
-        );
-      }
-    }
-
-    reply.code(201);
-    return {
-      ok: true,
-      conversation: {
-        id: conversationId,
-        type: 'dm' as const,
-        title: null,
-        itemId: payload.itemId ?? null,
-        ownerId: actorUserId,
-        participantIds: [actorUserId, payload.recipientUserId],
-        requestStatus,
-      },
-    };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-});
-
-app.post('/chat/groups', async (request, reply) => {
-  const bodySchema = z.object({
-    title: z.string().trim().min(2).max(80),
-    memberIds: z.array(z.string().trim().min(2)).max(48).default([]),
-    itemId: z.string().trim().min(2).max(120).optional(),
-    description: z.string().trim().max(280).optional(),
-    avatar: z.string().trim().max(512).optional(),
-    avatarFinalizationId: z.string().trim().min(2).max(120).optional(),
-    coverPhoto: z.string().trim().max(512).optional(),
-    coverPhotoFinalizationId: z.string().trim().min(2).max(120).optional(),
-  }).superRefine((value, context) => {
-    if (value.avatar && !value.avatarFinalizationId) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['avatarFinalizationId'],
-        message: 'A finalized upload receipt is required for a group photo',
-      });
-    }
-    if (value.coverPhoto && !value.coverPhotoFinalizationId) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['coverPhotoFinalizationId'],
-        message: 'A finalized upload receipt is required for a cover photo',
-      });
-    }
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const payload = bodySchema.parse(request.body ?? {});
-  const title = payload.title.trim();
-
-  const idempotencyKey = resolveHeaderString(request.headers['x-idempotency-key']);
-  const requestHash = hashGroupCreatePayload(payload);
-
-  const normalizedMemberIds = [...new Set([actorUserId, ...payload.memberIds.map((value) => value.trim())])]
-    .filter((value) => value.length > 0);
-
-  await Promise.all(normalizedMemberIds.map((memberId) => ensureUserExists(memberId)));
-
-  if (payload.avatar && payload.avatarFinalizationId) {
-    await ensureOwnedGroupAvatarReceipt(db, {
-      actorUserId,
-      finalizationId: payload.avatarFinalizationId,
-      avatarUrl: payload.avatar,
-    });
-  }
-
-  if (payload.coverPhoto && payload.coverPhotoFinalizationId) {
-    await ensureOwnedGroupMediaReceipt(db, {
-      actorUserId,
-      finalizationId: payload.coverPhotoFinalizationId,
-      mediaUrl: payload.coverPhoto,
-      folder: 'covers',
-      scope: 'cover',
-    });
-  }
-
-  if (payload.itemId) {
-    const listingResult = await db.query<{ id: string }>(
-      `
-        SELECT id
-        FROM listings
-        WHERE id = $1
-        LIMIT 1
-      `,
-      [payload.itemId]
-    );
-
-    if (!listingResult.rowCount) {
-      throw createApiError('LISTING_NOT_FOUND', 'Listing not found for group context', {
-        itemId: payload.itemId,
-      });
-    }
-  }
-
-  const conversationId = createRuntimeId('chatgrp');
-  const client = await db.connect();
-  let createdMessage: { id: string; createdAt: string } | null = null;
-  let cachedResponse: Record<string, unknown> | null = null;
-
-  try {
-    await client.query('BEGIN');
-
-    if (idempotencyKey) {
-      cachedResponse = await getChatGroupIdempotentResponse(client, {
-        creatorId: actorUserId,
-        idempotencyKey,
-        requestHash,
-      });
-
-      if (cachedResponse) {
-        await client.query('COMMIT');
-        reply.code(201);
-        return cachedResponse;
-      }
-    }
-
-    await client.query(
-      `
-        INSERT INTO chat_conversations (
-          id,
-          type,
-          title,
-          owner_id,
-          item_id,
-          metadata
-        )
-        VALUES ($1, 'group', $2, $3, $4, $5::jsonb)
-      `,
-      [
-        conversationId,
-        title,
-        actorUserId,
-        payload.itemId ?? null,
-        toJsonString({
-          createdVia: 'chat_groups_api',
-          ...(payload.description ? { description: payload.description } : {}),
-          ...(payload.avatar ? { avatar: payload.avatar } : {}),
-          ...(payload.avatarFinalizationId
-            ? { avatarFinalizationId: payload.avatarFinalizationId }
-            : {}),
-          ...(payload.coverPhoto ? { coverPhoto: payload.coverPhoto } : {}),
-          ...(payload.coverPhotoFinalizationId
-            ? { coverPhotoFinalizationId: payload.coverPhotoFinalizationId }
-            : {}),
-        }),
-      ]
-    );
-
-    for (const memberId of normalizedMemberIds) {
-      await client.query(
-        `
-          INSERT INTO chat_members (conversation_id, user_id, role)
-          VALUES ($1, $2, $3)
-          ON CONFLICT (conversation_id, user_id) DO NOTHING
-        `,
-        [conversationId, memberId, memberId === actorUserId ? 'owner' : 'member']
-      );
-    }
-
-    createdMessage = await appendSystemChatMessage(client, {
-      conversationId,
-      text: `${title} was created.`,
-      metadata: {
-        event: 'group_created',
-        actorUserId,
-      },
-    });
-
-    await client.query(
-      `
-        UPDATE chat_conversations
-        SET updated_at = NOW()
-        WHERE id = $1
-      `,
-      [conversationId]
-    );
-
-    const responsePayload = {
-      ok: true,
-      conversation: {
-        id: conversationId,
-        type: 'group' as const,
-        title,
-        itemId: payload.itemId ?? null,
-        ownerId: actorUserId,
-        description: payload.description ?? null,
-        avatar: payload.avatar ?? null,
-        coverPhoto: payload.coverPhoto ?? null,
-        participantIds: normalizedMemberIds,
-        memberRoles: Object.fromEntries(
-          normalizedMemberIds.map((memberId) => [
-            memberId,
-            memberId === actorUserId ? 'owner' : 'member',
-          ])
-        ),
-        botIds: [] as string[],
-        lastMessage: createdMessage?.createdAt ? `${title} was created.` : 'Group created',
-        lastMessageTime: createdMessage?.createdAt ?? new Date().toISOString(),
-        unread: false,
-      },
-      initialMessage: createdMessage
-        ? {
-            id: createdMessage.id,
-            senderType: 'system' as const,
-            senderUserId: null,
-            senderBotId: null,
-            body: `${title} was created.`,
-            metadata: {
-              event: 'group_created',
-              actorUserId,
-            },
-            createdAt: createdMessage.createdAt,
-          }
-        : null,
-    };
-
-    if (idempotencyKey) {
-      await saveChatGroupIdempotentResponse(client, {
-        creatorId: actorUserId,
-        idempotencyKey,
-        requestHash,
-        conversationId,
-        responsePayload,
-      });
-    }
-
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  const notifyMemberIds = normalizedMemberIds.filter((memberId) => memberId !== actorUserId);
-  await Promise.all(
-    notifyMemberIds.map(async (memberId) => {
-      try {
-        await queueUserNotification({
-          userId: memberId,
-          title: 'You were added to a group chat',
-          body: `${title} is now active in Thryftverse chat.`,
-          payload: {
-            conversationId,
-            event: 'chat_group_added',
-          },
-          metadata: {
-            source: 'chat.groups.create',
-          },
-        });
-      } catch (error) {
-        request.log.error(
-          {
-            err: error,
-            conversationId,
-            memberId,
-          },
-          'Failed to queue group add notification'
-        );
-      }
-    })
-  );
-
-  publishRealtimeEvent({
-    topic: `chat.conversation:${conversationId}`,
-    type: 'chat.group.created',
-    payload: {
-      conversationId,
-      title,
-      ownerId: actorUserId,
-      description: payload.description ?? null,
-      avatar: payload.avatar ?? null,
-      participantIds: normalizedMemberIds,
-      memberRoles: Object.fromEntries(
-        normalizedMemberIds.map((memberId) => [
-          memberId,
-          memberId === actorUserId ? 'owner' : 'member',
-        ])
-      ),
-    },
-  });
-
-  reply.code(201);
-  return {
-    ok: true,
-    conversation: {
-      id: conversationId,
-      type: 'group' as const,
-      title,
-      itemId: payload.itemId ?? null,
-      ownerId: actorUserId,
-      description: payload.description ?? null,
-      avatar: payload.avatar ?? null,
-      participantIds: normalizedMemberIds,
-      memberRoles: Object.fromEntries(
-        normalizedMemberIds.map((memberId) => [
-          memberId,
-          memberId === actorUserId ? 'owner' : 'member',
-        ])
-      ),
-      botIds: [] as string[],
-      lastMessage: createdMessage?.createdAt ? `${title} was created.` : 'Group created',
-      lastMessageTime: createdMessage?.createdAt ?? new Date().toISOString(),
-      unread: false,
-    },
-    initialMessage: createdMessage
-      ? {
-          id: createdMessage.id,
-          senderType: 'system' as const,
-          senderUserId: null,
-          senderBotId: null,
-          body: `${title} was created.`,
-          metadata: {
-            event: 'group_created',
-            actorUserId,
-          },
-          createdAt: createdMessage.createdAt,
-        }
-      : null,
-  };
-});
-
-app.get('/chat/conversations', async (request) => {
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(120).default(40),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { limit } = querySchema.parse(request.query ?? {});
-
-  const conversationsResult = await db.query<{
-    id: string;
-    type: ChatConversationType;
-    title: string | null;
-    owner_id: string;
-    item_id: string | null;
-    metadata: Record<string, unknown> | null;
-    updated_at: string;
-    last_message: string | null;
-    last_message_created_at: string | null;
-    last_message_id: string | null;
-    last_message_ciphertext: string | null;
-    last_message_key_version: number | null;
-  }>(
-    `
-      SELECT
-        c.id,
-        c.type,
-        c.title,
-        c.owner_id,
-        c.item_id,
-        c.metadata,
-        c.updated_at::text,
-        lm.body AS last_message,
-        lm.created_at::text AS last_message_created_at,
-        lm.id AS last_message_id,
-        lm.body_ciphertext AS last_message_ciphertext,
-        lm.key_version AS last_message_key_version
-      FROM chat_conversations c
-      INNER JOIN chat_members cm
-        ON cm.conversation_id = c.id
-      LEFT JOIN LATERAL (
-        SELECT id, body, body_ciphertext, key_version, created_at
-        FROM chat_messages
-        WHERE conversation_id = c.id
-        ORDER BY created_at DESC
-        LIMIT 1
-      ) lm ON TRUE
-      WHERE cm.user_id = $1
-      ORDER BY COALESCE(lm.created_at, c.updated_at) DESC
-      LIMIT $2
-    `,
-    [actorUserId, limit]
-  );
-
-  const conversationIds = conversationsResult.rows.map((row) => row.id);
-  if (!conversationIds.length) {
-    return {
-      ok: true,
-      items: [],
-    };
-  }
-
-  const [memberRows, botRows, stateRows, readStateRows] = await Promise.all([
-    db.query<{
-      conversation_id: string;
-      user_id: string;
-      role: ChatGroupMemberRole;
-      username: string;
-      display_name: string | null;
-      avatar: string | null;
-      email_verified_at: string | null;
-    }>(
-      `
-        SELECT
-          cm.conversation_id,
-          cm.user_id,
-          cm.role,
-          u.username,
-          u.display_name,
-          u.avatar,
-          u.email_verified_at::text
-        FROM chat_members cm
-        INNER JOIN users u ON u.id = cm.user_id
-        WHERE cm.conversation_id = ANY($1::text[])
-        ORDER BY cm.joined_at ASC
-      `,
-      [conversationIds]
-    ),
-    db.query<{ conversation_id: string; bot_id: string }>(
-      `
-        SELECT conversation_id, bot_id
-        FROM chat_bot_installs
-        WHERE conversation_id = ANY($1::text[])
-        ORDER BY installed_at ASC
-      `,
-      [conversationIds]
-    ),
-    db.query<{
-      conversation_id: string;
-      is_muted: boolean;
-      is_archived: boolean;
-      request_status: string;
-      pinned_rank: number;
-      marked_unread_message_id: string | null;
-    }>(
-      `
-        SELECT conversation_id, is_muted, is_archived, request_status, pinned_rank, marked_unread_message_id
-        FROM chat_conversation_user_state
-        WHERE user_id = $1 AND conversation_id = ANY($2::text[])
-      `,
-      [actorUserId, conversationIds]
-    ),
-    db.query<{
-      conversation_id: string;
-      last_read_at: string | null;
-    }>(
-      `
-        SELECT conversation_id, last_read_at::text
-        FROM chat_members
-        WHERE user_id = $1 AND conversation_id = ANY($2::text[])
-      `,
-      [actorUserId, conversationIds]
-    ),
-  ]);
-
-  const membersByConversation = new Map<string, string[]>();
-  const rolesByConversation = new Map<string, Record<string, ChatGroupMemberRole>>();
-  const memberProfilesByConversation = new Map<string, Array<{
-    id: string;
-    username: string;
-    displayName: string | null;
-    avatar: string | null;
-    emailVerified: boolean;
-  }>>();
-  for (const row of memberRows.rows) {
-    const current = membersByConversation.get(row.conversation_id) ?? [];
-    current.push(row.user_id);
-    membersByConversation.set(row.conversation_id, current);
-    const roles = rolesByConversation.get(row.conversation_id) ?? {};
-    roles[row.user_id] = row.role;
-    rolesByConversation.set(row.conversation_id, roles);
-    const profiles = memberProfilesByConversation.get(row.conversation_id) ?? [];
-    profiles.push({
-      id: row.user_id,
-      username: row.username,
-      displayName: row.display_name,
-      avatar: row.avatar,
-      emailVerified: Boolean(row.email_verified_at),
-    });
-    memberProfilesByConversation.set(row.conversation_id, profiles);
-  }
-
-  const botsByConversation = new Map<string, string[]>();
-  for (const row of botRows.rows) {
-    const current = botsByConversation.get(row.conversation_id) ?? [];
-    current.push(row.bot_id);
-    botsByConversation.set(row.conversation_id, current);
-  }
-
-  const stateByConversation = new Map<string, { isMuted: boolean; isArchived: boolean; requestStatus: string; pinnedRank: number; markedUnreadMessageId: string | null }>();
-  for (const row of stateRows.rows) {
-    stateByConversation.set(row.conversation_id, {
-      isMuted: row.is_muted,
-      isArchived: row.is_archived,
-      requestStatus: row.request_status,
-      pinnedRank: row.pinned_rank,
-      markedUnreadMessageId: row.marked_unread_message_id,
-    });
-  }
-
-  // Build last_read_at map for unread computation.
-  const lastReadByConversation = new Map<string, string | null>();
-  for (const row of readStateRows.rows) {
-    lastReadByConversation.set(row.conversation_id, row.last_read_at);
-  }
-
-  // PII encryption: decrypt last-message preview for each conversation.
-  await Promise.all(conversationsResult.rows.map(async (row) => {
-    if (row.last_message !== null && row.last_message_id) {
-      row.last_message = await resolveMessageBody(
-        row.last_message_id,
-        row.last_message,
-        row.last_message_ciphertext ?? null,
-      );
-    }
-  }));
-
-  return {
-    ok: true,
-    items: conversationsResult.rows.map((row) => {
-      const state = stateByConversation.get(row.id);
-      const metadata = asObject(row.metadata);
-      return {
-        id: row.id,
-        type: row.type,
-        title: row.title,
-        ownerId: row.owner_id,
-        description: typeof metadata.description === 'string' ? metadata.description : null,
-        avatar: typeof metadata.avatar === 'string' ? metadata.avatar : null,
-        coverPhoto: typeof metadata.coverPhoto === 'string' ? metadata.coverPhoto : null,
-        itemId: row.item_id,
-        participantIds: membersByConversation.get(row.id) ?? [],
-        memberRoles: rolesByConversation.get(row.id) ?? {},
-        participantProfiles: memberProfilesByConversation.get(row.id) ?? [],
-        botIds: botsByConversation.get(row.id) ?? [],
-        lastMessage: row.last_message ?? (row.type === 'group' ? `${row.title ?? 'Group'} created.` : 'No messages yet'),
-        lastMessageTime: row.last_message_created_at ?? row.updated_at,
-        unread: (() => {
-          const lastRead = lastReadByConversation.get(row.id);
-          const lastMsgTime = row.last_message_created_at ?? row.updated_at;
-          if (!lastRead || !lastMsgTime) return false;
-          return new Date(lastRead) < new Date(lastMsgTime);
-        })(),
-        isMuted: state?.isMuted ?? false,
-        isArchived: state?.isArchived ?? false,
-        requestStatus: state?.requestStatus ?? 'accepted',
-        pinnedRank: state?.pinnedRank ?? 0,
-        markedUnread: Boolean(state?.markedUnreadMessageId),
-      };
-    }),
-  };
-});
-
-app.get('/chat/conversations/:conversationId/messages', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-  // P0.3: Keyset pagination on (created_at, id). Default returns the NEWEST
-  // page (descending), reversed for display. `before` cursor fetches older
-  // messages; `after` fetches newer ones. `aroundMessageId` fetches context
-  // around a specific message (used for jump-to-result and reply scroll).
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(250).default(50),
-    before: z.string().min(2).max(120).optional(),
-    after: z.string().min(2).max(120).optional(),
-    aroundMessageId: z.string().min(2).max(120).optional(),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  const { limit, before, after, aroundMessageId } = querySchema.parse(request.query ?? {});
-
-  const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  // ── aroundMessageId: fetch a window centered on a message ──────────────
-  if (aroundMessageId) {
-    const centerResult = await db.query<{ created_at: string; id: string }>(
-      `SELECT created_at::text, id FROM chat_messages
-       WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
-      [aroundMessageId, conversationId]
-    );
-    if (centerResult.rowCount) {
-      const center = centerResult.rows[0];
-      const halfLimit = Math.ceil(limit / 2);
-      const older = await db.query<{
-        id: string;
-        sender_type: ChatSenderType;
-        sender_user_id: string | null;
-        sender_bot_id: string | null;
-        body: string;
-        body_ciphertext: string | null;
-        key_version: number | null;
-        metadata: Record<string, unknown> | null;
-        created_at: string;
-        client_message_id: string | null;
-        reply_to_message_id: string | null;
-        deleted_for_everyone_at: string | null;
-        edit_version: number;
-        edited_at: string | null;
-      }>(
-        `SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
-                m.body_ciphertext, m.key_version,
-                m.metadata, m.created_at::text, m.client_message_id,
-                m.reply_to_message_id, m.deleted_for_everyone_at,
-                m.edit_version, m.edited_at::text
-         FROM chat_messages m
-         WHERE m.conversation_id = $1
-           AND m.deleted_for_everyone_at IS NULL
-           AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = $5)
-           AND (m.created_at, m.id) < ($2, $3)
-         ORDER BY m.created_at DESC, m.id DESC
-         LIMIT $4`,
-        [conversationId, center.created_at, center.id, halfLimit, actorUserId]
-      );
-      const newer = await db.query<{
-        id: string;
-        sender_type: ChatSenderType;
-        sender_user_id: string | null;
-        sender_bot_id: string | null;
-        body: string;
-        body_ciphertext: string | null;
-        key_version: number | null;
-        metadata: Record<string, unknown> | null;
-        created_at: string;
-        client_message_id: string | null;
-        reply_to_message_id: string | null;
-        deleted_for_everyone_at: string | null;
-        edit_version: number;
-        edited_at: string | null;
-      }>(
-        `SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
-                m.body_ciphertext, m.key_version,
-                m.metadata, m.created_at::text, m.client_message_id,
-                m.reply_to_message_id, m.deleted_for_everyone_at,
-                m.edit_version, m.edited_at::text
-         FROM chat_messages m
-         WHERE m.conversation_id = $1
-           AND m.deleted_for_everyone_at IS NULL
-           AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = $5)
-           AND (m.created_at, m.id) >= ($2, $3)
-         ORDER BY m.created_at ASC, m.id ASC
-         LIMIT $4`,
-        [conversationId, center.created_at, center.id, limit - halfLimit, actorUserId]
-      );
-      // Combine: older (reversed to ASC) + newer (already ASC)
-      const items = [...older.rows.reverse(), ...newer.rows];
-      // PII encryption: decrypt message bodies before serialization.
-      await Promise.all(items.map(async (row) => {
-        row.body = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
-      }));
-      return {
-        ok: true,
-        conversation: {
-          id: conversation.id,
-          type: conversation.type,
-          title: conversation.title,
-          ownerId: conversation.owner_id,
-          itemId: conversation.item_id,
-        },
-        items: await serializeChatMessageRows(items, actorUserId),
-        hasMore: older.rows.length >= halfLimit,
-        oldestCursor: items.length > 0
-          ? `${items[0].created_at}|${items[0].id}` : null,
-        newestCursor: items.length > 0
-          ? `${items[items.length - 1].created_at}|${items[items.length - 1].id}` : null,
-      };
-    }
-  }
-
-  // ── Cursor-based keyset pagination ──────────────────────────────────────
-  // Default (no cursor): return the NEWEST page.
-  // `before`: messages older than the cursor (for scrolling up in history).
-  // `after`: messages newer than the cursor ( for catching up after a gap).
-  let cursorCreatedAt: string | null = null;
-  let cursorId: string | null = null;
-  if (before || after) {
-    const cursorStr = (before ?? after) as string;
-    const sepIdx = cursorStr.lastIndexOf('|');
-    if (sepIdx > 0) {
-      cursorCreatedAt = cursorStr.slice(0, sepIdx);
-      cursorId = cursorStr.slice(sepIdx + 1);
-    }
-  }
-
-  const isAfter = Boolean(after);
-  const result = await db.query<{
-    id: string;
-    sender_type: ChatSenderType;
-    sender_user_id: string | null;
-    sender_bot_id: string | null;
-    body: string;
-    body_ciphertext: string | null;
-    key_version: number | null;
-    metadata: Record<string, unknown> | null;
-    created_at: string;
-    client_message_id: string | null;
-    reply_to_message_id: string | null;
-    deleted_for_everyone_at: string | null;
-    edit_version: number;
-    edited_at: string | null;
-  }>(
-    `
-      SELECT m.id, m.sender_type, m.sender_user_id, m.sender_bot_id, m.body,
-             m.body_ciphertext, m.key_version,
-             m.metadata, m.created_at::text, m.client_message_id,
-             m.reply_to_message_id, m.deleted_for_everyone_at,
-             m.edit_version, m.edited_at::text
-      FROM chat_messages m
-      WHERE m.conversation_id = $1
-        AND m.deleted_for_everyone_at IS NULL
-        AND NOT EXISTS (SELECT 1 FROM chat_message_deletions cmd WHERE cmd.message_id = m.id AND cmd.user_id = ${cursorCreatedAt ? '$5' : '$3'})
-        ${cursorCreatedAt ? (isAfter
-          ? 'AND (m.created_at, m.id) > ($2, $3)'
-          : 'AND (m.created_at, m.id) < ($2, $3)')
-          : ''}
-      ORDER BY m.created_at ${isAfter ? 'ASC' : 'DESC'}, m.id ${isAfter ? 'ASC' : 'DESC'}
-      LIMIT $${cursorCreatedAt ? '4' : '2'}
-    `,
-    cursorCreatedAt
-      ? [conversationId, cursorCreatedAt, cursorId, limit, actorUserId]
-      : [conversationId, limit, actorUserId]
-  );
-
-  // For `before` and default (DESC query), reverse to chronological ASC for display.
-  // For `after` (ASC query), keep as-is.
-  const items = isAfter ? result.rows : result.rows.reverse();
-
-  // PII encryption: decrypt message bodies before serialization.
-  await Promise.all(items.map(async (row) => {
-    row.body = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
-  }));
-
-  return {
-    ok: true,
-    conversation: {
-      id: conversation.id,
-      type: conversation.type,
-      title: conversation.title,
-      ownerId: conversation.owner_id,
-      itemId: conversation.item_id,
-    },
-    items: await serializeChatMessageRows(items, actorUserId),
-    hasMore: result.rows.length >= limit,
-    oldestCursor: items.length > 0
-      ? `${items[0].created_at}|${items[0].id}` : null,
-    newestCursor: items.length > 0
-      ? `${items[items.length - 1].created_at}|${items[items.length - 1].id}` : null,
-  };
-});
-
-app.post('/chat/conversations/:conversationId/messages', {
-  config: {
-    rateLimit: {
-      max: 60,
-      timeWindow: '1 minute',
-    },
-  },
-  // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
-  // security best practices. Validates structure before the handler runs;
-  // Zod in the handler provides semantic validation as a second layer.
-  schema: {
-    params: {
-      type: 'object',
-      required: ['conversationId'],
-      properties: {
-        conversationId: { type: 'string', minLength: 2, maxLength: 120 },
-      },
-    },
-    body: {
-      type: 'object',
-      properties: {
-        type: { type: 'string', enum: ['text', 'image', 'video', 'voice'] },
-        text: { type: 'string', maxLength: 4000 },
-        mediaUri: { type: 'string', minLength: 1, maxLength: 2048 },
-        metadata: { type: 'object' },
-        clientMessageId: { type: 'string', minLength: 1, maxLength: 120 },
-        replyToMessageId: { type: 'string', minLength: 2, maxLength: 120 },
-      },
-      additionalProperties: false,
-    },
-  },
-}, async (request, reply) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-  // P0-MSG-1: Discriminated message payload. Text is required only for
-  // `type: 'text'` (or when `type` is absent for backwards compatibility).
-  // Image/video messages require a `mediaUri` and may omit the caption.
-  // Voice messages (report 19) require a `mediaUri` plus voice metadata
-  // (durationMs, container, codec) and are never sent without a finalized
-  // audio asset — the client must upload + finalize before sending.
-  const bodySchema = z
-    .object({
-      type: z.enum(['text', 'image', 'video', 'voice']).optional(),
-      text: z.string().trim().max(4000).optional(),
-      mediaUri: z.string().min(1).max(2048).optional(),
-      metadata: z.record(z.unknown()).optional(),
-      clientMessageId: z.string().trim().min(1).max(120).optional(),
-      replyToMessageId: z.string().trim().min(2).max(120).optional(),
-    })
-    .superRefine((val, ctx) => {
-      const isMedia = val.type === 'image' || val.type === 'video';
-      const isVoice = val.type === 'voice';
-      if (isMedia) {
-        if (!val.mediaUri || val.mediaUri.length < 1) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'mediaUri is required for image/video messages',
-            path: ['mediaUri'],
-          });
-        }
-      } else if (isVoice) {
-        if (!val.mediaUri || val.mediaUri.length < 1) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'mediaUri is required for voice messages',
-            path: ['mediaUri'],
-          });
-        }
-        const meta = val.metadata ?? {};
-        const durationMs = meta.durationMs ?? meta.duration_ms;
-        if (typeof durationMs !== 'number' || durationMs <= 0 || durationMs > 120_000) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'durationMs must be a positive number up to 120000 (2 minutes)',
-            path: ['metadata', 'durationMs'],
-          });
-        }
-        const container = meta.container ?? meta.audioContainer;
-        if (typeof container !== 'string' || !['m4a', 'ogg', 'webm', 'mp4'].includes(container)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'container must be one of m4a, ogg, webm, mp4',
-            path: ['metadata', 'container'],
-          });
-        }
-        const codec = meta.codec ?? meta.audioCodec;
-        if (typeof codec !== 'string' || !['aac', 'opus', 'mp3'].includes(codec)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'codec must be one of aac, opus, mp3',
-            path: ['metadata', 'codec'],
-          });
-        }
-      } else {
-        // `type: 'text'` or absent — backwards-compatible text message.
-        if (!val.text || val.text.length < 1) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'text is required for text messages',
-            path: ['text'],
-          });
-        }
-      }
-    });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const isMediaMessage = payload.type === 'image' || payload.type === 'video';
-  const isVoiceMessage = payload.type === 'voice';
-  // `body` is NOT NULL in chat_messages; media-only and voice messages use
-  // an empty string so the column constraint is satisfied while the media
-  // URI lives in metadata for the read path.
-  const bodyText = payload.text ?? '';
-  const mergedMetadata: Record<string, unknown> = {
-    ...(payload.metadata ?? {}),
-    ...(isMediaMessage
-      ? { mediaUri: payload.mediaUri, mediaType: payload.type }
-      : {}),
-    ...(isVoiceMessage
-      ? { mediaUri: payload.mediaUri, mediaType: 'voice', voiceMessage: true }
-      : {}),
-  };
-
-  await ensureUserExists(actorUserId);
-  const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  const actorStateResult = await db.query<{ request_status: string | null }>(
-    `SELECT request_status FROM chat_conversation_user_state
-     WHERE user_id = $1 AND conversation_id = $2 LIMIT 1`,
-    [actorUserId, conversationId],
-  );
-  const actorRequestStatus = actorStateResult.rowCount ? actorStateResult.rows[0].request_status : null;
-  if (actorRequestStatus === 'pending' || actorRequestStatus === 'declined') {
-    reply.code(403);
-    return { ok: false, error: 'Message request has not been accepted' };
-  }
-
-  // P0.8: Validate reply target — must exist in this conversation and not be
-  // deleted-for-everyone. This prevents cross-conversation reply spoofing.
-  if (payload.replyToMessageId) {
-    const replyTarget = await db.query<{ id: string }>(
-      `SELECT id FROM chat_messages
-       WHERE id = $1 AND conversation_id = $2 AND deleted_for_everyone_at IS NULL
-       LIMIT 1`,
-      [payload.replyToMessageId, conversationId]
-    );
-    if (!replyTarget.rowCount) {
-      reply.code(400);
-      return { ok: false, error: 'Reply target message not found in this conversation' };
-    }
-  }
-
-  // P0-MSG-2: Idempotent replay. If the client retried a send after a dropped
-  // response, the same clientMessageId will be presented. Return the original
-  // message instead of creating a duplicate. The partial unique index on
-  // (conversation_id, sender_user_id, client_message_id) is the race-condition
-  // backstop; this lookup is the fast path.
-  if (payload.clientMessageId) {
-    const existing = await db.query<{
-      id: string;
-      body: string;
-      body_ciphertext: string | null;
-      key_version: number | null;
-      metadata: Record<string, unknown>;
-      created_at: string;
-      client_message_id: string | null;
-      reply_to_message_id: string | null;
-    }>(
-      `
-        SELECT id, body, body_ciphertext, key_version, metadata, created_at::text, client_message_id, reply_to_message_id
-        FROM chat_messages
-        WHERE conversation_id = $1
-          AND sender_user_id = $2
-          AND client_message_id = $3
-        LIMIT 1
-      `,
-      [conversationId, actorUserId, payload.clientMessageId]
-    );
-
-    if (existing.rowCount && existing.rowCount > 0) {
-      const row = existing.rows[0];
-      // PII encryption: resolve body from ciphertext or plaintext fallback.
-      const resolvedBody = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
-      reply.code(201);
-      return {
-        ok: true,
-        message: {
-          id: row.id,
-          senderType: 'user' as const,
-          senderUserId: actorUserId,
-          senderBotId: null,
-          body: resolvedBody,
-          metadata: row.metadata ?? {},
-          createdAt: row.created_at,
-          clientMessageId: row.client_message_id ?? undefined,
-          replyToMessageId: row.reply_to_message_id ?? undefined,
-        },
-      };
-    }
-  }
-
-  const messageId = createRuntimeId('chatmsg');
-  // PII encryption dual-write: encrypt the body before INSERT. On failure,
-  // store plaintext so the backfill worker can encrypt later.
-  let bodyToStore = bodyText;
-  let bodyCiphertext: string | null = null;
-  let keyVersion: number | null = null;
-  try {
-    const encrypted = await encryptMessageBody(messageId, bodyText);
-    bodyCiphertext = encrypted.ciphertext;
-    keyVersion = encrypted.keyVersion;
-    bodyToStore = '[encrypted]';
-  } catch (err) {
-    logger.warn(
-      { messageId, err: err instanceof Error ? err.message : String(err) },
-      'messageEncryption.encryptFailed — storing plaintext for backfill',
-    );
-  }
-  const result = await db.query<{ id: string; created_at: string }>(
-    `
-      INSERT INTO chat_messages (
-        id,
-        conversation_id,
-        sender_type,
-        sender_user_id,
-        sender_bot_id,
-        body,
-        body_ciphertext,
-        key_version,
-        metadata,
-        client_message_id,
-        reply_to_message_id
-      )
-      VALUES ($1, $2, 'user', $3, NULL, $4, $5, $6, $7::jsonb, $8, $9)
-      ON CONFLICT (conversation_id, sender_user_id, client_message_id)
-        WHERE client_message_id IS NOT NULL
-      DO NOTHING
-      RETURNING id, created_at::text
-    `,
-    [
-      messageId,
-      conversationId,
-      actorUserId,
-      bodyToStore,
-      bodyCiphertext,
-      keyVersion,
-      toJsonString(mergedMetadata),
-      payload.clientMessageId ?? null,
-      payload.replyToMessageId ?? null,
-    ]
-  );
-
-  // P0-MSG-2: Race-condition backstop. Two concurrent retries with the same
-  // clientMessageId can both pass the SELECT lookup above. The partial unique
-  // index makes the second INSERT a no-op (DO NOTHING); detect that and
-  // replay the winning row so the client still gets a 201 with the message.
-  if (result.rowCount === 0 && payload.clientMessageId) {
-    const existing = await db.query<{
-      id: string;
-      body: string;
-      body_ciphertext: string | null;
-      key_version: number | null;
-      metadata: Record<string, unknown>;
-      created_at: string;
-      client_message_id: string | null;
-      reply_to_message_id: string | null;
-    }>(
-      `
-        SELECT id, body, body_ciphertext, key_version, metadata, created_at::text, client_message_id, reply_to_message_id
-        FROM chat_messages
-        WHERE conversation_id = $1
-          AND sender_user_id = $2
-          AND client_message_id = $3
-        LIMIT 1
-      `,
-      [conversationId, actorUserId, payload.clientMessageId]
-    );
-
-    if (existing.rowCount && existing.rowCount > 0) {
-      const row = existing.rows[0];
-      // PII encryption: resolve body from ciphertext or plaintext fallback.
-      const resolvedBody = await resolveMessageBody(row.id, row.body, row.body_ciphertext ?? null);
-      reply.code(201);
-      return {
-        ok: true,
-        message: {
-          id: row.id,
-          senderType: 'user' as const,
-          senderUserId: actorUserId,
-          senderBotId: null,
-          body: resolvedBody,
-          metadata: row.metadata ?? {},
-          createdAt: row.created_at,
-          clientMessageId: row.client_message_id ?? undefined,
-          replyToMessageId: row.reply_to_message_id ?? undefined,
-        },
-      };
-    }
-  }
-
-  if ((isMediaMessage || isVoiceMessage) && payload.mediaUri) {
-    const mediaUri = payload.mediaUri;
-    if (mediaUri.includes('/media/')) {
-      const assetResult = await db.query<{
-        id: string;
-        owner_id: string;
-        canonical_url: string | null;
-        status: string;
-        media_kind: string;
-      }>(
-        `SELECT id, owner_id, canonical_url, status, media_kind FROM media_assets WHERE canonical_url = $1 LIMIT 1`,
-        [mediaUri],
-      );
-      if (!assetResult.rowCount) {
-        reply.code(403);
-        return { ok: false, error: 'Media asset not found' };
-      }
-      const asset = assetResult.rows[0];
-      if (asset.owner_id !== actorUserId) {
-        reply.code(403);
-        return { ok: false, error: 'Media asset does not belong to the sender' };
-      }
-      // Voice messages require an audio-kind asset. Reject if the sender
-      // claims type:'voice' but the asset is not audio — this catches a
-      // misclassified upload (e.g. .m4a filed as image/jpeg) before it
-      // becomes a voice bubble with no playable audio.
-      if (isVoiceMessage && asset.media_kind !== 'audio') {
-        reply.code(422);
-        return {
-          ok: false,
-          error: 'Voice message media asset is not audio-kind. Re-upload with the correct content type.',
-        };
-      }
-      const attachmentKind = isVoiceMessage
-        ? 'audio'
-        : asset.media_kind === 'video'
-          ? 'video'
-          : 'image';
-      await db.query(
-        `INSERT INTO chat_message_attachments (id, message_id, media_asset_id, kind, canonical_url, created_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())`,
-        [createRuntimeId('chatatt'), result.rows[0].id, asset.id, attachmentKind, mediaUri],
-      );
-
-      // Voice messages get a canonical voice_messages row binding the asset
-      // to the message with duration/container/codec metadata. The waveform
-      // is left NULL — the waveform worker fills it async. The client reads
-      // this row to render a real waveform or an honest progress line.
-      if (isVoiceMessage) {
-        const voiceMeta = payload.metadata ?? {};
-        const durationMs = Number(voiceMeta.durationMs ?? voiceMeta.duration_ms ?? 0);
-        const container = String(voiceMeta.container ?? voiceMeta.audioContainer ?? 'm4a');
-        const codec = String(voiceMeta.codec ?? voiceMeta.audioCodec ?? 'aac');
-        const bytes = Number(voiceMeta.bytes ?? voiceMeta.sizeBytes ?? 0);
-        await db.query(
-          `INSERT INTO voice_messages (
-             id, message_id, conversation_id, media_asset_id, sender_user_id,
-             duration_ms, bytes, container, codec, moderation_state
-           )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')`,
-          [
-            createRuntimeId('voice'),
-            result.rows[0].id,
-            conversationId,
-            asset.id,
-            actorUserId,
-            durationMs,
-            bytes,
-            container,
-            codec,
-          ],
-        );
-      }
-    } else {
-      request.log.warn(
-        { mediaUri, conversationId, actorUserId },
-        'Chat message media URI does not match canonical media URL pattern — allowing without ownership check',
-      );
-      const attachmentKind = isVoiceMessage
-        ? 'audio'
-        : payload.type === 'video'
-          ? 'video'
-          : 'image';
-      await db.query(
-        `INSERT INTO chat_message_attachments (id, message_id, kind, canonical_url, created_at)
-         VALUES ($1, $2, $3, $4, NOW())`,
-        [createRuntimeId('chatatt'), result.rows[0].id, attachmentKind, mediaUri],
-      );
-    }
-  }
-
-  await db.query(
-    `
-      UPDATE chat_conversations
-      SET updated_at = NOW()
-      WHERE id = $1
-    `,
-    [conversationId],
-  );
-
-  const participantIds = await listChatParticipantIds(db, conversationId);
-  const recipientIds = participantIds.filter((memberId) => memberId !== actorUserId);
-
-  let notifiableRecipientIds = recipientIds;
-  if (recipientIds.length > 0) {
-    const stateResult = await db.query<{
-      user_id: string;
-      is_muted: boolean;
-      is_archived: boolean;
-      request_status: string | null;
-    }>(
-      `SELECT user_id, is_muted, is_archived, request_status
-       FROM chat_conversation_user_state
-       WHERE conversation_id = $1 AND user_id = ANY($2::text[])`,
-      [conversationId, recipientIds],
-    );
-    const suppressedUserIds = new Set<string>();
-    for (const row of stateResult.rows) {
-      if (row.is_muted || row.is_archived || row.request_status === 'pending' || row.request_status === 'declined') {
-        suppressedUserIds.add(row.user_id);
-      }
-    }
-    notifiableRecipientIds = recipientIds.filter((id) => !suppressedUserIds.has(id));
-  }
-
-  // ── FR-05: Authoritative risk decision BEFORE fan-out ────────────────
-  // The message is already committed to the DB. We now evaluate risk before
-  // any notification fan-out, realtime event, or bot execution so that
-  // phishing/scam content is quarantined before it reaches recipients.
-  //
-  // Flow: DB insert → evaluateRisk() → conditional fan-out → response.
-  //   allow          → full fan-out (notifications, realtime, bots)
-  //   quarantine     → no fan-out; sender-visible, recipient-hidden
-  //   step_up / manual_review / delay → realtime only, no push; pending_review
-  //   deny           → no fan-out; message blocked
-  //
-  // The legacy checkFraudNonBlocking call is retained below as a shadow log.
-  let riskDecision: Awaited<ReturnType<typeof evaluateRisk>> | null = null;
-  try {
-    riskDecision = await evaluateRisk(
-      { db, redis, logger: request.log, shadowService: fraudShadowService, ipReputationProvider },
-      {
-        eventType: 'chat.message.send',
-        subjectRef: conversationId,
-        userId: actorUserId,
-        headers: request.headers as Record<string, string | string[] | undefined>,
-        ip: request.ip,
-        context: {
-          conversationId,
-          messageId: result.rows[0].id,
-          messageLength: bodyText.length,
-        },
-      },
-    );
-  } catch (err) {
-    // Risk evaluation failures must never break message sending (AGENTS.md §6).
-    // Fail open: treat as allow so the message is delivered.
-    request.log.error(
-      { err, conversationId, actorUserId, messageId: result.rows[0].id },
-      'evaluateRisk failed for chat message — failing open to allow',
-    );
-  }
-
-  const ownerDecision = riskDecision?.ownerDecision ?? 'allow';
-  const suppressNotifications =
-    ownerDecision === 'quarantine' ||
-    ownerDecision === 'deny' ||
-    ownerDecision === 'step_up' ||
-    ownerDecision === 'manual_review' ||
-    ownerDecision === 'delay';
-  const suppressRealtimeAndBots =
-    ownerDecision === 'quarantine' || ownerDecision === 'deny';
-
-  if (ownerDecision === 'quarantine') {
-    request.log.warn(
-      {
-        conversationId,
-        actorUserId,
-        messageId: result.rows[0].id,
-        decisionId: riskDecision?.decisionId,
-        riskLevel: riskDecision?.riskLevel,
-        reasonCodes: riskDecision?.ownerReasonCodes,
-      },
-      'Chat message quarantined by risk decision — suppressing all fan-out',
-    );
-  } else if (ownerDecision === 'deny') {
-    request.log.warn(
-      {
-        conversationId,
-        actorUserId,
-        messageId: result.rows[0].id,
-        decisionId: riskDecision?.decisionId,
-        riskLevel: riskDecision?.riskLevel,
-        reasonCodes: riskDecision?.ownerReasonCodes,
-      },
-      'Chat message blocked by risk decision — suppressing all fan-out',
-    );
-  }
-
-  // Push notification fan-out — skipped for quarantine, deny, and
-  // pending_review (step_up / manual_review / delay) decisions.
-  if (!suppressNotifications && notifiableRecipientIds.length > 0) {
-    await Promise.all(
-      notifiableRecipientIds.map(async (memberId) => {
-        try {
-          await queueUserNotification({
-            userId: memberId,
-            title: 'New message',
-            body: conversation.type === 'group'
-              ? `New message in ${conversation.title ?? 'your group chat'}`
-              : 'You have a new message in Thryftverse.',
-            payload: {
-              conversationId,
-              messageId: result.rows[0].id,
-              senderId: actorUserId,
-              event: 'chat_message',
-            },
-            metadata: {
-              source: 'chat.conversations.message.create',
-            },
-          });
-        } catch (error) {
-          request.log.error(
-            {
-              err: error,
-              conversationId,
-              memberId,
-            },
-            'Failed to queue chat message notification'
-          );
-        }
-      })
-    );
-  }
-
-  // Realtime event — skipped for quarantine and deny. For pending_review
-  // (step_up / manual_review / delay) the realtime event still fires so an
-  // active recipient in the chat sees the message in real-time.
-  if (!suppressRealtimeAndBots) {
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.message.created',
-      payload: {
-        id: result.rows[0].id,
-        conversationId,
-        senderType: 'user',
-        senderUserId: actorUserId,
-        senderBotId: null,
-        body: bodyText,
-        metadata: mergedMetadata,
-        createdAt: result.rows[0].created_at,
-        clientMessageId: payload.clientMessageId ?? null,
-        replyToMessageId: payload.replyToMessageId ?? null,
-      },
-    });
-  }
-
-  // Bot runtime — skipped for quarantine and deny. Bot execution on
-  // suspicious content could trigger unwanted side-effects.
-  if (!suppressRealtimeAndBots && conversation.type === 'group') {
-    try {
-      const { enqueueAgentRun } = await import('./botRuntime/index.js');
-      await enqueueAgentRun(db, {
-        conversationId,
-        conversationType: conversation.type,
-        conversationTitle: conversation.title ?? null,
-        actorUserId,
-        actorUserName: null,
-        messageText: bodyText,
-        triggerMessageId: result.rows[0].id ?? null,
-      });
-    } catch (err) {
-      request.log.error({ err, conversationId, actorUserId }, 'Agent run enqueue failed');
-    }
-  }
-
-  // Legacy fraud check — retained as a shadow log. The authoritative
-  // decision above (evaluateRisk) is the primary; this provides comparison
-  // data for model calibration (AGENTS.md §11 — truthful signals).
-  try {
-    const fraudResult = await checkFraudNonBlocking(
-      redis,
-      {
-        eventType: 'message',
-        userId: actorUserId,
-        headers: request.headers as Record<string, string | string[] | undefined>,
-        ip: request.ip,
-      },
-      undefined,
-      request.log,
-      fraudShadowService,
-    );
-    // Message events map to `allow_low_risk_flow` when the fraud service
-    // is unavailable — messaging continues and spam can be caught post-hoc.
-    if (fraudResult.evaluationStatus === 'unavailable') {
-      request.log.warn(
-        { userId: actorUserId, policyAction: fraudResult.policyAction, reasonCode: fraudResult.reasonCode },
-        'Message fraud check unavailable — continuing with failover policy'
-      );
-    }
-  } catch {
-    // Fraud check failures must never break message sending (AGENTS.md §6).
-  }
-
-  // Record execution status for the authoritative risk decision (FR-13).
-  if (riskDecision) {
-    const executionStatus =
-      ownerDecision === 'allow'
-        ? ('executed' as const)
-        : ownerDecision === 'deny'
-          ? ('not_executed' as const)
-          : ('executed' as const);
-    try {
-      await recordExecution(db, {
-        decisionId: riskDecision.decisionId,
-        ownerService: 'messaging',
-        executionStatus,
-        domainEntityType: 'chat_message',
-        domainEntityId: result.rows[0].id,
-      });
-    } catch (err) {
-      request.log.error(
-        { err, decisionId: riskDecision.decisionId, messageId: result.rows[0].id },
-        'Failed to record risk decision execution',
-      );
-    }
-  }
-
-  // Determine the message state to surface to the sender.
-  const messageState =
-    ownerDecision === 'quarantine'
-      ? 'quarantined'
-      : ownerDecision === 'deny'
-        ? 'blocked'
-        : ownerDecision === 'step_up' ||
-            ownerDecision === 'manual_review' ||
-            ownerDecision === 'delay'
-          ? 'pending_review'
-          : 'sent';
-
-  reply.code(ownerDecision === 'deny' ? 403 : 201);
-  return {
-    ok: ownerDecision !== 'deny',
-    messageState,
-    message: {
-      id: result.rows[0].id,
-      senderType: 'user' as const,
-      senderUserId: actorUserId,
-      senderBotId: null,
-      body: bodyText,
-      metadata: mergedMetadata,
-      createdAt: result.rows[0].created_at,
-      clientMessageId: payload.clientMessageId ?? undefined,
-      replyToMessageId: payload.replyToMessageId ?? undefined,
-    },
-  };
-});
-
-// ── P0.5: Delete message — delete-for-me and delete-for-everyone ──────────
-// Two distinct semantics, never both labeled "Delete message":
-//   DELETE .../messages/:messageId           → delete-for-me (per-user tombstone)
-//   DELETE .../messages/:messageId?scope=everyone → delete-for-everyone (sender/admin, time-windowed)
-app.delete('/chat/conversations/:conversationId/messages/:messageId', async (request, reply) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-    messageId: z.string().min(2).max(120),
-  });
-  const querySchema = z.object({
-    scope: z.enum(['me', 'everyone']).default('me'),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId, messageId } = paramsSchema.parse(request.params);
-  const { scope } = querySchema.parse(request.query ?? {});
-
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  const messageResult = await db.query<{
-    sender_user_id: string | null;
-    created_at: string;
-    deleted_for_everyone_at: string | null;
-  }>(
-    `SELECT sender_user_id, created_at::text, deleted_for_everyone_at
-     FROM chat_messages WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
-    [messageId, conversationId]
-  );
-
-  if (!messageResult.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Message not found' };
-  }
-
-  const msg = messageResult.rows[0];
-
-  if (msg.deleted_for_everyone_at) {
-    // Already deleted for everyone — idempotent success
-    return { ok: true, deleted: true, scope: 'everyone' };
-  }
-
-  if (scope === 'everyone') {
-    // Only the sender can delete for everyone, within a 24h window.
-    if (msg.sender_user_id !== actorUserId) {
-      reply.code(403);
-      return { ok: false, error: 'Only the sender can delete a message for everyone' };
-    }
-    const ageMs = Date.now() - new Date(msg.created_at).getTime();
-    if (ageMs > 24 * 60 * 60 * 1000) {
-      reply.code(403);
-      return { ok: false, error: 'Delete for everyone is only available within 24 hours of sending' };
-    }
-
-    await db.query(
-      `UPDATE chat_messages
-       SET deleted_for_everyone_at = NOW(), deleted_by_user_id = $3, body = ''
-       WHERE id = $1 AND conversation_id = $2`,
-      [messageId, conversationId, actorUserId]
-    );
-
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.message.deleted',
-      payload: { conversationId, messageId, scope: 'everyone', actorUserId },
-    });
-
-    return { ok: true, deleted: true, scope: 'everyone' };
-  }
-
-  // scope === 'me' — per-user tombstone
-  await db.query(
-    `INSERT INTO chat_message_deletions (message_id, user_id)
-     VALUES ($1, $2)
-     ON CONFLICT (message_id, user_id) DO NOTHING`,
-    [messageId, actorUserId]
-  );
-
-  publishRealtimeEvent({
-    topic: `chat.conversation:${conversationId}`,
-    type: 'chat.message.deleted',
-    payload: { conversationId, messageId, scope: 'me', actorUserId },
-  });
-
-  return { ok: true, deleted: true, scope: 'me' };
-});
-
-// ── P0.9: Message reactions — add and remove ─────────────────────────────
-app.post('/chat/conversations/:conversationId/messages/:messageId/reactions', async (request, reply) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-    messageId: z.string().min(2).max(120),
-  });
-  const bodySchema = z.object({
-    emoji: z.string().trim().min(1).max(32),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId, messageId } = paramsSchema.parse(request.params);
-  const { emoji } = bodySchema.parse(request.body ?? {});
-
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  // Verify message exists and isn't deleted
-  const msgResult = await db.query<{ id: string }>(
-    `SELECT id FROM chat_messages
-     WHERE id = $1 AND conversation_id = $2 AND deleted_for_everyone_at IS NULL LIMIT 1`,
-    [messageId, conversationId]
-  );
-  if (!msgResult.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Message not found' };
-  }
-
-  await db.query(
-    `INSERT INTO chat_message_reactions (message_id, user_id, emoji)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (message_id, user_id, emoji) DO NOTHING`,
-    [messageId, actorUserId, emoji]
-  );
-
-  publishRealtimeEvent({
-    topic: `chat.conversation:${conversationId}`,
-    type: 'chat.reaction.added',
-    payload: { conversationId, messageId, userId: actorUserId, emoji },
-  });
-
-  reply.code(201);
-  return { ok: true, reacted: true, emoji };
-});
-
-app.delete('/chat/conversations/:conversationId/messages/:messageId/reactions', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-    messageId: z.string().min(2).max(120),
-  });
-  const querySchema = z.object({
-    emoji: z.string().trim().min(1).max(32),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId, messageId } = paramsSchema.parse(request.params);
-  const { emoji } = querySchema.parse(request.query ?? {});
-
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  await db.query(
-    `DELETE FROM chat_message_reactions
-     WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
-    [messageId, actorUserId, emoji]
-  );
-
-  publishRealtimeEvent({
-    topic: `chat.conversation:${conversationId}`,
-    type: 'chat.reaction.removed',
-    payload: { conversationId, messageId, userId: actorUserId, emoji },
-  });
-
-  return { ok: true, removed: true, emoji };
-});
-
-// ── P0.11: Conversation report route ─────────────────────────────────────
-// One canonical report workflow with evidence selection, idempotent submission,
-// and a real report ID from the server.
-app.post('/chat/conversations/:conversationId/report', async (request, reply) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-  const bodySchema = z.object({
-    reason: z.enum([
-      'spam', 'harassment', 'scam_fraud', 'inappropriate_content',
-      'off_platform_payment', 'impersonation', 'other',
-    ]),
-    details: z.string().trim().max(2000).optional(),
-    messageId: z.string().trim().min(2).max(120).optional(),
-    idempotencyKey: z.string().min(2).optional(),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body ?? {});
-
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  const reportId = createRuntimeId('chatrpt');
-
-  const insertResult = await db.query<{ id: string }>(
-    `INSERT INTO conversation_reports (id, conversation_id, reporter_user_id, reason, details, message_id, status, created_at, idempotency_key)
-     VALUES ($1, $2, $3, $4, $5, $6, 'submitted', NOW(), $7)
-     ON CONFLICT (idempotency_key) DO NOTHING
-     RETURNING id`,
-    [
-      reportId,
-      conversationId,
-      actorUserId,
-      payload.reason,
-      payload.details ?? null,
-      payload.messageId ?? null,
-      payload.idempotencyKey ?? null,
-    ]
-  );
-
-  const effectiveReportId = insertResult.rowCount && insertResult.rowCount > 0
-    ? insertResult.rows[0].id
-    : reportId;
-
-  publishRealtimeEvent({
-    topic: `chat.conversation:${conversationId}`,
-    type: 'chat.conversation.reported',
-    payload: { conversationId, reportId: effectiveReportId, reason: payload.reason },
-  });
-
-  reply.code(201);
-  return { ok: true, reportId: effectiveReportId, status: 'submitted' };
-});
-
-// P0 #1 / P2 #56: Typing indicator endpoint.
-// Ephemeral realtime-only signal — no DB writes. The composer debounces
-// "started typing" (1s) and "stopped typing" (3s inactivity / on send) on
-// the client; this endpoint just fans the signal out to other participants
-// via the conversation's realtime topic so `useTypingIndicator` lights up.
-app.post('/chat/conversations/:conversationId/typing', {
-  config: {
-    rateLimit: {
-      max: 10,
-      timeWindow: '10 seconds',
-    },
-  },
-  schema: {
-    params: {
-      type: 'object',
-      required: ['conversationId'],
-      properties: {
-        conversationId: { type: 'string', minLength: 2, maxLength: 120 },
-      },
-    },
-    body: {
-      type: 'object',
-      required: ['isTyping'],
-      properties: {
-        isTyping: { type: 'boolean' },
-      },
-      additionalProperties: false,
-    },
-  },
-}, async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-  const bodySchema = z.object({
-    isTyping: z.boolean(),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  const { isTyping } = bodySchema.parse(request.body ?? {});
-
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  publishRealtimeEvent({
-    topic: `chat.conversation:${conversationId}`,
-    type: 'chat.typing.update',
-    payload: {
-      conversationId,
-      userId: actorUserId,
-      isTyping,
-    },
-  });
-
-  return { ok: true };
-});
-
-// ── Mark conversation as read ────────────────────────────────────────
-// Updates chat_members.last_read_at for the current user. Used by the
-// client when the user opens a conversation or scrolls to the bottom.
-// Also publishes a realtime event so other participants can see read
-// receipts update.
-app.post('/chat/conversations/:conversationId/read', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  await db.query(
-    `
-      UPDATE chat_members
-      SET last_read_at = NOW()
-      WHERE conversation_id = $1 AND user_id = $2
-    `,
-    [conversationId, actorUserId],
-  );
-
-  const readReceiptsResult = await db.query<{ read_receipts_enabled: boolean }>(
-    `SELECT read_receipts_enabled FROM users WHERE id = $1`,
-    [actorUserId],
-  );
-
-  if (readReceiptsResult.rowCount && readReceiptsResult.rows[0].read_receipts_enabled) {
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.message.read',
-      payload: {
-        conversationId,
-        userId: actorUserId,
-        readAt: new Date().toISOString(),
-      },
-    });
-  }
-
-  return { ok: true, conversationId, readAt: new Date().toISOString() };
-});
-
-app.post('/chat/conversations/:conversationId/members', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-  const bodySchema = z.object({
-    memberIds: z.array(z.string().trim().min(2)).min(1).max(48),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const conversation = await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
-
-  const normalizedMemberIds = [...new Set(payload.memberIds.map((value) => value.trim()))]
-    .filter((value) => value.length > 0);
-  await Promise.all(normalizedMemberIds.map((memberId) => ensureUserExists(memberId)));
-
-  const client = await db.connect();
-  const addedMemberIds: string[] = [];
-  let participantIds: string[] = [];
-  let updateMessage: { id: string; createdAt: string } | null = null;
-
-  try {
-    await client.query('BEGIN');
-
-    for (const memberId of normalizedMemberIds) {
-      const inserted = await client.query<{ user_id: string }>(
-        `
-          INSERT INTO chat_members (conversation_id, user_id, role)
-          VALUES ($1, $2, 'member')
-          ON CONFLICT (conversation_id, user_id) DO NOTHING
-          RETURNING user_id
-        `,
-        [conversationId, memberId]
-      );
-
-      if (inserted.rowCount) {
-        addedMemberIds.push(inserted.rows[0].user_id);
-      }
-    }
-
-    if (addedMemberIds.length > 0) {
-      updateMessage = await appendSystemChatMessage(client, {
-        conversationId,
-        text: `${addedMemberIds.length} member${addedMemberIds.length === 1 ? '' : 's'} added to the group.`,
-        metadata: {
-          event: 'group_members_added',
-          actorUserId,
-          memberIds: addedMemberIds,
-        },
-      });
-
-      await client.query(
-        `
-          UPDATE chat_conversations
-          SET updated_at = NOW()
-          WHERE id = $1
-        `,
-        [conversationId]
-      );
-    }
-
-    participantIds = await listChatParticipantIds(client, conversationId);
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  await Promise.all(
-    addedMemberIds
-      .filter((memberId) => memberId !== actorUserId)
-      .map(async (memberId) => {
-        try {
-          await queueUserNotification({
-            userId: memberId,
-            title: 'Added to a group chat',
-            body: `You were added to ${conversation.title ?? 'a group chat'}.`,
-            payload: {
-              conversationId,
-              event: 'chat_group_member_added',
-            },
-            metadata: {
-              source: 'chat.conversations.members.add',
-            },
-          });
-        } catch (error) {
-          request.log.error(
-            {
-              err: error,
-              conversationId,
-              memberId,
-            },
-            'Failed to queue member add notification'
-          );
-        }
-      })
-  );
-
-  if (updateMessage) {
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.member.added',
-      payload: {
-        conversationId,
-        actorUserId,
-        memberIds: addedMemberIds,
-        messageId: updateMessage.id,
-      },
-    });
-  }
-
-  return {
-    ok: true,
-    conversationId,
-    addedMemberIds,
-    participantIds,
-  };
-});
-
-app.delete('/chat/conversations/:conversationId/members/:memberUserId', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-    memberUserId: z.string().min(2).max(120),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId, memberUserId } = paramsSchema.parse(request.params);
-
-  const conversation = await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
-
-  // Prevent removing the group owner — they must transfer ownership first.
-  if (conversation.owner_id === memberUserId) {
-    throw createApiError('CHAT_CANNOT_REMOVE_OWNER', 'The group owner cannot be removed. Transfer ownership first.', {
-      conversationId,
-      memberUserId,
-    });
-  }
-
-  const client = await db.connect();
-  let removed = false;
-  let participantIds: string[] = [];
-  let updateMessage: { id: string; createdAt: string } | null = null;
-
-  try {
-    await client.query('BEGIN');
-
-    const deleteResult = await client.query<{ user_id: string }>(
-      `
-        DELETE FROM chat_members
-        WHERE conversation_id = $1 AND user_id = $2
-        RETURNING user_id
-      `,
-      [conversationId, memberUserId]
-    );
-
-    removed = (deleteResult.rowCount ?? 0) > 0;
-
-    if (removed) {
-      updateMessage = await appendSystemChatMessage(client, {
-        conversationId,
-        text: 'A member was removed from the group.',
-        metadata: {
-          event: 'group_member_removed',
-          actorUserId,
-          memberUserId,
-        },
-      });
-
-      await client.query(
-        `
-          UPDATE chat_conversations
-          SET updated_at = NOW()
-          WHERE id = $1
-        `,
-        [conversationId]
-      );
-    }
-
-    participantIds = await listChatParticipantIds(client, conversationId);
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  if (updateMessage) {
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.member.removed',
-      payload: {
-        conversationId,
-        actorUserId,
-        memberUserId,
-        messageId: updateMessage.id,
-      },
-    });
-  }
-
-  return {
-    ok: true,
-    removed,
-    participantIds,
-  };
-});
-
-// ── Member role management: promote/demote ───────────────────────────
-app.patch('/chat/conversations/:conversationId/members/:memberUserId/role', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-    memberUserId: z.string().min(2).max(120),
-  });
-  const bodySchema = z.object({
-    role: z.enum(['admin', 'member']),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId, memberUserId } = paramsSchema.parse(request.params);
-  const { role: newRole } = bodySchema.parse(request.body ?? {});
-
-  const conversation = await ensureGroupManagementAccess(
-    db,
-    conversationId,
-    actorUserId,
-    request.authUser?.role,
-  );
-
-  // Cannot change the owner's role via this route — use transfer-ownership.
-  if (conversation.owner_id === memberUserId) {
-    throw createApiError(
-      'CHAT_CANNOT_CHANGE_OWNER_ROLE',
-      'The group owner\'s role cannot be changed. Transfer ownership instead.',
-      { conversationId, memberUserId },
-    );
-  }
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    const updateResult = await client.query<{ role: string }>(
-      `
-        UPDATE chat_members
-        SET role = $3
-        WHERE conversation_id = $1 AND user_id = $2
-        RETURNING role
-      `,
-      [conversationId, memberUserId, newRole],
-    );
-
-    if (updateResult.rowCount === 0) {
-      await client.query('ROLLBACK');
-      throw createApiError(
-        'CHAT_MEMBER_NOT_FOUND',
-        'The specified user is not a member of this conversation',
-        { conversationId, memberUserId },
-      );
-    }
-
-    const rolesResult = await client.query<{ user_id: string; role: string }>(
-      `SELECT user_id, role FROM chat_members WHERE conversation_id = $1 ORDER BY joined_at ASC`,
-      [conversationId],
-    );
-    const memberRoles = Object.fromEntries(
-      rolesResult.rows.map((r) => [r.user_id, r.role]),
-    );
-
-    await client.query('COMMIT');
-
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.member.role_updated',
-      payload: {
-        conversationId,
-        actorUserId,
-        memberUserId,
-        newRole,
-      },
-    });
-
-    return {
-      ok: true,
-      memberRoles,
-    };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-});
-
-// ── Transfer group ownership ─────────────────────────────────────────
-app.post('/chat/conversations/:conversationId/transfer-ownership', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-  const bodySchema = z.object({
-    newOwnerId: z.string().trim().min(2).max(120),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  const { newOwnerId } = bodySchema.parse(request.body ?? {});
-
-  const conversation = await ensureGroupManagementAccess(
-    db,
-    conversationId,
-    actorUserId,
-    request.authUser?.role,
-  );
-
-  // Only the current owner can transfer ownership.
-  if (conversation.owner_id !== actorUserId) {
-    throw createApiError(
-      'CHAT_NOT_OWNER',
-      'Only the group owner can transfer ownership',
-      { conversationId, actorUserId, ownerId: conversation.owner_id },
-    );
-  }
-
-  if (newOwnerId === actorUserId) {
-    throw createApiError(
-      'CHAT_CANNOT_TRANSFER_TO_SELF',
-      'You are already the owner of this group',
-      { conversationId, newOwnerId },
-    );
-  }
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Verify the target is a member.
-    const memberCheck = await client.query<{ user_id: string }>(
-      `SELECT user_id FROM chat_members WHERE conversation_id = $1 AND user_id = $2`,
-      [conversationId, newOwnerId],
-    );
-    if (memberCheck.rowCount === 0) {
-      await client.query('ROLLBACK');
-      throw createApiError(
-        'CHAT_MEMBER_NOT_FOUND',
-        'The specified user is not a member of this conversation',
-        { conversationId, newOwnerId },
-      );
-    }
-
-    // Promote new owner to 'owner' role, demote current owner to 'admin'.
-    await client.query(
-      `UPDATE chat_members SET role = 'owner' WHERE conversation_id = $1 AND user_id = $2`,
-      [conversationId, newOwnerId],
-    );
-    await client.query(
-      `UPDATE chat_members SET role = 'admin' WHERE conversation_id = $1 AND user_id = $2`,
-      [conversationId, actorUserId],
-    );
-
-    // Update the conversation owner_id.
-    await client.query(
-      `UPDATE chat_conversations SET owner_id = $2, updated_at = NOW() WHERE id = $1`,
-      [conversationId, newOwnerId],
-    );
-
-    const rolesResult = await client.query<{ user_id: string; role: string }>(
-      `SELECT user_id, role FROM chat_members WHERE conversation_id = $1 ORDER BY joined_at ASC`,
-      [conversationId],
-    );
-    const memberRoles = Object.fromEntries(
-      rolesResult.rows.map((r) => [r.user_id, r.role]),
-    );
-
-    await client.query('COMMIT');
-
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.group.ownership_transferred',
-      payload: {
-        conversationId,
-        actorUserId,
-        newOwnerId,
-      },
-    });
-
-    return {
-      ok: true,
-      ownerId: newOwnerId,
-      memberRoles,
-    };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-});
-
-// P0.6: Separate "delete for me" (hide from inbox, per-user, reversible)
-// from "leave" (membership mutation, posts system message, irreversible for DMs).
-//   DELETE /chat/conversations/:id              → delete-for-me (archive + hide)
-//   DELETE /chat/conversations/:id?scope=leave  → leave conversation (membership mutation)
-app.delete('/chat/conversations/:conversationId', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-  const querySchema = z.object({
-    scope: z.enum(['me', 'leave']).default('me'),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  const { scope } = querySchema.parse(request.query ?? {});
-
-  // Verify the user is a member of the conversation.
-  const conversation = await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  if (scope === 'me') {
-    // Delete-for-me: archive the conversation for this user only. No
-    // membership change, no system message, no effect on other participants.
-    // This is the inbox-cleanup action the UI copy describes.
-    await db.query(
-      `INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_archived, request_status, updated_at)
-       VALUES ($1, $2, TRUE, 'accepted', NOW())
-       ON CONFLICT (user_id, conversation_id)
-       DO UPDATE SET is_archived = TRUE, updated_at = NOW()`,
-      [actorUserId, conversationId]
-    );
-
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.conversation.archived',
-      payload: { conversationId, actorUserId },
-    });
-
-    return { ok: true, archived: true, scope: 'me' };
-  }
-
-  // scope === 'leave' — actual membership mutation
-  const client = await db.connect();
-  let participantIds: string[] = [];
-  let updateMessage: { id: string; createdAt: string } | null = null;
-
-  try {
-    await client.query('BEGIN');
-
-    const deleteResult = await client.query<{ user_id: string }>(
-      `
-        DELETE FROM chat_members
-        WHERE conversation_id = $1 AND user_id = $2
-        RETURNING user_id
-      `,
-      [conversationId, actorUserId]
-    );
-
-    if (deleteResult.rowCount === 0) {
-      await client.query('ROLLBACK');
-      throw createApiError('CHAT_CONVERSATION_NOT_FOUND', 'You are not a member of this conversation', {
-        conversationId,
-        actorUserId,
-      });
-    }
-
-    updateMessage = await appendSystemChatMessage(client, {
-      conversationId,
-      text: conversation.type === 'group' ? 'A member left the group.' : 'A participant left the conversation.',
-      metadata: {
-        event: conversation.type === 'group' ? 'group_member_left' : 'conversation_participant_left',
-        actorUserId,
-      },
-    });
-
-    await client.query(
-      `
-        UPDATE chat_conversations
-        SET updated_at = NOW()
-        WHERE id = $1
-      `,
-      [conversationId]
-    );
-
-    participantIds = await listChatParticipantIds(client, conversationId);
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  if (updateMessage) {
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.member.left',
-      payload: {
-        conversationId,
-        actorUserId,
-        messageId: updateMessage.id,
-      },
-    });
-  }
-
-  return {
-    ok: true,
-    left: true,
-    participantIds,
-  };
-});
-
-app.post('/chat/conversations/:conversationId/invite-links', async (request, reply) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-  const bodySchema = z.object({
-    expiresInHours: z.coerce.number().int().min(1).max(24 * 30).default(72),
-    maxUses: z.coerce.number().int().min(0).max(10_000).default(0),
-    metadata: z.record(z.unknown()).optional(),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const conversation = await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
-
-  const inviteId = createRuntimeId('chatinv');
-  const inviteToken = createPublicToken('ginv');
-  const tokenHash = hashOpaqueValue(inviteToken);
-  const tokenPrefix = inviteToken.slice(0, 14);
-  const expiresAt = new Date(Date.now() + payload.expiresInHours * 60 * 60 * 1000).toISOString();
-
-  await db.query(
-    `
-      INSERT INTO chat_group_invites (
-        id,
-        conversation_id,
-        token_hash,
-        token_prefix,
-        created_by,
-        max_uses,
-        expires_at,
-        metadata
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
-    `,
-    [
-      inviteId,
-      conversationId,
-      tokenHash,
-      tokenPrefix,
-      actorUserId,
-      payload.maxUses,
-      expiresAt,
-      toJsonString(payload.metadata ?? {}),
-    ]
-  );
-
-  publishRealtimeEvent({
-    topic: `chat.conversation:${conversationId}`,
-    type: 'chat.invite.created',
-    payload: {
-      conversationId,
-      inviteId,
-      actorUserId,
-    },
-  });
-
-  reply.code(201);
-  return {
-    ok: true,
-    conversationId,
-    invite: {
-      id: inviteId,
-      inviteLink: buildGroupInviteLink(inviteToken),
-      tokenPreview: `${tokenPrefix}...`,
-      createdBy: actorUserId,
-      ownerId: conversation.owner_id,
-      expiresAt,
-      maxUses: payload.maxUses,
-      useCount: 0,
-    },
-  };
-});
-
-app.get('/chat/conversations/:conversationId/invite-links', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-  const querySchema = z.object({
-    includeRevoked: z.coerce.boolean().default(false),
-    limit: z.coerce.number().int().min(1).max(100).default(20),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  const { includeRevoked, limit } = querySchema.parse(request.query ?? {});
-
-  await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
-
-  const result = includeRevoked
-    ? await db.query<{
-      id: string;
-      token_prefix: string;
-      created_by: string;
-      max_uses: number | string;
-      use_count: number | string;
-      expires_at: string;
-      revoked_at: string | null;
-      created_at: string;
-      updated_at: string;
-      last_used_at: string | null;
-      last_used_by: string | null;
-    }>(
-      `
-        SELECT
-          id,
-          token_prefix,
-          created_by,
-          max_uses,
-          use_count,
-          expires_at::text,
-          revoked_at::text,
-          created_at::text,
-          updated_at::text,
-          last_used_at::text,
-          last_used_by
-        FROM chat_group_invites
-        WHERE conversation_id = $1
-        ORDER BY created_at DESC
-        LIMIT $2
-      `,
-      [conversationId, limit]
-    )
-    : await db.query<{
-      id: string;
-      token_prefix: string;
-      created_by: string;
-      max_uses: number | string;
-      use_count: number | string;
-      expires_at: string;
-      revoked_at: string | null;
-      created_at: string;
-      updated_at: string;
-      last_used_at: string | null;
-      last_used_by: string | null;
-    }>(
-      `
-        SELECT
-          id,
-          token_prefix,
-          created_by,
-          max_uses,
-          use_count,
-          expires_at::text,
-          revoked_at::text,
-          created_at::text,
-          updated_at::text,
-          last_used_at::text,
-          last_used_by
-        FROM chat_group_invites
-        WHERE conversation_id = $1
-          AND revoked_at IS NULL
-        ORDER BY created_at DESC
-        LIMIT $2
-      `,
-      [conversationId, limit]
-    );
-
-  const now = Date.now();
-
-  return {
-    ok: true,
-    conversationId,
-    items: result.rows.map((row) => {
-      const maxUses = Number(row.max_uses);
-      const useCount = Number(row.use_count);
-      const isExpired = new Date(row.expires_at).getTime() <= now;
-      const remainingUses = maxUses > 0 ? Math.max(0, maxUses - useCount) : null;
-
-      return {
-        id: row.id,
-        tokenPreview: `${row.token_prefix}...`,
-        createdBy: row.created_by,
-        maxUses,
-        useCount,
-        remainingUses,
-        expiresAt: row.expires_at,
-        revokedAt: row.revoked_at,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        lastUsedAt: row.last_used_at,
-        lastUsedBy: row.last_used_by,
-        isExpired,
-        isRevoked: Boolean(row.revoked_at),
-      };
-    }),
-  };
-});
-
-app.delete('/chat/conversations/:conversationId/invite-links/:inviteId', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-    inviteId: z.string().min(2).max(120),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId, inviteId } = paramsSchema.parse(request.params);
-  await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
-
-  const client = await db.connect();
-  let revoked = false;
-  let updateMessage: { id: string; createdAt: string } | null = null;
-
-  try {
-    await client.query('BEGIN');
-
-    const revokeResult = await client.query<{ id: string }>(
-      `
-        UPDATE chat_group_invites
-        SET revoked_at = NOW(), updated_at = NOW()
-        WHERE conversation_id = $1
-          AND id = $2
-          AND revoked_at IS NULL
-        RETURNING id
-      `,
-      [conversationId, inviteId]
-    );
-
-    revoked = Boolean(revokeResult.rowCount);
-    if (revoked) {
-      updateMessage = await appendSystemChatMessage(client, {
-        conversationId,
-        text: 'An invite link was revoked.',
-        metadata: {
-          event: 'group_invite_revoked',
-          actorUserId,
-          inviteId,
-        },
-      });
-
-      await client.query(
-        `
-          UPDATE chat_conversations
-          SET updated_at = NOW()
-          WHERE id = $1
-        `,
-        [conversationId]
-      );
-    }
-
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  if (updateMessage) {
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.invite.revoked',
-      payload: {
-        conversationId,
-        inviteId,
-        actorUserId,
-        messageId: updateMessage.id,
-      },
-    });
-  }
-
-  return {
-    ok: true,
-    conversationId,
-    inviteId,
-    revoked,
-  };
-});
-
-app.post('/chat/groups/join', async (request, reply) => {
-  const bodySchema = z.object({
-    inviteToken: z.string().trim().min(6).max(260),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const payload = bodySchema.parse(request.body ?? {});
-  const inviteTokenHash = hashOpaqueValue(payload.inviteToken);
-
-  await ensureUserExists(actorUserId);
-
-  const client = await db.connect();
-  let joined = false;
-  let conversationId = '';
-  let conversationTitle: string | null = null;
-  let ownerId = '';
-  let itemId: string | null = null;
-  let participantIds: string[] = [];
-  let botIds: string[] = [];
-  let inviteId = '';
-  let maxUses = 0;
-  let useCount = 0;
-  let expiresAt = '';
-  let joinMessage: { id: string; createdAt: string } | null = null;
-  let lastMessage = '';
-  let lastMessageTime = '';
-
-  try {
-    await client.query('BEGIN');
-
-    const inviteResult = await client.query<{
-      id: string;
-      conversation_id: string;
-      conversation_type: ChatConversationType;
-      title: string | null;
-      owner_id: string;
-      item_id: string | null;
-      max_uses: number | string;
-      use_count: number | string;
-      expires_at: string;
-      revoked_at: string | null;
-    }>(
-      `
-        SELECT
-          cgi.id,
-          cgi.conversation_id,
-          c.type AS conversation_type,
-          c.title,
-          c.owner_id,
-          c.item_id,
-          cgi.max_uses,
-          cgi.use_count,
-          cgi.expires_at::text,
-          cgi.revoked_at::text
-        FROM chat_group_invites cgi
-        INNER JOIN chat_conversations c
-          ON c.id = cgi.conversation_id
-        WHERE cgi.token_hash = $1
-        LIMIT 1
-        FOR UPDATE
-      `,
-      [inviteTokenHash]
-    );
-
-    if (!inviteResult.rowCount) {
-      throw createApiError('CHAT_GROUP_INVITE_INVALID', 'Invite link is invalid or unavailable');
-    }
-
-    const invite = inviteResult.rows[0];
-    if (invite.conversation_type !== 'group') {
-      throw createApiError('CHAT_GROUP_INVITE_INVALID', 'Invite link is invalid for this conversation type', {
-        conversationId: invite.conversation_id,
-        conversationType: invite.conversation_type,
-      });
-    }
-
-    if (invite.revoked_at) {
-      throw createApiError('CHAT_GROUP_INVITE_INVALID', 'Invite link has been revoked', {
-        inviteId: invite.id,
-      });
-    }
-
-    const inviteExpiryMs = new Date(invite.expires_at).getTime();
-    if (inviteExpiryMs <= Date.now()) {
-      throw createApiError('CHAT_GROUP_INVITE_INVALID', 'Invite link has expired', {
-        inviteId: invite.id,
-        expiresAt: invite.expires_at,
-      });
-    }
-
-    maxUses = Number(invite.max_uses);
-    useCount = Number(invite.use_count);
-    if (maxUses > 0 && useCount >= maxUses) {
-      throw createApiError('CHAT_GROUP_INVITE_INVALID', 'Invite link has reached its usage limit', {
-        inviteId: invite.id,
-        maxUses,
-        useCount,
-      });
-    }
-
-    conversationId = invite.conversation_id;
-    conversationTitle = invite.title;
-    ownerId = invite.owner_id;
-    itemId = invite.item_id;
-    inviteId = invite.id;
-    expiresAt = invite.expires_at;
-
-    const memberInsertResult = await client.query<{ user_id: string }>(
-      `
-        INSERT INTO chat_members (conversation_id, user_id, role)
-        VALUES ($1, $2, 'member')
-        ON CONFLICT (conversation_id, user_id) DO NOTHING
-        RETURNING user_id
-      `,
-      [conversationId, actorUserId]
-    );
-
-    joined = Boolean(memberInsertResult.rowCount);
-
-    if (joined) {
-      const usageResult = await client.query<{ use_count: number | string }>(
-        `
-          UPDATE chat_group_invites
-          SET
-            use_count = use_count + 1,
-            last_used_at = NOW(),
-            last_used_by = $2,
-            updated_at = NOW()
-          WHERE id = $1
-          RETURNING use_count
-        `,
-        [inviteId, actorUserId]
-      );
-
-      useCount = Number(usageResult.rows[0]?.use_count ?? useCount + 1);
-
-      joinMessage = await appendSystemChatMessage(client, {
-        conversationId,
-        text: 'A new member joined via invite link.',
-        metadata: {
-          event: 'group_invite_joined',
-          actorUserId,
-          inviteId,
-        },
-      });
-
-      await client.query(
-        `
-          UPDATE chat_conversations
-          SET updated_at = NOW()
-          WHERE id = $1
-        `,
-        [conversationId]
-      );
-    }
-
-    participantIds = await listChatParticipantIds(client, conversationId);
-    botIds = await listChatBotIds(client, conversationId);
-
-    const latestMessageResult = await client.query<{ id: string; body: string; body_ciphertext: string | null; key_version: number | null; created_at: string }>(
-      `
-        SELECT id, body, body_ciphertext, key_version, created_at::text
-        FROM chat_messages
-        WHERE conversation_id = $1
-        ORDER BY created_at DESC
-        LIMIT 1
-      `,
-      [conversationId]
-    );
-
-    if (latestMessageResult.rowCount) {
-      const latestRow = latestMessageResult.rows[0];
-      // PII encryption: resolve body from ciphertext or plaintext fallback.
-      lastMessage = await resolveMessageBody(latestRow.id, latestRow.body, latestRow.body_ciphertext ?? null);
-      lastMessageTime = latestRow.created_at;
-    } else {
-      lastMessage = `${conversationTitle ?? 'Group'} created.`;
-      lastMessageTime = new Date().toISOString();
-    }
-
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  if (joinMessage) {
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.member.joined_via_invite',
-      payload: {
-        conversationId,
-        actorUserId,
-        inviteId,
-        messageId: joinMessage.id,
-      },
-    });
-  }
-
-  reply.code(joined ? 201 : 200);
-  return {
-    ok: true,
-    joined,
-    conversation: {
-      id: conversationId,
-      type: 'group' as const,
-      title: conversationTitle,
-      ownerId,
-      itemId,
-      participantIds,
-      botIds,
-      lastMessage,
-      lastMessageTime,
-      unread: false,
-    },
-    invite: {
-      id: inviteId,
-      maxUses,
-      useCount,
-      expiresAt,
-      remainingUses: maxUses > 0 ? Math.max(0, maxUses - useCount) : null,
-    },
-  };
-});
-
-const agentConfigSchema = z.object({
-  instructions: z.string().trim().max(8_000),
-  model: z.enum(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']),
-  triggerMode: z.enum(['mention', 'command', 'always']),
-  responseLength: z.enum(['concise', 'balanced', 'detailed']),
-  tone: z.enum(['focused', 'warm', 'expert']),
-  reasoningEffort: z.enum(['low', 'medium', 'high']),
-  historyLimit: z.number().int().min(0).max(40),
-  starterPrompts: z.array(z.string().trim().min(1).max(160)).max(4),
-});
-
-function botRuntimeReadiness(runtimeMode: string): {
-  runtimeReady: boolean;
-  runtimeReadinessReason: string | null;
-} {
-  if (runtimeMode !== 'ai') {
-    return { runtimeReady: true, runtimeReadinessReason: null };
-  }
-  return {
-    runtimeReady: isAgentRuntimeReady(),
-    runtimeReadinessReason: agentRuntimeReadinessReason(),
-  };
-}
-
-function publicAgentConfig(value: unknown) {
-  const agentConfig = normalizeAgentConfig(value);
-  return {
-    ...agentConfig,
-    instructions: '',
-  };
-}
-
-app.get('/chat/bots', async (request) => {
-  const authUserId = request.authUser?.userId;
-  const result = await db.query<{
-    id: string;
-    slug: string;
-    name: string;
-    description: string;
-    command_hint: string;
-    category: 'moderation' | 'commerce' | 'automation';
-    type: 'system' | 'custom';
-    status: string;
-    runtime_mode: string;
-    is_draft: boolean;
-    is_active: boolean;
-    permissions: unknown;
-    icon: string | null;
-    owner_id: string | null;
-    agent_config: unknown;
-  }>(
-    `
-      SELECT
-        id,
-        slug,
-        name,
-        description,
-        command_hint,
-        category,
-        type,
-        status,
-        runtime_mode,
-        is_draft,
-        is_active,
-        permissions,
-        icon,
-        owner_id,
-        agent_config
-      FROM chat_bots
-      WHERE (type = 'system' AND is_active = TRUE)
-         OR (type = 'custom' AND owner_id = $1 AND status != 'disabled' AND is_draft = FALSE)
-      ORDER BY type ASC, name ASC
-    `,
-    [authUserId ?? '']
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      slug: row.slug,
-      name: row.name,
-      description: row.description,
-      commandHint: row.command_hint,
-      category: row.category,
-      type: row.type,
-      status: row.status,
-      runtimeMode: row.runtime_mode,
-      isDraft: row.is_draft,
-      isActive: row.is_active,
-      permissions: row.permissions,
-      icon: row.icon,
-      ownerId: row.owner_id,
-      agentConfig: row.runtime_mode === 'ai' ? publicAgentConfig(row.agent_config) : null,
-      ...botRuntimeReadiness(row.runtime_mode),
-    })),
-  };
-});
-
-app.get('/chat/conversations/:conversationId/bots', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  await ensureGroupConversationAccess(db, conversationId, actorUserId);
-
-  const result = await db.query<{
-    bot_id: string;
-    bot_name: string;
-    bot_slug: string;
-    bot_category: string;
-    bot_type: 'system' | 'custom';
-    command_hint: string;
-    runtime_mode: string;
-    bot_status: string;
-    install_status: string;
-    permissions_snapshot: unknown;
-    installed_by: string | null;
-    installed_at: string;
-    agent_config: unknown;
-  }>(
-    `
-      SELECT
-        b.id AS bot_id,
-        b.name AS bot_name,
-        b.slug AS bot_slug,
-        b.category AS bot_category,
-        b.type AS bot_type,
-        b.command_hint,
-        b.runtime_mode,
-        b.status AS bot_status,
-        cbi.status AS install_status,
-        cbi.permissions_snapshot,
-        cbi.installed_by,
-        cbi.installed_at,
-        b.agent_config
-      FROM chat_bot_installs cbi
-      JOIN chat_bots b ON b.id = cbi.bot_id
-      WHERE cbi.conversation_id = $1
-        AND cbi.status = 'active'
-        AND b.is_active = TRUE
-        AND b.status != 'disabled'
-      ORDER BY cbi.installed_at ASC
-    `,
-    [conversationId]
-  );
-
-  return {
-    ok: true,
-    conversationId,
-    items: result.rows.map((row) => ({
-      botId: row.bot_id,
-      botName: row.bot_name,
-      botSlug: row.bot_slug,
-      botCategory: row.bot_category,
-      botType: row.bot_type,
-      commandHint: row.command_hint,
-      runtimeMode: row.runtime_mode,
-      status: row.bot_status,
-      installStatus: row.install_status,
-      permissionsSnapshot: row.permissions_snapshot,
-      runtimeReady: row.runtime_mode !== 'ai' || isAgentRuntimeReady(),
-      runtimeReadinessReason: row.runtime_mode === 'ai' ? agentRuntimeReadinessReason() : null,
-      installedBy: row.installed_by,
-      installedAt: row.installed_at,
-      agentConfig: row.runtime_mode === 'ai' ? publicAgentConfig(row.agent_config) : null,
-    })),
-  };
-});
-
-app.post('/chat/conversations/:conversationId/bots/:botId/deploy', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-    botId: z.string().min(2).max(120),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId, botId } = paramsSchema.parse(request.params);
-  await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
-
-  const botResult = await db.query<{
-    id: string;
-    name: string;
-    command_hint: string;
-    type: 'system' | 'custom';
-    status: string;
-    runtime_mode: string;
-    is_draft: boolean;
-    permissions: unknown;
-    owner_id: string | null;
-    agent_config: unknown;
-  }>(
-    `
-      SELECT id, name, command_hint, type, status, runtime_mode, is_draft, permissions, owner_id, agent_config
-      FROM chat_bots
-      WHERE id = $1
-        AND is_active = TRUE
-      LIMIT 1
-    `,
-    [botId]
-  );
-
-  if (!botResult.rowCount) {
-    throw createApiError('CHAT_BOT_NOT_FOUND', 'Chat bot not found', {
-      botId,
-    });
-  }
-
-  const bot = botResult.rows[0];
-
-  if (bot.type === 'custom' && bot.owner_id !== actorUserId) {
-    throw createApiError('FORBIDDEN_USER_CONTEXT', 'Only the agent owner can connect this private agent.');
-  }
-
-  if (bot.is_draft) {
-    throw createApiError('CHAT_BOT_DEPLOY_BLOCKED', 'Draft bots cannot be deployed. Publish the bot first.');
-  }
-
-  if (bot.status === 'backend-required') {
-    throw createApiError('CHAT_BOT_DEPLOY_BLOCKED', 'This bot requires a backend runtime that is not currently connected.');
-  }
-
-  if (bot.runtime_mode === 'ai' && !isAgentRuntimeReady()) {
-    throw createApiError(
-      'CHAT_BOT_DEPLOY_BLOCKED',
-      agentRuntimeReadinessReason() ?? 'The AI provider is unavailable.'
-    );
-  }
-
-  const client = await db.connect();
-  let installed = false;
-  let updateMessage: { id: string; createdAt: string } | null = null;
-  let botIds: string[] = [];
-
-  try {
-    await client.query('BEGIN');
-
-    const installResult = await client.query<{ bot_id: string }>(
-      `
-        INSERT INTO chat_bot_installs (
-          conversation_id,
-          bot_id,
-          installed_by,
-          permissions_snapshot,
-          configuration_snapshot
-        )
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (conversation_id, bot_id) DO UPDATE
-        SET
-          status = 'active',
-          permissions_snapshot = EXCLUDED.permissions_snapshot,
-          configuration_snapshot = EXCLUDED.configuration_snapshot,
-          updated_at = NOW()
-        RETURNING bot_id
-      `,
-      [
-        conversationId,
-        botId,
-        actorUserId,
-        toJsonString(bot.permissions ?? []),
-        toJsonString(bot.runtime_mode === 'ai' ? normalizeAgentConfig(bot.agent_config) : {}),
-      ]
-    );
-
-    installed = Boolean(installResult.rowCount);
-    if (installed) {
-      updateMessage = await appendSystemChatMessage(client, {
-        conversationId,
-          text: `${bot.name} connected. Try ${bot.command_hint} or mention the agent by name.`,
-        metadata: {
-          event: 'group_bot_deployed',
-          actorUserId,
-          botId,
-          botType: bot.type,
-          runtimeMode: bot.runtime_mode,
-          runtimeAvailable: bot.runtime_mode !== 'ai' || isAgentRuntimeReady(),
-        },
-      });
-
-      await client.query(
-        `
-          UPDATE chat_conversations
-          SET updated_at = NOW()
-          WHERE id = $1
-        `,
-        [conversationId]
-      );
-
-      await client.query(
-        `
-          INSERT INTO chat_bot_audit_events (id, bot_id, conversation_id, actor_user_id, event_type, metadata)
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `,
-        [
-          createRuntimeId('baev'),
-          botId,
-          conversationId,
-          actorUserId,
-          'deployed',
-          toJsonString({
-            runtimeMode: bot.runtime_mode,
-            runtimeAvailable: bot.runtime_mode !== 'ai' || isAgentRuntimeReady(),
-          }),
-        ]
-      );
-    }
-
-    botIds = await listChatBotIds(client, conversationId);
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  if (updateMessage) {
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.bot.deployed',
-      payload: {
-        conversationId,
-        botId,
-        actorUserId,
-        messageId: updateMessage.id,
-        runtimeMode: bot.runtime_mode,
-        runtimeAvailable: bot.runtime_mode !== 'ai' || isAgentRuntimeReady(),
-      },
-    });
-  }
-
-  return {
-    ok: true,
-    conversationId,
-    botId,
-    installed,
-    botIds,
-    runtimeMode: bot.runtime_mode,
-    runtimeAvailable: bot.runtime_mode !== 'ai' || isAgentRuntimeReady(),
-  };
-});
-
-app.delete('/chat/conversations/:conversationId/bots/:botId', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-    botId: z.string().min(2).max(120),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId, botId } = paramsSchema.parse(request.params);
-  await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
-
-  const botResult = await db.query<{ id: string; name: string }>(
-    `
-      SELECT id, name
-      FROM chat_bots
-      WHERE id = $1
-      LIMIT 1
-    `,
-    [botId]
-  );
-
-  if (!botResult.rowCount) {
-    throw createApiError('CHAT_BOT_NOT_FOUND', 'Chat bot not found', {
-      botId,
-    });
-  }
-
-  const bot = botResult.rows[0];
-  const client = await db.connect();
-  let removed = false;
-  let updateMessage: { id: string; createdAt: string } | null = null;
-  let botIds: string[] = [];
-
-  try {
-    await client.query('BEGIN');
-
-    const updateResult = await client.query<{ bot_id: string }>(
-      `
-        UPDATE chat_bot_installs
-        SET status = 'removed', updated_at = NOW()
-        WHERE conversation_id = $1
-          AND bot_id = $2
-          AND status = 'active'
-        RETURNING bot_id
-      `,
-      [conversationId, botId]
-    );
-
-    removed = Boolean(updateResult.rowCount);
-    if (removed) {
-      updateMessage = await appendSystemChatMessage(client, {
-        conversationId,
-        text: `${bot.name} removed from the group.`,
-        metadata: {
-          event: 'group_bot_removed',
-          actorUserId,
-          botId,
-        },
-      });
-
-      await client.query(
-        `
-          UPDATE chat_conversations
-          SET updated_at = NOW()
-          WHERE id = $1
-        `,
-        [conversationId]
-      );
-
-      await client.query(
-        `
-          INSERT INTO chat_bot_audit_events (id, bot_id, conversation_id, actor_user_id, event_type, metadata)
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `,
-        [
-          createRuntimeId('baev'),
-          botId,
-          conversationId,
-          actorUserId,
-          'removed',
-          toJsonString({}),
-        ]
-      );
-    }
-
-    botIds = await listChatBotIds(client, conversationId);
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-
-  if (updateMessage) {
-    publishRealtimeEvent({
-      topic: `chat.conversation:${conversationId}`,
-      type: 'chat.bot.removed',
-      payload: {
-        conversationId,
-        botId,
-        actorUserId,
-        messageId: updateMessage.id,
-      },
-    });
-  }
-
-  return {
-    ok: true,
-    conversationId,
-    botId,
-    removed,
-    botIds,
-  };
-});
-
-// ── Agent runs: durable execution status ───────────────────────────
+registerChatRoutes({ app, db, redis, resolveAuthenticatedUserId, createApiError, ensureUserExists, createRuntimeId, toJsonString, resolveHeaderString, asObject, queueUserNotification, fraudShadowService, ipReputationProvider });
+// â”€â”€ Agent runs: durable execution status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 app.get('/agent-runs', async (request) => {
   if (!request.authUser) throw createApiError('UNAUTHORIZED', 'Unauthorized');
@@ -24121,755 +17903,9 @@ app.post('/agent-runs/:runId/cancel', async (request) => {
   return { ok: true, runId, status: 'cancelled' };
 });
 
-// ── Bot command execution ──────────────────────────────────────────
-app.post('/chat/conversations/:conversationId/bots/:botId/command', async (request, reply) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-    botId: z.string().min(2).max(120),
-  });
-  const bodySchema = z.object({
-    command: z.string().min(1).max(200),
-    args: z.array(z.string()).default([]),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId, botId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body);
-  const conversation = await ensureGroupConversationAccess(db, conversationId, actorUserId);
-
-  const botResult = await db.query<{ id: string; name: string; runtime_mode: string }>(
-    `
-      SELECT id, name, runtime_mode
-      FROM chat_bots
-      WHERE id = $1
-        AND is_active = TRUE
-      LIMIT 1
-    `,
-    [botId]
-  );
-
-  if (!botResult.rowCount) {
-    throw createApiError('CHAT_BOT_NOT_FOUND', 'Chat bot not found', { botId });
-  }
-
-  const bot = botResult.rows[0];
-
-  const execution = await executeBotCommand(db, {
-    conversationId,
-    conversationType: 'group',
-    conversationTitle: conversation.title ?? null,
-    actorUserId,
-    actorUserName: null,
-    messageText: [payload.command, ...payload.args].join(' '),
-    targetBotId: botId,
-    command: payload.command,
-    args: payload.args,
-  });
-
-  reply.code(200);
-  return {
-    ok: true,
-    runtimeAvailable: bot.runtime_mode !== 'ai' || isAgentRuntimeReady(),
-    executed: execution.messageId !== null,
-    messageId: execution.messageId,
-    botId,
-    conversationId,
-    command: payload.command,
-    args: payload.args,
-  };
-});
-
-// ── Custom bots ──────────────────────────────────────────────────────
+// â”€â”€ Custom bots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 registerBotsRoutes({ app, db, createApiError, createRuntimeId, toJsonString });
 
-// ── Group conversation management ────────────────────────────────────
-app.get('/chat/conversations/:conversationId', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  const result = await db.query<{
-    id: string;
-    type: 'dm' | 'group';
-    title: string | null;
-    owner_id: string;
-    item_id: string | null;
-    metadata: unknown;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      SELECT id, type, title, owner_id, item_id, metadata, created_at, updated_at
-      FROM chat_conversations
-      WHERE id = $1
-      LIMIT 1
-    `,
-    [conversationId]
-  );
-
-  const conversation = result.rows[0];
-  const conversationMetadata = asObject(conversation.metadata);
-  const memberResult = await db.query<{ user_id: string; role: string; joined_at: string }>(
-    `
-      SELECT user_id, role, joined_at
-      FROM chat_members
-      WHERE conversation_id = $1
-      ORDER BY joined_at ASC
-    `,
-    [conversationId]
-  );
-
-  const botResult = await db.query<{
-    bot_id: string;
-    installed_at: string;
-    install_status: string;
-  }>(
-    `
-      SELECT bot_id, installed_at::text, status AS install_status
-      FROM chat_bot_installs
-      WHERE conversation_id = $1
-        AND status = 'active'
-      ORDER BY installed_at ASC
-    `,
-    [conversationId]
-  );
-
-  return {
-    ok: true,
-    conversation: {
-      id: conversation.id,
-      type: conversation.type,
-      title: conversation.title,
-      ownerId: conversation.owner_id,
-      itemId: conversation.item_id,
-      description: typeof conversationMetadata.description === 'string'
-        ? conversationMetadata.description
-        : null,
-      avatar: typeof conversationMetadata.avatar === 'string'
-        ? conversationMetadata.avatar
-        : null,
-      coverPhoto: typeof conversationMetadata.coverPhoto === 'string'
-        ? conversationMetadata.coverPhoto
-        : null,
-      metadata: conversation.metadata,
-      createdAt: conversation.created_at,
-      updatedAt: conversation.updated_at,
-      participantIds: memberResult.rows.map((r) => r.user_id),
-      memberRoles: memberResult.rows.reduce((acc, r) => {
-        acc[r.user_id] = r.role;
-        return acc;
-      }, {} as Record<string, string>),
-      botIds: botResult.rows.map((r) => r.bot_id),
-      botInstalls: botResult.rows.map((r) => ({
-        botId: r.bot_id,
-        installedAt: r.installed_at,
-        status: r.install_status,
-      })),
-    },
-  };
-});
-
-app.patch('/chat/conversations/:conversationId', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-  const bodySchema = z.object({
-    title: z.string().trim().min(2).max(80).optional(),
-    description: z.string().trim().max(280).optional(),
-    avatar: z.string().trim().max(512).nullable().optional(),
-    avatarFinalizationId: z.string().trim().min(2).max(120).optional(),
-    coverPhoto: z.string().trim().max(512).nullable().optional(),
-    coverPhotoFinalizationId: z.string().trim().min(2).max(120).optional(),
-  }).superRefine((value, context) => {
-    if (typeof value.avatar === 'string' && !value.avatarFinalizationId) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['avatarFinalizationId'],
-        message: 'A finalized upload receipt is required for a group photo',
-      });
-    }
-    if (typeof value.coverPhoto === 'string' && !value.coverPhotoFinalizationId) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['coverPhotoFinalizationId'],
-        message: 'A finalized upload receipt is required for a cover photo',
-      });
-    }
-    if (
-      value.title === undefined
-      && value.description === undefined
-      && value.avatar === undefined
-      && value.coverPhoto === undefined
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'At least one group identity field is required',
-      });
-    }
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body);
-  const idempotencyKey = resolveHeaderString(request.headers['x-idempotency-key']);
-  const requestHash = hashGroupCreatePayload({ conversationId, ...payload });
-  const client = await db.connect();
-
-  try {
-    await client.query('BEGIN');
-    const conversation = await ensureGroupManagementAccess(
-      client,
-      conversationId,
-      actorUserId,
-      request.authUser?.role
-    );
-
-    if (idempotencyKey) {
-      await client.query(
-        `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
-        [`chat-group-edit:${actorUserId}:${idempotencyKey}`]
-      );
-      const cachedResponse = await getChatGroupIdempotentResponse(client, {
-        creatorId: actorUserId,
-        idempotencyKey,
-        requestHash,
-      });
-      if (cachedResponse) {
-        await client.query('COMMIT');
-        return cachedResponse;
-      }
-    }
-
-    if (typeof payload.avatar === 'string' && payload.avatarFinalizationId) {
-      await ensureOwnedGroupAvatarReceipt(client, {
-        actorUserId,
-        finalizationId: payload.avatarFinalizationId,
-        avatarUrl: payload.avatar,
-      });
-    }
-
-    if (typeof payload.coverPhoto === 'string' && payload.coverPhotoFinalizationId) {
-      await ensureOwnedGroupMediaReceipt(client, {
-        actorUserId,
-        finalizationId: payload.coverPhotoFinalizationId,
-        mediaUrl: payload.coverPhoto,
-        folder: 'covers',
-        scope: 'cover',
-      });
-    }
-
-    const currentResult = await client.query<{
-      title: string | null;
-      metadata: Record<string, unknown> | null;
-    }>(
-      `SELECT title, metadata FROM chat_conversations WHERE id = $1 LIMIT 1 FOR UPDATE`,
-      [conversationId]
-    );
-    const current = currentResult.rows[0];
-    const currentMetadata = asObject(current.metadata);
-    const nextTitle = payload.title ?? current.title ?? 'Group chat';
-    const nextMetadata = {
-      ...currentMetadata,
-      ...(payload.description !== undefined ? { description: payload.description } : {}),
-      ...(payload.avatar !== undefined ? { avatar: payload.avatar } : {}),
-      ...(payload.avatarFinalizationId !== undefined
-        ? { avatarFinalizationId: payload.avatarFinalizationId }
-        : payload.avatar === null
-          ? { avatarFinalizationId: null }
-          : {}),
-      ...(payload.coverPhoto !== undefined ? { coverPhoto: payload.coverPhoto } : {}),
-      ...(payload.coverPhotoFinalizationId !== undefined
-        ? { coverPhotoFinalizationId: payload.coverPhotoFinalizationId }
-        : payload.coverPhoto === null
-          ? { coverPhotoFinalizationId: null }
-          : {}),
-    };
-
-    const updatedResult = await client.query<{ updated_at: string }>(
-      `
-        UPDATE chat_conversations
-        SET title = $2, metadata = $3::jsonb, updated_at = NOW()
-        WHERE id = $1
-        RETURNING updated_at::text
-      `,
-      [conversationId, nextTitle, toJsonString(nextMetadata)]
-    );
-
-    const changedFields = [
-      payload.title !== undefined ? 'name' : null,
-      payload.description !== undefined ? 'description' : null,
-      payload.avatar !== undefined ? 'photo' : null,
-      payload.coverPhoto !== undefined ? 'cover photo' : null,
-    ].filter((value): value is string => Boolean(value));
-    const identityUpdateText = changedFields.length === 1
-      ? `Group ${changedFields[0]} updated.`
-      : 'Group details updated.';
-    const systemMessage = await appendSystemChatMessage(client, {
-      conversationId,
-      text: identityUpdateText,
-      metadata: {
-        event: 'group_identity_updated',
-        actorUserId,
-        changedFields,
-      },
-    });
-
-    const responsePayload = {
-      ok: true,
-      conversation: {
-        id: conversationId,
-        type: 'group' as const,
-        title: nextTitle,
-        ownerId: conversation.owner_id,
-        itemId: conversation.item_id,
-        description: typeof nextMetadata.description === 'string' ? nextMetadata.description : null,
-        avatar: typeof nextMetadata.avatar === 'string' ? nextMetadata.avatar : null,
-        coverPhoto: typeof nextMetadata.coverPhoto === 'string' ? nextMetadata.coverPhoto : null,
-        updatedAt: updatedResult.rows[0].updated_at,
-      },
-      systemMessage: {
-        id: systemMessage.id,
-        createdAt: systemMessage.createdAt,
-      },
-    };
-
-    if (idempotencyKey) {
-      await saveChatGroupIdempotentResponse(client, {
-        creatorId: actorUserId,
-        idempotencyKey,
-        requestHash,
-        conversationId,
-        responsePayload,
-      });
-    }
-
-    await client.query('COMMIT');
-
-    try {
-      publishRealtimeEvent({
-        topic: `chat.conversation:${conversationId}`,
-        type: 'chat.message.created',
-        payload: {
-          id: systemMessage.id,
-          conversationId,
-          senderType: 'system',
-          senderUserId: null,
-          senderBotId: null,
-          body: identityUpdateText,
-          metadata: {
-            event: 'group_identity_updated',
-            actorUserId,
-            changedFields,
-          },
-          createdAt: systemMessage.createdAt,
-        },
-      });
-      publishRealtimeEvent({
-        topic: `chat.conversation:${conversationId}`,
-        type: 'chat.group.identity.updated',
-        payload: {
-          conversationId,
-          actorUserId,
-          changedFields,
-          title: nextTitle,
-          description: responsePayload.conversation.description,
-          avatar: responsePayload.conversation.avatar,
-          coverPhoto: responsePayload.conversation.coverPhoto,
-          updatedAt: responsePayload.conversation.updatedAt,
-        },
-      });
-    } catch (eventError) {
-      request.log.error(
-        { err: eventError, conversationId, actorUserId },
-        'Failed to publish group identity update after commit'
-      );
-    }
-
-    return responsePayload;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-});
-
-app.get('/chat/conversations/:conversationId/members', async (request) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  const result = await db.query<{
-    user_id: string;
-    role: string;
-    joined_at: string;
-  }>(
-    `
-      SELECT user_id, role, joined_at::text
-      FROM chat_members
-      WHERE conversation_id = $1
-      ORDER BY joined_at ASC
-    `,
-    [conversationId]
-  );
-
-  return {
-    ok: true,
-    conversationId,
-    items: result.rows.map((row) => ({
-      userId: row.user_id,
-      role: row.role,
-      joinedAt: row.joined_at,
-    })),
-  };
-});
-
-// ── Conversation participant summary ────────────────────────────────────
-// Returns participant list with profile info and last-read timestamps.
-// Used by the chat info screen to show who is in a conversation.
-app.get('/chat/conversations/:conversationId/participants', async (request, reply) => {
-  const paramsSchema = z.object({
-    conversationId: z.string().min(2).max(120),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-
-  // Verify conversation exists and the requesting user is a participant
-  const convCheck = await db.query<{ id: string }>(
-    `SELECT id FROM chat_conversations WHERE id = $1 LIMIT 1`,
-    [conversationId]
-  );
-  if (!convCheck.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Conversation not found' };
-  }
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  const result = await db.query<{
-    user_id: string;
-    role: string;
-    joined_at: string;
-    last_read_at: string | null;
-    username: string | null;
-    display_name: string | null;
-    avatar: string | null;
-    last_activity_at: string | null;
-  }>(
-    `
-      SELECT
-        cm.user_id,
-        cm.role,
-        cm.joined_at::text,
-        cm.last_read_at::text AS last_read_at,
-        u.username,
-        u.display_name,
-        u.avatar,
-        (
-          SELECT MAX(m.created_at)::text
-          FROM chat_messages m
-          WHERE m.conversation_id = cm.conversation_id
-        ) AS last_activity_at
-      FROM chat_members cm
-      LEFT JOIN users u ON u.id = cm.user_id
-      WHERE cm.conversation_id = $1
-      ORDER BY cm.joined_at ASC
-    `,
-    [conversationId]
-  );
-
-  return {
-    ok: true,
-    conversationId,
-    participantCount: result.rowCount,
-    participants: result.rows.map((row) => ({
-      userId: row.user_id,
-      username: row.username,
-      displayName: row.display_name,
-      avatar: row.avatar,
-      role: row.role,
-      joinedAt: row.joined_at,
-      lastReadAt: row.last_read_at,
-    })),
-    lastActivityAt: result.rows[0]?.last_activity_at ?? null,
-  };
-});
-
-// ── Per-user conversation state: mute, archive, message-request status ──
-
-app.post('/chat/conversations/:conversationId/mute', async (request) => {
-  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  await db.query(
-    `
-      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_muted, updated_at)
-      VALUES ($1, $2, TRUE, NOW())
-      ON CONFLICT (user_id, conversation_id)
-      DO UPDATE SET is_muted = TRUE, updated_at = NOW()
-    `,
-    [actorUserId, conversationId]
-  );
-
-  return { ok: true, conversationId, isMuted: true };
-});
-
-app.delete('/chat/conversations/:conversationId/mute', async (request) => {
-  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  await db.query(
-    `
-      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_muted, updated_at)
-      VALUES ($1, $2, FALSE, NOW())
-      ON CONFLICT (user_id, conversation_id)
-      DO UPDATE SET is_muted = FALSE, updated_at = NOW()
-    `,
-    [actorUserId, conversationId]
-  );
-
-  return { ok: true, conversationId, isMuted: false };
-});
-
-app.post('/chat/conversations/:conversationId/archive', async (request) => {
-  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  await db.query(
-    `
-      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_archived, updated_at)
-      VALUES ($1, $2, TRUE, NOW())
-      ON CONFLICT (user_id, conversation_id)
-      DO UPDATE SET is_archived = TRUE, updated_at = NOW()
-    `,
-    [actorUserId, conversationId]
-  );
-
-  return { ok: true, conversationId, isArchived: true };
-});
-
-app.delete('/chat/conversations/:conversationId/archive', async (request) => {
-  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  await db.query(
-    `
-      INSERT INTO chat_conversation_user_state (user_id, conversation_id, is_archived, updated_at)
-      VALUES ($1, $2, FALSE, NOW())
-      ON CONFLICT (user_id, conversation_id)
-      DO UPDATE SET is_archived = FALSE, updated_at = NOW()
-    `,
-    [actorUserId, conversationId]
-  );
-
-  return { ok: true, conversationId, isArchived: false };
-});
-
-app.post('/chat/conversations/:conversationId/accept', async (request) => {
-  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  await db.query(
-    `
-      INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status, updated_at)
-      VALUES ($1, $2, 'accepted', NOW())
-      ON CONFLICT (user_id, conversation_id)
-      DO UPDATE SET request_status = 'accepted', updated_at = NOW()
-    `,
-    [actorUserId, conversationId]
-  );
-
-  return { ok: true, conversationId, requestStatus: 'accepted' };
-});
-
-app.post('/chat/conversations/:conversationId/decline', async (request) => {
-  const paramsSchema = z.object({ conversationId: z.string().min(2).max(120) });
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { conversationId } = paramsSchema.parse(request.params);
-  await ensureChatConversationAccess(db, conversationId, actorUserId);
-
-  await db.query(
-    `
-      INSERT INTO chat_conversation_user_state (user_id, conversation_id, request_status, updated_at)
-      VALUES ($1, $2, 'declined', NOW())
-      ON CONFLICT (user_id, conversation_id)
-      DO UPDATE SET request_status = 'declined', updated_at = NOW()
-    `,
-    [actorUserId, conversationId]
-  );
-
-  return { ok: true, conversationId, requestStatus: 'declined' };
-});
-
-// ── Quick replies ──────────────────────────────────────────────────────
-
-app.get('/chat/quick-replies', async (request) => {
-  const querySchema = z.object({
-    role: z.enum(['buyer', 'seller']).optional(),
-  });
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { role } = querySchema.parse(request.query ?? {});
-
-  const result = await db.query<{
-    id: string;
-    role: string;
-    title: string;
-    body: string;
-    sort_order: number;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      SELECT id, role, title, body, sort_order, created_at::text, updated_at::text
-      FROM chat_quick_replies
-      WHERE user_id = $1 ${role ? 'AND role = $2' : ''}
-      ORDER BY sort_order ASC, created_at ASC
-    `,
-    role ? [actorUserId, role] : [actorUserId]
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      role: row.role,
-      title: row.title,
-      body: row.body,
-      sortOrder: row.sort_order,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
-  };
-});
-
-app.post('/chat/quick-replies', async (request) => {
-  const bodySchema = z.object({
-    role: z.enum(['buyer', 'seller']),
-    title: z.string().trim().min(1).max(40),
-    body: z.string().trim().min(1).max(200),
-    sortOrder: z.number().int().min(0).max(9999).optional(),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const id = `qr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const sortOrder = payload.sortOrder ?? Date.now();
-
-  await db.query(
-    `
-      INSERT INTO chat_quick_replies (id, user_id, role, title, body, sort_order)
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `,
-    [id, actorUserId, payload.role, payload.title, payload.body, sortOrder]
-  );
-
-  return {
-    ok: true,
-    quickReply: {
-      id,
-      role: payload.role,
-      title: payload.title,
-      body: payload.body,
-      sortOrder,
-    },
-  };
-});
-
-app.put('/chat/quick-replies/:replyId', async (request) => {
-  const paramsSchema = z.object({ replyId: z.string().min(2).max(120) });
-  const bodySchema = z.object({
-    title: z.string().trim().min(1).max(40).optional(),
-    body: z.string().trim().min(1).max(200).optional(),
-    sortOrder: z.number().int().min(0).max(9999).optional(),
-  });
-
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { replyId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body ?? {});
-
-  const setClauses: string[] = [];
-  const values: unknown[] = [replyId, actorUserId];
-  let paramIdx = 3;
-
-  if (payload.title !== undefined) {
-    setClauses.push(`title = $${paramIdx++}`);
-    values.push(payload.title);
-  }
-  if (payload.body !== undefined) {
-    setClauses.push(`body = $${paramIdx++}`);
-    values.push(payload.body);
-  }
-  if (payload.sortOrder !== undefined) {
-    setClauses.push(`sort_order = $${paramIdx++}`);
-    values.push(payload.sortOrder);
-  }
-
-  if (setClauses.length === 0) {
-    return { ok: true, replyId, updated: {} };
-  }
-
-  setClauses.push(`updated_at = NOW()`);
-
-  const result = await db.query<{ id: string }>(
-    `
-      UPDATE chat_quick_replies
-      SET ${setClauses.join(', ')}
-      WHERE id = $1 AND user_id = $2
-      RETURNING id
-    `,
-    values
-  );
-
-  if (result.rowCount === 0) {
-    throw createApiError('NOT_FOUND', 'Quick reply not found');
-  }
-
-  return {
-    ok: true,
-    replyId,
-    updated: {
-      ...(payload.title !== undefined ? { title: payload.title } : {}),
-      ...(payload.body !== undefined ? { body: payload.body } : {}),
-      ...(payload.sortOrder !== undefined ? { sortOrder: payload.sortOrder } : {}),
-    },
-  };
-});
-
-app.delete('/chat/quick-replies/:replyId', async (request) => {
-  const paramsSchema = z.object({ replyId: z.string().min(2).max(120) });
-  const actorUserId = resolveAuthenticatedUserId(request);
-  const { replyId } = paramsSchema.parse(request.params);
-
-  const result = await db.query<{ id: string }>(
-    `DELETE FROM chat_quick_replies WHERE id = $1 AND user_id = $2 RETURNING id`,
-    [replyId, actorUserId]
-  );
-
-  if (result.rowCount === 0) {
-    throw createApiError('NOT_FOUND', 'Quick reply not found');
-  }
-
-  return { ok: true, replyId, deleted: true };
-});
 
 app.post('/wallets/:userId/snapshot', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
@@ -24916,7 +17952,7 @@ app.post('/wallets/:userId/snapshot', async (request, reply) => {
   };
 });
 
-// ── Seller wallet: pending vs available balance ────────────────────────
+// â”€â”€ Seller wallet: pending vs available balance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Returns the seller's pending balance (escrow not yet released) and
 // available balance (released, ready for payout), with a per-order
 // breakdown of pending items and their scheduled release times.
@@ -25088,7 +18124,7 @@ app.get('/wallets/:userId/snapshot', async (request, reply) => {
   };
 });
 
-// ── Oracle & Price routes ───────────────────────────────────────────
+// â”€â”€ Oracle & Price routes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 registerOracleRoutes({ app });
 registerPriceRoutes({ app, db });
 registerTaxonomyRoutes({ app, db });
@@ -25147,13 +18183,13 @@ app.get('/wallet/1ze/quote', async (request, reply) => {
         throw createApiError('IZE_MINT_INVALID', 'Top-up amount is too low after platform fee');
       }
 
-      // ── At-par model: 1 1ZE = $1.00 USD. Use the raw USD→local FX rate.
+      // â”€â”€ At-par model: 1 1ZE = $1.00 USD. Use the raw USDâ†’local FX rate.
       // The platform fee is already applied above via calculateWalletTopupFeeBreakdown.
       effectiveRate = countryQuote.fxRate;
       effectiveRateMode = 'at_par_fx';
       izeAmount = Number((netFiatAmount / effectiveRate).toFixed(6));
     } else {
-      // ── At-par model: 1 1ZE = $1.00 USD. Use the raw USD→local FX rate.
+      // â”€â”€ At-par model: 1 1ZE = $1.00 USD. Use the raw USDâ†’local FX rate.
       // The platform withdraw fee is applied as a separate transparent line item.
       effectiveRate = countryQuote.fxRate;
       effectiveRateMode = 'at_par_fx';
@@ -25893,7 +18929,7 @@ app.post('/wallet/1ze/mint/quote', async (request, reply) => {
       }
     }
 
-    // ── At-par model: 1 1ZE = $1.00 USD. Use the raw USD→local FX rate.
+    // â”€â”€ At-par model: 1 1ZE = $1.00 USD. Use the raw USDâ†’local FX rate.
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
     const mintUnitPrice = pricingQuote.fxRate;
 
@@ -26544,7 +19580,7 @@ app.post('/wallet/1ze/mint', async (request, reply) => {
     }
 
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
-    // ── At-par model: 1 1ZE = $1.00 USD. Use the raw USD→local FX rate.
+    // â”€â”€ At-par model: 1 1ZE = $1.00 USD. Use the raw USDâ†’local FX rate.
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
     const mintUnitPrice = pricingQuote.fxRate;
     const izeAmount = Number((feeBreakdown.netFiatAmount / mintUnitPrice).toFixed(6));
@@ -26728,7 +19764,7 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
     await client.query('BEGIN');
     await ensureUserExists(actorUserId);
 
-    // ── Compliance gate: verify user can redeem (burn) 1ZE ──
+    // â”€â”€ Compliance gate: verify user can redeem (burn) 1ZE â”€â”€
     const burnCapability = await evaluateWalletCapability(client, actorUserId, 'redeem', {
       amountUsd: payload.izeAmount,
       currency: payload.fiatCurrency,
@@ -26810,8 +19846,8 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
         : redeemCountry
     );
     const isCrossBorder = originCountry !== redeemCountry;
-    // ── At-par model: 1 1ZE = $1.00 USD ──
-    // Convert via the USD→local FX rate. The platform spread is applied as a
+    // â”€â”€ At-par model: 1 1ZE = $1.00 USD â”€â”€
+    // Convert via the USDâ†’local FX rate. The platform spread is applied as a
     // separate transparent fee, not baked into the exchange rate.
     const fxRate = (await resolveInternalFxRate(client, 'USD', fiatCurrency)).rate;
     const redemptionUnitPrice = fxRate;
@@ -26960,7 +19996,7 @@ app.post('/wallet/1ze/burn', async (request, reply) => {
         },
       });
 
-      // ── Platform fee ledger entry ──
+      // â”€â”€ Platform fee ledger entry â”€â”€
       // Record the platform spread as a separate FEE entry so it is transparent
       // and auditable. The fee is credited to the platform revenue_fx account.
       if (feeAmount > 0) {
@@ -27117,7 +20153,7 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     };
   }
 
-  // ── Bug 3 fix: halt check ──
+  // â”€â”€ Bug 3 fix: halt check â”€â”€
   try {
     await assertOnezeMintBurnNotHalted();
   } catch (error) {
@@ -27143,7 +20179,7 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     const amountUnits = onezeAmountToUnits(normalizedIzeAmount);
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
 
-    // ── Compliance gate: verify user can redeem 1ZE ──
+    // â”€â”€ Compliance gate: verify user can redeem 1ZE â”€â”€
     const redeemCapability = await evaluateWalletCapability(client, actorUserId, 'redeem', {
       amountUsd: normalizedIzeAmount,
       currency: fiatCurrency,
@@ -27155,7 +20191,7 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
       });
     }
 
-    // ── Bug 2 fix: idempotency check ──
+    // â”€â”€ Bug 2 fix: idempotency check â”€â”€
     const idempotencyRequestHash = payload.idempotencyKey
       ? hashWalletIdempotencyPayload({
           userId: actorUserId,
@@ -27178,8 +20214,8 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
       }
     }
 
-    // ── At-par pricing model ──
-    // 1 1ZE = $1.00 USD. Convert to the target fiat currency via the USD→local
+    // â”€â”€ At-par pricing model â”€â”€
+    // 1 1ZE = $1.00 USD. Convert to the target fiat currency via the USDâ†’local
     // FX rate. The platform spread is applied as a separate transparent fee,
     // not baked into the exchange rate.
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
@@ -27187,7 +20223,7 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     const fxRate = (await resolveInternalFxRate(client, 'USD', fiatCurrency)).rate;
     const principalAmount = Number((onezeAmountFromUnits * fxRate).toFixed(6));
 
-    // ── Charge PLATFORM_CONVERT_FEE_BPS ──
+    // â”€â”€ Charge PLATFORM_CONVERT_FEE_BPS â”€â”€
     const feeBps = PLATFORM_CONVERT_FEE_BPS;
     const feeAmount = Number((principalAmount * feeBps / 10_000).toFixed(6));
     const netRedemption = Number((principalAmount - feeAmount).toFixed(6));
@@ -27210,8 +20246,8 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
     const txId = createRuntimeId('wtx');
     const operationId = createRuntimeId('ize_convert');
 
-    // ── Bug 1 fix: segment debit ──
-    // Conversion is a withdrawal-like action — debit from the purchased segment.
+    // â”€â”€ Bug 1 fix: segment debit â”€â”€
+    // Conversion is a withdrawal-like action â€” debit from the purchased segment.
     const pricingProfile = await getCountryPricingProfile(client, pricingQuote.countryCode);
     const redeemCountry = normalizeOnezeCountryTag(pricingQuote.countryCode);
     await debitWalletSegmentBalance(client, {
@@ -27249,7 +20285,7 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
       },
     });
 
-    // ── Platform fee ledger entry (Bug 5 fix) ──
+    // â”€â”€ Platform fee ledger entry (Bug 5 fix) â”€â”€
     // Record the platform spread as a separate FEE entry so it is transparent
     // and auditable. The fee is credited to the platform revenue_fx account.
     if (feeAmount > 0) {
@@ -27340,7 +20376,7 @@ app.post('/wallet/convert-1ze-to-fiat', async (request, reply) => {
       },
     };
 
-    // ── Bug 2 fix: save idempotent response ──
+    // â”€â”€ Bug 2 fix: save idempotent response â”€â”€
     if (payload.idempotencyKey && idempotencyRequestHash) {
       await saveWalletIdempotentResponse(client, {
         userId: actorUserId,
@@ -27403,7 +20439,7 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
     const fiatCurrency = payload.fiatCurrency.toUpperCase();
     const fiatAmountMinor = Math.round(payload.fiatAmount * 100);
 
-    // ── Compliance gate: verify user can issue (load) 1ZE ──
+    // â”€â”€ Compliance gate: verify user can issue (load) 1ZE â”€â”€
     const issueCapability = await evaluateWalletCapability(client, actorUserId, 'issue', {
       amountUsd: payload.fiatAmount,
       currency: fiatCurrency,
@@ -27433,8 +20469,8 @@ app.post('/wallet/buy-1ze', async (request, reply) => {
     // Get pricing for conversion rate
     const pricingQuote = await resolveCountryPricingQuoteByCurrency(client, fiatCurrency);
 
-    // ── At-par pricing model ──
-    // 1 1ZE = $1.00 USD. For any fiat currency, convert via the USD→local FX
+    // â”€â”€ At-par pricing model â”€â”€
+    // 1 1ZE = $1.00 USD. For any fiat currency, convert via the USDâ†’local FX
     // rate. The platform spread is applied as a separate transparent fee.
     const fxRate = (await resolveInternalFxRate(client, 'USD', fiatCurrency)).rate;
     const feeBps = PLATFORM_LOAD_FEE_BPS;
@@ -27575,7 +20611,7 @@ app.post('/wallet/1ze/transfer', async (request, reply) => {
     await ensureUserExists(senderUserId);
     await ensureUserExists(recipientUserId);
 
-    // ── Compliance gates: verify both sender and recipient are permitted ──
+    // â”€â”€ Compliance gates: verify both sender and recipient are permitted â”€â”€
     const sendCapability = await evaluateWalletCapability(client, senderUserId, 'p2p_send', {
       amountUsd: payload.izeAmount,
       currency: payload.fiatCurrency,
@@ -28010,7 +21046,7 @@ app.post('/wallet/1ze/withdrawals/quote', async (request, reply) => {
 
     const amountOneze = unitsToOnezeAmount(amountUnits);
     const grossMinor = toFiatMinor(amountOneze * fxRate.rate, targetCurrency);
-    // ── Platform fee (transparent, separate line item) ──
+    // â”€â”€ Platform fee (transparent, separate line item) â”€â”€
     // The platform spread is applied as a separate fee on the raw FX rate,
     // not baked into the exchange rate. This prevents the double-fee problem
     // (markdown + corridor spread).
@@ -29066,9 +22102,9 @@ app.get('/wallet/1ze/:userId/position', async (request, reply) => {
   const serverTimestamp = new Date().toISOString();
   const positionRate = fiatCurrency.toUpperCase() === 'GBP' ? 1 : pricingQuote.netRedemption;
 
-  // ── WS4: Wallet safeguarding (backend-backed, no longer hardcoded) ──
+  // â”€â”€ WS4: Wallet safeguarding (backend-backed, no longer hardcoded) â”€â”€
   // Query the user's safeguarding profile. Default to safeguarded=false
-  // when no row exists (fail closed — never assert safeguarding without
+  // when no row exists (fail closed â€” never assert safeguarding without
   // a backend row).
   const safeguardingResult = await db.query<{
     safeguarded: boolean;
@@ -30224,7 +23260,7 @@ app.post('/users/:userId/payout-accounts', async (request, reply) => {
   };
 });
 
-// ── Per-seller sale velocity + risk tiering ──────────────────────────────
+// â”€â”€ Per-seller sale velocity + risk tiering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.get('/users/:userId/risk-tier', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -30247,7 +23283,7 @@ app.get('/users/:userId/risk-tier', async (request, reply) => {
   };
 });
 
-// ── Payout schedule configuration ───────────────────────────────────────
+// â”€â”€ Payout schedule configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.put('/users/:userId/payout-schedule', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -30321,7 +23357,7 @@ app.put('/users/:userId/payout-schedule', async (request, reply) => {
   };
 });
 
-// ── Payout schedule sweep ───────────────────────────────────────────────
+// â”€â”€ Payout schedule sweep â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Batch-creates payout_requests for sellers with scheduled payouts whose
 // available balance exceeds their minimum. Called by a daily cron.
 app.post('/ops/payouts/schedule-sweep', async (request, reply) => {
@@ -30439,7 +23475,7 @@ app.post('/ops/payouts/schedule-sweep', async (request, reply) => {
   };
 });
 
-// ── Reserve release sweep ───────────────────────────────────────────────
+// â”€â”€ Reserve release sweep â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Releases rolling reserve holds whose holding period has expired.
 app.post('/ops/payouts/reserve-release-sweep', async (request, reply) => {
   const securityAdminError = ensureSecurityAdminAccess(request, reply);
@@ -30809,7 +23845,7 @@ app.get('/users/:userId/stripe-connect/status', async (request, reply) => {
   }
 });
 
-// ── Multi-vendor KYC fallback (Persona/Onfido) ──────────────────────────
+// â”€â”€ Multi-vendor KYC fallback (Persona/Onfido) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // When Stripe Identity is unavailable or fails, the system can fall back
 // to Persona (US/CA) or Onfido (EU/UK) for identity verification.
 app.post('/users/:userId/kyc-fallback', async (request, reply) => {
@@ -31004,12 +24040,12 @@ app.get('/users/:userId/payout-requests/:requestId', async (request, reply) => {
   };
 });
 
-// ── Unknown-outcome reconciliation for payout requests ──────────────
+// â”€â”€ Unknown-outcome reconciliation for payout requests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
 // GET /users/:userId/payout-requests/lookup-by-key/:idempotencyKey
 //
 // When a client sends POST /users/:userId/payout-requests but the response
-// is lost (network timeout), the outcome is ambiguous — the payout may or
+// is lost (network timeout), the outcome is ambiguous â€” the payout may or
 // may not have been created. This endpoint resolves the ambiguity by looking
 // up the payout request by its idempotency key. Returns:
 //   - 200 { ok: true, status: 'acknowledged', payoutRequest }
@@ -31804,7 +24840,7 @@ app.get('/admin/reconciliation/report', async (request, reply) => {
   };
 });
 
-// ── Three-way reconciliation (PAY-10, PAY-11) ───────────────────────
+// â”€â”€ Three-way reconciliation (PAY-10, PAY-11) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.post('/admin/reconciliation/three-way-run', async (request, reply) => {
   const securityError = ensureSecurityAdminAccess(request, reply);
   if (securityError) {
@@ -31836,7 +24872,7 @@ app.post('/admin/reconciliation/three-way-run', async (request, reply) => {
       // ingestion failures). Payouts stay in their current pause state.
       request.log.warn(
         { runId: result.runId, runDate: payload.runDate, status: result.status },
-        'Three-way reconciliation incomplete — payouts pause state unchanged'
+        'Three-way reconciliation incomplete â€” payouts pause state unchanged'
       );
     } else {
       // Only unpause when the run is complete AND not critical.
@@ -32332,7 +25368,7 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
     }
 
     try {
-      // ── Idempotency guard: skip the provider call if we already have a ref ──
+      // â”€â”€ Idempotency guard: skip the provider call if we already have a ref â”€â”€
       // If the payout was already submitted to the provider (e.g., on a retry),
       // reuse the existing provider_payout_ref instead of creating a duplicate
       // transfer. Stripe's idempotency key would catch it, but this avoids
@@ -32340,7 +25376,7 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
       if (providerPayoutRef) {
         request.log.info(
           { requestId, providerPayoutRef },
-          'Payout already has a provider reference — skipping provider call (idempotent)'
+          'Payout already has a provider reference â€” skipping provider call (idempotent)'
         );
         providerExecutionMetadata = {
           provider: 'stripe_connect',
@@ -32364,7 +25400,7 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
           amountMinor: providerTransfer.amountMinor,
           currency: providerTransfer.currency,
           transferCreatedAt: new Date().toISOString(),
-          // Transfer ≠ bank payout. The payout request stays in 'processing'
+          // Transfer â‰  bank payout. The payout request stays in 'processing'
           // until Stripe's payout.paid webhook confirms bank arrival.
           bankPayoutPending: true,
         };
@@ -32387,7 +25423,7 @@ app.post('/admin/payouts/:requestId/approve', async (request, reply) => {
   try {
     await client.query('BEGIN');
 
-    // After a Stripe Connect transfer, the payout is in 'processing' —
+    // After a Stripe Connect transfer, the payout is in 'processing' â€”
     // the transfer moved funds to the connected account's Stripe balance,
     // but the bank payout has not been confirmed. 'paid' is reserved for
     // bank terminal evidence (Stripe payout.paid webhook or manual bank
@@ -32818,7 +25854,7 @@ app.get('/admin/orders/stuck', async (request, reply) => {
   }
 });
 
-// ── Available APMs for a country/currency corridor ──────────────────────
+// â”€â”€ Available APMs for a country/currency corridor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.get('/payments/apms/available', async (request, reply) => {
   const querySchema = z.object({
     country: z.string().min(2).max(2).optional(),
@@ -32862,7 +25898,7 @@ app.get('/payments/apms/available', async (request, reply) => {
   };
 });
 
-// ── Available BNPL providers + installment plans ────────────────────────
+// â”€â”€ Available BNPL providers + installment plans â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.get('/payments/bnpl/available', async (request, reply) => {
   const querySchema = z.object({
     country: z.string().min(2).max(2).optional(),
@@ -33253,7 +26289,7 @@ app.post('/payments/intents', async (request, reply) => {
         : null;
       gatewayId = defaultGatewayForChannel(channel, payload.gatewayId);
 
-      // Calculate platform fee (5% + £0.70 fixed)
+      // Calculate platform fee (5% + Â£0.70 fixed)
       // Note: Fee is tracked in ledger, not extracted via Stripe Connect
       const platformChargeRate = 0.05;
       const platformChargeFixed = 0.70;
@@ -33366,10 +26402,10 @@ app.post('/payments/intents', async (request, reply) => {
       }
     }
 
-    // ── Phase 1: Persist intent with provider_submission_pending status ──
+    // â”€â”€ Phase 1: Persist intent with provider_submission_pending status â”€â”€
     // The payment intent is created in 'provider_submission_pending' state
     // BEFORE calling the provider. This ensures:
-    // 1. No provider I/O while DB locks are held (§5.1 gate)
+    // 1. No provider I/O while DB locks are held (Â§5.1 gate)
     // 2. If the provider call times out, the intent exists for recovery
     // 3. The order is bound atomically, preventing concurrent checkout
     const intentId = createRuntimeId('pi');
@@ -33499,11 +26535,11 @@ app.post('/payments/intents', async (request, reply) => {
       );
     }
 
-    // Commit Phase 1 — release all DB locks before provider I/O.
+    // Commit Phase 1 â€” release all DB locks before provider I/O.
     await client.query('COMMIT');
     client.release();
 
-    // ── Phase 2: Provider I/O (no DB locks held) ──
+    // â”€â”€ Phase 2: Provider I/O (no DB locks held) â”€â”€
     // If the provider call fails or times out, the intent remains in
     // 'provider_submission_pending'. A background worker can query the
     // provider for the authoritative state (unknown-outcome recovery).
@@ -33511,7 +26547,7 @@ app.post('/payments/intents', async (request, reply) => {
     let stripePaymentMethodId: string | null = null;
     if (gatewayId === 'stripe_americas') {
       if (!stripe) {
-        // Mark intent as failed — provider not configured.
+        // Mark intent as failed â€” provider not configured.
         await markIntentFailed(db, intentId, 'PAYMENT_PROVIDER_UNAVAILABLE', 'Stripe payment collection is not configured');
         reply.code(503);
         return {
@@ -33583,7 +26619,7 @@ app.post('/payments/intents', async (request, reply) => {
         },
       });
     } catch (providerError) {
-      // Provider call failed — mark intent as failed for recovery.
+      // Provider call failed â€” mark intent as failed for recovery.
       const failureCode = getApiError(providerError)?.code ?? 'PROVIDER_CALL_FAILED';
       const failureMessage = (providerError as Error).message ?? 'Provider call failed';
       await markIntentFailed(db, intentId, failureCode, failureMessage);
@@ -33600,7 +26636,7 @@ app.post('/payments/intents', async (request, reply) => {
       return { ok: false, error: 'Payment provider could not create the intent' };
     }
 
-    // ── Phase 3: Update intent with provider results ──
+    // â”€â”€ Phase 3: Update intent with provider results â”€â”€
     const settleClient = await db.connect();
     try {
       await settleClient.query('BEGIN');
@@ -33654,11 +26690,11 @@ app.post('/payments/intents', async (request, reply) => {
     } catch (settleError) {
       await settleClient.query('ROLLBACK');
       // The provider intent was created but we couldn't persist the result.
-      // The intent stays in 'provider_submission_pending' — a background
+      // The intent stays in 'provider_submission_pending' â€” a background
       // worker will query the provider and reconcile.
       request.log.error(
         { err: settleError, intentId, providerIntentRef: gatewayIntent.providerIntentRef },
-        'Failed to persist provider result — intent left in provider_submission_pending for recovery'
+        'Failed to persist provider result â€” intent left in provider_submission_pending for recovery'
       );
       // Return the intent as-is (in pending state) so the client can poll.
       const pendingIntent = await db.query<PaymentIntentRow>(
@@ -33825,7 +26861,7 @@ app.post('/payments/intents/:intentId/confirm', async (request, reply) => {
 
     // PAY-16 fix: Terminal status confirmation (succeeded/failed/cancelled)
     // requires admin role. The intent owner must NOT be able to confirm
-    // their own payment as succeeded — that's a provider-owned terminal
+    // their own payment as succeeded â€” that's a provider-owned terminal
     // state. Only admin operators can override, and in production, terminal
     // status requires a second approver (maker-checker).
     const isTerminalStatus = payload.simulateStatus !== 'processing';
@@ -34043,7 +27079,7 @@ app.post('/payments/intents/:intentId/refunds', async (request, reply) => {
 
     // PAY-01 fix: Only admin roles can initiate provider refunds.
     // A buyer must NOT be able to call the provider refund endpoint for
-    // their own payment — refunds are policy-owned commands that require
+    // their own payment â€” refunds are policy-owned commands that require
     // authorization (returns policy, dispute resolution, admin override).
     // The buyer's cancellation creates a refund request, never a direct
     // provider mutation.
@@ -34351,7 +27387,7 @@ app.get('/payments/disputes', async (request, reply) => {
   };
 });
 
-// ── Dispute detail ──────────────────────────────────────────────────────
+// â”€â”€ Dispute detail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.get('/payments/disputes/:disputeId', async (request, reply) => {
   const securityAdminError = ensureSecurityAdminAccess(request, reply);
   if (securityAdminError) {
@@ -34463,7 +27499,7 @@ app.get('/payments/disputes/:disputeId', async (request, reply) => {
   };
 });
 
-// ── Dispute evidence submission ─────────────────────────────────────────
+// â”€â”€ Dispute evidence submission â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.post('/payments/disputes/:disputeId/evidence', async (request, reply) => {
   const securityAdminError = ensureSecurityAdminAccess(request, reply);
   if (securityAdminError) {
@@ -34953,7 +27989,7 @@ app.post('/webhooks/:provider', async (request, reply) => {
     };
   }
 
-  // ── IP allowlisting for non-Stripe providers ────────────────────────
+  // â”€â”€ IP allowlisting for non-Stripe providers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Stripe verifies webhooks via signature, so IP allowlisting is not
   // needed. For other providers, check the client IP against the
   // configured allowlist as an additional security layer.
@@ -35001,11 +28037,11 @@ app.post('/webhooks/:provider', async (request, reply) => {
   const event = verification.event;
   const expectedGateway = expectedGatewayIdForProvider(provider);
 
-  // ── Stripe webhook event-ID deduplication ──────────────────────────
+  // â”€â”€ Stripe webhook event-ID deduplication â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // The 2026 Stripe Webhook Hardening Checklist requires explicit event-ID
   // dedup. We insert the Stripe event ID into the webhook_events table
   // before processing. If the insert returns zero rows (ON CONFLICT DO
-  // NOTHING), the event was already processed — return 200 OK immediately
+  // NOTHING), the event was already processed â€” return 200 OK immediately
   // (idempotent). This is additive to the existing payment_webhook_events
   // dedup inside the transaction below.
   if (provider === 'stripe' && event.providerEventId) {
@@ -35155,7 +28191,7 @@ app.post('/webhooks/:provider', async (request, reply) => {
 
     if (!webhookInsert.rowCount) {
       // PAY-03 fix: The insert returned 0 rows because this event was
-      // already received. But "received" != "processed" — a crash after
+      // already received. But "received" != "processed" â€” a crash after
       // the insert but before processed_at was set leaves the event
       // unprocessed. Check whether the existing row has processed_at.
       // If not, re-process it instead of silently returning duplicate.
@@ -35174,7 +28210,7 @@ app.post('/webhooks/:provider', async (request, reply) => {
         };
       }
 
-      // Event was received but never processed — fall through and process it.
+      // Event was received but never processed â€” fall through and process it.
       await client.query(
         `UPDATE payment_webhook_events
          SET event_type = $3, intent_id = $4
@@ -35554,7 +28590,7 @@ app.post('/webhooks/:provider', async (request, reply) => {
 
     request.log.error({ err: error, provider, event }, 'Failed to process provider webhook');
 
-    // ── Dead-letter queue: persist the failed event for retry ─────────
+    // â”€â”€ Dead-letter queue: persist the failed event for retry â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // The webhook event was already inserted (before the processing error),
     // so we record the failure in the outbox for the retry sweep.
     try {
@@ -35597,7 +28633,7 @@ app.post('/webhooks/:provider', async (request, reply) => {
   }
 });
 
-// ── Webhook dead-letter queue retry sweep ──────────────────────────────
+// â”€â”€ Webhook dead-letter queue retry sweep â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Retries failed webhook events with exponential backoff. Called by a
 // cron worker or manually by an admin.
 app.post('/ops/webhooks/retry-sweep', async (request, reply) => {
@@ -35703,7 +28739,7 @@ app.post('/ops/webhooks/retry-sweep', async (request, reply) => {
       );
 
       if (alreadyProcessed.rowCount) {
-        // Already processed — mark as succeeded.
+        // Already processed â€” mark as succeeded.
         await client.query(
           `UPDATE webhook_processing_outbox SET status = 'succeeded', updated_at = NOW() WHERE id = $1`,
           [item.id]
@@ -37707,7 +30743,7 @@ app.get('/users/:userId/orders', async (request) => {
     params.push(year);
   }
 
-  // Search query — match order ID, listing title, buyer/seller username, tracking number
+  // Search query â€” match order ID, listing title, buyer/seller username, tracking number
   if (searchQuery) {
     const searchPattern = `%${searchQuery}%`;
     conditions.push(`(
@@ -37721,7 +30757,7 @@ app.get('/users/:userId/orders', async (request) => {
     params.push(searchPattern);
   }
 
-  // Cursor pagination — createdBefore or cursor (ISO timestamp)
+  // Cursor pagination â€” createdBefore or cursor (ISO timestamp)
   const cursorDate = cursor ?? createdBefore;
   if (cursorDate) {
     conditions.push(`o.created_at < $${paramIdx++}`);
@@ -37811,9 +30847,9 @@ app.get('/users/:userId/orders', async (request) => {
   };
 });
 
-/* ── Buyer Protection ── */
+/* â”€â”€ Buyer Protection â”€â”€ */
 
-// GET /orders/:orderId/protection — buyer protection status for an order
+// GET /orders/:orderId/protection â€” buyer protection status for an order
 app.get('/orders/:orderId/protection', async (request, reply) => {
   if (!request.authUser) {
     reply.code(401);
@@ -37849,7 +30885,7 @@ app.get('/orders/:orderId/protection', async (request, reply) => {
 
   const feeGbpMinor = Math.round(Number(order.buyer_protection_fee_gbp) * 100);
   const totalGbpMinor = Math.round(Number(order.total_gbp) * 100);
-  const coverageAmountGbpMinor = Math.min(totalGbpMinor, 50000); // capped at £500
+  const coverageAmountGbpMinor = Math.min(totalGbpMinor, 50000); // capped at Â£500
   const eligibleUntil = order.delivered_at
     ? new Date(new Date(order.delivered_at).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
     : new Date(new Date(order.created_at).getTime() + 60 * 24 * 60 * 60 * 1000).toISOString();
@@ -37886,7 +30922,7 @@ app.get('/orders/:orderId/protection', async (request, reply) => {
   };
 });
 
-// POST /orders/:orderId/protection/claim — initiate a buyer protection claim
+// POST /orders/:orderId/protection/claim â€” initiate a buyer protection claim
 app.post('/orders/:orderId/protection/claim', {
   config: {
     rateLimit: {
@@ -37953,7 +30989,7 @@ app.post('/orders/:orderId/protection/claim', {
   };
 });
 
-/* ── Order consumer actions ── */
+/* â”€â”€ Order consumer actions â”€â”€ */
 
 app.post('/orders/:orderId/cancel', async (request, reply) => {
   const paramsSchema = z.object({ orderId: z.string().min(4).max(64) });
@@ -38211,7 +31247,7 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
     }
 
     // Look up the linked payment intent to issue a real provider refund.
-    // A refund without a provider call is a false refund — the buyer's card
+    // A refund without a provider call is a false refund â€” the buyer's card
     // is never credited.  Refuse if no succeeded intent is linked.
     const intentResult = await client.query<{
       id: string;
@@ -38276,7 +31312,7 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
       providerRefundRef = gatewayRefund.providerRefundRef;
       refundStatus = gatewayRefund.refundStatus;
     } catch (refundError) {
-      // Provider call failed or timed out — mark as unknown, not failed.
+      // Provider call failed or timed out â€” mark as unknown, not failed.
       // The reconciliation worker will query the provider for the authoritative
       // status.  Never claim success from a local-only update.
       refundStatus = 'unknown';
@@ -38302,7 +31338,7 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
       });
       // PAY-08 fix: Only post the ledger reversal when the refund is
       // confirmed succeeded. Unknown/pending refunds must NOT trigger a
-      // reversal — the money has not been returned to the buyer yet.
+      // reversal â€” the money has not been returned to the buyer yet.
       // The reversal is posted when the refund.* webhook confirms success
       // or when reconciliation resolves the unknown state.
       if (refundStatus === 'succeeded') {
@@ -38339,7 +31375,7 @@ app.post('/orders/:orderId/refund', async (request, reply) => {
   }
 });
 
-/* ── Unified transaction history ── */
+/* â”€â”€ Unified transaction history â”€â”€ */
 
 app.get('/users/:userId/transactions', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
@@ -38562,7 +31598,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
   };
 });
 
-// ── Auction House home aggregate endpoint ──
+// â”€â”€ Auction House home aggregate endpoint â”€â”€
 // Deterministic attention priority:
 // 1. unresolved won action  2. outbid live  3. leading ending within threshold
 // 4. leading live  5. watching ending within threshold  6. strongest closing-soon
@@ -38579,7 +31615,7 @@ app.get('/auctions/home', async (request, reply) => {
   const nowIso = now.toISOString();
   const nowMs = now.getTime();
 
-  // ── Fetch all auctions with viewer state in a single query ──
+  // â”€â”€ Fetch all auctions with viewer state in a single query â”€â”€
   // Parameterised: viewer ID passed as $1 to every authenticated query.
   // Anonymous queries use literal false/NULL with no parameter.
   const viewerSelect = viewerUserId
@@ -38618,7 +31654,7 @@ app.get('/auctions/home', async (request, reply) => {
     db.query(`SELECT DISTINCT COALESCE(l.category, '') AS category FROM auctions a LEFT JOIN listings l ON l.id = a.listing_id WHERE a.cancelled_at IS NULL AND a.starts_at > NOW() AND COALESCE(l.category, '') != '' ORDER BY category ASC`),
   ]);
 
-  // ── Row mapper (shared with /auctions list endpoint) ──
+  // â”€â”€ Row mapper (shared with /auctions list endpoint) â”€â”€
   function mapRow(row: any) {
     const canonical = resolveCanonicalLifecycle({
       cancelledAt: row.cancelled_at,
@@ -38690,7 +31726,7 @@ app.get('/auctions/home', async (request, reply) => {
   const sellerItems = sellerRes.rows.map(mapRow);
   const watchlistItems = watchlistRes.rows.map(mapRow);
 
-  // ── Activity counts (deduplicated by Auction ID) ──
+  // â”€â”€ Activity counts (deduplicated by Auction ID) â”€â”€
   const activity = {
     activeCount: 0,
     needsAttentionCount: 0,
@@ -38711,7 +31747,7 @@ app.get('/auctions/home', async (request, reply) => {
     else if (item.viewerState === 'won') { activity.unresolvedWonCount++; activity.needsAttentionCount++; }
   }
 
-  // ── Deterministic attention priority ──
+  // â”€â”€ Deterministic attention priority â”€â”€
   // 1. unresolved won action (won with ended/settled lifecycle and no settled_at = needs action)
   const wonAction = [...endedItems, ...liveItems].find(
     (i) => i.viewerState === 'won' && !i.settledAt
@@ -38757,20 +31793,20 @@ app.get('/auctions/home', async (request, reply) => {
     else if (nearestUpcoming) { attentionItem = nearestUpcoming; attentionReason = null; }
   }
 
-  // ── Closing soon programme (live items ending within 60 min, excluding attention item) ──
+  // â”€â”€ Closing soon programme (live items ending within 60 min, excluding attention item) â”€â”€
   const closingSoon = liveItems.filter((i) => {
     if (attentionItem && i.id === attentionItem.id) return false;
     const msToEnd = new Date(i.endsAt).getTime() - nowMs;
     return msToEnd > 0 && msToEnd <= CLOSING_SOON_THRESHOLD_MS;
   });
 
-  // ── Live auction floor (live items not in closing soon or attention) ──
+  // â”€â”€ Live auction floor (live items not in closing soon or attention) â”€â”€
   const excludeIds = new Set<string>();
   if (attentionItem) excludeIds.add(attentionItem.id);
   closingSoon.forEach((i) => excludeIds.add(i.id));
   const liveFloor = liveItems.filter((i) => !excludeIds.has(i.id));
 
-  // ── Category worlds ──
+  // â”€â”€ Category worlds â”€â”€
   // Map raw category strings to human-readable display names.
   // The listings table stores lowercase categories (women, men) alongside
   // display-case categories (Watches, Bags, Sneakers, Cameras). The frontend
@@ -38818,13 +31854,13 @@ app.get('/auctions/home', async (request, reply) => {
     });
   }
 
-  // ── Recently closed ──
+  // â”€â”€ Recently closed â”€â”€
   const recentlyClosed = endedItems.filter((i) => {
     if (attentionItem && i.id === attentionItem.id) return false;
     return true;
   });
 
-  // ── Seller summary ──
+  // â”€â”€ Seller summary â”€â”€
   let sellerSummary: { liveCount: number; scheduledCount: number; completedCount: number } | undefined;
   if (sellerItems.length > 0) {
     sellerSummary = {
@@ -38968,7 +32004,7 @@ app.get('/auctions', async (request, reply) => {
         }
       }
     } catch {
-      // Invalid cursor — ignore
+      // Invalid cursor â€” ignore
     }
   }
 
@@ -39426,7 +32462,7 @@ app.post('/auctions/:auctionId/bids', {
       timeWindow: '1 minute',
     },
   },
-  // Fastify JSON Schema — framework-level defence-in-depth per OWASP API
+  // Fastify JSON Schema â€” framework-level defence-in-depth per OWASP API
   // security best practices. Validates structure before the handler runs;
   // Zod in the handler provides semantic validation as a second layer.
   schema: {
@@ -39472,7 +32508,7 @@ app.post('/auctions/:auctionId/bids', {
   try {
     await client.query('BEGIN');
 
-    // Atomic idempotency claim — prevents TOCTOU race
+    // Atomic idempotency claim â€” prevents TOCTOU race
     if (scopedKey) {
       const claim = await claimIdempotency(client, {
         idempotencyKey: scopedKey,
@@ -39487,7 +32523,7 @@ app.post('/auctions/:auctionId/bids', {
           reply.code(409);
           return { ok: false, error: 'Idempotency key already used with a different payload.', code: 'IDEMPOTENCY_KEY_REUSED' };
         }
-        // Same hash — replay the original response
+        // Same hash â€” replay the original response
         await client.query('ROLLBACK');
         reply.code(claim.existing.responseStatus);
         return claim.existing.responseBody as any;
@@ -39542,7 +32578,7 @@ app.post('/auctions/:auctionId/bids', {
       return { ok: false, error: 'This auction has been settled.', code: 'AUCTION_SETTLED' };
     }
 
-    // Winner already set — auction is terminally ended via Buy Now
+    // Winner already set â€” auction is terminally ended via Buy Now
     if (auction.winner_bidder_id) {
       await client.query('ROLLBACK');
       reply.code(409);
@@ -39677,7 +32713,7 @@ app.post('/auctions/:auctionId/bids', {
       };
     }
 
-    // Reject bids that meet or exceed the Buy Now price — user must use the dedicated Buy Now flow
+    // Reject bids that meet or exceed the Buy Now price â€” user must use the dedicated Buy Now flow
     if (auction.buy_now_price_gbp !== null && amountGbp >= Number(auction.buy_now_price_gbp)) {
       await client.query('ROLLBACK');
       reply.code(409);
@@ -39881,7 +32917,7 @@ app.post('/auctions/:auctionId/bids', {
   }
 });
 
-// ── Dedicated Buy Now endpoint — atomic fixed-price purchase ──
+// â”€â”€ Dedicated Buy Now endpoint â€” atomic fixed-price purchase â”€â”€
 app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
   if (!request.authUser) {
     reply.code(401);
@@ -39906,7 +32942,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
   try {
     await client.query('BEGIN');
 
-    // Atomic idempotency claim — prevents TOCTOU race
+    // Atomic idempotency claim â€” prevents TOCTOU race
     const claim = await claimIdempotency(client, {
       idempotencyKey: scopedKey,
       operationType: 'buy_now',
@@ -39920,7 +32956,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
         reply.code(409);
         return { ok: false, error: 'Idempotency key already used with a different payload.', code: 'IDEMPOTENCY_KEY_REUSED' };
       }
-      // Same hash — replay the original response
+      // Same hash â€” replay the original response
       await client.query('ROLLBACK');
       reply.code(claim.existing.responseStatus);
       return claim.existing.responseBody as any;
@@ -39975,7 +33011,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
       return { ok: false, error: 'This auction has been settled.', code: 'AUCTION_SETTLED' };
     }
 
-    // Winner already set — auction is terminally ended
+    // Winner already set â€” auction is terminally ended
     if (auction.winner_bidder_id) {
       await client.query('ROLLBACK');
       reply.code(409);
@@ -40158,7 +33194,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
         [orderId, buyerId, auction.seller_id, auction.listing_id, transactionAmountGbp, auctionId]
       );
     } else {
-      // Order already exists from a prior idempotent replay — reuse its ID
+      // Order already exists from a prior idempotent replay â€” reuse its ID
       orderId = existingOrder.rows[0].id;
     }
 
@@ -40213,7 +33249,7 @@ app.post('/auctions/:auctionId/buy-now', async (request, reply) => {
       },
     });
 
-    // Mark the underlying listing as sold — the Buy Now is an immediate
+    // Mark the underlying listing as sold â€” the Buy Now is an immediate
     // purchase, so the item is no longer available. This aligns auction
     // Buy Now with the direct-checkout flow which also sets status = 'sold'
     // via the reconcile_listing_checkout_from_order trigger.
@@ -40537,7 +33573,7 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       },
       title: row.title ?? 'Untitled',
       imageUrl: row.image_url ?? null,
-      // Per spec 02_AUCTION §7: canonical media array. Empty until
+      // Per spec 02_AUCTION Â§7: canonical media array. Empty until
       // the listing_media table is populated. imageUrl remains as a
       // compatibility field.
       mediaItems,
@@ -40565,12 +33601,12 @@ app.get('/auctions/:auctionId', async (request, reply) => {
       settledAt: row.settled_at,
       cancelledAt: row.cancelled_at,
       createdAt: row.created_at,
-      // Per spec 02_AUCTION §8: backend-backed fulfilment contract.
+      // Per spec 02_AUCTION Â§8: backend-backed fulfilment contract.
       // Null until the auction is terminal and fulfilment data exists.
       fulfilment: null,
       // Buyer protection is a platform-wide feature: all auction
       // transactions go through escrow with a buyer protection hold
-      // (default 48h after delivery). This is truthful — not per-listing.
+      // (default 48h after delivery). This is truthful â€” not per-listing.
       buyerProtection: config.buyerProtectionHoldHours > 0,
     },
     bidActivity: bidsResult.rows.map((b) => ({
@@ -40780,7 +33816,7 @@ app.post('/auctions/:auctionId/watch', async (request, reply) => {
       [userId, auctionId]
     );
   } catch {
-    // Auction may have been deleted — safe ignore
+    // Auction may have been deleted â€” safe ignore
   }
 
   return { ok: true, isWatched: true };
@@ -40951,5600 +33987,6 @@ app.get('/users/me/auction-bids', async (request, reply) => {
   return { ok: true, items: filtered, nextCursor };
 });
 
-app.get('/co-own/policy', async () => ({
-  ok: true,
-  policy: COOWN_POLICY,
-}));
-
-// ── Co-Own eligibility (authoritative, server-evidenced) ──
-// GET /co-own/eligibility/:assetId
-//
-// Returns a server-side eligibility decision for the authenticated user
-// against a specific Co-Own asset. This is the source of truth for the
-// frontend's disabled-state UI. It is ADVISORY for the UI only — every
-// money-mutating endpoint (order placement, buyout, reservation) re-runs
-// `evaluateMarketEligibility` transactionally inside its own DB transaction
-// and rejects on failure, so a tampered or stale client response can never
-// authorise a trade.
-//
-// The decision is short-lived (TTL below) so the frontend must re-fetch
-// before showing the trade ticket after the window expires.
-const CO_OWN_ELIGIBILITY_TTL_MS = 5 * 60_000; // 5 minutes
-
-app.get('/co-own/eligibility/:assetId', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
-  const { assetId } = paramsSchema.parse(request.params);
-  const userId = request.authUser.userId;
-
-  const evaluatedAt = new Date();
-  const expiresAt = new Date(evaluatedAt.getTime() + CO_OWN_ELIGIBILITY_TTL_MS);
-
-  // Listing-status checks are server-owned and cannot be derived from
-  // client state. A missing or closed asset is never eligible.
-  const assetResult = await db.query<{ id: string; is_open: boolean; listing_tier: string }>(
-    `SELECT id, is_open, listing_tier FROM coOwn_assets WHERE id = $1`,
-    [assetId]
-  );
-  const asset = assetResult.rows[0];
-  if (!asset) {
-    return {
-      ok: true,
-      eligible: false,
-      reasonCodes: ['ASSET_NOT_FOUND'],
-      policyVersion: COMMERCE_POLICY_VERSION,
-      evaluatedAt: evaluatedAt.toISOString(),
-      expiresAt: expiresAt.toISOString(),
-    };
-  }
-
-  const reasonCodes: string[] = [];
-  if (!asset.is_open) {
-    reasonCodes.push('ASSET_CLOSED');
-  }
-
-  // Compliance / jurisdiction / KYC / sanctions / limits. orderNotionalGbp
-  // is 0 for the standalone eligibility probe — per-order notional limits
-  // are re-evaluated transactionally at order placement time.
-  const decision = await evaluateMarketEligibility(db, {
-    userId,
-    market: 'co-own',
-    orderNotionalGbp: 0,
-  });
-
-  if (!decision.allowed) {
-    reasonCodes.push(decision.code);
-  }
-
-  // Prior-ownership check: a user who already holds 100% of the asset
-  // cannot buy more units (the backend enforces this at order time too).
-  if (asset.is_open && decision.allowed) {
-    const holdingsResult = await db.query<{ units_owned: string; total_units: number }>(
-      `SELECT h.units_owned::text AS units_owned, a.total_units
-         FROM coOwn_holdings h
-         JOIN coOwn_assets a ON a.id = h.asset_id
-        WHERE h.asset_id = $1 AND h.user_id = $2`,
-      [assetId, userId]
-    );
-    const held = Number(holdingsResult.rows[0]?.units_owned ?? 0);
-    const total = Math.max(1, holdingsResult.rows[0]?.total_units ?? 1);
-    if (held >= total) {
-      reasonCodes.push('ALREADY_FULL_OWNER');
-    }
-  }
-
-  // Build a UI-facing message from the first applicable reason. The
-  // authoritative message at execution time comes from the transactional
-  // re-evaluation, so this is purely for the disabled-state copy.
-  let message: string | undefined;
-  if (reasonCodes.length > 0) {
-    if (reasonCodes.includes('ASSET_NOT_FOUND')) {
-      message = 'Co-Own asset not found.';
-    } else if (reasonCodes.includes('ASSET_CLOSED')) {
-      message = 'Co-Own asset is closed for trading.';
-    } else if (reasonCodes.includes('ALREADY_FULL_OWNER')) {
-      message = 'You already own 100% of this asset.';
-    } else if (!decision.allowed) {
-      message = decision.message;
-    }
-  }
-
-  return {
-    ok: true,
-    eligible: reasonCodes.length === 0,
-    reasonCodes,
-    policyVersion: COMMERCE_POLICY_VERSION,
-    evaluatedAt: evaluatedAt.toISOString(),
-    expiresAt: expiresAt.toISOString(),
-    message,
-  };
-});
-
-app.get('/co-own/assets', async (request) => {
-  const querySchema = z.object({
-    openOnly: z.union([z.string(), z.boolean()]).optional(),
-    issuerId: z.string().min(2).max(128).optional(),
-    limit: z.coerce.number().int().min(1).max(200).default(80),
-  });
-  const parsedQuery = querySchema.parse(request.query);
-  const openOnly = parseQueryBoolean(parsedQuery.openOnly, false);
-  const { limit, issuerId } = parsedQuery;
-
-  const whereConditions: string[] = [];
-  const whereParams: Array<string | number> = [];
-
-  if (openOnly) {
-    whereConditions.push('sa.is_open = TRUE');
-  }
-
-  if (issuerId) {
-    whereParams.push(issuerId);
-    whereConditions.push(`sa.issuer_id = $${whereParams.length}`);
-  }
-
-  whereParams.push(limit);
-  const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-  const limitPlaceholder = `$${whereParams.length}`;
-
-  const result = await db.query<{
-    id: string;
-    listing_id: string;
-    issuer_id: string;
-    title: string;
-    image_url: string | null;
-    total_units: number;
-    available_units: number;
-    unit_price_gbp: number | string;
-    unit_price_stable: number | string;
-    settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
-    issuer_jurisdiction: string | null;
-    market_move_pct_24h: number | string;
-    holders: number;
-    volume_24h_gbp: number | string;
-    is_open: boolean;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      SELECT
-        sa.id,
-        sa.listing_id,
-        sa.issuer_id,
-        sa.title,
-        sa.image_url,
-        sa.total_units,
-        sa.available_units,
-        sa.unit_price_gbp,
-        sa.unit_price_stable,
-        sa.settlement_mode,
-        sa.issuer_jurisdiction,
-        sa.market_move_pct_24h,
-        sa.holders,
-        sa.volume_24h_gbp,
-        sa.is_open,
-        sa.created_at,
-        sa.updated_at
-      FROM coOwn_assets sa
-      ${whereClause}
-      ORDER BY sa.volume_24h_gbp DESC, sa.created_at DESC
-      LIMIT ${limitPlaceholder}
-    `,
-    whereParams
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      listingId: row.listing_id,
-      issuerId: row.issuer_id,
-      title: row.title,
-      imageUrl: row.image_url,
-      totalUnits: row.total_units,
-      availableUnits: row.available_units,
-      unitPriceGbp: Number(row.unit_price_gbp),
-      unitPriceStable: Number(row.unit_price_stable),
-      settlementMode: row.settlement_mode,
-      issuerJurisdiction: row.issuer_jurisdiction,
-      marketMovePct24h: row.market_move_pct_24h == null ? null : Number(row.market_move_pct_24h),
-      holders: row.holders,
-      volume24hGbp: row.volume_24h_gbp == null ? null : Number(row.volume_24h_gbp),
-      isOpen: row.is_open,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
-  };
-});
-
-app.post('/co-own/assets', async (request, reply) => {
-  const bodySchema = z.object({
-    id: z.string().min(4).max(64).optional(),
-    listingId: z.string().min(2),
-    issuerId: z.string().min(2),
-    title: z.string().min(3).max(180).optional(),
-    imageUrl: z.string().url().optional(),
-    totalUnits: z.number().int().min(1).max(COOWN_POLICY.maxIssuanceUnits),
-    unitPriceGbp: z.number().positive(),
-    unitPriceStable: z.number().positive(),
-    settlementMode: z.literal('ONEZE'),
-    issuerJurisdiction: z.string().min(2).max(10).optional(),
-    // ── Trust profile (WS1) ──
-    // legal_vehicle_type is required for new issuance (equity-market pattern:
-    // no listing without a disclosed legal wrapper). 'none' is permitted for
-    // assets that genuinely have no wrapper, but it must be stated explicitly.
-    legalVehicleType: z.enum(['spv', 'llc', 'trust', 'series_llc', 'none']),
-    legalVehicleName: z.string().min(2).max(180).optional(),
-    legalVehicleJurisdiction: z.string().min(2).max(64).optional(),
-    custodianName: z.string().min(2).max(180).optional(),
-    custodianLocation: z.string().min(2).max(180).optional(),
-    custodyInsured: z.boolean().optional(),
-    custodyInsurer: z.string().min(2).max(180).optional(),
-    custodyPolicyRef: z.string().min(2).max(180).optional(),
-    custodyCoverageGbp: z.number().nonnegative().optional(),
-    authenticityStatus: z.enum(['unverified', 'pending', 'verified']).optional(),
-    authenticityMethod: z.string().min(2).max(180).optional(),
-    provenance: z.string().min(2).max(2000).optional(),
-    conditionGrade: z.string().min(1).max(64).optional(),
-    appraisalValueGbp: z.number().nonnegative().optional(),
-    appraisalValuedAt: z.string().datetime().optional(),
-    appraisalValuer: z.string().min(2).max(180).optional(),
-    buyerProtection: z.boolean().optional(),
-    buyerProtectionTermsUrl: z.string().url().optional(),
-  });
-
-  const payload = bodySchema.parse(request.body);
-
-  // Truthfulness invariant: if custody is insured, the insurer must be named.
-  if (payload.custodyInsured && !payload.custodyInsurer) {
-    reply.code(400);
-    return { ok: false, error: 'custodyInsured requires custodyInsurer', code: 'INSURER_REQUIRED' };
-  }
-  // If a legal vehicle other than 'none' is declared, a name is required.
-  if (payload.legalVehicleType !== 'none' && !payload.legalVehicleName) {
-    reply.code(400);
-    return { ok: false, error: 'legalVehicleName required for the chosen vehicle type', code: 'VEHICLE_NAME_REQUIRED' };
-  }
-
-  await ensureUserExists(payload.issuerId);
-
-  // ── WS2: KYC gate ──
-  // Issuers must have at least 'id' tier verification (KYC document) to
-  // fractionalize an asset. This prevents anonymous issuance.
-  const issuerVerification = await db.query<{ verification_tier: string | null }>(
-    'SELECT verification_tier FROM coown_issuer_verification_profile WHERE user_id = $1',
-    [payload.issuerId]
-  );
-  const tier = issuerVerification.rows[0]?.verification_tier ?? 'email';
-  if (tier !== 'id' && tier !== 'seller') {
-    reply.code(403);
-    return {
-      ok: false,
-      error: 'Identity verification (KYC) is required to issue Co-Own assets',
-      code: 'ISSUER_KYC_REQUIRED',
-      currentTier: tier,
-    };
-  }
-
-  const assetId = payload.id ?? `s_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-
-  // Transaction: lock the listing row, verify ownership, create co-own
-  // asset, and pause the listing atomically. This prevents a race
-  // condition where the listing could be sold via direct checkout
-  // between the ownership check and the pause.
-  const client = await db.connect();
-  let result: { rows: { id: string; listing_id: string; issuer_id: string; title: string; image_url: string | null; total_units: number; available_units: number; unit_price_gbp: number | string; unit_price_stable: number | string; settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE'; issuer_jurisdiction: string | null; market_move_pct_24h: number | string; holders: number; volume_24h_gbp: number | string; is_open: boolean; created_at: string; updated_at: string }[] };
-  try {
-    await client.query('BEGIN');
-
-    const listingResult = await client.query<{ id: string; title: string; image_url: string | null; status: string }>(
-      'SELECT id, title, image_url, status FROM listings WHERE id = $1 AND seller_id = $2 LIMIT 1 FOR UPDATE',
-      [payload.listingId, payload.issuerId]
-    );
-
-    const listing = listingResult.rows[0];
-    if (!listing) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Listing not found or not owned by issuer', code: 'LISTING_OWNERSHIP_DENIED' };
-    }
-
-    if (listing.status !== 'active') {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: 'Listing is not available for co-own (it may already be sold, paused, or fractionalized)', code: 'LISTING_NOT_COOWNABLE' };
-    }
-
-    const resolvedTitle = payload.title ?? `${listing.title} Fraction Pool`;
-    const resolvedImage = payload.imageUrl ?? listing.image_url;
-
-    result = await client.query<{
-      id: string;
-      listing_id: string;
-      issuer_id: string;
-      title: string;
-      image_url: string | null;
-      total_units: number;
-      available_units: number;
-      unit_price_gbp: number | string;
-      unit_price_stable: number | string;
-      settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
-      issuer_jurisdiction: string | null;
-      market_move_pct_24h: number | string;
-      holders: number;
-      volume_24h_gbp: number | string;
-      is_open: boolean;
-      created_at: string;
-      updated_at: string;
-    }>(
-      `
-        INSERT INTO coOwn_assets (
-          id,
-          listing_id,
-          issuer_id,
-          title,
-          image_url,
-          total_units,
-          available_units,
-          unit_price_gbp,
-          unit_price_stable,
-          settlement_mode,
-          issuer_jurisdiction,
-          market_move_pct_24h,
-          holders,
-          volume_24h_gbp,
-          is_open,
-          legal_vehicle_type,
-          legal_vehicle_name,
-          legal_vehicle_jurisdiction,
-          custodian_name,
-          custodian_location,
-          custody_insured,
-          custody_insurer,
-          custody_policy_ref,
-          custody_coverage_gbp,
-          authenticity_status,
-          authenticity_method,
-          provenance,
-          condition_grade,
-          appraisal_value_gbp,
-          appraisal_valued_at,
-          appraisal_valuer,
-          buyer_protection,
-          buyer_protection_terms_url
-        )
-        VALUES (
-          $1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, 0, 0, 0, TRUE,
-          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
-        )
-        RETURNING
-          id,
-          listing_id,
-          issuer_id,
-          title,
-          image_url,
-          total_units,
-          available_units,
-          unit_price_gbp,
-          unit_price_stable,
-          settlement_mode,
-          issuer_jurisdiction,
-          market_move_pct_24h,
-          holders,
-          volume_24h_gbp,
-          is_open,
-          created_at,
-          updated_at
-      `,
-      [
-        assetId,
-        payload.listingId,
-        payload.issuerId,
-        resolvedTitle,
-        resolvedImage,
-        payload.totalUnits,
-        roundTo(payload.unitPriceGbp, 4),
-        roundTo(payload.unitPriceStable, 4),
-        payload.settlementMode,
-        payload.issuerJurisdiction ?? null,
-        payload.legalVehicleType,
-        payload.legalVehicleName ?? null,
-        payload.legalVehicleJurisdiction ?? null,
-        payload.custodianName ?? null,
-        payload.custodianLocation ?? null,
-        payload.custodyInsured ?? false,
-        payload.custodyInsurer ?? null,
-        payload.custodyPolicyRef ?? null,
-        payload.custodyCoverageGbp != null ? roundTo(payload.custodyCoverageGbp, 2) : null,
-        payload.authenticityStatus ?? 'unverified',
-        payload.authenticityMethod ?? null,
-        payload.provenance ?? null,
-        payload.conditionGrade ?? null,
-        payload.appraisalValueGbp != null ? roundTo(payload.appraisalValueGbp, 2) : null,
-        payload.appraisalValuedAt ?? null,
-        payload.appraisalValuer ?? null,
-        payload.buyerProtection ?? false,
-        payload.buyerProtectionTermsUrl ?? null,
-      ]
-    );
-
-    // Pause the underlying listing so it is no longer available for direct
-    // purchase while the co-own asset is open for fractional trading. This
-    // prevents double-exposure where the same item is simultaneously buyable
-    // in the feed and available as a fractional asset.
-    await client.query(
-      `UPDATE listings
-       SET status = 'paused', updated_at = NOW()
-       WHERE id = $1 AND status = 'active'`,
-      [payload.listingId]
-    );
-
-    // Log the trust-profile creation to the append-only audit trail
-    // (SEC Rule 17Ad-7 pattern). Best-effort — must not fail the issuance
-    // if the audit row write fails.
-    try {
-      await client.query(
-        `INSERT INTO coown_asset_trust_events (asset_id, event_type, changed_by, new_payload)
-         VALUES ($1, 'trust_profile_created', $2, $3)`,
-        [
-          result.rows[0].id,
-          payload.issuerId,
-          JSON.stringify({
-            legalVehicleType: payload.legalVehicleType,
-            legalVehicleName: payload.legalVehicleName ?? null,
-            custodyInsured: payload.custodyInsured ?? false,
-            authenticityStatus: payload.authenticityStatus ?? 'unverified',
-            buyerProtection: payload.buyerProtection ?? false,
-          }),
-        ]
-      );
-    } catch (auditErr) {
-      app.log.warn({ err: auditErr, assetId: result.rows[0].id }, 'trust audit log write failed (non-fatal)');
-    }
-
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    app.log.error({ err }, 'POST /co-own/assets failed');
-    reply.code(500);
-    return { ok: false, error: 'Failed to create co-own asset' };
-  } finally {
-    client.release();
-  }
-
-  reply.code(201);
-  return {
-    ok: true,
-    asset: {
-      id: result.rows[0].id,
-      listingId: result.rows[0].listing_id,
-      issuerId: result.rows[0].issuer_id,
-      title: result.rows[0].title,
-      imageUrl: result.rows[0].image_url,
-      totalUnits: result.rows[0].total_units,
-      availableUnits: result.rows[0].available_units,
-      unitPriceGbp: Number(result.rows[0].unit_price_gbp),
-      unitPriceStable: Number(result.rows[0].unit_price_stable),
-      settlementMode: result.rows[0].settlement_mode,
-      issuerJurisdiction: result.rows[0].issuer_jurisdiction,
-      marketMovePct24h: result.rows[0].market_move_pct_24h == null ? null : Number(result.rows[0].market_move_pct_24h),
-      holders: result.rows[0].holders,
-      volume24hGbp: result.rows[0].volume_24h_gbp == null ? null : Number(result.rows[0].volume_24h_gbp),
-      isOpen: result.rows[0].is_open,
-      createdAt: result.rows[0].created_at,
-      updatedAt: result.rows[0].updated_at,
-    },
-  };
-});
-
-type CoOwnOrderStatus = 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
-type CoOwnOrderType = 'market' | 'limit';
-
-interface CoOwnHoldingRow {
-  user_id: string;
-  asset_id: string;
-  units_owned: number;
-  avg_entry_price_gbp: number | string;
-  realized_pnl_gbp: number | string;
-}
-
-async function getCoOwnHoldingForUpdate(
-  client: PoolClient,
-  userId: string,
-  assetId: string
-): Promise<CoOwnHoldingRow | null> {
-  const result = await client.query<CoOwnHoldingRow>(
-    `
-      SELECT
-        user_id,
-        asset_id,
-        units_owned,
-        avg_entry_price_gbp,
-        realized_pnl_gbp
-      FROM coOwn_holdings
-      WHERE user_id = $1
-        AND asset_id = $2
-      LIMIT 1
-      FOR UPDATE
-    `,
-    [userId, assetId]
-  );
-
-  return result.rows[0] ?? null;
-}
-
-async function saveCoOwnHolding(
-  client: PoolClient,
-  input: {
-    userId: string;
-    assetId: string;
-    unitsOwned: number;
-    avgEntryPriceGbp: number;
-    realizedPnlGbp: number;
-  }
-): Promise<void> {
-  await client.query(
-    `
-      INSERT INTO coOwn_holdings (
-        user_id,
-        asset_id,
-        units_owned,
-        avg_entry_price_gbp,
-        realized_pnl_gbp,
-        updated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, NOW())
-      ON CONFLICT (user_id, asset_id)
-      DO UPDATE
-        SET
-          units_owned = EXCLUDED.units_owned,
-          avg_entry_price_gbp = EXCLUDED.avg_entry_price_gbp,
-          realized_pnl_gbp = EXCLUDED.realized_pnl_gbp,
-          updated_at = NOW()
-    `,
-    [
-      input.userId,
-      input.assetId,
-      Math.max(0, Math.floor(input.unitsOwned)),
-      roundTo(Math.max(0, input.avgEntryPriceGbp), 4),
-      roundTo(input.realizedPnlGbp, 4),
-    ]
-  );
-}
-
-async function applyCoOwnTransfer(
-  client: PoolClient,
-  input: {
-    assetId: string;
-    buyerId: string;
-    sellerId: string;
-    units: number;
-    unitPriceGbp: number;
-    feeGbp: number;
-    sourceType: 'coOwn_trade' | 'buyout';
-    buyOrderId?: number | null;
-    sellOrderId?: number | null;
-    enforceSellerHolding: boolean;
-  }
-): Promise<{ notionalGbp: number; feeGbp: number }> {
-  const units = Math.max(0, Math.floor(input.units));
-  if (units <= 0) {
-    return {
-      notionalGbp: 0,
-      feeGbp: 0,
-    };
-  }
-
-  const buyerHolding = await getCoOwnHoldingForUpdate(client, input.buyerId, input.assetId);
-  const sellerHolding = await getCoOwnHoldingForUpdate(client, input.sellerId, input.assetId);
-
-  if (input.enforceSellerHolding) {
-    const sellerUnits = sellerHolding?.units_owned ?? 0;
-    if (sellerUnits < units) {
-      throw createApiError('CO_OWN_SELLER_UNITS_INSUFFICIENT', 'Seller does not have enough units', {
-        sellerId: input.sellerId,
-        availableUnits: sellerUnits,
-        requestedUnits: units,
-      });
-    }
-  }
-
-  const buyerUnitsBefore = buyerHolding?.units_owned ?? 0;
-  const buyerAvgBefore = Number(buyerHolding?.avg_entry_price_gbp ?? 0);
-  const buyerRealizedBefore = Number(buyerHolding?.realized_pnl_gbp ?? 0);
-  const buyerUnitsAfter = buyerUnitsBefore + units;
-  const buyerAvgAfter =
-    buyerUnitsAfter > 0
-      ? (buyerAvgBefore * buyerUnitsBefore + input.unitPriceGbp * units) / buyerUnitsAfter
-      : input.unitPriceGbp;
-
-  await saveCoOwnHolding(client, {
-    userId: input.buyerId,
-    assetId: input.assetId,
-    unitsOwned: buyerUnitsAfter,
-    avgEntryPriceGbp: buyerAvgAfter,
-    realizedPnlGbp: buyerRealizedBefore,
-  });
-
-  if (input.enforceSellerHolding) {
-    const sellerUnitsBefore = sellerHolding?.units_owned ?? 0;
-    const sellerAvgBefore = Number(sellerHolding?.avg_entry_price_gbp ?? 0);
-    const sellerRealizedBefore = Number(sellerHolding?.realized_pnl_gbp ?? 0);
-    const sellerUnitsAfter = sellerUnitsBefore - units;
-    const realizedDelta = (input.unitPriceGbp - sellerAvgBefore) * units;
-
-    await saveCoOwnHolding(client, {
-      userId: input.sellerId,
-      assetId: input.assetId,
-      unitsOwned: sellerUnitsAfter,
-      avgEntryPriceGbp: sellerUnitsAfter > 0 ? sellerAvgBefore : 0,
-      realizedPnlGbp: sellerRealizedBefore + realizedDelta,
-    });
-  }
-
-  const notionalGbp = roundTo(units * input.unitPriceGbp, 4);
-
-  await client.query(
-    `
-      INSERT INTO coOwn_trades (
-        asset_id,
-        buy_order_id,
-        sell_order_id,
-        buyer_id,
-        seller_id,
-        units,
-        unit_price_gbp,
-        notional_gbp,
-        fee_gbp,
-        settlement_status,
-        settled_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'settled', NOW())
-    `,
-    [
-      input.assetId,
-      input.buyOrderId ?? null,
-      input.sellOrderId ?? null,
-      input.buyerId,
-      input.sellerId,
-      units,
-      input.unitPriceGbp,
-      notionalGbp,
-      input.feeGbp,
-    ]
-  );
-
-  // ── Atomic DvP settlement (1ZE payment side) ──
-  // Delivery (units, above) and payment (1ZE, below) happen in the same
-  // transaction. If either fails, the whole trade rolls back.
-  // 1ZE amounts are in minor units. 1 1ZE = 1000 minor units.
-  // Conversion: 1ZE ≈ 1 GBP (canonical rate per spec 10 §2).
-  const buyerPays1zeUnits = Math.ceil(roundTo(notionalGbp + input.feeGbp, 4) * 1000);
-  const sellerReceives1zeUnits = Math.floor(roundTo(Math.max(0, notionalGbp - input.feeGbp), 4) * 1000);
-
-  if (buyerPays1zeUnits > 0) {
-    // Debit buyer's wallet
-    const buyerWalletResult = await client.query<{ id: string; oneze_balance_units: string }>(
-      `SELECT id, oneze_balance_units::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
-      [input.buyerId]
-    );
-    const buyerWallet = buyerWalletResult.rows[0];
-    if (!buyerWallet) {
-      throw createApiError('WALLET_NOT_FOUND', 'Buyer wallet not found', { buyerId: input.buyerId });
-    }
-    const buyerBalanceUnits = Number(buyerWallet.oneze_balance_units);
-    const otherBuyReservationsResult = await client.query<{ total: string }>(
-      `
-        SELECT COALESCE(SUM(reserved_1ze_units), 0)::text AS total
-        FROM coown_order_reservations
-        WHERE user_id = $1
-          AND status IN ('active', 'placed')
-          AND ($2::bigint IS NULL OR placed_order_id IS DISTINCT FROM $2)
-      `,
-      [input.buyerId, input.buyOrderId ?? null]
-    );
-    const protectedForOtherOrdersUnits = Number(otherBuyReservationsResult.rows[0]?.total ?? 0);
-    const buyerAvailableUnits = buyerBalanceUnits - protectedForOtherOrdersUnits;
-    if (buyerAvailableUnits < buyerPays1zeUnits) {
-      throw createApiError(
-        'INSUFFICIENT_1ZE_BALANCE',
-        'Buyer has insufficient 1ZE balance for settlement',
-        {
-          buyerId: input.buyerId,
-          required1zeUnits: buyerPays1zeUnits,
-          available1zeUnits: buyerAvailableUnits,
-        }
-      );
-    }
-
-    const buyerBalanceAfter = buyerBalanceUnits - buyerPays1zeUnits;
-    const tradeTxId = `coown_trade_${input.buyOrderId ?? 'x'}_${input.sellOrderId ?? 'x'}_${Date.now()}`;
-
-    await client.query(
-      `UPDATE wallets SET oneze_balance_units = $2, version = version + 1, updated_at = NOW() WHERE id = $1`,
-      [buyerWallet.id, buyerBalanceAfter]
-    );
-
-    await client.query(
-      `
-        INSERT INTO wallet_ledger (wallet_id, tx_id, asset, amount, balance_after, kind, ref_type, ref_id, metadata)
-        VALUES ($1, $2, '1ZE', $3, $4, 'CO_OWN_TRADE', 'coOwn_trade', $5, $6::jsonb)
-      `,
-      [
-        buyerWallet.id,
-        tradeTxId,
-        -buyerPays1zeUnits,
-        buyerBalanceAfter,
-        String(input.buyOrderId ?? ''),
-        JSON.stringify({ assetId: input.assetId, units, side: 'buy', notionalGbp, feeGbp: input.feeGbp }),
-      ]
-    );
-
-    // Credit the seller or issuing vehicle. Primary issuance must never debit
-    // the buyer without a corresponding vehicle-side settlement credit.
-    if (sellerReceives1zeUnits > 0) {
-      const sellerWalletResult = await client.query<{ id: string; oneze_balance_units: string }>(
-        `SELECT id, oneze_balance_units::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
-        [input.sellerId]
-      );
-      const sellerWallet = sellerWalletResult.rows[0];
-      if (!sellerWallet) {
-        throw createApiError('WALLET_NOT_FOUND', 'Seller or issuing vehicle wallet not found', {
-          sellerId: input.sellerId,
-        });
-      }
-      const sellerBalanceAfter = Number(sellerWallet.oneze_balance_units) + sellerReceives1zeUnits;
-      await client.query(
-        `UPDATE wallets SET oneze_balance_units = $2, version = version + 1, updated_at = NOW() WHERE id = $1`,
-        [sellerWallet.id, sellerBalanceAfter]
-      );
-
-      await client.query(
-        `
-          INSERT INTO wallet_ledger (wallet_id, tx_id, asset, amount, balance_after, kind, ref_type, ref_id, metadata)
-          VALUES ($1, $2, '1ZE', $3, $4, 'CO_OWN_TRADE', 'coOwn_trade', $5, $6::jsonb)
-        `,
-        [
-          sellerWallet.id,
-          tradeTxId,
-          sellerReceives1zeUnits,
-          sellerBalanceAfter,
-          String(input.sellOrderId ?? ''),
-          JSON.stringify({ assetId: input.assetId, units, side: 'sell', notionalGbp, feeGbp: input.feeGbp }),
-        ]
-      );
-    }
-  }
-
-  if (input.feeGbp > 0 && await ledgerTablesAvailable(client)) {
-    const platformRevenueAccountId = await ensureLedgerAccount(
-      client,
-      'platform',
-      'platform',
-      'platform_revenue'
-    );
-    const buyerSpendAccountId = await ensureLedgerAccount(
-      client,
-      'user',
-      input.buyerId,
-      'buyer_spend'
-    );
-    const sellerFeeAccountId = await ensureLedgerAccount(
-      client,
-      'user',
-      input.sellerId,
-      'seller_payable'
-    );
-    
-    await appendLedgerEntry(client, {
-      accountId: buyerSpendAccountId,
-      counterpartyAccountId: platformRevenueAccountId,
-      direction: 'debit',
-      amountGbp: input.feeGbp,
-      sourceType: 'coOwn_trade',
-      sourceId: input.buyOrderId ? `buy_${input.buyOrderId}` : `trade_${input.assetId}`,
-      lineType: 'coOwn_trade_fee_credit',
-    });
-
-    await appendLedgerEntry(client, {
-      accountId: sellerFeeAccountId,
-      counterpartyAccountId: platformRevenueAccountId,
-      direction: 'debit',
-      amountGbp: input.feeGbp,
-      sourceType: 'coOwn_trade',
-      sourceId: input.sellOrderId ? `sell_${input.sellOrderId}` : `issuance_${input.assetId}`,
-      lineType: 'coOwn_trade_seller_fee_debit',
-    });
-
-    await appendLedgerEntry(client, {
-      accountId: platformRevenueAccountId,
-      counterpartyAccountId: sellerFeeAccountId,
-      direction: 'credit',
-      amountGbp: input.feeGbp,
-      sourceType: 'coOwn_trade',
-      sourceId: input.sellOrderId ? `sell_${input.sellOrderId}` : `issuance_${input.assetId}`,
-      lineType: 'coOwn_trade_seller_fee_credit',
-    });
-    
-    await appendLedgerEntry(client, {
-      accountId: platformRevenueAccountId,
-      counterpartyAccountId: buyerSpendAccountId,
-      direction: 'credit',
-      amountGbp: input.feeGbp,
-      sourceType: 'coOwn_trade',
-      sourceId: input.buyOrderId ? `buy_${input.buyOrderId}` : `trade_${input.assetId}`,
-      lineType: 'coOwn_trade_fee_credit',
-    });
-  }
-
-  // ── Track total traded value for recourse liability ──
-  // Each trade increases the total traded value, which is used to
-  // calculate the seller's debt if recourse is triggered.
-  await client.query(
-    `UPDATE coOwn_assets
-     SET total_traded_value_gbp = total_traded_value_gbp + $2,
-         updated_at = NOW()
-     WHERE id = $1`,
-    [input.assetId, notionalGbp]
-  );
-
-  return {
-    notionalGbp,
-    feeGbp: input.feeGbp,
-  };
-}
-
-async function recalcCoOwnHolders(client: PoolClient, assetId: string): Promise<number> {
-  const result = await client.query<{ count: string }>(
-    `
-      SELECT COUNT(*)::text AS count
-      FROM coOwn_holdings
-      WHERE asset_id = $1
-        AND units_owned > 0
-    `,
-    [assetId]
-  );
-
-  return Number(result.rows[0]?.count ?? '0');
-}
-
-// ── Settlement status ──
-// Returns the settlement state of a user's trades. With atomic DvP, all
-// trades are settled at execution time, but this endpoint provides a
-// queryable surface for the frontend and future async settlement flows.
-
-app.get('/co-own/settlements', async (request, reply) => {
-  const querySchema = z.object({
-    userId: z.string().min(2),
-    status: z.enum(['pending', 'settled', 'failed', 'reversed']).optional(),
-    limit: z.coerce.number().int().min(1).max(100).default(50),
-    cursor: z.string().optional(),
-  });
-
-  const query = querySchema.parse(request.query);
-  const cursorDate = query.cursor ? new Date(query.cursor) : new Date(0);
-
-  const result = await db.query<{
-    id: string;
-    asset_id: string;
-    buyer_id: string;
-    seller_id: string;
-    units: number;
-    unit_price_gbp: string;
-    notional_gbp: string;
-    fee_gbp: string;
-    settlement_status: string;
-    settled_at: string | null;
-    created_at: string;
-  }>(
-    `
-      SELECT
-        id, asset_id, buyer_id, seller_id, units,
-        unit_price_gbp::text, notional_gbp::text, fee_gbp::text,
-        settlement_status, settled_at, created_at
-      FROM coOwn_trades
-      WHERE (buyer_id = $1 OR seller_id = $1)
-        AND ($2::text IS NULL OR settlement_status = $2)
-        AND created_at < $3
-      ORDER BY created_at DESC
-      LIMIT $4
-    `,
-    [query.userId, query.status ?? null, cursorDate, query.limit]
-  );
-
-  reply.code(200);
-  return {
-    ok: true,
-    settlements: result.rows.map((row) => ({
-      id: String(row.id),
-      assetId: row.asset_id,
-      buyerId: row.buyer_id,
-      sellerId: row.seller_id,
-      units: row.units,
-      unitPriceGbp: Number(row.unit_price_gbp),
-      notionalGbp: Number(row.notional_gbp),
-      feeGbp: Number(row.fee_gbp),
-      settlementStatus: row.settlement_status as 'pending' | 'settled' | 'failed' | 'reversed',
-      settledAt: row.settled_at,
-      createdAt: row.created_at,
-      role: row.buyer_id === query.userId ? 'buyer' : 'seller',
-    })),
-    nextCursor: result.rows.length === query.limit
-      ? result.rows[result.rows.length - 1].created_at
-      : null,
-  };
-});
-
-app.get('/co-own/assets/:assetId/orders', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const querySchema = z.object({
-    status: z.enum(['open', 'partially_filled', 'filled', 'cancelled', 'rejected']).optional(),
-    limit: z.coerce.number().int().min(1).max(200).default(60),
-  });
-
-  const { assetId } = paramsSchema.parse(request.params);
-  const { status, limit } = querySchema.parse(request.query);
-
-  const assetExists = await db.query('SELECT id FROM coOwn_assets WHERE id = $1 LIMIT 1', [assetId]);
-  if (!assetExists.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Co-Own asset not found' };
-  }
-
-  const result = await db.query<{
-    id: number;
-    asset_id: string;
-    user_id: string;
-    side: 'buy' | 'sell';
-    order_type: CoOwnOrderType;
-    limit_price_gbp: number | string | null;
-    units: number;
-    remaining_units: number;
-    filled_units: number;
-    unit_price_gbp: number | string;
-    fee_gbp: number | string;
-    total_gbp: number | string;
-    status: CoOwnOrderStatus;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      SELECT
-        id,
-        asset_id,
-        user_id,
-        side,
-        order_type,
-        limit_price_gbp,
-        units,
-        remaining_units,
-        filled_units,
-        unit_price_gbp,
-        fee_gbp,
-        total_gbp,
-        status,
-        created_at,
-        updated_at
-      FROM coOwn_orders
-      WHERE asset_id = $1
-        AND ($2::text IS NULL OR status = $2)
-      ORDER BY created_at DESC
-      LIMIT $3
-    `,
-    [assetId, status ?? null, limit]
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      assetId: row.asset_id,
-      userId: row.user_id,
-      side: row.side,
-      orderType: row.order_type,
-      limitPriceGbp: row.limit_price_gbp === null ? null : Number(row.limit_price_gbp),
-      units: row.units,
-      remainingUnits: row.remaining_units,
-      filledUnits: row.filled_units,
-      unitPriceGbp: Number(row.unit_price_gbp),
-      feeGbp: Number(row.fee_gbp),
-      totalGbp: Number(row.total_gbp),
-      status: row.status,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
-  };
-});
-
-app.get('/co-own/assets/:assetId/orderbook', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(200).default(40),
-    // R06: Per-side depth limits. Each side can be limited independently
-    // so clients can request asymmetric depth (e.g., more bid levels
-    // than ask levels for a buy-focused view).
-    bidLimit: z.coerce.number().int().min(1).max(200).optional(),
-    askLimit: z.coerce.number().int().min(1).max(200).optional(),
-  });
-
-  const { assetId } = paramsSchema.parse(request.params);
-  const { limit, bidLimit, askLimit } = querySchema.parse(request.query);
-
-  const assetExists = await db.query('SELECT id FROM coOwn_assets WHERE id = $1 LIMIT 1', [assetId]);
-  if (!assetExists.rowCount) {
-    reply.code(404);
-    return { ok: false, error: 'Co-Own asset not found' };
-  }
-
-  // R05: Atomic book snapshot — read the book and sequence in a single
-  // READ COMMITTED transaction with a single timestamp, so the
-  // snapshotSequence and the book rows are consistent. The client can
-  // compare the sequence across polls to detect concurrent mutations.
-  const client = await db.connect();
-  let result: { rows: { side: 'buy' | 'sell'; unit_price_gbp: string; units: string; order_count: string }[] };
-  let sequencing: { snapshot_sequence: string; event_sequence: string; last_execution_timestamp: string | null } | undefined;
-  try {
-    await client.query('BEGIN');
-    // R06: Per-side depth limits via separate queries with independent
-    // LIMIT clauses, so bid and ask depth can be controlled independently.
-    const bidRows = await client.query<{
-      side: 'buy' | 'sell';
-      unit_price_gbp: string;
-      units: string;
-      order_count: string;
-    }>(
-      `
-        SELECT
-          side,
-          unit_price_gbp::text,
-          SUM(remaining_units)::text AS units,
-          COUNT(*)::text AS order_count
-        FROM coOwn_orders
-        WHERE asset_id = $1
-          AND side = 'buy'
-          AND status IN ('open', 'partially_filled')
-          AND remaining_units > 0
-        GROUP BY side, unit_price_gbp
-        ORDER BY unit_price_gbp DESC, side ASC
-        LIMIT $2
-      `,
-      [assetId, bidLimit ?? limit]
-    );
-
-    const askRows = await client.query<{
-      side: 'buy' | 'sell';
-      unit_price_gbp: string;
-      units: string;
-      order_count: string;
-    }>(
-      `
-        SELECT
-          side,
-          unit_price_gbp::text,
-          SUM(remaining_units)::text AS units,
-          COUNT(*)::text AS order_count
-        FROM coOwn_orders
-        WHERE asset_id = $1
-          AND side = 'sell'
-          AND status IN ('open', 'partially_filled')
-          AND remaining_units > 0
-        GROUP BY side, unit_price_gbp
-        ORDER BY unit_price_gbp ASC, side ASC
-        LIMIT $2
-      `,
-      [assetId, askLimit ?? limit]
-    );
-
-    const sequencingResult = await client.query<{
-      snapshot_sequence: string;
-      event_sequence: string;
-      last_execution_timestamp: string | null;
-    }>(
-      `
-        SELECT
-          -- P0.3: Use the per-asset market_sequence instead of MAX(order.id).
-          -- MAX(order.id) does not advance on cancel, partial fill, or expiry,
-          -- so clients cannot detect book mutations that don't create new rows.
-          -- The market_sequence advances on EVERY book mutation.
-          COALESCE(
-            (SELECT next_sequence - 1 FROM coown_market_sequences WHERE asset_id = $1),
-            0
-          )::text AS snapshot_sequence,
-          COALESCE(
-            (SELECT MAX(market_sequence) FROM coOwn_trades WHERE asset_id = $1),
-            0
-          )::text AS event_sequence,
-          (SELECT MAX(created_at)::text FROM coOwn_trades WHERE asset_id = $1) AS last_execution_timestamp
-      `,
-      [assetId]
-    );
-    await client.query('COMMIT');
-
-    result = { rows: [...bidRows.rows, ...askRows.rows] };
-    sequencing = sequencingResult.rows[0];
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-  const haltState = await getOnezeMintBurnHaltState();
-
-  return {
-    ok: true,
-    snapshotSequence: Number(sequencing?.snapshot_sequence ?? 0),
-    // P0.8: exact decimal string — sequences can exceed 2^53.
-    snapshotSequenceStr: String(sequencing?.snapshot_sequence ?? 0),
-    eventSequence: Number(sequencing?.event_sequence ?? 0),
-    // P0.8: exact decimal string — sequences can exceed 2^53.
-    eventSequenceStr: String(sequencing?.event_sequence ?? 0),
-    serverTimestamp: new Date().toISOString(),
-    lastExecutionTimestamp: sequencing?.last_execution_timestamp ?? null,
-    stalenessThresholdSeconds: 15,
-    reconciliationState: haltState.halted ? 'reconciling' : 'reconciled',
-    bids: result.rows
-      .filter((row) => row.side === 'buy')
-      .map((row) => ({
-        side: row.side,
-        unitPriceGbp: Number(row.unit_price_gbp),
-        // P0.8: exact decimal string from the DB NUMERIC value.
-        unitPriceGbpStr: formatGbp(row.unit_price_gbp),
-        units: Number(row.units),
-        orderCount: Number(row.order_count),
-      })),
-    asks: result.rows
-      .filter((row) => row.side === 'sell')
-      .map((row) => ({
-        side: row.side,
-        unitPriceGbp: Number(row.unit_price_gbp),
-        // P0.8: exact decimal string from the DB NUMERIC value.
-        unitPriceGbpStr: formatGbp(row.unit_price_gbp),
-        units: Number(row.units),
-        orderCount: Number(row.order_count),
-      })),
-    // R06: Echo the per-side depth limits applied so the client knows
-    // whether the response is complete or truncated.
-    depthLimits: {
-      bid: bidLimit ?? limit,
-      ask: askLimit ?? limit,
-    },
-  };
-});
-
-app.get('/co-own/assets/:assetId/executions', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(500).default(200),
-  });
-  const { assetId } = paramsSchema.parse(request.params);
-  const { limit } = querySchema.parse(request.query);
-
-  const result = await db.query<{
-    id: number;
-    units: number;
-    unit_price_gbp: string;
-    notional_gbp: string;
-    created_at: string;
-    settlement_status: string;
-    failure_reason: string | null;
-    recovery_action: string | null;
-  }>(
-    `
-      SELECT id, units, unit_price_gbp::text, notional_gbp::text, created_at,
-             settlement_status, failure_reason, recovery_action
-      FROM coOwn_trades
-      WHERE asset_id = $1 AND settlement_status IN ('settled', 'failed', 'reversed')
-      ORDER BY created_at DESC, id DESC
-      LIMIT $2
-    `,
-    [assetId, limit]
-  );
-
-  return {
-    ok: true,
-    serverTimestamp: new Date().toISOString(),
-    items: result.rows.map((row) => ({
-      id: row.id,
-      assetId,
-      units: row.units,
-      unitPriceGbp: Number(row.unit_price_gbp),
-      notionalGbp: Number(row.notional_gbp),
-      executedAt: row.created_at,
-      settlementStatus: row.settlement_status,
-      failureReason: row.failure_reason,
-      recoveryAction: row.recovery_action,
-    })),
-  };
-});
-
-app.get('/co-own/assets/:assetId/holdings', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(200).default(100),
-  });
-
-  const { assetId } = paramsSchema.parse(request.params);
-  const { limit } = querySchema.parse(request.query);
-
-  // T05: Privacy — this public endpoint must not expose per-user
-  // identifiers, entry prices, or realised P&L. Only aggregate holdings
-  // data (holder count, total units held) is returned. Per-user detail
-  // is available only via the authenticated /users/:userId/co-own/holdings
-  // endpoint.
-  const result = await db.query<{
-    total_holders: number;
-    total_units_held: number;
-  }>(
-    `
-      SELECT
-        COUNT(*)::integer AS total_holders,
-        COALESCE(SUM(units_owned), 0)::integer AS total_units_held
-      FROM coOwn_holdings
-      WHERE asset_id = $1
-    `,
-    [assetId]
-  );
-
-  return {
-    ok: true,
-    aggregate: {
-      totalHolders: result.rows[0]?.total_holders ?? 0,
-      totalUnitsHeld: result.rows[0]?.total_units_held ?? 0,
-    },
-  };
-});
-
-// ── Order preview (authoritative server-side) ──
-// Returns an authoritative preview of what an order would look like if
-// placed now: estimated fill price, depth, slippage, fees, reservation,
-// and eligibility. This replaces the client-side generateSimulatedBook().
-// The preview is non-binding — the actual order may differ if the order
-// book changes between preview and placement.
-
-app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const bodySchema = z.object({
-    userId: z.string().min(2),
-    side: z.enum(['buy', 'sell']),
-    units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
-    orderType: z.enum(['market', 'limit', 'protected_market']).default('market'),
-    limitPriceGbp: z.number().positive().optional(),
-    // P0.1: protected_market uses maxPriceGbp (buy) or minPriceGbp (sell) as
-    // the protection cap — never limitPriceGbp, which is for resting limits.
-    maxPriceGbp: z.number().positive().optional(),
-    minPriceGbp: z.number().positive().optional(),
-  }).superRefine((value, ctx) => {
-    if (value.orderType === 'limit' && !value.limitPriceGbp) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'limitPriceGbp is required for limit orders',
-        path: ['limitPriceGbp'],
-      });
-    }
-    if (value.orderType === 'protected_market') {
-      if (value.side === 'buy' && !value.maxPriceGbp) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'maxPriceGbp is required for protected_market buy orders',
-          path: ['maxPriceGbp'],
-        });
-      }
-      if (value.side === 'sell' && !value.minPriceGbp) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'minPriceGbp is required for protected_market sell orders',
-          path: ['minPriceGbp'],
-        });
-      }
-    }
-  });
-
-  const { assetId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body);
-
-  const assetResult = await db.query<{
-    id: string;
-    unit_price_gbp: number | string;
-    unit_price_stable: number | string;
-    available_units: number;
-    total_units: number;
-    is_open: boolean;
-  }>(
-    `
-      SELECT id, unit_price_gbp, unit_price_stable, available_units, total_units, is_open
-      FROM coOwn_assets
-      WHERE id = $1
-    `,
-    [assetId]
-  );
-
-  const asset = assetResult.rows[0];
-  if (!asset) {
-    reply.code(404);
-    return { ok: false, error: 'Co-Own asset not found' };
-  }
-
-  if (!asset.is_open) {
-    reply.code(409);
-    return { ok: false, error: 'Co-Own asset is closed for trading' };
-  }
-
-  const referencePriceGbp = Number(asset.unit_price_gbp);
-  // P0.1: protected_market uses the protection cap price (maxPriceGbp for
-  // buys, minPriceGbp for sells) as the worst acceptable price. The order
-  // walks the book like a market order but will not fill beyond this cap.
-  // If the cap cannot be honored, the remainder is cancelled (never uncapped).
-  const protectionCapGbp =
-    payload.orderType === 'protected_market'
-      ? payload.side === 'buy'
-        ? (payload.maxPriceGbp ?? null)
-        : (payload.minPriceGbp ?? null)
-      : null;
-  const orderPriceGbp =
-    payload.orderType === 'limit'
-      ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
-      : payload.orderType === 'protected_market' && protectionCapGbp
-        ? roundTo(protectionCapGbp, 4)
-        : referencePriceGbp;
-
-  // Query the real order book for the opposite side.
-  // For protected_market, the cap filters which resting orders are eligible:
-  //   buy  → only asks ≤ maxPriceGbp
-  //   sell → only bids ≥ minPriceGbp
-  const oppositeSide = payload.side === 'buy' ? 'sell' : 'buy';
-  const priceFilter =
-    payload.orderType === 'limit'
-      ? (payload.limitPriceGbp ?? null)
-      : protectionCapGbp;
-  const restingOrders = await db.query<{
-    units: number;
-    remaining_units: number;
-    unit_price_gbp: string;
-  }>(
-    `
-      SELECT units, remaining_units, unit_price_gbp::text
-      FROM coOwn_orders
-      WHERE asset_id = $1
-        AND side = $2
-        AND status IN ('open', 'partially_filled')
-        AND (
-          $3::numeric IS NULL
-          OR ($4 = 'buy' AND unit_price_gbp <= $3)
-          OR ($4 = 'sell' AND unit_price_gbp >= $3)
-        )
-      ORDER BY
-        CASE WHEN $4 = 'buy' THEN unit_price_gbp END ASC,
-        CASE WHEN $4 = 'sell' THEN unit_price_gbp END DESC,
-        id ASC
-    `,
-    [assetId, oppositeSide, priceFilter, payload.side]
-  );
-
-  // Walk the book to estimate fill
-  let remainingUnits = payload.units;
-  let filledUnits = 0;
-  let grossNotional = 0;
-  let worstPrice = 0;
-  let avgFillPrice = 0;
-  let slippageBeyondDepth = false;
-
-  for (const resting of restingOrders.rows) {
-    if (remainingUnits <= 0) break;
-    const restingRemaining = resting.remaining_units;
-    if (restingRemaining <= 0) continue;
-
-    const fillUnits = Math.min(remainingUnits, restingRemaining);
-    const tradePrice = Number(resting.unit_price_gbp);
-    grossNotional = roundTo(grossNotional + fillUnits * tradePrice, 4);
-    worstPrice = tradePrice;
-    remainingUnits -= fillUnits;
-    filledUnits += fillUnits;
-  }
-
-  // For buy market/protected_market orders, also check primary issuance
-  // (issuer inventory). For protected_market, the cap must be ≥ reference
-  // price for primary issuance to be eligible.
-  if (
-    payload.side === 'buy'
-    && remainingUnits > 0
-    && asset.available_units > 0
-    && (payload.orderType === 'market'
-      || (payload.orderType === 'protected_market' && (protectionCapGbp ?? 0) >= referencePriceGbp)
-      || (payload.orderType === 'limit' && (payload.limitPriceGbp ?? 0) >= referencePriceGbp))
-  ) {
-    const primaryFillUnits = Math.min(remainingUnits, asset.available_units);
-    grossNotional = roundTo(grossNotional + primaryFillUnits * referencePriceGbp, 4);
-    if (worstPrice === 0) worstPrice = referencePriceGbp;
-    remainingUnits -= primaryFillUnits;
-    filledUnits += primaryFillUnits;
-  }
-
-  if (filledUnits > 0) {
-    avgFillPrice = roundTo(grossNotional / filledUnits, 4);
-  }
-  if (remainingUnits > 0) {
-    slippageBeyondDepth = true;
-  }
-
-  const fee = roundTo(grossNotional * CO_OWN_TRADE_FEE_RATE, 4);
-  const total =
-    payload.side === 'buy'
-      ? roundTo(grossNotional + fee, 4)
-      : roundTo(Math.max(0, grossNotional - fee), 4);
-
-  // Eligibility check (non-blocking — just informational in preview)
-  const eligibility = await evaluateMarketEligibility(db, {
-    userId: payload.userId,
-    market: 'co-own',
-    orderNotionalGbp: grossNotional,
-  });
-
-  reply.code(200);
-  return {
-    ok: true,
-    preview: {
-      assetId,
-      side: payload.side,
-      units: payload.units,
-      orderType: payload.orderType,
-      limitPriceGbp: payload.limitPriceGbp ?? null,
-      // P0.1: return the protection cap for protected_market orders
-      protectionPriceGbp: protectionCapGbp ?? null,
-      // P0.8: exact decimal string variants of the monetary fields above.
-      protectionPriceGbpStr: protectionCapGbp != null ? formatGbp(protectionCapGbp) : null,
-      referencePriceGbp,
-      referencePriceGbpStr: formatGbp(referencePriceGbp),
-      orderPriceGbp,
-      orderPriceGbpStr: formatGbp(orderPriceGbp),
-      estimatedFill: {
-        filledUnits,
-        remainingUnits: Math.max(0, remainingUnits),
-        avgFillPrice,
-        // P0.8: exact decimal string variants of the estimated fill fields.
-        avgFillPriceStr: formatGbp(avgFillPrice),
-        worstPrice,
-        worstPriceStr: formatGbp(worstPrice),
-        grossNotional,
-        grossNotionalStr: formatGbp(grossNotional),
-        slippageBeyondDepth,
-      },
-      fee,
-      feeStr: formatGbp(fee),
-      total,
-      totalStr: formatGbp(total),
-      feeRate: CO_OWN_TRADE_FEE_RATE,
-      availableUnits: asset.available_units,
-      totalUnits: asset.total_units,
-      eligibility: {
-        allowed: eligibility.allowed,
-        code: eligibility.code ?? null,
-        message: eligibility.message,
-      },
-      // Non-binding disclaimer
-      binding: false,
-      validUntil: new Date(Date.now() + 15_000).toISOString(), // 15s preview window
-    },
-  };
-});
-
-// ── Order reservation ──
-// Reserves funds (for buys) or units (for sells) for a pending order.
-// The reservation holds the funds so a concurrent order cannot overspend.
-// Reservations expire after 60s and are released on order placement,
-// cancellation, or expiry.
-
-const CO_OWN_RESERVATION_TTL_MS = 60_000; // 60 seconds
-
-app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const bodySchema = z.object({
-    userId: z.string().min(2),
-    side: z.enum(['buy', 'sell']),
-    units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
-    orderType: z.enum(['market', 'limit', 'protected_market']).default('market'),
-    limitPriceGbp: z.number().positive().optional(),
-    // P0.1: protected_market protection cap
-    maxPriceGbp: z.number().positive().optional(),
-    minPriceGbp: z.number().positive().optional(),
-    idempotencyKey: z.string().min(8).max(140).optional(),
-  }).superRefine((value, ctx) => {
-    if (value.orderType === 'protected_market') {
-      if (value.side === 'buy' && !value.maxPriceGbp) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'maxPriceGbp is required for protected_market buy orders',
-          path: ['maxPriceGbp'],
-        });
-      }
-      if (value.side === 'sell' && !value.minPriceGbp) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'minPriceGbp is required for protected_market sell orders',
-          path: ['minPriceGbp'],
-        });
-      }
-    }
-  });
-
-  const { assetId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body);
-  await ensureUserExists(payload.userId);
-
-  // P0.6: Reservation idempotency — if a key is supplied, check for a prior
-  // response. A replayed request with the same key + same payload returns the
-  // original reservation. A replayed request with the same key but different
-  // payload is rejected as a key-reuse conflict.
-  const reservationIdempotencyHash = payload.idempotencyKey
-    ? hashCoOwnReservationPayload({
-        side: payload.side,
-        units: payload.units,
-        orderType: payload.orderType,
-        limitPriceGbp: payload.limitPriceGbp ?? null,
-        maxPriceGbp: payload.maxPriceGbp ?? null,
-        minPriceGbp: payload.minPriceGbp ?? null,
-      })
-    : null;
-
-  if (payload.idempotencyKey && reservationIdempotencyHash) {
-    const idempotentResponse = await getCoOwnReservationIdempotentResponse(db, {
-      assetId,
-      userId: payload.userId,
-      idempotencyKey: payload.idempotencyKey,
-      requestHash: reservationIdempotencyHash,
-    });
-    if (idempotentResponse) {
-      reply.code(200);
-      return idempotentResponse;
-    }
-  }
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Expire any prior active reservations for this user+asset
-    await client.query(
-      `
-        UPDATE coown_order_reservations
-        SET status = 'expired', updated_at = NOW()
-        WHERE user_id = $1 AND asset_id = $2 AND status = 'active'
-      `,
-      [payload.userId, assetId]
-    );
-
-    // Lock the asset row
-    const assetResult = await client.query<{
-      id: string;
-      unit_price_gbp: number | string;
-      available_units: number;
-      is_open: boolean;
-    }>(
-      `SELECT id, unit_price_gbp, available_units, is_open FROM coOwn_assets WHERE id = $1 FOR UPDATE`,
-      [assetId]
-    );
-    const asset = assetResult.rows[0];
-    if (!asset) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Co-Own asset not found' };
-    }
-    if (!asset.is_open) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: 'Co-Own asset is closed for trading' };
-    }
-
-    const referencePriceGbp = Number(asset.unit_price_gbp);
-    // P0.1: protected_market uses the protection cap as the worst-case price
-    // for reservation purposes. We reserve enough to cover the cap × units + fee.
-    const protectionCapGbp =
-      payload.orderType === 'protected_market'
-        ? payload.side === 'buy'
-          ? (payload.maxPriceGbp ?? null)
-          : (payload.minPriceGbp ?? null)
-        : null;
-    const orderPriceGbp =
-      payload.orderType === 'limit'
-        ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
-        : payload.orderType === 'protected_market' && protectionCapGbp
-          ? roundTo(protectionCapGbp, 4)
-          : referencePriceGbp;
-    const grossNotional = roundTo(payload.units * orderPriceGbp, 4);
-    const fee = roundTo(grossNotional * CO_OWN_TRADE_FEE_RATE, 4);
-    const total = payload.side === 'buy' ? roundTo(grossNotional + fee, 4) : roundTo(Math.max(0, grossNotional - fee), 4);
-
-    let reserved1zeUnits = 0;
-    let reservedUnits = 0;
-
-    if (payload.side === 'buy') {
-      // Reserve 1ZE from the wallet (convert GBP notional to 1ZE minor units)
-      // 1ZE = 1000mg, and we use the asset's stable price for 1ZE conversion
-      // For now, use the reference price as the 1ZE/GBP rate (1 1ZE ≈ 1 GBP)
-      const reserve1ze = roundTo(total, 4); // 1ZE amount
-      reserved1zeUnits = Math.ceil(reserve1ze * 1000); // convert to minor units
-
-      // Check wallet balance
-      const walletResult = await client.query<{ oneze_balance_units: string }>(
-        `SELECT oneze_balance_units::text FROM wallets WHERE user_id = $1 FOR UPDATE`,
-        [payload.userId]
-      );
-      const wallet = walletResult.rows[0];
-      if (!wallet) {
-        await client.query('ROLLBACK');
-        reply.code(404);
-        return { ok: false, error: 'Wallet not found' };
-      }
-
-      // Compute currently-reserved amount from other active reservations
-      const otherReservedResult = await client.query<{ total: string }>(
-        `
-          SELECT COALESCE(SUM(reserved_1ze_units), 0)::text AS total
-          FROM coown_order_reservations
-          WHERE user_id = $1 AND status IN ('active', 'placed') AND id <> $2
-        `,
-        [payload.userId, '']
-      );
-      const otherReservedUnits = Number(otherReservedResult.rows[0]?.total ?? 0);
-      const availableUnits = Number(wallet.oneze_balance_units) - otherReservedUnits;
-
-      if (availableUnits < reserved1zeUnits) {
-        await client.query('ROLLBACK');
-        reply.code(409);
-        return {
-          ok: false,
-          error: `Insufficient 1ZE balance. Required: ${(reserved1zeUnits / 1000).toFixed(2)} 1ZE, available: ${(availableUnits / 1000).toFixed(2)} 1ZE`,
-          code: 'INSUFFICIENT_1ZE',
-        };
-      }
-    } else {
-      // Reserve Co-Own units from the user's holding
-      reservedUnits = payload.units;
-      const holdingResult = await client.query<{ units_owned: number }>(
-        `SELECT units_owned FROM coOwn_holdings WHERE user_id = $1 AND asset_id = $2 FOR UPDATE`,
-        [payload.userId, assetId]
-      );
-      const holding = holdingResult.rows[0];
-      const unitsOwned = holding?.units_owned ?? 0;
-
-      // Compute currently-reserved units from other active sell reservations
-      const otherReservedResult = await client.query<{ total: number }>(
-        `
-          SELECT COALESCE(SUM(reserved_units), 0) AS total
-          FROM coown_order_reservations
-          WHERE user_id = $1 AND asset_id = $2 AND status IN ('active', 'placed')
-        `,
-        [payload.userId, assetId]
-      );
-      const otherReservedUnits = Number(otherReservedResult.rows[0]?.total ?? 0);
-      const availableUnits = unitsOwned - otherReservedUnits;
-
-      if (availableUnits < reservedUnits) {
-        await client.query('ROLLBACK');
-        reply.code(409);
-        return {
-          ok: false,
-          error: `Insufficient units to sell. Required: ${reservedUnits}, available: ${availableUnits}`,
-          code: 'INSUFFICIENT_UNITS',
-        };
-      }
-    }
-
-    const reservationId = `res_${crypto.randomUUID()}`;
-    const expiresAt = new Date(Date.now() + CO_OWN_RESERVATION_TTL_MS);
-
-    await client.query(
-      `
-        INSERT INTO coown_order_reservations (
-          id, user_id, asset_id, side,
-          reserved_1ze_units, reserved_units,
-          reference_price_gbp, estimated_total_gbp, estimated_fee_gbp,
-          expires_at, status
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')
-      `,
-      [
-        reservationId,
-        payload.userId,
-        assetId,
-        payload.side,
-        reserved1zeUnits,
-        reservedUnits,
-        referencePriceGbp,
-        total,
-        fee,
-        expiresAt,
-      ]
-    );
-
-    // P0.6: Build the response body before commit so the idempotent receipt
-    // can be saved atomically in the same transaction.
-    reply.code(201);
-    const reservationResponseBody = {
-      ok: true,
-      reservation: {
-        id: reservationId,
-        assetId,
-        userId: payload.userId,
-        side: payload.side,
-        reserved1zeUnits,
-        // P0.8: exact decimal string — 1ZE minor unit is an integer but can be large.
-        reserved1zeUnitsStr: String(reserved1zeUnits),
-        reservedUnits,
-        referencePriceGbp,
-        // P0.8: exact decimal string variants of the monetary estimates.
-        referencePriceGbpStr: formatGbp(referencePriceGbp),
-        estimatedTotalGbp: total,
-        estimatedTotalGbpStr: formatGbp(total),
-        estimatedFeeGbp: fee,
-        estimatedFeeGbpStr: formatGbp(fee),
-        expiresAt: expiresAt.toISOString(),
-        status: 'active',
-      },
-    };
-
-    // P0.6: Save the idempotent response inside the transaction — atomic with
-    // the reservation commit. A crash after COMMIT but before a post-commit
-    // save would leave a committed reservation without a dedupe receipt.
-    if (payload.idempotencyKey && reservationIdempotencyHash) {
-      await saveCoOwnReservationIdempotentResponse(client, {
-        assetId,
-        userId: payload.userId,
-        idempotencyKey: payload.idempotencyKey,
-        requestHash: reservationIdempotencyHash,
-        responseStatus: 201,
-        responseBody: reservationResponseBody,
-      });
-    }
-
-    await client.query('COMMIT');
-
-    return reservationResponseBody;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    reply.code(500);
-    return {
-      ok: false,
-      error: `Unable to reserve order: ${(error as Error).message}`,
-    };
-  } finally {
-    client.release();
-  }
-});
-
-// Cancel a reservation (release the held funds/units)
-// P0.5: Owner-bound — only the reservation owner can cancel. The actor is
-// derived from request.authUser, never from the request body or URL.
-app.delete('/co-own/assets/:assetId/orders/reserve/:reservationId', async (request, reply) => {
-  const paramsSchema = z.object({
-    assetId: z.string().min(2),
-    reservationId: z.string().min(8),
-  });
-  const { assetId, reservationId } = paramsSchema.parse(request.params);
-
-  // P0.5: Derive the actor from the auth token. If not authenticated, reject.
-  const actorUserId = request.authUser?.userId;
-  if (!actorUserId) {
-    reply.code(401);
-    return { ok: false, error: 'Authentication required to cancel a reservation' };
-  }
-
-  // P0.5: Bind cancellation to the owner. Only the user who created the
-  // reservation can cancel it — prevents reservation theft/cancel by another user.
-  const result = await db.query(
-    `
-      UPDATE coown_order_reservations
-      SET status = 'cancelled', updated_at = NOW()
-      WHERE id = $1 AND asset_id = $2 AND user_id = $3 AND status = 'active'
-      RETURNING id
-    `,
-    [reservationId, assetId, actorUserId]
-  );
-
-  if (result.rows.length === 0) {
-    // Check if the reservation exists at all but belongs to another user
-    const existing = await db.query<{ user_id: string; status: string }>(
-      `SELECT user_id, status FROM coown_order_reservations WHERE id = $1 AND asset_id = $2`,
-      [reservationId, assetId]
-    );
-    if (existing.rows[0] && existing.rows[0].user_id !== actorUserId) {
-      reply.code(403);
-      return { ok: false, error: 'Only the reservation owner can cancel it' };
-    }
-    reply.code(404);
-    return { ok: false, error: 'Reservation not found or already released' };
-  }
-
-  reply.code(200);
-  return { ok: true, reservationId };
-});
-
-app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const bodySchema = z.object({
-    userId: z.string().min(2),
-    side: z.enum(['buy', 'sell']),
-    units: z.number().int().min(1).max(COOWN_POLICY.maxOrderUnits),
-    orderType: z.enum(['market', 'limit', 'protected_market']).default('market'),
-    limitPriceGbp: z.number().positive().optional(),
-    // P0.1: protected_market protection cap
-    maxPriceGbp: z.number().positive().optional(),
-    minPriceGbp: z.number().positive().optional(),
-    reservationId: z.string().min(8).max(160),
-    idempotencyKey: z.string().min(8).max(140).optional(),
-  }).superRefine((value, ctx) => {
-    if (value.orderType === 'limit' && !value.limitPriceGbp) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'limitPriceGbp is required for limit orders',
-        path: ['limitPriceGbp'],
-      });
-    }
-
-    if (value.orderType === 'market' && value.limitPriceGbp !== undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'limitPriceGbp is only valid for limit orders',
-        path: ['limitPriceGbp'],
-      });
-    }
-
-    // P0.1: protected_market must not carry limitPriceGbp; the cap lives
-    // in maxPriceGbp (buy) / minPriceGbp (sell).
-    if (value.orderType === 'protected_market') {
-      if (value.limitPriceGbp !== undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'protected_market orders use maxPriceGbp/minPriceGbp, not limitPriceGbp',
-          path: ['limitPriceGbp'],
-        });
-      }
-      if (value.side === 'buy' && !value.maxPriceGbp) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'maxPriceGbp is required for protected_market buy orders',
-          path: ['maxPriceGbp'],
-        });
-      }
-      if (value.side === 'sell' && !value.minPriceGbp) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'minPriceGbp is required for protected_market sell orders',
-          path: ['minPriceGbp'],
-        });
-      }
-    }
-  });
-
-  const { assetId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body);
-  await ensureUserExists(payload.userId);
-
-  // ── Idempotency check (spec 10 §1) ──
-  // If the client supplies an idempotency key, check for a prior response.
-  // A replayed request with the same key + same payload returns the original
-  // response. A replayed request with the same key but different payload is
-  // rejected as a key-reuse conflict.
-  const idempotencyRequestHash = payload.idempotencyKey
-    ? hashCoOwnOrderPayload({
-        side: payload.side,
-        units: payload.units,
-        orderType: payload.orderType,
-        limitPriceGbp: payload.limitPriceGbp ?? null,
-        maxPriceGbp: payload.maxPriceGbp ?? null,
-        minPriceGbp: payload.minPriceGbp ?? null,
-        reservationId: payload.reservationId,
-      })
-    : null;
-
-  if (payload.idempotencyKey && idempotencyRequestHash) {
-    const idempotentResponse = await getCoOwnOrderIdempotentResponse(db, {
-      assetId,
-      userId: payload.userId,
-      idempotencyKey: payload.idempotencyKey,
-      requestHash: idempotencyRequestHash,
-    });
-    if (idempotentResponse) {
-      reply.code(200);
-      return idempotentResponse;
-    }
-  }
-  const tradingHaltState = await getOnezeMintBurnHaltState();
-  if (tradingHaltState.halted) {
-    reply.code(423);
-    return {
-      ok: false,
-      error: 'Co-Own trading is paused while 1ZE reconciliation is in progress',
-      code: 'CO_OWN_RECONCILIATION_HALT',
-    };
-  }
-
-  const client = await db.connect();
-  let amlAlert: { alertId: string; status: string } | null = null;
-  try {
-    await client.query('BEGIN');
-
-    // ── Command lifecycle: insert PENDING row for unknown-result lookup ──
-    // The coown_order_commands table tracks the pending→acknowledged
-    // lifecycle so the lookup-by-key endpoint can tell a client whether
-    // their order is still processing or has been committed. The row is
-    // written inside this transaction so it rolls back if the order fails
-    // and is atomically promoted to 'acknowledged' before COMMIT.
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      const commandInsert = await client.query<{ id: string; status: string }>(
-        `
-          INSERT INTO coown_order_commands (asset_id, actor_id, idempotency_key, request_hash, status)
-          VALUES ($1, $2, $3, $4, 'pending')
-          ON CONFLICT (asset_id, idempotency_key) DO NOTHING
-          RETURNING id, status
-        `,
-        [assetId, payload.userId, payload.idempotencyKey, idempotencyRequestHash]
-      );
-
-      if (commandInsert.rows.length === 0) {
-        // A concurrent command with the same key already exists. Inspect
-        // its status to decide how to respond without double-processing.
-        const existingCommand = await client.query<{
-          status: string;
-          order_id: string | null;
-          response_code: number | null;
-          response_body: Record<string, unknown> | null;
-        }>(
-          `
-            SELECT status, order_id, response_code, response_body
-            FROM coown_order_commands
-            WHERE asset_id = $1 AND idempotency_key = $2
-            LIMIT 1
-          `,
-          [assetId, payload.idempotencyKey]
-        );
-
-        const existing = existingCommand.rows[0];
-        if (existing && (existing.status === 'acknowledged' || existing.status === 'completed')) {
-          // The command was already completed — replay the stored response.
-          await client.query('ROLLBACK');
-          reply.code(existing.response_code ?? 200);
-          return {
-            ok: true,
-            status: 'acknowledged',
-            ...(existing.response_body as Record<string, unknown> ?? {}),
-          };
-        }
-
-        if (existing && existing.status === 'pending') {
-          // Another request is actively handling this key — tell the
-          // client to poll.
-          await client.query('ROLLBACK');
-          reply.code(202);
-          return { ok: true, status: 'processing' };
-        }
-      }
-    }
-
-    const assetResult = await client.query<{
-      id: string;
-      issuer_id: string;
-      total_units: number;
-      available_units: number;
-      unit_price_gbp: number | string;
-      unit_price_stable: number | string;
-      holders: number;
-      volume_24h_gbp: number | string;
-      is_open: boolean;
-    }>(
-      `
-        SELECT
-          id,
-          issuer_id,
-          total_units,
-          available_units,
-          unit_price_gbp,
-          unit_price_stable,
-          holders,
-          volume_24h_gbp,
-          is_open
-        FROM coOwn_assets
-        WHERE id = $1
-        FOR UPDATE
-      `,
-      [assetId]
-    );
-
-    const asset = assetResult.rows[0];
-    if (!asset) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Co-Own asset not found' };
-    }
-
-    if (!asset.is_open) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: 'Co-Own asset is closed for trading' };
-    }
-
-    const reservationResult = await client.query<{
-      id: string;
-      user_id: string;
-      asset_id: string;
-      side: 'buy' | 'sell';
-      reserved_1ze_units: string;
-      reserved_units: number;
-      expires_at: string;
-      status: string;
-    }>(
-      `
-        SELECT
-          id,
-          user_id,
-          asset_id,
-          side,
-          reserved_1ze_units::text,
-          reserved_units,
-          expires_at::text,
-          status
-        FROM coown_order_reservations
-        WHERE id = $1
-        FOR UPDATE
-      `,
-      [payload.reservationId]
-    );
-    const reservation = reservationResult.rows[0];
-    const reservationMismatch = !reservation
-      || reservation.user_id !== payload.userId
-      || reservation.asset_id !== assetId
-      || reservation.side !== payload.side
-      || reservation.status !== 'active'
-      || Date.parse(reservation.expires_at) <= Date.now();
-    if (reservationMismatch) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return {
-        ok: false,
-        error: 'Order reservation is missing, expired, or does not match this order',
-        code: 'CO_OWN_RESERVATION_INVALID',
-      };
-    }
-
-    const referencePriceGbp = Number(asset.unit_price_gbp);
-    // P0.1: protected_market uses the protection cap as the worst-case price
-    // for reservation sufficiency checking.
-    const protectionCapGbp =
-      payload.orderType === 'protected_market'
-        ? payload.side === 'buy'
-          ? (payload.maxPriceGbp ?? null)
-          : (payload.minPriceGbp ?? null)
-        : null;
-    const proposedUnitPrice =
-      payload.orderType === 'limit'
-        ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
-        : payload.orderType === 'protected_market' && protectionCapGbp
-          ? roundTo(protectionCapGbp, 4)
-          : referencePriceGbp;
-    const proposedNotionalGbp = roundTo(Math.max(0, payload.units) * proposedUnitPrice, 2);
-    const requiredBuyReservationUnits = Math.ceil(
-      roundTo(proposedNotionalGbp * (1 + CO_OWN_TRADE_FEE_RATE), 4) * 1000
-    );
-    const reservationIsInsufficient = payload.side === 'buy'
-      ? Number(reservation.reserved_1ze_units) < requiredBuyReservationUnits
-      : Number(reservation.reserved_units) < payload.units;
-    if (reservationIsInsufficient) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return {
-        ok: false,
-        error: 'Reserved funds or units do not cover this order obligation',
-        code: 'CO_OWN_RESERVATION_INSUFFICIENT',
-      };
-    }
-
-    const eligibility = await evaluateMarketEligibility(client, {
-      userId: payload.userId,
-      market: 'co-own',
-      orderNotionalGbp: proposedNotionalGbp,
-    });
-
-    if (!eligibility.allowed) {
-      await client.query('ROLLBACK');
-
-      await appendComplianceAuditSafe(request, {
-        eventType: 'co-own.order.blocked.eligibility',
-        subjectUserId: payload.userId,
-        payload: {
-          assetId,
-          side: payload.side,
-          units: payload.units,
-          orderType: payload.orderType,
-          orderNotionalGbp: proposedNotionalGbp,
-          code: eligibility.code,
-          message: eligibility.message,
-        },
-      });
-
-      reply.code(403);
-      return {
-        ok: false,
-        error: eligibility.message,
-        code: eligibility.code,
-      };
-    }
-
-    // Compliance gate: verify the user is permitted to settle a co-own trade.
-    const settlementCapability = await evaluateWalletCapability(client, payload.userId, 'settlement', {
-      amountUsd: proposedNotionalGbp,
-      currency: 'GBP',
-      market: 'co-own',
-    });
-    if (!settlementCapability.allowed) {
-      await client.query('ROLLBACK');
-
-      await appendComplianceAuditSafe(request, {
-        eventType: 'co-own.order.blocked.wallet_capability',
-        subjectUserId: payload.userId,
-        payload: {
-          assetId,
-          side: payload.side,
-          units: payload.units,
-          orderType: payload.orderType,
-          orderNotionalGbp: proposedNotionalGbp,
-          capability: 'settlement',
-          code: settlementCapability.code,
-          reason: settlementCapability.reason,
-        },
-      });
-
-      reply.code(403);
-      return {
-        ok: false,
-        error: settlementCapability.reason ?? 'Wallet capability check failed',
-        code: settlementCapability.code,
-      };
-    }
-
-    const preTradeAml = await evaluateAmlRisk(client, {
-      userId: payload.userId,
-      market: 'co-own',
-      amountGbp: proposedNotionalGbp,
-      counterpartyUserId: asset.issuer_id,
-    });
-
-    if (preTradeAml.shouldBlock) {
-      await client.query('ROLLBACK');
-
-      if (preTradeAml.shouldCreateAlert) {
-        amlAlert = await createAmlAlert(db, {
-          userId: payload.userId,
-          relatedUserId: asset.issuer_id,
-          market: 'co-own',
-          eventType: 'trade',
-          amountGbp: proposedNotionalGbp,
-          referenceId: `${assetId}:pretrade`,
-          ruleCode: 'AML_PRE_TRADE_BLOCK',
-          notes: 'Co-Own order blocked by AML pre-trade evaluation',
-          context: {
-            assetId,
-            side: payload.side,
-            units: payload.units,
-            orderType: payload.orderType,
-          },
-          assessment: preTradeAml,
-        });
-      }
-
-      await appendComplianceAuditSafe(request, {
-        eventType: 'co-own.order.blocked.aml',
-        subjectUserId: payload.userId,
-        payload: {
-          assetId,
-          side: payload.side,
-          units: payload.units,
-          orderType: payload.orderType,
-          orderNotionalGbp: proposedNotionalGbp,
-          riskScore: preTradeAml.riskScore,
-          riskLevel: preTradeAml.riskLevel,
-          alertId: amlAlert?.alertId ?? null,
-        },
-      });
-
-      reply.code(403);
-      return {
-        ok: false,
-        error: 'Order blocked by AML controls. Please contact support for review.',
-        code: 'AML_BLOCKED',
-        riskLevel: preTradeAml.riskLevel,
-        alertId: amlAlert?.alertId ?? null,
-      };
-    }
-
-    if (payload.side === 'sell') {
-      const sellerHolding = await getCoOwnHoldingForUpdate(client, payload.userId, assetId);
-      const sellerUnits = sellerHolding?.units_owned ?? 0;
-      if (sellerUnits < payload.units) {
-        await client.query('ROLLBACK');
-        reply.code(409);
-        return {
-          ok: false,
-          error: `Insufficient units to sell. Available: ${sellerUnits}`,
-        };
-      }
-    }
-
-    const orderPriceGbp =
-      payload.orderType === 'limit'
-        ? roundTo(payload.limitPriceGbp ?? referencePriceGbp, 4)
-        : payload.orderType === 'protected_market' && protectionCapGbp
-          ? roundTo(protectionCapGbp, 4)
-          : referencePriceGbp;
-
-    // P0.3: Allocate a market sequence for this book mutation (new order).
-    const orderMarketSeq = await allocateMarketSequence(client, assetId);
-
-    // Phase 2: Track touched price levels for the book delta emission.
-    // Matched resting orders sit on the opposing side; we collect their
-    // price levels so the aggregate state can be queried after the match.
-    const touchedOpposingLevels = new Map<string, { side: 'buy' | 'sell'; price: number }>();
-    let lastMarketSeq = orderMarketSeq;
-
-    const orderResult = await client.query<{
-      id: number;
-      side: 'buy' | 'sell';
-      units: number;
-      remaining_units: number;
-      filled_units: number;
-      unit_price_gbp: string;
-      fee_gbp: string;
-      total_gbp: string;
-      created_at: string;
-    }>(
-      `
-        INSERT INTO coOwn_orders (
-          asset_id,
-          user_id,
-          side,
-          order_type,
-          limit_price_gbp,
-          protection_price_gbp,
-          units,
-          remaining_units,
-          filled_units,
-          unit_price_gbp,
-          fee_gbp,
-          total_gbp,
-          updated_at,
-          status,
-          market_sequence
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $7, 0, $8, 0, 0, NOW(), 'open', $9)
-        RETURNING id, side, units, remaining_units, filled_units, unit_price_gbp::text, fee_gbp::text, total_gbp::text, created_at
-      `,
-      [
-        assetId,
-        payload.userId,
-        payload.side,
-        payload.orderType,
-        payload.orderType === 'limit' ? payload.limitPriceGbp : null,
-        // P0.1: protected_market stores the cap in protection_price_gbp
-        payload.orderType === 'protected_market' ? (protectionCapGbp ?? null) : null,
-        payload.units,
-        orderPriceGbp,
-        orderMarketSeq,
-      ]
-    );
-
-    const incomingOrderId = orderResult.rows[0].id;
-    await client.query(
-      `
-        UPDATE coown_order_reservations
-        SET status = 'placed', placed_order_id = $2, updated_at = NOW()
-        WHERE id = $1 AND status = 'active'
-      `,
-      [payload.reservationId, incomingOrderId]
-    );
-    let remainingUnits = payload.units;
-    let filledUnits = 0;
-    let tradedNotionalGbp = 0;
-    let tradedFeeGbp = 0;
-    let lastExecutionPriceGbp: number | null = null;
-    let nextAvailableUnits = asset.available_units;
-
-    const restingOrders = await client.query<{
-      id: number;
-      user_id: string;
-      side: 'buy' | 'sell';
-      units: number;
-      remaining_units: number;
-      filled_units: number;
-      unit_price_gbp: string;
-      fee_gbp: string;
-      total_gbp: string;
-    }>(
-      `
-        SELECT
-          id,
-          user_id,
-          side,
-          units,
-          remaining_units,
-          filled_units,
-          unit_price_gbp::text,
-          fee_gbp::text,
-          total_gbp::text
-        FROM coOwn_orders
-        WHERE asset_id = $1
-          AND side = $2
-          AND status IN ('open', 'partially_filled')
-          AND id <> $3
-          -- P0: STP — skip own orders to prevent wash trades
-          AND user_id <> $6
-          AND (
-            $4::numeric IS NULL
-            OR (
-              $5 = 'buy' AND unit_price_gbp <= $4
-            )
-            OR (
-              $5 = 'sell' AND unit_price_gbp >= $4
-            )
-          )
-        ORDER BY
-          CASE WHEN $5 = 'buy' THEN unit_price_gbp END ASC,
-          CASE WHEN $5 = 'sell' THEN unit_price_gbp END DESC,
-          id ASC
-        FOR UPDATE
-      `,
-      [
-        assetId,
-        payload.side === 'buy' ? 'sell' : 'buy',
-        incomingOrderId,
-        // P0.1: protected_market uses the protection cap as the price filter
-        payload.orderType === 'limit'
-          ? (payload.limitPriceGbp ?? null)
-          : payload.orderType === 'protected_market'
-            ? (protectionCapGbp ?? null)
-            : null,
-        payload.side,
-        // P0: STP — skip own orders to prevent wash trades
-        payload.userId,
-      ]
-    );
-
-    for (const resting of restingOrders.rows) {
-      if (remainingUnits <= 0) {
-        break;
-      }
-
-      const restingRemaining = resting.remaining_units;
-      if (restingRemaining <= 0) {
-        continue;
-      }
-
-      const fillUnits = Math.min(remainingUnits, restingRemaining);
-      const tradePrice = Number(resting.unit_price_gbp);
-      const tradeNotional = roundTo(fillUnits * tradePrice, 4);
-      const tradeFee = roundTo(tradeNotional * CO_OWN_TRADE_FEE_RATE, 4);
-      lastExecutionPriceGbp = tradePrice;
-
-      if (payload.side === 'buy') {
-        await applyCoOwnTransfer(client, {
-          assetId,
-          buyerId: payload.userId,
-          sellerId: resting.user_id,
-          units: fillUnits,
-          unitPriceGbp: tradePrice,
-          feeGbp: tradeFee,
-          sourceType: 'coOwn_trade',
-          buyOrderId: incomingOrderId,
-          sellOrderId: resting.id,
-          enforceSellerHolding: true,
-        });
-      } else {
-        await applyCoOwnTransfer(client, {
-          assetId,
-          buyerId: resting.user_id,
-          sellerId: payload.userId,
-          units: fillUnits,
-          unitPriceGbp: tradePrice,
-          feeGbp: tradeFee,
-          sourceType: 'coOwn_trade',
-          buyOrderId: resting.id,
-          sellOrderId: incomingOrderId,
-          enforceSellerHolding: true,
-        });
-      }
-
-      tradedNotionalGbp = roundTo(tradedNotionalGbp + tradeNotional, 4);
-      tradedFeeGbp = roundTo(tradedFeeGbp + tradeFee, 4);
-      remainingUnits -= fillUnits;
-      filledUnits += fillUnits;
-
-      const restingRemainingAfter = restingRemaining - fillUnits;
-      const restingFilledAfter = resting.filled_units + fillUnits;
-      const restingStatus: CoOwnOrderStatus =
-        restingRemainingAfter <= 0 ? 'filled' : 'partially_filled';
-      const restingTradeNet =
-        resting.side === 'buy'
-          ? roundTo(tradeNotional + tradeFee, 4)
-          : roundTo(Math.max(0, tradeNotional - tradeFee), 4);
-      const restingTotalAfter = roundTo(Number(resting.total_gbp) + restingTradeNet, 4);
-      const restingFeeAfter = roundTo(Number(resting.fee_gbp) + tradeFee, 4);
-
-      // P0.3: Each fill is a book mutation — advance the market sequence.
-      const fillMarketSeq = await allocateMarketSequence(client, assetId);
-      const restingPrice = Number(resting.unit_price_gbp);
-      touchedOpposingLevels.set(`${resting.side}:${restingPrice}`, { side: resting.side, price: restingPrice });
-      lastMarketSeq = fillMarketSeq;
-
-      await client.query(
-        `
-          UPDATE coOwn_orders
-          SET
-            remaining_units = $2,
-            filled_units = $3,
-            fee_gbp = $4,
-            total_gbp = $5,
-            status = $6,
-            updated_at = NOW(),
-            market_sequence = $7
-          WHERE id = $1
-        `,
-        [
-          resting.id,
-          Math.max(0, restingRemainingAfter),
-          restingFilledAfter,
-          restingFeeAfter,
-          restingTotalAfter,
-          restingStatus,
-          fillMarketSeq,
-        ]
-      );
-
-      const restingReserve1zeUnits = resting.side === 'buy'
-        ? Math.ceil(roundTo(restingRemainingAfter * Number(resting.unit_price_gbp) * (1 + CO_OWN_TRADE_FEE_RATE), 4) * 1000)
-        : 0;
-      const restingReserveUnits = resting.side === 'sell' ? Math.max(0, restingRemainingAfter) : 0;
-      await client.query(
-        `
-          UPDATE coown_order_reservations
-          SET reserved_1ze_units = $2, reserved_units = $3, updated_at = NOW()
-          WHERE placed_order_id = $1 AND status = 'placed'
-        `,
-        [resting.id, restingReserve1zeUnits, restingReserveUnits]
-      );
-    }
-
-    if (
-      payload.side === 'buy'
-      && remainingUnits > 0
-      && (payload.orderType === 'market'
-        || (payload.orderType === 'protected_market' && (protectionCapGbp ?? 0) >= referencePriceGbp)
-        || (payload.orderType === 'limit' && (payload.limitPriceGbp ?? 0) >= referencePriceGbp))
-      && nextAvailableUnits > 0
-    ) {
-      const primaryFillUnits = Math.min(remainingUnits, nextAvailableUnits);
-      if (primaryFillUnits > 0) {
-        const tradePrice = referencePriceGbp;
-        const tradeNotional = roundTo(primaryFillUnits * tradePrice, 4);
-        const tradeFee = roundTo(tradeNotional * CO_OWN_TRADE_FEE_RATE, 4);
-        lastExecutionPriceGbp = tradePrice;
-
-        await applyCoOwnTransfer(client, {
-          assetId,
-          buyerId: payload.userId,
-          sellerId: asset.issuer_id,
-          units: primaryFillUnits,
-          unitPriceGbp: tradePrice,
-          feeGbp: tradeFee,
-          sourceType: 'coOwn_trade',
-          buyOrderId: incomingOrderId,
-          sellOrderId: null,
-          enforceSellerHolding: false,
-        });
-
-        tradedNotionalGbp = roundTo(tradedNotionalGbp + tradeNotional, 4);
-        tradedFeeGbp = roundTo(tradedFeeGbp + tradeFee, 4);
-        remainingUnits -= primaryFillUnits;
-        filledUnits += primaryFillUnits;
-        nextAvailableUnits -= primaryFillUnits;
-      }
-    }
-
-    let orderStatus: CoOwnOrderStatus;
-    let persistedRemainingUnits = Math.max(0, remainingUnits);
-
-    // P0.1: protected_market behaves like market for status purposes —
-    // it fills what it can within the cap and cancels the remainder.
-    // It never rests on the book as an open order.
-    if (payload.orderType === 'market' || payload.orderType === 'protected_market') {
-      if (filledUnits > 0 && remainingUnits > 0) {
-        orderStatus = 'partially_filled';
-        persistedRemainingUnits = 0; // remainder cancelled, not resting
-      } else if (filledUnits > 0) {
-        orderStatus = 'filled';
-        persistedRemainingUnits = 0;
-      } else {
-        orderStatus = 'rejected';
-        persistedRemainingUnits = 0;
-      }
-    } else if (filledUnits === 0) {
-      orderStatus = 'open';
-    } else if (remainingUnits > 0) {
-      orderStatus = 'partially_filled';
-    } else {
-      orderStatus = 'filled';
-    }
-
-    const orderTotalGbp =
-      payload.side === 'buy'
-        ? roundTo(tradedNotionalGbp + tradedFeeGbp, 4)
-        : roundTo(Math.max(0, tradedNotionalGbp - tradedFeeGbp), 4);
-
-    const incomingOrder = await client.query<{
-      id: number;
-      created_at: string;
-      updated_at: string;
-      status: CoOwnOrderStatus;
-      remaining_units: number;
-      filled_units: number;
-    }>(
-      `
-        UPDATE coOwn_orders
-        SET
-          remaining_units = $2,
-          filled_units = $3,
-          fee_gbp = $4,
-          total_gbp = $5,
-          status = $6,
-          updated_at = NOW()
-        WHERE id = $1
-        RETURNING id, created_at, updated_at, status, remaining_units, filled_units
-      `,
-      [incomingOrderId, persistedRemainingUnits, filledUnits, tradedFeeGbp, orderTotalGbp, orderStatus]
-    );
-
-    const incomingReserve1zeUnits = payload.side === 'buy'
-      ? Math.ceil(roundTo(persistedRemainingUnits * orderPriceGbp * (1 + CO_OWN_TRADE_FEE_RATE), 4) * 1000)
-      : 0;
-    const incomingReserveUnits = payload.side === 'sell' ? persistedRemainingUnits : 0;
-    await client.query(
-      `
-        UPDATE coown_order_reservations
-        SET reserved_1ze_units = $2, reserved_units = $3, updated_at = NOW()
-        WHERE id = $1 AND placed_order_id = $4 AND status = 'placed'
-      `,
-      [payload.reservationId, incomingReserve1zeUnits, incomingReserveUnits, incomingOrderId]
-    );
-
-    // Phase 2: Build the book delta changes for realtime emission.
-    // The incoming order rests on its side if it has remaining units and
-    // an open/partially_filled status. Matched opposing levels are queried
-    // for their aggregate state so clients receive accurate level totals.
-    const bookDeltaChanges: Array<{
-      side: 'buy' | 'sell';
-      priceGbp: number;
-      priceGbpStr: string;
-      units: number;
-      orderCount: number;
-    }> = [];
-
-    if (persistedRemainingUnits > 0 && (orderStatus === 'open' || orderStatus === 'partially_filled')) {
-      bookDeltaChanges.push({
-        side: payload.side,
-        priceGbp: orderPriceGbp,
-        priceGbpStr: formatGbp(orderPriceGbp),
-        units: persistedRemainingUnits,
-        orderCount: 1,
-      });
-    }
-
-    if (touchedOpposingLevels.size > 0) {
-      const opposingSide = payload.side === 'buy' ? 'sell' : 'buy';
-      const touchedPrices = Array.from(touchedOpposingLevels.values()).map((l) => l.price);
-      const levelResult = await client.query<{
-        side: 'buy' | 'sell';
-        unit_price_gbp: string;
-        units: string;
-        order_count: string;
-      }>(
-        `
-          SELECT side, unit_price_gbp::text, SUM(remaining_units)::text AS units, COUNT(*)::text AS order_count
-          FROM coOwn_orders
-          WHERE asset_id = $1 AND side = $2 AND status IN ('open', 'partially_filled') AND remaining_units > 0
-            AND unit_price_gbp = ANY($3::numeric[])
-          GROUP BY side, unit_price_gbp
-        `,
-        [assetId, opposingSide, touchedPrices]
-      );
-      for (const row of levelResult.rows) {
-        bookDeltaChanges.push({
-          side: row.side,
-          priceGbp: Number(row.unit_price_gbp),
-          priceGbpStr: row.unit_price_gbp,
-          units: Number(row.units),
-          orderCount: Number(row.order_count),
-        });
-      }
-      // Emit drained levels (no remaining orders) as zero so clients remove them.
-      for (const level of touchedOpposingLevels.values()) {
-        if (!levelResult.rows.some((r) => Number(r.unit_price_gbp) === level.price)) {
-          bookDeltaChanges.push({
-            side: level.side,
-            priceGbp: level.price,
-            priceGbpStr: formatGbp(level.price),
-            units: 0,
-            orderCount: 0,
-          });
-        }
-      }
-    }
-
-    const marketStatsResult = await client.query<{
-      volume_24h_gbp: string;
-      opening_price_gbp: string | null;
-    }>(
-      `
-        SELECT
-          COALESCE(SUM(notional_gbp), 0)::text AS volume_24h_gbp,
-          (ARRAY_AGG(unit_price_gbp ORDER BY created_at ASC, id ASC))[1]::text AS opening_price_gbp
-        FROM coOwn_trades
-        WHERE asset_id = $1
-          AND created_at >= NOW() - INTERVAL '24 hours'
-      `,
-      [assetId]
-    );
-    const marketStats = marketStatsResult.rows[0];
-    const nextUnitPriceGbp = lastExecutionPriceGbp ?? referencePriceGbp;
-    const stableRatio = Number(asset.unit_price_stable) / Math.max(referencePriceGbp, 0.0001);
-    const nextUnitPriceStable = roundTo(nextUnitPriceGbp * stableRatio, 4);
-    const openingPriceGbp = Number(marketStats?.opening_price_gbp ?? nextUnitPriceGbp);
-    const nextMarketMovePct24h = openingPriceGbp > 0
-      ? roundTo(((nextUnitPriceGbp - openingPriceGbp) / openingPriceGbp) * 100, 3)
-      : 0;
-    const nextVolume24hGbp = roundTo(Number(marketStats?.volume_24h_gbp ?? 0), 2);
-    const nextHolders = await recalcCoOwnHolders(client, assetId);
-
-    const updatedAssetResult = await client.query<{
-      id: string;
-      available_units: number;
-      holders: number;
-      volume_24h_gbp: string;
-      unit_price_gbp: string;
-      unit_price_stable: string;
-      market_move_pct_24h: string;
-      updated_at: string;
-    }>(
-      `
-        UPDATE coOwn_assets
-        SET
-          available_units = $2,
-          holders = $3,
-          volume_24h_gbp = $4,
-          unit_price_gbp = $5,
-          unit_price_stable = $6,
-          market_move_pct_24h = $7,
-          is_open = CASE WHEN $2 <= 0 THEN FALSE ELSE is_open END,
-          updated_at = NOW()
-        WHERE id = $1
-        RETURNING
-          id,
-          available_units,
-          holders,
-          volume_24h_gbp::text,
-          unit_price_gbp::text,
-          unit_price_stable::text,
-          market_move_pct_24h::text,
-          updated_at
-      `,
-      [
-        assetId,
-        nextAvailableUnits,
-        nextHolders,
-        nextVolume24hGbp,
-        nextUnitPriceGbp,
-        nextUnitPriceStable,
-        nextMarketMovePct24h,
-      ]
-    );
-
-    if (preTradeAml.shouldCreateAlert) {
-      const monitoredAmount = tradedNotionalGbp > 0 ? tradedNotionalGbp : proposedNotionalGbp;
-      amlAlert = await createAmlAlert(client, {
-        userId: payload.userId,
-        relatedUserId: asset.issuer_id,
-        market: 'co-own',
-        eventType: 'trade',
-        amountGbp: monitoredAmount,
-        referenceId: String(incomingOrder.rows[0].id),
-        ruleCode: 'AML_POST_TRADE_MONITOR',
-        notes: 'Co-Own order generated elevated AML risk score',
-        context: {
-          assetId,
-          side: payload.side,
-          orderType: payload.orderType,
-          units: payload.units,
-          filledUnits: incomingOrder.rows[0].filled_units,
-        },
-        assessment: preTradeAml,
-      });
-    }
-
-    // P0.7: Construct the response body BEFORE commit so the idempotent
-    // response can be saved atomically in the same transaction. This
-    // eliminates the post-commit gap where a crash could commit the order
-    // but lose the dedupe receipt, leaving a retry without a response.
-    reply.code(201);
-    const responseBody = {
-      ok: true,
-      order: {
-        id: incomingOrder.rows[0].id,
-        assetId,
-        userId: payload.userId,
-        side: payload.side,
-        orderType: payload.orderType,
-        limitPriceGbp: payload.limitPriceGbp ?? null,
-        // P0.1: return the protection cap for protected_market orders
-        protectionPriceGbp: payload.orderType === 'protected_market' ? (protectionCapGbp ?? null) : null,
-        units: payload.units,
-        filledUnits: incomingOrder.rows[0].filled_units,
-        remainingUnits: incomingOrder.rows[0].remaining_units,
-        unitPriceGbp: orderPriceGbp,
-        // P0.8: exact decimal string variants of the order monetary fields.
-        unitPriceGbpStr: formatGbp(orderPriceGbp),
-        feeGbp: tradedFeeGbp,
-        feeGbpStr: formatGbp(tradedFeeGbp),
-        totalGbp: orderTotalGbp,
-        totalGbpStr: formatGbp(orderTotalGbp),
-        status: incomingOrder.rows[0].status,
-        createdAt: incomingOrder.rows[0].created_at,
-        updatedAt: incomingOrder.rows[0].updated_at,
-      },
-      asset: {
-        id: updatedAssetResult.rows[0].id,
-        availableUnits: updatedAssetResult.rows[0].available_units,
-        holders: updatedAssetResult.rows[0].holders,
-        volume24hGbp: updatedAssetResult.rows[0].volume_24h_gbp == null ? null : Number(updatedAssetResult.rows[0].volume_24h_gbp),
-        unitPriceGbp: Number(updatedAssetResult.rows[0].unit_price_gbp),
-        unitPriceStable: Number(updatedAssetResult.rows[0].unit_price_stable),
-        marketMovePct24h: updatedAssetResult.rows[0].market_move_pct_24h == null ? null : Number(updatedAssetResult.rows[0].market_move_pct_24h),
-        updatedAt: updatedAssetResult.rows[0].updated_at,
-      },
-      aml: amlAlert
-        ? {
-          alertId: amlAlert.alertId,
-          status: amlAlert.status,
-        }
-        : null,
-    };
-
-    // P0.7: Save idempotent response INSIDE the transaction — atomic with
-    // the order commit. A crash after COMMIT but before the old post-commit
-    // save would leave a committed order without a dedupe receipt. Now the
-    // receipt and the order commit or roll back together.
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await saveCoOwnOrderIdempotentResponse(client, {
-        assetId,
-        userId: payload.userId,
-        idempotencyKey: payload.idempotencyKey,
-        requestHash: idempotencyRequestHash,
-        responseStatus: 201,
-        responseBody,
-      });
-    }
-
-    // ── Command lifecycle: mark command as ACKNOWLEDGED ──
-    // Atomically with the order commit, transition the command row from
-    // pending → acknowledged so the lookup-by-key endpoint stops returning
-    // 202 and can replay the stored response on future lookups.
-    if (payload.idempotencyKey && idempotencyRequestHash) {
-      await client.query(
-        `
-          UPDATE coown_order_commands
-          SET status = 'acknowledged', order_id = $2, response_code = 200, response_body = $3, completed_at = NOW()
-          WHERE asset_id = $1 AND idempotency_key = $4
-        `,
-        [assetId, String(incomingOrder.rows[0].id), JSON.stringify(responseBody), payload.idempotencyKey]
-      );
-    }
-
-    await client.query('COMMIT');
-
-    // ── GAP 1 fix: Write market audit event for the order ──
-    // Records the order in the append-only market audit trail so the
-    // frontend market history section has real data to show.
-    try {
-      await db.query(
-        `INSERT INTO coown_market_audit_events (asset_id, event_type, event_payload, visibility, changed_by)
-         VALUES ($1, $2, $3::jsonb, 'public', $4)`,
-        [
-          assetId,
-          `order.${incomingOrder.rows[0].status}`,
-          JSON.stringify({
-            orderId: incomingOrder.rows[0].id,
-            side: payload.side,
-            orderType: payload.orderType,
-            units: payload.units,
-            filledUnits: incomingOrder.rows[0].filled_units,
-            remainingUnits: incomingOrder.rows[0].remaining_units,
-            unitPriceGbp: orderPriceGbp,
-            status: incomingOrder.rows[0].status,
-          }),
-          payload.userId,
-        ]
-      );
-    } catch (auditError) {
-      app.log.error({ err: auditError, assetId }, 'Failed to write market audit event');
-    }
-
-    // ── GAP 2 fix: Publish realtime event for order/trade ──
-    // Subscribers to co-own.asset:{assetId} get notified of order
-    // creation, fills, and status changes.
-    publishRealtimeEvent({
-      topic: `co-own.asset:${assetId}`,
-      type: `order.${incomingOrder.rows[0].status}`,
-      payload: {
-        assetId,
-        orderId: incomingOrder.rows[0].id,
-        side: payload.side,
-        orderType: payload.orderType,
-        units: payload.units,
-        filledUnits: incomingOrder.rows[0].filled_units,
-        remainingUnits: incomingOrder.rows[0].remaining_units,
-        unitPriceGbp: orderPriceGbp,
-        status: incomingOrder.rows[0].status,
-      },
-      seq: true,
-      version: 1,
-    });
-
-    // If trades were executed, publish a trade event too.
-    if (filledUnits > 0 && lastExecutionPriceGbp != null) {
-      publishRealtimeEvent({
-        topic: `co-own.asset:${assetId}`,
-        type: 'trade.executed',
-        payload: {
-          assetId,
-          side: payload.side,
-          units: filledUnits,
-          unitPriceGbp: lastExecutionPriceGbp,
-          notionalGbp: tradedNotionalGbp,
-        },
-        seq: true,
-        version: 1,
-      });
-    }
-
-    // Phase 2: Emit book delta for realtime orderbook subscribers.
-    // Clients subscribed to co-own.asset:{assetId} receive sequenced
-    // level changes and can apply them incrementally instead of re-fetching
-    // the full snapshot after every trade.
-    if (bookDeltaChanges.length > 0) {
-      try {
-        await publishRealtimeEvent({
-          topic: `co-own.asset:${assetId}`,
-          type: 'co-own.book-delta',
-          payload: {
-            type: 'co-own.book-delta',
-            assetId,
-            sequence: lastMarketSeq,
-            changes: bookDeltaChanges,
-            serverTimestamp: new Date().toISOString(),
-          },
-          seq: true,
-          version: 1,
-        });
-      } catch {
-        // Delta emission is best-effort — don't fail the order if WS broadcast fails.
-      }
-    }
-
-    await appendComplianceAuditSafe(request, {
-      eventType: 'co-own.order.created',
-      subjectUserId: payload.userId,
-      payload: {
-        assetId,
-        orderId: incomingOrder.rows[0].id,
-        side: payload.side,
-        orderType: payload.orderType,
-        units: payload.units,
-        filledUnits: incomingOrder.rows[0].filled_units,
-        remainingUnits: incomingOrder.rows[0].remaining_units,
-        status: incomingOrder.rows[0].status,
-        amlAlertId: amlAlert?.alertId ?? null,
-      },
-    });
-
-    return responseBody;
-  } catch (error) {
-    await client.query('ROLLBACK');
-
-    const apiError = getApiError(error);
-    if (apiError?.code === 'CO_OWN_SELLER_UNITS_INSUFFICIENT') {
-      reply.code(409);
-      return {
-        ok: false,
-        error: apiError.message,
-        details: apiError.details,
-      };
-    }
-
-    reply.code(500);
-    return {
-      ok: false,
-      error: `Unable to place co-own order: ${(error as Error).message}`,
-    };
-  } finally {
-    client.release();
-  }
-});
-
-// ── P0.7: Unknown-result lookup ──
-// After a network error during order submission, the client may not know
-// whether the order was placed. This endpoint lets the client look up the
-// result by idempotency key to recover gracefully.
-//   200 — order acknowledged (body contains the original response)
-//   202 — order still processing (lock held, poll with backoff)
-//   404 — no record found (safe to retry the original POST with the same key)
-app.get('/co-own/assets/:assetId/orders/lookup-by-key/:idempotencyKey', async (request, reply) => {
-  const paramsSchema = z.object({
-    assetId: z.string().min(2),
-    idempotencyKey: z.string().min(8).max(140),
-  });
-  const { assetId, idempotencyKey } = paramsSchema.parse(request.params);
-
-  const actorUserId = request.authUser?.userId;
-  if (!actorUserId) {
-    reply.code(401);
-    return { ok: false, error: 'Authentication required to look up an order' };
-  }
-
-  // Check the order idempotency table for a completed response
-  const idempotentResult = await db.query<{
-    response_status: number;
-    response_body: Record<string, unknown>;
-  }>(
-    `
-      SELECT response_status, response_body
-      FROM coown_order_idempotency
-      WHERE asset_id = $1
-        AND user_id = $2
-        AND idempotency_key = $3
-      LIMIT 1
-    `,
-    [assetId, actorUserId, idempotencyKey]
-  );
-
-  if (idempotentResult.rows[0]) {
-    reply.code(200);
-    return {
-      ok: true,
-      status: 'acknowledged',
-      ...idempotentResult.rows[0].response_body as Record<string, unknown>,
-    };
-  }
-
-  // Check the order commands table for a pending command
-  const commandResult = await db.query<{ status: string }>(
-    `
-      SELECT status
-      FROM coown_order_commands
-      WHERE asset_id = $1
-        AND actor_id = $2
-        AND idempotency_key = $3
-      LIMIT 1
-    `,
-    [assetId, actorUserId, idempotencyKey]
-  );
-
-  if (commandResult.rows[0] && commandResult.rows[0].status === 'pending') {
-    reply.code(202);
-    return { ok: true, status: 'processing' };
-  }
-
-  // No record found — safe to retry
-  reply.code(404);
-  return { ok: false, status: 'safe_to_retry' };
-});
-
-app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply) => {
-  const paramsSchema = z.object({
-    assetId: z.string().min(2),
-    orderId: z.coerce.number().int().positive(),
-  });
-  const bodySchema = z.object({ userId: z.string().min(2) });
-  const { assetId, orderId } = paramsSchema.parse(request.params);
-  const { userId } = bodySchema.parse(request.body);
-  resolveAuthenticatedUserId(request, userId);
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-    const orderResult = await client.query<{
-      id: number;
-      user_id: string;
-      status: CoOwnOrderStatus;
-      filled_units: number;
-    }>(
-      `
-        SELECT id, user_id, status, filled_units
-        FROM coOwn_orders
-        WHERE id = $1 AND asset_id = $2
-        FOR UPDATE
-      `,
-      [orderId, assetId]
-    );
-    const order = orderResult.rows[0];
-    if (!order) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Co-Own order not found' };
-    }
-    if (order.user_id !== userId) {
-      await client.query('ROLLBACK');
-      reply.code(403);
-      return { ok: false, error: 'Only the order owner can cancel this order' };
-    }
-    if (order.status !== 'open' && order.status !== 'partially_filled') {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: `A ${order.status} order cannot be cancelled` };
-    }
-
-    // P0.3: Cancellation is a book mutation — advance the market sequence.
-    const cancelMarketSeq = await allocateMarketSequence(client, assetId);
-
-    await client.query(
-      `
-        UPDATE coOwn_orders
-        SET remaining_units = 0, status = 'cancelled', updated_at = NOW(), market_sequence = $2
-        WHERE id = $1
-      `,
-      [orderId, cancelMarketSeq]
-    );
-    await client.query(
-      `
-        UPDATE coown_order_reservations
-        SET reserved_1ze_units = 0, reserved_units = 0, status = 'cancelled', updated_at = NOW()
-        WHERE placed_order_id = $1 AND status = 'placed'
-      `,
-      [orderId]
-    );
-    await client.query('COMMIT');
-    return {
-      ok: true,
-      order: { id: orderId, status: 'cancelled', filledUnits: order.filled_units, remainingUnits: 0 },
-    };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-});
-
-app.get('/co-own/assets/:assetId/buyout-offers', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const querySchema = z.object({
-    status: z.enum(['open', 'accepted', 'expired', 'cancelled', 'rejected', 'settled']).optional(),
-    limit: z.coerce.number().int().min(1).max(200).default(60),
-  });
-
-  const { assetId } = paramsSchema.parse(request.params);
-  const { status, limit } = querySchema.parse(request.query);
-
-  const result = await db.query<{
-    id: string;
-    asset_id: string;
-    bidder_user_id: string;
-    offer_price_gbp: string;
-    target_units: number;
-    accepted_units: number;
-    status: string;
-    expires_at: string;
-    metadata: Record<string, unknown>;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `
-      SELECT
-        id,
-        asset_id,
-        bidder_user_id,
-        offer_price_gbp::text,
-        target_units,
-        accepted_units,
-        status,
-        expires_at::text,
-        metadata,
-        created_at::text,
-        updated_at::text
-      FROM coOwn_buyout_offers
-      WHERE asset_id = $1
-        AND ($2::text IS NULL OR status = $2)
-      ORDER BY created_at DESC
-      LIMIT $3
-    `,
-    [assetId, status ?? null, limit]
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      assetId: row.asset_id,
-      bidderUserId: row.bidder_user_id,
-      offerPriceGbp: Number(row.offer_price_gbp),
-      targetUnits: row.target_units,
-      acceptedUnits: row.accepted_units,
-      status: row.status,
-      expiresAt: row.expires_at,
-      metadata: row.metadata,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
-  };
-});
-
-app.post('/co-own/assets/:assetId/buyout-offers', {
-  config: {
-    rateLimit: {
-      max: 20,
-      timeWindow: '1 minute',
-    },
-  },
-}, async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const bodySchema = z.object({
-    bidderUserId: z.string().min(2),
-    offerPriceGbp: z.number().positive(),
-    targetUnits: z.number().int().min(1).max(COOWN_POLICY.maxBuyoutUnits).optional(),
-    expiresInHours: z.number().int().min(1).max(168).default(24),
-    metadata: z.record(z.unknown()).optional(),
-  });
-
-  const { assetId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body ?? {});
-  await ensureUserExists(payload.bidderUserId);
-
-  const client = await db.connect();
-  let amlAlert: { alertId: string; status: string } | null = null;
-  try {
-    await client.query('BEGIN');
-
-    const assetResult = await client.query<{
-      id: string;
-      total_units: number;
-      is_open: boolean;
-    }>(
-      `
-        SELECT id, total_units, is_open
-        FROM coOwn_assets
-        WHERE id = $1
-        FOR UPDATE
-      `,
-      [assetId]
-    );
-
-    const asset = assetResult.rows[0];
-    if (!asset) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Co-Own asset not found' };
-    }
-
-    if (!asset.is_open) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: 'Co-Own asset is closed for buyout offers' };
-    }
-
-    const bidderHolding = await getCoOwnHoldingForUpdate(client, payload.bidderUserId, assetId);
-    const bidderUnits = bidderHolding?.units_owned ?? 0;
-    const inferredTarget = Math.max(0, asset.total_units - bidderUnits);
-    const targetUnits = payload.targetUnits ?? inferredTarget;
-
-    if (targetUnits <= 0) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return {
-        ok: false,
-        error: 'Bidder already controls all units for this asset',
-      };
-    }
-
-    const offerNotionalGbp = roundTo(targetUnits * payload.offerPriceGbp, 2);
-
-    const eligibility = await evaluateMarketEligibility(client, {
-      userId: payload.bidderUserId,
-      market: 'co-own',
-      orderNotionalGbp: offerNotionalGbp,
-    });
-
-    if (!eligibility.allowed) {
-      await client.query('ROLLBACK');
-
-      await appendComplianceAuditSafe(request, {
-        eventType: 'buyout.offer.blocked.eligibility',
-        subjectUserId: payload.bidderUserId,
-        payload: {
-          assetId,
-          targetUnits,
-          offerPriceGbp: payload.offerPriceGbp,
-          offerNotionalGbp,
-          code: eligibility.code,
-          message: eligibility.message,
-        },
-      });
-
-      reply.code(403);
-      return {
-        ok: false,
-        error: eligibility.message,
-        code: eligibility.code,
-      };
-    }
-
-    const amlAssessment = await evaluateAmlRisk(client, {
-      userId: payload.bidderUserId,
-      market: 'co-own',
-      amountGbp: offerNotionalGbp,
-    });
-
-    if (amlAssessment.shouldBlock) {
-      await client.query('ROLLBACK');
-
-      if (amlAssessment.shouldCreateAlert) {
-        amlAlert = await createAmlAlert(db, {
-          userId: payload.bidderUserId,
-          market: 'co-own',
-          eventType: 'trade',
-          amountGbp: offerNotionalGbp,
-          referenceId: `${assetId}:buyout-offer`,
-          ruleCode: 'AML_BUYOUT_OFFER_BLOCK',
-          notes: 'Buyout offer blocked by AML controls',
-          context: {
-            assetId,
-            bidderUserId: payload.bidderUserId,
-            targetUnits,
-            offerPriceGbp: payload.offerPriceGbp,
-          },
-          assessment: amlAssessment,
-        });
-      }
-
-      await appendComplianceAuditSafe(request, {
-        eventType: 'buyout.offer.blocked.aml',
-        subjectUserId: payload.bidderUserId,
-        payload: {
-          assetId,
-          targetUnits,
-          offerPriceGbp: payload.offerPriceGbp,
-          offerNotionalGbp,
-          riskScore: amlAssessment.riskScore,
-          riskLevel: amlAssessment.riskLevel,
-          alertId: amlAlert?.alertId ?? null,
-        },
-      });
-
-      reply.code(403);
-      return {
-        ok: false,
-        error: 'Buyout offer blocked by AML controls. Please contact support.',
-        code: 'AML_BLOCKED',
-        riskLevel: amlAssessment.riskLevel,
-        alertId: amlAlert?.alertId ?? null,
-      };
-    }
-
-    const offerId = createRuntimeId('buyout');
-    const expiresAt = new Date(Date.now() + payload.expiresInHours * 60 * 60 * 1000).toISOString();
-
-    const inserted = await client.query<{
-      id: string;
-      created_at: string;
-      updated_at: string;
-    }>(
-      `
-        INSERT INTO coOwn_buyout_offers (
-          id,
-          asset_id,
-          bidder_user_id,
-          offer_price_gbp,
-          target_units,
-          accepted_units,
-          status,
-          expires_at,
-          metadata
-        )
-        VALUES ($1, $2, $3, $4, $5, 0, 'open', $6, $7::jsonb)
-        RETURNING id, created_at::text, updated_at::text
-      `,
-      [
-        offerId,
-        assetId,
-        payload.bidderUserId,
-        roundTo(payload.offerPriceGbp, 4),
-        targetUnits,
-        expiresAt,
-        toJsonString(payload.metadata ?? {}),
-      ]
-    );
-
-    if (amlAssessment.shouldCreateAlert) {
-      amlAlert = await createAmlAlert(client, {
-        userId: payload.bidderUserId,
-        market: 'co-own',
-        eventType: 'trade',
-        amountGbp: offerNotionalGbp,
-        referenceId: offerId,
-        ruleCode: 'AML_BUYOUT_OFFER_MONITOR',
-        notes: 'Buyout offer generated elevated AML risk score',
-        context: {
-          assetId,
-          bidderUserId: payload.bidderUserId,
-          targetUnits,
-          offerPriceGbp: payload.offerPriceGbp,
-        },
-        assessment: amlAssessment,
-      });
-    }
-
-    await client.query('COMMIT');
-
-    publishRealtimeEvent({
-      topic: `co-own.asset:${assetId}`,
-      type: 'buyout.offer.opened',
-      payload: {
-        offerId,
-        assetId,
-        bidderUserId: payload.bidderUserId,
-        offerPriceGbp: roundTo(payload.offerPriceGbp, 4),
-        targetUnits,
-        expiresAt,
-      },
-    });
-
-    await appendComplianceAuditSafe(request, {
-      eventType: 'buyout.offer.opened',
-      subjectUserId: payload.bidderUserId,
-      payload: {
-        offerId,
-        assetId,
-        targetUnits,
-        offerPriceGbp: roundTo(payload.offerPriceGbp, 4),
-        amlAlertId: amlAlert?.alertId ?? null,
-      },
-    });
-
-    reply.code(201);
-    return {
-      ok: true,
-      offer: {
-        id: inserted.rows[0].id,
-        assetId,
-        bidderUserId: payload.bidderUserId,
-        offerPriceGbp: roundTo(payload.offerPriceGbp, 4),
-        targetUnits,
-        acceptedUnits: 0,
-        status: 'open',
-        expiresAt,
-        createdAt: inserted.rows[0].created_at,
-        updatedAt: inserted.rows[0].updated_at,
-      },
-      aml: amlAlert
-        ? {
-          alertId: amlAlert.alertId,
-          status: amlAlert.status,
-        }
-        : null,
-    };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    reply.code(500);
-    return {
-      ok: false,
-      error: `Unable to create buyout offer: ${(error as Error).message}`,
-    };
-  } finally {
-    client.release();
-  }
-});
-
-app.post('/co-own/buyout-offers/:offerId/accept', async (request, reply) => {
-  const paramsSchema = z.object({ offerId: z.string().min(4) });
-  const bodySchema = z.object({
-    holderUserId: z.string().min(2),
-    units: z.number().int().min(1).max(COOWN_POLICY.maxBuyoutUnits),
-    metadata: z.record(z.unknown()).optional(),
-  });
-
-  const { offerId } = paramsSchema.parse(request.params);
-  const payload = bodySchema.parse(request.body ?? {});
-  await ensureUserExists(payload.holderUserId);
-
-  const client = await db.connect();
-  let amlAlert: { alertId: string; status: string } | null = null;
-  try {
-    await client.query('BEGIN');
-
-    const offerResult = await client.query<{
-      id: string;
-      asset_id: string;
-      bidder_user_id: string;
-      offer_price_gbp: string;
-      target_units: number;
-      accepted_units: number;
-      status: string;
-      expires_at: string;
-      total_units: number;
-    }>(
-      `
-        SELECT
-          bo.id,
-          bo.asset_id,
-          bo.bidder_user_id,
-          bo.offer_price_gbp::text,
-          bo.target_units,
-          bo.accepted_units,
-          bo.status,
-          bo.expires_at::text,
-          sa.total_units
-        FROM coOwn_buyout_offers bo
-        INNER JOIN coOwn_assets sa ON sa.id = bo.asset_id
-        WHERE bo.id = $1
-        LIMIT 1
-        FOR UPDATE
-      `,
-      [offerId]
-    );
-
-    const offer = offerResult.rows[0];
-    if (!offer) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return {
-        ok: false,
-        error: 'Buyout offer not found',
-      };
-    }
-
-    if (offer.bidder_user_id === payload.holderUserId) {
-      await client.query('ROLLBACK');
-      reply.code(400);
-      return {
-        ok: false,
-        error: 'Bidder cannot accept their own buyout offer',
-      };
-    }
-
-    const offerExpired = new Date(offer.expires_at).getTime() <= Date.now();
-    if (offer.status !== 'open' || offerExpired) {
-      await client.query(
-        `
-          UPDATE coOwn_buyout_offers
-          SET status = CASE WHEN expires_at <= NOW() THEN 'expired' ELSE status END,
-              updated_at = NOW()
-          WHERE id = $1
-        `,
-        [offerId]
-      );
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return {
-        ok: false,
-        error: 'Buyout offer is no longer open',
-      };
-    }
-
-    const remainingTarget = Math.max(0, offer.target_units - offer.accepted_units);
-    const acceptedUnits = Math.min(payload.units, remainingTarget);
-    if (acceptedUnits <= 0) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return {
-        ok: false,
-        error: 'Buyout offer target already fulfilled',
-      };
-    }
-
-    const acceptanceNotionalGbp = roundTo(acceptedUnits * Number(offer.offer_price_gbp), 2);
-
-    const holderEligibility = await evaluateMarketEligibility(client, {
-      userId: payload.holderUserId,
-      market: 'co-own',
-      orderNotionalGbp: acceptanceNotionalGbp,
-    });
-
-    if (!holderEligibility.allowed) {
-      await client.query('ROLLBACK');
-
-      await appendComplianceAuditSafe(request, {
-        eventType: 'buyout.accept.blocked.holder_eligibility',
-        subjectUserId: payload.holderUserId,
-        payload: {
-          offerId,
-          assetId: offer.asset_id,
-          acceptedUnits,
-          acceptanceNotionalGbp,
-          code: holderEligibility.code,
-          message: holderEligibility.message,
-        },
-      });
-
-      reply.code(403);
-      return {
-        ok: false,
-        error: holderEligibility.message,
-        code: holderEligibility.code,
-      };
-    }
-
-    const bidderEligibility = await evaluateMarketEligibility(client, {
-      userId: offer.bidder_user_id,
-      market: 'co-own',
-      orderNotionalGbp: acceptanceNotionalGbp,
-    });
-
-    if (!bidderEligibility.allowed) {
-      await client.query('ROLLBACK');
-
-      await appendComplianceAuditSafe(request, {
-        eventType: 'buyout.accept.blocked.bidder_eligibility',
-        subjectUserId: offer.bidder_user_id,
-        payload: {
-          offerId,
-          assetId: offer.asset_id,
-          acceptedUnits,
-          acceptanceNotionalGbp,
-          code: bidderEligibility.code,
-          message: bidderEligibility.message,
-        },
-      });
-
-      reply.code(403);
-      return {
-        ok: false,
-        error: 'Buyout bidder no longer eligible for this jurisdiction.',
-        code: bidderEligibility.code,
-      };
-    }
-
-    const amlAssessment = await evaluateAmlRisk(client, {
-      userId: payload.holderUserId,
-      market: 'co-own',
-      amountGbp: acceptanceNotionalGbp,
-      counterpartyUserId: offer.bidder_user_id,
-    });
-
-    if (amlAssessment.shouldBlock) {
-      await client.query('ROLLBACK');
-
-      if (amlAssessment.shouldCreateAlert) {
-        amlAlert = await createAmlAlert(db, {
-          userId: payload.holderUserId,
-          relatedUserId: offer.bidder_user_id,
-          market: 'co-own',
-          eventType: 'trade',
-          amountGbp: acceptanceNotionalGbp,
-          referenceId: offerId,
-          ruleCode: 'AML_BUYOUT_ACCEPT_BLOCK',
-          notes: 'Buyout acceptance blocked by AML controls',
-          context: {
-            offerId,
-            assetId: offer.asset_id,
-            holderUserId: payload.holderUserId,
-            bidderUserId: offer.bidder_user_id,
-            acceptedUnits,
-          },
-          assessment: amlAssessment,
-        });
-      }
-
-      await appendComplianceAuditSafe(request, {
-        eventType: 'buyout.accept.blocked.aml',
-        subjectUserId: payload.holderUserId,
-        payload: {
-          offerId,
-          assetId: offer.asset_id,
-          acceptedUnits,
-          acceptanceNotionalGbp,
-          riskScore: amlAssessment.riskScore,
-          riskLevel: amlAssessment.riskLevel,
-          alertId: amlAlert?.alertId ?? null,
-        },
-      });
-
-      reply.code(403);
-      return {
-        ok: false,
-        error: 'Buyout acceptance blocked by AML controls.',
-        code: 'AML_BLOCKED',
-        riskLevel: amlAssessment.riskLevel,
-        alertId: amlAlert?.alertId ?? null,
-      };
-    }
-
-    await applyCoOwnTransfer(client, {
-      assetId: offer.asset_id,
-      buyerId: offer.bidder_user_id,
-      sellerId: payload.holderUserId,
-      units: acceptedUnits,
-      unitPriceGbp: Number(offer.offer_price_gbp),
-      feeGbp: 0,
-      sourceType: 'buyout',
-      buyOrderId: null,
-      sellOrderId: null,
-      enforceSellerHolding: true,
-    });
-
-    await client.query(
-      `
-        INSERT INTO coOwn_buyout_acceptances (
-          offer_id,
-          holder_user_id,
-          units,
-          status,
-          responded_at,
-          metadata
-        )
-        VALUES ($1, $2, $3, 'accepted', NOW(), $4::jsonb)
-        ON CONFLICT (offer_id, holder_user_id)
-        DO UPDATE
-          SET
-            units = EXCLUDED.units,
-            status = EXCLUDED.status,
-            responded_at = NOW(),
-            metadata = coOwn_buyout_acceptances.metadata || EXCLUDED.metadata
-      `,
-      [offerId, payload.holderUserId, acceptedUnits, toJsonString(payload.metadata ?? {})]
-    );
-
-    const nextAcceptedUnits = offer.accepted_units + acceptedUnits;
-    const nextStatus = nextAcceptedUnits >= offer.target_units ? 'settled' : 'accepted';
-
-    await client.query(
-      `
-        UPDATE coOwn_buyout_offers
-        SET
-          accepted_units = $2,
-          status = $3,
-          updated_at = NOW()
-        WHERE id = $1
-      `,
-      [offerId, nextAcceptedUnits, nextStatus]
-    );
-
-    const bidderHolding = await getCoOwnHoldingForUpdate(client, offer.bidder_user_id, offer.asset_id);
-    const bidderUnits = bidderHolding?.units_owned ?? 0;
-    if (nextStatus === 'settled' && bidderUnits >= offer.total_units) {
-      await client.query(
-        `
-          UPDATE coOwn_assets
-          SET is_open = FALSE, updated_at = NOW()
-          WHERE id = $1
-        `,
-        [offer.asset_id]
-      );
-    }
-
-    const nextHolders = await recalcCoOwnHolders(client, offer.asset_id);
-    await client.query(
-      `
-        UPDATE coOwn_assets
-        SET holders = $2, updated_at = NOW()
-        WHERE id = $1
-      `,
-      [offer.asset_id, nextHolders]
-    );
-
-    if (amlAssessment.shouldCreateAlert) {
-      amlAlert = await createAmlAlert(client, {
-        userId: payload.holderUserId,
-        relatedUserId: offer.bidder_user_id,
-        market: 'co-own',
-        eventType: 'trade',
-        amountGbp: acceptanceNotionalGbp,
-        referenceId: offerId,
-        ruleCode: 'AML_BUYOUT_ACCEPT_MONITOR',
-        notes: 'Buyout acceptance generated elevated AML risk score',
-        context: {
-          offerId,
-          assetId: offer.asset_id,
-          holderUserId: payload.holderUserId,
-          bidderUserId: offer.bidder_user_id,
-          acceptedUnits,
-        },
-        assessment: amlAssessment,
-      });
-    }
-
-    await client.query('COMMIT');
-
-    publishRealtimeEvent({
-      topic: `co-own.asset:${offer.asset_id}`,
-      type: 'buyout.offer.accepted',
-      payload: {
-        offerId,
-        holderUserId: payload.holderUserId,
-        units: acceptedUnits,
-        acceptedUnits: nextAcceptedUnits,
-        status: nextStatus,
-      },
-    });
-
-    try {
-      await queueUserNotification({
-        userId: offer.bidder_user_id,
-        title: 'Buyout accepted',
-        body: `${payload.holderUserId} accepted ${acceptedUnits} units from your buyout offer.`,
-        payload: {
-          offerId,
-          assetId: offer.asset_id,
-          holderUserId: payload.holderUserId,
-          units: acceptedUnits,
-          event: 'buyout_acceptance',
-        },
-        metadata: {
-          source: 'buyout_accept_route',
-        },
-      });
-    } catch (error) {
-      request.log.error({ err: error, offerId }, 'Failed to queue bidder buyout notification');
-    }
-
-    await appendComplianceAuditSafe(request, {
-      eventType: 'buyout.accepted',
-      subjectUserId: payload.holderUserId,
-      payload: {
-        offerId,
-        assetId: offer.asset_id,
-        holderUserId: payload.holderUserId,
-        bidderUserId: offer.bidder_user_id,
-        acceptedUnits,
-        status: nextStatus,
-        amlAlertId: amlAlert?.alertId ?? null,
-      },
-    });
-
-    return {
-      ok: true,
-      offer: {
-        id: offerId,
-        assetId: offer.asset_id,
-        bidderUserId: offer.bidder_user_id,
-        offerPriceGbp: Number(offer.offer_price_gbp),
-        targetUnits: offer.target_units,
-        acceptedUnits: nextAcceptedUnits,
-        status: nextStatus,
-        expiresAt: offer.expires_at,
-      },
-      accepted: {
-        holderUserId: payload.holderUserId,
-        units: acceptedUnits,
-      },
-      aml: amlAlert
-        ? {
-          alertId: amlAlert.alertId,
-          status: amlAlert.status,
-        }
-        : null,
-    };
-  } catch (error) {
-    await client.query('ROLLBACK');
-
-    const apiError = getApiError(error);
-    if (apiError?.code === 'CO_OWN_SELLER_UNITS_INSUFFICIENT') {
-      reply.code(409);
-      return {
-        ok: false,
-        error: apiError.message,
-        details: apiError.details,
-      };
-    }
-
-    reply.code(500);
-    return {
-      ok: false,
-      error: `Unable to accept buyout offer: ${(error as Error).message}`,
-    };
-  } finally {
-    client.release();
-  }
-});
-
-app.get('/co-own/assets/:assetId', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const { assetId } = paramsSchema.parse(request.params);
-
-  const result = await db.query<{
-    id: string;
-    listing_id: string;
-    issuer_id: string;
-    title: string;
-    image_url: string | null;
-    total_units: number;
-    available_units: number;
-    unit_price_gbp: number;
-    unit_price_stable: number;
-    settlement_mode: string;
-    issuer_jurisdiction: string | null;
-    market_move_pct_24h: number;
-    holders: number;
-    volume_24h_gbp: number;
-    is_open: boolean;
-    created_at: string;
-    updated_at: string;
-    issuer_username: string | null;
-    issuer_display_name: string | null;
-    issuer_avatar: string | null;
-    issuer_location: string | null;
-    // ── Issuer verification (WS2) ──
-    issuer_verification_tier: 'email' | 'id' | 'seller' | null;
-    issuer_verification_tier_set_at: string | null;
-    issuer_seller_standards_met: boolean | null;
-    // ── Trust profile (WS1) ──
-    legal_vehicle_type: 'spv' | 'llc' | 'trust' | 'series_llc' | 'none' | null;
-    legal_vehicle_name: string | null;
-    legal_vehicle_jurisdiction: string | null;
-    custodian_name: string | null;
-    custodian_location: string | null;
-    custody_insured: boolean;
-    custody_insurer: string | null;
-    custody_policy_ref: string | null;
-    custody_coverage_gbp: string | number | null;
-    authenticity_status: 'unverified' | 'pending' | 'verified' | null;
-    authenticity_method: string | null;
-    authenticity_verified_at: string | null;
-    provenance: string | null;
-    condition_grade: string | null;
-    appraisal_value_gbp: string | number | null;
-    appraisal_valued_at: string | null;
-    appraisal_valuer: string | null;
-    buyer_protection: boolean;
-    buyer_protection_terms_url: string | null;
-    listing_tier: 'preview' | 'listed' | 'badged' | 'delisted';
-    // ── Settlement & escrow (WS3) ──
-    escrow_partner: string | null;
-    escrow_terms_url: string | null;
-    settlement_eta_hours: number | null;
-    // ── Wallet safeguarding (WS4) ──
-    safeguarded: boolean;
-    safeguarding_partner: string | null;
-    safeguarding_evidence_url: string | null;
-    safeguarding_terms_url: string | null;
-    // ── Recourse agreement (WS7) ──
-    recourse_agreement_signed: boolean;
-    recourse_status: string | null;
-    total_traded_value_gbp: string | number;
-    active_verification_demands: number;
-  }>(
-    `
-      SELECT
-        sa.*,
-        u.username AS issuer_username,
-        u.display_name AS issuer_display_name,
-        u.avatar AS issuer_avatar,
-        u.location AS issuer_location,
-        ivp.verification_tier AS issuer_verification_tier,
-        ivp.verification_tier_set_at AS issuer_verification_tier_set_at,
-        ivp.seller_standards_met AS issuer_seller_standards_met
-      FROM coOwn_assets sa
-      LEFT JOIN users u ON u.id = sa.issuer_id
-      LEFT JOIN coown_issuer_verification_profile ivp ON ivp.user_id = sa.issuer_id
-      WHERE sa.id = $1
-      LIMIT 1
-    `,
-    [assetId]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    reply.code(404);
-    return { ok: false, error: 'Asset not found' };
-  }
-
-  // ── Trust audit events (WS1, last 10) ──
-  const trustEventsResult = await db.query<{
-    event_type: string;
-    changed_by: string | null;
-    created_at: string;
-  }>(
-    `
-      SELECT event_type, changed_by, created_at
-      FROM coown_asset_trust_events
-      WHERE asset_id = $1
-      ORDER BY created_at DESC
-      LIMIT 10
-    `,
-    [assetId]
-  );
-
-  // Compute appraisal staleness in days (null when no appraisal).
-  let appraisalStaleDays: number | null = null;
-  if (row.appraisal_valued_at) {
-    const valuedAt = new Date(row.appraisal_valued_at).getTime();
-    if (Number.isFinite(valuedAt)) {
-      appraisalStaleDays = Math.max(0, Math.floor((Date.now() - valuedAt) / (24 * 60 * 60 * 1000)));
-    }
-  }
-
-  // ── WS6: Market audit trail + stale mark ──
-  // Query the last 10 public market audit events and compute the stale
-  // mark (days since the last public event). Null when no events exist.
-  const marketAuditResult = await db.query<{
-    id: number;
-    event_type: string;
-    event_payload: unknown;
-    created_at: string;
-  }>(
-    `SELECT id, event_type, event_payload, created_at
-     FROM coown_market_audit_events
-     WHERE asset_id = $1 AND visibility = 'public'
-     ORDER BY created_at DESC, id DESC
-     LIMIT 10`,
-    [assetId]
-  );
-
-  const staleMarkResult = await db.query<{ last_event_at: string | null }>(
-    `SELECT MAX(created_at) AS last_event_at FROM coown_market_audit_events
-     WHERE asset_id = $1 AND visibility = 'public'`,
-    [assetId]
-  );
-  const lastMarketEventAt = staleMarkResult.rows[0]?.last_event_at ?? null;
-  const staleMarkDays = lastMarketEventAt
-    ? Math.max(0, Math.floor((Date.now() - new Date(lastMarketEventAt).getTime()) / (24 * 60 * 60 * 1000)))
-    : null;
-
-  // ── Market snapshot (spec 03_COOWN §2) ──
-  // Compute from settled trades and open orders so the frontend can
-  // distinguish "Reference unit price" from "Last settled trade".
-  const snapshotResult = await db.query<{
-    last_execution_price_gbp: string | null;
-    last_execution_at: string | null;
-    volume_24h_gbp: string | null;
-    price_24h_ago_gbp: string | null;
-    best_bid_gbp: string | null;
-    best_ask_gbp: string | null;
-  }>(
-    `
-      WITH last_trade AS (
-        SELECT unit_price_gbp, created_at
-        FROM coOwn_trades
-        WHERE asset_id = $1 AND settlement_status = 'settled'
-        ORDER BY created_at DESC, id DESC
-        LIMIT 1
-      ),
-      vol_24h AS (
-        SELECT COALESCE(SUM(notional_gbp), 0)::text AS volume
-        FROM coOwn_trades
-        WHERE asset_id = $1
-          AND settlement_status = 'settled'
-          AND created_at >= NOW() - INTERVAL '24 hours'
-      ),
-      price_24h_ago AS (
-        SELECT unit_price_gbp
-        FROM coOwn_trades
-        WHERE asset_id = $1
-          AND settlement_status = 'settled'
-          AND created_at < NOW() - INTERVAL '24 hours'
-        ORDER BY created_at DESC, id DESC
-        LIMIT 1
-      ),
-      best_bid AS (
-        SELECT MAX(unit_price_gbp)::text AS price
-        FROM coOwn_orders
-        WHERE asset_id = $1
-          AND side = 'buy'
-          AND status IN ('open', 'partially_filled')
-          AND remaining_units > 0
-      ),
-      best_ask AS (
-        SELECT MIN(unit_price_gbp)::text AS price
-        FROM coOwn_orders
-        WHERE asset_id = $1
-          AND side = 'sell'
-          AND status IN ('open', 'partially_filled')
-          AND remaining_units > 0
-      )
-      SELECT
-        (SELECT unit_price_gbp::text FROM last_trade) AS last_execution_price_gbp,
-        (SELECT to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM last_trade) AS last_execution_at,
-        (SELECT volume FROM vol_24h) AS volume_24h_gbp,
-        (SELECT unit_price_gbp::text FROM price_24h_ago) AS price_24h_ago_gbp,
-        (SELECT price FROM best_bid) AS best_bid_gbp,
-        (SELECT price FROM best_ask) AS best_ask_gbp
-    `,
-    [assetId]
-  );
-
-  const snap = snapshotResult.rows[0];
-  const lastExecutionPriceGbp = snap?.last_execution_price_gbp
-    ? Number(snap.last_execution_price_gbp)
-    : null;
-  const price24hAgo = snap?.price_24h_ago_gbp ? Number(snap.price_24h_ago_gbp) : null;
-  const volume24h = snap?.volume_24h_gbp ? Number(snap.volume_24h_gbp) : 0;
-  let marketMovePct24h: number | null = null;
-  if (lastExecutionPriceGbp != null && price24hAgo != null && price24hAgo > 0) {
-    marketMovePct24h = ((lastExecutionPriceGbp - price24hAgo) / price24hAgo) * 100;
-  }
-
-  const marketSnapshot = {
-    version: 1,
-    asOf: new Date().toISOString(),
-    // GAP 5: connection status — 'live' when asset is open and has
-    // recent market activity, 'stale' when no events for >7 days,
-    // 'closed' when asset is not open, 'degraded' when partial.
-    connectionStatus: row.is_open
-      ? (staleMarkDays != null && staleMarkDays > 7 ? 'stale' : 'live')
-      : 'closed',
-    lastExecutionPriceGbp,
-    lastExecutionAt: snap?.last_execution_at ?? null,
-    volume24hGbp: volume24h > 0 ? volume24h : null,
-    marketMovePct24h,
-    bestBidGbp: snap?.best_bid_gbp ? Number(snap.best_bid_gbp) : null,
-    bestAskGbp: snap?.best_ask_gbp ? Number(snap.best_ask_gbp) : null,
-  };
-
-  // ── OHLC candles (spec 03_COOWN §4) ──
-  // Aggregate settled trades into daily buckets for the last 7 days.
-  // Returns empty array when no trades exist — the frontend gates the
-  // candle toggle on this.
-  const candleResult = await db.query<{
-    bucket_day: string;
-    open_price: string;
-    high_price: string;
-    low_price: string;
-    close_price: string;
-    total_volume: string;
-  }>(
-    `
-      SELECT
-        date_trunc('day', created_at) AS bucket_day,
-        (array_agg(unit_price_gbp ORDER BY created_at ASC, id ASC))[1]::text AS open_price,
-        MAX(unit_price_gbp)::text AS high_price,
-        MIN(unit_price_gbp)::text AS low_price,
-        (array_agg(unit_price_gbp ORDER BY created_at DESC, id DESC))[1]::text AS close_price,
-        SUM(units)::text AS total_volume
-      FROM coOwn_trades
-      WHERE asset_id = $1
-        AND settlement_status = 'settled'
-        AND created_at >= NOW() - INTERVAL '7 days'
-      GROUP BY bucket_day
-      ORDER BY bucket_day ASC
-    `,
-    [assetId]
-  );
-
-  const candles = candleResult.rows.map((c) => ({
-    timestamp: c.bucket_day,
-    openGbp: Number(c.open_price),
-    highGbp: Number(c.high_price),
-    lowGbp: Number(c.low_price),
-    closeGbp: Number(c.close_price),
-    volume: Number(c.total_volume),
-  }));
-
-  // T06: Co-Own rights/dossier — fetch the currently published rights
-  // version for this asset. Returns null when no rights have been
-  // published (e.g., a new asset with no dossier yet).
-  const rightsResult = await db.query<{
-    id: string;
-    version: number;
-    rights_type: string;
-    jurisdiction: string;
-    governing_law: string | null;
-    summary_terms: string;
-    transferable: boolean;
-    min_holding_units: number;
-    published_at: string;
-    tbc_eta_date: string | null;
-    tbc_reason: string | null;
-    economic_rights: string | null;
-    voting_rights: string | null;
-    exit_rights: string | null;
-    fee_rights: string | null;
-  }>(
-    `
-      SELECT id, version, rights_type, jurisdiction, governing_law,
-             summary_terms, transferable, min_holding_units, published_at,
-             tbc_eta_date, tbc_reason,
-             economic_rights, voting_rights, exit_rights, fee_rights
-      FROM coown_rights
-      WHERE asset_id = $1 AND status = 'published'
-      ORDER BY version DESC
-      LIMIT 1
-    `,
-    [assetId]
-  );
-
-  const rights = rightsResult.rows[0]
-    ? {
-        id: rightsResult.rows[0].id,
-        version: rightsResult.rows[0].version,
-        rightsType: rightsResult.rows[0].rights_type,
-        jurisdiction: rightsResult.rows[0].jurisdiction,
-        governingLaw: rightsResult.rows[0].governing_law,
-        summaryTerms: rightsResult.rows[0].summary_terms,
-        transferable: rightsResult.rows[0].transferable,
-        minHoldingUnits: rightsResult.rows[0].min_holding_units,
-        publishedAt: rightsResult.rows[0].published_at,
-        tbcEtaDate: rightsResult.rows[0].tbc_eta_date,
-        tbcReason: rightsResult.rows[0].tbc_reason,
-        economicRights: rightsResult.rows[0].economic_rights,
-        votingRights: rightsResult.rows[0].voting_rights,
-        exitRights: rightsResult.rows[0].exit_rights,
-        feeRights: rightsResult.rows[0].fee_rights,
-      }
-    : null;
-
-  // ── GAP 4 fix: Risk disclosures ──
-  // Fetch the currently published risk disclosure version. Returns
-  // null when no risk disclosures have been published.
-  const riskResult = await db.query<{
-    id: string;
-    version: number;
-    market_risk: string | null;
-    liquidity_risk: string | null;
-    custody_risk: string | null;
-    regulatory_risk: string | null;
-    counterparty_risk: string | null;
-    other_risks: string | null;
-    published_at: string;
-  }>(
-    `SELECT id, version, market_risk, liquidity_risk, custody_risk,
-            regulatory_risk, counterparty_risk, other_risks, published_at
-     FROM coown_risk_disclosures
-     WHERE asset_id = $1 AND status = 'published'
-     ORDER BY version DESC
-     LIMIT 1`,
-    [assetId]
-  );
-
-  const riskDisclosures = riskResult.rows[0]
-    ? {
-        marketRisk: riskResult.rows[0].market_risk,
-        liquidityRisk: riskResult.rows[0].liquidity_risk,
-        custodyRisk: riskResult.rows[0].custody_risk,
-        regulatoryRisk: riskResult.rows[0].regulatory_risk,
-        counterpartyRisk: riskResult.rows[0].counterparty_risk,
-        otherRisks: riskResult.rows[0].other_risks,
-        publishedAt: riskResult.rows[0].published_at,
-      }
-    : null;
-
-  return {
-    ok: true,
-    item: {
-      id: row.id,
-      listingId: row.listing_id,
-      issuerId: row.issuer_id,
-      issuer: row.issuer_username
-        ? {
-            username: row.issuer_username,
-            displayName: row.issuer_display_name,
-            avatar: row.issuer_avatar,
-            location: row.issuer_location,
-          }
-        : null,
-      // ── Issuer verification (WS2) ──
-      // Tiered verification: 'email' (baseline), 'id' (KYC document),
-      // 'seller' (full seller standards). Null when no profile row exists
-      // (fail closed — the frontend shows no badge).
-      issuerVerification: row.issuer_verification_tier
-        ? {
-            tier: row.issuer_verification_tier,
-            tierSetAt: row.issuer_verification_tier_set_at,
-            kycVerified: row.issuer_verification_tier === 'id' || row.issuer_verification_tier === 'seller',
-            sellerStandardsMet: row.issuer_seller_standards_met ?? false,
-          }
-        : null,
-      title: row.title,
-      imageUrl: row.image_url,
-      totalUnits: row.total_units,
-      availableUnits: row.available_units,
-      unitPriceGbp: Number(row.unit_price_gbp),
-      unitPriceStable: Number(row.unit_price_stable),
-      settlementMode: row.settlement_mode,
-      issuerJurisdiction: row.issuer_jurisdiction,
-      marketMovePct24h: row.market_move_pct_24h == null ? null : Number(row.market_move_pct_24h),
-      holders: row.holders,
-      volume24hGbp: row.volume_24h_gbp == null ? null : Number(row.volume_24h_gbp),
-      isOpen: row.is_open,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      // ── Trust profile (WS1) ──
-      // All fields nullable so existing assets don't break. The frontend
-      // fails closed: a null field means the corresponding UI element does
-      // not render (no fabricated trust signals).
-      legalVehicleType: row.legal_vehicle_type,
-      legalVehicleName: row.legal_vehicle_name,
-      legalVehicleJurisdiction: row.legal_vehicle_jurisdiction,
-      custodianName: row.custodian_name,
-      custodianLocation: row.custodian_location,
-      custodyInsured: row.custody_insured,
-      custodyInsurer: row.custody_insurer,
-      custodyPolicyRef: row.custody_policy_ref,
-      custodyCoverageGbp: row.custody_coverage_gbp == null ? null : Number(row.custody_coverage_gbp),
-      authenticityStatus: row.authenticity_status,
-      authenticityMethod: row.authenticity_method,
-      authenticityVerifiedAt: row.authenticity_verified_at,
-      provenance: row.provenance,
-      conditionGrade: row.condition_grade,
-      appraisalValueGbp: row.appraisal_value_gbp == null ? null : Number(row.appraisal_value_gbp),
-      appraisalValuedAt: row.appraisal_valued_at,
-      appraisalValuer: row.appraisal_valuer,
-      appraisalStaleDays,
-      buyerProtection: row.buyer_protection,
-      buyerProtectionTermsUrl: row.buyer_protection_terms_url,
-      // ── Listing tier (WS5) ──
-      listingTier: row.listing_tier,
-      // ── Settlement & escrow (WS3) ──
-      escrowPartner: row.escrow_partner,
-      escrowTermsUrl: row.escrow_terms_url,
-      settlementEtaHours: row.settlement_eta_hours,
-      // ── Wallet safeguarding (WS4) ──
-      safeguarded: row.safeguarded,
-      safeguardingPartner: row.safeguarding_partner,
-      safeguardingEvidenceUrl: row.safeguarding_evidence_url,
-      safeguardingTermsUrl: row.safeguarding_terms_url,
-      // ── Recourse agreement (WS7) ──
-      recourseAgreementSigned: row.recourse_agreement_signed ?? false,
-      recourseStatus: row.recourse_status ?? 'pending',
-      totalTradedValueGbp: row.total_traded_value_gbp != null ? Number(row.total_traded_value_gbp) : 0,
-      activeVerificationDemands: row.active_verification_demands ?? 0,
-      trustAuditEvents: trustEventsResult.rows.map((e) => ({
-        eventType: e.event_type,
-        createdAt: e.created_at,
-        changedByLabel: e.changed_by ?? null,
-      })),
-      // ── WS6: Market audit trail + stale mark ──
-      staleMarkDays,
-      marketAuditEvents: marketAuditResult.rows.map((e) => ({
-        id: e.id,
-        eventType: e.event_type,
-        payload: e.event_payload,
-        createdAt: e.created_at,
-      })),
-      // Per spec 03_COOWN §2: backend-backed market snapshot computed
-      // from settled trades and open orders.
-      marketSnapshot,
-      // Per spec 03_COOWN §4: canonical OHLC candles aggregated from
-      // settled trades. Empty array when no trades exist.
-      candles,
-      // T06: versioned rights/dossier. Null when no rights have been
-      // published for this asset.
-      rights,
-      // GAP 4: versioned risk disclosures. Null when none published.
-      riskDisclosures,
-    },
-  };
-});
-
-// ── WS1: Refresh appraisal (issuer-only) ──
-// Closes the "stale appraisal with no action" gap. The issuer can refresh
-// the appraisal value/date/valuer; the change is logged to the append-only
-// trust audit trail.
-app.post('/co-own/assets/:assetId/trust/refresh-appraisal', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const { assetId } = paramsSchema.parse(request.params);
-  const bodySchema = z.object({
-    appraisalValueGbp: z.number().nonnegative(),
-    appraisalValuer: z.string().min(2).max(180),
-    appraisalNotes: z.string().max(2000).optional(),
-  });
-  const payload = bodySchema.parse(request.body);
-
-  const authUser = (request as any).authUser;
-  if (!authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    const assetResult = await client.query<{ issuer_id: string; appraisal_value_gbp: string | number | null; appraisal_valued_at: string | null; appraisal_valuer: string | null }>(
-      'SELECT issuer_id, appraisal_value_gbp, appraisal_valued_at, appraisal_valuer FROM coOwn_assets WHERE id = $1 FOR UPDATE',
-      [assetId]
-    );
-    const asset = assetResult.rows[0];
-    if (!asset) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Asset not found' };
-    }
-    if (asset.issuer_id !== authUser.userId) {
-      await client.query('ROLLBACK');
-      reply.code(403);
-      return { ok: false, error: 'Only the issuer can refresh the appraisal' };
-    }
-
-    const previousPayload = {
-      appraisalValueGbp: asset.appraisal_value_gbp == null ? null : Number(asset.appraisal_value_gbp),
-      appraisalValuedAt: asset.appraisal_valued_at,
-      appraisalValuer: asset.appraisal_valuer,
-    };
-
-    await client.query(
-      `UPDATE coOwn_assets
-       SET appraisal_value_gbp = $1,
-           appraisal_valued_at = NOW(),
-           appraisal_valuer = $2,
-           updated_at = NOW()
-       WHERE id = $3`,
-      [roundTo(payload.appraisalValueGbp, 2), payload.appraisalValuer, assetId]
-    );
-
-    await client.query(
-      `INSERT INTO coown_asset_trust_events (asset_id, event_type, changed_by, previous_payload, new_payload)
-       VALUES ($1, 'appraisal_refreshed', $2, $3, $4)`,
-      [
-        assetId,
-        authUser.userId,
-        JSON.stringify(previousPayload),
-        JSON.stringify({ appraisalValueGbp: payload.appraisalValueGbp, appraisalValuer: payload.appraisalValuer, notes: payload.appraisalNotes ?? null }),
-      ]
-    );
-
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    app.log.error({ err }, 'POST /co-own/assets/:assetId/trust/refresh-appraisal failed');
-    reply.code(500);
-    return { ok: false, error: 'Failed to refresh appraisal' };
-  } finally {
-    client.release();
-  }
-
-  return { ok: true, refreshedAt: new Date().toISOString() };
-});
-
-// ── WS5: Promote asset from 'preview' to 'listed' (issuer-only) ──
-// An asset can be promoted only when it has a published rights document
-// with no TBC metadata (tbc_eta_date and tbc_reason both null). This
-// makes the half-listed state honest: 'preview' assets are visible but
-// not tradeable until rights are fully confirmed.
-app.post('/co-own/assets/:assetId/promote', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const { assetId } = paramsSchema.parse(request.params);
-
-  const authUser = (request as any).authUser;
-  if (!authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    const assetResult = await client.query<{ issuer_id: string; listing_tier: string }>(
-      'SELECT issuer_id, listing_tier FROM coOwn_assets WHERE id = $1 FOR UPDATE',
-      [assetId]
-    );
-    const asset = assetResult.rows[0];
-    if (!asset) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Asset not found' };
-    }
-    if (asset.issuer_id !== authUser.userId) {
-      await client.query('ROLLBACK');
-      reply.code(403);
-      return { ok: false, error: 'Only the issuer can promote this asset' };
-    }
-    if (asset.listing_tier !== 'preview') {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: 'Asset is not in preview tier', code: 'NOT_PREVIEW' };
-    }
-
-    // Check that published rights exist and have no TBC metadata.
-    const rightsResult = await client.query<{ tbc_eta_date: string | null; tbc_reason: string | null }>(
-      `SELECT tbc_eta_date, tbc_reason FROM coown_rights
-       WHERE asset_id = $1 AND status = 'published'
-       ORDER BY version DESC LIMIT 1`,
-      [assetId]
-    );
-    const rights = rightsResult.rows[0];
-    if (!rights) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: 'Publish rights before promoting', code: 'RIGHTS_NOT_PUBLISHED' };
-    }
-    if (rights.tbc_eta_date || rights.tbc_reason) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: 'Rights still have TBC metadata', code: 'RIGHTS_TBC_PENDING' };
-    }
-
-    // Require a signed recourse agreement before promotion.
-    // The seller must have signed the personal liability agreement
-    // before the asset can be traded.
-    const recourseResult = await client.query<{ status: string }>(
-      `SELECT status FROM coown_recourse_agreements
-       WHERE asset_id = $1 AND status = 'active'
-       LIMIT 1`,
-      [assetId]
-    );
-    if (!recourseResult.rows[0]) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return {
-        ok: false,
-        error: 'Recourse agreement must be signed before promoting to listed',
-        code: 'RECOURSE_AGREEMENT_REQUIRED',
-      };
-    }
-
-    await client.query(
-      `UPDATE coOwn_assets SET listing_tier = 'listed', updated_at = NOW() WHERE id = $1`,
-      [assetId]
-    );
-
-    // Record the tier transition in the market audit trail.
-    await client.query(
-      `INSERT INTO coown_market_audit_events (asset_id, event_type, event_payload, visibility, changed_by)
-       VALUES ($1, 'listing.tier_promoted', $2::jsonb, 'public', $3)`,
-      [
-        assetId,
-        JSON.stringify({ fromTier: 'preview', toTier: 'listed' }),
-        authUser.userId,
-      ]
-    );
-
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    app.log.error({ err }, 'POST /co-own/assets/:assetId/promote failed');
-    reply.code(500);
-    return { ok: false, error: 'Failed to promote asset' };
-  } finally {
-    client.release();
-  }
-
-  return { ok: true, listingTier: 'listed' };
-});
-
-// ── WS6: Audit trail ──
-// Returns the last 50 market audit events for an asset. Public events
-// are visible to all; internal events are issuer-only. The frontend
-// uses this to surface stale marks and the market history sheet.
-app.get('/co-own/assets/:assetId/audit-trail', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const { assetId } = paramsSchema.parse(request.params);
-
-  const authUser = (request as any).authUser;
-  const isIssuerOrAdmin = authUser ? await db.query(
-    'SELECT 1 FROM coOwn_assets WHERE id = $1 AND issuer_id = $2',
-    [assetId, authUser.userId]
-  ).then((r) => r.rows.length > 0).catch(() => false) : false;
-
-  const result = await db.query<{
-    id: number;
-    event_type: string;
-    event_payload: unknown;
-    visibility: string;
-    created_at: string;
-    created_by: string | null;
-  }>(
-    `SELECT id, event_type, event_payload, visibility, created_at, created_by
-     FROM coown_market_audit_events
-     WHERE asset_id = $1 ${isIssuerOrAdmin ? '' : "AND visibility = 'public'"}
-     ORDER BY created_at DESC, id DESC
-     LIMIT 50`,
-    [assetId]
-  );
-
-  // Compute stale mark: days since the last public market event.
-  const staleResult = await db.query<{ last_event_at: string | null }>(
-    `SELECT MAX(created_at) AS last_event_at FROM coown_market_audit_events
-     WHERE asset_id = $1 AND visibility = 'public'`,
-    [assetId]
-  );
-  const lastEventAt = staleResult.rows[0]?.last_event_at;
-  const staleMarkDays = lastEventAt
-    ? Math.floor((Date.now() - new Date(lastEventAt).getTime()) / (1000 * 60 * 60 * 24))
-    : null;
-
-  return {
-    ok: true,
-    staleMarkDays,
-    lastEventAt,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      eventType: row.event_type,
-      payload: row.event_payload,
-      visibility: row.visibility,
-      createdAt: row.created_at,
-      createdBy: row.created_by,
-    })),
-  };
-});
-
-// ── WS2: Issuer verification profile ──
-// Returns the caller's Co-Own issuer verification tier. Used by
-// CreateSyndicateScreen to gate issuance on KYC. Public read so the
-// issuer can check their own status before starting the flow.
-app.get('/co-own/issuer-verification/:userId', async (request, reply) => {
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-
-  const result = await db.query<{
-    verification_tier: 'email' | 'id' | 'seller' | null;
-    verification_tier_set_at: string | null;
-    seller_standards_met: boolean | null;
-  }>(
-    'SELECT verification_tier, verification_tier_set_at, seller_standards_met FROM coown_issuer_verification_profile WHERE user_id = $1',
-    [userId]
-  );
-
-  const row = result.rows[0];
-  if (!row || !row.verification_tier) {
-    return { ok: true, verification: null };
-  }
-
-  return {
-    ok: true,
-    verification: {
-      tier: row.verification_tier,
-      tierSetAt: row.verification_tier_set_at,
-      kycVerified: row.verification_tier === 'id' || row.verification_tier === 'seller',
-      sellerStandardsMet: row.seller_standards_met ?? false,
-    },
-  };
-});
-
-// ── Recourse Agreement System ───────────────────────────────────────
-// When a seller fractionalizes an asset, they must sign a recourse
-// agreement making them personally liable for safeguarding the physical
-// asset, proving authenticity on demand, and paying back the total
-// traded value if they fail. This is a consignment-with-recourse model.
-
-// POST /co-own/assets/:assetId/recourse-agreement
-// Seller signs the recourse agreement. Required before promotion to 'listed'.
-app.post('/co-own/assets/:assetId/recourse-agreement', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const { assetId } = paramsSchema.parse(request.params);
-
-  const authUser = (request as any).authUser;
-  if (!authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    agreementVersion: z.number().int().min(1).default(1),
-    agreementUrl: z.string().url().optional(),
-    signatureIp: z.string().optional(),
-    signatureUserAgent: z.string().optional(),
-    personalGuarantee: z.boolean().default(true),
-  });
-  const body = bodySchema.parse(request.body);
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Lock the asset row and verify ownership
-    const assetResult = await client.query<{ issuer_id: string; total_units: number; unit_price_gbp: string | number; listing_tier: string; recourse_agreement_signed: boolean }>(
-      `SELECT issuer_id, total_units, unit_price_gbp, listing_tier, recourse_agreement_signed
-       FROM coOwn_assets WHERE id = $1 FOR UPDATE`,
-      [assetId]
-    );
-    const asset = assetResult.rows[0];
-    if (!asset) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Asset not found' };
-    }
-    if (asset.issuer_id !== authUser.userId) {
-      await client.query('ROLLBACK');
-      reply.code(403);
-      return { ok: false, error: 'Only the issuer can sign the recourse agreement' };
-    }
-
-    // Check if already signed
-    if (asset.recourse_agreement_signed) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: 'Recourse agreement already signed', code: 'ALREADY_SIGNED' };
-    }
-
-    // Verify KYC tier is at least 'id'
-    const kycResult = await client.query<{ verification_tier: string | null }>(
-      'SELECT verification_tier FROM coown_issuer_verification_profile WHERE user_id = $1',
-      [authUser.userId]
-    );
-    const tier = kycResult.rows[0]?.verification_tier ?? 'email';
-    if (tier !== 'id' && tier !== 'seller') {
-      await client.query('ROLLBACK');
-      reply.code(403);
-      return { ok: false, error: 'KYC verification required before signing recourse agreement', code: 'KYC_REQUIRED' };
-    }
-
-    // Calculate max liability: total_units * unit_price
-    const maxLiability = Number(asset.total_units) * Number(asset.unit_price_gbp);
-    const agreementId = `recourse_${assetId}_${Date.now()}`;
-
-    // Insert the recourse agreement
-    await client.query(
-      `INSERT INTO coown_recourse_agreements
-        (id, asset_id, seller_id, agreement_version, agreement_url,
-         signed_at, signature_ip, signature_user_agent,
-         total_units_at_signing, unit_price_at_signing, max_liability_gbp,
-         personal_guarantee, status)
-       VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9, $10, $11, 'active')`,
-      [
-        agreementId,
-        assetId,
-        authUser.userId,
-        body.agreementVersion,
-        body.agreementUrl ?? null,
-        body.signatureIp ?? null,
-        body.signatureUserAgent ?? null,
-        asset.total_units,
-        asset.unit_price_gbp,
-        roundTo(maxLiability, 2),
-        body.personalGuarantee,
-      ]
-    );
-
-    // Update asset: mark recourse agreement as signed
-    await client.query(
-      `UPDATE coOwn_assets
-       SET recourse_agreement_signed = TRUE,
-           recourse_status = 'active',
-           updated_at = NOW()
-       WHERE id = $1`,
-      [assetId]
-    );
-
-    // Update seller liability profile
-    await client.query(
-      `INSERT INTO coown_seller_liability_profile
-        (user_id, total_active_liability_gbp, active_agreement_count,
-         total_agreements_signed, risk_tier, background_check_status, updated_at)
-       VALUES ($1, $2, 1, 1, 'standard', 'passed', NOW())
-       ON CONFLICT (user_id) DO UPDATE SET
-         total_active_liability_gbp = coown_seller_liability_profile.total_active_liability_gbp + $2,
-         active_agreement_count = coown_seller_liability_profile.active_agreement_count + 1,
-         total_agreements_signed = coown_seller_liability_profile.total_agreements_signed + 1,
-         updated_at = NOW()`,
-      [authUser.userId, roundTo(maxLiability, 2)]
-    );
-
-    // Log the event
-    await client.query(
-      `INSERT INTO coown_recourse_events
-        (asset_id, agreement_id, event_type, event_payload, triggered_by, visibility)
-       VALUES ($1, $2, 'agreement_signed', $3::jsonb, $4, 'public')`,
-      [
-        assetId,
-        agreementId,
-        JSON.stringify({
-          maxLiabilityGbp: roundTo(maxLiability, 2),
-          totalUnits: asset.total_units,
-          unitPriceGbp: Number(asset.unit_price_gbp),
-          personalGuarantee: body.personalGuarantee,
-        }),
-        authUser.userId,
-      ]
-    );
-
-    // Also log to the market audit trail
-    await client.query(
-      `INSERT INTO coown_market_audit_events (asset_id, event_type, event_payload, visibility, changed_by)
-       VALUES ($1, 'recourse.agreement_signed', $2::jsonb, 'public', $3)`,
-      [
-        assetId,
-        JSON.stringify({ maxLiabilityGbp: roundTo(maxLiability, 2), agreementId }),
-        authUser.userId,
-      ]
-    );
-
-    await client.query('COMMIT');
-
-    return {
-      ok: true,
-      agreement: {
-        id: agreementId,
-        assetId,
-        sellerId: authUser.userId,
-        maxLiabilityGbp: roundTo(maxLiability, 2),
-        totalUnits: asset.total_units,
-        unitPriceGbp: Number(asset.unit_price_gbp),
-        personalGuarantee: body.personalGuarantee,
-        status: 'active',
-        signedAt: new Date().toISOString(),
-      },
-    };
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    app.log.error({ err }, 'POST /co-own/assets/:assetId/recourse-agreement failed');
-    reply.code(500);
-    return { ok: false, error: 'Failed to sign recourse agreement' };
-  } finally {
-    client.release();
-  }
-});
-
-// GET /co-own/assets/:assetId/recourse
-// Returns the recourse agreement status and verification demand history.
-// Public — buyers need to see this before purchasing units.
-app.get('/co-own/assets/:assetId/recourse', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const { assetId } = paramsSchema.parse(request.params);
-
-  const agreementResult = await db.query<{
-    id: string;
-    seller_id: string;
-    agreement_version: number;
-    agreement_url: string | null;
-    signed_at: string;
-    max_liability_gbp: string | number;
-    personal_guarantee: boolean;
-    status: string;
-    triggered_at: string | null;
-    triggered_reason: string | null;
-    settled_at: string | null;
-    settled_amount_gbp: string | number | null;
-  }>(
-    `SELECT id, seller_id, agreement_version, agreement_url, signed_at,
-            max_liability_gbp, personal_guarantee, status,
-            triggered_at, triggered_reason, settled_at, settled_amount_gbp
-     FROM coown_recourse_agreements
-     WHERE asset_id = $1
-     LIMIT 1`,
-    [assetId]
-  );
-
-  const agreement = agreementResult.rows[0];
-
-  // Get seller liability profile
-  let sellerLiability: {
-    total_active_liability_gbp: string | number;
-    active_agreement_count: number;
-    total_agreements_signed: number;
-    total_recourse_triggered: number;
-    risk_tier: string;
-    background_check_status: string;
-  } | null = null;
-
-  if (agreement) {
-    const liabilityResult = await db.query<{
-      total_active_liability_gbp: string | number;
-      active_agreement_count: number;
-      total_agreements_signed: number;
-      total_recourse_triggered: number;
-      risk_tier: string;
-      background_check_status: string;
-    }>(
-      `SELECT total_active_liability_gbp, active_agreement_count,
-              total_agreements_signed, total_recourse_triggered,
-              risk_tier, background_check_status
-       FROM coown_seller_liability_profile
-       WHERE user_id = $1`,
-      [agreement.seller_id]
-    );
-    sellerLiability = liabilityResult.rows[0] ?? null;
-  }
-
-  // Get verification demands
-  const demandsResult = await db.query<{
-    id: number;
-    requested_by: string;
-    demand_type: string;
-    deadline: string;
-    status: string;
-    responded_at: string | null;
-    evidence_url: string | null;
-    evidence_notes: string | null;
-    inspector_verdict: string | null;
-    created_at: string;
-  }>(
-    `SELECT id, requested_by, demand_type, deadline, status,
-            responded_at, evidence_url, evidence_notes,
-            inspector_verdict, created_at
-     FROM coown_verification_demands
-     WHERE asset_id = $1
-     ORDER BY created_at DESC
-     LIMIT 20`,
-    [assetId]
-  );
-
-  // Get recourse events (audit trail)
-  const eventsResult = await db.query<{
-    id: number;
-    event_type: string;
-    event_payload: unknown;
-    amount_gbp: string | number | null;
-    triggered_by: string | null;
-    created_at: string;
-  }>(
-    `SELECT id, event_type, event_payload, amount_gbp, triggered_by, created_at
-     FROM coown_recourse_events
-     WHERE asset_id = $1
-     ORDER BY created_at DESC
-     LIMIT 30`,
-    [assetId]
-  );
-
-  return {
-    ok: true,
-    agreement: agreement ? {
-      id: agreement.id,
-      sellerId: agreement.seller_id,
-      version: agreement.agreement_version,
-      agreementUrl: agreement.agreement_url,
-      signedAt: agreement.signed_at,
-      maxLiabilityGbp: Number(agreement.max_liability_gbp),
-      personalGuarantee: agreement.personal_guarantee,
-      status: agreement.status,
-      triggeredAt: agreement.triggered_at,
-      triggeredReason: agreement.triggered_reason,
-      settledAt: agreement.settled_at,
-      settledAmountGbp: agreement.settled_amount_gbp != null ? Number(agreement.settled_amount_gbp) : null,
-    } : null,
-    sellerLiability: sellerLiability ? {
-      totalActiveLiabilityGbp: Number(sellerLiability.total_active_liability_gbp),
-      activeAgreementCount: sellerLiability.active_agreement_count,
-      totalAgreementsSigned: sellerLiability.total_agreements_signed,
-      totalRecourseTriggered: sellerLiability.total_recourse_triggered,
-      riskTier: sellerLiability.risk_tier,
-      backgroundCheckStatus: sellerLiability.background_check_status,
-    } : null,
-    verificationDemands: demandsResult.rows.map((d) => ({
-      id: d.id,
-      requestedBy: d.requested_by,
-      demandType: d.demand_type,
-      deadline: d.deadline,
-      status: d.status,
-      respondedAt: d.responded_at,
-      evidenceUrl: d.evidence_url,
-      evidenceNotes: d.evidence_notes,
-      inspectorVerdict: d.inspector_verdict,
-      createdAt: d.created_at,
-    })),
-    events: eventsResult.rows.map((e) => ({
-      id: e.id,
-      eventType: e.event_type,
-      payload: e.event_payload,
-      amountGbp: e.amount_gbp != null ? Number(e.amount_gbp) : null,
-      triggeredBy: e.triggered_by,
-      createdAt: e.created_at,
-    })),
-  };
-});
-
-// POST /co-own/assets/:assetId/verification-demand
-// A unit holder or the platform demands proof of authenticity, possession,
-// or condition. The seller has a deadline to respond.
-app.post('/co-own/assets/:assetId/verification-demand', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const { assetId } = paramsSchema.parse(request.params);
-
-  const authUser = (request as any).authUser;
-  if (!authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    demandType: z.enum(['authenticity', 'possession', 'condition', 'inspection']),
-    deadlineDays: z.number().int().min(1).max(30).default(14),
-    notes: z.string().max(1000).optional(),
-  });
-  const body = bodySchema.parse(request.body);
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Verify the asset exists and has an active recourse agreement
-    const assetResult = await client.query<{ issuer_id: string; recourse_agreement_signed: boolean; recourse_status: string }>(
-      `SELECT issuer_id, recourse_agreement_signed, recourse_status
-       FROM coOwn_assets WHERE id = $1 FOR UPDATE`,
-      [assetId]
-    );
-    const asset = assetResult.rows[0];
-    if (!asset) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Asset not found' };
-    }
-
-    // The demander must be a unit holder (not the issuer) or platform
-    if (authUser.userId === asset.issuer_id) {
-      await client.query('ROLLBACK');
-      reply.code(403);
-      return { ok: false, error: 'Issuer cannot demand verification from themselves', code: 'ISSUER_CANNOT_DEMAND' };
-    }
-
-    // Check if the demander holds units
-    const holdingResult = await client.query<{ units_owned: number }>(
-      'SELECT units_owned FROM coOwn_holdings WHERE asset_id = $1 AND user_id = $2',
-      [assetId, authUser.userId]
-    );
-    const holding = holdingResult.rows[0];
-    if (!holding || holding.units_owned <= 0) {
-      await client.query('ROLLBACK');
-      reply.code(403);
-      return { ok: false, error: 'Only unit holders can request verification', code: 'NOT_A_HOLDER' };
-    }
-
-    // Check for existing pending demands of the same type
-    const existingResult = await client.query<{ id: number }>(
-      `SELECT id FROM coown_verification_demands
-       WHERE asset_id = $1 AND demand_type = $2 AND status = 'pending'`,
-      [assetId, body.demandType]
-    );
-    if (existingResult.rows.length > 0) {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: 'A pending verification demand of this type already exists', code: 'DEMAND_EXISTS' };
-    }
-
-    // Create the demand
-    const deadline = new Date(Date.now() + body.deadlineDays * 24 * 60 * 60 * 1000);
-    const demandResult = await client.query<{ id: number }>(
-      `INSERT INTO coown_verification_demands
-        (asset_id, requested_by, demand_type, deadline, status)
-       VALUES ($1, $2, $3, $4, 'pending')
-       RETURNING id`,
-      [assetId, authUser.userId, body.demandType, deadline]
-    );
-    const demandId = demandResult.rows[0].id;
-
-    // Update active demand count on asset
-    await client.query(
-      `UPDATE coOwn_assets SET active_verification_demands = active_verification_demands + 1, updated_at = NOW() WHERE id = $1`,
-      [assetId]
-    );
-
-    // Log the event
-    await client.query(
-      `INSERT INTO coown_recourse_events
-        (asset_id, event_type, event_payload, triggered_by, visibility)
-       VALUES ($1, 'verification_demand_sent', $2::jsonb, $3, 'public')`,
-      [
-        assetId,
-        JSON.stringify({
-          demandId,
-          demandType: body.demandType,
-          deadline: deadline.toISOString(),
-          requestedBy: authUser.userId,
-          notes: body.notes ?? null,
-        }),
-        authUser.userId,
-      ]
-    );
-
-    // Notify the seller that a verification demand has been filed
-    const demandTypeLabel = body.demandType === 'authenticity' ? 'authenticity proof'
-      : body.demandType === 'possession' ? 'possession proof'
-      : body.demandType === 'condition' ? 'condition proof'
-      : 'inspection access';
-    await client.query(
-      `INSERT INTO notification_events (id, user_id, channel, title, body, payload, status, event_type, actor_user_id)
-       VALUES ($1, $2, 'in_app', $3, $4, $5::jsonb, 'sent', 'coown_verification_demand', $6)`,
-      [
-        `notif_demand_${demandId}`,
-        asset.issuer_id,
-        'Verification requested',
-        `A unit holder has requested ${demandTypeLabel} for your Co-Own asset. You have ${body.deadlineDays} days to respond.`,
-        JSON.stringify({ assetId, demandId, demandType: body.demandType, deadline: deadline.toISOString() }),
-        authUser.userId,
-      ]
-    );
-
-    await client.query('COMMIT');
-
-    return {
-      ok: true,
-      demand: {
-        id: demandId,
-        assetId,
-        demandType: body.demandType,
-        deadline: deadline.toISOString(),
-        status: 'pending',
-        requestedBy: authUser.userId,
-      },
-    };
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    app.log.error({ err }, 'POST /co-own/assets/:assetId/verification-demand failed');
-    reply.code(500);
-    return { ok: false, error: 'Failed to create verification demand' };
-  } finally {
-    client.release();
-  }
-});
-
-// POST /co-own/assets/:assetId/verification-demand/:demandId/respond
-// Seller responds to a verification demand with evidence.
-app.post('/co-own/assets/:assetId/verification-demand/:demandId/respond', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2), demandId: z.string().min(1) });
-  const { assetId, demandId } = paramsSchema.parse(request.params);
-
-  const authUser = (request as any).authUser;
-  if (!authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    evidenceUrl: z.string().url(),
-    evidenceNotes: z.string().max(2000).optional(),
-  });
-  const body = bodySchema.parse(request.body);
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Verify the asset and seller
-    const assetResult = await client.query<{ issuer_id: string }>(
-      'SELECT issuer_id FROM coOwn_assets WHERE id = $1 FOR UPDATE',
-      [assetId]
-    );
-    const asset = assetResult.rows[0];
-    if (!asset) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Asset not found' };
-    }
-    if (asset.issuer_id !== authUser.userId) {
-      await client.query('ROLLBACK');
-      reply.code(403);
-      return { ok: false, error: 'Only the seller can respond to verification demands' };
-    }
-
-    // Get the demand
-    const demandResult = await client.query<{
-      id: number;
-      status: string;
-      demand_type: string;
-      deadline: string;
-      requested_by: string;
-    }>(
-      `SELECT id, status, demand_type, deadline, requested_by
-       FROM coown_verification_demands
-       WHERE id = $1 AND asset_id = $2 FOR UPDATE`,
-      [Number(demandId), assetId]
-    );
-    const demand = demandResult.rows[0];
-    if (!demand) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Verification demand not found' };
-    }
-    if (demand.status !== 'pending') {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: `Demand already ${demand.status}`, code: 'DEMAND_NOT_PENDING' };
-    }
-
-    // Check if deadline has passed
-    const now = new Date();
-    const deadline = new Date(demand.deadline);
-    if (now > deadline) {
-      // Mark as expired
-      await client.query(
-        `UPDATE coown_verification_demands SET status = 'expired', updated_at = NOW() WHERE id = $1`,
-        [demand.id]
-      );
-      await client.query(
-        `UPDATE coOwn_assets SET active_verification_demands = GREATEST(active_verification_demands - 1, 0), updated_at = NOW() WHERE id = $1`,
-        [assetId]
-      );
-      await client.query(
-        `INSERT INTO coown_recourse_events
-          (asset_id, event_type, event_payload, triggered_by, visibility)
-         VALUES ($1, 'verification_demand_expired', $2::jsonb, 'system', 'public')`,
-        [assetId, JSON.stringify({ demandId: demand.id, demandType: demand.demand_type })]
-      );
-      await client.query('COMMIT');
-      reply.code(410);
-      return { ok: false, error: 'Verification demand deadline has passed', code: 'DEADLINE_PASSED' };
-    }
-
-    // Update the demand with seller's response
-    await client.query(
-      `UPDATE coown_verification_demands
-       SET status = 'responded', responded_at = NOW(),
-           evidence_url = $1, evidence_notes = $2,
-           updated_at = NOW()
-       WHERE id = $3`,
-      [body.evidenceUrl, body.evidenceNotes ?? null, demand.id]
-    );
-
-    // Log the event
-    await client.query(
-      `INSERT INTO coown_recourse_events
-        (asset_id, event_type, event_payload, triggered_by, visibility)
-       VALUES ($1, 'verification_demand_responded', $2::jsonb, $3, 'public')`,
-      [
-        assetId,
-        JSON.stringify({
-          demandId: demand.id,
-          demandType: demand.demand_type,
-          evidenceUrl: body.evidenceUrl,
-        }),
-        authUser.userId,
-      ]
-    );
-
-    // Notify the buyer who requested the verification
-    if (demand.requested_by && demand.requested_by !== 'platform') {
-      await client.query(
-        `INSERT INTO notification_events (id, user_id, channel, title, body, payload, status, event_type, actor_user_id)
-         VALUES ($1, $2, 'in_app', $3, $4, $5::jsonb, 'sent', 'coown_verification_response', $6)`,
-        [
-          `notif_response_${demand.id}`,
-          demand.requested_by,
-          'Seller responded',
-          `The seller has provided evidence for your ${demand.demand_type} verification request.`,
-          JSON.stringify({ assetId, demandId: demand.id, evidenceUrl: body.evidenceUrl }),
-          authUser.userId,
-        ]
-      );
-    }
-
-    await client.query('COMMIT');
-
-    return {
-      ok: true,
-      demand: {
-        id: demand.id,
-        status: 'responded',
-        respondedAt: new Date().toISOString(),
-        evidenceUrl: body.evidenceUrl,
-      },
-    };
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    app.log.error({ err }, 'POST verification-demand/respond failed');
-    reply.code(500);
-    return { ok: false, error: 'Failed to respond to verification demand' };
-  } finally {
-    client.release();
-  }
-});
-
-// POST /co-own/assets/:assetId/verification-demand/:demandId/review
-// Platform reviews seller's evidence and marks compliant or failed.
-// If failed, recourse is triggered automatically.
-app.post('/co-own/assets/:assetId/verification-demand/:demandId/review', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2), demandId: z.string().min(1) });
-  const { assetId, demandId } = paramsSchema.parse(request.params);
-
-  const authUser = (request as any).authUser;
-  if (!authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    verdict: z.enum(['compliant', 'failed', 'inconclusive']),
-    inspectorReportUrl: z.string().url().optional(),
-    notes: z.string().max(2000).optional(),
-  });
-  const body = bodySchema.parse(request.body);
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Get the demand
-    const demandResult = await client.query<{
-      id: number;
-      status: string;
-      demand_type: string;
-    }>(
-      `SELECT id, status, demand_type
-       FROM coown_verification_demands
-       WHERE id = $1 AND asset_id = $2 FOR UPDATE`,
-      [Number(demandId), assetId]
-    );
-    const demand = demandResult.rows[0];
-    if (!demand) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'Verification demand not found' };
-    }
-    if (demand.status !== 'responded') {
-      await client.query('ROLLBACK');
-      reply.code(409);
-      return { ok: false, error: 'Demand must be in responded state to review', code: 'NOT_RESPONDED' };
-    }
-
-    // Update the demand with the verdict
-    const newStatus = body.verdict === 'compliant' ? 'compliant' : body.verdict === 'failed' ? 'failed' : 'responded';
-    await client.query(
-      `UPDATE coown_verification_demands
-       SET status = $1, inspector_id = $2, inspector_report_url = $3,
-           inspector_verdict = $4, inspector_reviewed_at = NOW(),
-           updated_at = NOW()
-       WHERE id = $5`,
-      [newStatus, authUser.userId, body.inspectorReportUrl ?? null, body.verdict, demand.id]
-    );
-
-    if (body.verdict === 'compliant' || body.verdict === 'failed') {
-      await client.query(
-        `UPDATE coOwn_assets SET active_verification_demands = GREATEST(active_verification_demands - 1, 0), updated_at = NOW() WHERE id = $1`,
-        [assetId]
-      );
-    }
-
-    // Log the event
-    await client.query(
-      `INSERT INTO coown_recourse_events
-        (asset_id, event_type, event_payload, triggered_by, visibility)
-       VALUES ($1, $2, $3::jsonb, $4, 'public')`,
-      [
-        assetId,
-        body.verdict === 'compliant' ? 'verification_compliant' : body.verdict === 'failed' ? 'verification_failed' : 'verification_demand_responded',
-        JSON.stringify({ demandId: demand.id, demandType: demand.demand_type, verdict: body.verdict, notes: body.notes }),
-        authUser.userId,
-      ]
-    );
-
-    // If verification FAILED, trigger recourse automatically
-    if (body.verdict === 'failed') {
-      const agreementResult = await client.query<{ id: string; seller_id: string; max_liability_gbp: string | number; status: string }>(
-        `SELECT id, seller_id, max_liability_gbp, status
-         FROM coown_recourse_agreements
-         WHERE asset_id = $1 AND status = 'active'
-         FOR UPDATE`,
-        [assetId]
-      );
-      const agreement = agreementResult.rows[0];
-      if (agreement) {
-        // Get total traded value (what's actually been traded, not max liability)
-        const tradedResult = await client.query<{ total_traded_value_gbp: string | number }>(
-          'SELECT total_traded_value_gbp FROM coOwn_assets WHERE id = $1',
-          [assetId]
-        );
-        const tradedValue = Number(tradedResult.rows[0]?.total_traded_value_gbp ?? 0);
-        const debtAmount = Math.max(tradedValue, Number(agreement.max_liability_gbp));
-
-        // Trigger the recourse agreement
-        await client.query(
-          `UPDATE coown_recourse_agreements
-           SET status = 'triggered', triggered_at = NOW(), triggered_reason = $1
-           WHERE id = $2`,
-          [`Verification failed: ${demand.demand_type}`, agreement.id]
-        );
-
-        // Update asset recourse status
-        await client.query(
-          `UPDATE coOwn_assets SET recourse_status = 'triggered', updated_at = NOW() WHERE id = $1`,
-          [assetId]
-        );
-
-        // Mark the demand as having triggered recourse
-        await client.query(
-          `UPDATE coown_verification_demands SET recourse_triggered = TRUE WHERE id = $1`,
-          [demand.id]
-        );
-
-        // Log recourse trigger
-        await client.query(
-          `INSERT INTO coown_recourse_events
-            (asset_id, agreement_id, event_type, event_payload, amount_gbp, triggered_by, visibility)
-           VALUES ($1, $2, 'recourse_triggered', $3::jsonb, $4, $5, 'public')`,
-          [
-            assetId,
-            agreement.id,
-            JSON.stringify({
-              reason: `Verification failed: ${demand.demand_type}`,
-              demandId: demand.id,
-              debtAmountGbp: roundTo(debtAmount, 2),
-            }),
-            roundTo(debtAmount, 2),
-            authUser.userId,
-          ]
-        );
-
-        // Log debt creation
-        await client.query(
-          `INSERT INTO coown_recourse_events
-            (asset_id, agreement_id, event_type, event_payload, amount_gbp, triggered_by, visibility)
-           VALUES ($1, $2, 'debt_created', $3::jsonb, $4, 'system', 'public')`,
-          [
-            assetId,
-            agreement.id,
-            JSON.stringify({
-              debtorId: agreement.seller_id,
-              debtAmountGbp: roundTo(debtAmount, 2),
-              reason: `Verification failed: ${demand.demand_type}`,
-            }),
-            roundTo(debtAmount, 2),
-          ]
-        );
-
-        // Update seller's liability profile
-        await client.query(
-          `UPDATE coown_seller_liability_profile
-           SET total_recourse_triggered = total_recourse_triggered + 1,
-               risk_tier = 'high',
-               updated_at = NOW()
-           WHERE user_id = $1`,
-          [agreement.seller_id]
-        );
-
-        // Log to market audit
-        await client.query(
-          `INSERT INTO coown_market_audit_events (asset_id, event_type, event_payload, visibility, changed_by)
-           VALUES ($1, 'recourse.triggered', $2::jsonb, 'public', $3)`,
-          [
-            assetId,
-            JSON.stringify({ debtAmountGbp: roundTo(debtAmount, 2), reason: `Verification failed: ${demand.demand_type}` }),
-            authUser.userId,
-          ]
-        );
-      }
-    }
-
-    await client.query('COMMIT');
-
-    return {
-      ok: true,
-      demand: {
-        id: demand.id,
-        status: newStatus,
-        verdict: body.verdict,
-        recourseTriggered: body.verdict === 'failed',
-      },
-    };
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    app.log.error({ err }, 'POST verification-demand/review failed');
-    reply.code(500);
-    return { ok: false, error: 'Failed to review verification demand' };
-  } finally {
-    client.release();
-  }
-});
-
-// POST /co-own/assets/:assetId/recourse/trigger
-// Platform manually triggers recourse (e.g., seller didn't respond by deadline).
-app.post('/co-own/assets/:assetId/recourse/trigger', async (request, reply) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2) });
-  const { assetId } = paramsSchema.parse(request.params);
-
-  const authUser = (request as any).authUser;
-  if (!authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    reason: z.string().min(2).max(500),
-  });
-  const body = bodySchema.parse(request.body);
-
-  const client = await db.connect();
-  try {
-    await client.query('BEGIN');
-
-    const agreementResult = await client.query<{ id: string; seller_id: string; max_liability_gbp: string | number; status: string }>(
-      `SELECT id, seller_id, max_liability_gbp, status
-       FROM coown_recourse_agreements
-       WHERE asset_id = $1 AND status = 'active'
-       FOR UPDATE`,
-      [assetId]
-    );
-    const agreement = agreementResult.rows[0];
-    if (!agreement) {
-      await client.query('ROLLBACK');
-      reply.code(404);
-      return { ok: false, error: 'No active recourse agreement found', code: 'NO_ACTIVE_AGREEMENT' };
-    }
-
-    const tradedResult = await client.query<{ total_traded_value_gbp: string | number }>(
-      'SELECT total_traded_value_gbp FROM coOwn_assets WHERE id = $1',
-      [assetId]
-    );
-    const tradedValue = Number(tradedResult.rows[0]?.total_traded_value_gbp ?? 0);
-    const debtAmount = Math.max(tradedValue, Number(agreement.max_liability_gbp));
-
-    await client.query(
-      `UPDATE coown_recourse_agreements
-       SET status = 'triggered', triggered_at = NOW(), triggered_reason = $1
-       WHERE id = $2`,
-      [body.reason, agreement.id]
-    );
-
-    await client.query(
-      `UPDATE coOwn_assets SET recourse_status = 'triggered', updated_at = NOW() WHERE id = $1`,
-      [assetId]
-    );
-
-    await client.query(
-      `INSERT INTO coown_recourse_events
-        (asset_id, agreement_id, event_type, event_payload, amount_gbp, triggered_by, visibility)
-       VALUES ($1, $2, 'recourse_triggered', $3::jsonb, $4, $5, 'public')`,
-      [
-        assetId,
-        agreement.id,
-        JSON.stringify({ reason: body.reason, debtAmountGbp: roundTo(debtAmount, 2) }),
-        roundTo(debtAmount, 2),
-        authUser.userId,
-      ]
-    );
-
-    await client.query(
-      `INSERT INTO coown_recourse_events
-        (asset_id, agreement_id, event_type, event_payload, amount_gbp, triggered_by, visibility)
-       VALUES ($1, $2, 'debt_created', $3::jsonb, $4, 'system', 'public')`,
-      [
-        assetId,
-        agreement.id,
-        JSON.stringify({ debtorId: agreement.seller_id, debtAmountGbp: roundTo(debtAmount, 2), reason: body.reason }),
-        roundTo(debtAmount, 2),
-      ]
-    );
-
-    await client.query(
-      `UPDATE coown_seller_liability_profile
-       SET total_recourse_triggered = total_recourse_triggered + 1,
-           risk_tier = 'high', updated_at = NOW()
-       WHERE user_id = $1`,
-      [agreement.seller_id]
-    );
-
-    await client.query(
-      `INSERT INTO coown_market_audit_events (asset_id, event_type, event_payload, visibility, changed_by)
-       VALUES ($1, 'recourse.triggered', $2::jsonb, 'public', $3)`,
-      [assetId, JSON.stringify({ debtAmountGbp: roundTo(debtAmount, 2), reason: body.reason }), authUser.userId]
-    );
-
-    await client.query('COMMIT');
-
-    return {
-      ok: true,
-      recourse: {
-        agreementId: agreement.id,
-        debtAmountGbp: roundTo(debtAmount, 2),
-        reason: body.reason,
-        status: 'triggered',
-      },
-    };
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    app.log.error({ err }, 'POST /co-own/assets/:assetId/recourse/trigger failed');
-    reply.code(500);
-    return { ok: false, error: 'Failed to trigger recourse' };
-  } finally {
-    client.release();
-  }
-});
-
-// GET /co-own/seller/:userId/liability
-// Returns a seller's liability profile — visible to buyers assessing trust.
-app.get('/co-own/seller/:userId/liability', async (request, reply) => {
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-
-  const result = await db.query<{
-    total_active_liability_gbp: string | number;
-    active_agreement_count: number;
-    total_agreements_signed: number;
-    total_recourse_triggered: number;
-    total_debt_recovered_gbp: string | number;
-    risk_tier: string;
-    background_check_status: string;
-    background_check_completed_at: string | null;
-  }>(
-    `SELECT total_active_liability_gbp, active_agreement_count,
-            total_agreements_signed, total_recourse_triggered,
-            total_debt_recovered_gbp, risk_tier,
-            background_check_status, background_check_completed_at
-     FROM coown_seller_liability_profile
-     WHERE user_id = $1`,
-    [userId]
-  );
-
-  const row = result.rows[0];
-  if (!row) {
-    return {
-      ok: true,
-      liability: null,
-    };
-  }
-
-  return {
-    ok: true,
-    liability: {
-      totalActiveLiabilityGbp: Number(row.total_active_liability_gbp),
-      activeAgreementCount: row.active_agreement_count,
-      totalAgreementsSigned: row.total_agreements_signed,
-      totalRecourseTriggered: row.total_recourse_triggered,
-      totalDebtRecoveredGbp: Number(row.total_debt_recovered_gbp),
-      riskTier: row.risk_tier,
-      backgroundCheckStatus: row.background_check_status,
-      backgroundCheckCompletedAt: row.background_check_completed_at,
-    },
-  };
-});
-
-// GET /co-own/seller/:userId/verification-demands
-// Lists all verification demands across a seller's assets.
-// Sellers use this to see pending demands they need to respond to.
-app.get('/co-own/seller/:userId/verification-demands', async (request, reply) => {
-  const paramsSchema = z.object({ userId: z.string().min(2) });
-  const { userId } = paramsSchema.parse(request.params);
-
-  const authUser = (request as any).authUser;
-  if (!authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-  // Sellers can only see their own demands
-  if (authUser.userId !== userId) {
-    reply.code(403);
-    return { ok: false, error: 'Access denied' };
-  }
-
-  const result = await db.query<{
-    id: number;
-    asset_id: string;
-    requested_by: string;
-    demand_type: string;
-    deadline: string;
-    status: string;
-    responded_at: string | null;
-    evidence_url: string | null;
-    evidence_notes: string | null;
-    inspector_verdict: string | null;
-    created_at: string;
-    asset_title: string;
-    asset_image_url: string | null;
-  }>(
-    `SELECT vd.id, vd.asset_id, vd.requested_by, vd.demand_type,
-            vd.deadline, vd.status, vd.responded_at,
-            vd.evidence_url, vd.evidence_notes,
-            vd.inspector_verdict, vd.created_at,
-            ca.title AS asset_title, ca.image_url AS asset_image_url
-     FROM coown_verification_demands vd
-     INNER JOIN coOwn_assets ca ON ca.id = vd.asset_id
-     WHERE ca.issuer_id = $1
-     ORDER BY
-       CASE vd.status
-         WHEN 'pending' THEN 0
-         WHEN 'responded' THEN 1
-         WHEN 'failed' THEN 2
-         WHEN 'expired' THEN 3
-         WHEN 'compliant' THEN 4
-         ELSE 5
-       END,
-       vd.created_at DESC
-     LIMIT 50`,
-    [userId]
-  );
-
-  return {
-    ok: true,
-    demands: result.rows.map((d) => ({
-      id: d.id,
-      assetId: d.asset_id,
-      assetTitle: d.asset_title,
-      assetImageUrl: d.asset_image_url,
-      requestedBy: d.requested_by,
-      demandType: d.demand_type,
-      deadline: d.deadline,
-      status: d.status,
-      respondedAt: d.responded_at,
-      evidenceUrl: d.evidence_url,
-      evidenceNotes: d.evidence_notes,
-      inspectorVerdict: d.inspector_verdict,
-      createdAt: d.created_at,
-    })),
-  };
-});
-
 app.get('/users/:userId/co-own/holdings', async (request, reply) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const { userId } = paramsSchema.parse(request.params);
@@ -46581,336 +34023,6 @@ app.get('/users/:userId/co-own/holdings', async (request, reply) => {
   }));
 
   return { ok: true, items };
-});
-
-// GET /co-own/distributions
-// Lists distributions (dividend / revenue-share payments) for the current
-// user's holdings. Supports optional assetId filter and cursor pagination.
-app.get('/co-own/distributions', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const querySchema = z.object({
-    assetId: z.string().min(2).max(128).optional(),
-    limit: z.coerce.number().int().min(1).max(200).default(50),
-    cursor: z.string().optional(),
-  });
-  const { assetId, limit, cursor } = querySchema.parse(request.query);
-
-  const whereConditions: string[] = ['recipient_user_id = $1'];
-  const whereParams: Array<string | number> = [request.authUser.userId];
-
-  if (assetId) {
-    whereParams.push(assetId);
-    whereConditions.push(`asset_id = $${whereParams.length}`);
-  }
-
-  if (cursor) {
-    whereParams.push(cursor);
-    whereConditions.push(`created_at < $${whereParams.length}`);
-  }
-
-  whereParams.push(limit + 1);
-  const limitPlaceholder = `$${whereParams.length}`;
-
-  const result = await db.query<{
-    id: string;
-    asset_id: string;
-    amount_gbp_minor: string | number;
-    units_at_record: string | number;
-    per_unit_gbp_minor: string | number;
-    distribution_type: string;
-    status: string;
-    reference: string | null;
-    created_at: string;
-    settled_at: string | null;
-  }>(
-    `SELECT * FROM coown_distributions
-     WHERE ${whereConditions.join(' AND ')}
-     ORDER BY created_at DESC
-     LIMIT ${limitPlaceholder}`,
-    whereParams
-  );
-
-  const hasNext = result.rows.length > limit;
-  const rows = hasNext ? result.rows.slice(0, limit) : result.rows;
-  const nextCursor = hasNext && rows.length > 0
-    ? rows[rows.length - 1].created_at
-    : null;
-
-  return {
-    ok: true,
-    items: rows.map((row) => ({
-      id: row.id,
-      assetId: row.asset_id,
-      amountGbpMinor: Number(row.amount_gbp_minor),
-      unitsAtRecord: Number(row.units_at_record),
-      perUnitGbpMinor: Number(row.per_unit_gbp_minor),
-      distributionType: row.distribution_type,
-      status: row.status,
-      reference: row.reference,
-      createdAt: row.created_at,
-      settledAt: row.settled_at,
-    })),
-    nextCursor,
-  };
-});
-
-// GET /co-own/corporate-actions
-// Lists corporate actions (distributions, buybacks, splits, governance votes)
-// across all Co-Own assets. Public endpoint — no auth required. Supports
-// optional assetId and type filters.
-app.get('/co-own/corporate-actions', async (request) => {
-  const querySchema = z.object({
-    assetId: z.string().min(2).max(128).optional(),
-    type: z.enum(['distribution', 'buyback', 'split', 'governance']).optional(),
-    limit: z.coerce.number().int().min(1).max(200).default(50),
-  });
-  const { assetId, type, limit } = querySchema.parse(request.query);
-
-  const whereConditions: string[] = [];
-  const whereParams: Array<string | number> = [];
-
-  if (assetId) {
-    whereParams.push(assetId);
-    whereConditions.push(`asset_id = $${whereParams.length}`);
-  }
-
-  if (type) {
-    whereParams.push(type);
-    whereConditions.push(`action_type = $${whereParams.length}`);
-  }
-
-  whereParams.push(limit);
-  const limitPlaceholder = `$${whereParams.length}`;
-  const whereClause = whereConditions.length > 0
-    ? `WHERE ${whereConditions.join(' AND ')}`
-    : '';
-
-  const result = await db.query<{
-    id: string;
-    asset_id: string;
-    action_type: string;
-    title: string;
-    description: string | null;
-    per_unit_value_gbp_minor: string | number | null;
-    total_value_gbp_minor: string | number | null;
-    record_date: string | null;
-    ex_date: string | null;
-    payable_date: string | null;
-    status: string;
-    metadata: Record<string, unknown> | null;
-    created_at: string;
-  }>(
-    `SELECT * FROM coown_corporate_actions
-     ${whereClause}
-     ORDER BY created_at DESC
-     LIMIT ${limitPlaceholder}`,
-    whereParams
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      assetId: row.asset_id,
-      actionType: row.action_type,
-      title: row.title,
-      description: row.description,
-      perUnitValueGbpMinor: row.per_unit_value_gbp_minor == null
-        ? null
-        : Number(row.per_unit_value_gbp_minor),
-      totalValueGbpMinor: row.total_value_gbp_minor == null
-        ? null
-        : Number(row.total_value_gbp_minor),
-      recordDate: row.record_date,
-      exDate: row.ex_date,
-      payableDate: row.payable_date,
-      status: row.status,
-      metadata: row.metadata,
-      createdAt: row.created_at,
-    })),
-  };
-});
-
-// GET /co-own/assets/:assetId/corporate-actions
-// Lists corporate actions for a specific Co-Own asset. Public endpoint.
-app.get('/co-own/assets/:assetId/corporate-actions', async (request) => {
-  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
-  const { assetId } = paramsSchema.parse(request.params);
-
-  const querySchema = z.object({
-    type: z.enum(['distribution', 'buyback', 'split', 'governance']).optional(),
-    limit: z.coerce.number().int().min(1).max(200).default(50),
-  });
-  const { type, limit } = querySchema.parse(request.query);
-
-  const whereConditions: string[] = ['asset_id = $1'];
-  const whereParams: Array<string | number> = [assetId];
-
-  if (type) {
-    whereParams.push(type);
-    whereConditions.push(`action_type = $${whereParams.length}`);
-  }
-
-  whereParams.push(limit);
-  const limitPlaceholder = `$${whereParams.length}`;
-
-  const result = await db.query<{
-    id: string;
-    asset_id: string;
-    action_type: string;
-    title: string;
-    description: string | null;
-    per_unit_value_gbp_minor: string | number | null;
-    total_value_gbp_minor: string | number | null;
-    record_date: string | null;
-    ex_date: string | null;
-    payable_date: string | null;
-    status: string;
-    metadata: Record<string, unknown> | null;
-    created_at: string;
-  }>(
-    `SELECT * FROM coown_corporate_actions
-     WHERE ${whereConditions.join(' AND ')}
-     ORDER BY created_at DESC
-     LIMIT ${limitPlaceholder}`,
-    whereParams
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      assetId: row.asset_id,
-      actionType: row.action_type,
-      title: row.title,
-      description: row.description,
-      perUnitValueGbpMinor: row.per_unit_value_gbp_minor == null
-        ? null
-        : Number(row.per_unit_value_gbp_minor),
-      totalValueGbpMinor: row.total_value_gbp_minor == null
-        ? null
-        : Number(row.total_value_gbp_minor),
-      recordDate: row.record_date,
-      exDate: row.ex_date,
-      payableDate: row.payable_date,
-      status: row.status,
-      metadata: row.metadata,
-      createdAt: row.created_at,
-    })),
-  };
-});
-
-// POST /co-own/watchlist
-// Adds an asset to the current user's watchlist. Idempotent — inserting a
-// duplicate (user_id, asset_id) pair is a no-op via ON CONFLICT DO NOTHING.
-app.post('/co-own/watchlist', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const bodySchema = z.object({
-    assetId: z.string().min(2).max(128),
-  });
-  const { assetId } = bodySchema.parse(request.body);
-
-  await db.query(
-    `INSERT INTO coown_watchlist (user_id, asset_id)
-     VALUES ($1, $2)
-     ON CONFLICT DO NOTHING`,
-    [request.authUser.userId, assetId]
-  );
-
-  return { ok: true };
-});
-
-// GET /co-own/watchlist
-// Lists the current user's watchlisted Co-Own assets with full asset details
-// (same shape as the /co-own/assets list endpoint).
-app.get('/co-own/watchlist', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const querySchema = z.object({
-    limit: z.coerce.number().int().min(1).max(200).default(50),
-  });
-  const { limit } = querySchema.parse(request.query);
-
-  const result = await db.query<{
-    id: string;
-    listing_id: string;
-    issuer_id: string;
-    title: string;
-    image_url: string | null;
-    total_units: number;
-    available_units: number;
-    unit_price_gbp: number | string;
-    unit_price_stable: number | string;
-    settlement_mode: 'GBP' | 'TVUSD' | 'HYBRID' | 'ONEZE';
-    issuer_jurisdiction: string | null;
-    market_move_pct_24h: number | string;
-    holders: number;
-    volume_24h_gbp: number | string;
-    is_open: boolean;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `SELECT sa.*
-     FROM coOwn_assets sa
-     INNER JOIN coown_watchlist w ON w.asset_id = sa.id
-     WHERE w.user_id = $1
-     ORDER BY w.created_at DESC
-     LIMIT $2`,
-    [request.authUser.userId, limit]
-  );
-
-  return {
-    ok: true,
-    items: result.rows.map((row) => ({
-      id: row.id,
-      listingId: row.listing_id,
-      issuerId: row.issuer_id,
-      title: row.title,
-      imageUrl: row.image_url,
-      totalUnits: row.total_units,
-      availableUnits: row.available_units,
-      unitPriceGbp: Number(row.unit_price_gbp),
-      unitPriceStable: Number(row.unit_price_stable),
-      settlementMode: row.settlement_mode,
-      issuerJurisdiction: row.issuer_jurisdiction,
-      marketMovePct24h: row.market_move_pct_24h == null ? null : Number(row.market_move_pct_24h),
-      holders: row.holders,
-      volume24hGbp: row.volume_24h_gbp == null ? null : Number(row.volume_24h_gbp),
-      isOpen: row.is_open,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
-  };
-});
-
-// DELETE /co-own/watchlist/:assetId
-// Removes an asset from the current user's watchlist.
-app.delete('/co-own/watchlist/:assetId', async (request, reply) => {
-  if (!request.authUser) {
-    reply.code(401);
-    return { ok: false, error: 'Unauthorized' };
-  }
-
-  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
-  const { assetId } = paramsSchema.parse(request.params);
-
-  await db.query(
-    `DELETE FROM coown_watchlist WHERE user_id = $1 AND asset_id = $2`,
-    [request.authUser.userId, assetId]
-  );
-
-  return { ok: true };
 });
 
 let isShuttingDown = false;
@@ -47007,7 +34119,7 @@ const start = async () => {
         },
       });
     } else {
-      app.log.info('[api] background workers disabled — running in separate container');
+      app.log.info('[api] background workers disabled â€” running in separate container');
     }
 
     startAuctionSweepScheduler();
@@ -47031,14 +34143,14 @@ const start = async () => {
 
     // P0-9: AI/ML deploy-time validation. Log blocking errors and warnings
     // before serving traffic so ops can see whether the deployment may
-    // honestly claim AI capability. Does not block startup — heuristic
+    // honestly claim AI capability. Does not block startup â€” heuristic
     // baselines are valid.
     try {
       const readiness = await validateAiDeployReadiness({ probeProviders: false });
       if (readiness.blockingErrors.length > 0) {
         app.log.error(
           { blockingErrors: readiness.blockingErrors },
-          'AI deploy readiness: blocking errors — AI capability claim is false',
+          'AI deploy readiness: blocking errors â€” AI capability claim is false',
         );
       }
       if (readiness.warnings.length > 0) {
@@ -47055,7 +34167,7 @@ const start = async () => {
       app.log.warn({ err: error }, 'AI deploy readiness check failed');
     }
 
-    // ── Graceful shutdown ────────────────────────────────────────────────
+    // â”€â”€ Graceful shutdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Kubernetes sends SIGTERM, waits terminationGracePeriodSeconds (default 30s),
     // then SIGKILL. We set the delay slightly lower (25s) to ensure clean exit.
     // Fastify's app.close() stops accepting new connections and waits for
@@ -47091,19 +34203,19 @@ const start = async () => {
 };
 
 
-// ── Support tickets ────────────────────────────────────────────────
+// â”€â”€ Support tickets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 registerSupportReviewRoutes({ app, db, createApiError, queueUserNotification });
 registerSupportRoutes({ app, db, createApiError, queueUserNotification });
 registerOperatorSupportRoutes({ app, db, createApiError, queueUserNotification });
 
-// ── Returns domain (Gate 8+9) ──────────────────────────────────────
+// â”€â”€ Returns domain (Gate 8+9) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 registerReturnRoutes({ app, db, resolveAuthenticatedUserId, ensureUserExists });
 
-// ── Refund execution with maker-checker (Gate 10+12) ───────────────
+// â”€â”€ Refund execution with maker-checker (Gate 10+12) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 registerRefundRoutes({ app, db, resolveAuthenticatedUserId, postCommerceOrderRefundLedgerReversal });
 
-// ── Exception queue infrastructure (Gate 13) ───────────────────────
+// â”€â”€ Exception queue infrastructure (Gate 13) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 registerExceptionQueueRoutes({ app, db, resolveAuthenticatedUserId });
 registerVendorWebhookRoutes({
   app,
@@ -47365,9 +34477,9 @@ async function enrichPosterStory(
   };
 }
 
-// ── Poster Stories API ──────────────────────────────────────────────
+// â”€â”€ Poster Stories API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// POST /poster-stories/moodboard — publish a moodboard as a poster story
+// POST /poster-stories/moodboard â€” publish a moodboard as a poster story
 app.post('/poster-stories/moodboard', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const bodySchema = z.object({
@@ -47443,7 +34555,7 @@ app.post('/poster-stories/moodboard', async (request, reply) => {
   }
 });
 
-// POST /poster-stories — create story with frames and stickers in one transaction
+// POST /poster-stories â€” create story with frames and stickers in one transaction
 app.post('/poster-stories', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
 
@@ -47799,7 +34911,7 @@ app.post('/poster-stories', async (request, reply) => {
   return { ok: true, storyId: payload.id };
 });
 
-// GET /poster-stories — active story feed
+// GET /poster-stories â€” active story feed
 app.get('/poster-stories', async (request) => {
   const querySchema = z.object({
     creatorId: z.string().optional(),
@@ -47877,7 +34989,7 @@ app.get('/poster-stories', async (request) => {
   return { items: stories };
 });
 
-// GET /poster-stories/:storyId — story detail
+// GET /poster-stories/:storyId â€” story detail
 app.get('/poster-stories/:storyId', async (request, reply) => {
   const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
   const { storyId } = paramsSchema.parse(request.params);
@@ -47925,7 +35037,7 @@ app.get('/poster-stories/:storyId', async (request, reply) => {
   return enriched;
 });
 
-// POST /poster-frames/:frameId/view — record view
+// POST /poster-frames/:frameId/view â€” record view
 app.post('/poster-frames/:frameId/view', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
@@ -47961,7 +35073,7 @@ app.post('/poster-frames/:frameId/view', async (request, reply) => {
   };
 });
 
-// POST /poster-frames/:frameId/reaction — react
+// POST /poster-frames/:frameId/reaction â€” react
 app.post('/poster-frames/:frameId/reaction', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
@@ -48017,7 +35129,7 @@ app.post('/poster-frames/:frameId/reaction', async (request, reply) => {
   return { ok: true, reactionCounts, viewerReaction: reaction };
 });
 
-// DELETE /poster-frames/:frameId/reaction — remove reaction
+// DELETE /poster-frames/:frameId/reaction â€” remove reaction
 app.delete('/poster-frames/:frameId/reaction', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
@@ -48037,7 +35149,7 @@ app.delete('/poster-frames/:frameId/reaction', async (request, reply) => {
   return { ok: true };
 });
 
-// POST /poster-frames/:frameId/replies — private reply
+// POST /poster-frames/:frameId/replies â€” private reply
 app.post('/poster-frames/:frameId/replies', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
@@ -48079,7 +35191,7 @@ app.post('/poster-frames/:frameId/replies', async (request, reply) => {
   return { ok: true, replyId: payload.id };
 });
 
-// GET /poster-stories/:storyId/replies — creator sees all replies
+// GET /poster-stories/:storyId/replies â€” creator sees all replies
 app.get('/poster-stories/:storyId/replies', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
@@ -48127,7 +35239,7 @@ app.get('/poster-stories/:storyId/replies', async (request, reply) => {
   };
 });
 
-// POST /poster-stickers/:stickerId/vote — style vote
+// POST /poster-stickers/:stickerId/vote â€” style vote
 app.post('/poster-stickers/:stickerId/vote', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ stickerId: z.string().min(2).max(120) });
@@ -48199,7 +35311,7 @@ app.post('/poster-stickers/:stickerId/vote', async (request, reply) => {
   };
 });
 
-// GET /poster-stories/:storyId/activity — creator activity
+// GET /poster-stories/:storyId/activity â€” creator activity
 app.get('/poster-stories/:storyId/activity', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
@@ -48323,7 +35435,7 @@ app.get('/poster-stories/:storyId/activity', async (request, reply) => {
   };
 });
 
-// GET /poster-stories/archive — owner archive
+// GET /poster-stories/archive â€” owner archive
 app.get('/poster-stories/archive', async (request) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const querySchema = z.object({
@@ -48371,7 +35483,7 @@ app.get('/poster-stories/archive', async (request) => {
   return { items: stories };
 });
 
-// POST /poster-stories/:storyId/archive — manual archive
+// POST /poster-stories/:storyId/archive â€” manual archive
 app.post('/poster-stories/:storyId/archive', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
@@ -48398,7 +35510,7 @@ app.post('/poster-stories/:storyId/archive', async (request, reply) => {
   return { ok: true };
 });
 
-// DELETE /poster-stories/:storyId — delete story
+// DELETE /poster-stories/:storyId â€” delete story
 app.delete('/poster-stories/:storyId', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ storyId: z.string().min(2).max(120) });
@@ -48421,7 +35533,7 @@ app.delete('/poster-stories/:storyId', async (request, reply) => {
   return { ok: true };
 });
 
-// DELETE /poster-frames/:frameId — delete single frame
+// DELETE /poster-frames/:frameId â€” delete single frame
 app.delete('/poster-frames/:frameId', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ frameId: z.string().min(2).max(120) });
@@ -48467,9 +35579,9 @@ app.delete('/poster-frames/:frameId', async (request, reply) => {
   return { ok: true };
 });
 
-// ── Poster Highlights API ───────────────────────────────────────────
+// â”€â”€ Poster Highlights API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// GET /users/:userId/poster-highlights — public
+// GET /users/:userId/poster-highlights â€” public
 app.get('/users/:userId/poster-highlights', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2).max(120) });
   const { userId } = paramsSchema.parse(request.params);
@@ -48536,7 +35648,7 @@ app.get('/users/:userId/poster-highlights', async (request) => {
   return { items: highlights };
 });
 
-// POST /poster-highlights — create highlight
+// POST /poster-highlights â€” create highlight
 app.post('/poster-highlights', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const bodySchema = z.object({
@@ -48588,7 +35700,7 @@ app.post('/poster-highlights', async (request, reply) => {
   return { ok: true, highlightId: payload.id };
 });
 
-// PATCH /poster-highlights/:highlightId — update
+// PATCH /poster-highlights/:highlightId â€” update
 app.patch('/poster-highlights/:highlightId', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ highlightId: z.string().min(2).max(120) });
@@ -48631,7 +35743,7 @@ app.patch('/poster-highlights/:highlightId', async (request, reply) => {
   return { ok: true };
 });
 
-// DELETE /poster-highlights/:highlightId — delete
+// DELETE /poster-highlights/:highlightId â€” delete
 app.delete('/poster-highlights/:highlightId', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ highlightId: z.string().min(2).max(120) });
@@ -48654,7 +35766,7 @@ app.delete('/poster-highlights/:highlightId', async (request, reply) => {
   return { ok: true };
 });
 
-// POST /poster-highlights/:highlightId/frames — add frame
+// POST /poster-highlights/:highlightId/frames â€” add frame
 app.post('/poster-highlights/:highlightId/frames', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({ highlightId: z.string().min(2).max(120) });
@@ -48702,7 +35814,7 @@ app.post('/poster-highlights/:highlightId/frames', async (request, reply) => {
   return { ok: true };
 });
 
-// DELETE /poster-highlights/:highlightId/frames/:frameId — remove frame
+// DELETE /poster-highlights/:highlightId/frames/:frameId â€” remove frame
 app.delete('/poster-highlights/:highlightId/frames/:frameId', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
   const paramsSchema = z.object({
@@ -48732,29 +35844,29 @@ app.delete('/poster-highlights/:highlightId/frames/:frameId', async (request, re
   return { ok: true };
 });
 
-// ── Creator document routes (server-side draft persistence) ───────────────────
+// â”€â”€ Creator document routes (server-side draft persistence) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 registerCreatorDocumentRoutes({ app, db, resolveAuthenticatedUserId });
 
-// ── Creator publication orchestrator (P0 fix — creates real projections) ──
+// â”€â”€ Creator publication orchestrator (P0 fix â€” creates real projections) â”€â”€
 
 registerCreatorPublicationRoutes({ app, db, resolveAuthenticatedUserId });
 
-// ── Creator analytics (v2 — versioned, ownership-resolved) ────────────────
+// â”€â”€ Creator analytics (v2 â€” versioned, ownership-resolved) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 registerCreatorAnalyticsRoutes({ app, db, createApiError, resolveAuthenticatedUserId, resolveRequestIpAddress });
 
-// ── Creator content scheduling ────────────────────────────────────────────
+// â”€â”€ Creator content scheduling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-// PATCH /creator/documents/:documentId/schedule — set or clear scheduled_for
+// PATCH /creator/documents/:documentId/schedule â€” set or clear scheduled_for
 app.patch('/creator/documents/:documentId/schedule', async (request, reply) => {
   const actorUserId = resolveAuthenticatedUserId(request);
 
   const paramsSchema = z.object({ documentId: z.string().min(2).max(120) });
   const { documentId } = paramsSchema.parse(request.params);
 
-  // Accept both snake_case (scheduled_for — server contract) and camelCase
-  // (scheduledFor — native client contract). The casing mismatch was a P0
+  // Accept both snake_case (scheduled_for â€” server contract) and camelCase
+  // (scheduledFor â€” native client contract). The casing mismatch was a P0
   // bug identified in the publishing-lifecycle research report (23): the
   // frontend sent scheduledFor while the server expected scheduled_for.
   // Both are now accepted; scheduled_for remains the canonical server field.
@@ -48802,7 +35914,7 @@ registerListingOfferRoutes({
   enqueueOutboxDrain: () => enqueueOutboxDrainJob('after_commit'),
   triggerSmartSellEvaluation: (offerId: string) => {
     // Fire-and-forget: check if the listing has an active Smart Sell policy
-    // and evaluate the offer. This is non-blocking — the offer is already
+    // and evaluate the offer. This is non-blocking â€” the offer is already
     // durable when this is called. The evaluation is idempotent: if the
     // policy is paused or doesn't exist, the evaluate endpoint skips.
     void (async () => {
@@ -48873,19 +35985,19 @@ registerSyncRoutes({ app, db, readDb, resolveAuthenticatedUserId, createApiError
 
 registerImpactRoutes({ app, db, resolveAuthenticatedUserId });
 
-// POST /creator/documents — create or replace a draft document
+// POST /creator/documents â€” create or replace a draft document
 
-// GET /creator/documents — list current user's draft documents
+// GET /creator/documents â€” list current user's draft documents
 
-// GET /creator/documents/:documentId — get a single draft document
+// GET /creator/documents/:documentId â€” get a single draft document
 
-// DELETE /creator/documents/:documentId — delete a draft document
+// DELETE /creator/documents/:documentId â€” delete a draft document
 
-// POST /creator/documents/:documentId/publish — publish a document with validation
+// POST /creator/documents/:documentId/publish â€” publish a document with validation
 
-// GET /creator/documents/:documentId/revisions — list published revisions
+// GET /creator/documents/:documentId/revisions â€” list published revisions
 
-// POST /creator/documents/:documentId/remix — create a remix of a document
+// POST /creator/documents/:documentId/remix â€” create a remix of a document
 
 const shutdown = async () => {
   if (isShuttingDown) {
@@ -48959,7 +36071,7 @@ process.on('unhandledRejection', (reason) => {
     logger.warn({ err: reason.message }, '[unhandledRejection] Redis connection closed (suppressed)');
     return;
   }
-  logger.error({ reason }, '[unhandledRejection] Fatal — unhandled promise rejection');
+  logger.error({ reason }, '[unhandledRejection] Fatal â€” unhandled promise rejection');
   process.exit(1);
 });
 

@@ -734,14 +734,14 @@ export default function WithdrawScreen() {
               Withdrawal requested
             </Text>
             <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
-              {formatFromFiat(successData.amountGbp, currencyCode, { displayMode: 'fiat' })} is on its way
+              {formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} is on its way
             </Text>
           </View>
 
           <View>
             <FlagshipFormSection variant="flat" title="Withdrawal details">
               <FlagshipMetricLine label="Reference" value={shortRef} />
-              <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, currencyCode, { displayMode: 'fiat' })} separated />
+              <FlagshipMetricLine label="Amount" value={formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} separated />
               <FlagshipMetricLine label="Currency" value={successData.payoutCurrency} separated />
               <FlagshipMetricLine label="Requested" value={formattedDate} separated />
               <FlagshipMetricLine label="Estimated arrival" value="1–3 business days" separated />
@@ -790,7 +790,7 @@ export default function WithdrawScreen() {
               accessibilityLabel={
                 isWithdrawing
                   ? 'Processing withdrawal'
-                  : `Confirm withdrawal of ${formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })}`
+                  : `Confirm withdrawal of ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
               }
               accessibilityHint="Submits your withdrawal request"
             />
@@ -813,9 +813,9 @@ export default function WithdrawScreen() {
         >
           <View>
             <FlagshipFormSection variant="flat" title="Withdrawal summary">
-              <FlagshipMetricLine label="Amount" value={formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })} />
-              <FlagshipMetricLine label="Fee" value={formatFromFiat(0, currencyCode, { displayMode: 'fiat' })} separated />
-              <FlagshipMetricLine label="You receive" value={formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })} emphasis separated />
+              <FlagshipMetricLine label="Amount" value={formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })} />
+              <FlagshipMetricLine label="Fee" value={formatFromFiat(0, 'GBP', { displayMode: 'fiat' })} separated />
+              <FlagshipMetricLine label="You receive" value={formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })} emphasis separated />
               <FlagshipMetricLine label="Destination" value={destinationLabel} separated />
               <FlagshipMetricLine label="Estimated arrival" value="1–3 business days" separated />
             </FlagshipFormSection>
@@ -879,7 +879,7 @@ export default function WithdrawScreen() {
             style={[styles.primaryBtn, !canWithdraw && styles.primaryBtnDisabled]}
             titleStyle={styles.primaryText}
             accessibilityLabel={
-              `Review withdrawal of ${formatFromFiat(numericAmount, currencyCode, { displayMode: 'fiat' })}`
+              `Review withdrawal of ${formatFromFiat(numericAmount, 'GBP', { displayMode: 'fiat' })}`
             }
             accessibilityHint="Proceeds to the confirmation step"
           />
@@ -906,7 +906,7 @@ export default function WithdrawScreen() {
           <View style={{ marginTop: Space.md }}>
             <FlagshipMetricLine
               label="Available to withdraw"
-              value={formatFromFiat(availableBalance, currencyCode, { displayMode: 'fiat' })}
+              value={formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}
               emphasis
             />
           </View>
@@ -926,7 +926,7 @@ export default function WithdrawScreen() {
               accessibilityHint="Enter the amount to withdraw from your available balance"
             />
           </View>
-          <Text style={styles.availableText}>Available: {formatFromFiat(availableBalance, currencyCode, { displayMode: 'fiat' })}</Text>
+          <Text style={styles.availableText}>Available: {formatFromFiat(availableBalance, 'GBP', { displayMode: 'fiat' })}</Text>
           {policyScopeLabel ? <Text style={styles.policyLabel}>Policy scope: {policyScopeLabel}</Text> : null}
           {payoutPolicyHint ? <Text style={styles.policyHint}>{payoutPolicyHint}</Text> : null}
           {exceedsBalance ? <Text style={styles.balanceError}>Entered amount exceeds available balance.</Text> : null}
@@ -1030,14 +1030,14 @@ export default function WithdrawScreen() {
                           styles.withdrawalRow,
                           !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
                         ]}
-                        accessibilityLabel={`Withdrawal of ${formatFromFiat(item.amountGbp, currencyCode, { displayMode: 'fiat' })}, ${statusConfig.label}, ${formattedDate}`}
+                        accessibilityLabel={`Withdrawal of ${formatFromFiat(item.amountGbp, 'GBP', { displayMode: 'fiat' })}, ${statusConfig.label}, ${formattedDate}`}
                       >
                         <View style={styles.withdrawalLeft}>
                           <Text
                             style={[styles.withdrawalAmount, { color: colors.textPrimary }]}
                             numberOfLines={1}
                           >
-                            {formatFromFiat(item.amountGbp, currencyCode, { displayMode: 'fiat' })}
+                            {formatFromFiat(item.amountGbp, 'GBP', { displayMode: 'fiat' })}
                           </Text>
                           <Text style={[styles.withdrawalDate, { color: colors.textMuted }]}>
                             {formattedDate}

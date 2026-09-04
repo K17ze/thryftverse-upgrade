@@ -173,7 +173,7 @@ function ProductCardBase({
         style={styles.imageWrap}
         hapticFeedback="light"
         accessibilityRole="none"
-        accessibilityLabel={`${identityLine}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
+        accessibilityLabel={`${identityLine}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
         testID={testID}
       >
@@ -308,7 +308,7 @@ function ProductCardBase({
           ) : null}
           <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <View style={styles.priceRow}>
-            <Text style={styles.priceHero}>{formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}</Text>
+            <Text style={styles.priceHero}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
           </View>
           {sellerUsername ? (
             <View style={styles.sellerRow}>
@@ -648,7 +648,7 @@ function ProductDiscoveryTileBase({
       hapticFeedback="light"
       style={tileStyles.container}
       accessibilityRole="button"
-      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
+      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
       accessibilityHint="Opens item details"
       testID={testID}
     >
@@ -693,7 +693,7 @@ function ProductDiscoveryTileBase({
       </View>
       <View style={tileStyles.info}>
         <Text style={tileStyles.title} numberOfLines={1}>{item.title}</Text>
-        <Text style={tileStyles.price}>{formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}</Text>
+        <Text style={tileStyles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
       </View>
     </AnimatedPressable>
   );

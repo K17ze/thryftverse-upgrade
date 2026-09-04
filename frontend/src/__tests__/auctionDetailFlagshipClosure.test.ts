@@ -4,6 +4,7 @@ import { resolve } from 'path';
 
 const SCREENS = resolve(__dirname, '../screens');
 const SERVICES = resolve(__dirname, '../services');
+const UTILS = resolve(__dirname, '../utils');
 
 function readScreen(name: string): string {
   return readFileSync(resolve(SCREENS, name), 'utf-8');
@@ -13,9 +14,14 @@ function readService(name: string): string {
   return readFileSync(resolve(SERVICES, name), 'utf-8');
 }
 
+function readUtil(name: string): string {
+  return readFileSync(resolve(UTILS, name), 'utf-8');
+}
+
 describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
   const src = readScreen('AuctionDetailScreen.tsx');
   const marketApi = readService('marketApi.ts');
+  const logic = readUtil('auctionDetailLogic.ts');
 
   // ── §1 Remove duplicated price hierarchy ──
   describe('price hierarchy', () => {
@@ -47,9 +53,9 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
       expect(src).not.toContain('familyChip');
     });
 
-    it('retains AuctionStateBadge in media overlay', () => {
-      expect(src).toContain('AuctionStateBadge');
-      expect(src).toContain('overlayTopContent');
+    it('renders identity in media overlay', () => {
+      expect(src).toContain('overlayBottomContent');
+      expect(src).toContain('family="auction"');
     });
   });
 
@@ -80,7 +86,7 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
       // The dock should not have a stateBadge with the terminal message
       // (the body owns the result). The dock carries the action only.
       const terminalStart = src.indexOf('if (isTerminal)');
-      const terminalEnd = src.indexOf('// Seller view', terminalStart);
+      const terminalEnd = src.indexOf('// ── Post-end lifecycle states ──', terminalStart);
       const dockSection = src.slice(terminalStart, terminalEnd);
       expect(terminalStart).toBeGreaterThan(-1);
       expect(terminalEnd).toBeGreaterThan(terminalStart);
@@ -127,11 +133,11 @@ describe('auction-detail flagship closure (spec 02_AUCTION)', () => {
   describe('multi-media support', () => {
     it('uses auctionMediaItems derived from the canonical image/video array', () => {
       expect(src).toContain('auctionMediaItems');
-      expect(src).toContain('mediaItems');
-      expect(src).toContain('posterUri');
-      expect(src).toContain('focalPoint');
       expect(src).toContain('fullscreenMediaIndex');
-      expect(src).not.toContain(".filter((m) => m.type === 'image')");
+      expect(logic).toContain('mediaItems');
+      expect(logic).toContain('posterUri');
+      expect(logic).toContain('focalPoint');
+      expect(logic).not.toContain(".filter((m) => m.type === 'image')");
     });
 
     it('falls back to imageUrl for compatibility', () => {

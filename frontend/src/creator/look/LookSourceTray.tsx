@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     height: 44 },
   tabBtn: {

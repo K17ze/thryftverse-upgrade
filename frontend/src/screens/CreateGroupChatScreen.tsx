@@ -506,7 +506,12 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
                 <Text style={[styles.mediaErrorText, { color: colors.danger }]} numberOfLines={2}>
                   {groupMedia.avatar.error}
                 </Text>
-                <Pressable onPress={() => void groupMedia.retryAvatar()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Retry uploading group photo">
+                <Pressable
+                  onPress={() => void groupMedia.retryAvatar()}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry avatar upload"
+                >
                   <Text style={[styles.retryText, { color: colors.brand }]}>Retry</Text>
                 </Pressable>
               </View>

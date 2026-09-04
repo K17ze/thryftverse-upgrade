@@ -73,7 +73,7 @@ describe('commerce-detail family art direction (spec 05)', () => {
     it('editorial variant has a stronger heading', () => {
       const src = readDetailComponent('CommerceDetailSection');
       expect(src).toContain('labelEditorial');
-      expect(src).toContain('Type.subtitle');
+      expect(src).toMatch(/(TypographyV2|Type)\.(sectionTitle|subtitle)/);
     });
 
     it('compact variant suppresses divider', () => {
@@ -108,7 +108,7 @@ describe('commerce-detail family art direction (spec 05)', () => {
       const src = readDetailComponent('CommerceDetailIdentity');
       expect(src).toContain('titleCompact');
       // titleCompact uses TypographyV2.priceHero.size - 2 (28 - 2 = 26pt)
-      expect(src).toMatch(/fontSize: Type\.priceHero\.size - 2/);
+      expect(src).toMatch(/fontSize: (TypographyV2|Type)\.priceHero\.size - 2/);
     });
 
     it('standard density uses 28pt title', () => {
@@ -180,10 +180,10 @@ describe('commerce-detail family art direction (spec 05)', () => {
       expect(surface).toContain("fontVariant: ['tabular-nums']");
     });
 
-    it('uses design tokens (Type) not hardcoded font sizes for primary values', () => {
+    it('uses design tokens (TypographyV2 / Type) not hardcoded font sizes for primary values', () => {
       const surface = readDetailComponent('CommerceDetailTransactionSurface');
-      expect(surface).toContain('Type.priceHero');
-      expect(surface).toContain('Type.bodyStrong');
+      expect(surface).toMatch(/(TypographyV2|Type)\.priceHero/);
+      expect(surface).toMatch(/(TypographyV2|Type)\.bodyStrong/);
     });
   });
 
@@ -198,7 +198,7 @@ describe('commerce-detail family art direction (spec 05)', () => {
     it('dock uses one entry transition (FadeIn)', () => {
       const src = readDetailComponent('CommerceDetailStateDock');
       expect(src).toContain('FadeIn');
-      expect(src).toContain('duration(280)');
+      expect(src).toMatch(/FadeIn\.duration\((280|Motion\.duration\.slow)\)/);
     });
 
     it('header respects reduced motion', () => {

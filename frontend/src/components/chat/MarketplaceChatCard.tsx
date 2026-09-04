@@ -450,7 +450,7 @@ export function MarketplaceChatCard({
               <Text style={styles.shareSellerText}>@{listing.sellerUsername}</Text>
               {listing.sellerRating && (
                 <View style={styles.shareRatingChip}>
-                  <Ionicons name="star" size={10} color="#F59E0B" />
+                  <Ionicons name="star" size={10} color={colors.warning} />
                   <Text style={styles.shareRatingText}>{listing.sellerRating.toFixed(1)}</Text>
                 </View>
               )}
@@ -528,7 +528,7 @@ export function MarketplaceChatCard({
     return (
       <View style={styles.safetyCard}>
         <View style={styles.safetyIconSquircle}>
-          <Ionicons name="shield-checkmark" size={16} color="#0D9488" />
+          <Ionicons name="shield-checkmark" size={16} color={colors.brand} />
         </View>
         <View style={styles.safetyContent}>
           <Text style={styles.safetyHeadline}>ThryftVerse Buyer Protection</Text>
@@ -587,11 +587,6 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.borderSubtle,
       padding: Space.md - 2,
       gap: Space.sm,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
-      elevation: 2,
     },
     offerCardThem: {
       alignSelf: 'flex-start',
@@ -831,11 +826,6 @@ const createStyles = (colors: ThemeColors) =>
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.borderSubtle,
       overflow: 'hidden',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.06,
-      shadowRadius: 10,
-      elevation: 3,
     },
     shareCardThem: {
       alignSelf: 'flex-start',
@@ -859,7 +849,7 @@ const createStyles = (colors: ThemeColors) =>
       position: 'absolute',
       bottom: 10,
       left: 10,
-      backgroundColor: 'rgba(0,0,0,0.72)',
+      backgroundColor: colors.mediaOverlayScrim,
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 10,
@@ -870,30 +860,30 @@ const createStyles = (colors: ThemeColors) =>
     shareFloatingPrice: {
       fontSize: 13,
       fontFamily: FontFamily.bold,
-      color: '#FFFFFF',
+      color: colors.mediaOverlayText,
       fontVariant: ['tabular-nums'],
     },
     sharePillDot: {
       width: 3,
       height: 3,
       borderRadius: 1.5,
-      backgroundColor: 'rgba(255,255,255,0.6)',
+      backgroundColor: colors.scrimTextTertiary,
     },
     shareFloatingCondition: {
       fontSize: 11,
       fontFamily: FontFamily.medium,
-      color: 'rgba(255,255,255,0.85)',
+      color: colors.scrimTextSecondary,
     },
     shareSoldOverlay: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
     },
     shareSoldText: {
       fontSize: 16,
       fontFamily: FontFamily.bold,
-      color: '#FFFFFF',
+      color: colors.mediaOverlayText,
       letterSpacing: 2,
     },
     shareContent: {
@@ -990,11 +980,6 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.borderSubtle,
       padding: Space.md - 2,
       gap: Space.sm,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
-      elevation: 2,
     },
     purchaseReceiptHeader: {
       flexDirection: 'row',
@@ -1056,7 +1041,7 @@ const createStyles = (colors: ThemeColors) =>
       width: 28,
       height: 28,
       borderRadius: Radius.sm,
-      backgroundColor: '#CCFBF1',
+      backgroundColor: colors.brandSubtle ?? colors.surfaceAlt,
       alignItems: 'center',
       justifyContent: 'center',
       flexShrink: 0,

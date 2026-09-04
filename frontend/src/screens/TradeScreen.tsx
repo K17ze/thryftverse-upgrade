@@ -488,7 +488,6 @@ export default function TradeScreen() {
         header={
           <FlagshipHeader
             title="Trade"
-            subtitle="Buy or sell Co-Own units"
             onBack={handleBack}
           />
         }
@@ -507,7 +506,6 @@ export default function TradeScreen() {
         header={
           <FlagshipHeader
             title="Trade"
-            subtitle="Buy or sell Co-Own units"
             onBack={handleBack}
           />
         }
@@ -767,7 +765,7 @@ export default function TradeScreen() {
               </Text>
               <View style={[styles.modePill, { backgroundColor: colors.brand }]}>
                 <Text style={[styles.modePillText, { color: colors.background }]} numberOfLines={1}>
-                  CAPPED
+                  Capped
                 </Text>
               </View>
             </View>

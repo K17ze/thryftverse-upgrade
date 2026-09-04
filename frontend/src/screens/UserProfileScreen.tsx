@@ -61,6 +61,7 @@ import { useSignupWall } from '../hooks/useSignupWall';
 import { useToast } from '../context/ToastContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import type { ListingApiItem } from '../services/listingsApi';
 import type { LookApiItem } from '../services/looksApi';
 import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
@@ -549,7 +550,16 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // Render item
   const renderItem = useCallback(({ item }: { item: ListingApiItem | LookApiItem | SellerReviewItem }): React.ReactElement | null => {
     if (activeTab === 'Listings') {
-      return <ProfileShopTile item={item as ListingApiItem} isSold={shopSegment === 'sold'} onPress={() => navigation.push('ItemDetail', { itemId: (item as ListingApiItem).id })} formatPrice={formatFromFiat} cardWidth={cardWidth} cardHeight={cardHeight} />;
+      return (
+        <ProfileShopTile
+          item={item as ListingApiItem}
+          isSold={shopSegment === 'sold'}
+          onPress={() => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: (item as ListingApiItem).id, sourceSurface: 'UserProfile' })}
+          formatPrice={formatFromFiat}
+          cardWidth={cardWidth}
+          cardHeight={cardHeight}
+        />
+      );
     }
     if (activeTab === 'Looks') {
       return <ProfileLookTile item={item as LookApiItem} onPress={() => navigation.navigate('LookDetail', { lookId: (item as LookApiItem).id })} cardWidth={lookTileWidth} cardHeight={lookTileHeight} gap={LOOK_GAP} />;
@@ -559,7 +569,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       <ProfileReviewRow
         item={reviewItem}
         onOpenReviewer={(uid) => openProfile(navigation, uid, currentUserId)}
-        onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })}
+        onOpenListing={(lid) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: lid, sourceSurface: 'UserProfileReview' })}
         onRespond={targetUserId === currentUserId
           ? (reviewId, reviewerName, rating) => setResponseComposer({ visible: true, reviewId, reviewerName, rating })
           : undefined}
@@ -723,7 +733,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           and matching listings are loaded (ShopRail returns null when empty). */}
       <ShopRail
         items={shopRailItems}
-        onPressItem={(id) => navigation.push('ItemDetail', { itemId: id })}
+        onPressItem={(id) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: id, sourceSurface: 'UserProfileShopRail' })}
       />
 
       {/* Tab rail - measures Y for sticky threshold */}

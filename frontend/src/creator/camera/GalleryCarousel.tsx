@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     // backgroundColor applied inline via colors.mediaOverlayScrim (theme token)
-    borderRadius: 16,
+    borderRadius: Radius.xl,
     paddingVertical: Space.sm,
   },
   recentCarouselContent: {

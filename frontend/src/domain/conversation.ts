@@ -1,6 +1,13 @@
+import type { ConversationContext } from './conversationContext';
+
 export interface MessageReaction {
   emoji: string;
   userIds: string[];
+  /** Derived convenience: userIds.length. Populated by mappers so the UI
+   *  can render reaction counts without recomputing. */
+  count?: number;
+  /** Derived convenience: whether the current user is in userIds. */
+  reactedByMe?: boolean;
 }
 
 export interface Message {
@@ -14,14 +21,46 @@ export interface Message {
   systemTitle?: string;
   timestamp: string;
   itemImage?: string;
-  type?: 'text' | 'offer' | 'system' | 'commerce_state' | 'voice' | 'listing_share' | 'purchase_status';
+  type?: 'text' | 'offer' | 'offer_declined' | 'purchase_status' | 'system' | 'commerce_state' | 'voice' | 'media' | 'listing_share' | 'document';
   sender?: 'me' | 'other' | 'system';
-  offer?: { originalPrice: number; offerPrice: number; status: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled'; expiresAt?: string; counterRound?: number; itemId?: string; itemTitle?: string; itemImage?: string | null; itemBrand?: string | null; itemSize?: string | null; itemCondition?: string | null };
-  listing?: { id: string; title: string; price: number; originalPrice?: number; image: string; brand?: string; size?: string; condition?: string; sellerUsername?: string; sellerRating?: number; isSold?: boolean };
+  listing?: {
+    id: string;
+    title: string;
+    price: number;
+    originalPrice?: number;
+    images?: string[];
+    image?: string;
+    brand?: string | null;
+    sellerId?: string | null;
+    size?: string;
+    condition?: string;
+    sellerUsername?: string;
+    sellerRating?: number;
+    isSold?: boolean;
+  };
+  documentUri?: string;
+  documentName?: string;
+  documentMimeType?: string;
+  offer?: {
+    offerId?: string;
+    originalPrice?: number;
+    offerPrice?: number;
+    /** Alias for offerPrice — used by MarketplaceChatCard and legacy consumers. */
+    price?: number;
+    amount?: number;
+    status?: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled';
+    expiresAt?: string;
+    counterRound?: number;
+    buyerId?: string;
+    sellerId?: string;
+    listingId?: string;
+    itemId?: string;
+    listingTitle?: string;
+  };
   reactions?: MessageReaction[];
   replyToMessageId?: string;
   mediaUri?: string;
-  mediaType?: 'image' | 'video' | 'document';
+  mediaType?: 'image' | 'video';
   uploadStatus?: 'uploading' | 'failed' | 'sent';
   // Voice messages — report 19.
   voiceUri?: string;
@@ -30,16 +69,30 @@ export interface Message {
   voiceContainer?: 'm4a' | 'ogg' | 'webm' | 'mp4';
   voiceCodec?: 'aac' | 'opus' | 'mp3';
   voiceModerationState?: 'pending' | 'allowed' | 'limited' | 'blocked';
-  /** P2-03: True when the message has been edited by its sender. */
-  isEdited?: boolean;
-  /** P2-03: ISO timestamp of the most recent edit (null/undefined when never edited). */
-  editedAt?: string | null;
-  /** P2-03: Monotonic edit revision counter (0 = never edited, 1+ = edited N times). */
-  editVersion?: number;
   /** ID of the bot/agent that authored this message (agent conversations). */
   botId?: string;
   /** True when the message was generated in demo mode (clearly labelled). */
   isDemo?: boolean;
+  /** Delivery lifecycle for optimistic/synced messages. */
+  status?: 'sending' | 'sent' | 'failed' | 'draft' | 'reconciling';
+  /** True when the message was edited after creation. */
+  isEdited?: boolean;
+  /** True when the message was deleted for everyone. */
+  isDeleted?: boolean;
+  /** Stable client-generated id for idempotent message creation. */
+  clientMessageId?: string;
+  /** Server-assigned edit version for conflict detection. */
+  editVersion?: number;
+  /** When the message was last edited. */
+  editedAt?: string | null;
+  /** When the message was deleted for everyone. */
+  deletedForEveryoneAt?: string | null;
+  /** Read receipt state. */
+  readStatus?: 'sending' | 'sent' | 'delivered' | 'read';
+  /** User IDs who have read this message (durable per-message receipts). */
+  readBy?: string[];
+  /** Whether the current user has read this message (their own perspective). */
+  isReadByMe?: boolean;
   commerceState?: {
     stateType: 'order_placed' | 'payment_confirmed' | 'order_shipped' | 'order_in_transit' | 'order_delivered' | 'order_cancelled' | 'order_refunded';
     orderId: string;
@@ -49,13 +102,49 @@ export interface Message {
     trackingNumber?: string | null;
     carrier?: string | null;
   };
-  /** P2-02: Pinned location shared in chat (expo-location). */
-  location?: { lat: number; lng: number; label?: string };
-  /** P2-02: Document attachment (expo-document-picker). */
-  documentUri?: string;
-  documentName?: string;
-  documentMimeType?: string;
+  /** Display label for the sender (username / bot name / "System"). */
+  senderLabel?: string;
+  /** Alias for `timestamp` — used by chat hooks and UI components for date
+   *  separators, sorting, and age calculations. Mappers populate both. */
+  date?: string;
+  /** Voice transcription receipt (joined from voice_transcriptions). */
+  voiceTranscription?: {
+    id: string;
+    state: 'queued' | 'processing' | 'complete' | 'failed_retryable' | 'failed_final' | 'unsupported';
+    text: string | null;
+    language: string | null;
+    failureReason: string | null;
+    derived: true;
+  };
+  /** True when this message was generated by a deployed AI agent (demo). */
+  isAgent?: boolean;
+  /** Ionicon name for the agent avatar glyph (only set for agent messages). */
+  agentAvatar?: string;
+  /** Threaded reply preview — resolved by the caller from replyToMessageId. */
+  replyTo?: { senderName: string; text: string } | null;
+  /** Server-authoritative scam warning flag — set when the backend scam
+   *  scanner detects medium-severity off-platform contact patterns. */
+  scamWarning?: boolean;
+  /** True when this message is pinned for the conversation by an admin. */
+  isPinned?: boolean;
+  /** ISO timestamp when the message was pinned. */
+  pinnedAt?: string;
+  /** Poll data attached to a poll-type message. */
+  poll?: ChatPollData;
 }
+
+export interface ChatPollData {
+  id: string;
+  question: string;
+  options: string[];
+  allowMultiple: boolean;
+  isAnonymous: boolean;
+  closesAt?: string;
+  voteCounts: number[];
+  myVotes: number[];
+}
+
+export type { ConversationContext } from './conversationContext';
 
 export type ConversationType = 'dm' | 'group';
 
@@ -96,4 +185,9 @@ export interface Conversation {
   isArchived?: boolean;
   requestStatus?: 'pending' | 'accepted' | 'declined';
   markedUnread?: boolean;
+  /** ISO timestamp of the last read receipt for this conversation. */
+  lastReadAt?: string;
+  /** Authoritative transaction context — listing, offer, order, protection.
+   *  Derived server-side from the database; null for non-marketplace chats. */
+  context?: ConversationContext;
 }

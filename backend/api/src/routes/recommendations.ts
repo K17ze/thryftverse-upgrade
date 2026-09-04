@@ -114,6 +114,7 @@ type ListingRow = {
   created_at: string;
   interaction_count: string;
   seller_rating: string | null;
+  seller_response_hours: string | null;
 };
 
 type DecisionRecommendation = {
@@ -747,16 +748,43 @@ export function registerRecommendationRoutes({
          -- receive a neutral 0.5 so ranking is driven by other features only.
          SELECT seller_id, NULL::text AS seller_rating
          FROM (SELECT DISTINCT seller_id FROM listings WHERE seller_id IS NOT NULL) s
+       ),
+       -- G8: Compute median response hours per seller from chat_messages.
+       -- Measures time from buyer's first message to seller's first reply.
+       seller_response_times AS (
+         WITH seller_convos AS (
+           SELECT
+             c.seller_id,
+             c.id AS conversation_id,
+             MIN(CASE WHEN m.sender_user_id = c.seller_id THEN m.created_at END) AS first_seller_msg,
+             MIN(CASE WHEN m.sender_user_id != c.seller_id THEN m.created_at END) AS first_buyer_msg
+           FROM chat_messages m
+           JOIN conversations c ON c.id = m.conversation_id
+           WHERE m.sender_user_id IS NOT NULL
+             AND m.deleted_for_everyone_at IS NULL
+             AND m.created_at > NOW() - INTERVAL '30 days'
+           GROUP BY c.seller_id, c.id
+         )
+         SELECT seller_id,
+           PERCENTILE_CONT(0.5) WITHIN GROUP (
+             ORDER BY EXTRACT(EPOCH FROM (first_seller_msg - first_buyer_msg)) / 3600
+           )::text AS seller_response_hours
+         FROM seller_convos
+         WHERE first_seller_msg IS NOT NULL AND first_buyer_msg IS NOT NULL
+           AND first_seller_msg > first_buyer_msg
+         GROUP BY seller_id
        )
        SELECT
          l.id, l.seller_id, l.title, l.description, l.category, l.brand,
          l.size, l.condition, l.price_gbp::text, l.image_url,
          l.created_at::text,
          COALESCE(ic.interaction_count, '0') AS interaction_count,
-         sr.seller_rating
+         sr.seller_rating,
+         srt.seller_response_hours
        FROM listings l
        LEFT JOIN interaction_counts ic ON ic.listing_id = l.id
        LEFT JOIN seller_ratings sr ON sr.seller_id = l.seller_id
+       LEFT JOIN seller_response_times srt ON srt.seller_id = l.seller_id
        WHERE l.status = 'active' AND l.seller_id <> $1
        ORDER BY l.created_at DESC, l.id
        LIMIT 500`,
@@ -873,6 +901,9 @@ export function registerRecommendationRoutes({
               seller_trust_score: row.seller_rating == null
                 ? 0.5
                 : Math.min(1, Math.max(0, Number(row.seller_rating) / 5)),
+              seller_response_hours: row.seller_response_hours != null
+                ? Number(row.seller_response_hours)
+                : null,
               available: true,
             })),
             recent_interactions: interactionsResult.rows.map((row) => ({
@@ -1012,4 +1043,115 @@ export function registerRecommendationRoutes({
       items,
     };
   });
+}
+
+// ── Reranking & Diversity Engine ──────────────────────────────────────────
+
+export interface RerankCandidate {
+  id: string;
+  sellerId: string;
+  category: string;
+  createdAt: string;
+  sellerRating: number | null;
+  sellerHasRecentDispute?: boolean;
+  baseScore?: number;
+}
+
+export interface RerankUserProfile {
+  purchasedCategories: Set<string>;
+  savedCategories: Set<string>;
+  viewedCategories: Set<string>;
+}
+
+export interface RerankResult {
+  id: string;
+  sellerId: string;
+  score: number;
+  position: number;
+  componentScores: {
+    base: number;
+    freshness: number;
+    purchaseRelevance: number;
+    saveRelevance: number;
+    viewRelevance: number;
+    sellerTrust: number;
+    badOutcomeSuppression: number;
+  };
+}
+
+export function rerankCandidates(
+  candidates: RerankCandidate[],
+  profile: RerankUserProfile,
+  options: { generatedAt: string; maxPerSellerInTop5?: number } = {
+    generatedAt: new Date().toISOString(),
+    maxPerSellerInTop5: 3,
+  }
+): RerankResult[] {
+  const now = Date.parse(options.generatedAt);
+  const maxSellerTop5 = options.maxPerSellerInTop5 ?? 3;
+
+  const scored = candidates.map((c) => {
+    const ageDays = Math.max(0, (now - Date.parse(c.createdAt)) / 86_400_000);
+    const freshness = Math.exp(-ageDays / 28);
+    const purchaseRelevance = profile.purchasedCategories.has(c.category) ? 1.0 : 0.0;
+    const saveRelevance = profile.savedCategories.has(c.category) ? 1.0 : 0.0;
+    const viewRelevance = profile.viewedCategories.has(c.category) ? 1.0 : 0.0;
+    const sellerTrust =
+      c.sellerRating == null ? 0.5 : Math.min(1, Math.max(0, c.sellerRating / 5));
+    const badOutcomeSuppression = c.sellerHasRecentDispute ? 0.0 : 1.0;
+    const base = c.baseScore ?? 0.5;
+
+    const score =
+      0.25 * base +
+      0.20 * freshness +
+      0.25 * purchaseRelevance +
+      0.10 * saveRelevance +
+      0.05 * viewRelevance +
+      0.05 * sellerTrust +
+      0.10 * badOutcomeSuppression;
+
+    return {
+      id: c.id,
+      sellerId: c.sellerId,
+      score: Number(score.toFixed(6)),
+      position: 0,
+      componentScores: {
+        base: Number(base.toFixed(6)),
+        freshness: Number(freshness.toFixed(6)),
+        purchaseRelevance,
+        saveRelevance,
+        viewRelevance,
+        sellerTrust: Number(sellerTrust.toFixed(6)),
+        badOutcomeSuppression,
+      },
+    };
+  });
+
+  // Sort by score descending, tie break by id ascending for determinism
+  scored.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
+
+  // Apply seller diversity constraint: max items per seller in top 5
+  const top5: typeof scored = [];
+  const remaining: typeof scored = [];
+  const sellerCountInTop5 = new Map<string, number>();
+
+  for (const item of scored) {
+    const currentCount = sellerCountInTop5.get(item.sellerId) ?? 0;
+    if (top5.length < 5 && currentCount < maxSellerTop5) {
+      top5.push(item);
+      sellerCountInTop5.set(item.sellerId, currentCount + 1);
+    } else {
+      remaining.push(item);
+    }
+  }
+
+  // If top 5 is not full, pull from remaining in score order
+  while (top5.length < 5 && remaining.length > 0) {
+    top5.push(remaining.shift()!);
+  }
+
+  return [...top5, ...remaining].map((item, idx) => ({
+    ...item,
+    position: idx + 1,
+  }));
 }

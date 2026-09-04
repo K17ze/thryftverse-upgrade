@@ -21,6 +21,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { useScrollRestoration } from '../hooks/useScrollRestoration';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { SyncStatusPill } from '../components/SyncStatusPill';
@@ -127,7 +128,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
   const removeSavedSearch = useStore((state) => state.removeSavedSearch);
   const toggleSavedSearchAlerts = useStore((state) => state.toggleSavedSearchAlerts);
   const { listings, source, isSyncing, lastError, refreshListings } = useBackendData();
-  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
+  const { currencySymbol, formatFromFiat } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
@@ -574,13 +575,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
 
   const handleOpenRecommendation = (listingId: string) => {
     ProductAnalytics.itemView(listingId);
-    navigation.push('ItemDetail', { itemId: listingId });
-  };
-
-  const handleOpenSearchResult = (listingId: string) => {
-    const position = discoverListings.findIndex((listing) => listing.id === listingId);
-    track('search_result_tapped', { listing_id: listingId, query: normalizedQuery, position });
-    handleOpenRecommendation(listingId);
+    openProductDetail(navigation, { referenceKind: 'listing', canonicalId: listingId, sourceSurface: 'GlobalSearchRec' });
   };
 
   const handleOpenRecommendationSeller = (sellerId: string) => {
@@ -641,7 +636,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
 
   const isDiscoverLanding = !normalizedQuery;
 
-  const t = StyleSheet.create({
+  const t = useMemo(() => StyleSheet.create({
     container: { backgroundColor: colors.background },
     inputContainer: { backgroundColor: colors.surfaceAlt },
     filterBarCount: { color: colors.textSecondary },
@@ -663,7 +658,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
     sortSheetTitle: { color: colors.textPrimary },
     sortSheetRow: { borderBottomColor: colors.border },
     resultOverlay: { backgroundColor: colors.overlay },
-    resultPrice: { color: colors.surface } });
+    resultPrice: { color: colors.surface } }), [colors]);
 
   return (
     <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
@@ -934,7 +929,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                             key={listing.id}
                             style={styles.masonryItemWrap}
                             onPress={() => handleOpenRecommendation(listing.id)}
-                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, currencyCode, { displayMode: 'fiat' })}`}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
                             accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -945,7 +940,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                               />
                             </SharedTransitionView>
                             <View style={[styles.resultOverlay, t.resultOverlay]}>
-                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, currencyCode, { displayMode: 'fiat' })}</Text>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}
@@ -956,7 +951,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                             key={listing.id}
                             style={styles.masonryItemWrap}
                             onPress={() => handleOpenRecommendation(listing.id)}
-                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, currencyCode, { displayMode: 'fiat' })}`}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
                             accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -967,7 +962,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                               />
                             </SharedTransitionView>
                             <View style={[styles.resultOverlay, t.resultOverlay]}>
-                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, currencyCode, { displayMode: 'fiat' })}</Text>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}
@@ -1342,8 +1337,8 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
-                            onPress={() => handleOpenSearchResult(listing.id)}
-                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, currencyCode, { displayMode: 'fiat' })}`}
+                            onPress={() => handleOpenRecommendation(listing.id)}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
                             accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -1354,7 +1349,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                               />
                             </SharedTransitionView>
                             <View style={[styles.resultOverlay, t.resultOverlay]}>
-                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, currencyCode, { displayMode: 'fiat' })}</Text>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}
@@ -1364,8 +1359,8 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                           <AnimatedPressable
                             key={listing.id}
                             style={styles.masonryItemWrap}
-                            onPress={() => handleOpenSearchResult(listing.id)}
-                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, currencyCode, { displayMode: 'fiat' })}`}
+                            onPress={() => handleOpenRecommendation(listing.id)}
+                            accessibilityLabel={`${listing.title}, ${formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}`}
                             accessibilityRole="button"
                           >
                             <SharedTransitionView sharedTransitionTag={`image-${listing.id}-0`}>
@@ -1376,7 +1371,7 @@ export default function GlobalSearchScreen({ navigation, route }: Props) {
                               />
                             </SharedTransitionView>
                             <View style={[styles.resultOverlay, t.resultOverlay]}>
-                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, currencyCode, { displayMode: 'fiat' })}</Text>
+                              <Text style={[styles.resultPrice, t.resultPrice]}>{formatFromFiat(listing.price, 'GBP', { displayMode: 'fiat' })}</Text>
                             </View>
                           </AnimatedPressable>
                         ))}

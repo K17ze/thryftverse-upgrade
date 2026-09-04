@@ -182,7 +182,7 @@ export function trackTelemetryEvent(eventName: string, payload: TelemetryPayload
     return;
   }
 
-  const safePayload = scrubPII(payload);
+  const safePayload = sanitizeValue(scrubPII(payload)) as TelemetryPayload;
 
   // Value-based PII sanitization — catches PII that leaks into arbitrary
   // string values (e.g. a user typing their email into a search box that

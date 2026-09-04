@@ -16,9 +16,9 @@ import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkelet
 import { AppIcon } from '../components/common/AppIcon';
 import { IconSize } from '../theme/iconTokens';
 import {
-  fetchPublicProfile,
   unblockUser,
-  type PublicProfileUser } from '../services/profileApi';
+  getBlockedUsers,
+  type BlockedUserEntry } from '../services/profileApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BlockedUsers'>;
 
@@ -28,35 +28,24 @@ export default function BlockedUsersScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const blockedIds = useStore((state) => state.blockedUsers);
   const toggleBlocked = useStore((state) => state.toggleBlockedUser);
-  const [profiles, setProfiles] = useState<Record<string, PublicProfileUser | null>>({});
+  const [serverEntries, setServerEntries] = useState<BlockedUserEntry[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   React.useEffect(() => {
     let cancelled = false;
-    if (blockedIds.length === 0) {
-      setProfiles({});
-      return;
-    }
-
     setLoadingProfiles(true);
-    Promise.all(
-      blockedIds.map(async (userId) => {
-        try {
-          return [userId, await fetchPublicProfile(userId)] as const;
-        } catch {
-          return [userId, null] as const;
-        }
-      })
-    )
+    getBlockedUsers()
       .then((entries) => {
-        if (!cancelled) setProfiles(Object.fromEntries(entries));
+        if (!cancelled) setServerEntries(entries);
+      })
+      .catch(() => {
+        if (!cancelled) setServerEntries([]);
       })
       .finally(() => {
         if (!cancelled) setLoadingProfiles(false);
       });
-
     return () => {
       cancelled = true;
     };
@@ -82,16 +71,16 @@ export default function BlockedUsersScreen({ navigation }: Props) {
     if (!query.trim()) return blockedIds;
     const q = query.trim().toLowerCase();
     return blockedIds.filter((userId) => {
-      const p = profiles[userId];
-      const name = (p?.displayName || p?.username || '').toLowerCase();
-      const handle = (p?.username || '').toLowerCase();
+      const entry = serverEntries.find((e) => e.userId === userId);
+      const name = (entry?.displayName || entry?.username || '').toLowerCase();
+      const handle = (entry?.username || '').toLowerCase();
       return name.includes(q) || handle.includes(q) || userId.toLowerCase().includes(q);
     });
-  }, [blockedIds, profiles, query]);
+  }, [blockedIds, serverEntries, query]);
 
   const renderRow = (userId: string, isLast: boolean) => {
-    const profile = profiles[userId];
-    const displayName = profile?.displayName || profile?.username || 'Account unavailable';
+    const entry = serverEntries.find((e) => e.userId === userId);
+    const displayName = entry?.displayName || entry?.username || 'Account unavailable';
     return (
       <View
         key={userId}
@@ -100,9 +89,9 @@ export default function BlockedUsersScreen({ navigation }: Props) {
           !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
         ]}
       >
-        {profile?.avatar ? (
+        {entry?.avatarUrl ? (
           <CachedImage
-            uri={profile.avatar}
+            uri={entry.avatarUrl}
             style={styles.avatar}
             containerStyle={styles.avatar}
             contentFit="cover"
@@ -118,7 +107,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
             {displayName}
           </Text>
           <Text style={[styles.userMeta, { color: colors.textMuted }]} numberOfLines={1}>
-            {profile?.username ? `@${profile.username}` : 'Profile details could not be loaded'}
+            {entry?.username ? `@${entry.username}` : 'Profile details could not be loaded'}
           </Text>
         </View>
 
@@ -188,7 +177,7 @@ export default function BlockedUsersScreen({ navigation }: Props) {
             </View>
           )}
 
-          {loadingProfiles && Object.keys(profiles).length === 0 ? (
+          {loadingProfiles && serverEntries.length === 0 ? (
             <SettingsListSkeleton count={Math.min(blockedIds.length, 4)} />
           ) : filteredIds.length === 0 ? (
             <EmptyState

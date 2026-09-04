@@ -53,7 +53,7 @@ export default function CoOwnPriceAlertsScreen({ navigation }: Props) {
   const { formatFromFiat, currencyCode } = useFormattedPrice();
 
   const formatGbp = React.useCallback(
-    (minor: number) => formatFromFiat(minor / 100, currencyCode),
+    (minor: number) => formatFromFiat(minor / 100, 'GBP'),
     [formatFromFiat, currencyCode]
   );
 

@@ -597,14 +597,16 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
               hasError={mediaState === 'error'}
               onRetry={retryMediaFetch}
               onViewAll={() => navigation.navigate('SharedConversationMedia', { conversationId })}
-              onOpenMedia={(uri, mediaType, senderLabel, timestamp, messageId) =>
-                navigation.navigate('ChatMediaPreview', {
-                  mediaUri: uri,
-                  mediaType,
-                  senderLabel,
-                  timestamp,
-                  messageId })
-              }
+              onOpenMedia={(uri, mediaType, senderLabel, timestamp, messageId) => {
+                if (mediaType === 'image' || mediaType === 'video') {
+                  navigation.navigate('ChatMediaPreview', {
+                    mediaUri: uri,
+                    mediaType,
+                    senderLabel,
+                    timestamp,
+                    messageId });
+                }
+              }}
             />
           )}
 

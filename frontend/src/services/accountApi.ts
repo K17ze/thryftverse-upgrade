@@ -18,8 +18,11 @@ interface RequestDataExportResponse {
     coOwnOrders?: unknown[];
     coOwnHoldings?: unknown[];
     consents?: unknown[];
+    complianceProfile?: unknown;
     kycCases?: unknown[];
     amlAlerts?: unknown[];
+    aiUsageEvents?: unknown[];
+    gdprHistory?: unknown[];
   };
 }
 
@@ -29,11 +32,19 @@ interface DeleteMyAccountResponse {
   message: string;
 }
 
+export interface DataExportCategorySummary {
+  key: string;
+  label: string;
+  count: number;
+}
+
 export interface DataExportResult {
   requestId: string;
   exportedAt: string | null;
   username: string | null;
   estimatedRecords: number;
+  categories: DataExportCategorySummary[];
+  exportPayload: unknown;
 }
 
 export interface DeleteAccountResult {
@@ -41,26 +52,45 @@ export interface DeleteAccountResult {
   message: string;
 }
 
+const EXPORT_CATEGORY_KEYS: { key: keyof RequestDataExportResponse['export']; label: string }[] = [
+  { key: 'addresses', label: 'Addresses' },
+  { key: 'paymentMethods', label: 'Payment methods' },
+  { key: 'sessions', label: 'Sessions' },
+  { key: 'interactions', label: 'Interactions' },
+  { key: 'orders', label: 'Orders' },
+  { key: 'auctionBids', label: 'Auction bids' },
+  { key: 'coOwnOrders', label: 'Co-own orders' },
+  { key: 'coOwnHoldings', label: 'Co-own holdings' },
+  { key: 'consents', label: 'Consents' },
+  { key: 'kycCases', label: 'KYC cases' },
+  { key: 'amlAlerts', label: 'AML alerts' },
+  { key: 'aiUsageEvents', label: 'AI usage events' },
+  { key: 'gdprHistory', label: 'GDPR requests' },
+];
+
+function summarizeExportCategories(
+  payload: RequestDataExportResponse['export'] | undefined,
+): DataExportCategorySummary[] {
+  if (!payload) {
+    return [];
+  }
+
+  return EXPORT_CATEGORY_KEYS.map(({ key, label }) => {
+    const value = payload[key];
+    return {
+      key,
+      label,
+      count: Array.isArray(value) ? value.length : 0,
+    };
+  });
+}
+
 function countEstimatedRecords(payload: RequestDataExportResponse['export'] | undefined) {
   if (!payload) {
     return 0;
   }
 
-  const keys: Array<keyof RequestDataExportResponse['export']> = [
-    'addresses',
-    'paymentMethods',
-    'sessions',
-    'interactions',
-    'orders',
-    'auctionBids',
-    'coOwnOrders',
-    'coOwnHoldings',
-    'consents',
-    'kycCases',
-    'amlAlerts',
-  ];
-
-  return keys.reduce((total, key) => {
+  return EXPORT_CATEGORY_KEYS.reduce((total, { key }) => {
     const value = payload[key];
     if (!Array.isArray(value)) {
       return total;
@@ -78,35 +108,23 @@ export async function requestMyDataExport(): Promise<DataExportResult> {
     exportedAt: payload.export?.exportedAt ?? null,
     username: payload.export?.user?.username ?? null,
     estimatedRecords: countEstimatedRecords(payload.export),
-  };
-}
-
-export async function deleteMyAccount(reason?: string): Promise<DeleteAccountResult> {
-  const payload = await fetchJson<DeleteMyAccountResponse>('/users/me', {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reason: reason?.trim() || undefined }),
-  });
-
-  return {
-    requestId: payload.requestId,
-    message: payload.message,
+    categories: summarizeExportCategories(payload.export),
+    exportPayload: payload.export ?? null,
   };
 }
 
 /**
- * Request permanent account deletion with identity re-confirmation.
+ * Permanently delete the account with server-side re-authentication.
  *
- * Sends the user's password, typed confirmation phrase, and optional departure
- * reason to `DELETE /users/me`. The backend GDPR erasure handler accepts the
- * `reason` field today; `password` and `confirmText` are forwarded so that when
- * the backend adds server-side re-authentication they are already in the
- * request body without a client round-trip.
+ * Sends the user's current password, the typed confirmation phrase ("DELETE"),
+ * an optional departure reason, and — when 2FA is enabled — the current TOTP
+ * code. The backend verifies all of these before performing GDPR erasure.
  */
 export async function requestAccountDeletion(
   password: string,
-  confirmText: string,
+  confirmPhrase: string,
   reason?: string,
+  totpCode?: string,
 ): Promise<DeleteAccountResult> {
   const payload = await fetchJson<DeleteMyAccountResponse>('/users/me', {
     method: 'DELETE',
@@ -114,7 +132,8 @@ export async function requestAccountDeletion(
     body: JSON.stringify({
       reason: reason?.trim() || undefined,
       password: password || undefined,
-      confirmText: confirmText?.trim() || undefined,
+      confirmPhrase: confirmPhrase?.trim() || undefined,
+      totpCode: totpCode?.trim() || undefined,
     }),
   });
 

@@ -19,7 +19,7 @@ import { MessageBubble } from "./MessageBubble";
 import {
   LinkPreviewCard,
   extractFirstUrl } from "./LinkPreviewCard";
-import { PaymentWarningCard } from "./PaymentWarningCard";
+import { ScamWarningCard } from "./ScamWarningCard";
 
 import { useAppTheme } from "../../theme/ThemeContext";
 import { Space, Radius, Control, Stroke } from "../../theme/designTokens";
@@ -27,7 +27,6 @@ import { t as legacyT } from "../../i18n";
 import { useAppTranslation } from "../../i18n/useAppTranslation";
 import { type SupportedCurrencyCode } from "../../constants/currencies";
 import type { CurrencyDisplayMode } from "../../utils/currency";
-import { useFormattedPrice } from "../../hooks/useFormattedPrice";
 
 import {
   isFirstInCluster as isFirstInClusterHelper,
@@ -35,12 +34,12 @@ import {
 import {
   isTrustedSystemMessage,
   resolveSystemMessageProvenance } from "../../utils/systemMessageProvenance";
-import { containsOffPlatformPaymentPattern } from "../../utils/chatSafetyWarnings";
 
 import {
   type Message,
   formatDateSeparator,
   formatMessageTime } from "../../hooks/chat";
+import { openProductDetail } from "../../platform/product/openProductDetail";
 
 export type FormatFromFiat = (
   fiatAmount: number,
@@ -60,9 +59,11 @@ export interface ChatMessageRowProps {
   unreadDividerIndex: number;
   conversationId: string | undefined;
   isGroup: boolean;
+  currentUserId?: string;
   selectionMode: boolean;
   selectedMessageIds: Set<string>;
   dismissedWarningIds: Set<string>;
+  currencyCode?: SupportedCurrencyCode;
   formatFromFiat: FormatFromFiat;
   navigation: ChatMessageRowNavigation;
   onAcceptOffer: (msgId: string) => void;
@@ -101,9 +102,11 @@ export function ChatMessageRow({
   unreadDividerIndex,
   conversationId,
   isGroup,
+  currentUserId,
   selectionMode,
   selectedMessageIds,
   dismissedWarningIds,
+  currencyCode = 'GBP',
   formatFromFiat,
   navigation,
   onAcceptOffer,
@@ -126,7 +129,6 @@ export function ChatMessageRow({
   onCancelEdit }: ChatMessageRowProps) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
-  const { currencyCode } = useFormattedPrice();
 
   const styles = useMemo(() => StyleSheet.create({
     dateWrap: {
@@ -262,16 +264,16 @@ export function ChatMessageRow({
   const nextMsg = messages[index + 1];
 
   const clusterFirst = isFirstInClusterHelper(
-    { sender: msg.sender, type: msg.type, date: msg.date },
+    { sender: msg.sender ?? 'other', type: msg.type ?? 'text', date: msg.date },
     prevMsg
-      ? { sender: prevMsg.sender, type: prevMsg.type, date: prevMsg.date }
+      ? { sender: prevMsg.sender ?? 'other', type: prevMsg.type ?? 'text', date: prevMsg.date }
       : undefined,
   );
 
   const clusterLast = isLastInClusterHelper(
-    { sender: msg.sender, type: msg.type, date: msg.date },
+    { sender: msg.sender ?? 'other', type: msg.type ?? 'text', date: msg.date },
     nextMsg
-      ? { sender: nextMsg.sender, type: nextMsg.type, date: nextMsg.date }
+      ? { sender: nextMsg.sender ?? 'other', type: nextMsg.type ?? 'text', date: nextMsg.date }
       : undefined,
   );
 
@@ -423,20 +425,31 @@ export function ChatMessageRow({
           type="offer"
           isMe={isMe}
           senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
-          offer={msg.offer}
-          formattedPrice={formatFromFiat(msg.offer!.price, currencyCode, {
+          offer={msg.offer ? {
+            price: msg.offer.price ?? msg.offer.offerPrice ?? msg.offer.amount ?? 0,
+            originalPrice: msg.offer.originalPrice ?? msg.offer.price ?? msg.offer.offerPrice ?? 0,
+            status: msg.offer.status,
+            expiresAt: msg.offer.expiresAt,
+            counterRound: msg.offer.counterRound,
+          } : undefined}
+          formattedPrice={formatFromFiat(msg.offer?.price ?? msg.offer?.offerPrice ?? msg.offer?.amount ?? 0, 'GBP', {
             displayMode: "fiat" })}
           formattedOriginalPrice={formatFromFiat(
-            msg.offer!.originalPrice, currencyCode,
+            msg.offer?.originalPrice ?? msg.offer?.price ?? msg.offer?.offerPrice ?? 0, 'GBP',
             { displayMode: "fiat" },
           )}
           onAccept={() => onAcceptOffer(msg.id)}
           onDecline={() => onDeclineOffer(msg.id)}
-          onCounter={() => onCounterOffer(msg.id, msg.offer?.price, msg.offer?.originalPrice)}
+          onCounter={() => onCounterOffer(msg.id, msg.offer?.price ?? msg.offer?.offerPrice, msg.offer?.originalPrice)}
           onExpire={() => onOfferExpired(msg.id)}
           onViewListing={() => {
-            if (msg.offer?.itemId) {
-              navigation.navigate("ItemDetail", { itemId: msg.offer.itemId });
+            const targetItemId = msg.offer?.itemId ?? msg.offer?.listingId;
+            if (targetItemId) {
+              openProductDetail(navigation, {
+                referenceKind: 'listing',
+                canonicalId: targetItemId,
+                sourceSurface: 'ChatMessageRowOffer',
+              });
             }
           }}
           onViewOrder={() => {
@@ -472,7 +485,19 @@ export function ChatMessageRow({
         <MarketplaceChatCard
           type="listing_share"
           isMe={isMe}
-          listing={msg.listing}
+          listing={{
+            id: msg.listing.id,
+            title: msg.listing.title,
+            price: msg.listing.price,
+            originalPrice: msg.listing.originalPrice,
+            image: msg.listing.image ?? msg.listing.images?.[0] ?? '',
+            brand: msg.listing.brand ?? undefined,
+            size: msg.listing.size,
+            condition: msg.listing.condition,
+            sellerUsername: msg.listing.sellerUsername,
+            sellerRating: msg.listing.sellerRating,
+            isSold: msg.listing.isSold,
+          }}
           formattedPrice={formatFromFiat(msg.listing.price, currencyCode, {
             displayMode: "fiat",
           })}
@@ -484,7 +509,11 @@ export function ChatMessageRow({
               : undefined
           }
           onViewListing={() => {
-            navigation.navigate("ItemDetail", { itemId: msg.listing!.id });
+            openProductDetail(navigation, {
+              referenceKind: 'listing',
+              canonicalId: msg.listing!.id,
+              sourceSurface: 'ChatMessageRowListingShare',
+            });
           }}
           onMakeOffer={() => {
             navigation.navigate("MakeOffer", {
@@ -593,6 +622,9 @@ export function ChatMessageRow({
                 : undefined
           }
           readStatus={isMe ? msg.readStatus : undefined}
+          readBy={msg.readBy}
+          isGroup={isGroup}
+          currentUserId={currentUserId}
           onLongPress={() => onMessageLongPress(msg)}
           onReactionPress={() => onSetReactingToMessage(msg)}
           onMediaPress={
@@ -627,7 +659,11 @@ export function ChatMessageRow({
               ? () => onScrollToMessage(msg.replyToMessageId!)
               : undefined
           }
-          reactions={msg.reactions}
+          reactions={msg.reactions?.map(r => ({
+            emoji: r.emoji,
+            count: r.count ?? r.userIds.length,
+            reactedByMe: r.reactedByMe ?? false,
+          }))}
           mediaUri={msg.mediaUri}
           mediaType={msg.mediaType}
           uploadStatus={msg.uploadStatus}
@@ -676,18 +712,13 @@ export function ChatMessageRow({
               </View>
             ) : null;
           })()}
-        {/* Off-platform payment warning — non-blocking inline card below the message */}
-        {!isMedia && !isVoice && containsOffPlatformPaymentPattern(msg.text ?? "") && (
+        {/* Server-authoritative scam warning — non-blocking inline card below the message */}
+        {!isMedia && !isVoice && msg.scamWarning && (
           <View style={[isMe && styles.linkPreviewWrapRight]}>
-            <PaymentWarningCard
+            <ScamWarningCard
               dismissed={dismissedWarningIds.has(msg.id)}
               onDismiss={() => {
                 onDismissWarning(msg.id);
-              }}
-              onReport={() => {
-                navigation.navigate("Report", {
-                  type: "user",
-                  targetId: msg.senderId });
               }}
               isMe={isMe}
             />

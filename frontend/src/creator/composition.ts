@@ -556,6 +556,14 @@ export const CreatorMetadataSchema = z.object({
   sourceCreatorId: z.string().optional(),
   scheduledFor: z.string().datetime().optional(),
   coverPageIndex: z.number().int().min(0).optional(),
+  // ── Exported render metadata ──
+  // When the native export pipeline renders the composition to a
+  // canonical image, these fields store the uploaded render URL and
+  // dimensions so the publication orchestrator can use it as the
+  // canonical published asset.
+  exportedRenderUrl: z.string().optional(),
+  exportedRenderWidth: z.number().int().positive().optional(),
+  exportedRenderHeight: z.number().int().positive().optional(),
 });
 
 export type CreatorMetadata = z.infer<typeof CreatorMetadataSchema>;

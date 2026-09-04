@@ -19,7 +19,7 @@ import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
 import { haptics } from '../utils/haptics';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
-import { Space, Radius, Typography, Stroke, Control } from '../theme/designTokens';
+import { Space, Radius, Typography, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { formatHour } from '../utils/timeFormat';
 type Props = NativeStackScreenProps<RootStackParamList, 'PushNotifications'>;
@@ -255,7 +255,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         <View style={styles.permissionBanner}>
           <Ionicons name="notifications-off-outline" size={18} color={colors.danger} />
           <Text style={styles.permissionBannerText}>
-            Push notifications are blocked. Enable them in Settings to receive alerts.
+            Push is blocked. Enable it in Settings to receive alerts.
           </Text>
           <AnimatedPressable
             onPress={() => Linking.openSettings()}
@@ -263,8 +263,9 @@ export default function PushNotificationsScreen({ navigation }: Props) {
             scaleValue={0.95}
             hapticFeedback="light"
             accessibilityLabel="Open device settings"
+            hitSlop={8}
           >
-            <Text style={styles.permissionBannerAction}>Open Settings</Text>
+            <Text style={styles.permissionBannerAction}>Open settings</Text>
           </AnimatedPressable>
         </View>
       )}
@@ -275,14 +276,13 @@ export default function PushNotificationsScreen({ navigation }: Props) {
           {enabledCount === 0 ? 'All notifications off' : 'Push notifications on'}
         </Text>
         <Text style={[styles.postureSubtitle, { color: colors.textSecondary }]}>
-          {enabledCount === 0 ? 'You won\'t receive any push alerts' : isDeviceRegistered ? 'This device is registered for delivery' : 'Register this device to receive alerts'}
+          {enabledCount === 0 ? 'You won\'t receive any push alerts' : isDeviceRegistered ? 'This device is registered' : 'Register this device to receive alerts'}
         </Text>
       </View>
 
       {PUSH_NOTIFICATION_GROUPS.map((group) => {
         const groupItems = NOTIFICATIONS.filter((n) => n.group === group.key);
         if (groupItems.length === 0) return null;
-        const groupIconColor = group.key === 'orders' ? colors.success : group.key === 'social' ? colors.brand : colors.textMuted;
         return (
           <View key={group.key}>
             <SettingsSection title={group.label} noCard>
@@ -290,9 +290,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
                 <SettingsRow
                   key={item.key}
                   title={item.label}
-                  subtitle={item.subtitle}
                   icon={item.icon}
-                  iconColor={groupIconColor}
                   toggleValue={toggles[item.key]}
                   onToggle={() => void toggle(item.key)}
                   syncing={syncingKeys.has(item.key)}
@@ -306,10 +304,9 @@ export default function PushNotificationsScreen({ navigation }: Props) {
       })}
 
       {/* Quiet Hours — suppress non-urgent notifications during a time window */}
-      <SettingsSection title="Quiet Hours" noCard>
+      <SettingsSection title="Quiet hours" noCard>
         <SettingsRow
           title="Do Not Disturb"
-          subtitle="Pause non-urgent notifications during set hours"
           toggleValue={quietHours.enabled}
           onToggle={() => setQuietHours({ enabled: !quietHours.enabled })}
           isFirst
@@ -383,14 +380,10 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         {quietHours.enabled ? (
           <SettingsInfoBanner
             icon="moon-outline"
-            text={`Urgent alerts (order updates, security) still arrive during quiet hours. Non-urgent push notifications are silenced on this device between ${formatHour(quietHours.startHour)} and ${formatHour(quietHours.endHour)}. This setting applies to this device only.`}
+            text={`Urgent alerts still arrive. Non-urgent push is silenced between ${formatHour(quietHours.startHour)} and ${formatHour(quietHours.endHour)} on this device.`}
           />
         ) : null}
       </SettingsSection>
-
-      <Text style={styles.footerNote}>
-        Manage push notifications from your device Settings app too.
-      </Text>
     </FlagshipScreen>
   );
 }
@@ -398,22 +391,10 @@ export default function PushNotificationsScreen({ navigation }: Props) {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     iconBtn: {
-      width: Control.chrome + Space.xs,
-      height: Control.chrome + Space.xs,
-      borderRadius: Radius.md,
-      backgroundColor: colors.surfaceAlt,
-      justifyContent: 'center',
+      width: Control.hit,
+      height: Control.hit,
       alignItems: 'center',
-      borderWidth: Stroke.standard,
-      borderColor: colors.border },
-    footerNote: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.textMuted,
-      lineHeight: TypographyV2.meta.lineHeight,
-      marginTop: Space.sm,
-      marginHorizontal: Space.md,
-      letterSpacing: TypographyV2.meta.letterSpacing },
+      justifyContent: 'center' },
     permissionBanner: {
       flexDirection: 'row',
       alignItems: 'center',

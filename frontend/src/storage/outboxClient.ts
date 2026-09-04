@@ -141,6 +141,22 @@ export async function getOutboxPendingCount(): Promise<number> {
 }
 
 /**
+ * Returns the count of failed outbox rows — mutations that exhausted
+ * retries and require manual intervention. Surfaced by the sync status
+ * badge so the user knows changes did not sync.
+ */
+export async function getOutboxFailedCount(): Promise<number> {
+  const db = await getDb();
+  const result = db.execute(
+    `SELECT COUNT(*) AS count
+     FROM mutation_outbox
+     WHERE state = 'failed';`,
+  );
+  const row = result.rows.item(0);
+  return Number(row?.count ?? 0);
+}
+
+/**
  * Returns outbox rows in a `conflict` state so the UI can surface them
  * for user resolution (e.g. "This item was edited elsewhere — review").
  */

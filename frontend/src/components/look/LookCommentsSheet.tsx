@@ -289,6 +289,7 @@ const CommentRow = React.memo(function CommentRow({
       delayLongPress={400}
       disabled={isPending || isFailed}
       accessibilityRole="button"
+      accessibilityLabel={`Comment by ${comment.author.username}`}
       accessibilityActions={[{ name: 'longpress', label: 'Show comment actions' }]}
       onAccessibilityAction={(e) => {
         if (e.nativeEvent.actionName === 'longpress') handleLongPress();
@@ -1056,7 +1057,7 @@ export function LookCommentsSheet({
 
       {/* Long-press context menu — destructive actions live one level deep */}
       <Modal transparent visible={menuComment !== null} animationType="fade" onRequestClose={closeMenu}>
-        <Pressable style={styles.menuBackdrop} onPress={closeMenu} accessibilityRole="button" accessibilityLabel="Close menu">
+        <Pressable style={styles.menuBackdrop} onPress={closeMenu} accessibilityLabel="Close menu" accessibilityRole="button">
           <View style={styles.menuSheet}>
             <Text style={styles.menuTitle} numberOfLines={1}>
               {menuComment?.author.username ?? 'Comment'}
@@ -1228,7 +1229,7 @@ const createStyles = (colors: ThemeColors) =>
     emptyWrap: {
       alignItems: 'center',
       gap: Space.xs,
-      paddingVertical: 48,
+      paddingVertical: Space.xxl,
     },
     emptyText: {
       fontSize: TypographyV2.bodyStrong.size,

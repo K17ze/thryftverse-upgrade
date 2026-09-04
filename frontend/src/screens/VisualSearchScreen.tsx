@@ -33,10 +33,19 @@ import type { Listing } from '../domain';
 import { visualSearch } from '../services/listingsApi';
 import VisualSearchCamera from '../components/VisualSearchCamera';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { openProductDetail } from '../platform/product/openProductDetail';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VisualSearch'>;
 
 type ResultStatus = 'idle' | 'loading' | 'populated' | 'empty' | 'error' | 'offline' | 'partial';
+
+// G11: Color and style facets for visual search refinement.
+// Colors are matched against listing title/description text (honest text
+// matching, not image analysis). Styles are matched against common fashion
+// style keywords. These are client-side filters that narrow the result set
+// after the backend returns candidates.
+const COLOR_FACETS = ['Black', 'White', 'Blue', 'Red', 'Green', 'Brown', 'Grey', 'Pink', 'Beige', 'Navy'] as const;
+const STYLE_FACETS = ['Vintage', 'Minimal', 'Streetwear', 'Y2K', 'Formal', 'Casual', 'Sportswear', 'Luxury'] as const;
 
 export default function VisualSearchScreen({ navigation, route }: Props) {
   const { colors } = useAppTheme();
@@ -57,6 +66,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   const [brand, setBrand] = useState('');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
   const [status, setStatus] = useState<ResultStatus>('idle');
   const [results, setResults] = useState<Listing[]>([]);
   const [visualMatching, setVisualMatching] = useState(false);
@@ -180,23 +191,27 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       const b = (payload.brand ?? '').trim().toLowerCase();
       const min = payload.minPrice;
       const max = payload.maxPrice;
+      const colorFilter = selectedColor?.toLowerCase() ?? '';
+      const styleFilter = selectedStyle?.toLowerCase() ?? '';
 
       return listings.filter((listing) => {
         if (cat && (listing.category ?? '').toLowerCase() !== cat) return false;
         if (b && !(listing.brand ?? '').toLowerCase().includes(b)) return false;
         if (typeof min === 'number' && listing.price < min) return false;
         if (typeof max === 'number' && listing.price > max) return false;
+        const searchable = [listing.title, listing.description, listing.brand, listing.category]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (colorFilter && !searchable.includes(colorFilter)) return false;
+        if (styleFilter && !searchable.includes(styleFilter)) return false;
         if (q) {
-          const searchable = [listing.title, listing.description, listing.brand, listing.category]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase();
           if (!searchable.includes(q)) return false;
         }
         return true;
       });
     },
-    [listings]
+    [listings, selectedColor, selectedStyle]
   );
 
   // Read a local image URI as a base64 string for the backend. Remote/data
@@ -279,6 +294,23 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
       return;
     }
 
+    // G11: Apply client-side color/style facet filtering to API results.
+    // These facets don't exist in the backend schema, so we filter after
+    // the API returns. Honest text matching on title/description.
+    const colorFilter = selectedColor?.toLowerCase() ?? '';
+    const styleFilter = selectedStyle?.toLowerCase() ?? '';
+    if (colorFilter || styleFilter) {
+      items = items.filter((listing) => {
+        const searchable = [listing.title, listing.description, listing.brand, listing.category]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (colorFilter && !searchable.includes(colorFilter)) return false;
+        if (styleFilter && !searchable.includes(styleFilter)) return false;
+        return true;
+      });
+    }
+
     setResults(items);
     setVisualMatching(apiResult.visualMatching);
     setSimilarityMethod(apiResult.similarityMethod);
@@ -318,6 +350,8 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     setBrand('');
     setMinPrice('');
     setMaxPrice('');
+    setSelectedColor(null);
+    setSelectedStyle(null);
     if (imageUri) {
       setTimeout(() => void runSearch(), 0);
     }
@@ -333,7 +367,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
 
   const handlePressItem = useCallback(
     (item: Listing) => {
-      navigation.navigate('ItemDetail', { itemId: item.id });
+      openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'VisualSearch' });
     },
     [navigation]
   );
@@ -385,7 +419,9 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     selectedCategory !== null ||
     brand.trim().length > 0 ||
     minPrice.trim().length > 0 ||
-    maxPrice.trim().length > 0;
+    maxPrice.trim().length > 0 ||
+    selectedColor !== null ||
+    selectedStyle !== null;
 
   // ── Visual-query header (photo selected) ──────────────────────────────
   // No scanline animation or corner brackets — the backend is a colour
@@ -418,7 +454,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           accessibilityLabel="Remove photo and start over"
           accessibilityHint="Removes the photo and returns to the camera"
         >
-          <Ionicons name="close-circle" size={22} color="#fff" />
+          <Ionicons name="close-circle" size={22} color={colors.textInverse} />
         </AnimatedPressable>
       </View>
 
@@ -514,6 +550,80 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
           })}
         </ScrollView>
       )}
+
+      {/* G11: Color facet chips — client-side text matching on listing titles */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.categoryRail}
+        contentContainerStyle={styles.categoryRailContent}
+      >
+        <AnimatedPressable
+          style={[styles.categoryPill, !selectedColor && styles.categoryPillActive]}
+          onPress={() => { haptic.selection(); setSelectedColor(null); }}
+          activeOpacity={0.85}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="All colors"
+          accessibilityState={{ selected: !selectedColor }}
+        >
+          <Text style={[styles.categoryPillText, !selectedColor && styles.categoryPillTextActive]}>All colours</Text>
+        </AnimatedPressable>
+        {COLOR_FACETS.map((color) => {
+          const active = selectedColor === color;
+          return (
+            <AnimatedPressable
+              key={`vscol-${color}`}
+              style={[styles.categoryPill, active && styles.categoryPillActive]}
+              onPress={() => { haptic.selection(); setSelectedColor(active ? null : color); }}
+              activeOpacity={0.85}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={`Filter by ${color}`}
+              accessibilityState={{ selected: active }}
+            >
+              <Text style={[styles.categoryPillText, active && styles.categoryPillTextActive]}>{color}</Text>
+            </AnimatedPressable>
+          );
+        })}
+      </ScrollView>
+
+      {/* G11: Style facet chips — client-side text matching on listing titles */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.categoryRail}
+        contentContainerStyle={styles.categoryRailContent}
+      >
+        <AnimatedPressable
+          style={[styles.categoryPill, !selectedStyle && styles.categoryPillActive]}
+          onPress={() => { haptic.selection(); setSelectedStyle(null); }}
+          activeOpacity={0.85}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="All styles"
+          accessibilityState={{ selected: !selectedStyle }}
+        >
+          <Text style={[styles.categoryPillText, !selectedStyle && styles.categoryPillTextActive]}>All styles</Text>
+        </AnimatedPressable>
+        {STYLE_FACETS.map((style) => {
+          const active = selectedStyle === style;
+          return (
+            <AnimatedPressable
+              key={`vsstyle-${style}`}
+              style={[styles.categoryPill, active && styles.categoryPillActive]}
+              onPress={() => { haptic.selection(); setSelectedStyle(active ? null : style); }}
+              activeOpacity={0.85}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={`Filter by ${style} style`}
+              accessibilityState={{ selected: active }}
+            >
+              <Text style={[styles.categoryPillText, active && styles.categoryPillTextActive]}>{style}</Text>
+            </AnimatedPressable>
+          );
+        })}
+      </ScrollView>
 
       <View style={styles.filterRow}>
         <View style={styles.filterInputWrap}>
@@ -621,7 +731,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     if (!honestNoteText) return null;
     return (
       <View style={styles.honestNote}>
-        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+        <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} accessible={false} aria-hidden={true} />
         <Text style={styles.honestNoteText}>{honestNoteText}</Text>
       </View>
     );
@@ -649,7 +759,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
     <EmptyState
       icon="eye-outline"
       title="No matches found"
-      subtitle="Try clearing filters, broadening your description, or browse a category instead."
+      subtitle="Try clearing filters or broadening your description."
       {...(hasActiveFilters
         ? { ctaLabel: 'Clear filters', onCtaPress: handleClearFilters }
         : {})}
@@ -665,9 +775,7 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   // ── Error state with retry ────────────────────────────────────────────
   const renderErrorState = () => (
     <View style={styles.emptyState}>
-      <View style={styles.emptyIconWrap}>
-        <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
-      </View>
+      <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} accessible={false} aria-hidden={true} />
       <Text style={styles.emptyTitle}>Couldn't load results</Text>
       <Text style={styles.emptyText}>Check your connection and try again.</Text>
       <AppButton
@@ -685,14 +793,14 @@ export default function VisualSearchScreen({ navigation, route }: Props) {
   // method, never "Analyzing image" which implies AI/ML analysis.
   const renderOfflineBanner = () => (
     <View style={styles.offlineBanner}>
-      <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} />
+      <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} accessible={false} aria-hidden={true} />
       <Text style={styles.offlineBannerText}>Offline — showing cached results</Text>
     </View>
   );
 
   const renderPartialIndicator = () => (
     <View style={styles.partialIndicator}>
-      <Ionicons name="save-outline" size={14} color={colors.textMuted} />
+      <Ionicons name="save-outline" size={14} color={colors.textMuted} accessible={false} aria-hidden={true} />
       <Text style={styles.partialIndicatorText}>Some results from your saved data</Text>
     </View>
   );
@@ -871,7 +979,7 @@ function createStyles(colors: ThemeColors) {
     position: 'absolute',
     top: Space.xs,
     right: Space.xs,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     borderRadius: Radius.lg,
     width: Control.icon,
     height: Control.icon,
@@ -906,8 +1014,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: TypographyV2.label.size,
     fontFamily: TypographyV2.label.fontFamily,
     color: colors.textSecondary,
-    letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase' },
+    letterSpacing: TypographyV2.label.letterSpacing },
   textInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',

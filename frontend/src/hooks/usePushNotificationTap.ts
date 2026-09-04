@@ -73,8 +73,17 @@ function readNotificationType(data: Record<string, unknown> | undefined): string
 
 function handleNotificationResponse(response: Notifications.NotificationResponse) {
   const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+  const actionId = response.actionIdentifier;
   const route = extractRouteFromPushData(data);
-  queueRoute(route);
+
+  // G5: Handle inline action button taps from per-type notification categories.
+  // "mark_as_read" is a no-op (just dismiss). Other actions navigate normally.
+  if (actionId && actionId !== 'mark_as_read') {
+    queueRoute(route);
+  } else if (!actionId) {
+    // Regular tap (no action button) — navigate to the route
+    queueRoute(route);
+  }
 
   // Fire-and-forget analytics. PostHog no-ops in dev (no API key), and we
   // additionally guard on __DEV__ so no capture work runs locally.
@@ -84,6 +93,7 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     track('push_notification_tapped', {
       notification_type: notificationType,
       target_screen: targetScreen,
+      action_id: actionId ?? null,
     });
   }
 }

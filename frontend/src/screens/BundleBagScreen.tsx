@@ -28,7 +28,7 @@ export default function BundleBagScreen() {
   const route = useRoute<RouteT>();
   const { sellerId, sellerName } = route.params ?? { sellerId: '', sellerName: '' };
   const { listings, isSyncing, refreshListings } = useBackendData();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const haptic = useHaptic();
   const { show } = useToast();
 
@@ -105,7 +105,7 @@ export default function BundleBagScreen() {
         )}
         <View style={styles.itemInfo}>
           <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.itemPrice}>{formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}</Text>
+          <Text style={styles.itemPrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
           {item.size && <Text style={styles.itemMeta}>Size: {item.size}</Text>}
         </View>
       </AnimatedPressable>
@@ -168,7 +168,7 @@ export default function BundleBagScreen() {
             <View style={styles.footer}>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Subtotal ({selectedItems.length} items)</Text>
-                <Text style={styles.summaryValue}>{formatFromFiat(subtotal, currencyCode, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.summaryValue}>{formatFromFiat(subtotal, 'GBP', { displayMode: 'fiat' })}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Shipping</Text>
@@ -176,10 +176,10 @@ export default function BundleBagScreen() {
               </View>
               <View style={[styles.summaryRow, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>{formatFromFiat(total, currencyCode, { displayMode: 'fiat' })}</Text>
+                <Text style={styles.totalValue}>{formatFromFiat(total, 'GBP', { displayMode: 'fiat' })}</Text>
               </View>
               <AppButton
-                title={selectedItems.length < 2 ? 'Select 2+ items' : `Checkout · ${formatFromFiat(total, currencyCode, { displayMode: 'fiat' })}`}
+                title={selectedItems.length < 2 ? 'Select 2+ items' : `Checkout · ${formatFromFiat(total, 'GBP', { displayMode: 'fiat' })}`}
                 variant="primary"
                 size="lg"
                 style={styles.checkoutBtn}

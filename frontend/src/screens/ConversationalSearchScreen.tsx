@@ -62,7 +62,7 @@ type ConversationRow =
 
 export default function ConversationalSearchScreen({ navigation }: Props) {
   const { colors, isDark } = useAppTheme();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { isOffline } = useConnectivity();
   const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -229,9 +229,9 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       if (filters.priceRange) {
         const { min, max } = filters.priceRange;
         let priceLabel = t('filters.priceLabel');
-        if (min !== undefined && max !== undefined) priceLabel += `${formatFromFiat(min, currencyCode)}–${formatFromFiat(max, currencyCode)}`;
-        else if (max !== undefined) priceLabel += t('filters.priceUnder', { value: formatFromFiat(max, currencyCode) });
-        else if (min !== undefined) priceLabel += t('filters.priceOver', { value: formatFromFiat(min, currencyCode) });
+        if (min !== undefined && max !== undefined) priceLabel += `${formatFromFiat(min, 'GBP')}–${formatFromFiat(max, 'GBP')}`;
+        else if (max !== undefined) priceLabel += t('filters.priceUnder', { value: formatFromFiat(max, 'GBP') });
+        else if (min !== undefined) priceLabel += t('filters.priceOver', { value: formatFromFiat(min, 'GBP') });
         chips.push({ label: priceLabel, key: 'price' });
       }
       if (filters.sustainableOnly) {
@@ -239,7 +239,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
       }
       return chips;
     },
-    [formatFromFiat, t, currencyCode],
+    [formatFromFiat, t],
   );
 
   // ── Render an assistant message bubble ──
@@ -340,6 +340,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
                     activeOpacity={0.8}
                     hapticFeedback="light"
                     disabled={isProcessing}
+                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                     accessibilityLabel={`Refine search: ${suggestion}`}
                     accessibilityHint="Adds this refinement to your search"
                     accessibilityRole="button"
@@ -495,7 +496,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
   // ── Error state ──
   const renderErrorState = () => (
     <View style={localStyles.errorWrap}>
-      <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
+      <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} accessible={false} aria-hidden={true} />
       <Text
         style={[localStyles.errorTitle, { color: colors.textPrimary }]}
         accessibilityRole="text"
@@ -563,7 +564,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.borderSubtle },
           ]}
         >
-          <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+          <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} accessible={false} aria-hidden={true} />
           <Text
             style={[localStyles.demoBannerText, { color: colors.textMuted }]}
             accessibilityRole="text"
@@ -581,7 +582,7 @@ export default function ConversationalSearchScreen({ navigation }: Props) {
             { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.borderSubtle },
           ]}
         >
-          <Ionicons name="wifi-outline" size={14} color={colors.textMuted} />
+          <Ionicons name="wifi-outline" size={14} color={colors.textMuted} accessible={false} aria-hidden={true} />
           <Text
             style={[localStyles.offlineBannerText, { color: colors.textMuted }]}
             accessibilityRole="text"
@@ -759,7 +760,6 @@ const localStyles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase',
     marginBottom: Space.xs },
   filterChipWrap: {
     flexDirection: 'row',
@@ -802,7 +802,6 @@ const localStyles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase',
     marginBottom: Space.xs },
   refineScroll: {
     gap: Space.xs,
@@ -850,7 +849,6 @@ const localStyles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase',
     marginBottom: Space.sm },
   suggestionSkeletonRow: {
     paddingVertical: Space.sm },

@@ -4,6 +4,8 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { File, Paths } from 'expo-file-system';
+import Share from 'react-native-share';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -46,6 +48,7 @@ export default function DataExportScreen({ navigation }: Props) {
   const [exportState, setExportState] = React.useState<ExportState>('idle');
   const [exportResult, setExportResult] = React.useState<DataExportResult | null>(null);
   const [exportError, setExportError] = React.useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = React.useState(false);
 
   const handleRequestExport = useCallback(async () => {
     if (!currentUser?.id) {
@@ -74,6 +77,38 @@ export default function DataExportScreen({ navigation }: Props) {
     setExportResult(null);
   }, []);
 
+  const handleDownload = useCallback(async () => {
+    if (!exportResult?.exportPayload) {
+      return;
+    }
+    setIsDownloading(true);
+    try {
+      const fileName = `thryftverse-export-${exportResult.requestId}.json`;
+      const file = new File(Paths.cache, fileName);
+      file.write(JSON.stringify(exportResult.exportPayload, null, 2));
+      await Share.open({
+        url: file.uri,
+        failOnCancel: false,
+        type: 'application/json',
+        title: 'Download your data export',
+      });
+      haptic.medium();
+    } catch (error) {
+      const parsed = parseApiError(error, 'Unable to save the export file right now.');
+      show(parsed.message, 'error');
+      haptic.light();
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [exportResult, show, haptic]);
+
+  const exportedCategories = useMemo(() => {
+    if (!exportResult?.categories) {
+      return [];
+    }
+    return exportResult.categories.filter((c) => c.count > 0);
+  }, [exportResult?.categories]);
+
   return (
     <FlagshipScreen
       header={
@@ -84,21 +119,23 @@ export default function DataExportScreen({ navigation }: Props) {
       }
     >
       {/* ── What's included — flat rows, no card wrapper ── */}
-      <SettingsSection
-        title="What's included"
-        description="Export a copy of everything Thryftverse holds about you"
-      >
-        {DATA_CATEGORIES.map((category, i) => (
-          <SettingsRow
-            key={category.label}
-            icon={category.icon}
-            title={category.label}
-            subtitle={category.description}
-            isFirst={i === 0}
-            isLast={i === DATA_CATEGORIES.length - 1}
-          />
-        ))}
-      </SettingsSection>
+      {exportState !== 'success' ? (
+        <SettingsSection
+          title="What's included"
+          description="Export a copy of everything Thryftverse holds about you"
+        >
+          {DATA_CATEGORIES.map((category, i) => (
+            <SettingsRow
+              key={category.label}
+              icon={category.icon}
+              title={category.label}
+              subtitle={category.description}
+              isFirst={i === 0}
+              isLast={i === DATA_CATEGORIES.length - 1}
+            />
+          ))}
+        </SettingsSection>
+      ) : null}
 
       {/* ── State-specific content ── */}
       {/* Loading state */}
@@ -120,29 +157,24 @@ export default function DataExportScreen({ navigation }: Props) {
             description="Your data export has been generated"
           />
           <SettingsSection
-            title="Export ready"
-            description="Your export is ready above. Request a new export at any time."
+            title="Export summary"
+            description={`${exportResult.estimatedRecords} records across ${exportedCategories.length} categories`}
           >
             <SettingsRow
               title="Request ID"
               subtitle={exportResult.requestId}
               isFirst
-              isLast={!exportResult.exportedAt && !(exportResult.estimatedRecords > 0)}
+              isLast={exportedCategories.length === 0}
             />
-            {exportResult.exportedAt ? (
+            {exportedCategories.map((category, i) => (
               <SettingsRow
-                title="Exported at"
-                value={new Date(exportResult.exportedAt).toLocaleString()}
-                isLast={!(exportResult.estimatedRecords > 0)}
+                key={category.key}
+                title={category.label}
+                value={String(category.count)}
+                isFirst={false}
+                isLast={i === exportedCategories.length - 1}
               />
-            ) : null}
-            {exportResult.estimatedRecords > 0 ? (
-              <SettingsRow
-                title="Records"
-                value={String(exportResult.estimatedRecords)}
-                isLast
-              />
-            ) : null}
+            ))}
           </SettingsSection>
         </>
       ) : null}
@@ -203,6 +235,18 @@ export default function DataExportScreen({ navigation }: Props) {
           ) : exportState === 'success' ? (
             <>
               <AppButton
+                title={isDownloading ? 'Preparing file...' : 'Download JSON'}
+                variant="primary"
+                size="lg"
+                onPress={handleDownload}
+                loading={isDownloading}
+                disabled={isDownloading}
+                hapticFeedback="medium"
+                accessibilityLabel="Download your data export as a JSON file"
+                accessibilityHint="Saves a JSON file containing all your exported account data"
+                style={styles.fullWidth}
+              />
+              <AppButton
                 title="Request a new export"
                 variant="secondary"
                 size="lg"
@@ -229,7 +273,7 @@ export default function DataExportScreen({ navigation }: Props) {
               onPress={handleRequestExport}
               hapticFeedback="medium"
               accessibilityLabel="Request data export"
-              accessibilityHint="Generates a copy of your account data and sends it to your email"
+              accessibilityHint="Generates a copy of your account data"
               style={styles.fullWidth}
             />
           )}

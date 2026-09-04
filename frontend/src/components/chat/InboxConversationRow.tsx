@@ -16,6 +16,7 @@ import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTranslation } from '../../i18n/useAppTranslation';
+import type { CommerceStatusTone } from '../../utils/conversationClassification';
 
 export interface InboxConversationRowProps {
   displayTitle: string;
@@ -30,13 +31,13 @@ export interface InboxConversationRowProps {
   draftText?: string;
   itemId?: string;
   itemThumbUri?: string | null;
-  /**
-   * Pre-built listing context thumbnail node (e.g. ListingContextThumbnail).
-   * When provided, takes priority over itemThumbUri — it handles the
-   * no-image fallback (bag icon) so marketplace conversations always show
-   * listing context even when the listing has no photo.
-   */
-  listingContextThumb?: React.ReactNode;
+  /** Server-projected listing thumbnail (context.listing.imageUrl). Shown
+   *  as a 40×40 commerce context thumbnail on the right of the row. */
+  contextThumbUri?: string | null;
+  /** Compact commerce status label (e.g. "Offer pending", "Paid"). */
+  commerceStatusLabel?: string | null;
+  /** Visual tone for the commerce status badge. */
+  commerceStatusTone?: CommerceStatusTone;
   avatarElement: React.ReactNode;
   isTyping?: boolean;
   onPress: () => void;
@@ -108,7 +109,9 @@ function InboxConversationRowBase({
   draftText,
   itemId,
   itemThumbUri,
-  listingContextThumb,
+  contextThumbUri,
+  commerceStatusLabel,
+  commerceStatusTone = 'neutral',
   avatarElement,
   isTyping,
   onPress,
@@ -145,6 +148,19 @@ function InboxConversationRowBase({
   const typingAnimStyle = useAnimatedStyle(() => ({
     opacity: typingOpacity.value }));
 
+  // Commerce context thumbnail — prefer the server projection, fall back to
+  // the legacy listing lookup. Shown whenever commerce context exists.
+  const commerceThumbUri = contextThumbUri ?? (itemId ? itemThumbUri ?? null : null);
+  const showCommerceThumb = !!commerceThumbUri;
+
+  const toneColors: Record<CommerceStatusTone, { bg: string; fg: string }> = {
+    brand: { bg: colors.brandSubtle, fg: colors.brand },
+    success: { bg: colors.successSubtle, fg: colors.success },
+    warning: { bg: colors.warningSubtle, fg: colors.warning },
+    neutral: { bg: colors.surfaceAlt, fg: colors.textSecondary },
+  };
+  const tone = toneColors[commerceStatusTone] ?? toneColors.neutral;
+
   const accessibilityParts: string[] = [
     displayTitle,
     isTyping ? 'typing...' : lastMessage,
@@ -154,6 +170,7 @@ function InboxConversationRowBase({
   if (isMuted) accessibilityParts.push('muted');
   if (isPinned) accessibilityParts.push('pinned');
   if (isGroup && memberCount) accessibilityParts.push(t('conversation.memberCount', { count: memberCount }));
+  if (commerceStatusLabel) accessibilityParts.push(commerceStatusLabel);
 
   return (
     <AnimatedPressable
@@ -179,10 +196,10 @@ function InboxConversationRowBase({
                 {displayTitle}
               </Text>
               {isPinned && (
-                <Ionicons name="pin" size={12} color={colors.textMuted} style={styles.metaIcon} />
+                <Ionicons name="pin" size={11} color={colors.textMuted} style={styles.metaIcon} />
               )}
               {isMuted && (
-                <Ionicons name="volume-mute" size={12} color={colors.textMuted} style={styles.metaIcon} />
+                <Ionicons name="volume-mute" size={11} color={colors.textMuted} style={styles.metaIcon} />
               )}
             </View>
             <Text
@@ -213,33 +230,34 @@ function InboxConversationRowBase({
                   styles.preview,
                   unread && styles.previewUnread,
                 ]}
-                numberOfLines={2}
+                numberOfLines={1}
               >
                 {draftText ?? lastMessage}
               </Text>
             )}
-            {unread && !draftText ? (
-              unreadCount && unreadCount > 1 ? (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.unreadIndicator} />
-              )
+            {commerceStatusLabel ? (
+              <View style={[styles.commerceBadge, { backgroundColor: tone.bg }]}>
+                <Text style={[styles.commerceBadgeText, { color: tone.fg }]} numberOfLines={1}>
+                  {commerceStatusLabel}
+                </Text>
+              </View>
             ) : null}
-            {!unread && itemId && listingContextThumb ? (
-              listingContextThumb
-            ) : !unread && itemId && itemThumbUri ? (
-              <CachedImage
-                uri={itemThumbUri}
-                style={styles.itemThumb}
-                contentFit="cover"
-              />
+            {unread && !draftText ? (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>
+                  {unreadCount && unreadCount > 1 ? (unreadCount > 99 ? '99+' : unreadCount) : ''}
+                </Text>
+              </View>
             ) : null}
           </View>
         </View>
+        {showCommerceThumb && commerceThumbUri ? (
+          <CachedImage
+            uri={commerceThumbUri}
+            style={styles.itemThumb}
+            contentFit="cover"
+          />
+        ) : null}
       </View>
     </AnimatedPressable>
   );
@@ -251,17 +269,17 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Space.sm + 2,
+    paddingVertical: Space.sm,
     paddingHorizontal: Space.md,
-    gap: Space.sm + 2,
-    minHeight: 76 },
+    gap: Space.sm,
+    minHeight: 68 },
   rowUnread: {},
   avatarWrap: {
     position: 'relative' },
   body: {
     flex: 1,
     justifyContent: 'center',
-    gap: Space.xs + 1 },
+    gap: 2 },
   topLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -269,7 +287,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1,
+    gap: Space.xs,
     flex: 1,
     minWidth: 0 },
   // Name: Type.bodyStrong — clear, readable, emphasis on identity
@@ -297,7 +315,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   bottomLine: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.xs + 1 },
+    gap: Space.xs },
   memberCount: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
@@ -306,14 +324,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily,
     color: colors.brand },
-  // Snippet: Type.body — readable, not cramped
+  // Snippet: Type.body — readable, not cramped. Single line for density.
   preview: {
     flex: 1,
-    fontSize: TypographyV2.body.size,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypeStyles.body.fontFamily,
     color: colors.textSecondary,
-    lineHeight: TypographyV2.body.lineHeight,
-    letterSpacing: TypographyV2.body.letterSpacing },
+    lineHeight: TypographyV2.meta.lineHeight,
+    letterSpacing: TypographyV2.meta.letterSpacing },
   typingPreview: {
     color: colors.brand,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily },
@@ -321,35 +339,37 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    height: TypographyV2.body.lineHeight },
+    height: TypographyV2.meta.lineHeight },
   previewUnread: {
     color: colors.textPrimary,
     fontFamily: TypeStyles.bodyEmphasis.fontFamily },
-  // Unread indicator — refined dot for single unread
-  unreadIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-    marginLeft: 2 },
-  // Unread count badge — for multiple unread messages (WhatsApp/iMessage style)
+  // Compact commerce status badge — quiet tinted pill, no chrome.
+  commerceBadge: {
+    borderRadius: Radius.sm,
+    paddingHorizontal: Space.xs + 1,
+    paddingVertical: 1,
+    maxWidth: 120 },
+  commerceBadgeText: {
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: Typography.family.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing },
+  // Unread count badge — compact pill, single unread shows empty dot-width.
   unreadBadge: {
-    minWidth: 20,
-    height: 20,
+    minWidth: 18,
+    height: 18,
     borderRadius: Radius.full,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 5,
-    marginLeft: 2 },
+    paddingHorizontal: 5 },
   unreadBadgeText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
     color: colors.textInverse,
     lineHeight: 12 },
-  // Commerce thumbnail — clean, rounded, right-side context
+  // Commerce thumbnail — 40×40 listing context, rounded media edge.
   itemThumb: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.sm + 1,
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
     backgroundColor: colors.surfaceAlt } });

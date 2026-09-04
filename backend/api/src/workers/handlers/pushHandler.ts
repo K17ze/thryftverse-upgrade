@@ -9,12 +9,36 @@ import { config } from '../../config.js';
 import { db } from '../../db/pool.js';
 import { recordPushDelivery, recordPushTicketError } from '../../lib/metrics.js';
 import { publishRealtimeEvent } from '../../lib/realtime.js';
-import { toJsonString, mapEventTypeToChannelId, mapEventTypeToInterruptionLevel, mapEventTypeToRelevanceScore, mapEventToPushCategory } from '../../lib/workerHelpers.js';
+import { toJsonString, mapEventTypeToChannelId, mapEventTypeToInterruptionLevel, mapEventTypeToRelevanceScore, mapEventToPushCategory, mapEventTypeToIosCategory } from '../../lib/workerHelpers.js';
 import type { PushJobData } from '../../lib/queues.js';
 
 export type PushHandlerDeps = {
   /** Injected for symmetry with the other handlers; push delivery uses the shared db singleton. */
 };
+
+/**
+ * G5: Derive an iOS thread identifier from the event type and payload so
+ * related notifications stack into a group instead of flooding the lock
+ * screen. Messages from the same conversation, events for the same order,
+ * and bids on the same auction are grouped together.
+ */
+function deriveThreadIdentifier(eventType: string, payload: Record<string, unknown>): string | undefined {
+  if (eventType === 'chat_message') {
+    const conversationId = typeof payload.conversationId === 'string' ? payload.conversationId : null;
+    return conversationId ? `msg:${conversationId}` : undefined;
+  }
+  if (eventType.startsWith('order_')) {
+    const orderId = typeof payload.orderId === 'string' ? payload.orderId : null;
+    return orderId ? `order:${orderId}` : undefined;
+  }
+  if (eventType.startsWith('auction_')) {
+    const auctionId = typeof payload.auctionId === 'string' ? payload.auctionId : null;
+    const listingId = typeof payload.listingId === 'string' ? payload.listingId : null;
+    return auctionId ? `auction:${auctionId}` : listingId ? `auction:${listingId}` : undefined;
+  }
+  // No grouping for social, price drops, or generic news
+  return undefined;
+}
 
 export async function processPushQueueJob(job: PushJobData): Promise<void> {
   const devicesResult = await db.query<{
@@ -92,6 +116,14 @@ export async function processPushQueueJob(job: PushJobData): Promise<void> {
           // Previously all notifications went to 'default', ignoring the
           // per-category channels the user configured on their device.
           channelId: mapEventTypeToChannelId(job.eventType ?? 'generic'),
+          // G5: iOS notification category — triggers inline action buttons
+          // (Reply, Track, View bid, etc.) registered in App.tsx.
+          category: mapEventTypeToIosCategory(job.eventType ?? 'generic') ?? undefined,
+          // G5: iOS thread identifier — groups related notifications so they
+          // stack instead of flooding the lock screen. Messages from the same
+          // conversation, events for the same order, and bids on the same
+          // auction are grouped together.
+          threadIdentifier: deriveThreadIdentifier(job.eventType ?? 'generic', job.payload ?? {}),
           // iOS interruption level — timeSensitive breaks through Focus
           interruptionLevel: mapEventTypeToInterruptionLevel(job.eventType ?? 'generic'),
           // iOS relevance score for Notification Summary ranking (0.0–1.0)

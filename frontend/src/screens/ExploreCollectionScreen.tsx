@@ -22,6 +22,7 @@ import { fetchFilteredListings } from '../services/listingsApi';
 import { mapListingToDiscoverySummary } from '../contracts/DiscoveryListingSummary';
 import type { Listing } from '../domain';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
+import { openProductDetail } from '../platform/product/openProductDetail';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'ExploreCollection'>;
@@ -122,7 +123,7 @@ export default function ExploreCollectionScreen() {
     (item: Listing) => {
       haptic.light();
       ProductAnalytics.itemView(item.id);
-      navigation.push('ItemDetail', { itemId: item.id });
+      openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'ExploreCollection' });
     },
     [haptic, navigation],
   );

@@ -41,6 +41,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
 import { SharedTransitionView } from '../components/SharedTransitionView';
+import { openProductDetail } from '../platform/product/openProductDetail';
 
 import { Space, Radius, Elevation, Typography, AspectRatio, Control, IconSize } from '../theme/designTokens';
 import { AppIcon } from '../components/common/AppIcon';
@@ -138,21 +139,16 @@ export default function BrowseScreen() {
     itemCountText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.textSecondary,
-      fontVariant: ['tabular-nums'] },
+      color: colors.textMuted,
+      fontVariant: ['tabular-nums'],
+      marginTop: Space.xs },
     itemCountPill: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xxs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xxs + 1,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-      marginTop: Space.xs + 2,
-      alignSelf: 'flex-start' },
+      gap: Space.xxs },
 
     filterBar: { paddingBottom: Space.md },
-    filterRow: { paddingHorizontal: Space.md, gap: Space.sm, alignItems: 'center' },
+    filterRow: { paddingHorizontal: Space.md, gap: Space.xs + 2, alignItems: 'center' },
     filterPill: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -160,10 +156,12 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       backgroundColor: 'transparent' },
     filterPillActive: {
-      backgroundColor: colors.surfaceAlt },
-    filterPillTextActive: { color: colors.textPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
+      borderColor: colors.textPrimary },
+    filterPillTextActive: { color: colors.textPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamilySemibold ?? TypographyV2.meta.fontFamily },
     filterPillOutline: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -171,10 +169,12 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       backgroundColor: 'transparent' },
-    filterPillText: { color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
+    filterPillText: { color: colors.textSecondary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     saveSearchPillActive: {
-      backgroundColor: colors.surfaceAlt },
+      borderColor: colors.brand },
     saveSearchTextActive: {
       color: colors.brand,
       fontFamily: Typography.family.semibold },
@@ -185,10 +185,12 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       backgroundColor: 'transparent' },
     sortTriggerActive: {
-      backgroundColor: colors.surfaceAlt },
-    sortTriggerText: { color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
+      borderColor: colors.textPrimary },
+    sortTriggerText: { color: colors.textSecondary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     sortTriggerTextActive: { color: colors.textPrimary, fontFamily: TypographyV2.meta.fontFamily },
     sortMenu: {
       marginHorizontal: Space.md,
@@ -227,7 +229,8 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt },
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border },
     activeBadgeText: {
       color: colors.textPrimary,
       fontSize: TypographyV2.meta.size,
@@ -965,7 +968,7 @@ export default function BrowseScreen() {
         ) : displayListings.length > 0 ? (
           <PinterestMasonryGrid
             items={displayListings}
-            onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
+            onPressItem={(item) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'BrowseScreen' })}
             numColumns={gridDensity === 'compact' ? 3 : 2}
             showSaveButton
             gap={gridDensity === 'compact' ? Space.xs + 2 : 3}

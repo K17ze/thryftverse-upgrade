@@ -23,6 +23,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { RootStackParamList } from '../navigation/types';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
@@ -70,7 +71,7 @@ export default function ClosetScreen() {
   const BOARD_CARD_W = (SCREEN_W - Space.md * 2 - BOARD_GAP) / BOARD_COLS;
   const BOARD_CARD_H = BOARD_CARD_W / AspectRatio.portrait + 8;
 
-  const t = StyleSheet.create({
+  const t = useMemo(() => StyleSheet.create({
     container: { backgroundColor: colors.background },
     headerBorder: { backgroundColor: colors.background, borderBottomColor: colors.border },
     tabBar: { borderBottomColor: colors.border },
@@ -105,11 +106,11 @@ export default function ClosetScreen() {
     brandChipText: { color: colors.textSecondary },
     brandChipTextActive: { color: colors.background },
     closetToolbarBadge: { backgroundColor: colors.textPrimary },
-    closetToolbarBadgeText: { color: colors.background } });
+    closetToolbarBadgeText: { color: colors.background } }), [colors]);
 
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const [activeTab, setActiveTab] = useState<TabKey>('SAVED');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('Default');
@@ -453,7 +454,7 @@ export default function ClosetScreen() {
         {/* 3-column media mosaic — 3:4 portrait thumbnails, media-first */}
         <ClosetMediaMosaic
           items={filteredSaved}
-          onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
+          onPressItem={(item) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'ClosetSaved' })}
           showSaveButton
         />
       </>
@@ -477,7 +478,7 @@ export default function ClosetScreen() {
       <>
         <ClosetMediaMosaic
           items={filteredWishlist}
-          onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
+          onPressItem={(item) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'ClosetWishlist' })}
           showWishlistButton
         />
       </>
@@ -842,7 +843,7 @@ export default function ClosetScreen() {
               </View>
               <View style={[styles.statDivider, t.statDivider]} />
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, currencyCode)}</Text>
+                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
                 <Text style={[styles.statLabel, t.statLabel]}>Total value</Text>
               </View>
               <View style={[styles.statDivider, t.statDivider]} />
@@ -855,7 +856,7 @@ export default function ClosetScreen() {
               <View style={[styles.savingsRow, t.savingsRow]}>
                 <Ionicons name="trending-down" size={12} color={colors.success} />
                 <Text style={[styles.savingsText, t.savingsText]}>
-                  {formatFromFiat(closetStats.totalSavings, currencyCode)} in price drops tracked
+                  {formatFromFiat(closetStats.totalSavings, 'GBP')} in price drops tracked
                 </Text>
               </View>
             ) : null}

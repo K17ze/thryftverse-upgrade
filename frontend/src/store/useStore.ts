@@ -48,13 +48,15 @@ import {
   unmuteConversationOnApi,
   archiveConversationOnApi,
   unarchiveConversationOnApi,
+  pinConversationOnApi,
+  setConversationUnreadOnApi,
   acceptMessageRequestOnApi,
   declineMessageRequestOnApi,
   addMessageReactionOnApi,
   removeMessageReactionOnApi,
 } from '../services/chatApi';
 import { fetchJson } from '../lib/apiClient';
-import { fetchMyProfile as fetchMyProfileFromApi } from '../services/profileApi';
+import { fetchMyProfile as fetchMyProfileFromApi, getBlockedUsers } from '../services/profileApi';
 import {
   createSupportTicket as createSupportTicketOnApi,
   listSupportTickets as listSupportTicketsFromApi,
@@ -531,10 +533,10 @@ interface StoreState {
   upsertConversation: (conversation: Conversation) => void;
   reconcileGroupMembershipEvent: (event: ChatGroupMembershipEvent) => void;
   markConversationRead: (id: string) => void;
-  toggleConversationUnread: (id: string) => void;
+  toggleConversationUnread: (id: string) => Promise<void>;
   archiveConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
-  toggleConversationPinned: (id: string) => void;
+  toggleConversationPinned: (id: string) => Promise<void>;
   createGroupConversation: (input: CreateGroupConversationInput) => string;
   deployBotToConversation: (conversationId: string, botId: string) => void;
   undeployBotFromConversation: (conversationId: string, botId: string) => void;
@@ -547,6 +549,8 @@ interface StoreState {
   blockedUsers: string[];
   toggleBlockedUser: (userId: string) => void;
   isBlockedUser: (userId: string) => boolean;
+  hydrateBlockedUsers: () => Promise<void>;
+  setBlockedUsers: (userIds: string[]) => void;
   mutedConversationIds: string[];
   toggleMutedConversation: (id: string) => Promise<void>;
   isMutedConversation: (id: string) => boolean;
@@ -692,9 +696,10 @@ export const useStore = create<StoreState>()(
       email: user.email ?? undefined,
       username: user.username,
     });
+    get().hydrateBlockedUsers().catch(() => undefined);
   },
   logout: () => {
-    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false });
+    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [] });
     persistLocalAuthSnapshot(null, false);
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
@@ -1482,6 +1487,7 @@ export const useStore = create<StoreState>()(
           participantIds: conversation.participantIds ?? existing.participantIds,
           botIds: conversation.botIds ?? existing.botIds,
           messages: conversation.messages.length ? conversation.messages : existing.messages,
+          context: conversation.context ?? existing.context,
         };
         nextConversations = [
           mergedConversation,
@@ -1546,12 +1552,24 @@ export const useStore = create<StoreState>()(
       /* best-effort: ignore — next sync reconciles */
     });
   },
-  toggleConversationUnread: (id) =>
+  toggleConversationUnread: (id) => {
+    const convo = get().conversations.find((c) => c.id === id);
+    const wasUnread = convo ? convo.unread : false;
+    const nextUnread = !wasUnread;
     set((state) => ({
       conversations: state.conversations.map((c) =>
-        c.id === id ? { ...c, unread: !c.unread } : c
+        c.id === id ? { ...c, unread: nextUnread, markedUnread: nextUnread } : c
       ),
-    })),
+    }));
+    return setConversationUnreadOnApi(id, nextUnread).catch((error) => {
+      set((state) => ({
+        conversations: state.conversations.map((c) =>
+          c.id === id ? { ...c, unread: wasUnread, markedUnread: wasUnread } : c
+        ),
+      }));
+      throw error;
+    });
+  },
   archiveConversation: (id) =>
     set((state) => ({
       conversations: state.conversations.filter((c) => c.id !== id),
@@ -1565,12 +1583,24 @@ export const useStore = create<StoreState>()(
       archivedConversationIds: state.archivedConversationIds.filter((aid) => aid !== id),
       messageRequests: state.messageRequests.filter((rid) => rid !== id),
     })),
-  toggleConversationPinned: (id) =>
+  toggleConversationPinned: (id) => {
+    const convo = get().conversations.find((c) => c.id === id);
+    const wasPinned = convo ? Boolean(convo.isPinned) : false;
+    const nextPinned = !wasPinned;
     set((state) => ({
       conversations: state.conversations.map((c) =>
-        c.id === id ? { ...c, isPinned: !c.isPinned } : c
+        c.id === id ? { ...c, isPinned: nextPinned } : c
       ),
-    })),
+    }));
+    return pinConversationOnApi(id, nextPinned).catch((error) => {
+      set((state) => ({
+        conversations: state.conversations.map((c) =>
+          c.id === id ? { ...c, isPinned: wasPinned } : c
+        ),
+      }));
+      throw error;
+    });
+  },
   setConversationDraft: (conversationId, draft) =>
     set((state) => ({
       conversations: state.conversations.map((c) =>
@@ -1744,6 +1774,15 @@ export const useStore = create<StoreState>()(
       };
     }),
   isBlockedUser: (userId) => get().blockedUsers.includes(userId),
+  setBlockedUsers: (userIds) => set({ blockedUsers: userIds }),
+  hydrateBlockedUsers: async () => {
+    try {
+      const entries = await getBlockedUsers();
+      set({ blockedUsers: entries.map((e) => e.userId) });
+    } catch {
+      // Best-effort — block list hydration must not block app usage.
+    }
+  },
   mutedConversationIds: [],
   toggleMutedConversation: (id) => {
     const wasMuted = get().mutedConversationIds.includes(id);

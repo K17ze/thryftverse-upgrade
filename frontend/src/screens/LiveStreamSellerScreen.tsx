@@ -29,7 +29,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { Space, Radius, Control, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Control, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import {
   LIVE_SHOPPING_DEMO_MODE,
@@ -138,7 +138,7 @@ export function LiveStreamSellerScreen() {
   const route = useRoute<LiveStreamSellerRoute>();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
+  const { currencySymbol, formatFromFiat } = useFormattedPrice();
   const insets = useSafeAreaInsets();
   const { width: SCREEN_WIDTH } = useWindowDimensions();
   const styles = useMemo(() => createStyles(colors, SCREEN_WIDTH), [colors, SCREEN_WIDTH]);
@@ -218,7 +218,7 @@ export function LiveStreamSellerScreen() {
         lotListingIds: lots.map((l) => l.id) });
       if (!result.success || !result.stream) {
         setGoingLive(false);
-        setSetupError(result.error || 'Could not start stream. Please try again.');
+        setSetupError(result.error || 'Could not start stream.');
         return;
       }
       streamIdRef.current = result.stream.id;
@@ -230,7 +230,7 @@ export function LiveStreamSellerScreen() {
       setSoldAmount(null);
     } catch {
       setGoingLive(false);
-      setSetupError('Network error — could not start stream. Please try again.');
+      setSetupError('Network error — try again.');
     }
   }, [haptic, title, lots]);
 
@@ -249,7 +249,7 @@ export function LiveStreamSellerScreen() {
         setTotalSales(result.summary.totalSales);
       }
     } catch {
-      setEndError('Stream end status unknown — your stream may have ended. Check your stream history.');
+      setEndError('Stream end status unknown — check your stream history.');
     }
     setEndingStream(false);
     setPhase('summary');
@@ -378,9 +378,9 @@ export function LiveStreamSellerScreen() {
         <SafeAreaView style={styles.safeArea} edges={['top']}>
           <View style={styles.header}>
             <Pressable onPress={() => navigation.goBack()} style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]} accessibilityRole="button" accessibilityLabel="Go back">
-              <Ionicons name="close" size={24} color={colors.textPrimary} />
+              <Ionicons name="close" size={24} color={colors.textPrimary} accessible={false} />
             </Pressable>
-            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Go Live</Text>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Go live</Text>
             <View style={{ width: Control.hit }} />
           </View>
 
@@ -388,14 +388,14 @@ export function LiveStreamSellerScreen() {
             {/* Demo banner */}
             {isDemo && (
               <View style={[styles.demoBanner, { backgroundColor: colors.warningSubtle }]} accessibilityRole="header">
-                <Ionicons name="flask-outline" size={16} color={colors.warning} />
-                <Text style={[styles.demoBannerText, { color: colors.warning }]}>Demo Mode — sample lots loaded</Text>
+                <Ionicons name="flask-outline" size={16} color={colors.warning} accessible={false} />
+                <Text style={[styles.demoBannerText, { color: colors.warning }]}>Demo mode — sample lots loaded</Text>
               </View>
             )}
 
             {/* Camera preview placeholder */}
             <View style={[styles.cameraPreview, { backgroundColor: colors.surfaceAlt }]}>
-              <Ionicons name="videocam-outline" size={40} color={colors.textMuted} />
+              <Ionicons name="videocam-outline" size={40} color={colors.textMuted} accessible={false} />
               <Text style={[styles.cameraPreviewText, { color: colors.textMuted }]}>
                 {isDemo ? 'Camera preview unavailable in demo mode' : 'Camera preview'}
               </Text>
@@ -403,7 +403,7 @@ export function LiveStreamSellerScreen() {
 
             {/* Title input */}
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Stream Title</Text>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Stream title</Text>
               <TextInput
                 style={[styles.titleInput, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.border }]}
                 placeholder="e.g. Vintage Finds Live Auction"
@@ -427,21 +427,20 @@ export function LiveStreamSellerScreen() {
                   renderItem={({ item, index }) => (
                     <View style={[styles.lotRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                       <Text style={[styles.lotNumber, { color: colors.textMuted }]}>#{index + 1}</Text>
-                      <Image source={{ uri: item.imageUri }} style={styles.lotImage} />
+                      <Image source={{ uri: item.imageUri }} style={styles.lotImage} accessible={false} />
                       <View style={styles.lotInfo}>
                         <Text style={[styles.lotTitle, { color: colors.textPrimary }]} numberOfLines={1}>{item.title}</Text>
                         <Text style={[styles.lotPrice, { color: colors.textSecondary }]}>Start: {currencySymbol}{item.startingPrice}</Text>
                       </View>
-                      <Ionicons name="reorder-three-outline" size={20} color={colors.textMuted} />
+                      <Ionicons name="reorder-three-outline" size={20} color={colors.textMuted} accessible={false} />
                     </View>
                   )}
                   scrollEnabled={false}
                 />
               ) : (
                 <View style={[styles.emptyLots, { borderColor: colors.border }]}>
-                  <Ionicons name="bag-handle-outline" size={28} color={colors.textMuted} />
+                  <Ionicons name="bag-handle-outline" size={28} color={colors.textMuted} accessible={false} />
                   <Text style={[styles.emptyLotsText, { color: colors.textSecondary }]}>No lots added yet</Text>
-                  <Text style={[styles.emptyLotsSubtext, { color: colors.textMuted }]}>Add listings to your stream before going live</Text>
                 </View>
               )}
             </View>
@@ -450,7 +449,7 @@ export function LiveStreamSellerScreen() {
           <View style={[styles.setupFooter, { paddingBottom: insets.bottom || Space.md }]}>
             {setupError && (
               <View style={[styles.setupErrorBanner, { backgroundColor: colors.dangerSubtle }]}>
-                <Ionicons name="alert-circle-outline" size={16} color={colors.danger} />
+                <Ionicons name="alert-circle-outline" size={16} color={colors.danger} accessible={false} />
                 <Text style={[styles.setupErrorText, { color: colors.danger }]}>{setupError}</Text>
               </View>
             )}
@@ -467,7 +466,7 @@ export function LiveStreamSellerScreen() {
               ) : (
                 <>
                   <View style={styles.liveDot} />
-                  <Text style={styles.goLiveBtnText}>Go Live Now</Text>
+                  <Text style={styles.goLiveBtnText}>Go live now</Text>
                 </>
               )}
             </Pressable>
@@ -486,27 +485,28 @@ export function LiveStreamSellerScreen() {
         <View style={{ paddingTop: insets.top }}>
           {/* Camera preview (small) */}
           <View style={styles.sellerCameraPreview}>
-            <Ionicons name="videocam" size={24} color={colors.textMuted} />
+            <Ionicons name="videocam" size={24} color={colors.textMuted} accessible={false} />
             <Text style={styles.sellerCameraText}>{isDemo ? 'Demo broadcast' : 'Broadcasting'}</Text>
-            <View style={[styles.liveBadgeSmall, isDemo && { backgroundColor: colors.warning }]}>
+            <View style={[styles.liveBadgeSmall, isDemo && { backgroundColor: colors.warning }]} accessible={false}>
               <View style={[styles.liveDot, isDemo && { backgroundColor: colors.textPrimary }]} />
-              <Text style={styles.liveBadgeTextSmall}>{isDemo ? 'DEMO' : 'LIVE'}</Text>
+              <Text style={styles.liveBadgeTextSmall}>{isDemo ? 'Demo' : 'Live'}</Text>
             </View>
           </View>
 
           {/* Stats bar */}
           <View style={styles.sellerStatsBar}>
             <View style={styles.sellerStat}>
-              <Ionicons name="eye-outline" size={14} color={colors.textSecondary} />
+              <Ionicons name="eye-outline" size={14} color={colors.textSecondary} accessible={false} />
               <Text style={styles.sellerStatText}>{viewerCount} viewers</Text>
             </View>
             <View style={styles.sellerStat}>
-              <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+              <Ionicons name="time-outline" size={14} color={colors.textSecondary} accessible={false} />
               <Text style={styles.sellerStatText}>{Math.floor(liveDuration / 60)}:{(liveDuration % 60).toString().padStart(2, '0')}</Text>
             </View>
             <Pressable
               onPress={handleEndStream}
               disabled={endingStream}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={({ pressed }) => [styles.endStreamBtn, pressed && { opacity: 0.7 }, endingStream && { opacity: 0.6 }]}
               accessibilityRole="button"
               accessibilityLabel="End stream"
@@ -522,10 +522,10 @@ export function LiveStreamSellerScreen() {
 
           {/* Current lot */}
           <View style={styles.sellerCurrentLot}>
-            <Image source={{ uri: currentLot?.imageUri }} style={styles.sellerLotImage} />
+            <Image source={{ uri: currentLot?.imageUri }} style={styles.sellerLotImage} accessible={false} />
             <View style={styles.sellerLotInfo}>
               <Text style={styles.sellerLotTitle} numberOfLines={1}>{currentLot?.title}</Text>
-              <Text style={styles.sellerLotPrice}>{formatFromFiat(currentLot?.startingPrice ?? 0, currencyCode)}</Text>
+              <Text style={styles.sellerLotPrice}>{formatFromFiat(currentLot?.startingPrice ?? 0, 'GBP')}</Text>
               <View
                 style={[
                   styles.sellerLotStatusBadge,
@@ -553,7 +553,7 @@ export function LiveStreamSellerScreen() {
                 {lotActionPending ? (
                   <ActivityIndicator size="small" color={colors.textPrimary} />
                 ) : (
-                  <Text style={styles.nextLotBtnText}>Open Lot</Text>
+                  <Text style={styles.nextLotBtnText}>Open lot</Text>
                 )}
               </Pressable>
             )}
@@ -580,7 +580,7 @@ export function LiveStreamSellerScreen() {
                   {lotActionPending ? (
                     <ActivityIndicator size="small" color={colors.textPrimary} />
                   ) : (
-                    <Text style={styles.nextLotBtnText}>Close Lot</Text>
+                    <Text style={styles.nextLotBtnText}>Close lot</Text>
                   )}
                 </Pressable>
               </>
@@ -641,15 +641,15 @@ export function LiveStreamSellerScreen() {
           )}
 
           {/* Upcoming lots */}
-          <Text style={styles.upcomingLabel}>Up Next</Text>
+          <Text style={styles.upcomingLabel}>Up next</Text>
           <FlatList
             data={lots.slice(currentLotIndex + 1, currentLotIndex + 4)}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <View style={styles.upcomingLotRow}>
-                <Image source={{ uri: item.imageUri }} style={styles.upcomingLotImage} />
+                <Image source={{ uri: item.imageUri }} style={styles.upcomingLotImage} accessible={false} />
                 <Text style={styles.upcomingLotTitle} numberOfLines={1}>{item.title}</Text>
-                <Text style={styles.upcomingLotPrice}>{formatFromFiat(item.startingPrice, currencyCode)}</Text>
+                <Text style={styles.upcomingLotPrice}>{formatFromFiat(item.startingPrice, 'GBP')}</Text>
               </View>
             )}
             scrollEnabled={false}
@@ -665,39 +665,37 @@ export function LiveStreamSellerScreen() {
       <StatusBar barStyle="dark-content" />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.summaryContainer}>
-          <View style={[styles.summaryIcon, { backgroundColor: colors.successSubtle }]}>
-            <Ionicons name="checkmark-circle" size={48} color={colors.success} />
-          </View>
-          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>Stream Ended</Text>
+          <Ionicons name="checkmark-circle" size={48} color={colors.success} accessible={false} />
+          <Text style={[styles.summaryTitle, { color: colors.textPrimary }]}>Stream ended</Text>
 
           {endError && (
             <View style={[styles.summaryWarningBanner, { backgroundColor: colors.warningSubtle }]}>
-              <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
+              <Ionicons name="alert-circle-outline" size={16} color={colors.warning} accessible={false} />
               <Text style={[styles.summaryWarningText, { color: colors.warning }]}>{endError}</Text>
             </View>
           )}
 
           {isDemo && (
             <View style={[styles.summaryDemoBadge, { backgroundColor: colors.warningSubtle }]}>
-              <Ionicons name="flask-outline" size={14} color={colors.warning} />
-              <Text style={[styles.summaryDemoText, { color: colors.warning }]}>Demo Mode — mock figures</Text>
+              <Ionicons name="flask-outline" size={14} color={colors.warning} accessible={false} />
+              <Text style={[styles.summaryDemoText, { color: colors.warning }]}>Demo mode — mock figures</Text>
             </View>
           )}
 
           <View style={[styles.summaryStats, { backgroundColor: colors.surface }]}>
             <View style={styles.summaryStatItem}>
               <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{viewerCount}</Text>
-              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Peak Viewers</Text>
+              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Peak viewers</Text>
             </View>
             <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.summaryStatItem}>
               <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{lotsSold}</Text>
-              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Lots Sold</Text>
+              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Lots sold</Text>
             </View>
             <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
             <View style={styles.summaryStatItem}>
-              <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{formatFromFiat(totalSales, currencyCode)}</Text>
-              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Total Sales</Text>
+              <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]}>{formatFromFiat(totalSales, 'GBP')}</Text>
+              <Text style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>Total sales</Text>
             </View>
           </View>
 
@@ -809,10 +807,6 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => StyleSheet.cr
   emptyLotsText: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily },
-  emptyLotsSubtext: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    textAlign: 'center' },
   setupFooter: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md },
@@ -842,7 +836,7 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => StyleSheet.cr
   goLiveBtnText: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
-    color: colors.textPrimary },
+    color: colors.scrimTextPrimary },
   liveDot: {
     width: Space.sm,
     height: Space.sm,
@@ -874,7 +868,7 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => StyleSheet.cr
   liveBadgeTextSmall: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textPrimary },
+    color: colors.scrimTextPrimary },
   sellerStatsBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -899,7 +893,7 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => StyleSheet.cr
   endStreamBtnText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textPrimary },
+    color: colors.scrimTextPrimary },
   sellerCurrentLot: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -966,16 +960,14 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => StyleSheet.cr
   nextLotBtnText: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
-    color: colors.textPrimary },
+    color: colors.scrimTextPrimary },
   upcomingLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps },
+    paddingBottom: Space.xs },
   upcomingLotRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1003,12 +995,6 @@ const createStyles = (colors: ThemeColors, screenWidth: number) => StyleSheet.cr
     justifyContent: 'center',
     paddingHorizontal: Space.xl,
     gap: Space.md },
-  summaryIcon: {
-    width: Space.xxl + Space.xxl + Space.xs,
-    height: Space.xxl + Space.xxl + Space.xs,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center' },
   summaryTitle: {
     fontSize: TypographyV2.screenTitle.size,
     fontFamily: TypographyV2.screenTitle.fontFamily },

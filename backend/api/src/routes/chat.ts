@@ -698,6 +698,43 @@ async function serializeChatMessageRows(
     userIds.push(r.user_id);
   }
 
+  // ── Poll data: batch-load polls and votes for these messages ─────────
+  const pollsResult = await db.query<{
+    id: string;
+    message_id: string;
+    question: string;
+    options: string[];
+    allow_multiple: boolean;
+    is_anonymous: boolean;
+    closes_at: string | null;
+  }>(
+    `SELECT id, message_id, question, options, allow_multiple, is_anonymous, closes_at
+     FROM chat_polls WHERE message_id = ANY($1::text[])`,
+    [messageIds],
+  );
+  const pollIds = pollsResult.rows.map((p) => p.id);
+  const pollByMessage = new Map<string, typeof pollsResult.rows[0] & { voteCounts: number[]; myVotes: number[] }>();
+  if (pollIds.length > 0) {
+    const votesResult = await db.query<{ poll_id: string; option_index: number; user_id: string }>(
+      `SELECT poll_id, option_index, user_id FROM chat_poll_votes WHERE poll_id = ANY($1::text[])`,
+      [pollIds],
+    );
+    const votesByPoll = new Map<string, Map<number, string[]>>();
+    for (const v of votesResult.rows) {
+      let byOpt = votesByPoll.get(v.poll_id);
+      if (!byOpt) { byOpt = new Map(); votesByPoll.set(v.poll_id, byOpt); }
+      const arr = byOpt.get(v.option_index) ?? [];
+      arr.push(v.user_id);
+      byOpt.set(v.option_index, arr);
+    }
+    for (const p of pollsResult.rows) {
+      const voteMap = votesByPoll.get(p.id) ?? new Map<number, string[]>();
+      const voteCounts = p.options.map((_, i) => voteMap.get(i)?.length ?? 0);
+      const myVotes = [...voteMap.entries()].filter(([, uids]) => uids.includes(actorUserId)).map(([opt]) => opt);
+      pollByMessage.set(p.message_id, { ...p, voteCounts, myVotes });
+    }
+  }
+
   return rows.map((row) => {
     const readBy = readByMessage.get(row.id) ?? [];
     const baseReturn: Record<string, unknown> = {
@@ -721,6 +758,19 @@ async function serializeChatMessageRows(
     const voice = voiceByMessage.get(row.id);
     if (voice) {
       baseReturn.voice = voice;
+    }
+    const poll = pollByMessage.get(row.id);
+    if (poll) {
+      baseReturn.poll = {
+        id: poll.id,
+        question: poll.question,
+        options: poll.options,
+        allowMultiple: poll.allow_multiple,
+        isAnonymous: poll.is_anonymous,
+        closesAt: poll.closes_at ?? undefined,
+        voteCounts: poll.voteCounts,
+        myVotes: poll.myVotes,
+      };
     }
     return baseReturn;
   });
@@ -2025,7 +2075,7 @@ app.post('/chat/conversations/:conversationId/messages', {
   // audio asset â€” the client must upload + finalize before sending.
   const bodySchema = z
     .object({
-      type: z.enum(['text', 'image', 'video', 'voice', 'document']).optional(),
+      type: z.enum(['text', 'image', 'video', 'voice', 'document', 'poll']).optional(),
       text: z.string().trim().max(4000).optional(),
       mediaUri: z.string().min(1).max(2048).optional(),
       metadata: z.record(z.unknown()).optional(),
@@ -2085,8 +2135,32 @@ app.post('/chat/conversations/:conversationId/messages', {
             path: ['metadata', 'codec'],
           });
         }
+      } else if (val.type === 'poll') {
+        const meta = val.metadata ?? {};
+        const question = meta.question;
+        const options = meta.options;
+        if (typeof question !== 'string' || question.trim().length < 1 || question.length > 200) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'metadata.question is required (1-200 chars) for poll messages',
+            path: ['metadata', 'question'],
+          });
+        }
+        if (!Array.isArray(options) || options.length < 2 || options.length > 10) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'metadata.options must be an array of 2-10 strings for poll messages',
+            path: ['metadata', 'options'],
+          });
+        } else if (options.some((o: unknown) => typeof o !== 'string' || o.trim().length < 1 || o.length > 100)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'each poll option must be a non-empty string (max 100 chars)',
+            path: ['metadata', 'options'],
+          });
+        }
       } else {
-        // `type: 'text'` or absent â€” backwards-compatible text message.
+        // `type: 'text'` or absent — backwards-compatible text message.
         if (!val.text || val.text.length < 1) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -2450,6 +2524,24 @@ app.post('/chat/conversations/:conversationId/messages', {
         [createRuntimeId('chatatt'), result.rows[0].id, attachmentKind, mediaUri],
       );
     }
+  }
+
+  // ── Poll message: create the chat_polls row ──────────────────────────
+  if (payload.type === 'poll' && result.rows[0]) {
+    const pollMeta = payload.metadata ?? {};
+    const pollId = createRuntimeId('poll');
+    await db.query(
+      `INSERT INTO chat_polls (id, message_id, question, options, allow_multiple, is_anonymous)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        pollId,
+        result.rows[0].id,
+        String(pollMeta.question ?? ''),
+        (pollMeta.options as string[]) ?? [],
+        Boolean(pollMeta.allowMultiple),
+        pollMeta.isAnonymous !== false, // default anonymous
+      ],
+    );
   }
 
   await db.query(
@@ -2993,7 +3085,284 @@ app.delete('/chat/conversations/:conversationId/messages/:messageId/reactions', 
   return { ok: true, removed: true, emoji };
 });
 
-// â”€â”€ P0.11: Conversation report route â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Pinned messages ───────────────────────────────────────────────────
+// One pinned message per conversation. Group admins/owners can pin.
+// Pinning a new message replaces the previous pin (upsert on conversation_id).
+
+app.post('/chat/conversations/:conversationId/messages/:messageId/pin', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+
+  // Only group admins/owners can pin messages.
+  await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
+
+  // Verify the message exists and belongs to this conversation.
+  const msgResult = await db.query(
+    `SELECT id FROM chat_messages WHERE id = $1 AND conversation_id = $2 AND deleted_for_everyone_at IS NULL`,
+    [messageId, conversationId],
+  );
+  if (msgResult.rows.length === 0) {
+    reply.code(404);
+    return { error: 'Message not found in this conversation' };
+  }
+
+  // Upsert: replace any existing pin for this conversation.
+  await db.query(
+    `INSERT INTO chat_pinned_messages (conversation_id, message_id, pinned_by)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (conversation_id)
+     DO UPDATE SET message_id = $2, pinned_by = $3, pinned_at = NOW()`,
+    [conversationId, messageId, actorUserId],
+  );
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.message.pinned',
+    payload: { conversationId, messageId, pinnedBy: actorUserId },
+  });
+
+  return { ok: true, pinned: true, messageId };
+});
+
+app.delete('/chat/conversations/:conversationId/messages/:messageId/pin', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+
+  // Only group admins/owners can unpin.
+  await ensureGroupManagementAccess(db, conversationId, actorUserId, request.authUser?.role);
+
+  await db.query(
+    `DELETE FROM chat_pinned_messages WHERE conversation_id = $1 AND message_id = $2`,
+    [conversationId, messageId],
+  );
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.message.unpinned',
+    payload: { conversationId, messageId },
+  });
+
+  return { ok: true, unpinned: true };
+});
+
+app.get('/chat/conversations/:conversationId/pinned-message', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const result = await db.query<{ message_id: string; pinned_by: string; pinned_at: string }>(
+    `SELECT message_id, pinned_by, pinned_at FROM chat_pinned_messages WHERE conversation_id = $1`,
+    [conversationId],
+  );
+
+  if (result.rows.length === 0) {
+    return { pinned: null };
+  }
+
+  const pin = result.rows[0];
+  // Fetch the actual message so the client has the full content.
+  const msgResult = await db.query<ChatMessageRow>(
+    `SELECT * FROM chat_messages WHERE id = $1 AND deleted_for_everyone_at IS NULL`,
+    [pin.message_id],
+  );
+
+  if (msgResult.rows.length === 0) {
+    // The pinned message was deleted — clean up the stale pin.
+    await db.query(`DELETE FROM chat_pinned_messages WHERE conversation_id = $1`, [conversationId]);
+    return { pinned: null };
+  }
+
+  const serialized = await serializeChatMessageRow(msgResult.rows[0], actorUserId);
+  return {
+    pinned: {
+      messageId: pin.message_id,
+      pinnedBy: pin.pinned_by,
+      pinnedAt: pin.pinned_at,
+      message: serialized,
+    },
+  };
+});
+
+// ── Polls: vote and unvote ────────────────────────────────────────────
+app.post('/chat/conversations/:conversationId/messages/:messageId/poll/vote', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    optionIndex: z.number().int().min(0).max(9),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+  const { optionIndex } = bodySchema.parse(request.body ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  // Fetch the poll row
+  const pollResult = await db.query<{ id: string; options: string[]; allow_multiple: boolean; closes_at: string | null }>(
+    `SELECT id, options, allow_multiple, closes_at FROM chat_polls WHERE message_id = $1`,
+    [messageId],
+  );
+  if (pollResult.rows.length === 0) {
+    reply.code(404);
+    return { error: 'Poll not found for this message' };
+  }
+  const poll = pollResult.rows[0];
+  if (optionIndex >= poll.options.length) {
+    reply.code(400);
+    return { error: 'Invalid option index' };
+  }
+  if (poll.closes_at && new Date(poll.closes_at) < new Date()) {
+    reply.code(400);
+    return { error: 'Poll is closed' };
+  }
+
+  if (poll.allow_multiple) {
+    // Insert vote, ignore if already voted on this option
+    await db.query(
+      `INSERT INTO chat_poll_votes (poll_id, user_id, option_index)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (poll_id, user_id, option_index) DO NOTHING`,
+      [poll.id, actorUserId, optionIndex],
+    );
+  } else {
+    // Single-vote: remove any existing votes by this user, then insert
+    await db.query(
+      `DELETE FROM chat_poll_votes WHERE poll_id = $1 AND user_id = $2`,
+      [poll.id, actorUserId],
+    );
+    await db.query(
+      `INSERT INTO chat_poll_votes (poll_id, user_id, option_index)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (poll_id, user_id, option_index) DO NOTHING`,
+      [poll.id, actorUserId, optionIndex],
+    );
+  }
+
+  // Fetch updated vote counts
+  const votesResult = await db.query<{ option_index: number; count: string }>(
+    `SELECT option_index, COUNT(*)::text as count FROM chat_poll_votes WHERE poll_id = $1 GROUP BY option_index`,
+    [poll.id],
+  );
+  const voteCounts = poll.options.map((_, i) => {
+    const row = votesResult.rows.find((r) => r.option_index === i);
+    return row ? Number(row.count) : 0;
+  });
+
+  // Fetch the user's current votes
+  const myVotesResult = await db.query<{ option_index: number }>(
+    `SELECT option_index FROM chat_poll_votes WHERE poll_id = $1 AND user_id = $2`,
+    [poll.id, actorUserId],
+  );
+  const myVotes = myVotesResult.rows.map((r) => r.option_index);
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.poll.voted',
+    payload: { conversationId, messageId, pollId: poll.id, voteCounts, userId: actorUserId },
+  });
+
+  return { ok: true, voteCounts, myVotes };
+});
+
+app.post('/chat/conversations/:conversationId/messages/:messageId/poll/unvote', async (request, reply) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+    messageId: z.string().min(2).max(120),
+  });
+  const bodySchema = z.object({
+    optionIndex: z.number().int().min(0).max(9),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId, messageId } = paramsSchema.parse(request.params);
+  const { optionIndex } = bodySchema.parse(request.body ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  const pollResult = await db.query<{ id: string; closes_at: string | null }>(
+    `SELECT id, closes_at FROM chat_polls WHERE message_id = $1`,
+    [messageId],
+  );
+  if (pollResult.rows.length === 0) {
+    reply.code(404);
+    return { error: 'Poll not found' };
+  }
+  const poll = pollResult.rows[0];
+  if (poll.closes_at && new Date(poll.closes_at) < new Date()) {
+    reply.code(400);
+    return { error: 'Poll is closed' };
+  }
+
+  await db.query(
+    `DELETE FROM chat_poll_votes WHERE poll_id = $1 AND user_id = $2 AND option_index = $3`,
+    [poll.id, actorUserId, optionIndex],
+  );
+
+  publishRealtimeEvent({
+    topic: `chat.conversation:${conversationId}`,
+    type: 'chat.poll.voted',
+    payload: { conversationId, messageId, pollId: poll.id, userId: actorUserId },
+  });
+
+  return { ok: true };
+});
+
+// ── In-chat message search ────────────────────────────────────────────
+// Searches message body text within a conversation. Returns matching
+// message IDs + created_at timestamps so the client can jump to the
+// right pagination window via aroundMessageId.
+app.get('/chat/conversations/:conversationId/search', async (request) => {
+  const paramsSchema = z.object({
+    conversationId: z.string().min(2).max(120),
+  });
+  const querySchema = z.object({
+    q: z.string().trim().min(1).max(200),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+  });
+
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const { conversationId } = paramsSchema.parse(request.params);
+  const { q, limit } = querySchema.parse(request.query ?? {});
+
+  await ensureChatConversationAccess(db, conversationId, actorUserId);
+
+  // ILIKE for case-insensitive substring search. This is sufficient for
+  // chat-scale message volumes; a GIN/pg_trgm index can be added later
+  // if performance requires it.
+  const result = await db.query<{ id: string; created_at: string }>(
+    `SELECT id, created_at FROM chat_messages
+     WHERE conversation_id = $1
+       AND deleted_for_everyone_at IS NULL
+       AND body ILIKE '%' || $2 || '%'
+     ORDER BY created_at DESC
+     LIMIT $3`,
+    [conversationId, q, limit],
+  );
+
+  return {
+    query: q,
+    results: result.rows.map((r) => ({ messageId: r.id, createdAt: r.created_at })),
+  };
+});
+
+// ── P0.11: Conversation report route â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // One canonical report workflow with evidence selection, idempotent submission,
 // and a real report ID from the server.
 app.post('/chat/conversations/:conversationId/report', async (request, reply) => {

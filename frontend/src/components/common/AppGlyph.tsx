@@ -122,13 +122,13 @@ export type AppGlyphName = keyof typeof APP_GLYPH_REGISTRY;
 export function AppGlyph({
   name,
   size = 24,
-  color,
+  color: colorProp,
   style,
   accessibilityLabel,
   testID,
 }: AppGlyphProps): React.ReactElement {
   const { colors } = useAppTheme();
-  const resolvedColor = color ?? colors.textPrimary;
+  const color = colorProp ?? colors.textPrimary;
   const paths: ReadonlyArray<string> = APP_GLYPH_REGISTRY[name];
 
   if (!paths || paths.length === 0) {
@@ -150,7 +150,7 @@ export function AppGlyph({
       accessibilityRole={accessibilityLabel ? 'image' : undefined}
       testID={testID}
     >
-      <G color={resolvedColor}>
+      <G color={color}>
         {paths.map((d, i) => (
           <Path
             key={i}

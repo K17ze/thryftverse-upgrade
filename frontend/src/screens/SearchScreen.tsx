@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useStore } from '../store/useStore';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
@@ -200,7 +201,8 @@ export default function SearchScreen() {
     // tiles carry the production DiscoveryListingSummary, so the navigation
     // callbacks are typed against that contract (it exposes id + sellerId,
     // which is all navigation needs here).
-    onPressItem: (item: DiscoveryListingSummary) => navigation.navigate('ItemDetail', { itemId: item.id }),
+    onPressItem: (item: DiscoveryListingSummary) =>
+      openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'SearchScreen' }),
     onPressSeller: (item: DiscoveryListingSummary) => openProfile(navigation, item.sellerId, currentUser?.id),
     onMessageSeller: (item: DiscoveryListingSummary) => navigation.navigate('Chat', {
       conversationId: `${item.sellerId}_${item.id}`,

@@ -345,7 +345,7 @@ function SellerSummary({
     ? formatAuctionIze(toIze(stats.highestBid, currencyCode, fxRates))
     : null;
   const highestBidLocal = hasBidContext
-    ? formatFromFiat(stats.highestBid, currencyCode)
+    ? formatFromFiat(stats.highestBid, 'GBP')
     : null;
 
   return (

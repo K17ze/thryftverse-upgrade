@@ -202,6 +202,26 @@ export const SemanticIconMap = {
   clock: { outline: 'time-outline', filled: 'time', description: 'Timestamp / Schedule' },
   location: { outline: 'location-outline', filled: 'location', description: 'Geographic location' },
   notifications: { outline: 'notifications-outline', filled: 'notifications', description: 'Push notifications' },
+
+  // Concept aliases — additional names required by the IconConcept alias
+  // layer below. These extend the canonical registry so there is a single
+  // source of truth for every glyph used in the app.
+  menu: { outline: 'menu', filled: 'menu', description: 'Hamburger menu' },
+  sort: { outline: 'swap-vertical-outline', filled: 'swap-vertical', description: 'Sort order' },
+  remove: { outline: 'remove-outline', filled: 'remove', description: 'Remove item' },
+  bag: { outline: 'bag-outline', filled: 'bag', description: 'Shopping bag' },
+  offer: { outline: 'pricetags-outline', filled: 'pricetags', description: 'Offer / multi-tag' },
+  payout: { outline: 'cash-outline', filled: 'cash', description: 'Payout / cash' },
+  send: { outline: 'send-outline', filled: 'send', description: 'Send message' },
+  follow: { outline: 'person-add-outline', filled: 'person-add', description: 'Follow user' },
+  mic: { outline: 'mic-outline', filled: 'mic', description: 'Microphone' },
+  stop: { outline: 'stop-outline', filled: 'stop', description: 'Stop' },
+  moon: { outline: 'moon-outline', filled: 'moon', description: 'Dark mode' },
+  language: { outline: 'language-outline', filled: 'language', description: 'Language' },
+  fire: { outline: 'flame-outline', filled: 'flame', description: 'Trending hot' },
+  store: { outline: 'storefront-outline', filled: 'storefront', description: 'Store / shop' },
+  inventory: { outline: 'file-tray-stacked-outline', filled: 'file-tray-stacked', description: 'Inventory' },
+  dashboard: { outline: 'grid-outline', filled: 'grid', description: 'Dashboard' },
 } as const;
 
 export type SemanticIconName =
@@ -289,5 +309,189 @@ export type SemanticIconName =
   | 'clock'
   | 'location'
   | 'notifications'
+  | 'menu'
+  | 'sort'
+  | 'flag'
+  | 'remove'
+  | 'bag'
+  | 'offer'
+  | 'payout'
+  | 'send'
+  | 'follow'
+  | 'mic'
+  | 'stop'
+  | 'moon'
+  | 'language'
+  | 'fire'
+  | 'store'
+  | 'inventory'
+  | 'dashboard'
   | 'offline';
+
+// ============================================================================
+// ICON CONCEPT ALIAS LAYER
+// ============================================================================
+// `IconConcept` is a high-level semantic vocabulary (e.g. 'sparkle', 'payout',
+// 'chevron-right') that maps onto the canonical `SemanticIconName` registry
+// above. This keeps a SINGLE source of truth for glyph names
+// (`SemanticIconMap`) while letting call sites express intent through
+// domain concepts. AppIcon accepts `concept` as the preferred prop.
+//
+// NOTE: The `sparkle` concept resolves to `sparkles` → `bulb-outline`, never
+// the banned `sparkles-outline` glyph (AGENTS.md §38.2).
+export type IconConcept =
+  // Navigation
+  | 'back' | 'forward' | 'close' | 'menu'
+  | 'chevron-right' | 'chevron-down' | 'chevron-left' | 'chevron-up'
+  // Actions
+  | 'search' | 'filter' | 'sort' | 'share' | 'edit' | 'delete' | 'save'
+  | 'bookmark' | 'flag' | 'report' | 'add' | 'remove' | 'check' | 'x'
+  | 'more' | 'refresh'
+  // Commerce
+  | 'cart' | 'bag' | 'tag' | 'price' | 'offer' | 'wallet' | 'payout'
+  | 'receipt' | 'shipping' | 'package'
+  // Communication
+  | 'message' | 'send' | 'chat' | 'mail' | 'notification' | 'bell'
+  | 'phone' | 'video'
+  // User
+  | 'profile' | 'person' | 'people' | 'group' | 'follow' | 'block'
+  // Media
+  | 'camera' | 'image' | 'mic' | 'play' | 'pause' | 'stop' | 'gallery'
+  // Status
+  | 'success' | 'warning' | 'error' | 'info' | 'pending' | 'verified'
+  | 'shield'
+  // Settings
+  | 'settings' | 'globe' | 'lock' | 'eye' | 'moon' | 'language'
+  // Discovery
+  | 'home' | 'explore' | 'heart' | 'star' | 'fire' | 'trending' | 'sparkle'
+  // Seller
+  | 'store' | 'analytics' | 'inventory' | 'dashboard' | 'listings';
+
+/**
+ * Maps each `IconConcept` to its canonical `SemanticIconName` in
+ * `SemanticIconMap`. Concepts are aliases — they never introduce a new glyph,
+ * they only re-express an existing registry entry through domain language.
+ */
+export const ConceptAliasMap: Record<IconConcept, SemanticIconName> = {
+  // Navigation
+  back: 'back',
+  forward: 'forward',
+  close: 'close',
+  menu: 'menu',
+  'chevron-right': 'forward',
+  'chevron-down': 'chevronDown',
+  'chevron-left': 'back',
+  'chevron-up': 'chevronUp',
+
+  // Actions
+  search: 'search',
+  filter: 'filter',
+  sort: 'sort',
+  share: 'share',
+  edit: 'edit',
+  delete: 'trash',
+  save: 'bookmark',
+  bookmark: 'bookmark',
+  flag: 'flag',
+  report: 'flag',
+  add: 'plus',
+  remove: 'remove',
+  check: 'check',
+  x: 'close',
+  more: 'more',
+  refresh: 'refresh',
+
+  // Commerce
+  cart: 'cart',
+  bag: 'bag',
+  tag: 'pricetag',
+  price: 'pricetag',
+  offer: 'offer',
+  wallet: 'wallet',
+  payout: 'payout',
+  receipt: 'receipt',
+  shipping: 'box',
+  package: 'box',
+
+  // Communication
+  message: 'chat',
+  send: 'send',
+  chat: 'chat',
+  mail: 'mail',
+  notification: 'notifications',
+  bell: 'notifications',
+  phone: 'phone',
+  video: 'videocam',
+
+  // User
+  profile: 'profile',
+  person: 'profile',
+  people: 'people',
+  group: 'people',
+  follow: 'follow',
+  block: 'ban',
+
+  // Media
+  camera: 'camera',
+  image: 'image',
+  mic: 'mic',
+  play: 'play',
+  pause: 'pause',
+  stop: 'stop',
+  gallery: 'images',
+
+  // Status
+  success: 'check',
+  warning: 'warning',
+  error: 'alert',
+  info: 'info',
+  pending: 'clock',
+  verified: 'verified',
+  shield: 'shield',
+
+  // Settings
+  settings: 'settings',
+  globe: 'globe',
+  lock: 'lock',
+  eye: 'eye',
+  moon: 'moon',
+  language: 'language',
+
+  // Discovery
+  home: 'home',
+  explore: 'explore',
+  heart: 'heart',
+  star: 'star',
+  fire: 'fire',
+  trending: 'trending',
+  sparkle: 'sparkles',
+
+  // Seller
+  store: 'store',
+  analytics: 'analytics',
+  inventory: 'inventory',
+  dashboard: 'dashboard',
+  listings: 'pricetag',
+};
+
+/**
+ * Resolve an Ionicons glyph name for a given concept and state.
+ *
+ * @param concept  Semantic icon concept (e.g. 'search', 'cart')
+ * @param filled   When true, returns the filled variant for selected/active
+ *                 states. Falls back to outline when no filled form exists.
+ * @returns        The Ionicons glyph name to render.
+ */
+export function getIconName(concept: IconConcept, filled: boolean = false): string {
+  const semanticName = ConceptAliasMap[concept];
+  if (!semanticName) {
+    console.warn(`[iconTokens] Unknown icon concept: ${concept}`);
+    return 'help-outline';
+  }
+  const def = (SemanticIconMap as Record<string, SemanticIconDef>)[semanticName];
+  if (!def) {
+    return 'help-outline';
+  }
+  return filled ? (def.filled ?? def.outline) : def.outline;
+}
 

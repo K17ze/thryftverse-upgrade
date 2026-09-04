@@ -169,9 +169,19 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
   app.get('/feed/home', async (request) => {
     const { limit, cursor } = homeQuerySchema.parse(request.query ?? {});
 
+    const viewerUserId = request.authUser?.userId ?? null;
     const cursorCondition = cursor ? `AND created_at < $1` : '';
     const cursorParams = cursor ? [cursor, limit] : [limit];
     const limitSlot = `$${cursorParams.length}`;
+
+    let blockedSellerIds: Set<string> | null = null;
+    if (viewerUserId) {
+      const blockedResult = await readDb.query<{ blocked_id: string }>(
+        `SELECT blocked_id FROM user_blocks WHERE blocker_id = $1`,
+        [viewerUserId]
+      );
+      blockedSellerIds = new Set(blockedResult.rows.map((r) => r.blocked_id));
+    }
 
     const listingsResult = await readDb.query<{
       id: string;
@@ -199,6 +209,12 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       `,
       cursorParams
     );
+
+    if (blockedSellerIds && blockedSellerIds.size > 0) {
+      listingsResult.rows = listingsResult.rows.filter(
+        (row) => !blockedSellerIds!.has(row.seller_id)
+      );
+    }
 
     const listingIds = listingsResult.rows.map((r) => r.id);
     const imagesResult = listingIds.length

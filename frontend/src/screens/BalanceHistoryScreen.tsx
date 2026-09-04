@@ -55,7 +55,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const { show } = useToast();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const { isOffline } = useConnectivity();
   const [transactions, setTransactions] = useState<UserTransaction[]>([]);
@@ -175,9 +175,9 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                 styles.heroValue,
                 { color: netFlow >= 0 ? colors.success : colors.danger },
               ]}
-              accessibilityLabel={`Net flow ${formatFromFiat(Math.abs(netFlow), currencyCode, { displayMode: 'fiat' })}`}
+              accessibilityLabel={`Net flow ${formatFromFiat(Math.abs(netFlow), 'GBP', { displayMode: 'fiat' })}`}
             >
-              {netFlow >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(netFlow), currencyCode, { displayMode: 'fiat' })}
+              {netFlow >= 0 ? '+' : '-'}{formatFromFiat(Math.abs(netFlow), 'GBP', { displayMode: 'fiat' })}
             </Text>
             <Text style={[styles.heroSubtitle, { color: colors.textMuted }]}>
               {transactions.length} transaction{transactions.length === 1 ? '' : 's'}
@@ -198,7 +198,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
                     <Text style={styles.txDate}>{formatDateLabel(tx.createdAt)}</Text>
                   </View>
                   <Text style={[styles.txAmount, { color: tx.direction === 'credit' ? colors.success : colors.textPrimary }]}>
-                    {tx.direction === 'credit' ? '+' : '-'}{formatFromFiat(Math.abs(tx.amount), currencyCode, { displayMode: 'fiat' })}
+                    {tx.direction === 'credit' ? '+' : '-'}{formatFromFiat(Math.abs(tx.amount), 'GBP', { displayMode: 'fiat' })}
                   </Text>
                 </View>
                 {idx < transactions.length - 1 && <View style={styles.separator} />}

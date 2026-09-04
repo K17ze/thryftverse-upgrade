@@ -68,6 +68,7 @@ import { searchListingsFromApi } from '../services/feedApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { buildListingFeedUnit, type DiscoveryFeedUnit } from '../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
+import { openProductDetail } from '../platform/product/openProductDetail';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'UnifiedDiscovery'>;
 
@@ -278,8 +279,12 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   }, [haptic, loadDiscoveryContent, forYouFeed, refreshListings]);
 
   const handleListingPress = useCallback((item: DiscoveryListingSummary) => {
-    // DiscoveryListingSummary carries id + sellerId — that's all navigation needs.
-    navigation.navigate('ItemDetail', { itemId: item.id });
+    // DiscoveryListingSummary carries id + sellerId — route via canonical resolver.
+    openProductDetail(navigation, {
+      referenceKind: 'listing',
+      canonicalId: item.id,
+      sourceSurface: 'UnifiedDiscovery',
+    });
   }, [navigation]);
 
   const handleLookPress = useCallback((lookId: string) => {

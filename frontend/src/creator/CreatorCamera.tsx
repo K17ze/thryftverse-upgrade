@@ -1699,7 +1699,7 @@ const styles = StyleSheet.create({
   cameraInitSpinner: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     borderWidth: 2,
     // borderColor / borderTopColor applied inline via scrim text tokens
   },

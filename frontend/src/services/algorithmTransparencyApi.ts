@@ -79,6 +79,8 @@ export interface AlgorithmSignal {
 export interface FeedExplanationReason {
   /** Topic label that matched the item. */
   topic: string;
+  /** G1: Real topic ID from the backend, for "See more / Show less / Remove" actions. */
+  topicId?: string;
   /** Where the topic influence originated. */
   source: SignalSource;
   /** Relative weight contribution (0–1). */
@@ -632,6 +634,7 @@ export async function fetchFeedExplanation(itemId: string): Promise<AlgorithmFee
 
   const reasons: FeedExplanationReason[] = ranked.map((t) => ({
     topic: t.label,
+    topicId: t.id,  // G1: Real topic ID for "See more / Show less / Remove" actions
     source: t.source,
     weight: weightToValue(t.weight),
   }));

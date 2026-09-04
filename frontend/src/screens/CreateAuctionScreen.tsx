@@ -218,7 +218,7 @@ export default function CreateAuctionScreen() {
         />
         <View style={styles.listingMeta}>
           <BodyEmphasis style={styles.listingTitle} numberOfLines={1}>{item.title}</BodyEmphasis>
-          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, currencyCode)}</Meta>
+          <Meta style={styles.listingPrice}>{formatFromFiat(item.price, 'GBP')}</Meta>
         </View>
         {selected && (
           <View style={styles.selectedTick}>
@@ -312,7 +312,7 @@ export default function CreateAuctionScreen() {
                         {selectedListing?.title ?? t('auction.create.selectListing')}
                       </BodyEmphasis>
                       <Meta style={styles.previewPrice}>
-                        {selectedListing ? formatFromFiat(selectedListing.price, currencyCode) : '—'}
+                        {selectedListing ? formatFromFiat(selectedListing.price, 'GBP') : '—'}
                       </Meta>
                     </View>
                   </TradeCard>
@@ -458,7 +458,7 @@ export default function CreateAuctionScreen() {
                         {selectedListing?.title ?? t('auction.create.selectListing')}
                       </BodyEmphasis>
                       <Meta style={styles.previewPrice}>
-                        {selectedListing ? formatFromFiat(selectedListing.price, currencyCode) : '—'}
+                        {selectedListing ? formatFromFiat(selectedListing.price, 'GBP') : '—'}
                       </Meta>
                     </View>
                   </TradeCard>

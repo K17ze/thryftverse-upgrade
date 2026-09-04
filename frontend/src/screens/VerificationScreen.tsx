@@ -60,12 +60,10 @@ export default function VerificationScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const currentUser = useStore((state) => state.currentUser);
-  const coOwnCompliance = useStore((state) => state.coOwnCompliance);
   const updateCoOwnCompliance = useStore((state) => state.updateCoOwnCompliance);
 
-  // Verification status — derived from user + compliance state
+  // Verification status — derived from user + backend state
   const emailVerified = currentUser?.emailVerified ?? false;
-  const kycVerifiedLocal = coOwnCompliance.kycVerified;
 
   // KYC flow state
   const [kycStep, setKycStep] = React.useState<KycStep>('status');
@@ -88,10 +86,7 @@ export default function VerificationScreen({ navigation }: Props) {
   const [dac7SelfDeclared, setDac7SelfDeclared] = React.useState(false);
   const [isSubmittingDac7, setIsSubmittingDac7] = React.useState(false);
 
-  // DAC7 status — stored in compliance profile
-  const dac7CompletedLocal = coOwnCompliance.dac7Completed ?? false;
-
-  // Real backend status
+  // Real backend status — §11: verification must be backend-authoritative
   const [backendKycStatus, setBackendKycStatus] = useState<KycStatus | null>(null);
   const [backendDac7Info, setBackendDac7Info] = useState<Dac7TaxInfo | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(true);
@@ -122,19 +117,17 @@ export default function VerificationScreen({ navigation }: Props) {
     return () => { cancelled = true; };
   }, [currentUser?.id]);
 
-  // Effective status — merges local + backend
+  // §11 truthfulness: verification status must be backend-authoritative.
+  // Local coOwnCompliance.kycVerified is a stale cache that can outlive a
+  // revocation — never use it to grant a verified badge.
   const kycBackendVerified = backendKycStatus?.status === 'verified';
   const kycBackendPending = backendKycStatus?.status === 'pending';
-  const effectiveKycVerified = kycVerifiedLocal || kycBackendVerified;
-  const effectiveDac7Completed = dac7CompletedLocal || backendDac7Info != null;
+  const effectiveDac7Completed = backendDac7Info != null;
   const dac7BackendStatus = backendDac7Info?.status ?? null;
 
   // Derived tier info — identity/seller verification only, NOT email.
-  // Email confirmation is a prerequisite step shown below, but it does not
-  // grant a trust badge (P0-UI-3: trust badges must not be synthesized from
-  // email verification).
-  const hasVerification = effectiveKycVerified;
-  const currentTier: VerificationTier | null = effectiveKycVerified ? 'id' : null;
+  const hasVerification = kycBackendVerified;
+  const currentTier: VerificationTier | null = kycBackendVerified ? 'id' : null;
 
   const tierInfo = hasVerification && currentTier
     ? VERIFICATION_TIERS[currentTier]
@@ -146,7 +139,7 @@ export default function VerificationScreen({ navigation }: Props) {
         description: 'Verify your identity with a government document to get the trust badge' };
 
   const handleStartKyc = () => {
-    if (effectiveKycVerified) {
+    if (kycBackendVerified) {
       show('Your identity is already verified', 'info');
       return;
     }
@@ -321,7 +314,7 @@ export default function VerificationScreen({ navigation }: Props) {
         icon={tierInfo.icon as keyof typeof Ionicons.glyphMap}
         title={tierInfo.label}
         description={tierInfo.description}
-        tone={effectiveKycVerified ? 'success' : 'info'}
+        tone={kycBackendVerified ? 'success' : 'info'}
       />
 
       {/* ── VERIFICATION STEPS ── */}
@@ -336,17 +329,17 @@ export default function VerificationScreen({ navigation }: Props) {
         />
         <SettingsRow
           icon="card-outline"
-          iconColor={effectiveKycVerified ? colors.brand : kycBackendPending ? colors.warning : colors.textMuted}
+          iconColor={kycBackendVerified ? colors.brand : kycBackendPending ? colors.warning : colors.textMuted}
           title="Identity verification"
           subtitle={
-            effectiveKycVerified
+            kycBackendVerified
               ? 'ID verified'
               : kycBackendPending
               ? 'Verification under review'
               : 'Verify your identity with a government document'
           }
           value={
-            effectiveKycVerified
+            kycBackendVerified
               ? 'Verified'
               : kycBackendPending
               ? 'Pending'

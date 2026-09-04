@@ -761,7 +761,7 @@ const CaptionRow = React.memo(function CaptionRow({
       style={styles.captionRow}
       accessibilityLabel={`Caption: ${segment.text}, ${formatTime(segment.startMs)}`}
       accessibilityRole="button"
-      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
     >
       <Text style={[styles.captionTime, { color: colors.textMuted }]}>
         {formatTime(segment.startMs)}

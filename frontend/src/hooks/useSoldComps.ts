@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { Listing } from '../domain';
+import { fetchListingSoldComparables, type ListingSoldComparables } from '../services/listingsApi';
 
 /**
  * Sold comparables for pricing guidance.
@@ -19,20 +20,53 @@ export interface SoldCompsResult {
 }
 
 /**
- * Computes sold comparables from backend listings filtered by category and/or brand.
- * Only returns data when there are ≥2 sold items matching — otherwise returns nulls
- * so the UI can truthfully show nothing rather than fabricate a range.
+ * Computes sold comparables.
  *
- * @param listings All backend listings (from useBackendData)
+ * When `listingId` is provided, uses the authoritative server endpoint
+ * `GET /listings/:listingId/sold-comparables` which returns real completed-sale data.
+ *
+ * When no `listingId` is available (e.g. during listing creation), falls back to
+ * deriving comparables from the in-memory backend listings. This client-derived
+ * approach is NOT authoritative and should be labelled as approximate guidance.
+ *
+ * @param listings All backend listings (from useBackendData) — used as fallback
  * @param category Optional category filter
  * @param brand Optional brand filter
+ * @param listingId Optional listing ID — when provided, uses the authoritative server endpoint
  */
 export function useSoldComps(
   listings: Listing[],
   category?: string,
-  brand?: string
+  brand?: string,
+  listingId?: string,
 ): SoldCompsResult {
+  const [serverComps, setServerComps] = useState<ListingSoldComparables | null>(null);
+
+  useEffect(() => {
+    if (!listingId) {
+      setServerComps(null);
+      return;
+    }
+    let cancelled = false;
+    fetchListingSoldComparables(listingId)
+      .then((comps) => { if (!cancelled) setServerComps(comps); })
+      .catch(() => { if (!cancelled) setServerComps(null); });
+    return () => { cancelled = true; };
+  }, [listingId]);
+
   return useMemo(() => {
+    // Use authoritative server endpoint when available
+    if (serverComps && serverComps.sampleSize >= 2) {
+      return {
+        minPrice: serverComps.minPrice,
+        maxPrice: serverComps.maxPrice,
+        medianPrice: serverComps.medianPrice,
+        sampleSize: serverComps.sampleSize,
+        hasComps: true,
+      };
+    }
+
+    // Fallback: client-derived from in-memory listings (NOT authoritative)
     if (!category && !brand) {
       return { minPrice: null, maxPrice: null, medianPrice: null, sampleSize: 0, hasComps: false };
     }
@@ -59,5 +93,5 @@ export function useSoldComps(
       sampleSize: sold.length,
       hasComps: true,
     };
-  }, [listings, category, brand]);
+  }, [serverComps, listings, category, brand]);
 }

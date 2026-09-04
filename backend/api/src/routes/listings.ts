@@ -155,6 +155,12 @@ app.get('/listings', async (request) => {
   const conditions: string[] = ["l.status = 'active'"];
   const args: unknown[] = [];
 
+  const viewerUserId = request.authUser?.userId;
+  if (viewerUserId) {
+    conditions.push(`l.seller_id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = $${args.length + 1})`);
+    args.push(viewerUserId);
+  }
+
   if (params.q) {
     conditions.push(`(
       l.title ILIKE $${args.length + 1}
@@ -2956,7 +2962,7 @@ app.get('/listings/:listingId', async (request, reply) => {
     shipping_method: string | null;
     shipping_payer: string | null;
     created_at: string;
-    updated_at: string | null;
+    updated_at: string;
     media_frozen_at: string | null;
     seller_username: string | null;
     sustainability_grade: string | null;
@@ -3070,7 +3076,7 @@ app.get('/listings/:listingId', async (request, reply) => {
       shippingMethod: row.shipping_method,
       shippingPayer: row.shipping_payer,
       createdAt: row.created_at,
-      updatedAt: row.updated_at ?? row.created_at,
+      updatedAt: row.updated_at,
       mediaFrozenAt: row.media_frozen_at,
       sustainabilityGrade: row.sustainability_grade,
       materialComposition: row.material_composition,
@@ -4493,7 +4499,15 @@ app.patch('/listings/:listingId', async (request, reply) => {
   // Sync the updated listing into the search index (fire-and-forget)
   void syncSingleListing(db, listingId).catch(() => {});
 
-  return { ok: true, listingId, alertEvaluation };
+  // Return the new updated_at so the client can update its conflict-detection
+  // baseline after a successful save.
+  const updatedRow = await db.query<{ updated_at: string }>(
+    `SELECT updated_at FROM listings WHERE id = $1 LIMIT 1`,
+    [listingId],
+  );
+  const updatedAt = updatedRow.rows[0]?.updated_at ?? new Date().toISOString();
+
+  return { ok: true, listingId, updatedAt, alertEvaluation };
 });
 
 app.delete('/listings/:listingId', async (request, reply) => {
@@ -4671,11 +4685,24 @@ app.get('/users/:userId/listings', async (request) => {
   const paramsSchema = z.object({ userId: z.string().min(2) });
   const querySchema = z.object({
     status: z.enum(['draft', 'active', 'paused', 'sold', 'deleted']).optional(),
-    limit: z.coerce.number().int().min(1).max(200).default(60),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().optional(),
   });
 
   const { userId } = paramsSchema.parse(request.params);
-  const { status, limit } = querySchema.parse(request.query);
+  const { status, limit, cursor } = querySchema.parse(request.query);
+
+  let cursorData: { createdAt: string; id: string } | null = null;
+  if (cursor) {
+    try {
+      const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
+      if (decoded.createdAt && decoded.id) {
+        cursorData = { createdAt: decoded.createdAt, id: decoded.id };
+      }
+    } catch {
+      // Invalid cursor — ignore, start from beginning
+    }
+  }
 
   const conditions: string[] = ['seller_id = $1'];
   const args: unknown[] = [userId];
@@ -4684,6 +4711,13 @@ app.get('/users/:userId/listings', async (request) => {
     conditions.push(`status = $${args.length + 1}`);
     args.push(status);
   }
+
+  if (cursorData) {
+    conditions.push(`(l.created_at, l.id) < ($${args.length + 1}, $${args.length + 2})`);
+    args.push(cursorData.createdAt, cursorData.id);
+  }
+
+  const fetchLimit = limit + 1;
 
   const result = await readDb.query<{
     id: string;
@@ -4710,13 +4744,16 @@ app.get('/users/:userId/listings', async (request) => {
       FROM listings l
       LEFT JOIN users u ON u.id = l.seller_id
       WHERE ${conditions.join(' AND ')}
-      ORDER BY l.created_at DESC
+      ORDER BY l.created_at DESC, l.id DESC
       LIMIT $${args.length + 1}
     `,
-    [...args, limit]
+    [...args, fetchLimit]
   );
 
-  const listingIds = result.rows.map((r) => r.id);
+  const hasMore = result.rows.length > limit;
+  const pageRows = hasMore ? result.rows.slice(0, limit) : result.rows;
+
+  const listingIds = pageRows.map((r) => r.id);
   const imagesResult = listingIds.length
     ? await readDb.query<{
         listing_id: string;
@@ -4754,8 +4791,16 @@ app.get('/users/:userId/listings', async (request) => {
     }
   }
 
+  const lastRow = pageRows[pageRows.length - 1];
+  const nextCursor = hasMore && lastRow
+    ? Buffer.from(JSON.stringify({
+        createdAt: lastRow.created_at,
+        id: lastRow.id,
+      })).toString('base64')
+    : null;
+
   return {
-    items: result.rows.map((row) => {
+    items: pageRows.map((row) => {
       const primaryGeometry = primaryGeometryByListing.get(row.id);
       return {
         id: row.id,
@@ -4789,6 +4834,7 @@ app.get('/users/:userId/listings', async (request) => {
           : null,
       };
     }),
+    nextCursor,
   };
 });
 

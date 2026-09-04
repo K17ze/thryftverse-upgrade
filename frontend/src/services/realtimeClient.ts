@@ -74,6 +74,35 @@ export interface ChatMessageCreatedPayload {
   createdAt: string;
   clientMessageId?: string | null;
   replyToMessageId?: string | null;
+  editVersion?: number;
+  editedAt?: string | null;
+  deletedForEveryoneAt?: string | null;
+  /** Voice receipt (joined from voice_messages by the backend serializer). */
+  voice?: {
+    id: string;
+    durationMs: number;
+    bytes?: number;
+    container: 'm4a' | 'ogg' | 'webm' | 'mp4';
+    codec: 'aac' | 'opus' | 'mp3';
+    waveform: { samples: number[]; sampleCount: number; algorithmVersion: number } | null;
+    moderationState?: 'pending' | 'allowed' | 'limited' | 'blocked';
+  } | null;
+  /** Media URI for image/video messages. */
+  mediaUri?: string | null;
+  /** Offer payload for offer messages. */
+  offer?: {
+    offerId?: string;
+    amount?: number;
+    status?: 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled';
+    buyerId?: string;
+    sellerId?: string;
+    listingId?: string;
+    listingTitle?: string;
+    originalPrice?: number;
+    offerPrice?: number;
+    expiresAt?: string;
+    counterRound?: number;
+  } | null;
 }
 
 /** Payload shape for `chat.message.deleted`. */
@@ -107,6 +136,9 @@ export interface ChatMessageReadPayload {
   conversationId: string;
   userId: string;
   readAt: string;
+  /** Message IDs that were marked read in this event. When absent, the
+   *  event is a legacy conversation-level cursor (mark all up to readAt). */
+  messageIds?: string[];
 }
 
 /** Payload shape for `chat.typing.update`. */
@@ -193,20 +225,106 @@ export function realtimePayloadToMessage(
   const meta = payload.metadata ?? {};
   const isCurrentUser = Boolean(currentUserId && senderId === currentUserId);
 
+  // ── Type detection ────────────────────────────────────────────────
+  // Voice: the backend attaches a `voice` receipt, or stashes voice
+  // metadata under `metadata.voice` / `metadata.mediaType === 'voice'`.
+  const voice =
+    payload.voice ??
+    (meta.voice as ChatMessageCreatedPayload['voice'] | undefined);
+  const isVoice =
+    Boolean(payload.voice) ||
+    Boolean(meta.voice) ||
+    meta.mediaType === 'voice';
+
+  // Offer: the backend attaches an `offer` object, or stashes the offer
+  // payload under `metadata.offerPayload`.
+  const offerSource =
+    payload.offer ??
+    (meta.offerPayload as ChatMessageCreatedPayload['offer'] | undefined);
+  const isOffer = Boolean(payload.offer) || Boolean(meta.offerPayload);
+
+  // Media: a non-voice message with a mediaUri renders as a media bubble.
+  const mediaUri =
+    typeof payload.mediaUri === 'string'
+      ? payload.mediaUri
+      : typeof meta.mediaUri === 'string'
+        ? meta.mediaUri
+        : undefined;
+
+  let type: ConversationMessage['type'];
+  if (payload.senderType === 'system') {
+    type = 'system';
+  } else if (isOffer) {
+    type = 'offer';
+  } else if (isVoice) {
+    type = 'voice';
+  } else if (mediaUri) {
+    type = 'media';
+  } else {
+    type = 'text';
+  }
+
+  // Voice field extraction — prefer the canonical voice receipt, fall
+  // back to metadata fields for backwards compatibility.
+  const voiceUriFromMeta = typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined;
+  const voiceDurationMs =
+    voice?.durationMs ??
+    (typeof meta.durationMs === 'number' ? meta.durationMs : undefined);
+  const voiceWaveform = voice?.waveform?.samples;
+  const voiceContainer = voice?.container;
+  const voiceCodec = voice?.codec;
+  const voiceModerationState = voice?.moderationState;
+
   return {
     id: payload.id,
     senderId,
     text: payload.body,
     timestamp: payload.createdAt,
+    date: payload.createdAt,
     isSystem: payload.senderType === 'system',
     systemTitle: payload.senderType === 'system' ? 'System' : undefined,
-    type: payload.senderType === 'system' ? 'system' : 'text',
+    type,
     sender: isCurrentUser ? 'me' : payload.senderType === 'system' ? 'system' : 'other',
-    mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
+    mediaUri,
     mediaType:
-      meta.mediaType === 'image' || meta.mediaType === 'video'
+      !isVoice && (meta.mediaType === 'image' || meta.mediaType === 'video')
         ? (meta.mediaType as 'image' | 'video')
         : undefined,
+    // Lifecycle fields — carried through so the UI can render edit/delete
+    // state and reconcile optimistic messages by clientMessageId.
+    clientMessageId: payload.clientMessageId ?? undefined,
+    editVersion: payload.editVersion ?? undefined,
+    editedAt: payload.editedAt ?? undefined,
+    isEdited: Boolean(payload.editedAt) || (payload.editVersion ?? 0) > 0,
+    deletedForEveryoneAt: payload.deletedForEveryoneAt ?? undefined,
+    isDeleted: Boolean(payload.deletedForEveryoneAt),
+    // The server has accepted a realtime message, so it is at least "sent".
+    readStatus: 'sent',
+    readBy: [],
+    // Voice fields — only populated when this is a voice message.
+    voiceUri: isVoice ? voiceUriFromMeta : undefined,
+    voiceDurationMs: isVoice ? voiceDurationMs : undefined,
+    voiceWaveform: isVoice ? voiceWaveform : undefined,
+    voiceContainer: isVoice ? voiceContainer : undefined,
+    voiceCodec: isVoice ? voiceCodec : undefined,
+    voiceModerationState: isVoice ? voiceModerationState : undefined,
+    // Offer fields — only populated when this is an offer message.
+    offer: isOffer && offerSource
+      ? {
+          offerId: offerSource.offerId,
+          amount: offerSource.amount,
+          status: offerSource.status,
+          buyerId: offerSource.buyerId,
+          sellerId: offerSource.sellerId,
+          listingId: offerSource.listingId,
+          listingTitle: offerSource.listingTitle,
+          originalPrice: offerSource.originalPrice,
+          offerPrice: offerSource.offerPrice,
+          price: offerSource.offerPrice,
+          expiresAt: offerSource.expiresAt,
+          counterRound: offerSource.counterRound,
+        }
+      : undefined,
     replyToMessageId: payload.replyToMessageId ?? undefined,
   };
 }
@@ -255,10 +373,31 @@ export function useChatMessageEvent(
  * useTypingIndicator — subscribe to typing events for a conversation and
  * expose a reactive `isTyping` flag. The flag auto-clears 4s after the
  * last typing event so a stale "typing…" state never lingers.
+ *
+ * Returns a boolean for backwards compatibility. For named typing
+ * (group chats), use `useTypingUsers` which exposes the set of typing
+ * user IDs.
  */
 export function useTypingIndicator(conversationId: string | undefined): boolean {
-  const [isTyping, setIsTyping] = useState(false);
-  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { isTyping } = useTypingUsers(conversationId);
+  return isTyping;
+}
+
+/**
+ * useTypingUsers — subscribe to typing events for a conversation and
+ * expose the set of user IDs currently typing. Auto-clears individual
+ * users 4s after their last typing event so stale states never linger.
+ *
+ * Returns:
+ *   - typingUserIds: string[] — user IDs currently typing (excludes self)
+ *   - isTyping: boolean — true if anyone is typing
+ */
+export function useTypingUsers(conversationId: string | undefined): {
+  typingUserIds: string[];
+  isTyping: boolean;
+} {
+  const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
+  const clearTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const ctx = useRealtimeSafe();
   const client = ctx?.client;
 
@@ -266,7 +405,7 @@ export function useTypingIndicator(conversationId: string | undefined): boolean 
 
   useEffect(() => {
     if (!topic || !client) {
-      setIsTyping(false);
+      setTypingUserIds([]);
       return;
     }
 
@@ -277,30 +416,42 @@ export function useTypingIndicator(conversationId: string | undefined): boolean 
       if (payload.conversationId && conversationId && payload.conversationId !== conversationId) {
         return;
       }
-      setIsTyping(Boolean(payload.isTyping));
-      if (clearTimerRef.current) {
-        clearTimeout(clearTimerRef.current);
-      }
+      const userId = payload.userId;
+      if (!userId) return;
+
       if (payload.isTyping) {
-        clearTimerRef.current = setTimeout(() => {
-          setIsTyping(false);
-          clearTimerRef.current = null;
+        setTypingUserIds((prev) => prev.includes(userId) ? prev : [...prev, userId]);
+        // Clear existing timer for this user
+        const existingTimer = clearTimersRef.current.get(userId);
+        if (existingTimer) clearTimeout(existingTimer);
+        // Set new auto-clear timer
+        const timer = setTimeout(() => {
+          setTypingUserIds((prev) => prev.filter((id) => id !== userId));
+          clearTimersRef.current.delete(userId);
         }, 4000);
+        clearTimersRef.current.set(userId, timer);
+      } else {
+        setTypingUserIds((prev) => prev.filter((id) => id !== userId));
+        const existingTimer = clearTimersRef.current.get(userId);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+          clearTimersRef.current.delete(userId);
+        }
       }
     });
 
     return () => {
       unsubscribe();
       client.unsubscribe([topic]);
-      if (clearTimerRef.current) {
-        clearTimeout(clearTimerRef.current);
-        clearTimerRef.current = null;
+      for (const timer of clearTimersRef.current.values()) {
+        clearTimeout(timer);
       }
-      setIsTyping(false);
+      clearTimersRef.current.clear();
+      setTypingUserIds([]);
     };
   }, [client, topic, conversationId]);
 
-  return isTyping;
+  return { typingUserIds, isTyping: typingUserIds.length > 0 };
 }
 
 // ── Inbox-wide message event hook ───────────────────────────────────

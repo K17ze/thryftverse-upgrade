@@ -20,8 +20,9 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   // ── §1 Replace three-column fundamentals with stacked layout ──
   describe('fundamentals layout', () => {
     it('uses stacked fundamentals layout, not three columns', () => {
-      expect(src).toContain('fundamentalsStacked');
-      expect(src).toContain('fundamentalsRow');
+      const fundamentals = readComponent('asset/FundamentalsSection.tsx');
+      expect(fundamentals).toContain('fundamentalsStacked');
+      expect(fundamentals).toContain('fundamentalsRow');
     });
 
     it('does not use the old three-column marketSecondaryFacts in JSX', () => {
@@ -154,20 +155,17 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   // ── §8 Rights & risks compress ──
   describe('rights & risks compress', () => {
     it('risk disclosure is collapsed by default', () => {
-      expect(src).toContain('riskDisclosureVisible');
-      expect(src).toContain('setRiskDisclosureVisible');
+      expect(src).toContain('riskDisclosure');
+      expect(src).toContain('openSheet');
     });
 
-    it('has "Risks" disclosure row (not "View risk disclosure")', () => {
-      // Per spec 09: use "Risks" instead of "View risk disclosure".
-      expect(src).toContain('"Risks"');
+    it('has "Risk disclosure" row (not "View risk disclosure")', () => {
+      expect(src).toContain('label="Risk disclosure"');
       expect(src).not.toContain('label="View risk disclosure"');
     });
 
-    it('does not render CoOwnRiskDisclosure inline in the Due diligence section', () => {
-      // The old code rendered <CoOwnRiskDisclosure ... /> directly in
-      // the section. The new code opens it in a modal.
-      const ddSection = src.match(/CommerceDetailSection label="Due diligence"[\s\S]*?<\/CommerceDetailSection>/);
+    it('does not render CoOwnRiskDisclosure inline in the Asset dossier section', () => {
+      const ddSection = src.match(/<CommerceDetailSection[\s\S]*?label="Asset dossier"[\s\S]*?<\/CommerceDetailSection>/);
       expect(ddSection).toBeTruthy();
       expect(ddSection![0]).not.toContain('<CoOwnRiskDisclosure');
     });
@@ -211,7 +209,8 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
     });
 
     it('displays avg entry in the holder position', () => {
-      expect(src).toContain('Avg. entry');
+      const holderSummary = readComponent('asset/HolderPositionSummary.tsx');
+      expect(holderSummary).toContain('Avg. entry');
     });
   });
 

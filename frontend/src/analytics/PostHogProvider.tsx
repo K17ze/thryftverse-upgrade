@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { PostHogProvider as PostHogProviderCore, PostHog, usePostHog as usePostHogCore } from 'posthog-react-native';
+import { PostHogProvider as PostHogProviderCore, PostHog, usePostHog } from 'posthog-react-native';
 import Constants from 'expo-constants';
 import * as Application from 'expo-application';
 import type { FeatureFlagKey } from './types';
 import { setTelemetryHandler } from '../lib/telemetry';
-import { isAnalyticsOptOut, subscribeToAnalyticsOptOut } from './analyticsGate';
-import { setCreatorAnalyticsHandler } from '../creator/creatorAnalytics';
-import { trackRaw } from './track';
+import { isAnalyticsEnabled, subscribeToAnalyticsOptOut } from './analyticsGate';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Environment configuration — EXPO_PUBLIC_ prefix follows Expo convention.
@@ -185,46 +183,16 @@ export function PostHogProvider({ children }: PostHogProviderProps): React.React
 
     posthogClient = client;
 
-    // Apply the current opt-out state on init — if the user has previously
-    // opted out, tell PostHog to stop capturing immediately.
-    if (isAnalyticsOptOut()) {
-      try {
-        void client.optOut();
-      } catch {
-        // Best-effort — never crash the app.
-      }
-    }
-
-    // Subscribe to opt-out changes so toggling the preference in settings
-    // takes effect immediately without an app restart. PostHog's
-    // optOut/optIn are persisted by the SDK itself.
-    const unsubscribeOptOut = subscribeToAnalyticsOptOut((optOut) => {
-      try {
-        if (optOut) {
-          void client.optOut();
-        } else {
-          void client.optIn();
-        }
-      } catch {
-        // Best-effort — never crash the app.
-      }
-    });
-
     // Bridge telemetry events to PostHog so every `trackTelemetryEvent` call
     // also fires `posthog.capture()` with the same event name and properties.
     // PII scrubbing and the analytics opt-out preference are already applied
-    // inside `trackTelemetryEvent` before the handler is invoked.
-    setTelemetryHandler((eventName, properties) =>
-      client.capture(eventName, properties as Record<string, any> | undefined)
-    );
-
-    // Bridge creator analytics events to PostHog so every CreatorAnalytics
-    // call (layer add, undo/redo, draft save, publish, camera effects, etc.)
-    // flows into PostHog via trackRaw. The opt-out gate in track.ts is
-    // checked before any event reaches PostHog.
-    setCreatorAnalyticsHandler((event, payload) =>
-      trackRaw(event, payload as Record<string, string | number | boolean | null | undefined>)
-    );
+    // inside `trackTelemetryEvent` before the handler is invoked. The gate
+    // is checked here too so that toggling opt-out at runtime immediately
+    // stops the bridge from forwarding events to PostHog.
+    setTelemetryHandler((eventName, properties) => {
+      if (!isAnalyticsEnabled()) return;
+      client.capture(eventName, properties as Record<string, any> | undefined);
+    });
 
     // Wait for the client to be ready, then persist flags for next boot.
     client
@@ -241,15 +209,32 @@ export function PostHogProvider({ children }: PostHogProviderProps): React.React
 
     return () => {
       // On unmount, flush pending events and shut down.
-      unsubscribeOptOut();
       client.flush().catch(() => {
         // Best-effort flush.
       });
       posthogClient = null;
       setTelemetryHandler(null);
-      setCreatorAnalyticsHandler(null);
     };
   }, []);
+
+  // Session replay control — start or stop recording based on the analytics
+  // opt-out flag. The subscription fires immediately on mount and whenever
+  // the flag changes, so toggling opt-out at runtime takes effect instantly.
+  useEffect(() => {
+    if (!POSTHOG_API_KEY) return;
+
+    const unsubscribe = subscribeToAnalyticsOptOut((optOut) => {
+      const client = posthogClient;
+      if (!client) return;
+      if (optOut) {
+        client.stopSessionRecording().catch(() => {});
+      } else {
+        client.startSessionRecording().catch(() => {});
+      }
+    });
+
+    return unsubscribe;
+  }, [POSTHOG_API_KEY]);
 
   // No API key → render children directly (dev mode graceful degradation).
   if (!POSTHOG_API_KEY) {
@@ -310,23 +295,15 @@ let cachedDeviceInfo: { appVersion: string; deviceModel: string | null } | null 
  */
 export function getDeviceInfo(): { appVersion: string; deviceModel: string | null } {
   if (cachedDeviceInfo) return cachedDeviceInfo;
-  // Platform.constants is Android-specific — exposes the device model name
-  // (e.g. "Pixel 8 Pro"). On iOS, expo-device would be needed for the model
-  // name; null is acceptable there — PostHog's SDK collects $device_model
-  // internally when its optional peer deps are available.
-  let deviceModel: string | null = null;
-  if (Platform.OS === 'android') {
-    const constants = Platform.constants as Record<string, unknown> | undefined;
-    if (constants && typeof constants['Model'] === 'string') {
-      deviceModel = constants['Model'];
-    }
-  }
   cachedDeviceInfo = {
     appVersion:
       Application.nativeApplicationVersion ??
       Constants?.expoConfig?.version ??
       'unknown',
-    deviceModel,
+    // Platform.constants is Android-specific; on iOS we'd need expo-device
+    // for the model name. null is acceptable — PostHog's SDK collects
+    // $device_model internally when its optional peer deps are available.
+    deviceModel: null,
   };
   return cachedDeviceInfo;
 }
@@ -338,16 +315,6 @@ export function getPlatform(): 'ios' | 'android' | 'web' {
   return Platform.OS as 'ios' | 'android' | 'web';
 }
 
-// Safe wrapper around usePostHog: in dev mode or when PostHog is not initialized/configured,
-// returns undefined gracefully without triggering PostHog's missing-provider warning toast.
-export function usePostHog(): PostHog | undefined {
-  if (!POSTHOG_API_KEY && !posthogClient) {
-    return undefined;
-  }
-  try {
-    return usePostHogCore();
-  } catch {
-    return undefined;
-  }
-}
+// Re-export the usePostHog hook for convenience.
+export { usePostHog } from 'posthog-react-native';
 export type { FeatureFlagKey };

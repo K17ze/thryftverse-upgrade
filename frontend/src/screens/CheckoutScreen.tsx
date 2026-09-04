@@ -211,7 +211,7 @@ export default function CheckoutScreen() {
   const [shippingError, setShippingError] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
   const { showError, showInfo } = useNotifications();
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   const createdOrderIdRef = useRef<string | null>(null);
   const createdOrderSignatureRef = useRef<string | null>(null);
@@ -239,6 +239,10 @@ export default function CheckoutScreen() {
     onConfirm: () => void;
     variant: 'default' | 'danger';
   }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
+
+  // Inline validation — set when the user taps Pay but fields are missing.
+  // Errors clear automatically as fields become valid (computed from state).
+  const [hasAttemptedPay, setHasAttemptedPay] = useState(false);
 
   // --- Eligibility ---
   const checkoutEligible = useMemo(() => {
@@ -529,6 +533,7 @@ export default function CheckoutScreen() {
   const handlePay = useCallback(async () => {
     if (isSubmittingRef.current) return;
     if (!checkoutEligible) {
+      setHasAttemptedPay(true);
       showError('Cannot pay yet', 'Complete address and payment details before paying.');
       return;
     }
@@ -873,11 +878,13 @@ export default function CheckoutScreen() {
     walletBalance,
     useOnezePayment,
     onezeBalance,
+    setHasAttemptedPay,
   ]);
 
   // --- Address selection change ---
   const handleAddressPress = useCallback(async () => {
     haptics.tap();
+    setHasAttemptedPay(false);
 
     if (createdOrderIdRef.current) {
       const cancelled = await cancelStaleOrder();
@@ -890,7 +897,7 @@ export default function CheckoutScreen() {
       mode: savedAddress ? 'edit' : 'add',
       source: 'checkout',
     });
-  }, [cancelStaleOrder, navigation, savedAddress]);
+  }, [cancelStaleOrder, navigation, savedAddress, setHasAttemptedPay]);
 
   // --- Payment selection change ---
   const handleSelectPaymentMethod = useCallback(async (
@@ -963,6 +970,7 @@ export default function CheckoutScreen() {
   // --- Payment method change press ---
   const handlePaymentPress = useCallback(() => {
     haptics.tap();
+    setHasAttemptedPay(false);
     if (!allowCardPayments && checkoutCapabilities) {
       showError('Cards unavailable', 'Cards are unavailable for your region.');
       navigation.navigate('Payments');
@@ -973,12 +981,13 @@ export default function CheckoutScreen() {
     } else {
       setAddCardSheetVisible(true);
     }
-  }, [allowCardPayments, checkoutCapabilities, backendPaymentMethods.length, showError, navigation]);
+  }, [allowCardPayments, checkoutCapabilities, backendPaymentMethods.length, showError, navigation, setHasAttemptedPay]);
 
   const handleDeliveryPress = useCallback(async () => {
     if (!canChangePostage) return;
 
     haptics.tap();
+    setHasAttemptedPay(false);
 
     if (createdOrderIdRef.current) {
       const cancelled = await cancelStaleOrder();
@@ -988,7 +997,7 @@ export default function CheckoutScreen() {
     }
 
     navigation.navigate('Postage');
-  }, [canChangePostage, cancelStaleOrder, navigation]);
+  }, [canChangePostage, cancelStaleOrder, navigation, setHasAttemptedPay]);
 
   // --- Close handler ---
   const handleClose = useCallback(() => {
@@ -1299,7 +1308,7 @@ export default function CheckoutScreen() {
           ? `Pay ${Math.ceil(GROSS_TOTAL).toLocaleString()} 1ZE`
           : walletAvailable
             ? 'Pay with card'
-            : `Pay ${formatFromFiat(TOTAL, currencyCode)}`;
+            : `Pay ${formatFromFiat(TOTAL, 'GBP')}`;
 
   // Whether the row-level errorText should be suppressed because the partial-
   // data banner already covers that case (avoids duplicate messaging).
@@ -1307,6 +1316,26 @@ export default function CheckoutScreen() {
   const suppressPaymentError = partialDataPrompt?.icon === 'card-outline';
   const suppressShippingError =
     partialDataPrompt?.icon === 'information-circle-outline' && !!postageOption.carrierId;
+
+  // ── Progress indicator ──
+  // Compact 3-dot indicator showing the logical checkout sections. Each dot
+  // fills when its section is complete, reducing anxiety by showing the user
+  // what's involved and where they are in the flow (2026 UX research:
+  // "Progress indicator = reduces anxiety").
+  const deliveryStepComplete = !!savedAddress?.id && !!postageOption.carrierId;
+  const paymentStepComplete = useOnezePayment
+    ? onezeBalance >= GROSS_TOTAL
+    : (!!savedPaymentMethod?.id && isPaymentMethodAllowed(checkoutCapabilities, savedPaymentMethod.type))
+      || (useBalance && walletBalance >= GROSS_TOTAL);
+  const reviewStepComplete = checkoutEligible;
+
+  // ── Inline validation errors ──
+  // Shown only after the user has attempted to pay (hasAttemptedPay). Errors
+  // clear automatically as fields become valid — no manual reset needed.
+  const inlineAddressError = hasAttemptedPay && !savedAddress?.id ? 'Delivery address required' : undefined;
+  const inlinePaymentError = hasAttemptedPay && !paymentStepComplete && !useOnezePayment
+    ? (!savedPaymentMethod?.id ? 'Payment method required' : undefined)
+    : undefined;
 
   return (
     <SafeAreaView ref={a11yRef} style={[styles.container, t.container]} edges={['top']}>
@@ -1328,6 +1357,27 @@ export default function CheckoutScreen() {
       </View>
 
       <CommerceDetailOfflineBanner isOffline={isOffline} />
+
+      {/* 1a. Compact progress indicator — three logical sections shown as a
+          thin dot row. Reduces anxiety by making the checkout scope visible
+          at a glance (2026 UX research). No large stepper — just dots and
+          labels, sober and informational. */}
+      <View style={styles.progressRow} accessibilityRole="progressbar" accessibilityLabel={`Checkout progress: Delivery ${deliveryStepComplete ? 'complete' : 'pending'}, Payment ${paymentStepComplete ? 'complete' : 'pending'}, Review ${reviewStepComplete ? 'ready' : 'pending'}`}>
+        <View style={styles.progressStep}>
+          <View style={[styles.progressDot, { backgroundColor: deliveryStepComplete ? colors.brand : colors.surfaceAlt, borderColor: deliveryStepComplete ? colors.brand : colors.border }]} />
+          <Text style={[styles.progressLabel, { color: deliveryStepComplete ? colors.textPrimary : colors.textMuted }]} maxFontSizeMultiplier={1}>Delivery</Text>
+        </View>
+        <View style={[styles.progressConnector, { backgroundColor: deliveryStepComplete ? colors.brand : colors.border }]} />
+        <View style={styles.progressStep}>
+          <View style={[styles.progressDot, { backgroundColor: paymentStepComplete ? colors.brand : colors.surfaceAlt, borderColor: paymentStepComplete ? colors.brand : colors.border }]} />
+          <Text style={[styles.progressLabel, { color: paymentStepComplete ? colors.textPrimary : colors.textMuted }]} maxFontSizeMultiplier={1}>Payment</Text>
+        </View>
+        <View style={[styles.progressConnector, { backgroundColor: paymentStepComplete ? colors.brand : colors.border }]} />
+        <View style={styles.progressStep}>
+          <View style={[styles.progressDot, { backgroundColor: reviewStepComplete ? colors.brand : colors.surfaceAlt, borderColor: reviewStepComplete ? colors.brand : colors.border }]} />
+          <Text style={[styles.progressLabel, { color: reviewStepComplete ? colors.textPrimary : colors.textMuted }]} maxFontSizeMultiplier={1}>Review</Text>
+        </View>
+      </View>
 
       {/* Partial-data inline prompt (Â§14). Quiet, friendly â€” the checkout is
           still usable. Distinct from full error states. */}
@@ -1354,8 +1404,8 @@ export default function CheckoutScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 300 + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
-        accessibilityElementsHidden={addCardSheetVisible || paymentSelectorVisible}
-        importantForAccessibility={addCardSheetVisible || paymentSelectorVisible ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={addCardSheetVisible || paymentSelectorVisible || breakdownSheetVisible || confirmSheet.visible}
+        importantForAccessibility={addCardSheetVisible || paymentSelectorVisible || breakdownSheetVisible || confirmSheet.visible ? 'no-hide-descendants' : 'auto'}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -1375,7 +1425,7 @@ export default function CheckoutScreen() {
             username: resolvedSeller.username,
             avatar: resolvedSeller.avatar,
           }}
-          priceLabel={formatFromFiat(item.price, currencyCode)}
+          priceLabel={formatFromFiat(item.price, 'GBP')}
           onPressSeller={
             resolvedSeller.id
               ? () => { haptics.tap(); openProfile(navigation, resolvedSeller.id, currentUser?.id); }
@@ -1394,7 +1444,7 @@ export default function CheckoutScreen() {
           icon="location-outline"
           isFilled={!!savedAddress}
           warningText={addressNeedsSave ? 'Needs saving before payment' : undefined}
-          errorText={suppressAddressError ? undefined : (addressError ?? undefined)}
+          errorText={suppressAddressError ? undefined : (inlineAddressError ?? addressError ?? undefined)}
           accessibilityLabel={
             savedAddress
               ? `Delivery address: ${savedAddress.name}, ${savedAddress.streetAddress}, ${savedAddress.city}, ${savedAddress.postalCode}, ${savedAddress.country}`
@@ -1408,7 +1458,7 @@ export default function CheckoutScreen() {
           label="Delivery"
           title={postageOption.label}
           subtitle={`${postageOption.etaLabel}${postageOption.liveQuote ? '' : ' (Estimated)'}${postageOption.tracking ? ' Â· Tracking' : ''}`}
-          actionLabel={formatFromFiat(POSTAGE_FEE, currencyCode)}
+          actionLabel={formatFromFiat(POSTAGE_FEE, 'GBP')}
           onPress={canChangePostage ? handleDeliveryPress : undefined}
           icon="car-outline"
           isFilled={!!postageOption.carrierId}
@@ -1419,7 +1469,7 @@ export default function CheckoutScreen() {
                 ? undefined
                 : shippingError ?? undefined
           }
-          accessibilityLabel={`Delivery: ${postageOption.label}, ${postageOption.etaLabel}, ${postageOption.liveQuote ? 'Live quote' : 'Estimated'}, ${formatFromFiat(POSTAGE_FEE, currencyCode)}`}
+          accessibilityLabel={`Delivery: ${postageOption.label}, ${postageOption.etaLabel}, ${postageOption.liveQuote ? 'Live quote' : 'Estimated'}, ${formatFromFiat(POSTAGE_FEE, 'GBP')}`}
         />
 
         {/* 5. Payment method â€” unified with address/delivery row family */}
@@ -1435,7 +1485,7 @@ export default function CheckoutScreen() {
             : savedPaymentMethod?.details ?? undefined}
           actionLabel={useOnezePayment ? 'Card' : savedPaymentMethod ? 'Change' : 'Add'}
           onPress={useOnezePayment
-            ? () => { haptics.tap(); setUseOnezePayment(false); }
+            ? () => { haptics.tap(); setUseOnezePayment(false); setHasAttemptedPay(false); }
             : handlePaymentPress}
           icon={useOnezePayment ? 'wallet-outline' : (savedPaymentMethod?.type === 'apple_pay' ? 'logo-apple' : 'card-outline')}
           isFilled={useOnezePayment || !!savedPaymentMethod}
@@ -1444,7 +1494,7 @@ export default function CheckoutScreen() {
               ? 'Cards unavailable in your region'
               : undefined
           }
-          errorText={suppressPaymentError ? undefined : (paymentError ?? undefined)}
+          errorText={suppressPaymentError ? undefined : (inlinePaymentError ?? paymentError ?? undefined)}
           accessibilityLabel={
             useOnezePayment
               ? `1ZE Wallet payment, ${onezeBalance.toLocaleString()} 1ZE available. Switch to card payment.`
@@ -1462,7 +1512,7 @@ export default function CheckoutScreen() {
         {onezeBalance > 0 && !balanceLoading && !useOnezePayment && (
           <Pressable
             style={({ pressed }) => [styles.onezeOptionRow, { borderColor: colors.border }, pressed && { opacity: 0.7 }]}
-            onPress={() => { haptics.tap(); setUseOnezePayment(true); if (useBalance) setUseBalance(false); }}
+            onPress={() => { haptics.tap(); setUseOnezePayment(true); setHasAttemptedPay(false); if (useBalance) setUseBalance(false); }}
             accessibilityRole="button"
             accessibilityLabel={`Pay with 1ZE Wallet. ${onezeBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} 1ZE available. ${Math.ceil(GROSS_TOTAL).toLocaleString()} 1ZE needed.`}
             accessibilityHint="Switch to paying with your 1ZE wallet balance"
@@ -1484,11 +1534,25 @@ export default function CheckoutScreen() {
             row where card-security anxiety peaks. Per 2026 UX research:
             "A 'Secure checkout' message next to the card number field is more
             effective than security badges in the footer." */}
-        <View style={styles.securePaymentRow}>
-          <Ionicons name="lock-closed" size={12} color={colors.success} aria-hidden={true} />
-          <Text style={[styles.securePaymentText, { color: colors.success }]} maxFontSizeMultiplier={1}>
-            Secure payment Â· card details encrypted
-          </Text>
+        <View style={styles.trustCluster}>
+          <View style={styles.trustRow}>
+            <Ionicons name="shield-checkmark-outline" size={13} color={colors.success} aria-hidden={true} />
+            <Text style={[styles.trustText, { color: colors.success }]} maxFontSizeMultiplier={1}>
+              Buyer protection included
+            </Text>
+          </View>
+          <View style={styles.trustRow}>
+            <Ionicons name="lock-closed" size={13} color={colors.textMuted} aria-hidden={true} />
+            <Text style={[styles.trustText, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>
+              Secure payment · encrypted
+            </Text>
+          </View>
+          <View style={styles.trustRow}>
+            <Ionicons name="return-down-back-outline" size={13} color={colors.textMuted} aria-hidden={true} />
+            <Text style={[styles.trustText, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>
+              14-day returns
+            </Text>
+          </View>
         </View>
         </View>
 
@@ -1513,6 +1577,7 @@ export default function CheckoutScreen() {
               onPress={() => {
                 haptics.tap();
                 setUseBalance((v) => !v);
+                setHasAttemptedPay(false);
               }}
               accessibilityRole="switch"
               accessibilityLabel="Use wallet balance"
@@ -1523,8 +1588,8 @@ export default function CheckoutScreen() {
               </View>
               <View style={styles.balanceTextCol}>
                 <Text style={[styles.balanceLabel, t.balanceLabel]} maxFontSizeMultiplier={1}>Use wallet balance</Text>
-                <Text style={[styles.balanceAmount, t.balanceAmount]} numberOfLines={1} maxFontSizeMultiplier={1} accessibilityLabel={`${formatFromFiat(walletBalance, currencyCode)} available`}>
-                  {formatFromFiat(walletBalance, currencyCode)} available
+                <Text style={[styles.balanceAmount, t.balanceAmount]} numberOfLines={1} maxFontSizeMultiplier={1} accessibilityLabel={`${formatFromFiat(walletBalance, 'GBP')} available`}>
+                  {formatFromFiat(walletBalance, 'GBP')} available
                 </Text>
               </View>
             </Pressable>
@@ -1535,7 +1600,7 @@ export default function CheckoutScreen() {
           <View style={[styles.savingsBadge, t.savingsBadge]}>
             <Ionicons name="wallet-outline" size={12} color={colors.success} aria-hidden={true} />
             <Text style={[styles.savingsText, t.savingsText]} maxFontSizeMultiplier={1}>
-              Saving {formatFromFiat(balanceApplied, currencyCode)} with wallet balance
+              Saving {formatFromFiat(balanceApplied, 'GBP')} with wallet balance
             </Text>
           </View>
         )}
@@ -1596,25 +1661,25 @@ export default function CheckoutScreen() {
           style={styles.compactSummary}
           onPress={() => { haptics.tap(); setBreakdownSheetVisible(true); }}
           accessibilityRole="button"
-          accessibilityLabel={`Order summary. Item ${formatFromFiat(item.price, currencyCode)}, Delivery ${formatFromFiat(POSTAGE_FEE, currencyCode)}, Buyer protection ${formatFromFiat(PLATFORM_CHARGE, currencyCode)}. Total ${formatFromFiat(TOTAL, currencyCode)}. View full breakdown.`}
+          accessibilityLabel={`Order summary. Item ${formatFromFiat(item.price, 'GBP')}, Delivery ${formatFromFiat(POSTAGE_FEE, 'GBP')}, Buyer protection ${formatFromFiat(PLATFORM_CHARGE, 'GBP')}. Total ${formatFromFiat(TOTAL, 'GBP')}. View full breakdown.`}
           accessibilityHint="Open the full cost breakdown and returns policy"
         >
           <View style={styles.compactSummaryRow}>
             <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Item</Text>
-            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(item.price, currencyCode)}</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(item.price, 'GBP')}</Text>
           </View>
           <View style={styles.compactSummaryRow}>
             <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Delivery</Text>
-            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(POSTAGE_FEE, currencyCode)}</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(POSTAGE_FEE, 'GBP')}</Text>
           </View>
           <View style={styles.compactSummaryRow}>
             <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Buyer protection</Text>
-            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(PLATFORM_CHARGE, currencyCode)}</Text>
+            <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(PLATFORM_CHARGE, 'GBP')}</Text>
           </View>
           {useBalance && balanceApplied > 0 && (
             <View style={styles.compactSummaryRow}>
               <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Wallet applied</Text>
-              <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>-{formatFromFiat(balanceApplied, currencyCode)}</Text>
+              <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>-{formatFromFiat(balanceApplied, 'GBP')}</Text>
             </View>
           )}
           <View style={[styles.compactSummaryDivider, t.compactSummaryDivider]} />
@@ -1624,10 +1689,10 @@ export default function CheckoutScreen() {
               <Text
                 style={[styles.compactSummaryTotalValue, t.compactSummaryTotalValue]}
                 accessibilityLiveRegion="polite"
-                accessibilityLabel={`Total ${formatFromFiat(TOTAL, currencyCode)}`}
+                accessibilityLabel={`Total ${formatFromFiat(TOTAL, 'GBP')}`}
                 maxFontSizeMultiplier={2}
               >
-                {formatFromFiat(TOTAL, currencyCode)}
+                {formatFromFiat(TOTAL, 'GBP')}
               </Text>
             </View>
             <View style={styles.breakdownChevron}>
@@ -1657,7 +1722,7 @@ export default function CheckoutScreen() {
               ]}
               disabled={!checkoutEligible || isInteractionLocked}
               accessibilityRole="button"
-              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, currencyCode)} with Apple Pay`}
+              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Apple Pay`}
               accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
             >
               <Ionicons name="logo-apple" size={22} color={colors.textInverse} aria-hidden={true} />
@@ -1677,7 +1742,7 @@ export default function CheckoutScreen() {
               ]}
               disabled={!checkoutEligible || isInteractionLocked}
               accessibilityRole="button"
-              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, currencyCode)} with Google Pay`}
+              accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Google Pay`}
               accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
             >
               <Ionicons name="logo-google" size={22} color={colors.textInverse} aria-hidden={true} />
@@ -1697,8 +1762,8 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel={
               walletAvailable
-                ? `Pay ${formatFromFiat(TOTAL, currencyCode)} with card`
-                : `Pay ${formatFromFiat(TOTAL, currencyCode)}`
+                ? `Pay ${formatFromFiat(TOTAL, 'GBP')} with card`
+                : `Pay ${formatFromFiat(TOTAL, 'GBP')}`
             }
             accessibilityState={{
               disabled: !checkoutEligible || isInteractionLocked,
@@ -1761,11 +1826,11 @@ export default function CheckoutScreen() {
       >
         <View style={styles.breakdownSheetContent}>
           <Text style={[styles.breakdownSheetTitle, t.breakdownSheetTitle]}>Full breakdown</Text>
-          <PriceRow label="Item" value={formatFromFiat(item.price, currencyCode)} />
-          <PriceRow label="Buyer protection fee" value={formatFromFiat(PLATFORM_CHARGE, currencyCode)} />
+          <PriceRow label="Item" value={formatFromFiat(item.price, 'GBP')} />
+          <PriceRow label="Buyer protection fee" value={formatFromFiat(PLATFORM_CHARGE, 'GBP')} />
           <PriceRow
             label={`Delivery${postageOption.liveQuote ? '' : ' (Estimated)'}`}
-            value={formatFromFiat(POSTAGE_FEE, currencyCode)}
+            value={formatFromFiat(POSTAGE_FEE, 'GBP')}
           />
           <View style={styles.protectionIncludedRow}>
             <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
@@ -1777,10 +1842,10 @@ export default function CheckoutScreen() {
             <>
               <PriceRow
                 label="Wallet balance applied"
-                value={`-${formatFromFiat(balanceApplied, currencyCode)}`}
+                value={`-${formatFromFiat(balanceApplied, 'GBP')}`}
               />
               <View style={[styles.breakdownSheetDivider, t.breakdownSheetDivider]} />
-              <PriceRow label="To pay" value={formatFromFiat(TOTAL, currencyCode)} bold />
+              <PriceRow label="To pay" value={formatFromFiat(TOTAL, 'GBP')} bold />
             </>
           )}
           {!useBalance && (
@@ -1789,7 +1854,7 @@ export default function CheckoutScreen() {
           <View style={styles.breakdownSheetTotalRow}>
             <Text style={[styles.breakdownSheetTotalLabel, t.breakdownSheetTotalLabel]}>Total</Text>
             <Text style={[styles.breakdownSheetTotalValue, t.breakdownSheetTotalValue]}>
-              {formatFromFiat(TOTAL, currencyCode)}
+              {formatFromFiat(TOTAL, 'GBP')}
             </Text>
           </View>
           <View style={[styles.breakdownSheetDivider, t.breakdownSheetDivider]} />
@@ -1872,6 +1937,52 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     paddingVertical: Space.xs,
     paddingHorizontal: Space.xs,
+  },
+  trustCluster: {
+    flexDirection: 'column',
+    gap: Space.xs - 1,
+    paddingVertical: Space.xs,
+    paddingHorizontal: Space.xs,
+  },
+  trustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+  },
+  trustText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+    lineHeight: TypographyV2.meta.lineHeight,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    gap: Space.xs,
+  },
+  progressStep: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: Space.xs - 2,
+  },
+  progressDot: {
+    width: Space.sm,
+    height: Space.sm,
+    borderRadius: Space.sm / 2,
+    borderWidth: Stroke.standard,
+  },
+  progressLabel: {
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: FontFamily.medium,
+    lineHeight: TypographyV2.meta.lineHeight,
+  },
+  progressConnector: {
+    height: Stroke.hairline,
+    flex: 1,
+    maxWidth: Space.xl,
+    marginBottom: Space.sm + 2,
   },
   onezeOptionRow: {
     flexDirection: 'row',

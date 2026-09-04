@@ -31,8 +31,7 @@ import {
   type AIEffectCategory,
   type AIEffectDefinition,
   type CapabilityClass,
-  AI_EFFECT_CATEGORIES,
-  isMLAvailable } from './AIEffectRegistry';
+  AI_EFFECT_CATEGORIES } from './AIEffectRegistry';
 import {
   type EffectPreset,
   type EffectPresetCategory,
@@ -47,7 +46,7 @@ import {
  * category. The 'ml' tab shows only effects whose current implementation
  * is ML/generative AND on-device ML is available.
  */
-type FilterTab = 'all' | 'ml' | AIEffectCategory;
+type FilterTab = 'all' | AIEffectCategory;
 
 export interface AIEffectGridProps {
   /** The effects to display (typically from getAllAIEffects()). */
@@ -182,7 +181,9 @@ interface TabMeta {
 
 const TAB_META: TabMeta[] = [
   { key: 'all', label: 'All', icon: 'apps-outline' },
-  { key: 'ml', label: 'ML', icon: 'bulb-outline' },
+  // §11: "ML" tab removed — no ML/generative effects are registered today.
+  // Re-add when isMLAvailable() can be true and capabilityClass: 'ml'
+  // effects exist in the registry.
   { key: 'portrait', label: 'Portrait', icon: 'person-outline' },
   { key: 'creative', label: 'Creative', icon: 'color-palette-outline' },
   { key: 'color', label: 'Color', icon: 'color-filter-outline' },
@@ -210,26 +211,11 @@ export function AIEffectGrid({
     [effects],
   );
 
-  // Filter by the active tab. The 'ml' tab is capability-based: it shows
-  // only effects whose current implementation is ML/generative AND
-  // on-device ML is available. When no ML effects are available, it
-  // falls back to the full list so the user is never shown an empty grid
-  // with no explanation (the empty state below handles the honest message).
-  const mlAvailable = useMemo(() => isMLAvailable(), []);
-
+  // Filter by the active tab.
   const filtered = useMemo(() => {
     if (activeTab === 'all') return presets;
-    if (activeTab === 'ml') {
-      const mlPresets = presets.filter(
-        ({ effect }) =>
-          (effect.capabilityClass === 'ml' ||
-            effect.capabilityClass === 'generative') &&
-          mlAvailable,
-      );
-      return mlPresets.length > 0 ? mlPresets : presets;
-    }
     return presets.filter(({ effect }) => effect.category === activeTab);
-  }, [presets, activeTab, mlAvailable]);
+  }, [presets, activeTab]);
 
   const handleTabSwitch = useCallback(
     (tab: FilterTab) => {
@@ -296,7 +282,7 @@ export function AIEffectGrid({
         keyExtractor={(item) => item.effect.id}
         numColumns={3}
         renderItem={({ item }) => {
-          const badge = getCapabilityBadge(item.effect.capabilityClass, mlAvailable);
+          const badge = getCapabilityBadge(item.effect.capabilityClass, false);
           const badgeColor = badge.emphasized ? colors.brand : colors.textMuted;
           return (
             <View style={styles.cell}>
@@ -340,14 +326,10 @@ export function AIEffectGrid({
           <View style={styles.emptyState}>
             <AppIcon name="sparkles" size={IconSize.hero} color="textMuted" opticalCenter={true} accessible={false} />
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-              {activeTab === 'ml'
-                ? 'ML effects require an on-device model'
-                : 'No effects in this category'}
+              No effects in this category
             </Text>
             <Text style={[styles.emptyHint, { color: colors.textMuted }]}>
-              {activeTab === 'ml'
-                ? 'Showing all filters instead.'
-                : 'Switch categories to browse more effects.'}
+              Switch categories to browse more effects.
             </Text>
           </View>
         }

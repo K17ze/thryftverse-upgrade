@@ -1062,8 +1062,8 @@ export function DrawingWorkspace({
           <Pressable
             style={styles.overflowBackdrop}
             onPress={() => setShowOverflow(false)}
+            accessibilityLabel="Dismiss menu"
             accessibilityRole="button"
-            accessibilityLabel="Close overflow menu"
           >
             <View
               style={[

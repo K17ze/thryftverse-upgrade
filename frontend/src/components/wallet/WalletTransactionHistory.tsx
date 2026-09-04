@@ -78,7 +78,7 @@ export function WalletTransactionHistory({
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const currentUser = useStore((state) => state.currentUser);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { isOffline } = useConnectivity();
 
   const [items, setItems] = useState<WalletLedgerItem[]>([]);
@@ -116,7 +116,7 @@ export function WalletTransactionHistory({
     const isPositive = item.amount > 0;
     const amountText = item.asset === '1ZE'
       ? `${isPositive ? '+' : ''}${item.amountDisplay.toFixed(3)} 1ZE`
-      : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), currencyCode, { displayMode: 'fiat' })}`;
+      : `${isPositive ? '+' : ''}${formatFromFiat(Math.abs(item.amount), 'GBP', { displayMode: 'fiat' })}`;
 
     // Direction-aware icon color: inflows use success, outflows use textPrimary,
     // neutral trades use brand. This pairs glyph + colour per AGENTS.md §13.

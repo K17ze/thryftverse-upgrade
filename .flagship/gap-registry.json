@@ -1,0 +1,115 @@
+{
+  "department": "analytics",
+  "audit_date": "2026-09-03",
+  "current_state": {
+    "backend_endpoints": [
+      "GET /sellers/:id/analytics (revenue, views, likes, saves, itemsSold, reviews, trust)",
+      "GET /sellers/:id/analytics/top-performers (engagement-scored listings)",
+      "GET /sellers/:id/analytics/daily (per-day views/likes/saves/sales)",
+      "GET /sellers/:id/standards (operational metrics + tier defects)"
+    ],
+    "frontend_screens": [
+      "SellerAnalyticsScreen — hero metric, KPI grid, daily bar chart, funnel, top listings, needs attention",
+      "CreatorAnalyticsDashboardScreen — separate creator-focused analytics with Skia charts"
+    ],
+    "chart_components": [
+      "BarChart (Skia/Victory Native)",
+      "LineChart (Skia/Victory Native, multi-series)",
+      "CandleChart (Skia/Victory Native)",
+      "ChartTooltip",
+      "DailyViewsChart (hand-rolled View-based, NOT using Skia)"
+    ]
+  },
+  "gaps": [
+    {
+      "id": "ANL-001",
+      "severity": "P1",
+      "title": "SellerAnalyticsScreen uses hand-rolled chart instead of Skia BarChart",
+      "evidence": "SellerAnalyticsScreen.tsx lines 854-948: DailyViewsChart is a View-based bar chart with no touch interaction, no tooltip, no crosshair, no accessibility summary. The codebase already has a Skia-rendered BarChart component with full state coverage.",
+      "competitor_evidence": "Shopify, Stripe, eBay all use interactive charts with tooltips. Research shows touch interaction (tap/scrub for tooltips) is the mobile standard.",
+      "impact": "Chart looks primitive vs competitor dashboards. No touch-to-inspect. Inconsistent with CreatorAnalyticsDashboard which uses Skia charts.",
+      "fix": "Replace DailyViewsChart with the existing BarChart component from components/charts/"
+    },
+    {
+      "id": "ANL-002",
+      "severity": "P1",
+      "title": "No multi-metric trend chart (views/likes/saves on one chart)",
+      "evidence": "Only a single-metric bar chart for views exists. No line chart showing trends across multiple metrics over time.",
+      "competitor_evidence": "Shopify supports up to 4 metrics on one line chart. Stripe pairs sparklines with KPIs. eBay shows traffic metrics on line charts.",
+      "impact": "Sellers cannot see correlation between views, likes, and saves over time. Limits insight depth.",
+      "fix": "Add a LineChart section showing views/likes/saves as multi-series from daily data"
+    },
+    {
+      "id": "ANL-003",
+      "severity": "P1",
+      "title": "No traffic sources breakdown",
+      "evidence": "No endpoint or UI for where views come from (search, feed, profile, direct, share).",
+      "competitor_evidence": "Etsy: traffic sources (Etsy search, Etsy app, SEO, Direct, Social, Ads). eBay: traffic source breakdown with CTR. This is table-stakes for seller analytics.",
+      "impact": "Sellers cannot optimize discovery channels. Major competitive gap vs Etsy/eBay.",
+      "fix": "Backend: aggregate interactions.metadata.surface. Frontend: traffic sources section with bar breakdown."
+    },
+    {
+      "id": "ANL-004",
+      "severity": "P1",
+      "title": "No category performance breakdown",
+      "evidence": "No endpoint or UI showing which categories perform best for the seller.",
+      "competitor_evidence": "eBay Seller Hub: listing activity by category. Shopify: sales by product type. Third-party Vinted tools: sell-through by category.",
+      "impact": "Sellers cannot identify which categories to invest in. Misses inventory strategy insight.",
+      "fix": "Backend: aggregate engagement by listing.category. Frontend: category performance rows."
+    },
+    {
+      "id": "ANL-005",
+      "severity": "P2",
+      "title": "No potential revenue metric",
+      "evidence": "No metric showing the total value of active listings (inventory valuation).",
+      "competitor_evidence": "Depop: 'Potential revenue' gives live valuation of current listings. Unique differentiator for resale marketplaces.",
+      "impact": "Sellers miss inventory value insight. Depop competitive advantage not matched.",
+      "fix": "Backend: SUM(price) WHERE status='active'. Frontend: show in hero or KPI grid."
+    },
+    {
+      "id": "ANL-006",
+      "severity": "P2",
+      "title": "No last-refreshed timestamp or data freshness indicator",
+      "evidence": "No indication of when data was last updated.",
+      "competitor_evidence": "Shopify: real-time data indicators + 'last refreshed' timestamps. Stripe: open/closed period colors. Etsy: 24-48h lag messaging.",
+      "impact": "Sellers don't know if they're looking at stale data. Trust gap.",
+      "fix": "Backend: include generatedAt timestamp. Frontend: show 'Updated Xh ago' near header."
+    },
+    {
+      "id": "ANL-007",
+      "severity": "P2",
+      "title": "No sparklines in KPI cards",
+      "evidence": "KPI cards show value + delta only. No mini trend visualization.",
+      "competitor_evidence": "Stripe: SparkLineChart paired with KPIs. Shopify: metric cards with trend lines. Research: 'sparklines are best for direction and velocity in metric cards'.",
+      "impact": "KPI cards feel flat. Missing at-a-glance trend context.",
+      "fix": "Add 7-day sparkline to each KPI card from daily data."
+    },
+    {
+      "id": "ANL-008",
+      "severity": "P2",
+      "title": "Export is JSON-only, no CSV",
+      "evidence": "handleExport writes a JSON file and shares it. No CSV format.",
+      "competitor_evidence": "eBay: CSV/XLSX reports + scheduled reports. Shopify: CSV export on every report. Stripe: CSV for Balance, Payouts, Fees. Etsy: CSV download. Depop: CSV sales download. CSV is the universal standard.",
+      "impact": "Sellers cannot import into spreadsheets or accounting tools. Major workflow gap.",
+      "fix": "Backend: add CSV export endpoint. Frontend: offer CSV alongside JSON in export menu."
+    },
+    {
+      "id": "ANL-009",
+      "severity": "P2",
+      "title": "No buyer stats (unique buyers, repeat buyers, buyer conversion)",
+      "evidence": "No metrics about buyer behavior — unique buyers, repeat purchase rate.",
+      "competitor_evidence": "Whatnot: Buyer Count, Buyer Referrals, Buyer Shares. Shopify: returning customer rate. eBay: buyer insights.",
+      "impact": "Sellers can't assess customer loyalty or acquisition vs retention.",
+      "fix": "Backend: aggregate unique buyers + repeat buyers from orders. Frontend: add to KPI grid."
+    },
+    {
+      "id": "ANL-010",
+      "severity": "P3",
+      "title": "No chart accessibility summary for screen readers",
+      "evidence": "DailyViewsChart has no accessibilityLabel or accessibilitySummary. The Skia BarChart component has accessibilitySummary prop but it's not used here.",
+      "competitor_evidence": "Research: 'Provide explicit accessibilityLabel summarizing the chart'. WCAG 1.1.1 requires text alternatives for visual data.",
+      "impact": "Screen reader users get no chart information. Accessibility gap.",
+      "fix": "Add accessibilitySummary to all chart components."
+    }
+  ]
+}

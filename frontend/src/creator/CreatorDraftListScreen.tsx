@@ -773,9 +773,12 @@ function DraftCard({
           </Pressable>
           <View style={styles.draftInfo}>
             <Text style={styles.draftTitle} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.draftMeta} numberOfLines={1}>
-              {formatRelativeTime(item.updatedAt)}
-            </Text>
+            <View style={styles.draftMetaRow}>
+              <View style={[styles.draftTypeDot, item.type === 'look' ? styles.draftTypeDotLook : styles.draftTypeDotPoster]} />
+              <Text style={styles.draftMeta} numberOfLines={1}>
+                {formatRelativeTime(item.updatedAt)}
+              </Text>
+            </View>
           </View>
           <View style={styles.actions}>
             <Pressable
@@ -1023,6 +1026,19 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.bodyStrong.size,
     color: colors.textPrimary },
+  draftMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs },
+  draftTypeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 2 },
+  draftTypeDotLook: {
+    backgroundColor: colors.textPrimary },
+  draftTypeDotPoster: {
+    backgroundColor: colors.warning },
   draftMeta: {
     fontFamily: Typography.family.regular,
     fontSize: TypographyV2.meta.size,

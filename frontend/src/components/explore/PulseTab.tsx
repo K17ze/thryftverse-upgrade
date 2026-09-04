@@ -123,7 +123,7 @@ export default function PulseTab() {
   const haptic = useHaptic();
   const { listings } = useBackendData();
   const { formatFromFiat, currencyCode } = useFormattedPrice();
-  const formatPrice = React.useCallback((n: number) => formatFromFiat(n, currencyCode, { displayMode: 'fiat' }), [formatFromFiat, currencyCode]);
+  const formatPrice = React.useCallback((n: number) => formatFromFiat(n, 'GBP', { displayMode: 'fiat' }), [formatFromFiat, currencyCode]);
   const customAuctions = useStore((state) => state.customAuctions);
   const auctionRuntime = useStore((state) => state.auctionRuntime);
 

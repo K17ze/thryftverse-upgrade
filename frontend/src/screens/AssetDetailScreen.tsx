@@ -120,7 +120,7 @@ export default function AssetDetailScreen() {
   const upsertConversation = useStore((state) => state.upsertConversation);
   const isCoOwnWatched = useStore((state) => state.isCoOwnWatched);
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { requireAuth } = useSignupWall();
 
@@ -372,7 +372,7 @@ export default function AssetDetailScreen() {
         <CoOwnStateCanvas
           variant="error"
           title="Item not found"
-          subtitle="This Co-Own item may have been delisted or does not exist."
+          subtitle="This item may have been delisted."
           actionLabel="Back to Co-Own"
           onAction={() => navigation.navigate('CoOwnHub')}
         />
@@ -387,7 +387,7 @@ export default function AssetDetailScreen() {
         <CoOwnStateCanvas
           variant="error"
           title="Supply data unavailable"
-          subtitle="This market returned an invalid supply snapshot. Trading is disabled until it is corrected."
+          subtitle="Trading is disabled until this is corrected."
           actionLabel="Back to Co-Own"
           onAction={() => navigation.navigate('CoOwnHub')}
         />
@@ -1061,7 +1061,7 @@ export default function AssetDetailScreen() {
             label={fundamentalsExpanded ? 'Hide valuation' : 'Valuation'}
             summary={
               navPerUnitGbp != null
-                ? `${formatFromFiat(navPerUnitGbp, currencyCode)} NAV / unit`
+                ? `${formatFromFiat(navPerUnitGbp, 'GBP')} NAV / unit`
                 : 'Reporting'
             }
             onPress={() => toggleExpansion('fundamentals')}
@@ -1070,7 +1070,7 @@ export default function AssetDetailScreen() {
           {fundamentalsExpanded ? (
             <FundamentalsSection
               referenceVsNavPct={referenceVsNavPct}
-              navPerUnitLabel={navPerUnitGbp != null ? formatFromFiat(navPerUnitGbp, currencyCode) : 'Not available'}
+              navPerUnitLabel={navPerUnitGbp != null ? formatFromFiat(navPerUnitGbp, 'GBP') : 'Not available'}
               appraisalValuedAt={asset.appraisalValuedAt}
             />
           ) : null}
@@ -1270,7 +1270,7 @@ export default function AssetDetailScreen() {
           </View>
           <CommerceDetailMetricRow
             label="NAV / unit"
-            value={navPerUnitGbp != null ? formatFromFiat(navPerUnitGbp, currencyCode) : 'Not available'}
+            value={navPerUnitGbp != null ? formatFromFiat(navPerUnitGbp, 'GBP') : 'Not available'}
             muted={navPerUnitGbp == null}
           />
           <CommerceDetailMetricRow
@@ -1282,7 +1282,7 @@ export default function AssetDetailScreen() {
           />
           <CommerceDetailMetricRow
             label="Appraisal"
-            value={asset.appraisalValueGbp != null ? formatFromFiat(asset.appraisalValueGbp, currencyCode) : 'Not available'}
+            value={asset.appraisalValueGbp != null ? formatFromFiat(asset.appraisalValueGbp, 'GBP') : 'Not available'}
             muted={asset.appraisalValueGbp == null}
           />
           <CommerceDetailMetricRow
@@ -2032,7 +2032,6 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase',
   },
   // ── Market state legend (spec P1-B §4) ──
   // Clear bid/ask colour key on first use of the depth table.

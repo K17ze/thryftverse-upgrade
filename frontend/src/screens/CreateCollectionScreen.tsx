@@ -16,7 +16,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Elevation, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { Space, Radius, Elevation, Stroke } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -38,7 +38,7 @@ export default function CreateCollectionScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const createCollectionOnApi = useStore((state) => state.createCollectionOnApi);
   const addToCollectionOnApi = useStore((state) => state.addToCollectionOnApi);
   const savedProducts = useStore((state) => state.savedProducts);
@@ -114,7 +114,7 @@ export default function CreateCollectionScreen() {
     if (count === 1) {
       return (
         <View style={[styles.mosaicTile, { width: MOSAIC_SIZE, height: MOSAIC_SIZE }]}>
-          <CachedImage uri={mosaicImages[0]} style={styles.mosaicImg} contentFit="cover" />
+          <CachedImage uri={mosaicImages[0]} style={styles.mosaicImg} contentFit="cover" accessible={false} />
         </View>
       );
     }
@@ -125,7 +125,7 @@ export default function CreateCollectionScreen() {
       <View style={[styles.mosaicGrid, { width: MOSAIC_SIZE, height: MOSAIC_SIZE }]}>
         {tiles.map((uri, i) => (
           <View key={uri + i} style={[styles.mosaicTileSmall, { width: half, height: half }]}>
-            <CachedImage uri={uri} style={styles.mosaicImg} contentFit="cover" />
+            <CachedImage uri={uri} style={styles.mosaicImg} contentFit="cover" accessible={false} />
           </View>
         ))}
         {/* Fill empty slots */}
@@ -170,27 +170,11 @@ export default function CreateCollectionScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Cover mosaic preview — auto-generated from selected items */}
-        <View style={styles.coverPreviewSection}>
-          <View style={[styles.coverPreview, { backgroundColor: colors.surfaceAlt }]}>
-            {mosaicImages.length > 0 ? (
-              renderMosaic()
-            ) : (
-              <View style={[styles.coverPlaceholder, { width: MOSAIC_SIZE, height: MOSAIC_SIZE }]}>
-                <Ionicons name="images-outline" size={28} color={colors.textMuted} />
-              </View>
-            )}
-            <View style={styles.coverPreviewInfo}>
-              <Text style={[styles.coverPreviewLabel, { color: colors.textMuted }]}>
-                Cover preview
-              </Text>
-              <Text style={[styles.coverPreviewSub, { color: colors.textMuted }]}>
-                {mosaicImages.length > 0
-                  ? `Auto-generated from ${selectedListings.length} item${selectedListings.length > 1 ? 's' : ''}`
-                  : 'Select items to auto-generate a cover'}
-              </Text>
-            </View>
+        {mosaicImages.length > 0 ? (
+          <View style={styles.coverPreviewSection}>
+            {renderMosaic()}
           </View>
-        </View>
+        ) : null}
 
         <View style={styles.flatSection}>
           <Text style={styles.label}>Name</Text>
@@ -219,14 +203,11 @@ export default function CreateCollectionScreen() {
           <Text style={styles.charCount}>{description.length}/200</Text>
         </View>
 
-        <View style={styles.card}>
+        <View style={styles.flatSection}>
           <View style={styles.toggleRow}>
-            <View style={styles.toggleIconWrap}>
-              <Ionicons name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'} size={20} color={colors.textSecondary} />
-            </View>
+            <Ionicons name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'} size={20} color={colors.textSecondary} />
             <View style={styles.toggleText}>
               <Text style={styles.toggleLabel}>Private collection</Text>
-              <Text style={styles.toggleSub}>Only you can see this collection</Text>
             </View>
             <AnimatedPressable
               onPress={() => {
@@ -238,6 +219,7 @@ export default function CreateCollectionScreen() {
               accessibilityLabel="Toggle private collection"
               accessibilityRole="switch"
               accessibilityState={{ checked: isPrivate }}
+              hitSlop={8}
             >
               <View style={[styles.togglePill, isPrivate && styles.togglePillActive]}>
                 <View style={[styles.toggleKnob, isPrivate && styles.toggleKnobActive]} />
@@ -258,13 +240,9 @@ export default function CreateCollectionScreen() {
           </View>
 
           {savedListings.length === 0 ? (
-            <View style={[styles.emptyItemsCard, { backgroundColor: colors.surface }]}>
-              <Ionicons name="bookmark-outline" size={28} color={colors.textMuted} />
+            <View style={styles.emptyItems}>
               <Text style={[styles.emptyItemsTitle, { color: colors.textSecondary }]}>
                 No saved items yet
-              </Text>
-              <Text style={[styles.emptyItemsSub, { color: colors.textMuted }]}>
-                Save items from browse to add them to collections.
               </Text>
             </View>
           ) : (
@@ -279,6 +257,7 @@ export default function CreateCollectionScreen() {
                   <Pressable
                     key={item.id}
                     onPress={() => toggleItem(item.id)}
+                    hitSlop={4}
                     accessibilityRole="button"
                     accessibilityLabel={`${isSelected ? 'Remove' : 'Add'} ${item.title} ${isSelected ? 'from' : 'to'} collection`}
                     accessibilityState={{ selected: isSelected }}
@@ -289,7 +268,7 @@ export default function CreateCollectionScreen() {
                     ]}>
                       <View style={styles.itemThumbWrap}>
                         {item.images?.[0] ? (
-                          <CachedImage uri={item.images[0]} style={styles.itemThumb} contentFit="cover" />
+                          <CachedImage uri={item.images[0]} style={styles.itemThumb} contentFit="cover" accessible={false} />
                         ) : (
                           <View style={[styles.itemThumb, { backgroundColor: colors.surfaceAlt }]}>
                             <Ionicons name="image-outline" size={20} color={colors.textMuted} />
@@ -305,7 +284,7 @@ export default function CreateCollectionScreen() {
                         {item.title}
                       </Text>
                       <Text style={[styles.itemCardPrice, { color: colors.textMuted }]} numberOfLines={1}>
-                        {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
+                        {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
                       </Text>
                     </View>
                   </Pressable>
@@ -317,7 +296,7 @@ export default function CreateCollectionScreen() {
 
         <View style={styles.footer}>
           <AppButton
-            title={isSubmitting ? 'Creating...' : 'Create Collection'}
+            title={isSubmitting ? 'Creating...' : 'Create collection'}
             onPress={handleCreate}
             disabled={!canSubmit}
             variant="primary"
@@ -351,29 +330,6 @@ function createStyles(colors: ThemeColors) {
   // ── Cover preview ──
   coverPreviewSection: {
     alignItems: 'center' },
-  coverPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    padding: Space.md,
-    borderRadius: Radius.lg,
-    ...Elevation.subtle },
-  coverPlaceholder: {
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  coverPreviewInfo: {
-    flex: 1 },
-  coverPreviewLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + 0.38 },
-  coverPreviewSub: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.xs / 2,
-    letterSpacing: TypographyV2.meta.letterSpacing },
   // ── Mosaic ──
   mosaicTile: {
     borderRadius: Radius.md,
@@ -393,11 +349,6 @@ function createStyles(colors: ThemeColors) {
     width: '100%',
     height: '100%' },
   // ── Cards ──
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    ...Elevation.subtle },
   // Flat section — no card background, hairline separator.
   // Anti-AI-slop: avoids generic dashboard silhouette of stacked equal-weight cards.
   flatSection: {
@@ -409,8 +360,7 @@ function createStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + 0.38,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginBottom: Space.sm },
   textArea: {
     minHeight: Space.xl + Space.xxl,
@@ -425,12 +375,6 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd },
-  toggleIconWrap: {
-    width: Control.chrome,
-    height: Control.chrome,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center' },
   toggleText: {
     flex: 1 },
   toggleLabel: {
@@ -438,12 +382,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     letterSpacing: TypographyV2.body.letterSpacing },
-  toggleSub: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    marginTop: Space.xs / 2,
-    letterSpacing: TypographyV2.meta.letterSpacing },
   togglePill: {
     width: Space.xxl,
     height: Space.lg + Space.xs,
@@ -507,20 +445,13 @@ function createStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size - 1,
     fontFamily: TypographyV2.meta.fontFamily },
   // ── Empty items ──
-  emptyItemsCard: {
+  emptyItems: {
     alignItems: 'center',
-    padding: Space.lg,
-    borderRadius: Radius.lg,
-    gap: Space.sm,
-    ...Elevation.subtle },
+    paddingVertical: Space.lg,
+    gap: Space.sm },
   emptyItemsTitle: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily },
-  emptyItemsSub: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    textAlign: 'center',
-    lineHeight: TypographyV2.meta.lineHeight + 2 },
   footer: {
     marginTop: 'auto' },
   btnDisabled: {

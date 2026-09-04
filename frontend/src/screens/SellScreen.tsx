@@ -28,9 +28,13 @@ import {
   formatReviewSummary } from '../utils/sellScreenLogic';
 import { haptics } from '../utils/haptics';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
+import { ListingCameraSheet } from '../components/listing/ListingCameraSheet';
 import { EmptyState } from '../components/EmptyState';
 import { ListingModeSelector } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
+import { ListingQualityMeter } from '../components/sell/ListingQualityMeter';
+import { scoreListing } from '../services/listingQualityApi';
+import type { ListingCondition } from '../contracts/taxonomy';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { t } from '../i18n';
 import { useSellScreenData, useSellScreenForm, useSellScreenActions } from '../hooks/sell';
@@ -119,6 +123,24 @@ export default function SellScreen() {
     discountPercent,
   } = form;
 
+  // G9: Photo quality gating — compute a listing quality score from the
+  // current draft so sellers get actionable feedback before publishing.
+  // Only shown when there's enough content to score (at least a title or
+  // one photo). The meter renders inline above the publish footer.
+  const qualityScore = useMemo(() => {
+    if (!title.trim() && photos.length === 0) return null;
+    return scoreListing({
+      title,
+      description: desc,
+      price: numericPrice,
+      images: photos,
+      category,
+      brand,
+      size,
+      condition: (condition || null) as ListingCondition | null,
+    });
+  }, [title, desc, numericPrice, photos, category, brand, size, condition]);
+
   const {
     handleTagSubmit,
     removeTag,
@@ -126,10 +148,14 @@ export default function SellScreen() {
     handleApplyAutofill,
     handlePickFromLibrary,
     handlePickFromCamera,
+    handleCameraCapture,
+    cameraSheetVisible,
+    setCameraSheetVisible,
     removeItem,
     handleRetryItem,
     handleReorderIds,
     handleSetCover,
+    handleTransformItem,
     handlePriceChange,
     handleShareCountChange,
     getPickerOptions,
@@ -262,6 +288,7 @@ export default function SellScreen() {
               onRemoveItem={removeItem}
               onRetryItem={handleRetryItem}
               onSetCover={handleSetCover}
+              onTransformItem={handleTransformItem}
             />
           )}
 
@@ -1043,6 +1070,16 @@ export default function SellScreen() {
           <View style={{ height: DockConstants.singleActionHeight }} />
         </KeyboardAwareScrollView>
 
+      {/* G9: Listing quality meter — photo/quality gating before publish.
+          Shows actionable suggestions so sellers can improve their listing
+          before it goes live. Only renders when there's enough content to
+          score. Flat placement above the publish footer — no card chrome. */}
+      {qualityScore && qualityScore.overall < 80 && (
+        <View style={styles.qualityMeterWrap}>
+          <ListingQualityMeter score={qualityScore} />
+        </View>
+      )}
+
       {/* -- 9. RECOVERABLE PUBLICATION FEEDBACK + 10. STICKY PREVIEW / PUBLISH FOOTER -- */}
       {/* No quality score or dashboard — the footer shows readiness state
           and primary CTA only. Contextual guidance lives next to each field. */}
@@ -1065,6 +1102,14 @@ export default function SellScreen() {
         options={getPickerOptions()}
         selectedValue={getPickerSelected()}
         onSelect={handlePickerSelect}
+      />
+
+      {/* Flagship camera sheet — replaces system camera for listing photos */}
+      <ListingCameraSheet
+        visible={cameraSheetVisible}
+        onClose={() => setCameraSheetVisible(false)}
+        onCapture={handleCameraCapture}
+        maxPhotos={10 - mediaDraftItems.length}
       />
     </SafeAreaView>
   );
@@ -1361,6 +1406,10 @@ const styles = StyleSheet.create({
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm },
+  /* G9: Quality meter wrapper — sits above the publish footer */
+  qualityMeterWrap: {
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm },
   reviewSummaryText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,

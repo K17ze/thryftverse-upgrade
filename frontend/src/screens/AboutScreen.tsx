@@ -85,7 +85,7 @@ export default function AboutScreen({ navigation }: Props) {
   const handleRateApp = () => {
     haptic.light();
     const url = Platform.OS === 'ios'
-      ? 'itms-apps://itunes.apple.com/app/id thryftverse?action=write-review'
+      ? 'itms-apps://itunes.apple.com/app/id-thryftverse?action=write-review'
       : 'market://details?id=com.thryftverse.app';
     void handleOpenExternal(url);
   };
@@ -107,7 +107,7 @@ export default function AboutScreen({ navigation }: Props) {
                 onPress={handleVersionTap}
                 accessibilityRole="text"
                 accessibilityLabel="Thryftverse version"
-                hitSlop={8}
+                hitSlop={16}
               >
                 <Text style={styles.brandVersion}>
                   Version 1.0.0 (Build 2026.06.05)

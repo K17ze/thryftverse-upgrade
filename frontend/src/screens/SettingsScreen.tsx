@@ -25,6 +25,10 @@ import {
   getThemePreferenceLabel,
   ThemePreference,
   updateThemePreference } from '../theme/themePreference';
+import {
+  ACCENT_PRESETS,
+  getAccentPresetLabel,
+  type AccentPreset } from '../theme/accentPreference';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { t } from '../i18n';
@@ -234,6 +238,7 @@ export default function SettingsScreen({ navigation }: Props) {
 
   const [currencyPickerVisible, setCurrencyPickerVisible] = React.useState(false);
   const [themePickerVisible, setThemePickerVisible] = React.useState(false);
+  const [accentPickerVisible, setAccentPickerVisible] = React.useState(false);
   const [languagePickerVisible, setLanguagePickerVisible] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [pushPermissionGranted, setPushPermissionGranted] = React.useState<boolean | null>(null);
@@ -272,7 +277,7 @@ export default function SettingsScreen({ navigation }: Props) {
     };
   }, []);
 
-  const { themePreference, setThemePreference } = useAppTheme();
+  const { themePreference, setThemePreference, accentPreset, setAccentPreset } = useAppTheme();
 
   const {
     currencyCode,
@@ -308,6 +313,15 @@ export default function SettingsScreen({ navigation }: Props) {
     [themeOptions, themePreference]
   );
 
+  const accentOptions = React.useMemo(
+    () => ACCENT_PRESETS.map((p) => p.label),
+    [],
+  );
+  const selectedAccentOption = React.useMemo(
+    () => getAccentPresetLabel(accentPreset),
+    [accentPreset],
+  );
+
   const handleCurrencySelect = (option: string) => {
     const selectedCode = option.split(' | ')[0] as SupportedCurrencyCode;
     if (selectedCode !== currencyCode) {
@@ -337,6 +351,14 @@ export default function SettingsScreen({ navigation }: Props) {
     const nextLanguage = option as SupportedLanguageOption;
     if (nextLanguage === selectedLanguage) return;
     setLanguage(nextLanguage);
+  };
+
+  const handleAccentSelect = (option: string) => {
+    const preset = ACCENT_PRESETS.find((p) => p.label === option);
+    if (!preset || preset.id === accentPreset) return;
+    setAccentPickerVisible(false);
+    setAccentPreset(preset.id);
+    show(`Accent changed to ${preset.label}`, 'success');
   };
 
   const handleOpenExternal = React.useCallback(
@@ -762,6 +784,12 @@ export default function SettingsScreen({ navigation }: Props) {
               isFirst
             />
             <SettingsRow
+              icon="color-palette-outline"
+              title="Accent colour"
+              value={getAccentPresetLabel(accentPreset)}
+              onPress={() => setAccentPickerVisible(true)}
+            />
+            <SettingsRow
               icon="repeat"
               title={ts('rows.currencyDisplay')}
               value={displayModeLabel}
@@ -954,6 +982,15 @@ export default function SettingsScreen({ navigation }: Props) {
         options={themeOptions}
         selectedValue={selectedThemeOption}
         onSelect={handleThemeSelect}
+      />
+
+      <BottomSheetPicker
+        visible={accentPickerVisible}
+        onClose={() => setAccentPickerVisible(false)}
+        title="Accent colour"
+        options={accentOptions}
+        selectedValue={selectedAccentOption}
+        onSelect={handleAccentSelect}
       />
     </View>
   );

@@ -150,7 +150,7 @@ describe('chatGroupHelpers — production exports', () => {
 
   /* Constants are real exported values, not test-local */
   it('exports correct constants from production code', () => {
-    expect(MAX_MEMBERS).toBe(50);
+    expect(MAX_MEMBERS).toBe(48);
     expect(MIN_MEMBERS).toBe(1);
     expect(SEARCH_DEBOUNCE_MS).toBe(350);
   });
@@ -327,16 +327,16 @@ describe('deriveMessageActions — production export', () => {
     expect(deleteAction?.destructive).toBe(true);
   });
 
-  it('returns actions in correct order: retry, reply, react, copy, askAgent, report/delete', () => {
+  it('returns actions in correct order: retry, reply, react, forward, copy, askAgent, report/delete', () => {
     const actions = deriveMessageActions({ ...baseCaps, isOwnMessage: true, isFailed: true, messageText: 'hello' });
     const ids = actions.map((a) => a.id);
-    expect(ids).toEqual(['retry', 'reply', 'react', 'copy', 'askAgent', 'delete']);
+    expect(ids).toEqual(['retry', 'reply', 'react', 'forward', 'copy', 'askAgent', 'delete']);
   });
 
   it('returns actions in correct order for others message', () => {
     const actions = deriveMessageActions({ ...baseCaps, isOwnMessage: false, messageText: 'hello' });
     const ids = actions.map((a) => a.id);
-    expect(ids).toEqual(['reply', 'react', 'copy', 'askAgent', 'report']);
+    expect(ids).toEqual(['reply', 'react', 'forward', 'copy', 'askAgent', 'report']);
   });
 });
 

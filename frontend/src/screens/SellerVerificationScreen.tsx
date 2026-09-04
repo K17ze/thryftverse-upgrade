@@ -132,6 +132,7 @@ export default function SellerVerificationScreen() {
                 uri={demand.assetImageUrl}
                 style={styles.assetThumb}
                 contentFit="cover"
+                accessible={false}
               />
             ) : (
               <View style={[styles.assetThumb, { backgroundColor: colors.surfaceAlt }]}>
@@ -290,7 +291,7 @@ export default function SellerVerificationScreen() {
           <FlagshipState
             variant="empty"
             title="No verification requests"
-            subtitle="When unit holders request proof of authenticity, possession, or condition, you'll see them here."
+            subtitle="Requests for proof will appear here."
             icon="checkmark-circle-outline"
           />
         ) : (
@@ -356,7 +357,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: LetterSpacing.wide + 0.08,
-      textTransform: 'uppercase',
       marginTop: Space.xs - 2 },
     summaryDivider: {
       width: Stroke.standard,
@@ -367,7 +367,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: LetterSpacing.wide + 0.18,
-      textTransform: 'uppercase',
       marginBottom: Space.sm,
       marginLeft: Space.xs - 2 },
     demandCard: {

@@ -35,6 +35,8 @@ describe('co-own trade lifecycle smoke', () => {
       kycVerified: true,
       riskDisclosureAccepted: true,
       stableCoinWalletConnected: true,
+      educationCompleted: true,
+      dac7Completed: true,
     });
   });
 

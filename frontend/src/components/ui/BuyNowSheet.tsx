@@ -249,11 +249,11 @@ export function BuyNowSheet({
   const displayPriceGbp = authoritativePrice ?? auction.buyNowPriceGbp;
 
   const priceText = displayPriceGbp
-    ? formatFromFiat(displayPriceGbp, currencyCode)
+    ? formatFromFiat(displayPriceGbp, 'GBP')
     : '—';
 
   const displayPriceText = displayPriceGbp && currencyCode !== 'GBP'
-    ? formatFromFiat(displayPriceGbp, currencyCode)
+    ? formatFromFiat(displayPriceGbp, 'GBP')
     : null;
 
   return (

@@ -47,7 +47,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
   const { show } = useToast();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   const ACCENT = colors.brand;
   const CARD = colors.surface;
@@ -293,7 +293,7 @@ export default function InviteFriendsScreen({ navigation }: Props) {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCell}>
-              <Text style={[styles.statValue, { color: ACCENT }]}>{formatFromFiat(referralStats.creditsBalance, currencyCode)}</Text>
+              <Text style={[styles.statValue, { color: ACCENT }]}>{formatFromFiat(referralStats.creditsBalance, 'GBP')}</Text>
               <Text style={styles.statLabel}>Credits</Text>
             </View>
           </View>

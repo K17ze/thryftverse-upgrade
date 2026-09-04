@@ -45,7 +45,7 @@ const CARD_IMAGE_HEIGHT = 186; // ~3:4 portrait
 export function ShopRail({ items, onPressItem, onLongPressItem }: ShopRailProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   if (items.length === 0) return null;
 
@@ -69,7 +69,7 @@ export function ShopRail({ items, onPressItem, onLongPressItem }: ShopRailProps)
               onLongPress={onLongPressItem ? () => onLongPressItem(item.id) : undefined}
               activeOpacity={0.9}
               accessibilityRole="button"
-              accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}${item.isPinned ? ', pinned' : ''}${item.isSold ? ', sold' : ''}`}
+              accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.isPinned ? ', pinned' : ''}${item.isSold ? ', sold' : ''}`}
               accessibilityHint="Opens listing details"
             >
               <View style={styles.imageWrap}>
@@ -98,7 +98,7 @@ export function ShopRail({ items, onPressItem, onLongPressItem }: ShopRailProps)
                 ) : null}
               </View>
               <Text style={styles.price} numberOfLines={1}>
-                {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
+                {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
               </Text>
               <Text style={styles.brand} numberOfLines={1}>
                 {item.brand ?? item.title}

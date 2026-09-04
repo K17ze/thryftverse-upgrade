@@ -222,11 +222,10 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
     });
   });
 
-  // ── 7. No duplicated appraisal modules (Co-Own) ──
   describe('no duplicated appraisal modules (Co-Own)', () => {
-    it('AssetDetailScreen does not render a separate valuation card alongside CoOwnAssetDossier', () => {
+    it('AssetDetailScreen does not render a separate valuation card alongside due diligence', () => {
       const src = readScreen('AssetDetailScreen.tsx');
-      expect(src).toContain('CoOwnAssetDossier');
+      expect(src).toContain('AssetDueDiligence');
       // The old valuation provenance card has been removed; the dossier
       // is the single source of appraisal truth.
       expect(src).not.toContain('valuationCard');
@@ -236,13 +235,10 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
 
   // ── 8. Buyout contradiction resolved ──
   describe('buyout contradiction resolved', () => {
-    it('AssetDetailScreen does not navigate to Buyout for unavailable buyout', () => {
+    it('AssetDetailScreen does not navigate to fake Buyout screen', () => {
       const src = readScreen('AssetDetailScreen.tsx');
-      // The Buyout row is a truthful unavailable state, not a navigation
-      // to a Buyout flow that does not exist.
       expect(src).not.toContain("navigation.navigate('Buyout'");
-      expect(src).toContain('Full-asset buyout');
-      expect(src).toContain('Not available');
+      expect(src).not.toContain("navigate('Buyout'");
     });
   });
 
@@ -311,7 +307,7 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
   describe('Co-Own native composition regressions', () => {
     it('renders a structured bid, ask, and spread market snapshot', () => {
       const src = readScreen('AssetDetailScreen.tsx');
-      expect(src).toContain('marketBookRow');
+      expect(src).toContain('CoOwnOrderBook');
       expect(src).toContain('Bid');
       expect(src).toContain('Ask');
       expect(src).toContain('Spread');
@@ -319,7 +315,7 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
 
     it('keeps unavailable fundamentals outside the dominant market surface', () => {
       const src = readScreen('AssetDetailScreen.tsx');
-      expect(src).toContain('marketSecondaryFacts');
+      expect(src).toContain('trustFactualLine');
       expect(src).not.toContain('secondaryMetrics');
     });
 

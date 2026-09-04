@@ -21,7 +21,7 @@ import Reanimated, {
   withTiming } from 'react-native-reanimated';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppIcon } from '../components/common/AppIcon';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
@@ -59,8 +59,11 @@ import { isVideoUri } from '../utils/media';
 import { AppButton } from '../components/ui/AppButton';
 import { Space, Radius, FontFamily, Stroke, Elevation, Control, AvatarSize } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { updateTopicWeight } from '../services/algorithmTransparencyApi';
+import { appStorage } from '../storage/mmkv';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { useForYouFeed } from '../hooks/useForYouFeed';
 import { useRecommendationImpressions } from '../hooks/useRecommendationImpressions';
@@ -205,6 +208,13 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
   );
 });
 
+// G2: In-feed quick signal chips for fast category filtering.
+// These are high-level fashion categories that map to common browsing intents.
+const QUICK_SIGNALS = ['All', 'Denim', 'Sneakers', 'Outerwear', 'Vintage', 'Minimal', 'Streetwear', 'Luxury'] as const;
+
+// G3: Feed mode type — expanded to include 'latest' and 'saved' views.
+type FeedMode = 'foryou' | 'following' | 'latest' | 'saved';
+
 export default function HomeScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -218,6 +228,7 @@ export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const notificationCount = useStore((state) => state.notificationCount);
   const isGuest = useIsGuest();
+  const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const haptic = useHaptic();
   const { requireAuth } = useSignupWall();
@@ -239,7 +250,22 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<HomeDiscoveryItemVM | null>(null);
   const [newListingIds, setNewListingIds] = React.useState<Set<string>>(() => new Set());
-  const [feedMode, setFeedMode] = React.useState<'foryou' | 'following'>('foryou');
+  // G3: Persist feed mode across sessions via MMKV so the user's last-used
+  // feed view (For you / Following / Latest / Saved) is restored on app launch.
+  const [feedMode, setFeedModeState] = React.useState<FeedMode>(() => {
+    try {
+      const stored = appStorage.getString('home.feedMode');
+      if (stored === 'foryou' || stored === 'following' || stored === 'latest' || stored === 'saved') {
+        return stored;
+      }
+    } catch {}
+    return 'foryou';
+  });
+  const setFeedMode = React.useCallback((mode: FeedMode) => {
+    setFeedModeState(mode);
+    try { appStorage.set('home.feedMode', mode); } catch {}
+  }, []);
+  const [selectedSignal, setSelectedSignal] = React.useState<string>('All');
 
   // Viewability-driven video autoplay: only the most-visible feed tile plays
   // its video. Settlement delay (350ms) avoids spinning up players during fast
@@ -568,6 +594,45 @@ export default function HomeScreen() {
       featured: computeFeatured(index) }));
   }, [forYouFeed.listings, wishlist, followedSellerIdsSet, computeFeatured]);
 
+  // G3: Latest feed — chronologically sorted listings.
+  const latestExploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
+    return [...listings]
+      .sort((a, b) => {
+        const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return db - da;
+      })
+      .map((listing) =>
+        toHomeDiscoveryItemVM(listing, {
+          isSaved: wishlist.includes(listing.id),
+          currency: currencyCode,
+          followedSellerIds: followedSellerIdsSet,
+        }),
+      )
+      .map((vm, index) => ({
+        ...vm,
+        featured: computeFeatured(index),
+      }));
+  }, [listings, wishlist, currencyCode, followedSellerIdsSet, computeFeatured]);
+
+  // G3: Saved feed — items in the user's wishlist.
+  const savedExploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
+    const savedSet = new Set(wishlist);
+    return listings
+      .filter((l) => savedSet.has(l.id))
+      .map((listing) =>
+        toHomeDiscoveryItemVM(listing, {
+          isSaved: true,
+          currency: currencyCode,
+          followedSellerIds: followedSellerIdsSet,
+        }),
+      )
+      .map((vm, index) => ({
+        ...vm,
+        featured: computeFeatured(index),
+      }));
+  }, [listings, wishlist, currencyCode, followedSellerIdsSet, computeFeatured]);
+
   // For You mode uses personalised recommendations. When the feed is empty
   // or errored, we do NOT silently substitute general listings. The empty/
   // error state renders an honest message and the user can pull to refresh
@@ -577,7 +642,45 @@ export default function HomeScreen() {
   const forYouHasError = feedMode === 'foryou' && forYouFeed.error !== null && forYouFeed.listings.length === 0;
   const forYouIsDegraded = feedMode === 'foryou' && forYouFeed.serveMode === 'degraded_baseline' && forYouFeed.listings.length > 0;
 
-  const activeFeedData = feedMode === 'following' ? followingExploreData : effectiveForYouData;
+  // G3: Base feed data switches across all 4 feed modes.
+  const baseFeedData = React.useMemo(() => {
+    switch (feedMode) {
+      case 'following':
+        return followingExploreData;
+      case 'latest':
+        return latestExploreData;
+      case 'saved':
+        return savedExploreData;
+      case 'foryou':
+      default:
+        return effectiveForYouData;
+    }
+  }, [feedMode, followingExploreData, latestExploreData, savedExploreData, effectiveForYouData]);
+
+  // G2: Apply quick signal filtering to the base feed data.
+  const activeFeedData = React.useMemo(() => {
+    if (selectedSignal === 'All') return baseFeedData;
+    const lowerSignal = selectedSignal.toLowerCase();
+    return baseFeedData.filter((item) => {
+      const primaryMatch = item.identity?.primary?.toLowerCase().includes(lowerSignal);
+      const secondaryMatch = item.identity?.secondary?.toLowerCase().includes(lowerSignal);
+      const categoryMatch = (item as any).category?.toLowerCase()?.includes(lowerSignal);
+      return Boolean(primaryMatch || secondaryMatch || categoryMatch);
+    });
+  }, [baseFeedData, selectedSignal]);
+
+  const handleSelectSignal = React.useCallback(
+    (signal: string) => {
+      haptic.selection();
+      setSelectedSignal(signal);
+      // G2: Wire signal selection to topic weight API so it influences the feed.
+      if (currentUser?.id && signal !== 'All') {
+        void updateTopicWeight(signal.toLowerCase(), 'high').catch(() => {});
+      }
+    },
+    [currentUser?.id, haptic]
+  );
+
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
   const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
   const showForYouLoading = feedMode === 'foryou' && forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
@@ -634,7 +737,7 @@ export default function HomeScreen() {
     // activeIndex does not cause a now-offscreen video to keep playing.
     resetPlayback();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [feedMode]);
+  }, [feedMode, selectedSignal]);
 
   const feedOpacityStyle = useAnimatedStyle(() => ({
     opacity: feedOpacity.value }));
@@ -706,7 +809,7 @@ export default function HomeScreen() {
 
                     {story.totalFrameCount > 1 && (
                       <View style={styles.frameCountBadge} accessible={false}>
-                        <AppIcon name="layers" focused size={10} color={colors.scrimTextPrimary} />
+                        <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
                         <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                       </View>
                     )}
@@ -735,7 +838,7 @@ export default function HomeScreen() {
 
                   {story.totalFrameCount > 1 && (
                     <View style={styles.frameCountBadge} accessible={false}>
-                      <AppIcon name="layers" focused size={10} color={colors.scrimTextPrimary} />
+                      <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
                       <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                     </View>
                   )}
@@ -766,8 +869,8 @@ export default function HomeScreen() {
           style={styles.newListingsBanner}
           contentStyle={styles.newListingsBannerContent}
           titleStyle={styles.newListingsBannerText}
-          icon={<AppIcon name="arrowUp" size={14} color={colors.background} />}
-          trailingIcon={<AppIcon name="chevronUp" size={14} color={colors.background} />}
+          icon={<Ionicons name="arrow-up-circle-outline" size={14} color={colors.background} />}
+          trailingIcon={<Ionicons name="chevron-up" size={14} color={colors.background} />}
           iconContainerStyle={styles.newListingsBannerIconWrap}
           trailingIconContainerStyle={styles.newListingsBannerIconWrap}
           hapticFeedback="selection"
@@ -815,7 +918,7 @@ export default function HomeScreen() {
     if (!routeId) return;
     haptic.selection();
     ProductAnalytics.itemView(routeId);
-    navigation.push('ItemDetail', { itemId: routeId });
+    openProductDetail(navigation, { referenceKind: 'listing', canonicalId: routeId, sourceSurface: 'HomeScreen' });
   }, [navigation, haptic]);
 
   const handleTileLongPress = React.useCallback((item: HomeDiscoveryItemVM) => {
@@ -957,7 +1060,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens sell listing flow"
             >
-              <AppIcon name="plus" size={24} color={colors.textPrimary} />
+              <Ionicons name="add" size={24} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -966,7 +1069,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens discovery — explore items, looks, mood boards, editorials and more"
             >
-              <AppIcon name="search" focused size={22} color={colors.textPrimary} />
+              <Ionicons name="search" size={22} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -975,7 +1078,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens notifications center"
             >
-              <AppIcon name="notifications" size={22} color={colors.textPrimary} />
+              <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
               {notificationCount > 0 && (
                 <View style={styles.notificationBadge} pointerEvents="none" accessible={false}>
                   <Text style={styles.notificationBadgeText} maxFontSizeMultiplier={1.5}>
@@ -1021,9 +1124,15 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <View>
             <View style={styles.feedTabBar} accessibilityRole="tablist">
-              {(['foryou', 'following'] as const).map((option) => {
+              {(['foryou', 'following', 'latest', 'saved'] as const).map((option) => {
                 const isSelected = feedMode === option;
-                const label = option === 'foryou' ? 'For you' : 'Following';
+                const labels: Record<typeof option, string> = {
+                  foryou: 'For you',
+                  following: 'Following',
+                  latest: 'Latest',
+                  saved: 'Saved',
+                };
+                const label = labels[option];
                 return (
                   <AnimatedPressable
                     key={option}
@@ -1053,6 +1162,37 @@ export default function HomeScreen() {
                 );
               })}
             </View>
+
+            {/* G2: Quick signal chips — fast category filtering on the feed.
+                Horizontal scroll rail with haptic feedback. Selecting a signal
+                filters the feed and boosts the topic weight via the API. */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.signalRail}
+              contentContainerStyle={styles.signalRailContent}
+              accessibilityRole="tablist"
+            >
+              {QUICK_SIGNALS.map((signal) => {
+                const active = selectedSignal === signal;
+                return (
+                  <AnimatedPressable
+                    key={`signal-${signal}`}
+                    style={[styles.signalChip, active && styles.signalChipActive]}
+                    onPress={() => handleSelectSignal(signal)}
+                    activeOpacity={0.85}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Filter by ${signal}`}
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Text style={[styles.signalChipText, active && styles.signalChipTextActive]}>
+                      {signal}
+                    </Text>
+                  </AnimatedPressable>
+                );
+              })}
+            </ScrollView>
 
             {/* New home feed editorial header — gated by the new_home_feed
                 feature flag. Additive enhancement; absent when the flag is
@@ -1090,7 +1230,7 @@ export default function HomeScreen() {
 
             {forYouIsDegraded ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: Space.xs }}>
-                <AppIcon name="info" size={16} color={colors.textSecondary} />
+                <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} accessible={false} />
                 <Text style={{ flex: 1, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textSecondary }} maxFontSizeMultiplier={1.5}>
                   Showing baseline listings — personalised feed is temporarily unavailable.
                 </Text>
@@ -1242,11 +1382,11 @@ export default function HomeScreen() {
                     align="center"
                     style={styles.peekPrimaryBtn}
                     titleStyle={styles.peekPrimaryText}
-                    icon={<AppIcon name="forward" focused size={14} color={colors.background} />}
+                    icon={<Ionicons name="arrow-forward" size={14} color={colors.background} />}
                     iconContainerStyle={styles.peekPrimaryIconWrap}
                     onPress={() => {
                       if (peekItem.routeId) {
-                        navigation.push('ItemDetail', { itemId: peekItem.routeId });
+                        openProductDetail(navigation, { referenceKind: 'listing', canonicalId: peekItem.routeId, sourceSurface: 'HomeScreenPeek' });
                       }
                       closePeek();
                     }}
@@ -1402,6 +1542,29 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   feedTabLabelActive: {
     fontFamily: FontFamily.semibold,
     color: colors.textPrimary },
+  // G2: Quick signal chip styles
+  signalRail: {
+    maxHeight: 40 },
+  signalRailContent: {
+    paddingHorizontal: Space.md,
+    gap: Space.xs,
+    alignItems: 'center' },
+  signalChip: {
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border },
+  signalChipActive: {
+    backgroundColor: colors.textPrimary,
+    borderColor: colors.textPrimary },
+  signalChipText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    color: colors.textSecondary },
+  signalChipTextActive: {
+    color: colors.background },
   feedTabCount: {
     minWidth: 20,
     height: 20,

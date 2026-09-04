@@ -91,14 +91,14 @@ export default function DataPrivacyScreen({ navigation }: Props) {
     >
       {/* ── Device-local indicator (truthful UI per AGENTS.md §11) ── */}
       <View
-        style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
+        style={[styles.syncBanner, { backgroundColor: colors.surfaceAlt }]}
         accessibilityRole="header"
-        accessibilityLabel="Device-local privacy controls"
+        accessibilityLabel="Privacy controls synced to your account"
       >
         <AppIcon name="info" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
-        <Text style={styles.demoBannerText}>
-          These privacy controls are saved on this device and stay in effect
-          across app restarts.
+        <Text style={styles.syncBannerText}>
+          These privacy controls are synced to your account and stay in effect
+          across devices and app restarts.
         </Text>
       </View>
 
@@ -136,7 +136,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
           <SettingsRow
             icon="notifications"
             title="Personalised ads"
-            subtitle="Allow us to use your activity to show relevant ads"
+            subtitle="Allow us to use your activity to show personalised ads"
             toggleValue={personalizedAds}
             onToggle={toggleWithHaptic(setPersonalizedAds)}
             isFirst
@@ -151,7 +151,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
           <SettingsRow
             icon="profile"
             title="Recommendation personalisation"
-            subtitle="Use your activity to personalise feed recommendations"
+            subtitle="Use your activity to personalise product recommendations"
             toggleValue={recommendationPersonalization}
             onToggle={toggleWithHaptic(setRecommendationPersonalization)}
             isLast
@@ -178,7 +178,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
           <SettingsRow
             icon="share"
             title="Share data with partners"
-            subtitle="Allow sharing anonymised data with shipping and payment partners"
+            subtitle="Allow anonymised aggregate data sharing with partners"
             toggleValue={thirdPartySharing}
             onToggle={toggleWithHaptic(setThirdPartySharing)}
             isFirst
@@ -253,7 +253,7 @@ export default function DataPrivacyScreen({ navigation }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    demoBanner: {
+    syncBanner: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Space.xs,
@@ -261,7 +261,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       borderRadius: Radius.md,
       marginBottom: Space.md },
-    demoBannerText: {
+    syncBannerText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: TypographyV2.meta.letterSpacing,

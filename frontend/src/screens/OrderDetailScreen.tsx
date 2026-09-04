@@ -20,6 +20,7 @@ import {
   getStatusExplanation,
   getStatusTone,
   resolveStatusColor,
+  resolveStatusSubtleColor,
   formatTimelineDate,
   isTerminalStatus,
   getParcelEventDisplay,
@@ -31,6 +32,7 @@ import {
   formatPackageSummary } from '../utils/orderDetailLogic';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useOrderDetail } from '../hooks/useOrderDetail';
 import { useBackendData } from '../context/BackendDataContext';
@@ -74,7 +76,7 @@ export default function OrderDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
   const { orderId } = route.params ?? {};
   const { show } = useToast();
@@ -196,6 +198,7 @@ export default function OrderDetailScreen() {
   const isSeller = currentUser?.id === backendOrder?.sellerId;
   const statusTone = getStatusTone(normalisedStatus);
   const statusColor = resolveStatusColor(statusTone, colors);
+  const statusSubtleColor = resolveStatusSubtleColor(statusTone, colors);
 
   const listingId = backendOrder?.listingId;
   const existingListing = listingId ? listings.find((item) => item.id === listingId) : undefined;
@@ -833,10 +836,9 @@ export default function OrderDetailScreen() {
 
         {/* 2. Current order status and order number */}
         <View style={styles.statusHeader}>
-          <Text style={[styles.orderNumber, themed.orderNumber]}>ORDER #{shortOrderId}</Text>
+          <Text style={[styles.orderNumber, themed.orderNumber]}>Order #{shortOrderId}</Text>
           <View style={styles.statusBadgeRow}>
-            {/* TODO: replace `${statusColor}15` with statusColorSubtle token when available */}
-            <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
+            <View style={[styles.statusBadge, { backgroundColor: statusSubtleColor }]}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <Text style={[styles.statusBadgeText, { color: statusColor }]}>
                 {statusLabel}
@@ -882,11 +884,11 @@ export default function OrderDetailScreen() {
           title={orderTitle}
           imageUrl={orderImage}
           subtitle={orderSubtitle}
-          priceLabel={formatFromFiat(orderSubtotal ?? 0, currencyCode, fiatOpts)}
+          priceLabel={formatFromFiat(orderSubtotal ?? 0, 'GBP', fiatOpts)}
           listingAvailable={listingExists}
           onPress={listingExists && listingId ? () => {
             haptics.tap();
-            navigation.navigate('ItemDetail', { itemId: listingId });
+            openProductDetail(navigation, { referenceKind: 'listing', canonicalId: listingId, sourceSurface: 'OrderDetailSummary' });
           } : undefined}
         />
 
@@ -976,7 +978,7 @@ export default function OrderDetailScreen() {
               subtitle={orderSubtitle}
               onPress={listingExists && listingId ? () => {
                 haptics.tap();
-                navigation.navigate('ItemDetail', { itemId: listingId });
+                openProductDetail(navigation, { referenceKind: 'listing', canonicalId: listingId, sourceSurface: 'OrderDetailPackage' });
               } : undefined}
             />
           </View>
@@ -998,7 +1000,7 @@ export default function OrderDetailScreen() {
             <View style={[styles.staleBanner, themed.staleBanner]}>
               <Ionicons name="time-outline" size={16} color={colors.warning} aria-hidden={true} />
               <Text style={[styles.staleText, themed.staleText]}>
-                Tracking has not updated in over 48 hours. The carrier may be delayed. Check the carrier site for the latest status.
+                Tracking hasn't updated in over 48 hours — the carrier may be delayed.
               </Text>
             </View>
           ) : null}
@@ -1047,7 +1049,6 @@ export default function OrderDetailScreen() {
           postageFee={postageFee}
           totalPaid={totalPaid}
           formatFromFiat={formatFromFiat}
-          currencyCode={currencyCode}
           fiatOpts={fiatOpts}
         />
 
@@ -1174,7 +1175,6 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase',
     fontVariant: ['tabular-nums'] },
   statusBadgeRow: {
     flexDirection: 'row',

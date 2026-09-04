@@ -6,6 +6,7 @@
 // colors are defined here and consumed identically in both light and dark themes.
 
 import { Appearance } from 'react-native';
+import { getRuntimeAccentPreset, getAccentColors } from '../theme/accentPreference';
 
 export type ThemeMode = 'dark' | 'light';
 
@@ -303,7 +304,16 @@ function resolveActiveTheme(): ThemeMode {
 
 function buildColors(mode: ThemeMode): CompatThemeColors {
   const base = mode === 'light' ? LIGHT_COLORS : DARK_COLORS;
-  return { ...base, borderLight: base.borderSubtle };
+  const isDark = mode === 'dark';
+  const accent = getAccentColors(getRuntimeAccentPreset(), isDark);
+  return {
+    ...base,
+    brand: accent.brand,
+    brandPressed: accent.brandPressed,
+    brandSubtle: accent.brandSubtle,
+    brandBorder: accent.brandBorder,
+    borderLight: base.borderSubtle,
+  };
 }
 
 export let ActiveTheme: ThemeMode = resolveActiveTheme();

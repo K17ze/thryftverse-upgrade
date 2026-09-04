@@ -23,6 +23,28 @@ export { PostHogProvider, getPostHogClient, isPostHogAvailable, getDeviceInfo, g
 // Tracking — typed track() and trackRaw() for dynamic event names.
 export { track, trackRaw, trackFunnelStep } from './track';
 
+// PII sanitization — value-based PII stripping for analytics payloads.
+export { sanitizeValue, sanitizeEvent } from './piiSanitizer';
+
+// Consent management — 2026 privacy-first opt-in consent state.
+export {
+  getConsentState,
+  setConsentState,
+  hasAnalyticsConsent,
+  hasAnalyticsConsentSync,
+  refreshConsentCache,
+  updateConsentCache,
+} from './analyticsConsent';
+export type { ConsentState } from './analyticsConsent';
+
+// Analytics gate — single source of truth for the analytics opt-out flag.
+export {
+  setAnalyticsOptOut,
+  isAnalyticsOptOut,
+  isAnalyticsEnabled,
+  subscribeToAnalyticsOptOut,
+} from './analyticsGate';
+
 // Identification — identify and reset user identity.
 export { identifyUser, resetIdentity } from './identify';
 

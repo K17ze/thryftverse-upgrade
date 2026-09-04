@@ -97,7 +97,7 @@ export default function MarketLedgerScreen() {
   const { formatFromFiat, currencyCode } = useFormattedPrice();
 
   const formatMoney = useCallback(
-    (value: number) => formatFromFiat(value, currencyCode),
+    (value: number) => formatFromFiat(value, 'GBP'),
     [formatFromFiat, currencyCode]
   );
 

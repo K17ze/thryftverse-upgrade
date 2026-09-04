@@ -50,7 +50,7 @@ export function RelatedItemsRail({
   headerLabel = 'More like this' }: RelatedItemsRailProps) {
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
 
   // Portrait card width: ~40% of screen, capped so 2.5 cards are visible.
@@ -61,7 +61,7 @@ export function RelatedItemsRail({
     ({ item }: { item: Listing }) => {
       const imageUri = item.images?.[0];
       const formattedPrice = item.price != null
-        ? formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })
+        ? formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })
         : 'Price unavailable';
       return (
         <AnimatedPressable

@@ -263,7 +263,7 @@ export default function AuctionDetailScreen() {
 
   const priceText = React.useMemo(() => {
     if (priceLabel === 'No bids') return 'No bids';
-    return formatFromFiat(priceAmount, currencyCode);
+    return formatFromFiat(priceAmount, 'GBP');
   }, [priceLabel, priceAmount, formatFromFiat]);
 
   const countdown = React.useMemo(() => {
@@ -786,7 +786,7 @@ export default function AuctionDetailScreen() {
                   Minimum to lead
                 </Text>
                 <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(auction.minimumNextBidGbp, currencyCode)}
+                  {formatFromFiat(auction.minimumNextBidGbp, 'GBP')}
                 </Text>
               </View>
             )}
@@ -1024,7 +1024,7 @@ export default function AuctionDetailScreen() {
                 id: rel.id,
                 title: rel.title,
                 imageUrl: rel.imageUrl,
-                priceText: formatFromFiat(relPrice, currencyCode),
+                priceText: formatFromFiat(relPrice, 'GBP'),
                 sizeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, currencyCode, fxRates), 2) : undefined,
                 badgeText: relStateLabel,
                 mode: 'auction' as const,
@@ -1309,7 +1309,7 @@ export default function AuctionDetailScreen() {
         // Live bidder — current/min next bid + Place bid (+ optional Buy now).
         if (showBidControls && stateAction && stateAction.primary.type !== 'none') {
           const dockValue = isLive && auction.minimumNextBidGbp > 0
-            ? formatFromFiat(auction.minimumNextBidGbp, currencyCode)
+            ? formatFromFiat(auction.minimumNextBidGbp, 'GBP')
             : priceText;
           const dockValueLabel = isLive && auction.minimumNextBidGbp > 0
             ? 'Min next bid'
@@ -1380,7 +1380,7 @@ export default function AuctionDetailScreen() {
                       onPress: () => { haptics.press(); openBuyNowSheet(); },
                       disabled: isBuyNowLoading,
                       loading: isBuyNowLoading,
-                      accessibilityLabel: `Buy now for ${formatFromFiat(auction.buyNowPriceGbp ?? 0, currencyCode)}`,
+                      accessibilityLabel: `Buy now for ${formatFromFiat(auction.buyNowPriceGbp ?? 0, 'GBP')}`,
                     }
                   : undefined
               }

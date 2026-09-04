@@ -109,6 +109,24 @@ export function inferMimeTypeFromUri(uri: string): string {
 }
 
 /* ── conversion ── */
+
+/**
+ * Converts a raw capture URI (from CreatorCamera / ListingCameraSheet) into a
+ * MediaUploadAsset. Unlike `convertPickerAsset`, only the URI is available —
+ * dimensions and fileSize are resolved downstream by the upload pipeline.
+ */
+export function convertCaptureUri(uri: string): MediaUploadAsset {
+  const mimeType = inferMimeTypeFromUri(uri);
+  const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+  return {
+    id: makeStableId('asset'),
+    uri,
+    fileName: generateFileName(`capture.${ext}`),
+    mimeType,
+    kind: resolveKind(mimeType),
+  };
+}
+
 export function convertPickerAsset(asset: ImagePicker.ImagePickerAsset): MediaUploadAsset {
   const mimeType = resolveMimeType(asset);
   const fileName = asset.fileName
@@ -222,6 +240,9 @@ export interface ListingMediaDraftItem {
   uri: string;
   kind: 'image' | 'video';
   source: 'local' | 'remote';
+  /** Backend media ID for remote items (from the listing's `media` array).
+   *  Used to build `attachmentOrder` and `removedAttachmentIds` on edit. */
+  mediaId?: string;
   fileName?: string;
   mimeType?: string;
   fileSize?: number;

@@ -24,6 +24,7 @@ import { FlagshipMetricLine } from '../components/flagship/FlagshipMetricLine';
 import { FlagshipFormSection } from '../components/flagship/FlagshipFormSection';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useToast } from '../context/ToastContext';
 import { CachedImage } from '../components/CachedImage';
@@ -37,11 +38,7 @@ import {
   Numeric,
   FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-import { fetchListingByIdFromApi } from '../services/listingsApi';
-import {
-  submitSellerHubBatchCommand,
-  type SellerHubBatchCommand,
-} from '../services/sellerHubApi';
+import { fetchListingByIdFromApi, patchListingOnApi, deleteListingOnApi } from '../services/listingsApi';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -52,8 +49,6 @@ import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { AppIcon } from '../components/common/AppIcon';
 import { AppIconButton } from '../components/common/AppIconButton';
 import { IconSize } from '../theme/iconTokens';
-import { createStableId } from '../utils/createStableId';
-import { LinearGradient } from 'expo-linear-gradient';
 
 
 type RouteT = RouteProp<RootStackParamList, 'ManageListing'>;
@@ -68,7 +63,7 @@ export default function ManageListingScreen() {
   const { currencyCode, formatFromFiat } = useFormattedPrice();
   const reducedMotion = useReducedMotion();
   const { show } = useToast();
-  const { itemId } = route.params ?? {};
+  const { itemId } = route.params;
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
 
@@ -77,7 +72,6 @@ export default function ManageListingScreen() {
   const [isNotFound, setIsNotFound] = React.useState(false);
   const [hasError, setHasError] = React.useState(false);
   const [imgIndex, setImgIndex] = React.useState(0);
-  const [isMutating, setIsMutating] = React.useState(false);
   const [confirmSheet, setConfirmSheet] = React.useState<{
     visible: boolean;
     title: string;
@@ -153,6 +147,21 @@ export default function ManageListingScreen() {
     );
   }
 
+  if (isNotFound || !item) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
+        <EmptyState
+          icon="bag-handle-outline"
+          title={t('manage.listingNotFound')}
+          subtitle={t('manage.listingRemoved')}
+          ctaLabel={t('manage.goBack')}
+          onCtaPress={() => navigation.goBack()}
+        />
+      </View>
+    );
+  }
+
   if (hasError) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
@@ -180,21 +189,6 @@ export default function ManageListingScreen() {
     );
   }
 
-  if (isNotFound || !item) {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
-        <EmptyState
-          icon="bag-handle-outline"
-          title={t('manage.listingNotFound')}
-          subtitle={t('manage.listingRemoved')}
-          ctaLabel={t('manage.goBack')}
-          onCtaPress={() => navigation.goBack()}
-        />
-      </View>
-    );
-  }
-
   if (!isOwner) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: Space.lg }]}>
@@ -216,67 +210,16 @@ export default function ManageListingScreen() {
   // Rules of Hooks (hooks must not be called after conditional returns).
   const handleShare = async () => {
     try {
+      const deepLink = `thryftverse://product/${item.id}`;
       await Share.share({
-        message: t('manage.shareMessage', { title: item.title, price: formatFromFiat(item.priceGbp ?? 0, currencyCode, { displayMode: 'fiat' }) }) });
+        message: t('manage.shareMessage', {
+          title: item.title,
+          price: formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' }),
+          link: deepLink,
+        }),
+      });
     } catch {
       // silently fail
-    }
-  };
-
-  const reconcileListing = async () => {
-    try {
-      const response = await fetchListingByIdFromApi(itemId);
-      if (response.ok && response.listing) {
-        setItem(response.listing);
-        setIsNotFound(false);
-      } else {
-        setIsNotFound(true);
-      }
-    } catch {
-      setHasError(true);
-    }
-  };
-
-  const runLifecycleCommand = async (
-    command: SellerHubBatchCommand,
-    successStatus: 'active' | 'paused' | 'sold' | 'deleted',
-    successMessage: string,
-  ): Promise<'applied' | 'rejected' | 'unknown'> => {
-    if (isMutating) return 'unknown';
-    setIsMutating(true);
-    try {
-      const response = await submitSellerHubBatchCommand(
-        command,
-        [{ listingId: itemId }],
-        createStableId('listing-command'),
-      );
-      const result = response.results[0];
-      if (result?.state === 'applied') {
-        if (successStatus !== 'deleted') {
-          setItem((previous: any) => ({ ...previous, status: successStatus }));
-        }
-        show(successMessage, 'success');
-        void refreshListings();
-        void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
-        return 'applied';
-      }
-      if (result?.state === 'rejected') {
-        show(t('manage.stateChanged'), 'error');
-        await reconcileListing();
-        return 'rejected';
-      }
-
-      show(t('manage.checkingStatus'), 'info');
-      await reconcileListing();
-      return 'unknown';
-    } catch {
-      // A timeout does not prove failure; the durable receipt or a fresh read
-      // decides what happened.
-      show(t('manage.checkingStatus'), 'info');
-      await reconcileListing();
-      return 'unknown';
-    } finally {
-      setIsMutating(false);
     }
   };
 
@@ -288,9 +231,14 @@ export default function ManageListingScreen() {
       confirmLabel: t('manage.delete'),
       cancelLabel: t('manage.cancel'),
       onConfirm: async () => {
-        const outcome = await runLifecycleCommand('delete', 'deleted', t('manage.deleted'));
-        if (outcome === 'applied') {
+        try {
+          await deleteListingOnApi(itemId);
+          show(t('manage.deleted'), 'success');
+          void refreshListings();
+          void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
           navigation.goBack();
+        } catch {
+          show(t('manage.deleteFailed'), 'error');
         }
       },
       variant: 'danger' });
@@ -309,16 +257,60 @@ export default function ManageListingScreen() {
       cancelLabel: t('manage.cancel'),
       variant: 'default',
       onConfirm: async () => {
-        await runLifecycleCommand('mark_sold_external', 'sold', t('manage.markedSold'));
+        try {
+          await patchListingOnApi(itemId, { status: 'sold' });
+          setItem((prev: any) => ({ ...prev, status: 'sold' }));
+          show(t('manage.markedSold'), 'success');
+          void refreshListings();
+          void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
+        } catch {
+          show(t('manage.updateFailed'), 'error');
+        }
       } });
   };
 
   const handlePause = async () => {
-    await runLifecycleCommand('pause', 'paused', t('manage.paused'));
+    try {
+      await patchListingOnApi(itemId, { status: 'paused' });
+      setItem((prev: any) => ({ ...prev, status: 'paused' }));
+      show(t('manage.paused'), 'info');
+      void refreshListings();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
+    } catch {
+      show(t('manage.updateFailed'), 'error');
+    }
   };
 
   const handleReactivate = async () => {
-    await runLifecycleCommand('resume', 'active', t('manage.reactivated'));
+    try {
+      await patchListingOnApi(itemId, { status: 'active' });
+      setItem((prev: any) => ({ ...prev, status: 'active' }));
+      show(t('manage.reactivated'), 'success');
+      void refreshListings();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.listing.detail(itemId) });
+    } catch {
+      show(t('manage.updateFailed'), 'error');
+    }
+  };
+
+  const handleOverflowMenu = () => {
+    const firstAction =
+      status === 'active'
+        ? { label: t('manage.pauseListing'), action: handlePause }
+        : status === 'paused'
+          ? { label: t('manage.reactivateListing'), action: handleReactivate }
+          : status === 'sold'
+            ? { label: t('manage.reactivateListing'), action: handleReactivate }
+            : null;
+    if (!firstAction) return;
+    setConfirmSheet({
+      visible: true,
+      title: t('manage.moreActions'),
+      message: '',
+      confirmLabel: firstAction.label,
+      cancelLabel: t('manage.cancel'),
+      variant: 'default',
+      onConfirm: firstAction.action });
   };
 
   // Status metadata for the flat identity block.
@@ -338,6 +330,24 @@ export default function ManageListingScreen() {
   const answeredQuestionCount = engagement?.answeredQuestionCount ?? 0;
   const activeOfferCount = engagement?.activeOfferCount ?? item.offersCount ?? item.offers ?? 0;
 
+  // ── Performance metrics ──
+  // Views is optional in the engagement summary — show "—" when absent
+  // rather than fabricating a zero. Conversion rate = offers / views, only
+  // meaningful when both views and offers are real. Time on market is
+  // computed from the listing's createdAt timestamp.
+  const viewsCount: number | null = engagement?.views ?? item.views ?? null;
+  const conversionRate = useMemo(() => {
+    if (viewsCount == null || viewsCount === 0) return null;
+    return (activeOfferCount / viewsCount) * 100;
+  }, [viewsCount, activeOfferCount]);
+  const daysOnMarket = useMemo(() => {
+    const created = item.createdAt;
+    if (!created) return null;
+    const diffMs = Date.now() - new Date(created).getTime();
+    if (diffMs < 0) return null;
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  }, [item.createdAt]);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor="transparent" translucent />
@@ -346,15 +356,21 @@ export default function ManageListingScreen() {
         <AppIconButton
           name="back"
           size={IconSize.lg}
-          color="textInverse"
-          containerVariant="blur"
+          color="textPrimary"
           onPress={() => navigation.goBack()}
           accessibilityLabel="Go back"
         />
         <Reanimated.View style={headerTitleStyle}>
           <Text style={styles.hdrTitle} numberOfLines={1}>{t('manage.title')}</Text>
         </Reanimated.View>
-        <View style={styles.headerBalance} />
+        <AppIconButton
+          name="overflow"
+          size={IconSize.md}
+          color="textPrimary"
+          onPress={handleOverflowMenu}
+          accessibilityLabel="More actions"
+          accessibilityHint={t('manage.a11y.overflowHint')}
+        />
       </Reanimated.View>
 
       <Reanimated.ScrollView
@@ -379,12 +395,7 @@ export default function ManageListingScreen() {
               <CachedImage key={i} uri={uri} style={styles.heroImage} contentFit="cover" />
             ))}
           </ScrollView>
-          <LinearGradient
-            colors={['rgba(0,0,0,0.32)', 'rgba(0,0,0,0)']}
-            locations={[0, 1]}
-            style={styles.heroTopScrim}
-            pointerEvents="none"
-          />
+          <View style={styles.heroOverlay} />
 
           {images.length > 1 && (
             <View style={styles.dotRow}>
@@ -398,7 +409,7 @@ export default function ManageListingScreen() {
         {/* ── Flat identity block (no floating card over media) ── */}
         <View style={styles.identityBlock}>
           <Text style={styles.identityTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.identityPrice}>{formatFromFiat(item.priceGbp ?? 0, currencyCode, { displayMode: 'fiat' })}</Text>
+          <Text style={styles.identityPrice}>{formatFromFiat(item.priceGbp ?? 0, 'GBP', { displayMode: 'fiat' })}</Text>
 
           <View style={styles.statusRow}>
             {/* TODO: replace `${statusColor}1A` with statusColorSubtle token when available */}
@@ -417,12 +428,12 @@ export default function ManageListingScreen() {
 
         {/* ── Primary CTA: Edit listing ── */}
         <AppButton
-          title={isSold ? t('manage.soldRecord') : t('manage.editListing')}
+          title={t('manage.editListing')}
+          icon={<AppIcon name="edit" size={IconSize.sm} color={colors.background} opticalCenter accessible={false} />}
           variant="primary"
           size="lg"
           style={styles.editBtn}
           onPress={() => navigation.navigate('EditListing', { itemId })}
-          disabled={isSold || isMutating}
           accessibilityLabel={t('manage.editListing')}
           accessibilityHint={t('manage.a11y.editListingHint')}
           hapticFeedback="light"
@@ -456,7 +467,7 @@ export default function ManageListingScreen() {
           </AnimatedPressable>
           <AnimatedPressable
             style={styles.iconAction}
-            onPress={() => navigation.push('ItemDetail', { itemId: item.id })}
+            onPress={() => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'ManageListingPreview' })}
             accessibilityLabel={t('manage.a11y.previewListing')}
             accessibilityRole="button"
             accessibilityHint={t('manage.a11y.previewListingHint')}
@@ -466,6 +477,31 @@ export default function ManageListingScreen() {
             <Text style={styles.iconActionLabel}>{t('manage.preview')}</Text>
           </AnimatedPressable>
         </View>
+
+        {/* ── Performance — compact label-value pairs, no cards ──
+            Flat composition per AGENTS.md §4: hairline separators, one
+            icon family, design tokens only. Unavailable metrics show
+            "—" not "0" to distinguish missing data from zero. */}
+        <FlagshipFormSection
+          variant="flat"
+          title={t('manage.performance')}
+          style={styles.metricsSection}
+        >
+          <FlagshipMetricLine label={t('manage.views')} value={viewsCount != null ? String(viewsCount) : '—'} />
+          <FlagshipMetricLine label={t('manage.saves')} value={String(savesCount)} separated />
+          <FlagshipMetricLine label={t('manage.questions')} value={String(questionCount)} separated />
+          <FlagshipMetricLine label={t('manage.offers')} value={String(activeOfferCount)} separated />
+          <FlagshipMetricLine
+            label={t('manage.conversionRate')}
+            value={conversionRate != null ? `${conversionRate.toFixed(1)}%` : '—'}
+            separated
+          />
+          <FlagshipMetricLine
+            label={t('manage.timeOnMarket')}
+            value={daysOnMarket != null ? t('manage.daysCount', { count: daysOnMarket, plural: daysOnMarket === 1 ? '' : 's' }) : '—'}
+            separated
+          />
+        </FlagshipFormSection>
 
         {/* ── Buyer activity / performance (real metrics only) ──
             Views intentionally omitted — not returned by the backend
@@ -491,7 +527,11 @@ export default function ManageListingScreen() {
             title={t('manage.viewAnalytics')}
             subtitle={t('manage.analyticsSubtitle')}
             icon="analytics"
-            onPress={() => navigation.navigate('SellerAnalytics', { listingId: itemId, listingTitle: item.title })}
+            onPress={() => navigation.navigate('SellerAnalytics', {
+              listingId: item.id,
+              listingTitle: item.title,
+              listingImage: item.images?.[0] ?? item.imageUrl ?? undefined,
+            })}
             accessibilityLabel={t('manage.viewAnalytics')}
             accessibilityHint={t('manage.a11y.viewAnalyticsHint')}
           />
@@ -500,9 +540,9 @@ export default function ManageListingScreen() {
               title={t('manage.viewQuestions')}
               subtitle={t('manage.questionsToReview', { count: questionCount, plural: questionCount === 1 ? '' : 's' })}
               icon="chat"
-              onPress={() => navigation.navigate('Inbox', { filterItemId: itemId })}
-              accessibilityLabel="View questions"
-              accessibilityHint="Open your inbox to review and answer buyer questions"
+              onPress={() => navigation.navigate('Inbox', { listingId: item.id })}
+              accessibilityLabel={t('manage.viewQuestions')}
+              accessibilityHint={t('manage.a11y.viewQuestionsHint')}
             />
           ) : null}
         </FlagshipFormSection>
@@ -513,7 +553,7 @@ export default function ManageListingScreen() {
           <FlagshipNavigationRow
             title={t('manage.priceAndOffers')}
             subtitle={activeOfferCount > 0 ? t('manage.offersReceived', { count: activeOfferCount, plural: activeOfferCount === 1 ? '' : 's' }) : t('manage.noOffersYet')}
-            icon="tag"
+            icon="cash-outline"
             onPress={() => navigation.navigate('EditListing', { itemId, focus: 'price' })}
             accessibilityLabel={t('manage.a11y.priceAndOffers')}
             accessibilityHint={t('manage.a11y.priceAndOffersHint')}
@@ -521,14 +561,14 @@ export default function ManageListingScreen() {
           <FlagshipNavigationRow
             title={t('manage.delivery')}
             subtitle={item.shippingType ? item.shippingType : t('manage.shippingOptions')}
-            icon="box"
+            icon="car-outline"
             onPress={() => navigation.navigate('EditListing', { itemId, focus: 'shipping' })}
             accessibilityLabel={t('manage.delivery')}
             accessibilityHint={t('manage.a11y.deliveryHint')}
           />
           <FlagshipNavigationRow
             title={t('manage.format')}
-            icon="auction"
+            icon="cash-outline"
             onPress={() => navigation.navigate('EditListing', { itemId, focus: 'format' })}
             accessibilityLabel={t('manage.format')}
             accessibilityHint={t('manage.a11y.listingFormatHint')}
@@ -545,7 +585,6 @@ export default function ManageListingScreen() {
                 subtitle={t('manage.pauseSubtitle')}
                 icon="pause"
                 onPress={handlePause}
-                disabled={isMutating}
                 accessibilityLabel={t('manage.pauseListing')}
                 accessibilityHint={t('manage.a11y.pauseListingHint')}
               />
@@ -553,8 +592,8 @@ export default function ManageListingScreen() {
                 title={t('manage.markAsSold')}
                 subtitle={t('manage.markSoldSubtitle')}
                 icon="verified"
+                danger
                 onPress={handleMarkSold}
-                disabled={isMutating}
                 accessibilityLabel={t('manage.markAsSold')}
                 accessibilityHint={t('manage.a11y.markAsSoldHint')}
               />
@@ -567,7 +606,6 @@ export default function ManageListingScreen() {
                 subtitle={t('manage.reactivateSubtitle')}
                 icon="play"
                 onPress={handleReactivate}
-                disabled={isMutating}
                 accessibilityLabel={t('manage.reactivateListing')}
                 accessibilityHint={t('manage.a11y.reactivateListingHint')}
               />
@@ -575,36 +613,34 @@ export default function ManageListingScreen() {
                 title={t('manage.markAsSold')}
                 subtitle={t('manage.markSoldSubtitle')}
                 icon="verified"
+                danger
                 onPress={handleMarkSold}
-                disabled={isMutating}
                 accessibilityLabel={t('manage.markAsSold')}
                 accessibilityHint={t('manage.a11y.markAsSoldHint')}
               />
             </>
           )}
           {status === 'sold' && (
-            <View style={styles.soldRecordNote}>
-              <AppIcon name="receipt" size={IconSize.md} color="textSecondary" opticalCenter accessible={false} />
-              <View style={styles.soldRecordCopy}>
-                <Text style={styles.soldRecordTitle}>{t('manage.soldRecord')}</Text>
-                <Text style={styles.soldRecordSubtitle}>{t('manage.soldRecordSubtitle')}</Text>
-              </View>
-            </View>
+            <FlagshipNavigationRow
+              title={t('manage.reactivateListing')}
+              subtitle={t('manage.reactivateSoldSubtitle')}
+              icon="play"
+              onPress={handleReactivate}
+              accessibilityLabel={t('manage.reactivateListing')}
+              accessibilityHint={t('manage.a11y.reactivateListingHint')}
+            />
           )}
           {/* Delete — clearly separated as the terminal action */}
-          {!isSold ? (
-            <FlagshipNavigationRow
-              title={t('manage.deleteListing')}
-              subtitle={t('manage.deleteSubtitle')}
-              icon="trash"
-              danger
-              disabled={isMutating}
-              separator={false}
-              onPress={handleDeleteListing}
-              accessibilityLabel={t('manage.deleteListing')}
-              accessibilityHint={t('manage.deleteHint')}
-            />
-          ) : null}
+          <FlagshipNavigationRow
+            title={t('manage.deleteListing')}
+            subtitle={t('manage.deleteSubtitle')}
+            icon="trash"
+            danger
+            separator={false}
+            onPress={handleDeleteListing}
+            accessibilityLabel={t('manage.deleteListing')}
+            accessibilityHint={t('manage.deleteHint')}
+          />
         </View>
       </Reanimated.ScrollView>
 
@@ -648,9 +684,6 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
       fontFamily: TypographyV2.sectionTitle.fontFamily,
       color: colors.textPrimary,
       maxWidth: screenWidth * 0.5 },
-    headerBalance: {
-      width: Control.hit,
-      height: Control.hit },
 
     // ── Media carousel ──
     heroWrap: {
@@ -661,12 +694,9 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     heroImage: {
       width: screenWidth,
       height: screenWidth },
-    heroTopScrim: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      height: 116 },
+    heroOverlay: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: colors.overlay },
     dotRow: {
       position: 'absolute',
       bottom: Space.md,
@@ -730,8 +760,15 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
 
     // ── Primary CTA ──
     editBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
       marginHorizontal: Space.md,
-      marginTop: Space.md },
+      marginTop: Space.md,
+      paddingVertical: Space.md,
+      borderRadius: Radius.xl,
+      backgroundColor: colors.textPrimary },
 
     // ── Transparent action cluster ──
     // Per AGENTS.md §4: transparent 44pt targets, 20–24pt glyphs, no grey
@@ -774,25 +811,5 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
 
     // ── More / terminal section ──
     moreSection: {
-      marginTop: Space.lg },
-    soldRecordNote: {
-      minHeight: Control.hit,
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: Space.sm,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.md },
-    soldRecordCopy: {
-      flex: 1,
-      gap: Space.xxs },
-    soldRecordTitle: {
-      fontSize: TypographyV2.bodyStrong.size,
-      lineHeight: TypographyV2.bodyStrong.lineHeight,
-      fontFamily: TypographyV2.bodyStrong.fontFamily,
-      color: colors.textPrimary },
-    soldRecordSubtitle: {
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.textMuted } });
+      marginTop: Space.lg } });
 }

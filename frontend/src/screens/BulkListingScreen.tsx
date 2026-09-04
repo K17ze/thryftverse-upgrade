@@ -514,7 +514,7 @@ const BulkRow = React.memo(function BulkRow({
             />
           </View>
           <View style={styles.rowPriceRow}>
-            <Text style={[styles.pricePrefix, { color: colors.textMuted }]}>{formatFromFiat(0, currencyCode).replace(/[0-9.,]/g, '').trim()}</Text>
+            <Text style={[styles.pricePrefix, { color: colors.textMuted }]}>{formatFromFiat(0, 'GBP').replace(/[0-9.,]/g, '').trim()}</Text>
             <TextInput
               style={[styles.rowPriceInput, { color: colors.textPrimary }]}
               value={item.price > 0 ? String(item.price) : ''}
@@ -687,7 +687,7 @@ function DraftForm({
           }}
           placeholder="0.00"
           keyboardType="decimal-pad"
-          prefix={formatFromFiat(0, currencyCode).replace(/[0-9.,]/g, '').trim()}
+          prefix={formatFromFiat(0, 'GBP').replace(/[0-9.,]/g, '').trim()}
           containerStyle={[styles.field, { flex: 1 }]}
         />
         <AppInput

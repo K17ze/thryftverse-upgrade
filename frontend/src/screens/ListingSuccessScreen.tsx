@@ -33,7 +33,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ListingSuccess'>;
 export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
 
@@ -78,7 +78,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
   const listingTitle = backendListing?.title || routeTitle || 'your listing';
   const listingPriceRaw = backendListing?.priceGbp ?? routePrice;
-  const listingPrice = listingPriceRaw != null ? formatFromFiat(listingPriceRaw, currencyCode, { displayMode: 'fiat' }) : null;
+  const listingPrice = listingPriceRaw != null ? formatFromFiat(listingPriceRaw, 'GBP', { displayMode: 'fiat' }) : null;
   const listingCategory = backendListing?.category || routeCategory;
   const listingPhoto = backendListing?.imageUrl || routePhoto;
 

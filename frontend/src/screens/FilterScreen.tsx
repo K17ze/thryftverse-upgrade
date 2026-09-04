@@ -101,7 +101,7 @@ export default function FilterScreen() {
   const { show } = useToast();
   const { mySizes, setMySizes, toggleMySize, filterPresets, saveFilterPreset, removeFilterPreset } = useSettingsPreferences();
   const { colors } = useAppTheme();
-  const { formatFromFiat, currencySymbol, currencyCode } = useFormattedPrice();
+  const { formatFromFiat, currencySymbol } = useFormattedPrice();
   const reducedMotion = useReducedMotion();
   const { height, width } = useWindowDimensions();
   const SNAP_HALF = height * 0.5;
@@ -894,7 +894,7 @@ export default function FilterScreen() {
                       <Text style={styles.priceInputLabel}>Min</Text>
                       <TextInput
                         style={styles.priceInput}
-                        placeholder={formatFromFiat(0, currencyCode)}
+                        placeholder={formatFromFiat(0, 'GBP')}
                         placeholderTextColor={colors.textMuted}
                         value={priceMin}
                         onChangeText={setPriceMin}

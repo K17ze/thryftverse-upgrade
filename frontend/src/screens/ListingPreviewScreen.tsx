@@ -32,7 +32,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ListingPreview'>;
 export default function ListingPreviewScreen({ navigation, route }: Props) {
   const { preview, origin } = route.params ?? {};
   const insets = useSafeAreaInsets();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((s) => s.currentUser);
   const { colors } = useAppTheme();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
@@ -43,10 +43,10 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
   const title = preview?.title?.trim() || 'Untitled listing';
   const hasRealTitle = !!preview?.title?.trim();
   const priceText = preview?.price != null
-    ? formatFromFiat(preview.price, currencyCode, { displayMode: 'fiat' })
+    ? formatFromFiat(preview.price, 'GBP', { displayMode: 'fiat' })
     : null;
   const originalPriceText = preview?.originalPrice != null && preview.originalPrice > 0
-    ? formatFromFiat(preview.originalPrice, currencyCode, { displayMode: 'fiat' })
+    ? formatFromFiat(preview.originalPrice, 'GBP', { displayMode: 'fiat' })
     : null;
   const hasDiscount = priceText != null && originalPriceText != null && preview!.originalPrice! > (preview!.price ?? 0);
 

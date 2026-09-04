@@ -130,7 +130,7 @@ describe('product-detail-flagship-reconstruction: offline state coverage', () =>
 // frontend must consume them with proper typing (no `as any` casts).
 // ───────────────────────────────────────────────────────────────────────────
 describe('product-detail-flagship-reconstruction: Co-Own market snapshot backend', () => {
-  const backendSrc = readBackend('index.ts');
+  const backendSrc = readBackend('routes/coOwn.ts');
 
   it('backend computes lastExecutionPriceGbp from settled trades', () => {
     expect(backendSrc).toContain('last_execution_price_gbp');
@@ -233,21 +233,20 @@ describe('product-detail-flagship-reconstruction: Direct Listing report action',
   it('ItemDetailScreen uses canonical BottomSheet for overflow (not local sheet)', () => {
     expect(itemSrc).toContain('<BottomSheet');
     expect(itemSrc).not.toContain('overflowBackdrop');
-    expect(itemSrc).not.toContain('overflowBackdropPress');
   });
 
-  it('ReportScreen handles type "item" via reportListing API', () => {
-    expect(reportSrc).toContain('reportListing');
-    expect(reportSrc).toContain("type === 'user'");
-    expect(reportSrc).toContain('Report listing');
-  });
+  describe('Direct Listing report action', () => {
+    it('ReportScreen handles item reports via reportListing', () => {
+      expect(reportSrc).toContain('reportListing');
+      expect(reportSrc).toContain("type === 'user'");
+      expect(reportSrc).toContain('reportListing(');
+    });
 
-  it('ReportScreen does not reject item reports with "Report target unavailable"', () => {
-    // The old guard rejected anything that wasn't type === 'user'. The
-    // new guard only rejects when targetId is missing.
-    const guardMatch = reportSrc.match(/if\s*\([^)]*\)\s*{[\s\S]*?Report target unavailable/);
-    expect(guardMatch).toBeTruthy();
-    expect(guardMatch![0]).not.toContain("type !== 'user'");
+    it('ReportScreen accepts all valid report target types (user, group, listing)', () => {
+      expect(reportSrc).toContain("type === 'user'");
+      expect(reportSrc).toContain("type === 'group'");
+      expect(reportSrc).not.toContain("type !== 'user'");
+    });
   });
 });
 
@@ -261,13 +260,12 @@ describe('product-detail-flagship-reconstruction: Auction terminal dock', () => 
     // The terminal branch should return CommerceDetailStateDock with
     // primaryAction only — no stateBadge.
     const terminalStart = src.indexOf('if (isTerminal)');
-    const terminalEnd = src.indexOf('// Seller view', terminalStart);
+    const terminalEnd = src.indexOf('if (isPostEnd)', terminalStart);
     const terminalBranch = src.slice(terminalStart, terminalEnd);
     expect(terminalStart).toBeGreaterThan(-1);
     expect(terminalEnd).toBeGreaterThan(terminalStart);
     expect(terminalBranch).toContain('primaryAction={terminalAction}');
     expect(terminalBranch).not.toContain('stateBadge');
-    expect(terminalBranch).not.toContain('Seller view');
   });
 
   it('every terminal viewer state has a next valid action', () => {

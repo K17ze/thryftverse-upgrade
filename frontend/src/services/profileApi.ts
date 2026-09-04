@@ -192,10 +192,10 @@ export async function unfollowUser(userId: string): Promise<{ isFollowing: boole
 
 // ── Block / unblock ──────────────────────────────────────────────────
 
-export async function blockUser(userId: string): Promise<{ isBlocked: boolean }> {
+export async function blockUser(userId: string, reason?: string): Promise<{ isBlocked: boolean }> {
   const response = await fetchJson<{ ok: boolean; isBlocked: boolean }>(
     `/users/${encodeURIComponent(userId)}/block`,
-    { method: 'POST' }
+    { method: 'POST', body: JSON.stringify({ reason: reason }) }
   );
   return { isBlocked: response.isBlocked };
 }
@@ -206,6 +206,22 @@ export async function unblockUser(userId: string): Promise<{ isBlocked: boolean 
     { method: 'POST' }
   );
   return { isBlocked: response.isBlocked };
+}
+
+export interface BlockedUserEntry {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  blockedAt: string;
+  reason: string | null;
+}
+
+export async function getBlockedUsers(): Promise<BlockedUserEntry[]> {
+  const response = await fetchJson<{ ok: boolean; items: BlockedUserEntry[] }>(
+    `/users/me/blocked-users`
+  );
+  return response.items;
 }
 
 // ── Appeal (DSA Article 20) ───────────────────────────────────────────

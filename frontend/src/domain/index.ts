@@ -29,6 +29,8 @@ export type {
   Conversation,
 } from './conversation';
 
+export type { ConversationContext } from './conversationContext';
+
 export type {
   ChatAgentConfig,
   ChatBot,

@@ -10,7 +10,8 @@
  * When it is NOT linked, all methods throw with a clear error message
  * directing the developer to run a custom dev client.
  */
-import { HybridObject } from 'react-native-nitro-modules';
+import { getHybridObjectConstructor } from 'react-native-nitro-modules';
+import type { HybridObject } from 'react-native-nitro-modules';
 import type { ThryftMediaExport } from './ThryftMediaExport.nitro';
 
 const MODULE_NAME = 'ThryftMediaExport';
@@ -23,9 +24,9 @@ function checkAvailability(): boolean {
   if (availabilityChecked) return isAvailable;
   availabilityChecked = true;
   try {
-    // HybridObject.getOrCreate throws if the native class is not registered.
-    const instance = HybridObject.getOrCreate<ThryftMediaExport>(MODULE_NAME);
-    cachedInstance = instance;
+    // getHybridObjectConstructor throws if the native class is not registered.
+    const Constructor = getHybridObjectConstructor<ThryftMediaExport & HybridObject<{}>>(MODULE_NAME);
+    cachedInstance = new Constructor();
     isAvailable = true;
   } catch {
     isAvailable = false;

@@ -5,7 +5,7 @@ import { CachedImage } from '../components/CachedImage';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { ActionSheet } from '../components/sheets';
 import { FlashList, type FlashListProps, type FlashListRef } from '@shopify/flash-list';
-import { AppIcon } from '../components/common/AppIcon';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useScrollToTop, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import NetInfo from '@react-native-community/netinfo';
@@ -15,7 +15,6 @@ import { RootStackParamList } from '../navigation/types';
 import { SwipeableRow } from '../components/SwipeableRow';
 import Reanimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { EmptyState } from '../components/EmptyState';
-import { StateCopyView } from '../components/flagship';
 import { useStore } from '../store/useStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { RefreshIndicator } from '../components/RefreshIndicator';
@@ -30,7 +29,14 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { InboxConversationRow } from '../components/chat/InboxConversationRow';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { MessagingSegmentRail, MessagingSegment } from '../components/chat/MessagingSegmentRail';
-import { classifyConversation } from '../utils/conversationClassification';
+import {
+  classifyConversation,
+  getCommerceStatus,
+  needsResponse,
+  hasActiveOffer,
+  needsShipment,
+  type CommerceStatusTone,
+} from '../utils/conversationClassification';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { Space, Control, Stroke, FontFamily } from '../theme/designTokens';
@@ -41,7 +47,7 @@ import { colorForId, initialsFromName } from '../utils/avatarColor';
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 type InboxRoute = RouteProp<RootStackParamList, 'Inbox'>;
 type ConvoItem = Conversation;
-type InboxSegment = MessagingSegment | 'unread' | 'archived' | 'groups';
+type InboxSegment = MessagingSegment | 'all' | 'unread' | 'buying' | 'selling' | 'archived' | 'groups';
 
 const AnimatedFlashList = Reanimated.createAnimatedComponent(FlashList) as unknown as React.ComponentClass<FlashListProps<Conversation>>;
 
@@ -54,18 +60,20 @@ function ListingContextThumbnail({ itemId }: { itemId: string }) {
   }), [colors]);
   if (!listing?.images?.[0]) {
     return (
-      <View style={[styles.contextThumb, listingThemed.contextThumb]}>
-        <AppIcon name="pricetag" size={14} color={colors.textMuted} />
+      <View style={[styles.contextThumb, listingThemed.contextThumb]} accessible={false} importantForAccessibility="no-hide-descendants">
+        <Ionicons name="bag-handle-outline" size={14} color={colors.textMuted} />
       </View>
     );
   }
   return (
-    <CachedImage
-      uri={listing.images[0]}
-      style={styles.contextThumbImage}
-      containerStyle={[styles.contextThumb, listingThemed.contextThumb]}
-      contentFit="cover"
-    />
+    <View accessible={false} importantForAccessibility="no-hide-descendants">
+      <CachedImage
+        uri={listing.images[0]}
+        style={styles.contextThumbImage}
+        containerStyle={[styles.contextThumb, listingThemed.contextThumb]}
+        contentFit="cover"
+      />
+    </View>
   );
 }
 
@@ -74,7 +82,12 @@ export default function InboxScreen() {
   const reducedMotion = useReducedMotion();
   const navigation = useNavigation<NavT>();
   const route = useRoute<InboxRoute>();
-  const filterItemId = route.params?.filterItemId;
+  // ── Listing context filter (P2-06) ──
+  // When navigated from ManageListing → Questions, the inbox scopes to
+  // conversations about that specific listing. A local state override
+  // lets the user clear the filter via "Show all" without navigating away.
+  const routeListingId = route.params?.listingId;
+  const [listingFilterId, setListingFilterId] = useState<string | undefined>(routeListingId);
   const { showSuccess, showInfo, showError } = useNotifications();
   const haptic = useHaptic();
   const { refreshListings, listings } = useBackendData();
@@ -102,9 +115,14 @@ export default function InboxScreen() {
   const [isOffline, setIsOffline] = useState(false);
   // Search is behind an icon in the first viewport — expands on tap.
   const [searchVisible, setSearchVisible] = useState(false);
-  // Additional classifiers (Requests, Unread, Archived, Groups) are behind
-  // a filter icon — expands on tap to show secondary scope chips.
+  // Secondary filters (Unread, Buying, Selling, Archived, Groups) live in a
+  // bottom sheet opened from the filter icon — keeps the first viewport calm
+  // and the Primary/Requests rail as the sole top-tier control.
+  const [filterSheetVisible, setFilterSheetVisible] = useState(false);
   const [filterExpanded, setFilterExpanded] = useState(false);
+  // Seller operational quick-filters — compact chips above the list that
+  // toggle on/off. Null means no seller filter active.
+  const [sellerFilter, setSellerFilter] = useState<'needs-response' | 'active-offers' | 'ship-now' | null>(null);
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
     title: string;
@@ -293,12 +311,25 @@ export default function InboxScreen() {
     return map;
   }, [conversations, currentUser?.id, currentUser?.username]);
   const profileMediaOverrides = useStore((s) => s.profileMediaOverrides);
+  // ── Listing-scoped filter ──
+  // When a listingId filter is active, only conversations whose context
+  // listing or itemId matches are shown. The filter is applied before
+  // segment/search so the user sees a focused subset.
+  const filteredByListing = useMemo(() => {
+    if (!listingFilterId) return conversations;
+    return conversations.filter((c) => {
+      const contextListingId = c.context?.listing?.id;
+      return contextListingId === listingFilterId || c.itemId === listingFilterId;
+    });
+  }, [conversations, listingFilterId]);
+  const filteredListingTitle = useMemo(() => {
+    if (!listingFilterId) return null;
+    const listing = listings.find((l) => l.id === listingFilterId);
+    return listing?.title ?? null;
+  }, [listings, listingFilterId]);
   const visibleConversations = useMemo(() => {
     const normalizedQuery = String(searchQuery ?? '').trim().toLowerCase();
-    const scoped = conversations.filter((conversation) => {
-      // Listing-scoped view (from ManageListingScreen "View questions"):
-      // restrict to conversations about this listing only.
-      if (filterItemId && conversation.itemId !== filterItemId) return false;
+    const scoped = filteredByListing.filter((conversation) => {
       const isArchived = archivedIds.includes(conversation.id);
       const isRequest = messageRequests.includes(conversation.id);
       if (segment === 'unread' && !conversation.unread) return false;
@@ -332,7 +363,7 @@ export default function InboxScreen() {
       return b.lastMessageTime.localeCompare(a.lastMessageTime);
     });
     return ordered;
-  }, [conversations, searchQuery, segment, currentUser?.id, participantNameLookup, archivedIds, messageRequests, filterItemId]);
+  }, [filteredByListing, searchQuery, segment, currentUser?.id, participantNameLookup, archivedIds, messageRequests]);
   const unreadCount = useMemo(() => visibleConversations.filter((c) => c.unread).length, [visibleConversations]);
   const buyingUnreadCount = useMemo(
     () => conversations.filter(
@@ -414,16 +445,27 @@ export default function InboxScreen() {
   }, [declineMessageRequest, showInfo, showError, haptic]);
   const handlePin = useCallback((id: string) => {
     haptic.medium();
-    toggleConversationPinned(id);
-    showSuccess('Pinned', 'Conversation pinned.');
-  }, [toggleConversationPinned, showSuccess, haptic]);
+    const nowPinned = !conversations.find((c) => c.id === id)?.isPinned;
+    toggleConversationPinned(id)
+      .then(() => {
+        showSuccess(nowPinned ? 'Pinned' : 'Unpinned', nowPinned ? 'Conversation pinned.' : 'Conversation unpinned.');
+      })
+      .catch(() => {
+        showError('Action failed', 'Could not update pin status. Check your connection and try again.');
+      });
+  }, [conversations, toggleConversationPinned, showSuccess, showError, haptic]);
   const handleToggleRead = useCallback((id: string) => {
     const convo = conversations.find((c) => c.id === id);
     const willMarkUnread = convo ? !convo.unread : false;
     haptic.light();
-    toggleConversationUnread(id);
-    showInfo(willMarkUnread ? 'Marked unread' : 'Marked read', willMarkUnread ? 'Conversation marked as unread' : 'Conversation marked as read');
-  }, [conversations, toggleConversationUnread, showInfo, haptic]);
+    toggleConversationUnread(id)
+      .then(() => {
+        showInfo(willMarkUnread ? 'Marked unread' : 'Marked read', willMarkUnread ? 'Conversation marked as unread' : 'Conversation marked as read');
+      })
+      .catch(() => {
+        showError('Action failed', 'Could not update read status. Check your connection and try again.');
+      });
+  }, [conversations, toggleConversationUnread, showInfo, showError, haptic]);
 
   // Long-press quick actions: an ActionSheet exposing mute, pin, and
   // delete. Preserves the capabilities previously surfaced via the old
@@ -465,8 +507,8 @@ export default function InboxScreen() {
           </Text>
         )}
         {(item.botIds?.length ?? 0) > 0 && (
-          <View style={[styles.botIndicator, t.botIndicator]}>
-            <AppIcon name="sparkles" size={14} color={colors.brand} />
+          <View style={[styles.botIndicator, t.botIndicator]} accessible={false} importantForAccessibility="no-hide-descendants">
+            <Ionicons name="bulb-outline" size={14} color={colors.brand} />
           </View>
         )}
       </View>
@@ -540,7 +582,6 @@ export default function InboxScreen() {
           const listing = listings.find((l) => l.id === item.itemId);
           return listing?.images?.[0] ?? null;
         })() : undefined}
-        listingContextThumb={item.itemId ? <ListingContextThumbnail itemId={item.itemId} /> : undefined}
         avatarElement={avatarEl}
         onPress={() => {
           markConversationRead(item.id);
@@ -598,7 +639,10 @@ export default function InboxScreen() {
     handleArchive,
   ]);
   return (
-    <SafeAreaView testID="inbox-screen" edges={['top']} style={[styles.screenRoot, t.screenRoot]}>
+    <SafeAreaView testID="inbox-screen" edges={['top']} style={[styles.screenRoot, t.screenRoot]}
+      accessibilityElementsHidden={actionSheet.visible || confirmSheet.visible}
+      importantForAccessibility={actionSheet.visible || confirmSheet.visible ? 'no-hide-descendants' : 'auto'}
+    >
       <View style={styles.compactHeader}>
         <Text style={[styles.headerTitle, t.headerTitle]}>Inbox</Text>
         <View style={styles.headerActions}>
@@ -616,9 +660,8 @@ export default function InboxScreen() {
             accessibilityHint="Opens the search bar to find conversations"
             accessibilityRole="button"
           >
-            <AppIcon
-              name="search"
-              focused={searchVisible}
+            <Ionicons
+              name={searchVisible ? 'search' : 'search-outline'}
               size={20}
               color={searchVisible ? colors.brand : colors.textSecondary}
             />
@@ -631,16 +674,15 @@ export default function InboxScreen() {
             hapticFeedback="light"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel="More filters"
-            accessibilityHint="Shows additional filters: unread, archived, groups"
+            accessibilityHint="Shows additional filters: requests, unread, archived, groups"
             accessibilityRole="button"
           >
-            <AppIcon
-              name="options"
-              focused={filterExpanded}
+            <Ionicons
+              name={filterExpanded ? 'options' : 'options-outline'}
               size={20}
-              color={filterExpanded || ['unread', 'archived', 'groups'].includes(segment) ? colors.brand : colors.textSecondary}
+              color={filterExpanded || ['requests', 'unread', 'archived', 'groups'].includes(segment) ? colors.brand : colors.textSecondary}
             />
-            {['unread', 'archived', 'groups'].includes(segment) && !filterExpanded ? (
+            {['requests', 'unread', 'archived', 'groups'].includes(segment) && !filterExpanded ? (
               <View style={[styles.filterDot, t.filterDot]} />
             ) : null}
           </AnimatedPressable>
@@ -655,7 +697,7 @@ export default function InboxScreen() {
             accessibilityHint="Opens privacy, automation, and quick reply settings"
             accessibilityRole="button"
           >
-            <AppIcon name="settings" size={20} color={colors.textSecondary} />
+            <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
           </AnimatedPressable>
           <AnimatedPressable
             style={[styles.newMessageBtn, t.newMessageBtn]}
@@ -666,7 +708,7 @@ export default function InboxScreen() {
             accessibilityLabel="New message"
             accessibilityRole="button"
           >
-            <AppIcon name="edit" size={18} color={colors.textInverse} />
+            <Ionicons name="create-outline" size={18} color={colors.textInverse} />
             <Text style={[styles.newMessageBtnText, t.newMessageBtnText]}>New</Text>
           </AnimatedPressable>
         </View>
@@ -686,18 +728,17 @@ export default function InboxScreen() {
           />
         )}
         <MessagingSegmentRail
-          active={segment === 'all' || segment === 'buying' || segment === 'selling' || segment === 'requests' ? segment : 'all'}
+          active={segment === 'requests' ? 'requests' : 'primary'}
           onChange={(s) => setSegment(s)}
           requestCount={messageRequests.length}
-          buyingCount={buyingUnreadCount}
-          sellingCount={sellingUnreadCount}
         />
         {filterExpanded && (
           <View style={styles.filterChips}>
             {([
-              { key: 'unread' as const, label: 'Unread', badge: unreadCount },
-              { key: 'archived' as const, label: 'Archived', badge: archivedIds.length },
-              { key: 'groups' as const, label: 'Groups', badge: conversations.filter(c => c.type === 'group').length },
+              { key: 'requests' as const, label: 'Requests', badge: messageRequests.length },
+              { key: 'unread' as const, label: 'Unread' },
+              { key: 'archived' as const, label: 'Archived' },
+              { key: 'groups' as const, label: 'Groups' },
             ]).map((chip) => {
               const isActive = segment === chip.key;
               return (
@@ -731,8 +772,8 @@ export default function InboxScreen() {
                     {chip.label}
                   </Text>
                   {(chip.badge ?? 0) > 1 ? (
-                    <View style={[styles.unreadPill, t.unreadPill, isActive && { backgroundColor: `${colors.textInverse}30` /* TODO: no textInverseSubtle token available */ }]}>
-                      <Text style={[styles.unreadPillText, t.unreadPillText, isActive && { color: colors.textInverse }]}>
+                    <View style={[styles.unreadPill, t.unreadPill, isActive && { backgroundColor: colors.textInverse }]}>
+                      <Text style={[styles.unreadPillText, t.unreadPillText, isActive && { color: colors.textPrimary }]}>
                         {chip.badge! > 99 ? '99+' : chip.badge}
                       </Text>
                     </View>
@@ -743,33 +784,14 @@ export default function InboxScreen() {
           </View>
         )}
       </View>
-      {filterItemId && (
-        <View style={[styles.itemFilterBanner, { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border }]}>
-          <AppIcon name="tag" size={14} color={colors.brand} />
-          <Text style={[styles.itemFilterBannerText, { color: colors.textSecondary }]} numberOfLines={1}>
-            Questions about this listing
-          </Text>
-          <AnimatedPressable
-            onPress={() => navigation.setParams({ filterItemId: undefined })}
-            activeOpacity={0.7}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel="Clear listing filter"
-          >
-            <Text style={[styles.itemFilterBannerClear, { color: colors.brand }]}>All</Text>
-          </AnimatedPressable>
-        </View>
-      )}
       {isOffline && (
         <OfflineBanner message="You are offline" />
       )}
       {!!syncError && (
         <View style={[styles.errorBanner, t.errorBanner]}>
-          <AppIcon name="alert" size={16} color={colors.danger} />
+          <Ionicons name="alert-circle-outline" size={16} color={colors.danger} accessible={false} />
           <View style={styles.errorBannerCopy}>
-            <Text style={[styles.errorBannerTitle, t.errorBannerTitle]}>Couldn't sync messages</Text>
+            <Text style={[styles.errorBannerTitle, t.errorBannerTitle]} accessibilityLiveRegion="polite">Couldn't sync messages</Text>
             <Text style={[styles.errorBannerSub, t.errorBannerSub]}>Check your connection or retry.</Text>
           </View>
           <AnimatedPressable
@@ -778,9 +800,38 @@ export default function InboxScreen() {
             scaleValue={0.95}
             hapticFeedback="light"
             accessibilityLabel="Retry loading conversations"
+            accessibilityRole="button"
             style={styles.errorBannerRetryBtn}
           >
             <Text style={[styles.errorBannerRetry, t.errorBannerRetry]}>Retry</Text>
+          </AnimatedPressable>
+        </View>
+      )}
+      {listingFilterId && (
+        <View style={[styles.listingFilterBanner, { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border }]}>
+          <Ionicons name="pricetag-outline" size={16} color={colors.brand} accessible={false} />
+          <View style={styles.listingFilterCopy}>
+            <Text style={[styles.listingFilterTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+              {filteredListingTitle ?? 'Listing'}
+            </Text>
+            <Text style={[styles.listingFilterSub, { color: colors.textMuted }]}>
+              Showing conversations about this listing
+            </Text>
+          </View>
+          <AnimatedPressable
+            onPress={() => {
+              haptic.light();
+              setListingFilterId(undefined);
+            }}
+            activeOpacity={0.7}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityLabel="Show all conversations"
+            accessibilityHint="Clear the listing filter and show all conversations"
+            accessibilityRole="button"
+            style={styles.listingFilterShowAll}
+          >
+            <Text style={[styles.listingFilterShowAllText, { color: colors.brand }]}>Show all</Text>
           </AnimatedPressable>
         </View>
       )}
@@ -812,7 +863,7 @@ export default function InboxScreen() {
                   style={styles.requestsBannerTap}
                 >
                   <View style={[styles.requestsAvatar, t.requestsAvatar]}>
-                    <AppIcon name="mailUnread" size={18} color={colors.brand} />
+                    <Ionicons name="mail-unread-outline" size={18} color={colors.brand} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.requestsBannerText, t.requestsBannerText]}>Message Requests</Text>
@@ -823,7 +874,7 @@ export default function InboxScreen() {
                   <View style={[styles.requestsBadge, t.requestsBadge]}>
                     <Text style={[styles.requestsBadgeText, t.requestsBadgeText]}>{messageRequests.length}</Text>
                   </View>
-                  <AppIcon name="forward" size={16} color={colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
                 </AnimatedPressable>
               </View>
             )}
@@ -847,12 +898,25 @@ export default function InboxScreen() {
               }
               ListEmptyComponent={
                 (() => {
+                  if (listingFilterId) {
+                    return (
+                      <EmptyState
+                        icon="chatbubbles-outline"
+                        title="No conversations about this listing"
+                        subtitle="When buyers message you about this item, their conversations will appear here."
+                        ctaLabel="Show all"
+                        onCtaPress={() => setListingFilterId(undefined)}
+                      />
+                    );
+                  }
                   if (searchQuery.trim()) {
                     return (
-                      <StateCopyView
-                        state="emptyFiltered"
-                        copyKey="conversations"
-                        onRetry={() => setSearchQuery('')}
+                      <EmptyState
+                        icon="search-outline"
+                        title="No matching conversations"
+                        subtitle="Try another keyword or filter."
+                        ctaLabel="Clear search"
+                        onCtaPress={() => setSearchQuery('')}
                       />
                     );
                   }
@@ -918,11 +982,12 @@ export default function InboxScreen() {
                       );
                     default:
                       return (
-                        <StateCopyView
-                          state="empty"
-                          copyKey="conversations"
-                          emptyCtaLabel="Browse listings"
-                          onEmptyCta={() => navigation.navigate('MainTabs')}
+                        <EmptyState
+                          icon="chatbubbles-outline"
+                          title="No conversations yet"
+                          subtitle="Start chatting with a seller to see your messages here."
+                          ctaLabel="Browse listings"
+                          onCtaPress={() => navigation.navigate('MainTabs')}
                         />
                       );
                   }
@@ -950,9 +1015,9 @@ export default function InboxScreen() {
           <Text style={[styles.actionSheetTitle, { color: colors.textPrimary }]}>
             Conversation
           </Text>
-          <View style={styles.actionSheetList}>
+          <View style={[styles.actionSheetList, { borderColor: colors.border }]}>
             <AnimatedPressable
-              style={[styles.actionSheetRow, { backgroundColor: colors.surfaceAlt }]}
+              style={styles.actionSheetRow}
               onPress={() => {
                 const id = actionSheet.conversationId;
                 setActionSheet((s) => ({ ...s, visible: false }));
@@ -964,8 +1029,8 @@ export default function InboxScreen() {
               accessibilityRole="button"
               accessibilityLabel={actionSheet.isMuted ? 'Unmute conversation' : 'Mute conversation'}
             >
-              <AppIcon
-                name={actionSheet.isMuted ? 'notifications' : 'notificationsOff'}
+              <Ionicons
+                name={actionSheet.isMuted ? 'notifications-outline' : 'notifications-off-outline'}
                 size={22}
                 color={colors.brand}
               />
@@ -973,8 +1038,9 @@ export default function InboxScreen() {
                 {actionSheet.isMuted ? 'Unmute' : 'Mute'}
               </Text>
             </AnimatedPressable>
+            <View style={[styles.actionSheetDivider, { backgroundColor: colors.border }]} />
             <AnimatedPressable
-              style={[styles.actionSheetRow, { backgroundColor: colors.surfaceAlt }]}
+              style={styles.actionSheetRow}
               onPress={() => {
                 const id = actionSheet.conversationId;
                 setActionSheet((s) => ({ ...s, visible: false }));
@@ -986,9 +1052,8 @@ export default function InboxScreen() {
               accessibilityRole="button"
               accessibilityLabel={actionSheet.isPinned ? 'Unpin conversation' : 'Pin conversation'}
             >
-              <AppIcon
-                name="pin"
-                focused={!actionSheet.isPinned}
+              <Ionicons
+                name={actionSheet.isPinned ? 'pin-outline' : 'pin'}
                 size={22}
                 color={colors.brand}
               />
@@ -996,8 +1061,9 @@ export default function InboxScreen() {
                 {actionSheet.isPinned ? 'Unpin' : 'Pin'}
               </Text>
             </AnimatedPressable>
+            <View style={[styles.actionSheetDivider, { backgroundColor: colors.border }]} />
             <AnimatedPressable
-              style={[styles.actionSheetRow, { backgroundColor: colors.surfaceAlt }]}
+              style={styles.actionSheetRow}
               onPress={() => {
                 const id = actionSheet.conversationId;
                 setActionSheet((s) => ({ ...s, visible: false }));
@@ -1009,14 +1075,14 @@ export default function InboxScreen() {
               accessibilityRole="button"
               accessibilityLabel="Delete conversation"
             >
-              <AppIcon name="trash" size={22} color={colors.danger} />
+              <Ionicons name="trash-outline" size={22} color={colors.danger} />
               <Text style={[styles.actionSheetRowLabel, { color: colors.danger }]}>
                 Delete
               </Text>
             </AnimatedPressable>
           </View>
           <AnimatedPressable
-            style={[styles.actionSheetCancelBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+            style={[styles.actionSheetCancelBtn, { borderColor: colors.border }]}
             onPress={() => setActionSheet((s) => ({ ...s, visible: false }))}
             activeOpacity={0.7}
             scaleValue={0.98}
@@ -1293,24 +1359,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  itemFilterBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  itemFilterBannerText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-    minWidth: 0,
-  },
-  itemFilterBannerClear: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold,
-  },
   errorBannerCopy: {
     flex: 1,
     gap: Space.xs / 4,
@@ -1328,6 +1376,37 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
   },
   errorBannerRetry: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+  },
+  listingFilterBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  listingFilterCopy: {
+    flex: 1,
+    gap: Space.xs / 4,
+  },
+  listingFilterTitle: {
+    fontSize: TypographyV2.body.size,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.body.letterSpacing,
+  },
+  listingFilterSub: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+  },
+  listingFilterShowAll: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  listingFilterShowAllText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.semibold,
   },
@@ -1355,15 +1434,20 @@ const styles = StyleSheet.create({
     letterSpacing: TypographyV2.body.letterSpacing,
   },
   actionSheetList: {
-    gap: Space.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RadiusRoleValue.compactControl,
+    overflow: 'hidden',
+  },
+  actionSheetDivider: {
+    height: StyleSheet.hairlineWidth,
   },
   actionSheetRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd,
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.sm + 2,
-    borderRadius: RadiusRoleValue.compactControl,
+    paddingVertical: Space.sm + 4,
+    paddingHorizontal: Space.md,
+    minHeight: 44,
   },
   actionSheetRowLabel: {
     fontSize: TypographyV2.body.size,
@@ -1373,7 +1457,7 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.compactControl,
     paddingVertical: Space.md,
     alignItems: 'center',
-    marginTop: Space.xs,
+    marginTop: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: 44,
     justifyContent: 'center',

@@ -12,6 +12,8 @@ export interface SellerTrustSummary {
   completedSales?: number | null;
   responseRate?: number | null;
   responseTimeLabel?: string | null;
+  /** G8: Real median response time in hours, computed from chat_messages. */
+  avgResponseHours?: number | null;
   dispatchTimeLabel?: string | null;
   memberSince?: string | null;
   location?: string | null;
@@ -301,7 +303,7 @@ export function buildCapabilities(
   currentUserId?: string
 ): ListingCapabilities {
   const isOwner = !!currentUserId && listing.sellerId === currentUserId;
-  const status = listing.status ?? (listing.isSold ? 'sold' : 'active');
+  const status = listing.status ?? (listing.isSold ? 'sold' : undefined);
   const isSold = status === 'sold';
   let unavailableReason: ListingCapabilities['unavailableReason'] = null;
   if (isSold) unavailableReason = 'sold';

@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  ActivityIndicator,
   useWindowDimensions,
   Pressable } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
@@ -29,6 +30,12 @@ import { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
 import { UploadQueueItem, UploadQueueItemState } from '../../services/mediaUploadQueue';
 import { isVideoUri } from '../../utils/media';
 import { Video, ResizeMode } from '../compat/Video';
+import {
+  rotateImage,
+  flipImage,
+  cropImage,
+  type MediaTransformResult,
+} from '../../platform/media/mediaTransforms';
 
 const THUMB_SIZE = 80;
 
@@ -69,6 +76,11 @@ interface ListingMediaStudioProps {
   reorderEnabled?: boolean;
   /** Edit-Listing: optional note shown below the strip when reorder is disabled */
   lockedNote?: string;
+  /**
+   * Called when the user applies a crop/rotate/flip transform to an item.
+   * The host replaces the item's URI with the transformed result.
+   */
+  onTransformItem?: (itemId: string, transformedUri: string) => void;
 }
 
 function getItemStatus(
@@ -235,7 +247,8 @@ export function ListingMediaStudio({
   removeLabel = 'Remove',
   canRemoveItem,
   reorderEnabled = true,
-  lockedNote }: ListingMediaStudioProps) {
+  lockedNote,
+  onTransformItem }: ListingMediaStudioProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotion = useReducedMotion();
@@ -276,6 +289,12 @@ export function ListingMediaStudio({
     haptic.medium();
     onSetCover?.(itemId);
   }, [haptic, onSetCover]);
+
+  // ── Crop / Rotate / Flip transform toolbar ──
+  // Appears as an overlay on the cover when the user taps "Edit".
+  // Uses the existing mediaTransforms.ts functions (expo-image-manipulator).
+  const [transformOpen, setTransformOpen] = useState(false);
+  const [transformBusy, setTransformBusy] = useState(false);
 
   const prevStatusMap = useRef<Record<string, ItemStatus>>({});
   useEffect(() => {
@@ -341,6 +360,36 @@ export function ListingMediaStudio({
   const coverCanRemove = canRemoveItem ? canRemoveItem(coverItem.id) : true;
   const photoUris = items.map(getDisplayUri);
   const itemIds = items.map((m) => m.id);
+
+  // ── Transform handler (crop/rotate/flip) ──
+  // Uses the existing mediaTransforms.ts functions. Only applies to local
+  // image URIs (file:// / content://) — remote URLs need download first.
+  const applyTransform = useCallback(async (
+    action: 'rotateLeft' | 'rotateRight' | 'flip',
+  ) => {
+    if (!onTransformItem || transformBusy) return;
+    const uri = coverDisplayUri;
+    if (!uri.startsWith('file://') && !uri.startsWith('content://')) return;
+    if (isVideoUri(uri)) return;
+    setTransformBusy(true);
+    haptic.light();
+    try {
+      let result: MediaTransformResult;
+      if (action === 'rotateLeft') {
+        result = await rotateImage(uri, 270);
+      } else if (action === 'rotateRight') {
+        result = await rotateImage(uri, 90);
+      } else {
+        result = await flipImage(uri, 'horizontal');
+      }
+      onTransformItem(coverItem.id, result.uri);
+      haptic.success();
+    } catch {
+      haptic.warning();
+    } finally {
+      setTransformBusy(false);
+    }
+  }, [onTransformItem, transformBusy, coverDisplayUri, coverItem.id, haptic]);
 
   /* Render each thumbnail inside SortablePhotoStrip */
   const renderThumbItem = (index: number) => {
@@ -566,6 +615,64 @@ export function ListingMediaStudio({
             <Text style={styles.coverCancelledText}>Cancelled</Text>
           </View>
         )}
+
+        {/* ── Edit / transform toolbar ──
+            Crop, rotate, and flip for the cover image. Only shown for
+            local image URIs (not videos or remote-only items). */}
+        {onTransformItem && !isCoverVideo && coverStatus !== 'failed' && coverStatus !== 'cancelled' && (
+          <>
+            <Pressable
+              style={styles.coverEditBtn}
+              onPress={() => { haptic.light(); setTransformOpen((v) => !v); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={transformOpen ? 'Close edit tools' : 'Edit photo'}
+            >
+              <Ionicons name={transformOpen ? 'close' : 'create-outline'} size={18} color={colors.scrimTextPrimary} aria-hidden={true} />
+            </Pressable>
+
+            {transformOpen && (
+              <View style={styles.transformBar}>
+                {transformBusy ? (
+                  <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
+                ) : (
+                  <>
+                    <Pressable
+                      style={styles.transformBtn}
+                      onPress={() => void applyTransform('rotateLeft')}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Rotate left"
+                    >
+                      <Ionicons name="return-down-back-outline" size={20} color={colors.scrimTextPrimary} aria-hidden={true} />
+                      <Text style={styles.transformBtnText}>Rotate ↺</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.transformBtn}
+                      onPress={() => void applyTransform('rotateRight')}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Rotate right"
+                    >
+                      <Ionicons name="return-down-forward-outline" size={20} color={colors.scrimTextPrimary} aria-hidden={true} />
+                      <Text style={styles.transformBtnText}>Rotate ↻</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.transformBtn}
+                      onPress={() => void applyTransform('flip')}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Flip horizontally"
+                    >
+                      <Ionicons name="swap-horizontal" size={20} color={colors.scrimTextPrimary} aria-hidden={true} />
+                      <Text style={styles.transformBtnText}>Flip</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            )}
+          </>
+        )}
       </View>
 
       {/* ── Sortable thumbnail rail ── */}
@@ -743,6 +850,35 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center' },
+  coverEditBtn: {
+    position: 'absolute',
+    top: Space.sm,
+    right: Space.sm + 40,
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  transformBar: {
+    position: 'absolute',
+    bottom: Space.sm,
+    left: Space.sm,
+    right: Space.sm,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Space.md,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.overlay },
+  transformBtn: {
+    alignItems: 'center',
+    gap: 2 },
+  transformBtnText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.scrimTextPrimary },
   coverStatusOverlay: {
     position: 'absolute',
     top: 0,

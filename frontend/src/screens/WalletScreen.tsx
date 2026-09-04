@@ -533,9 +533,9 @@ export default function WalletScreen({ navigation }: Props) {
             icon="cash-outline"
             iconColor={colors.brand}
             title={t('commerce.wallet.sellerEarnings')}
-            subtitle={t('commerce.wallet.sellerEarningsSubtitle', { available: formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' }) })}
+            subtitle={t('commerce.wallet.sellerEarningsSubtitle', { available: formatFromFiat(sellerBalances.availableGbp, 'GBP', { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, 'GBP', { displayMode: 'fiat' }) })}
             onPress={handleViewEarnings}
-            accessibilityLabel={t('commerce.wallet.a11y.sellerEarnings', { available: formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' }) })}
+            accessibilityLabel={t('commerce.wallet.a11y.sellerEarnings', { available: formatFromFiat(sellerBalances.availableGbp, 'GBP', { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, 'GBP', { displayMode: 'fiat' }) })}
             accessibilityHint={t('commerce.wallet.a11y.viewSellerEarnings')}
           />
         )}

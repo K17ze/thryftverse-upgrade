@@ -36,6 +36,7 @@ RANKING_FEATURES: tuple[str, ...] = (
     "quality",
     "popularity",
     "seller_trust",
+    "response_velocity",  # G8: seller response time as ranking signal
 )
 
 
@@ -103,6 +104,19 @@ def _freshness(candidate: CandidateItem, as_of: datetime) -> float:
         return 0.45
     age_days = max(0.0, (as_of - _utc(candidate.created_at, as_of)).total_seconds() / 86_400)
     return math.exp(-age_days / 28.0)
+
+
+def _response_velocity(candidate: CandidateItem) -> float:
+    """G8: Map seller response time (hours) to a 0–1 velocity score.
+
+    < 1h → ~1.0 (excellent), 3h → ~0.7, 12h → ~0.3, 24h+ → ~0.1.
+    Sellers with no response data get a neutral 0.5.
+    """
+    if candidate.seller_response_hours is None:
+        return 0.5
+    hours = max(0.0, candidate.seller_response_hours)
+    # Exponential decay: fast responders score high, slow responders score low.
+    return math.exp(-hours / 6.0)
 
 
 def _event_weight(event: InteractionEvent, as_of: datetime) -> float:
@@ -226,23 +240,26 @@ def extract_candidate_features(
             "quality": candidate.quality_score,
             "popularity": candidate.popularity_score,
             "seller_trust": candidate.seller_trust_score,
+            "response_velocity": _response_velocity(candidate),
         }
         if cold_start:
             utility = (
-                0.32 * components["quality"]
-                + 0.27 * components["popularity"]
-                + 0.23 * components["freshness"]
-                + 0.18 * components["seller_trust"]
+                0.30 * components["quality"]
+                + 0.25 * components["popularity"]
+                + 0.20 * components["freshness"]
+                + 0.15 * components["seller_trust"]
+                + 0.10 * components["response_velocity"]
             )
         else:
             utility = (
-                0.34 * components["affinity"]
-                + 0.18 * components["sequence"]
-                + 0.14 * components["price_alignment"]
-                + 0.12 * components["quality"]
-                + 0.09 * components["popularity"]
+                0.32 * components["affinity"]
+                + 0.17 * components["sequence"]
+                + 0.13 * components["price_alignment"]
+                + 0.11 * components["quality"]
+                + 0.08 * components["popularity"]
                 + 0.07 * components["freshness"]
                 + 0.06 * components["seller_trust"]
+                + 0.06 * components["response_velocity"]
             )
         rows.append(
             {
@@ -324,23 +341,26 @@ def rank_recommendations(payload: RecommendationRequest) -> RecommendationRespon
             "quality": candidate.quality_score,
             "popularity": candidate.popularity_score,
             "seller_trust": candidate.seller_trust_score,
+            "response_velocity": _response_velocity(candidate),
         }
         if cold_start:
             utility = (
-                0.32 * components["quality"]
-                + 0.27 * components["popularity"]
-                + 0.23 * components["freshness"]
-                + 0.18 * components["seller_trust"]
+                0.30 * components["quality"]
+                + 0.25 * components["popularity"]
+                + 0.20 * components["freshness"]
+                + 0.15 * components["seller_trust"]
+                + 0.10 * components["response_velocity"]
             )
         else:
             utility = (
-                0.34 * components["affinity"]
-                + 0.18 * components["sequence"]
-                + 0.14 * components["price_alignment"]
-                + 0.12 * components["quality"]
-                + 0.09 * components["popularity"]
+                0.32 * components["affinity"]
+                + 0.17 * components["sequence"]
+                + 0.13 * components["price_alignment"]
+                + 0.11 * components["quality"]
+                + 0.08 * components["popularity"]
                 + 0.07 * components["freshness"]
                 + 0.06 * components["seller_trust"]
+                + 0.06 * components["response_velocity"]
             )
         ranked.append(
             {

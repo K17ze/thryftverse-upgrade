@@ -32,7 +32,7 @@ export default function SuccessScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
 
   const [order, setOrder] = React.useState<CommerceOrder | null>(null);
@@ -151,7 +151,7 @@ export default function SuccessScreen() {
                 <View style={styles.orderInfo}>
                   <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
                   <Text style={styles.orderSeller}>from @{sellerName}</Text>
-                  <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, currencyCode)}</Text>
+                  <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, 'GBP')}</Text>
                 </View>
               </ElevatedSurface>
             </View>

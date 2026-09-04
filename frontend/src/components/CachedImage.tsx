@@ -87,6 +87,8 @@ interface CachedImageProps {
   accessibilityLabel?: string;
   /** When true, hides this element and its descendants from the screen reader. */
   accessibilityElementsHidden?: boolean;
+  /** When false, removes this element from the accessibility tree. */
+  accessible?: boolean;
 }
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
@@ -115,6 +117,7 @@ function CachedImageComponent({
   accessibilityRole,
   accessibilityLabel,
   accessibilityElementsHidden,
+  accessible,
 }: CachedImageProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -270,6 +273,7 @@ function CachedImageComponent({
         accessibilityRole={accessibilityRole}
         accessibilityLabel={accessibilityLabel}
         accessibilityElementsHidden={accessibilityElementsHidden}
+        accessible={accessible}
       >
         <ImageEmptyGraphic
           label={emptyLabel}
@@ -286,6 +290,7 @@ function CachedImageComponent({
       accessibilityRole={accessibilityRole}
       accessibilityLabel={accessibilityLabel}
       accessibilityElementsHidden={accessibilityElementsHidden}
+      accessible={accessible}
     >
       {/* Premium fallback for failed loads (404, network error, etc.) —
           never leaves a broken/blank image rectangle. */}
@@ -410,6 +415,7 @@ function cachedImagePropsEqual(prev: CachedImageProps, next: CachedImageProps): 
     prev.accessibilityRole !== next.accessibilityRole ||
     prev.accessibilityLabel !== next.accessibilityLabel ||
     prev.accessibilityElementsHidden !== next.accessibilityElementsHidden ||
+    prev.accessible !== next.accessible ||
     prev.onError !== next.onError ||
     prev.onLoad !== next.onLoad
   ) {

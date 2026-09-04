@@ -21,7 +21,7 @@ import { NativeStackScreenProps, RootStackParamList } from '../navigation/types'
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, Typography, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-import { FlagshipScreen, FlagshipHeader, FlagshipState, DenseListScreen } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { CachedImage } from '../components/CachedImage';
@@ -33,13 +33,16 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useConnectivity } from '../hooks/useConnectivity';
 import {
   fetchUserListingsFromApi,
+  patchListingOnApi,
+  deleteListingOnApi,
   type ListingApiItem } from '../services/listingsApi';
 import {
   submitSellerHubBatchCommand,
-  type SellerHubBatchResult } from '../services/sellerHubApi';
+  fetchSellerInventoryTotals,
+  type SellerHubBatchResult,
+  type SellerInventoryTotals } from '../services/sellerHubApi';
 import { parseApiError } from '../lib/apiClient';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { createStableId } from '../utils/createStableId';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'InventoryManagement'>;
 
@@ -59,7 +62,7 @@ const SORT_OPTIONS: { key: SortOption; label: string }[] = [
   { key: 'price_high', label: 'Price (high to low)' },
   { key: 'price_low', label: 'Price (low to high)' },
   { key: 'most_viewed', label: 'Most viewed' },
-  { key: 'best_selling', label: 'Best selling' },
+  { key: 'best_selling', label: 'Sold first' },
 ];
 
 // Enable LayoutAnimation for selection-mode transitions on Android
@@ -84,6 +87,10 @@ export default function InventoryManagementScreen({ navigation }: Props) {
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [totals, setTotals] = useState<SellerInventoryTotals | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
@@ -107,6 +114,8 @@ export default function InventoryManagementScreen({ navigation }: Props) {
     variant: 'default' | 'danger';
   }>(() => ({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' as const }));
 
+  const PAGE_SIZE = 50;
+
   const load = useCallback(async (silent = false) => {
     if (!currentUser?.id) {
       setIsLoading(false);
@@ -114,9 +123,17 @@ export default function InventoryManagementScreen({ navigation }: Props) {
     }
     if (!silent) setIsLoading(true);
     setError(null);
+    setCursor(null);
+    setHasMore(false);
     try {
-      const res = await fetchUserListingsFromApi(currentUser.id, { limit: 200 });
+      const [res, invTotals] = await Promise.all([
+        fetchUserListingsFromApi(currentUser.id, { limit: PAGE_SIZE }),
+        fetchSellerInventoryTotals().catch(() => null),
+      ]);
       setListings(res.items);
+      setCursor(res.nextCursor ?? null);
+      setHasMore(Boolean(res.nextCursor));
+      if (invTotals) setTotals(invTotals);
     } catch (err) {
       const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
       const parsed = parseApiError(err, isNetworkError ? 'You appear to be offline. Check your connection and try again.' : undefined);
@@ -126,6 +143,21 @@ export default function InventoryManagementScreen({ navigation }: Props) {
       setIsRefreshing(false);
     }
   }, [currentUser?.id, isOffline]);
+
+  const loadMore = useCallback(async () => {
+    if (!currentUser?.id || isLoadingMore || !hasMore || !cursor) return;
+    setIsLoadingMore(true);
+    try {
+      const res = await fetchUserListingsFromApi(currentUser.id, { limit: PAGE_SIZE, cursor });
+      setListings((prev) => [...prev, ...res.items]);
+      setCursor(res.nextCursor ?? null);
+      setHasMore(Boolean(res.nextCursor));
+    } catch {
+      // Non-fatal — user can pull to refresh to retry
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [currentUser?.id, isLoadingMore, hasMore, cursor]);
 
   useFocusEffect(
     useCallback(() => {
@@ -139,8 +171,18 @@ export default function InventoryManagementScreen({ navigation }: Props) {
     void load(true);
   }, [load]);
 
-  // ── Derived summary ──
+  // ── Derived summary from server totals (uncapped) ──
   const summary = useMemo(() => {
+    if (totals) {
+      return {
+        total: totals.active + totals.drafts + totals.paused + totals.sold,
+        active: totals.active,
+        sold: totals.sold,
+        paused: totals.paused,
+        draft: totals.drafts,
+        totalValue: totals.listedValueGbp,
+      };
+    }
     const active = listings.filter((l) => l.status === 'active');
     const sold = listings.filter((l) => l.status === 'sold');
     const paused = listings.filter((l) => l.status === 'paused');
@@ -153,7 +195,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
       paused: paused.length,
       draft: draft.length,
       totalValue };
-  }, [listings]);
+  }, [listings, totals]);
 
   // ── Filtered + sorted list ──
   const filteredListings = useMemo(() => {
@@ -213,28 +255,15 @@ export default function InventoryManagementScreen({ navigation }: Props) {
       prev.map((l) => (l.id === item.id ? { ...l, status: nextStatus } : l))
     );
     try {
-      const response = await submitSellerHubBatchCommand(
-        isPaused ? 'resume' : 'pause',
-        [{ listingId: item.id }],
-        createStableId('listing-command'),
-      );
-      const result = response.results[0];
-      if (result?.state === 'applied') {
-        show(isPaused ? 'Listing resumed' : 'Listing paused', 'success');
-      } else if (result?.state === 'rejected') {
-        setListings((prev) =>
-          prev.map((l) => (l.id === item.id ? { ...l, status: result.currentStatus ?? item.status } : l))
-        );
-        show('This listing can no longer be changed from its current state.', 'error');
-      } else {
-        void load(true);
-        show('Checking the listing’s current status…', 'info');
-      }
+      await patchListingOnApi(item.id, { status: nextStatus as 'active' | 'paused' });
+      show(isPaused ? 'Listing resumed' : 'Listing paused', 'success');
     } catch (err) {
-      // The request may have committed before the response was lost. Keep the
-      // optimistic row and reconcile instead of falsely rolling it back.
-      void load(true);
-      show('Connection interrupted. Checking the listing’s current status…', 'info');
+      // Revert on failure
+      setListings((prev) =>
+        prev.map((l) => (l.id === item.id ? { ...l, status: item.status } : l))
+      );
+      const parsed = parseApiError(err);
+      show(parsed.message, 'error');
     } finally {
       setPendingActionIds((prev) => {
         const next = new Set(prev);
@@ -242,7 +271,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
         return next;
       });
     }
-  }, [pendingActionIds, haptic, show, load]);
+  }, [pendingActionIds, haptic, show]);
 
   const handleRelist = useCallback((item: ListingApiItem) => {
     haptic.light();
@@ -263,25 +292,13 @@ export default function InventoryManagementScreen({ navigation }: Props) {
         setPendingActionIds((prev) => new Set(prev).add(item.id));
         setListings((prev) => prev.filter((l) => l.id !== item.id));
         try {
-          const response = await submitSellerHubBatchCommand(
-            'delete',
-            [{ listingId: item.id }],
-            createStableId('listing-command'),
-          );
-          const result = response.results[0];
-          if (result?.state === 'applied') {
-            show('Listing deleted', 'success');
-          } else if (result?.state === 'rejected') {
-            void load(true);
-            show('This listing cannot be deleted from its current state.', 'error');
-          } else {
-            void load(true);
-            show('Checking whether the listing was deleted…', 'info');
-          }
+          await deleteListingOnApi(item.id);
+          show('Listing deleted', 'success');
         } catch (err) {
-          // Unknown transport outcome: the server receipt is authoritative.
+          // Re-fetch to restore on failure
           void load(true);
-          show('Connection interrupted. Checking whether the listing was deleted…', 'info');
+          const parsed = parseApiError(err);
+          show(parsed.message, 'error');
         } finally {
           setPendingActionIds((prev) => {
             const next = new Set(prev);
@@ -338,7 +355,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
       prev.map((l) => (selectedIds.has(l.id) ? { ...l, status: nextStatus } : l))
     );
     try {
-      const idempotencyKey = createStableId(`bulk-${command}`);
+      const idempotencyKey = `bulk-${command}-${ids.slice().sort().join('-')}`;
       const response = await submitSellerHubBatchCommand(
         command,
         ids.map((id) => ({ listingId: id })),
@@ -384,10 +401,19 @@ export default function InventoryManagementScreen({ navigation }: Props) {
         if (applied.length === ids.length) exitSelectionMode();
       }
     } catch (err) {
-      // Some items may already be committed. Reconcile the whole inventory;
-      // never roll back an authoritative sibling because the response was lost.
-      void load(true);
-      show('Connection interrupted. Checking updated listings…', 'info');
+      // Network/transport error — revert all to original since we can't
+      // confirm any item was committed
+      setListings((prev) =>
+        prev.map((l) => {
+          if (selectedIds.has(l.id)) {
+            const orig = originalStatuses.get(l.id);
+            return orig ? { ...l, status: orig } : l;
+          }
+          return l;
+        })
+      );
+      const parsed = parseApiError(err);
+      show(parsed.message, 'error');
     } finally {
       setPendingActionIds((prev) => {
         const next = new Set(prev);
@@ -418,7 +444,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
         // Optimistic: remove all selected from the list
         setListings((prev) => prev.filter((l) => !selectedIds.has(l.id)));
         try {
-          const idempotencyKey = createStableId('bulk-delete');
+          const idempotencyKey = `bulk-delete-${ids.slice().sort().join('-')}`;
           const response = await submitSellerHubBatchCommand(
             'delete',
             ids.map((id) => ({ listingId: id })),
@@ -456,10 +482,10 @@ export default function InventoryManagementScreen({ navigation }: Props) {
             if (applied.length === ids.length) exitSelectionMode();
           }
         } catch (err) {
-          // Unknown transport outcome: reload durable per-item truth instead of
-          // restoring rows that may already have been deleted.
-          void load(true);
-          show('Connection interrupted. Checking deleted listings…', 'info');
+          // Network/transport error — restore all items
+          setListings(snapshot);
+          const parsed = parseApiError(err);
+          show(parsed.message, 'error');
         } finally {
           setPendingActionIds((prev) => {
             const next = new Set(prev);
@@ -496,241 +522,238 @@ export default function InventoryManagementScreen({ navigation }: Props) {
   const showFilteredEmpty = listings.length > 0 && filteredListings.length === 0;
 
   return (
-    <>
-      <DenseListScreen
-        testID="inventory-management-screen"
-        header={
-          <FlagshipHeader
-            title="Inventory"
-            onBack={() => navigation.goBack()}
-            rightAction={
-              <AnimatedPressable
-                style={styles.headerAction}
-                onPress={() => navigation.navigate('Sell')}
-                accessibilityRole="button"
-                accessibilityLabel="Create new listing"
-                hapticFeedback="light"
-              >
-                <Ionicons name="add-circle-outline" size={24} color={colors.textPrimary} />
-              </AnimatedPressable>
-            }
-          />
-        }
-        preList={
-          <>
-            {/* ── Search bar ── */}
-            <View style={styles.searchWrap}>
-              <Ionicons name="search-outline" size={16} color={colors.textMuted} style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search by title or brand"
-                placeholderTextColor={colors.textMuted}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                accessibilityLabel="Search inventory"
-              />
-              {searchQuery.length > 0 ? (
-                <Pressable
-                  onPress={() => setSearchQuery('')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Clear search"
-                  hitSlop={8}
-                >
-                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-                </Pressable>
-              ) : null}
-            </View>
-
-            {/* ── Summary header — flat canvas, hairline separators ── */}
-            {listings.length > 0 ? (
-              <View style={styles.summaryRow}>
-                <SummaryCell label="Items" value={String(summary.total)} colors={colors} styles={styles} />
-                <SummaryCell label="Active" value={String(summary.active)} colors={colors} styles={styles} accent={colors.success} />
-                <SummaryCell label="Sold" value={String(summary.sold)} colors={colors} styles={styles} accent={colors.textMuted} />
-                <SummaryCell label="Paused" value={String(summary.paused)} colors={colors} styles={styles} accent={colors.warning} />
-                <SummaryCell label="Value" value={formatFromFiat(summary.totalValue, currencyCode, { displayMode: 'fiat' })} colors={colors} styles={styles} accent={colors.brand} last />
-              </View>
-            ) : null}
-          </>
-        }
-        segments={
-          /* ── Filter tabs — underline indicator ── */
-          <View style={styles.filterRail}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRailContent}>
-              {FILTER_TABS.map((tab) => {
-                const isActive = tab.key === activeFilter;
-                return (
-                  <Pressable
-                    key={tab.key}
-                    onPress={() => { haptic.selection(); setActiveFilter(tab.key); }}
-                    style={styles.filterTab}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: isActive }}
-                    accessibilityLabel={`${tab.label} filter`}
-                  >
-                    <Text
-                      style={[
-                        styles.filterTabLabel,
-                        { color: isActive ? colors.textPrimary : colors.textMuted },
-                        isActive && { fontFamily: Typography.family.semibold },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {tab.label}
-                    </Text>
-                    <View style={[styles.filterIndicator, isActive && { backgroundColor: colors.textPrimary }]} />
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        }
-        filterRail={
-          <>
-            {/* ── Sort dropdown ── */}
-            <View style={styles.sortRow}>
-              <Pressable
-                onPress={() => setSortMenuOpen((v) => !v)}
-                style={styles.sortTrigger}
-                accessibilityRole="button"
-                accessibilityLabel={`Sort by ${SORT_OPTIONS.find((o) => o.key === sortOption)?.label}`}
-              >
-                <Ionicons name="swap-vertical-outline" size={14} color={colors.textMuted} />
-                <Text style={styles.sortTriggerText} numberOfLines={1}>
-                  {SORT_OPTIONS.find((o) => o.key === sortOption)?.label ?? 'Sort'}
-                </Text>
-                <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textMuted} />
-              </Pressable>
-            </View>
-
-            {/* Sort menu — inline dropdown */}
-            {sortMenuOpen ? (
-              <View style={styles.sortMenu}>
-                {SORT_OPTIONS.map((opt) => {
-                  const isActive = opt.key === sortOption;
-                  return (
-                    <Pressable
-                      key={opt.key}
-                      onPress={() => { haptic.selection(); setSortOption(opt.key); setSortMenuOpen(false); }}
-                      style={[styles.sortMenuItem, opt.key === SORT_OPTIONS[SORT_OPTIONS.length - 1].key && { borderBottomWidth: 0 }]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Sort by ${opt.label}`}
-                    >
-                      <Text
-                        style={[
-                          styles.sortMenuItemText,
-                          { color: isActive ? colors.brand : colors.textPrimary },
-                          isActive && { fontFamily: Typography.family.semibold },
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                      {isActive ? <Ionicons name="checkmark" size={16} color={colors.brand} /> : null}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : null}
-          </>
-        }
-        list={
-          /* ── Inventory list ── */
-          listings.length === 0 ? (
-            <ScrollView
-              contentContainerStyle={styles.emptyScroll}
-              refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
+    <FlagshipScreen
+      header={
+        <FlagshipHeader
+          title="Inventory"
+          onBack={() => navigation.goBack()}
+          rightAction={
+            <AnimatedPressable
+              style={styles.headerAction}
+              onPress={() => navigation.navigate('Sell')}
+              accessibilityRole="button"
+              accessibilityLabel="Create new listing"
+              hapticFeedback="light"
             >
-              <EmptyState
-                icon="bag-handle-outline"
-                title="No listings yet"
-                subtitle="Create your first listing to start selling."
-                ctaLabel="Create listing"
-                onCtaPress={() => navigation.navigate('Sell')}
-              />
-            </ScrollView>
-          ) : showFilteredEmpty ? (
-            <View style={styles.filteredEmptyWrap}>
-              <EmptyState
-                icon="filter-outline"
-                title="No items match this filter"
-                subtitle={searchQuery ? `No results for "${searchQuery}" in ${activeFilter}.` : `No ${activeFilter} listings.`}
-                density="compact"
-              />
-            </View>
-          ) : (
-            <InventoryList
-              listings={filteredListings}
-              colors={colors}
-              styles={styles}
-              selectionMode={selectionMode}
-              selectedIds={selectedIds}
-              pendingActionIds={pendingActionIds}
-              onLongPress={enterSelectionMode}
-              onPressRow={(item) => {
-                if (selectionMode) {
-                  toggleSelection(item.id);
-                } else {
-                  navigation.navigate('ManageListing', { itemId: item.id });
-                }
-              }}
-              onEdit={handleEdit}
-              onTogglePause={handleTogglePause}
-              onRelist={handleRelist}
-              onDelete={handleDelete}
-              onToggleSelect={toggleSelection}
-              isRefreshing={isRefreshing}
-              onRefresh={onRefresh}
-              selectionBarHeight={selectionMode ? 80 : 0}
+              <Ionicons name="add-circle-outline" size={24} color={colors.textPrimary} />
+            </AnimatedPressable>
+          }
+        />
+      }
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
+      <View style={styles.root}>
+        {/* ── Search bar ── */}
+        <View style={styles.searchWrap}>
+          <Ionicons name="search-outline" size={16} color={colors.textMuted} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by title or brand"
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            accessibilityLabel="Search inventory"
+          />
+          {searchQuery.length > 0 ? (
+            <Pressable
+              onPress={() => setSearchQuery('')}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+              hitSlop={8}
+            >
+              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
+
+        {/* ── Summary header — flat canvas, hairline separators ── */}
+        {listings.length > 0 ? (
+          <View style={styles.summaryRow}>
+            <SummaryCell label="Items" value={String(summary.total)} colors={colors} styles={styles} />
+            <SummaryCell label="Active" value={String(summary.active)} colors={colors} styles={styles} accent={colors.success} />
+            <SummaryCell label="Sold" value={String(summary.sold)} colors={colors} styles={styles} accent={colors.textMuted} />
+            <SummaryCell label="Paused" value={String(summary.paused)} colors={colors} styles={styles} accent={colors.warning} />
+            <SummaryCell label="Value" value={formatFromFiat(summary.totalValue, 'GBP')} colors={colors} styles={styles} accent={colors.brand} last />
+          </View>
+        ) : null}
+
+        {/* ── Filter tabs — underline indicator (InboxScreen segment rail pattern) ── */}
+        <View style={styles.filterRail}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRailContent}>
+            {FILTER_TABS.map((tab) => {
+              const isActive = tab.key === activeFilter;
+              return (
+                <Pressable
+                  key={tab.key}
+                  onPress={() => { haptic.selection(); setActiveFilter(tab.key); }}
+                  style={styles.filterTab}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`${tab.label} filter`}
+                >
+                  <Text
+                    style={[
+                      styles.filterTabLabel,
+                      { color: isActive ? colors.textPrimary : colors.textMuted },
+                      isActive && { fontFamily: Typography.family.semibold },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {tab.label}
+                  </Text>
+                  <View style={[styles.filterIndicator, isActive && { backgroundColor: colors.textPrimary }]} />
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* ── Sort dropdown ── */}
+        <View style={styles.sortRow}>
+          <Pressable
+            onPress={() => setSortMenuOpen((v) => !v)}
+            style={styles.sortTrigger}
+            accessibilityRole="button"
+            accessibilityLabel={`Sort by ${SORT_OPTIONS.find((o) => o.key === sortOption)?.label}`}
+          >
+            <Ionicons name="swap-vertical-outline" size={14} color={colors.textMuted} />
+            <Text style={styles.sortTriggerText} numberOfLines={1}>
+              {SORT_OPTIONS.find((o) => o.key === sortOption)?.label ?? 'Sort'}
+            </Text>
+            <Ionicons name={sortMenuOpen ? 'chevron-up' : 'chevron-down'} size={12} color={colors.textMuted} />
+          </Pressable>
+        </View>
+
+        {/* Sort menu — inline dropdown */}
+        {sortMenuOpen ? (
+          <View style={styles.sortMenu}>
+            {SORT_OPTIONS.map((opt) => {
+              const isActive = opt.key === sortOption;
+              return (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => { haptic.selection(); setSortOption(opt.key); setSortMenuOpen(false); }}
+                  style={[styles.sortMenuItem, opt.key === SORT_OPTIONS[SORT_OPTIONS.length - 1].key && { borderBottomWidth: 0 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Sort by ${opt.label}`}
+                >
+                  <Text
+                    style={[
+                      styles.sortMenuItemText,
+                      { color: isActive ? colors.brand : colors.textPrimary },
+                      isActive && { fontFamily: Typography.family.semibold },
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                  {isActive ? <Ionicons name="checkmark" size={16} color={colors.brand} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* ── Inventory list ── */}
+        {listings.length === 0 ? (
+          <ScrollView
+            contentContainerStyle={styles.emptyScroll}
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
+          >
+            <EmptyState
+              icon="bag-handle-outline"
+              title="No listings yet"
+              subtitle="Create your first listing to start selling."
+              ctaLabel="Create listing"
+              onCtaPress={() => navigation.navigate('Sell')}
             />
-          )
-        }
-        stickyFooter={
-          selectionMode ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={styles.bulkBarInfo}>
-                <Text style={styles.bulkBarCount}>{selectedIds.size} selected</Text>
-              </View>
-              <View style={styles.bulkBarActions}>
-                <Pressable
-                  onPress={() => void handleBulkPause(false)}
-                  style={styles.bulkActionBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Pause selected listings"
-                >
-                  <Ionicons name="pause-outline" size={18} color={colors.textPrimary} />
-                  <Text style={styles.bulkActionText}>Pause</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => void handleBulkPause(true)}
-                  style={styles.bulkActionBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Resume selected listings"
-                >
-                  <Ionicons name="play-outline" size={18} color={colors.textPrimary} />
-                  <Text style={styles.bulkActionText}>Resume</Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleBulkDelete}
-                  style={styles.bulkActionBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Delete selected listings"
-                >
-                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                  <Text style={[styles.bulkActionText, { color: colors.danger }]}>Delete</Text>
-                </Pressable>
-                <Pressable
-                  onPress={exitSelectionMode}
-                  style={styles.bulkActionBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel selection"
-                >
-                  <Text style={styles.bulkCancelText}>Cancel</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : undefined
-        }
-      />
+          </ScrollView>
+        ) : showFilteredEmpty ? (
+          <View style={styles.filteredEmptyWrap}>
+            <EmptyState
+              icon="filter-outline"
+              title="No items match this filter"
+              subtitle={searchQuery ? `No results for "${searchQuery}" in ${activeFilter}.` : `No ${activeFilter} listings.`}
+              density="compact"
+            />
+          </View>
+        ) : (
+          <InventoryList
+            listings={filteredListings}
+            colors={colors}
+            styles={styles}
+            selectionMode={selectionMode}
+            selectedIds={selectedIds}
+            pendingActionIds={pendingActionIds}
+            onLongPress={enterSelectionMode}
+            onPressRow={(item) => {
+              if (selectionMode) {
+                toggleSelection(item.id);
+              } else {
+                navigation.navigate('ManageListing', { itemId: item.id });
+              }
+            }}
+            onEdit={handleEdit}
+            onTogglePause={handleTogglePause}
+            onRelist={handleRelist}
+            onDelete={handleDelete}
+            onToggleSelect={toggleSelection}
+            isRefreshing={isRefreshing}
+            onRefresh={onRefresh}
+            onEndReached={loadMore}
+            isLoadingMore={isLoadingMore}
+            selectionBarHeight={selectionMode ? 80 : 0}
+          />
+        )}
+      </View>
+
+      {/* ── Bulk actions bar ── */}
+      {selectionMode ? (
+        <View
+          style={[styles.bulkBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}
+        >
+          <View style={styles.bulkBarInfo}>
+            <Text style={styles.bulkBarCount}>{selectedIds.size} selected</Text>
+          </View>
+          <View style={styles.bulkBarActions}>
+            <Pressable
+              onPress={() => void handleBulkPause(false)}
+              style={styles.bulkActionBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Pause selected listings"
+            >
+              <Ionicons name="pause-outline" size={18} color={colors.textPrimary} />
+              <Text style={styles.bulkActionText}>Pause</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => void handleBulkPause(true)}
+              style={styles.bulkActionBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Resume selected listings"
+            >
+              <Ionicons name="play-outline" size={18} color={colors.textPrimary} />
+              <Text style={styles.bulkActionText}>Resume</Text>
+            </Pressable>
+            <Pressable
+              onPress={handleBulkDelete}
+              style={styles.bulkActionBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Delete selected listings"
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              <Text style={[styles.bulkActionText, { color: colors.danger }]}>Delete</Text>
+            </Pressable>
+            <Pressable
+              onPress={exitSelectionMode}
+              style={styles.bulkActionBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel selection"
+            >
+              <Text style={styles.bulkCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       <ConfirmationSheet
         visible={confirmSheet.visible}
@@ -742,7 +765,7 @@ export default function InventoryManagementScreen({ navigation }: Props) {
         onConfirm={() => { confirmSheet.onConfirm(); setConfirmSheet((s) => ({ ...s, visible: false })); }}
         variant={confirmSheet.variant}
       />
-    </>
+    </FlagshipScreen>
   );
 }
 
@@ -786,6 +809,8 @@ function InventoryList({
   onToggleSelect,
   isRefreshing,
   onRefresh,
+  onEndReached,
+  isLoadingMore,
   selectionBarHeight }: {
   listings: ListingApiItem[];
   colors: ThemeColors;
@@ -802,6 +827,8 @@ function InventoryList({
   onToggleSelect: (id: string) => void;
   isRefreshing: boolean;
   onRefresh: () => void;
+  onEndReached: () => void;
+  isLoadingMore: boolean;
   selectionBarHeight: number;
 }) {
   const renderItem = useCallback(({ item, index }: { item: ListingApiItem; index: number }) => (
@@ -831,8 +858,14 @@ function InventoryList({
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.listContent}
       showsVerticalScrollIndicator={false}
+      onEndReached={onEndReached}
+      onEndReachedThreshold={0.5}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.textMuted} />}
-      ListFooterComponent={<View style={{ height: selectionBarHeight || Space.xl }} />}
+      ListFooterComponent={
+        <View style={{ height: selectionBarHeight || Space.xl, alignItems: 'center', justifyContent: 'center' }}>
+          {isLoadingMore ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
+        </View>
+      }
     />
   );
 }
@@ -926,7 +959,7 @@ function InventoryRow({
         {/* Body */}
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.rowPrice}>{formatFromFiat(item.priceGbp, currencyCode, { displayMode: 'fiat' })}</Text>
+          <Text style={styles.rowPrice}>{formatFromFiat(item.priceGbp, 'GBP')}</Text>
           <View style={styles.rowMetaRow}>
             {/* Status badge */}
             <View style={styles.statusBadge}>

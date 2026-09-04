@@ -11,7 +11,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { CachedImage } from '../CachedImage';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Radius, Space, Type, TypeStyles, FontFamily } from '../../theme/designTokens';
+import { Radius, Space, Type, TypeStyles } from '../../theme/designTokens';
 import { colorForId } from '../../utils/avatarColor';
 
 export interface MosaicMember {
@@ -46,7 +46,11 @@ export function GroupAvatarMosaic({
   // If a group photo was uploaded, show it full.
   if (groupPhoto) {
     return (
-      <View style={[styles.container, { width: size, height: size, borderRadius: Radius.full }]}>
+      <View
+        style={[styles.container, { width: size, height: size, borderRadius: Radius.full }]}
+        accessible
+        accessibilityLabel="Group photo"
+      >
         <CachedImage
           uri={groupPhoto}
           style={{ width: size, height: size, borderRadius: Radius.full }}
@@ -70,7 +74,6 @@ export function GroupAvatarMosaic({
       .slice(0, 2)
       .toUpperCase();
     const colorSeed = groupId ?? members[0]?.id ?? fallbackInitials;
-    const baseColor = colorForId(colorSeed);
     return (
       <View
         style={[
@@ -79,40 +82,13 @@ export function GroupAvatarMosaic({
             width: size,
             height: size,
             borderRadius: Radius.full,
-            backgroundColor: baseColor,
-            borderWidth: 2,
-            borderColor: colors.background,
-            shadowColor: baseColor,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.25,
-            shadowRadius: 8,
-            elevation: 3,
-            position: 'relative',
+            backgroundColor: colorForId(colorSeed),
           },
         ]}
+        accessible
+        accessibilityLabel={`Group avatar, ${initials || 'G'}`}
       >
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: size * 0.45,
-            backgroundColor: 'rgba(255,255,255,0.18)',
-            borderTopLeftRadius: size / 2,
-            borderTopRightRadius: size / 2,
-          }}
-        />
-        <Text
-          style={[
-            styles.initials,
-            {
-              fontSize: size * 0.38,
-              color: '#FFFFFF',
-              fontFamily: FontFamily.bold,
-            },
-          ]}
-        >
+        <Text style={[styles.initials, { fontSize: size * 0.36, color: colors.textInverse }]}>
           {initials || 'G'}
         </Text>
       </View>
@@ -127,7 +103,11 @@ export function GroupAvatarMosaic({
   }
 
   return (
-    <View style={[styles.container, { width: size, height: size, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt }]}>
+    <View
+      style={[styles.container, { width: size, height: size, borderRadius: Radius.full, backgroundColor: colors.surfaceAlt }]}
+      accessible
+      accessibilityLabel={`Group avatar, ${members.length} members`}
+    >
       <View style={styles.grid}>
         {slots.map((member, i) => (
           <View

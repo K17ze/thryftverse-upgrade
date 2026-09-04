@@ -34,6 +34,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { fetchFollowCounts } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
+import { setFeaturedListings } from '../services/storefrontApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -51,6 +52,7 @@ import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/Prof
 import { ShopRail, type ShopRailItem } from '../components/profile/ShopRail';
 import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
@@ -165,7 +167,7 @@ export default function MyProfileScreen() {
   const { show } = useToast();
   const haptic = useHaptic();
 
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   const { listings } = useBackendData();
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
@@ -367,25 +369,136 @@ export default function MyProfileScreen() {
     || profileMediaOverride?.avatar
     || null;
 
+  // ── G4: Profile grid drag-reorder ──────────────────────────────────────
+  // Sellers can pin/unpin listings to their shop grid, reorder pinned
+  // listings, and save the order to the backend via setFeaturedListings.
+  const [isReorderMode, setIsReorderMode] = React.useState(false);
+  const [overrideFeaturedIds, setOverrideFeaturedIds] = React.useState<string[] | null>(null);
+  const [isSavingReorder, setIsSavingReorder] = React.useState(false);
+
   const allOwnedListings = React.useMemo(() => {
     if (!profileUserId) return [];
     // Pinned/featured listings appear first in the Shop grid (2026 pattern).
-    // Stable sort preserves backend ordering for non-featured items.
+    // When an override order is active (reorder mode), sort by the override
+    // rank; otherwise fall back to the backend `featured` flag with a stable
+    // sort that preserves backend ordering for non-featured items.
     return listings
       .filter((item) => item.sellerId === profileUserId)
       .sort((a, b) => {
+        if (overrideFeaturedIds) {
+          const ai = overrideFeaturedIds.indexOf(a.id);
+          const bi = overrideFeaturedIds.indexOf(b.id);
+          const ar = ai === -1 ? Number.MAX_SAFE_INTEGER : ai;
+          const br = bi === -1 ? Number.MAX_SAFE_INTEGER : bi;
+          return ar - br;
+        }
         const af = a.featured === true ? 0 : 1;
         const bf = b.featured === true ? 0 : 1;
         return af - bf;
       });
-  }, [listings, profileUserId]);
+  }, [listings, profileUserId, overrideFeaturedIds]);
+
+  // When overrideFeaturedIds is set, featured state is derived from the
+  // override array; otherwise it falls back to the backend `featured` flag.
+  const isItemFeatured = useCallback(
+    (id: string, defaultFeatured: boolean | null | undefined): boolean => {
+      if (overrideFeaturedIds) return overrideFeaturedIds.includes(id);
+      return defaultFeatured === true;
+    },
+    [overrideFeaturedIds],
+  );
+
+  // Returns the 1-based rank position of a featured item, or 0 if not featured.
+  const getItemFeaturedRank = useCallback(
+    (id: string, defaultFeatured: boolean | null | undefined): number => {
+      if (overrideFeaturedIds) {
+        const idx = overrideFeaturedIds.indexOf(id);
+        return idx === -1 ? 0 : idx + 1;
+      }
+      return defaultFeatured === true ? 1 : 0;
+    },
+    [overrideFeaturedIds],
+  );
+
+  const handleTogglePin = useCallback(
+    (listingId: string) => {
+      haptic.light();
+      const current = overrideFeaturedIds
+        ?? allOwnedListings.filter((l) => l.featured === true).map((l) => l.id);
+      if (current.includes(listingId)) {
+        setOverrideFeaturedIds(current.filter((id) => id !== listingId));
+        show(tt('listings.unpinned'), 'success');
+      } else {
+        if (current.length >= 8) {
+          haptic.medium();
+          show(tt('listings.featuredMaxReached'), 'error');
+          return;
+        }
+        setOverrideFeaturedIds([...current, listingId]);
+        show(tt('listings.pinned'), 'success');
+      }
+    },
+    [overrideFeaturedIds, allOwnedListings, haptic, show, tt],
+  );
+
+  const handleShiftFeatured = useCallback(
+    (listingId: string, direction: -1 | 1) => {
+      if (!overrideFeaturedIds) return;
+      const idx = overrideFeaturedIds.indexOf(listingId);
+      if (idx === -1) return;
+      const target = idx + direction;
+      if (target < 0 || target >= overrideFeaturedIds.length) return;
+      haptic.light();
+      const next = [...overrideFeaturedIds];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      setOverrideFeaturedIds(next);
+    },
+    [overrideFeaturedIds, haptic],
+  );
+
+  const handleSaveReorder = useCallback(async () => {
+    if (!overrideFeaturedIds) {
+      setIsReorderMode(false);
+      return;
+    }
+    setIsSavingReorder(true);
+    try {
+      await setFeaturedListings(overrideFeaturedIds);
+      haptic.light();
+      show(tt('listings.orderSaved'), 'success');
+      setOverrideFeaturedIds(null);
+      setIsReorderMode(false);
+    } catch (err) {
+      const parsed = parseApiError(err, tt('listings.orderSaveFailed'));
+      show(parsed.message, 'error');
+    } finally {
+      setIsSavingReorder(false);
+    }
+  }, [overrideFeaturedIds, haptic, show, tt]);
+
+  const handleToggleReorderMode = useCallback(() => {
+    if (isReorderMode) {
+      // Exit without saving — discard override.
+      haptic.light();
+      setOverrideFeaturedIds(null);
+      setIsReorderMode(false);
+    } else {
+      haptic.light();
+      // Seed override from current featured state so shifts are visible.
+      const currentFeatured = allOwnedListings
+        .filter((l) => l.featured === true)
+        .map((l) => l.id);
+      setOverrideFeaturedIds(currentFeatured.length > 0 ? currentFeatured : []);
+      setIsReorderMode(true);
+    }
+  }, [isReorderMode, allOwnedListings, haptic]);
 
   // Curated shop window — featured listings for the ShopRail. The rail renders
   // only when featured items exist (ShopRail returns null for empty input),
   // keeping the first viewport truthful — no fabricated placeholder content.
   const shopRailItems = React.useMemo<ShopRailItem[]>(() => {
     return allOwnedListings
-      .filter((item) => item.featured === true)
+      .filter((item) => isItemFeatured(item.id, item.featured))
       .slice(0, 10)
       .map((item) => ({
         id: item.id,
@@ -396,7 +509,7 @@ export default function MyProfileScreen() {
         isSold: item.isSold,
         isPinned: true,
       }));
-  }, [allOwnedListings]);
+  }, [allOwnedListings, isItemFeatured]);
 
   // Profile completion — drives the progress prompt. Completion measures ONLY
   // identity fields the user can complete directly: display name, bio, profile
@@ -588,7 +701,8 @@ export default function MyProfileScreen() {
 
   const renderListingItem = useCallback(
     ({ item, index }: { item: (typeof allOwnedListings)[number]; index: number }) => {
-      const isFeatured = item.featured === true;
+      const isFeatured = isItemFeatured(item.id, item.featured);
+      const featuredRank = isFeatured ? getItemFeaturedRank(item.id, item.featured) : 0;
       const colIndex = index % 3;
       return (
         <View
@@ -600,7 +714,13 @@ export default function MyProfileScreen() {
         >
           <AnimatedPressable
             style={styles.gridCard}
-            onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
+            onPress={() => {
+              if (isReorderMode) {
+                handleTogglePin(item.id);
+              } else {
+                navigation.navigate('ManageListing', { itemId: item.id });
+              }
+            }}
             accessibilityRole="button"
             accessibilityLabel={`Manage ${item.title}${isFeatured ? ', pinned' : ''}`}
           >
@@ -624,9 +744,72 @@ export default function MyProfileScreen() {
                   <Text style={[styles.soldText, t.soldText]}>{tt('listings.sold')}</Text>
                 </View>
               ) : null}
+
+              {/* ── Reorder-mode controls ── */}
+              {isReorderMode ? (
+                <View style={styles.reorderOverlay} pointerEvents="box-none">
+                  {/* Rank badge for featured items */}
+                  {isFeatured ? (
+                    <View style={[styles.rankBadge, t.pinnedBadge]} pointerEvents="none">
+                      <Text
+                        style={[styles.rankBadgeText, t.soldText]}
+                        allowFontScaling={false}
+                      >
+                        {featuredRank}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {/* Pin/unpin toggle — top-right */}
+                  <Pressable
+                    style={styles.reorderPinBtn}
+                    onPress={() => handleTogglePin(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={isFeatured ? tt('listings.unpin') : tt('listings.pin')}
+                    hitSlop={4}
+                  >
+                    <View style={[styles.reorderPinVisible, t.pinnedBadge]}>
+                      <Ionicons
+                        name={isFeatured ? 'pin' : 'pin-outline'}
+                        size={16}
+                        color={colors.scrimTextPrimary}
+                        aria-hidden={true}
+                      />
+                    </View>
+                  </Pressable>
+
+                  {/* Shift arrows — bottom-center for featured items */}
+                  {isFeatured ? (
+                    <View style={styles.reorderShiftRow} pointerEvents="box-none">
+                      <Pressable
+                        style={styles.reorderShiftBtn}
+                        onPress={() => handleShiftFeatured(item.id, -1)}
+                        accessibilityRole="button"
+                        accessibilityLabel={tt('listings.shiftLeft')}
+                        hitSlop={4}
+                      >
+                        <View style={[styles.reorderShiftVisible, t.pinnedBadge]}>
+                          <Ionicons name="chevron-back" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
+                        </View>
+                      </Pressable>
+                      <Pressable
+                        style={styles.reorderShiftBtn}
+                        onPress={() => handleShiftFeatured(item.id, 1)}
+                        accessibilityRole="button"
+                        accessibilityLabel={tt('listings.shiftRight')}
+                        hitSlop={4}
+                      >
+                        <View style={[styles.reorderShiftVisible, t.pinnedBadge]}>
+                          <Ionicons name="chevron-forward" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
+                        </View>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
             </SharedTransitionView>
             <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
-              {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
+              {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
             </Text>
             {item.brand ? (
               <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
@@ -635,7 +818,7 @@ export default function MyProfileScreen() {
         </View>
       );
     },
-    [navigation, t, tt, colors, formatFromFiat, currencyCode, CARD_HEIGHT]
+    [navigation, t, tt, colors, formatFromFiat, CARD_HEIGHT, isReorderMode, isItemFeatured, getItemFeaturedRank, handleTogglePin, handleShiftFeatured]
   );
 
   const tabs = React.useMemo(
@@ -909,14 +1092,40 @@ export default function MyProfileScreen() {
               <>
                 <View style={styles.gridHeader}>
                   <Text style={[styles.gridHeaderCount, t.gridHeaderCount]}>{tt('listings.listingsCount', { count: allOwnedListings.length })}</Text>
-                  <Pressable
-                    onPress={() => navigation.navigate('MyListings')}
-                    accessibilityRole="button"
-                    accessibilityLabel="View all listings"
-                    hitSlop={13}
-                  >
-                    <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>{tt('listings.viewAll')}</Text>
-                  </Pressable>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.md }}>
+                    {/* G4: Reorder-mode toggle — "Edit" enters, "Done" saves & exits */}
+                    <Pressable
+                      onPress={() => {
+                        if (isReorderMode) {
+                          void handleSaveReorder();
+                        } else {
+                          handleToggleReorderMode();
+                        }
+                      }}
+                      disabled={isSavingReorder}
+                      accessibilityRole="button"
+                      accessibilityLabel={isReorderMode ? tt('listings.done') : tt('listings.editOrder')}
+                      hitSlop={13}
+                    >
+                      {isSavingReorder ? (
+                        <ActivityIndicator size="small" color={colors.brand} />
+                      ) : (
+                        <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>
+                          {isReorderMode ? tt('listings.done') : tt('listings.editOrder')}
+                        </Text>
+                      )}
+                    </Pressable>
+                    {!isReorderMode ? (
+                      <Pressable
+                        onPress={() => navigation.navigate('MyListings')}
+                        accessibilityRole="button"
+                        accessibilityLabel="View all listings"
+                        hitSlop={13}
+                      >
+                        <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>{tt('listings.viewAll')}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                 </View>
                 <FlashList
                   data={allOwnedListings}
@@ -1120,7 +1329,7 @@ export default function MyProfileScreen() {
                     key={review.id}
                     item={review}
                     onOpenReviewer={(uid) => openProfile(navigation, uid, currentUser?.id)}
-                    onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })}
+                    onOpenListing={(lid) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: lid, sourceSurface: 'MyProfileReview' })}
                   />
                 ))}
               </View>
@@ -1445,6 +1654,49 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: RadiusRoleValue.pillAvatar,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  // ── G4: Reorder-mode overlay controls ──
+  reorderOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 4 },
+  rankBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  rankBadgeText: {
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: FontFamily.bold,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
+  reorderPinBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4 },
+  reorderPinVisible: {
+    width: Space.xl - 2,
+    height: Space.xl - 2,
+    borderRadius: RadiusRoleValue.standalonePanel,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  reorderShiftRow: {
+    position: 'absolute',
+    bottom: 6,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Space.xs },
+  reorderShiftBtn: {},
+  reorderShiftVisible: {
+    width: Space.xl - 2,
+    height: Space.xl - 2,
+    borderRadius: RadiusRoleValue.standalonePanel,
     alignItems: 'center',
     justifyContent: 'center' },
   gridImage: {

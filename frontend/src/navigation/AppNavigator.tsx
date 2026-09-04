@@ -235,7 +235,7 @@ export default function AppNavigator() {
       <Stack.Screen name="MainTabs" component={TabNavigator} />
 
       {/* ── Commerce ── */}
-      <Stack.Screen name="ItemDetail" getComponent={() => require('../screens/ItemDetailScreen').default} />
+      <Stack.Screen name="ItemDetail" getComponent={withScreenErrorBoundary(() => require('../screens/ItemDetailScreen').default, 'ItemDetail')} />
       <Stack.Screen name="CategoryDetail" getComponent={() => require('../screens/CategoryDetailScreen').default} />
       <Stack.Screen name="Browse" getComponent={() => require('../screens/BrowseScreen').default} />
       <Stack.Screen name="Closet" getComponent={() => require('../screens/ClosetScreen').default} />
@@ -278,7 +278,7 @@ export default function AppNavigator() {
       <Stack.Screen name="MyListings" getComponent={() => require('../screens/MyListingsScreen').default} />
       <Stack.Screen name="InventoryManagement" getComponent={() => require('../screens/InventoryManagementScreen').default} />
       <Stack.Screen name="SellerAnalytics" getComponent={() => require('../screens/SellerAnalyticsScreen').default} />
-      <Stack.Screen name="SellerHub" getComponent={() => require('../screens/SellerHubScreen').default} />
+      <Stack.Screen name="SellerHub" getComponent={withScreenErrorBoundary(() => require('../screens/SellerHubScreen').default, 'SellerHub')} />
       <Stack.Screen name="CreatorAnalyticsDashboard" getComponent={() => require('../screens/CreatorAnalyticsDashboardScreen').default} />
       <Stack.Screen name="BundleBag" getComponent={() => require('../screens/BundleBagScreen').default} />
       <Stack.Screen name="VerificationResponse" getComponent={() => require('../screens/VerificationResponseScreen').default} options={modalScreenOptions} />
@@ -290,7 +290,7 @@ export default function AppNavigator() {
       <Stack.Screen name="CoOwnOnboarding" getComponent={() => require('../screens/SyndicateOnboardingScreen').default} options={modalScreenOptions} />
 
       {/* ── Chat & Messaging ── */}
-      <Stack.Screen name="Chat" getComponent={() => require('../screens/ChatScreen').default} />
+      <Stack.Screen name="Chat" getComponent={withScreenErrorBoundary(() => require('../screens/ChatScreen').default, 'Chat')} />
       <Stack.Screen name="Inbox" getComponent={() => require('../screens/InboxScreen').default} />
       <Stack.Screen name="CreateGroupChat" getComponent={withScreenErrorBoundary(() => require('../screens/CreateGroupChatScreen').default, 'CreateGroupChat')} options={modalScreenOptions} />
       <Stack.Screen name="GroupChat" getComponent={withScreenErrorBoundary(() => require('../screens/GroupChatScreen').default, 'GroupChat')} />
@@ -314,9 +314,8 @@ export default function AppNavigator() {
       <Stack.Screen name="AccountSecurityRecovery" getComponent={() => require('../screens/AccountSecurityRecoveryScreen').default} options={pushScreenOptions} />
 
       {/* ── Settings & Account ── (profile, preferences, privacy, verification) */}
-      <Stack.Screen name="Settings" getComponent={() => require('../screens/SettingsScreen').default} />
+      <Stack.Screen name="Settings" getComponent={withScreenErrorBoundary(() => require('../screens/SettingsScreen').default, 'Settings')} />
       <Stack.Screen name="EditProfile" getComponent={() => require('../screens/EditProfileScreen').default} options={modalScreenOptions} />
-      <Stack.Screen name="AccountSettings" getComponent={() => require('../screens/AccountSettingsScreen').default} />
       <Stack.Screen name="AccountControl" getComponent={() => require('../screens/AccountControlScreen').default} />
       <Stack.Screen name="SavedAddresses" getComponent={() => require('../screens/SavedAddressesScreen').default} />
       <Stack.Screen name="Payments" getComponent={() => require('../screens/PaymentsScreen').default} />
@@ -372,7 +371,7 @@ export default function AppNavigator() {
       <Stack.Screen name="OrderReceipt" getComponent={() => require('../screens/OrderReceiptScreen').default} />
 
       {/* Phase 19 new screens */}
-      <Stack.Screen name="Checkout" getComponent={() => require('../screens/CheckoutScreen').default} />
+      <Stack.Screen name="Checkout" getComponent={withScreenErrorBoundary(() => require('../screens/CheckoutScreen').default, 'Checkout')} />
       <Stack.Screen name="AddressForm" getComponent={() => require('../screens/AddressFormScreen').default} />
       <Stack.Screen name="Success" getComponent={() => require('../screens/SuccessScreen').default} />
       <Stack.Screen name="ManageListing" getComponent={() => require('../screens/ManageListingScreen').default} />

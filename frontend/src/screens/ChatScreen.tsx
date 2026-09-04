@@ -5,7 +5,6 @@ import { AnimatedPressable } from "../components/AnimatedPressable";
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   Pressable,
   Dimensions,
@@ -14,7 +13,7 @@ import {
 
 import { FlashList } from "@shopify/flash-list";
 
-import { AppIcon } from "../components/common/AppIcon";
+import { Ionicons } from "@expo/vector-icons";
 
 import {
   useSafeAreaInsets,
@@ -31,15 +30,13 @@ import { useFormattedPrice } from "../hooks/useFormattedPrice";
 
 import { useBackendData } from "../context/BackendDataContext";
 
-import { getListingCoverUri } from "../utils/media";
 
 import { useStore } from "../store/useStore";
 
-import { track } from "../analytics";
-
 import {
   clearComposerStateOnApi,
-  reportConversationOnApi } from "../services/chatApi";
+  reportConversationOnApi,
+  sendConversationMessageOnApi } from "../services/chatApi";
 import { fetchPublicProfile, PublicProfileUser } from "../services/profileApi";
 
 import { useToast } from "../context/ToastContext";
@@ -51,7 +48,7 @@ import { KeyboardStickyView } from "../platform/keyboard/KeyboardProvider";
 
 import { ChatComposerBar } from "../components/chat/ChatComposerBar";
 
-import { ChatMessageRow, InlineMessageEditor, type InlineEditStyles } from "../components/chat/ChatMessageRow";
+import { ChatMessageRow } from "../components/chat/ChatMessageRow";
 
 import { ChatTopBar } from "../components/chat/ChatTopBar";
 
@@ -62,9 +59,9 @@ import {
   ChatActionSheet } from "../components/chat/ChatActionSheet";
 
 import { AttachmentReviewSheet } from "../components/chat/AttachmentReviewSheet";
-import { DocumentReviewSheet } from "../components/chat/DocumentReviewSheet";
 
 import { MessageContextMenu } from "../components/chat/MessageContextMenu";
+import { ForwardSheet } from "../components/chat/ForwardSheet";
 
 import { ConfirmationSheet } from "../components/ConfirmationSheet";
 
@@ -90,7 +87,7 @@ import * as Clipboard from "expo-clipboard";
 
 import { Caption } from "../components/ui/Text";
 
-import { detectChatSafetyWarning, containsOffPlatformPaymentPattern } from "../utils/chatSafetyWarnings";
+import { detectChatSafetyWarning } from "../utils/chatSafetyWarnings";
 import {
   resolveComposerStack,
   isSlotVisible,
@@ -113,7 +110,16 @@ import {
 import { MarketplaceChatCard } from "../components/chat/MarketplaceChatCard";
 import { MessageBubble } from "../components/chat/MessageBubble";
 import { LinkPreviewCard, extractFirstUrl } from "../components/chat/LinkPreviewCard";
-import { PaymentWarningCard } from "../components/chat/PaymentWarningCard";
+import { ScamWarningCard } from "../components/chat/ScamWarningCard";
+import { PinnedMessageBar } from "../components/chat/PinnedMessageBar";
+import { SwipeableMessage } from "../components/SwipeableMessage";
+import { PollMessageBubble } from "../components/chat/PollMessageBubble";
+import {
+  fetchPinnedMessageFromApi,
+  pinMessageOnApi,
+  unpinMessageOnApi,
+  voteInPollOnApi,
+  unvoteInPollOnApi } from "../services/chatApi";
 
 import { t } from "../i18n";
 
@@ -133,10 +139,7 @@ import {
   DEFAULT_SELLER_QUICK_REPLIES,
   DEFAULT_BUYER_QUICK_REPLIES,
   formatDateSeparator,
-  formatMessageTime,
-} from "../hooks/chat";
-import { createStableId } from "../utils/createStableId";
-import { sendConversationMessageOnApi } from "../services/chatApi";
+  formatMessageTime } from "../hooks/chat";
 import { useTypingIndicator, useChatGroupIdentityEvent } from "../services/realtimeClient";
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -333,6 +336,26 @@ export default function ChatScreen({ navigation, route }: Props) {
       lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: TypographyV2.meta.fontFamily },
 
+    blockBannerWrap: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: Space.xs + 1,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm - 1,
+      backgroundColor: colors.surfaceAlt,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle },
+
+    blockBannerText: {
+      flex: 1,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: TypographyV2.meta.fontFamily },
+
+    blockBannerAction: {
+      fontFamily: TypographyV2.meta.fontFamily,
+      fontWeight: '600' },
+
     // Suggested-replies wrapper — adds a dismiss control so the bar can
     // be dismissed for the current conversation session.
     suggestedRepliesWrap: {
@@ -354,59 +377,15 @@ export default function ChatScreen({ navigation, route }: Props) {
       flex: 1,
       minHeight: Math.floor(
         Dimensions.get('window').height * MESSAGE_LIST_MIN_HEIGHT_RATIO,
-      ) },
+      ) } }), [colors]);
 
-    // P2-03: Inline message editing — "Edited" label + editor styles.
-    editedLabel: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.textMuted,
-      marginTop: 2 },
-
-    editedLabelRight: {
-      alignSelf: 'flex-end',
-      marginRight: 4 },
-
-    editContainer: {
-      maxWidth: '80%',
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.emphasis,
-      borderColor: colors.brand,
-      backgroundColor: colors.surfaceAlt,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      gap: Space.xs },
-
-    editInput: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      color: colors.textPrimary,
-      minHeight: 40,
-      paddingVertical: 0,
-      paddingHorizontal: 0 },
-
-    editActions: {
-      flexDirection: 'row',
-      justifyContent: 'flex-end',
-      gap: Space.sm },
-
-    editActionBtn: {
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.md },
-
-    editSaveBtn: {
-      backgroundColor: colors.brand },
-
-    editActionLabel: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily } }), [colors]);
-
-  const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params ?? {};
+  const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params;
 
   const currentUser = useStore((state) => state.currentUser);
 
   const conversations = useStore((state) => state.conversations);
+  const blockedUsers = useStore((state) => state.blockedUsers);
+  const toggleBlockedUser = useStore((state) => state.toggleBlockedUser);
 
   const bots = useStore((state) => state.availableChatBots);
   const customBots = useStore((state) => state.customBots);
@@ -444,6 +423,45 @@ export default function ChatScreen({ navigation, route }: Props) {
 
   const isGroup = conversation?.type === "group";
 
+  // ── Pinned message ──────────────────────────────────────────────────
+  // Fetch the conversation's pinned message on mount and when realtime
+  // pin/unpin events arrive. Only group chats support pinning.
+  const [pinnedMessage, setPinnedMessage] = useState<{
+    messageId: string;
+    senderLabel: string;
+    text: string;
+  } | null>(null);
+
+  const loadPinnedMessage = useCallback(async () => {
+    if (!isGroup) return;
+    try {
+      const result = await fetchPinnedMessageFromApi(conversationId);
+      if (result.pinned) {
+        const msg = result.pinned.message as Record<string, unknown>;
+        const body = typeof msg.body === 'string' ? msg.body : '';
+        const senderId = msg.senderUserId as string | null;
+        const senderLabel = senderId
+          ? (conversations.find((c) => c.id === conversationId)?.participantIds?.includes(senderId)
+            ? 'Participant'
+            : 'Someone')
+          : 'System';
+        setPinnedMessage({
+          messageId: result.pinned.messageId,
+          senderLabel,
+          text: body || '(media)',
+        });
+      } else {
+        setPinnedMessage(null);
+      }
+    } catch {
+      // Silently fail — pinned bar is non-critical.
+    }
+  }, [conversationId, isGroup, conversations]);
+
+  useEffect(() => {
+    void loadPinnedMessage();
+  }, [loadPinnedMessage]);
+
   const botLookup = useMemo(() => {
     const map = new Map<string, string>();
 
@@ -470,13 +488,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     return map;
   }, [conversation?.participantProfiles, currentUser?.id, currentUser?.username]);
 
-  // Linked listing context for rich product negotiation cards
-  const linkedListing = useMemo(() => {
-    const itemId = routeItemId ?? conversation?.itemId;
-    if (!itemId) return null;
-    return listings.find((l) => l.id === itemId) ?? null;
-  }, [routeItemId, conversation?.itemId, listings]);
-
   const profileMediaOverrides = useStore(
     (state) => state.profileMediaOverrides,
   );
@@ -492,7 +503,7 @@ export default function ChatScreen({ navigation, route }: Props) {
       const isCurrentUserSender =
         resolvedSenderId === "me" || resolvedSenderId === currentUser?.id;
 
-      const sender: "me" | "them" = isCurrentUserSender ? "me" : "them";
+      const sender: "me" | "other" = isCurrentUserSender ? "me" : "other";
 
       const senderLabel =
         botLookup.get(resolvedSenderId) ??
@@ -502,87 +513,69 @@ export default function ChatScreen({ navigation, route }: Props) {
       if (entry.offerPrice !== undefined && entry.originalPrice !== undefined) {
         return {
           id: entry.id,
+
           type: "offer",
+
           sender,
+
           senderId: resolvedSenderId,
+
           senderLabel,
+
+          timestamp: entry.timestamp ?? entry.date ?? new Date().toISOString(),
+
           offer: {
             price: entry.offerPrice,
-            originalPrice: entry.originalPrice,
-            status: (entry.offer?.status ?? entry.offerStatus) as
-              | "pending"
-              | "declined"
-              | "countered"
-              | "accepted"
-              | "expired"
-              | "cancelled"
-              | undefined,
-            expiresAt: entry.offer?.expiresAt,
-            counterRound: entry.offer?.counterRound,
-            itemId: linkedListing?.id,
-            itemTitle: linkedListing?.title,
-            itemImage: linkedListing?.images?.[0],
-            itemBrand: linkedListing?.brand ?? undefined,
-            itemSize: linkedListing?.size ?? undefined,
-          },
-          text: entry.text,
-          date: entry.timestamp,
-        };
-      }
 
-      if (entry.type === "listing_share") {
-        return {
-          id: entry.id,
-          type: "listing_share",
-          sender,
-          senderId: resolvedSenderId,
-          senderLabel,
-          listing: entry.listing ?? (linkedListing ? {
-            id: linkedListing.id,
-            title: linkedListing.title,
-            price: linkedListing.price,
-            originalPrice: linkedListing.originalPrice,
-            image: linkedListing.images[0],
-            brand: linkedListing.brand ?? undefined,
-            size: linkedListing.size ?? undefined,
-            condition: linkedListing.condition ?? undefined,
-            sellerUsername: conversation?.participantProfiles?.[0]?.username,
-            sellerRating: 4.8,
-            isSold: linkedListing.isSold,
-          } : undefined),
-          date: entry.timestamp,
-        };
+            originalPrice: entry.originalPrice,
+
+            status: entry.offerStatus as "pending" | "declined" | "countered" | "accepted" | "expired" | "cancelled" | undefined },
+
+          text: entry.text };
       }
 
       return {
         id: entry.id,
+
         type:
           entry.isSystem || entry.type === "system"
             ? "system"
             : entry.mediaUri
               ? "media"
               : "text",
+
         sender,
+
         senderId: resolvedSenderId,
+
         senderLabel,
+
+        timestamp: entry.timestamp ?? entry.date ?? new Date().toISOString(),
+
         text: entry.text ?? entry.systemTitle ?? "",
+
         isSystem: entry.isSystem,
+
         systemTitle: entry.systemTitle,
+
         date: entry.timestamp,
+
         reactions: entry.reactions?.map((r) => ({
           emoji: r.emoji,
+
+          userIds: r.userIds,
+
           count: r.userIds.length,
-          reactedByMe: r.userIds.includes(currentUser?.id ?? "me"),
-        })),
+
+          reactedByMe: r.userIds.includes(currentUser?.id ?? "me") })),
+
         mediaUri: entry.mediaUri,
+
         mediaType: entry.mediaType,
-        uploadStatus: entry.uploadStatus,
-        documentUri: entry.documentUri,
-        documentName: entry.documentName,
-        documentMimeType: entry.documentMimeType,
-      };
+
+        uploadStatus: entry.uploadStatus };
     });
-  }, [botLookup, conversation?.messages, conversation?.participantProfiles, currentUser?.id, linkedListing, userLookup, t]);
+  }, [botLookup, conversation?.messages, currentUser?.id, userLookup]);
 
   // Early ref for composer hydration — updated after useConversationMessages
   // returns. useConversationComposer only reads this inside effects, so an
@@ -607,8 +600,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     setIsVoiceRecording,
     pendingAttachment,
     setPendingAttachment,
-    pendingDocument,
-    setPendingDocument,
     reactingToMessage,
     setReactingToMessage,
     searchQuery,
@@ -666,18 +657,16 @@ export default function ChatScreen({ navigation, route }: Props) {
   // so the chat header and info screen stay current without a refetch.
   const upsertConversation = useStore((state) => state.upsertConversation);
   useChatGroupIdentityEvent(conversationId, (payload) => {
-    if (!conversation) return;
     upsertConversation({
-      ...conversation,
       id: payload.conversationId,
-      title: payload.title ?? conversation.title,
-      description: payload.description ?? conversation.description,
-      avatar: payload.avatar !== undefined ? (payload.avatar ?? undefined) : conversation.avatar,
-      coverPhoto: payload.coverPhoto !== undefined ? (payload.coverPhoto ?? undefined) : conversation.coverPhoto,
-    });
+      title: payload.title ?? undefined,
+      description: payload.description ?? undefined,
+      avatar: payload.avatar ?? undefined,
+      coverPhoto: payload.coverPhoto ?? undefined,
+    } as any);
   });
 
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   // ─── Controller hook: message list state, sync, send, retry, delete ───
   // useConversationMessages owns the message list, API sync, sending, retry,
@@ -710,14 +699,9 @@ export default function ChatScreen({ navigation, route }: Props) {
     handleRetrySendMessage,
     createMediaMessage,
     handleSendPendingAttachment: hookSendPendingAttachment,
-    handleSendPendingDocument: hookSendPendingDocument,
     handleUndoDelete,
     handleBulkDelete: hookBulkDelete,
     handleDeleteMessage,
-    editingMessageId,
-    startEdit,
-    cancelEdit,
-    saveEdit,
     confirmation: conversationConfirmation,
     clearConfirmation: clearConversationConfirmation,
     dateSeparatorIndices,
@@ -782,6 +766,11 @@ export default function ChatScreen({ navigation, route }: Props) {
     setMessages,
     routeItemId,
     conversationItemId: conversation?.itemId,
+    context: conversation?.context,
+    onUpdateContext: (updatedContext) => {
+      if (!conversation) return;
+      upsertConversation({ ...conversation, context: updatedContext });
+    },
     show,
     haptic,
     navigation });
@@ -800,14 +789,37 @@ export default function ChatScreen({ navigation, route }: Props) {
     enterSelectionMode,
     exitSelectionMode } = useMessageSelection({ selectionMode: false });
 
+  // ── Forward sheet state ──
+  const [forwardSheetVisible, setForwardSheetVisible] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
+
+  const forwardMessageToConversation = useCallback(
+    async (targetConversationId: string, text: string, mediaUri?: string, mediaType?: string) => {
+      try {
+        const options: { type?: 'text' | 'image' | 'video'; mediaUri?: string } = {};
+        if (mediaUri && mediaType) {
+          options.type = mediaType === 'video' ? 'video' : 'image';
+          options.mediaUri = mediaUri;
+        }
+        await sendConversationMessageOnApi(
+          targetConversationId,
+          text,
+          undefined,
+          undefined,
+          options,
+          currentUser?.id,
+        );
+      } catch (err) {
+        show("Failed to forward message", "error");
+      }
+    },
+    [currentUser?.id, show],
+  );
   // Adapter: bind composer state to hookSendMessage's (input, replyTo, setInput, setReplyTo) signature
   const handleSend = useCallback(() => {
     notifyStoppedTyping();
     hookSendMessage(input, replyTo, setInput, setReplyTo);
-    if (conversationId) {
-      track('message_sent', { conversation_id: conversationId, message_type: 'text' });
-    }
-  }, [hookSendMessage, input, replyTo, setInput, setReplyTo, notifyStoppedTyping, conversationId]);
+  }, [hookSendMessage, input, replyTo, setInput, setReplyTo, notifyStoppedTyping]);
 
   // Adapter: wrap hookHandleMessageListScroll for FlashList's NativeSyntheticEvent type
   const handleMessageListScroll = useCallback(
@@ -879,6 +891,15 @@ export default function ChatScreen({ navigation, route }: Props) {
     ? conversation?.participantProfiles?.find((participant) => participant.id === resolvedPartnerId)
     : undefined;
 
+  const isPartnerBlocked = !isGroup && resolvedPartnerId
+    ? blockedUsers.includes(resolvedPartnerId)
+    : false;
+
+  const handleUnblockPartner = useCallback(() => {
+    if (!resolvedPartnerId) return;
+    toggleBlockedUser(resolvedPartnerId);
+  }, [resolvedPartnerId, toggleBlockedUser]);
+
   const sellerHandle = resolvedPartnerId
     ? (partnerProfile?.displayName || partnerProfile?.username || partnerSummary?.displayName || partnerSummary?.username || userLookup.get(resolvedPartnerId) || t('chat.fallbackUserName'))
     : t('chat.fallbackUserName');
@@ -941,19 +962,8 @@ export default function ChatScreen({ navigation, route }: Props) {
   const handleSendPendingAttachment = useCallback(
     (caption: string) => {
       hookSendPendingAttachment(caption, pendingAttachment, setPendingAttachment);
-      if (pendingAttachment && conversationId) {
-        track('message_sent', { conversation_id: conversationId, message_type: pendingAttachment.mediaType });
-      }
     },
-    [hookSendPendingAttachment, pendingAttachment, setPendingAttachment, conversationId],
-  );
-
-  // Adapter: bind pending document state to hookSendPendingDocument's signature
-  const handleSendPendingDocument = useCallback(
-    (caption: string) => {
-      hookSendPendingDocument(caption, pendingDocument, setPendingDocument);
-    },
-    [hookSendPendingDocument, pendingDocument, setPendingDocument],
+    [hookSendPendingAttachment, pendingAttachment, setPendingAttachment],
   );
 
   const mediaTypeLabel = (t: "image" | "video") =>
@@ -964,16 +974,16 @@ export default function ChatScreen({ navigation, route }: Props) {
     const nextMsg = messages[index + 1];
 
     const clusterFirst = isFirstInClusterHelper(
-      { sender: msg.sender, type: msg.type, date: msg.date },
+      { sender: msg.sender ?? 'other', type: msg.type ?? 'text', date: msg.date },
       prevMsg
-        ? { sender: prevMsg.sender, type: prevMsg.type, date: prevMsg.date }
+        ? { sender: prevMsg.sender ?? 'other', type: prevMsg.type ?? 'text', date: prevMsg.date }
         : undefined,
     );
 
     const clusterLast = isLastInClusterHelper(
-      { sender: msg.sender, type: msg.type, date: msg.date },
+      { sender: msg.sender ?? 'other', type: msg.type ?? 'text', date: msg.date },
       nextMsg
-        ? { sender: nextMsg.sender, type: nextMsg.type, date: nextMsg.date }
+        ? { sender: nextMsg.sender ?? 'other', type: nextMsg.type ?? 'text', date: nextMsg.date }
         : undefined,
     );
 
@@ -1125,76 +1135,23 @@ export default function ChatScreen({ navigation, route }: Props) {
             type="offer"
             isMe={isMe}
             senderLabel={isGroup && !isMe ? msg.senderLabel : undefined}
-            offer={msg.offer}
-            formattedPrice={formatFromFiat(msg.offer!.price, currencyCode, {
+            offer={msg.offer ? {
+              price: msg.offer.price ?? msg.offer.offerPrice ?? msg.offer.amount ?? 0,
+              originalPrice: msg.offer.originalPrice ?? msg.offer.price ?? msg.offer.offerPrice ?? 0,
+              status: msg.offer.status,
+              expiresAt: msg.offer.expiresAt,
+              counterRound: msg.offer.counterRound,
+            } : undefined}
+            formattedPrice={formatFromFiat(msg.offer?.price ?? msg.offer?.offerPrice ?? msg.offer?.amount ?? 0, 'GBP', {
               displayMode: "fiat" })}
             formattedOriginalPrice={formatFromFiat(
-              msg.offer!.originalPrice, currencyCode,
+              msg.offer?.originalPrice ?? msg.offer?.price ?? msg.offer?.offerPrice ?? 0, 'GBP',
               { displayMode: "fiat" },
             )}
             onAccept={() => handleAcceptOffer(msg.id)}
             onDecline={() => handleDeclineOffer(msg.id)}
             onCounter={() => handleCounterOffer(msg.id, msg.offer?.price, msg.offer?.originalPrice)}
             onExpire={() => handleOfferExpired(msg.id)}
-            onViewListing={() => {
-              if (msg.offer?.itemId) {
-                navigation.navigate("ItemDetail", { itemId: msg.offer.itemId });
-              }
-            }}
-            onViewOrder={() => {
-              if (msg.offer?.offerId) {
-                navigation.navigate("OrderDetail", { orderId: msg.offer.offerId });
-              }
-            }}
-          />
-        </View>
-      );
-      return dateSeparator ? (
-        <View key={msg.id + "_group"}>
-          {dateSeparator}
-          {content}
-        </View>
-      ) : (
-        content
-      );
-    }
-
-    // Product / listing share message — Pinterest & Instagram Direct standard
-    if (msg.type === "listing_share" && msg.listing) {
-      const isMe = msg.sender === "me";
-      const content = (
-        <View
-          key={msg.id}
-          style={[
-            styles.msgRow,
-            isMe && styles.msgRowRight,
-            { marginTop: spacingTop, marginBottom },
-          ]}
-        >
-          <MarketplaceChatCard
-            type="listing_share"
-            isMe={isMe}
-            listing={msg.listing}
-            formattedPrice={formatFromFiat(msg.listing.price, currencyCode, {
-              displayMode: "fiat",
-            })}
-            formattedOriginalPrice={
-              msg.listing.originalPrice
-                ? formatFromFiat(msg.listing.originalPrice, currencyCode, {
-                    displayMode: "fiat",
-                  })
-                : undefined
-            }
-            onViewListing={() => {
-              navigation.navigate("ItemDetail", { itemId: msg.listing!.id });
-            }}
-            onMakeOffer={() => {
-              navigation.navigate("MakeOffer", {
-                itemId: msg.listing!.id,
-                price: msg.listing!.price,
-                title: msg.listing!.title,
-              });
-            }}
           />
         </View>
       );
@@ -1212,8 +1169,6 @@ export default function ChatScreen({ navigation, route }: Props) {
     const isMedia = msg.type === "media" && msg.mediaUri;
     const isVoice = msg.type === "voice" && msg.voiceUri;
     if (!msg.text && !isMedia && !isVoice) return null;
-
-    const isEditing = editingMessageId === msg.id && !isMedia && !isVoice;
 
     const bubble = (
       <View style={[styles.selectionRow, isMe && styles.selectionRowRight]}>
@@ -1236,7 +1191,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             accessibilityState={{ selected: selectedMessageIds.has(msg.id) }}
           >
             {selectedMessageIds.has(msg.id) ? (
-              <AppIcon name="check" size={14} color={colors.textInverse} />
+              <Ionicons name="checkmark" size={14} color={colors.textInverse} />
             ) : null}
           </AnimatedPressable>
         ) : null}
@@ -1248,18 +1203,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             { marginTop: spacingTop, marginBottom },
           ]}
         >
-        {isEditing ? (
-          <InlineMessageEditor
-            initialText={msg.text ?? ""}
-            isMe={isMe}
-            colors={colors}
-            styles={styles as unknown as InlineEditStyles}
-            onSave={(text) => saveEdit(msg.id, text)}
-            onCancel={() => cancelEdit()}
-          />
-        ) : (
-          <>
-        <MessageBubble
+          <MessageBubble
             id={msg.id}
             conversationId={conversationId ?? ''}
             text={msg.text ?? ""}
@@ -1295,6 +1239,9 @@ export default function ChatScreen({ navigation, route }: Props) {
                   : undefined
             }
             readStatus={isMe ? msg.readStatus : undefined}
+            readBy={msg.readBy}
+            isGroup={isGroup}
+            currentUserId={currentUser?.id}
             onLongPress={() => handleMessageLongPress(msg)}
             onReactionPress={() => setReactingToMessage(msg)}
             onMediaPress={
@@ -1329,13 +1276,14 @@ export default function ChatScreen({ navigation, route }: Props) {
                 ? () => scrollToMessage(msg.replyToMessageId!)
                 : undefined
             }
-            reactions={msg.reactions}
+            reactions={msg.reactions?.map(r => ({
+              emoji: r.emoji,
+              count: r.count ?? r.userIds.length,
+              reactedByMe: r.reactedByMe ?? false,
+            }))}
             mediaUri={msg.mediaUri}
             mediaType={msg.mediaType}
             uploadStatus={msg.uploadStatus}
-            documentUri={msg.documentUri}
-            documentName={msg.documentName}
-            documentMimeType={msg.documentMimeType}
             voiceDurationMs={msg.voiceDurationMs}
             voiceWaveform={msg.voiceWaveform}
             voiceContainer={msg.voiceContainer}
@@ -1352,18 +1300,8 @@ export default function ChatScreen({ navigation, route }: Props) {
             isLastInCluster={isLastInCluster}
             showAvatar={!isMe && isFirstInCluster}
             isNew={isNewMessage(msg.id)}
+            searchHighlight={isSearchActive ? searchQuery : undefined}
           />
-          {msg.isEdited && !isMedia && !isVoice && (
-            <Text
-              style={[
-                styles.editedLabel,
-                isMe && styles.editedLabelRight,
-              ]}
-              accessibilityLabel="Edited"
-            >
-              {'Edited'}
-            </Text>
-          )}
           {!isMedia && !isVoice &&
             (() => {
               const url = extractFirstUrl(msg.text ?? "");
@@ -1378,25 +1316,29 @@ export default function ChatScreen({ navigation, route }: Props) {
                 </View>
               ) : null;
             })()}
-          {/* Off-platform payment warning — non-blocking inline card below the message */}
-          {!isMedia && !isVoice && containsOffPlatformPaymentPattern(msg.text ?? "") && (
+          {/* Server-authoritative scam warning — non-blocking inline card below the message */}
+          {!isMedia && !isVoice && msg.scamWarning && (
             <View style={[isMe && styles.linkPreviewWrapRight]}>
-              <PaymentWarningCard
+              <ScamWarningCard
                 dismissed={dismissedWarningIds.has(msg.id)}
                 onDismiss={() => {
                   dismissMessageWarning(msg.id);
-                }}
-                onReport={() => {
-                  navigation.navigate("Report", {
-                    type: "user",
-                    targetId: msg.senderId });
                 }}
                 isMe={isMe}
               />
             </View>
           )}
-          </>
-        )}
+          {/* Poll message — renders the poll UI inside the bubble */}
+          {msg.poll ? (
+            <View style={[isMe && styles.linkPreviewWrapRight]}>
+              <PollMessageBubble
+                poll={msg.poll}
+                isMe={isMe}
+                onVote={(idx) => voteInPollOnApi(conversationId, msg.id, idx)}
+                onUnvote={(idx) => unvoteInPollOnApi(conversationId, msg.id, idx)}
+              />
+            </View>
+          ) : null}
         </View>
       </View>
     );
@@ -1405,12 +1347,27 @@ export default function ChatScreen({ navigation, route }: Props) {
       return (
         <View key={msg.id + "_group"}>
           {dateSeparator}
-          {bubble}
+          <SwipeableMessage
+            isMe={isMe}
+            onReply={() => setReplyTo(msg)}
+            onActions={() => handleMessageLongPress(msg)}
+          >
+            {bubble}
+          </SwipeableMessage>
         </View>
       );
     }
 
-    return bubble;
+    return (
+      <SwipeableMessage
+        key={msg.id}
+        isMe={isMe}
+        onReply={() => setReplyTo(msg)}
+        onActions={() => handleMessageLongPress(msg)}
+      >
+        {bubble}
+      </SwipeableMessage>
+    );
   };
 
   const avatarUri = !isGroup
@@ -1438,6 +1395,12 @@ export default function ChatScreen({ navigation, route }: Props) {
         .slice(0, 2)
         .toUpperCase() ?? "G")
     : sellerHandle.slice(0, 2).toUpperCase();
+
+  const linkedListing = useMemo(() => {
+    const itemId = routeItemId ?? conversation?.itemId;
+    if (!itemId) return null;
+    return listings.find((l) => l.id === itemId) ?? null;
+  }, [routeItemId, conversation?.itemId, listings]);
 
   // Conversation-level safety warning (triggered by conversation state,
   // e.g. off-platform payment requests in messages). This is distinct
@@ -1610,15 +1573,14 @@ export default function ChatScreen({ navigation, route }: Props) {
             accessibilityRole="alert"
             accessibilityLiveRegion="polite"
           >
-            <AppIcon
+            <Ionicons
               name={
                 conversationSafetyWarning.level === "danger"
                   ? "warning"
                   : conversationSafetyWarning.level === "caution"
-                    ? "alert"
-                    : "lock"
+                    ? "alert-circle-outline"
+                    : "lock-closed-outline"
               }
-              focused={conversationSafetyWarning.level === "danger"}
               size={14}
               color={
                 conversationSafetyWarning.level === "danger"
@@ -1646,55 +1608,53 @@ export default function ChatScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {!isGroup && linkedListing && (
+        {isPartnerBlocked ? (
+          <View
+            style={styles.blockBannerWrap}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+          >
+            <Ionicons
+              name="lock-closed-outline"
+              size={14}
+              color={colors.textMuted}
+            />
+            <Text
+              style={[styles.blockBannerText, { color: colors.textSecondary }]}
+              numberOfLines={2}
+            >
+              You blocked this user.{" "}
+              <Text
+                style={[styles.blockBannerAction, { color: colors.textPrimary }]}
+                onPress={handleUnblockPartner}
+              >
+                Unblock to continue.
+              </Text>
+            </Text>
+          </View>
+        ) : null}
+
+        {!isGroup && conversation?.context?.listing && (
           <ChatListingContextBar
-            thumbnailUri={getListingCoverUri(linkedListing.images, "")}
-            title={linkedListing.title}
-            price={formatFromFiat(linkedListing.price, currencyCode, {
-              displayMode: "fiat" })}
-            availability={linkedListing.isSold ? "Sold" : "Available"}
-            primaryActionLabel={
-              linkedListing.isSold
-                ? "View item"
-                : linkedListing.sellerId === currentUser?.id
-                  ? "Manage"
-                  : "Buy now"
+            context={conversation.context}
+            priceDisplay={formatFromFiat(
+              conversation.context.listing.price,
+              'GBP',
+              { displayMode: "fiat" },
+            )}
+            onPress={() =>
+              navigation.navigate("ItemDetail", {
+                itemId: conversation.context!.listing!.id,
+              })
             }
-            primaryActionIcon={
-              linkedListing.isSold
-                ? "eye-outline"
-                : linkedListing.sellerId === currentUser?.id
-                  ? "settings-outline"
-                  : "bag-handle-outline"
-            }
-            onPrimaryAction={
-              linkedListing.isSold
+            onPressOrder={
+              conversation.context?.order
                 ? () =>
-                    navigation.navigate("ItemDetail", {
-                      itemId: linkedListing.id })
-                : linkedListing.sellerId === currentUser?.id
-                  ? () =>
-                      navigation.navigate("ManageListing", {
-                        itemId: linkedListing.id })
-                  : () =>
-                      navigation.navigate("Checkout", {
-                        itemId: linkedListing.id })
+                    navigation.navigate("OrderDetail", {
+                      orderId: conversation.context!.order!.id,
+                    })
+                : undefined
             }
-            secondaryActionLabel={
-              linkedListing.isSold ? undefined : "View item"
-            }
-            secondaryActionIcon="eye-outline"
-            onSecondaryAction={
-              linkedListing.isSold
-                ? undefined
-                : () =>
-                    navigation.navigate("ItemDetail", {
-                      itemId: linkedListing.id })
-            }
-            onTitlePress={() =>
-              navigation.navigate("ItemDetail", { itemId: linkedListing.id })
-            }
-            defaultCollapsed
           />
         )}
 
@@ -1721,7 +1681,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               accessibilityLabel="Exit selection mode"
               accessibilityHint="Closes the message selection toolbar"
             >
-              <AppIcon
+              <Ionicons
                 name="close-outline"
                 size={24}
                 color={colors.textPrimary}
@@ -1743,9 +1703,21 @@ export default function ChatScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityHint="Permanently removes the selected messages from this conversation"
             >
-              <AppIcon name="trash" size={Control.icon} color={colors.danger} />
+              <Ionicons name="trash-outline" size={Control.icon} color={colors.danger} />
             </AnimatedPressable>
           </View>
+        ) : null}
+
+        {/* Pinned message bar — above the message list, below the top bar. */}
+        {pinnedMessage ? (
+          <PinnedMessageBar
+            senderLabel={pinnedMessage.senderLabel}
+            text={pinnedMessage.text}
+            onPress={() => {
+              const idx = messages.findIndex((m) => m.id === pinnedMessage.messageId);
+              if (idx >= 0) listRef.current?.scrollToIndex({ index: idx, animated: true });
+            }}
+          />
         ) : null}
 
         {/* Message list — persistent. Flexes to fill remaining space but
@@ -1853,7 +1825,11 @@ export default function ChatScreen({ navigation, route }: Props) {
 
                 {isSlotVisible(resolution, 'reactionPicker') && reactingToMessage ? (
                   <EmojiReactionsBar
-                    reactions={reactingToMessage.reactions ?? []}
+                    reactions={reactingToMessage.reactions?.map(r => ({
+                      emoji: r.emoji,
+                      count: r.count ?? r.userIds.length,
+                      reactedByMe: r.reactedByMe ?? false,
+                    })) ?? []}
                     onReact={(emoji) => {
                       if (reactingToMessage && conversationId) {
                         addMessageReaction(
@@ -1921,7 +1897,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityHint="Hides suggested replies for this conversation"
               >
-                <AppIcon name="close" size={15} color={colors.textMuted} />
+                <Ionicons name="close" size={15} color={colors.textMuted} />
               </Pressable>
             </View>
           )}
@@ -1949,8 +1925,8 @@ export default function ChatScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityHint="Open agent management"
               >
-                <AppIcon
-                  name={(deployedChatAgents[0]?.avatar as string) || 'pricetag'}
+                <Ionicons
+                  name={(deployedChatAgents[0]?.avatar as keyof typeof Ionicons.glyphMap) || 'bag-handle-outline'}
                   size={13}
                   color={colors.brand}
                 />
@@ -2031,7 +2007,7 @@ export default function ChatScreen({ navigation, route }: Props) {
           visible={attachmentPickerVisible && !composerSending}
           onClose={() => setAttachmentPickerVisible(false)}
           onSelect={(action) => {
-            if (action === "gallery" || action === "camera" || action === "document" || action === "location") {
+            if (action === "gallery" || action === "camera") {
               handleAttachmentSelect(action);
             } else if (action === "agent") {
               setChatAgentPickerVisible(true);
@@ -2046,16 +2022,6 @@ export default function ChatScreen({ navigation, route }: Props) {
             mediaType={pendingAttachment.mediaType}
             onClose={() => setPendingAttachment(null)}
             onSend={handleSendPendingAttachment}
-          />
-        )}
-
-        {pendingDocument && !composerSending && (
-          <DocumentReviewSheet
-            visible={!!pendingDocument}
-            fileName={pendingDocument.name}
-            mimeType={pendingDocument.mimeType}
-            onClose={() => setPendingDocument(null)}
-            onSend={handleSendPendingDocument}
           />
         )}
 
@@ -2090,8 +2056,9 @@ export default function ChatScreen({ navigation, route }: Props) {
               case "reply":
                 setReplyTo(selectedMessage);
                 break;
-              case "edit":
-                startEdit(selectedMessage);
+              case "forward":
+                setForwardingMessage(selectedMessage);
+                setForwardSheetVisible(true);
                 break;
               case "react":
                 setReactingToMessage(selectedMessage);
@@ -2142,12 +2109,32 @@ export default function ChatScreen({ navigation, route }: Props) {
             selectedMessage?.status === "failed" ||
             selectedMessage?.uploadStatus === "failed"
           }
-          canEdit={
-            selectedMessage?.sender === "me" &&
-            !!selectedMessage?.text &&
-            !!selectedMessage.date &&
-            Date.now() - new Date(selectedMessage.date).getTime() < 15 * 60 * 1000
-          }
+        />
+
+        <ForwardSheet
+          visible={forwardSheetVisible}
+          conversations={conversations.filter((c) => c.id !== conversationId)}
+          currentConversationId={conversationId}
+          onForward={(targetConversationId) => {
+            if (forwardingMessage) {
+              const text = forwardingMessage.text ?? "";
+              if (text) {
+                forwardMessageToConversation(
+                  targetConversationId,
+                  text,
+                  forwardingMessage.mediaUri,
+                  forwardingMessage.mediaType,
+                );
+              }
+            }
+            setForwardSheetVisible(false);
+            setForwardingMessage(null);
+            show("Message forwarded", "success");
+          }}
+          onClose={() => {
+            setForwardSheetVisible(false);
+            setForwardingMessage(null);
+          }}
         />
 
         <ConfirmationSheet
@@ -2160,14 +2147,14 @@ export default function ChatScreen({ navigation, route }: Props) {
           onConfirm={() => {
             const req = conversationConfirmation;
             clearConversationConfirmation();
-            if (req) Promise.resolve(req.onConfirm()).catch(() => undefined);
+            if (req) void req.onConfirm();
           }}
           onCancel={
             conversationConfirmation?.onCancel
               ? () => {
                   const req = conversationConfirmation;
                   clearConversationConfirmation();
-                  if (req?.onCancel) Promise.resolve(req.onCancel()).catch(() => undefined);
+                  if (req?.onCancel) void req.onCancel();
                 }
               : undefined
           }

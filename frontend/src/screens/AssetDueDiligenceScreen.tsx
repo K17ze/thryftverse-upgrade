@@ -99,7 +99,7 @@ export default function AssetDueDiligenceScreen() {
   const haptic = useHaptic();
   const { isOffline } = useConnectivity();
   const currentUser = useStore((state) => state.currentUser);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
 
   const assetId = route.params?.assetId;
@@ -506,7 +506,7 @@ export default function AssetDueDiligenceScreen() {
               {navPerUnitGbp != null && (
                 <CommerceDetailMetricRow
                   label="NAV / unit"
-                  value={formatFromFiat(navPerUnitGbp, currencyCode)}
+                  value={formatFromFiat(navPerUnitGbp, 'GBP')}
                 />
               )}
               {referenceVsNavPct != null && (

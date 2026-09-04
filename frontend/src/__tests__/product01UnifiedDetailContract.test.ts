@@ -400,7 +400,7 @@ describe('PRODUCT-01 co-own adapter', () => {
   it('preserves settlement mode and financial truth', () => {
     const vm = buildCoOwnViewModel({ asset: baseAsset, viewerUnits: 0 });
     const coOwn = vm as Extract<typeof vm, { family: 'co_own' }>;
-    expect(coOwn.settlementMode).toBe('GBP');
+    expect(coOwn.settlementMode).toBe('ONEZE');
     expect(coOwn.totalUnits).toBe(100);
     expect(coOwn.availableUnits).toBe(60);
     expect(coOwn.holders).toBe(8);

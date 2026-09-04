@@ -21,6 +21,8 @@ import { AppIcon } from '../components/common/AppIcon';
 import { type SemanticIconName } from '../theme/iconTokens';
 import { getStoredCreateMode, type PersistedCreateMode } from '../preferences/createModePreferences';
 import { useTabScroll } from '../context/TabScrollContext';
+import { useTabSwipe } from '../hooks/useTabSwipe';
+import { GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -267,7 +269,25 @@ export default function TabNavigator() {
       openEntry: true });
   }, [haptic, navigation, persistedCreateMode, requireAuth]);
 
+  // G12: Swipe-to-switch-tab gesture. Navigable tabs exclude Create (it is
+  // an action button, not a destination). Guest-gated tabs (Inbox, Profile)
+  // are skipped for unauthenticated users. Uses manualActivation so inner
+  // horizontal carousels/ScrollViews can claim the gesture first.
+  const navigableTabs = isGuest ? ['Home', 'Explore'] : ['Home', 'Explore', 'Inbox', 'Profile'];
+  const gatedTabs = isGuest ? new Set(['Inbox', 'Profile']) : undefined;
+  const tabSwipeGesture = useTabSwipe({
+    tabs: navigableTabs,
+    activeTab: lastTabRef.current,
+    navigateToTab: useCallback((tab: string) => {
+      haptic.patterns.tabSwitch();
+      lastTabRef.current = tab;
+      navigation.navigate('MainTabs' as any, { screen: tab });
+    }, [haptic, navigation]),
+    gatedTabs,
+  });
+
   return (
+    <GestureDetector gesture={tabSwipeGesture}>
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <Tab.Navigator
         tabBar={(props) => <AnimatedTabBar {...props} />}
@@ -435,6 +455,7 @@ export default function TabNavigator() {
       </Tab.Navigator>
 
     </View>
+    </GestureDetector>
   );
 }
 

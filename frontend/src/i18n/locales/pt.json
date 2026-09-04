@@ -60,7 +60,10 @@
       "off": "Desligado",
       "none": "Nenhum",
       "notSignedIn": "Não conectado"
-    }
+    },
+    "on": "Ativado",
+    "off": "Desativado",
+    "none": "Nenhum"
   },
   "home": {
     "brandTitle": "Thryftverse",
@@ -210,15 +213,20 @@
       "helpLegal": "Ajuda e jurídico",
       "advanced": "Avançado",
       "account": "Conta",
-      "profile": "Profile",
-      "accountSecurity": "Account & security",
-      "privacy": "Privacy",
-      "selling": "Selling",
-      "appearance": "Appearance",
-      "dataStorage": "Data & storage",
-      "support": "Support",
-      "about": "About",
-      "developer": "Developer"
+      "profile": "Perfil",
+      "accountSecurity": "Conta e segurança",
+      "privacy": "Privacidade",
+      "selling": "Vendas",
+      "appearance": "Aparência",
+      "dataStorage": "Dados e armazenamento",
+      "support": "Suporte",
+      "about": "Sobre",
+      "developer": "Desenvolvedor",
+      "profileLogin": "Perfil e login",
+      "privacyData": "Privacidade e dados",
+      "paymentsPayouts": "Pagamentos e repasses",
+      "sellerTools": "Ferramentas do vendedor",
+      "aboutSupport": "Sobre e suporte"
     },
     "rows": {
       "verification": "Verificação",
@@ -310,9 +318,8 @@
       "autoTranslate": "Traduzir mensagens automaticamente",
       "autoTranslateEnabled": "Mensagens estrangeiras traduzidas automaticamente",
       "autoTranslateDisabled": "Toque para traduzir mensagens estrangeiras manualmente",
-      "enabled": "On",
-      "disabled": "Off",
-      "appVersion": "v{{version}}"
+      "twoFADisabled": "2FA desativada",
+      "blockedUsersSubtitle": "Gerenciar contas bloqueadas"
     },
     "toast": {
       "themeApplying": "Aplicando tema {{theme}}…",
@@ -402,75 +409,57 @@
       "manageListing": "Gerenciar anúncio"
     },
     "edit": {
-      "couldNotLoad": "Couldn't load this listing",
-      "retryLoad": "Retry",
-      "discardTitle": "Discard changes?",
-      "discardMessage": "Your changes haven't been saved.",
-      "discard": "Discard",
-      "keepEditing": "Keep editing",
-      "unsaved": "Unsaved changes",
-      "updated": "Listing updated",
-      "updateFailed": "Couldn't update the listing. Try again.",
-      "titlePlaceholder": "e.g. Vintage Levi's 501 Denim Jacket",
-      "descriptionPlaceholder": "Describe the item's condition, size, and details",
-      "selectCategory": "Select category",
-      "selectCondition": "Select condition",
-      "selectSize": "Select size",
-      "selectBrand": "Select brand",
-      "select": "Select",
-      "remove": "Remove",
-      "pricing": "Pricing",
-      "format": "Format",
-      "formatFixedPrice": "Fixed price",
-      "formatHelper": "Choose how buyers can purchase this item",
-      "restricted": "Some categories can't be listed yet",
-      "shipping": "Shipping",
-      "shippingMethod": "Shipping method",
-      "shippingStandard": "Standard",
-      "shippingExpress": "Express",
-      "selectMethod": "Select method",
-      "whoPays": "Who pays shipping?",
-      "selectPayer": "Select payer",
-      "payerSeller": "You pay",
-      "payerBuyer": "Buyer pays",
-      "toggleShippingMethod": "Change shipping method",
-      "toggleShippingPayer": "Change who pays shipping",
-      "expandPhotoTips": "Photo tips",
-      "collapsePhotoTips": "Hide photo tips",
-      "showTips": "Show tips",
-      "hideTips": "Hide tips",
-      "tipsToImprove": "Tips to improve your listing",
-      "listingQuality": "Listing quality",
-      "allowCamera": "Allow camera access",
-      "allowGallery": "Allow photo library access",
-      "noPermission": "Camera access is off. Enable it in Settings.",
-      "couldNotOpenCamera": "Couldn't open the camera",
-      "couldNotOpenLibrary": "Couldn't open your photo library",
-      "mediaFailedRetry": "A photo failed to load. Retry.",
-      "retry": "Retry",
-      "lockedPhotos": "Photos locked while editing",
-      "statusDraft": "Draft",
-      "statusActive": "Active",
-      "statusPaused": "Paused",
-      "statusSold": "Sold",
-      "saving": "Saving…",
-      "saved": "Saved",
-      "offlineChanges": "Offline changes",
-      "conflict": "Conflict",
-      "conflictTitle": "Listing edited elsewhere",
-      "conflictMessage": "This listing was edited on another device. Would you like to:",
-      "conflictKeepMine": "Keep my changes",
-      "conflictUseTheirs": "Use their changes",
-      "conflictCompare": "Compare changes",
-      "conflictCompareTitle": "Your changes vs their changes",
-      "draftFound": "Unsaved draft found",
-      "draftRestore": "Restore draft from {date}?",
-      "draftRestoreAction": "Restore",
-      "draftDiscard": "Discard draft",
-      "saveButton": "Save",
-      "retrySave": "Retry",
-      "savingButton": "Saving…",
-      "mediaUploading": "Uploading media…"
+      "couldNotLoad": "Não foi possível carregar este anúncio",
+      "retryLoad": "Tentar novamente",
+      "discardTitle": "Descartar alterações?",
+      "discardMessage": "Suas alterações ainda não foram salvas.",
+      "discard": "Descartar",
+      "keepEditing": "Continuar editando",
+      "unsaved": "Alterações não salvas",
+      "updated": "Anúncio atualizado",
+      "updateFailed": "Não foi possível atualizar o anúncio. Tente novamente.",
+      "titlePlaceholder": "ex. Jaqueta jeans Levi's 501 vintage",
+      "descriptionPlaceholder": "Descreva a condição, o tamanho e os detalhes do item",
+      "selectCategory": "Selecionar categoria",
+      "selectCondition": "Selecionar condição",
+      "selectSize": "Selecionar tamanho",
+      "selectBrand": "Selecionar marca",
+      "select": "Selecionar",
+      "remove": "Remover",
+      "pricing": "Definição de preço",
+      "format": "Formato",
+      "formatFixedPrice": "Preço fixo",
+      "formatHelper": "Escolha como os compradores podem adquirir este item",
+      "restricted": "Algumas categorias ainda não podem ser listadas",
+      "shipping": "Envio",
+      "shippingMethod": "Método de envio",
+      "shippingStandard": "Padrão",
+      "shippingExpress": "Expresso",
+      "selectMethod": "Selecionar método",
+      "whoPays": "Quem paga o envio?",
+      "selectPayer": "Selecionar pagador",
+      "payerSeller": "Você paga",
+      "payerBuyer": "Comprador paga",
+      "toggleShippingMethod": "Alterar método de envio",
+      "toggleShippingPayer": "Alterar quem paga o envio",
+      "expandPhotoTips": "Dicas de foto",
+      "collapsePhotoTips": "Ocultar dicas de foto",
+      "showTips": "Mostrar dicas",
+      "hideTips": "Ocultar dicas",
+      "tipsToImprove": "Dicas para melhorar seu anúncio",
+      "listingQuality": "Qualidade do anúncio",
+      "allowCamera": "Permitir acesso à câmera",
+      "allowGallery": "Permitir acesso à biblioteca de fotos",
+      "noPermission": "O acesso à câmera está desativado. Ative-o nas Configurações.",
+      "couldNotOpenCamera": "Não foi possível abrir a câmera",
+      "couldNotOpenLibrary": "Não foi possível abrir sua biblioteca de fotos",
+      "mediaFailedRetry": "Uma foto não pôde ser carregada. Tente novamente.",
+      "retry": "Tentar novamente",
+      "lockedPhotos": "Fotos bloqueadas durante a edição",
+      "statusDraft": "Rascunho",
+      "statusActive": "Ativo",
+      "statusPaused": "Pausado",
+      "statusSold": "Vendido"
     }
   },
   "messaging": {
@@ -518,14 +507,12 @@
       "undoMessageDeletion": "Desfazer exclusão de mensagem",
       "reactWith": "Reagir com {{emoji}}",
       "openLink": "Abrir link para {{domain}}",
-      "typingIndicator": "Digitando...",
-      "edited": "Edited"
+      "typingIndicator": "Digitando..."
     },
     "inbox": {
       "primary": "Principal",
       "buying": "Comprando",
       "selling": "Vendendo",
-      "requests": "Solicitações",
       "tabBadge": "Aba {{label}}{{plural}}",
       "newBadge": ", {{count}} nova",
       "openConversation": "Abrir {{title}}",
@@ -614,11 +601,7 @@
       "shareListing": "Compartilhar anúncio",
       "orderStatus": "Status do pedido",
       "payment": "Pagamento",
-      "agent": "Agente",
-      "location": "Location",
-      "shareLocation": "Share a pinned location",
-      "document": "Document",
-      "shareDocument": "Share a file from your device"
+      "agent": "Agente"
     },
     "offers": {
       "declineOffer": "Recusar oferta",
@@ -735,7 +718,9 @@
       "title": "Mantenha os pagamentos no ThryftVerse",
       "body": "Pagamentos fora da plataforma não são cobertos pela Proteção ao Comprador. Se esta for uma transação legítima, conclua-a no app para permanecer protegido.",
       "dismiss": "Dispensar aviso",
-      "reportConversation": "Denunciar esta conversa"
+      "reportConversation": "Denunciar esta conversa",
+      "scamWarningBody": "Esta mensagem pode conter detalhes de contato fora da plataforma. Mantenha pagamentos e comunicação no Thryftverse para sua proteção.",
+      "scamBlockToast": "Esta mensagem foi bloqueada para protegê-lo de possíveis golpes. Mantenha os pagamentos na plataforma."
     },
     "search": {
       "placeholder": "Pesquisar no chat",
@@ -897,18 +882,6 @@
       "statusDelivered": "Entregue",
       "statusCancelled": "Cancelado",
       "statusRefunded": "Reembolsado"
-    },
-    "sellerAnalytics": {
-      "metricsTitle": "What do these metrics mean?",
-      "metricsExpand": "Show metric definitions",
-      "metricsCollapse": "Hide metric definitions",
-      "exportReport": "Export report",
-      "exporting": "Exporting…",
-      "exportSuccess": "Report exported",
-      "exportFailed": "Couldn't export report. Try again.",
-      "scopeListing": "Per listing",
-      "scopeSeller": "Per seller",
-      "scopePlatform": "Platform-wide"
     }
   },
   "myProfile": {
@@ -1231,8 +1204,8 @@
       "minNextBid": "Próximo lance mínimo",
       "cancel": "Cancelar",
       "close": "Fechar",
-      "riskDisclosure": "Bids are binding. If you win, you must complete payment within 48 hours. No retraction after confirmation.",
-      "paymentDeadline": "Payment due within 48 hours of auction close."
+      "riskDisclosure": "Lances são vinculantes. Se você ganhar, deve concluir o pagamento em 48 horas. Sem retratação após a confirmação.",
+      "paymentDeadline": "Pagamento devido em 48 horas após o encerramento do leilão."
     },
     "unknown": {
       "title": "Status do lance desconhecido",
@@ -1783,115 +1756,18 @@
       "appealFailed": "Não foi possível enviar o recurso. Verifique sua conexão e tente novamente."
     }
   },
-  "stateCopy": {
-    "actions": {
-      "tryAgain": "Try again",
-      "refresh": "Refresh",
-      "clearFilters": "Clear filters"
-    },
-    "conversations": {
-      "loading": "Loading your conversations…",
-      "empty": "No conversations yet. Start one from a listing or profile.",
-      "emptyFiltered": "No conversations match this filter.",
-      "error": "Couldn't load your conversations. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached conversations.",
-      "stale": "These conversations may be out of date. Pull to refresh.",
-      "permissionDenied": "Sign in to see your conversations."
-    },
-    "messages": {
-      "loading": "Loading messages…",
-      "empty": "No messages yet. Say hello to start the conversation.",
-      "error": "Couldn't load messages. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached messages.",
-      "stale": "These messages may be out of date. Pull to refresh."
-    },
-    "listings": {
-      "loading": "Loading listings…",
-      "empty": "No listings yet. List your first item to start selling.",
-      "emptyFiltered": "No listings match these filters.",
-      "error": "Couldn't load listings. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached listings.",
-      "stale": "These listings may be out of date. Pull to refresh."
-    },
-    "inventory": {
-      "loading": "Loading your inventory…",
-      "empty": "No items in your inventory. List an item to get started.",
-      "emptyFiltered": "No items match these filters.",
-      "error": "Couldn't load your inventory. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached inventory.",
-      "stale": "Your inventory may be out of date. Pull to refresh."
-    },
-    "orders": {
-      "loading": "Loading your orders…",
-      "empty": "No orders yet. When you buy or sell something, your orders will show up here.",
-      "emptyFiltered": "No orders match these filters.",
-      "error": "Couldn't load your orders. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached orders.",
-      "stale": "These orders may be out of date. Pull to refresh."
-    },
-    "analytics": {
-      "loading": "Loading your analytics…",
-      "empty": "No analytics data yet. List an item to start tracking performance.",
-      "emptyFiltered": "No data for this period.",
-      "error": "Couldn't load your analytics. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached analytics.",
-      "stale": "This data may be out of date. Pull to refresh."
-    },
-    "wallet": {
-      "loading": "Loading your wallet…",
-      "empty": "No wallet activity yet. Your balance and transactions will appear here.",
-      "emptyFiltered": "No transactions match these filters.",
-      "error": "Couldn't load your wallet. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached wallet data.",
-      "stale": "Your wallet balance may be out of date. Pull to refresh."
-    },
-    "search": {
-      "loading": "Searching…",
-      "empty": "No results found. Try a different search term.",
-      "emptyFiltered": "No results match these filters.",
-      "error": "Search isn't available right now. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Search requires a connection.",
-      "stale": "These results may be out of date. Search again to refresh."
-    },
-    "sellerHub": {
-      "loading": "Loading your seller dashboard…",
-      "empty": "No seller activity yet. List an item to start selling.",
-      "emptyFiltered": "No data for this period.",
-      "error": "Couldn't load your seller dashboard. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached seller data.",
-      "stale": "This data may be out of date. Pull to refresh."
-    },
-    "profile": {
-      "loading": "Loading profile…",
-      "empty": "This profile has no public activity yet.",
-      "emptyFiltered": "No listings match these filters.",
-      "error": "Couldn't load this profile. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached profile data.",
-      "stale": "This profile may be out of date. Pull to refresh."
-    }
-  },
   "coOwn": {
     "tradeComposer": {
-      "riskDisclosure": "Fractional ownership is irrevocable. Shares are subject to corporate actions and market volatility. Past performance does not guarantee future returns. You may lose some or all of your investment.",
-      "noGuarantee": "No guaranteed returns",
-      "irrevocable": "Irrevocable commitment"
+      "riskDisclosure": "A propriedade fracionada é irrevogável. As cotas estão sujeitas a ações corporativas e à volatilidade do mercado. O desempenho passado não garante retornos futuros. Você pode perder parte ou todo o seu investimento.",
+      "noGuarantee": "Sem retornos garantidos",
+      "irrevocable": "Compromisso irrevogável"
     },
     "detail": {
-      "issuerTrust": "Issuer",
-      "sharePrice": "Share price",
-      "totalValue": "Total asset value",
-      "ownershipPercent": "Your ownership",
-      "distributions": "Distributions"
+      "issuerTrust": "Emissor",
+      "sharePrice": "Preço por cota",
+      "totalValue": "Valor total do ativo",
+      "ownershipPercent": "Sua participação",
+      "distributions": "Distribuições"
     }
   }
 }

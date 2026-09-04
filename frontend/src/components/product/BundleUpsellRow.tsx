@@ -44,7 +44,7 @@ function BundleUpsellRowComponent({
   onOpenBundleBag }: BundleUpsellRowProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat, displayMode, currencyCode } = useFormattedPrice();
+  const { formatFromFiat, displayMode } = useFormattedPrice();
 
   const bundleItems = items
     .filter((i) => i.id !== currentListingId && !i.isSold)
@@ -54,7 +54,7 @@ function BundleUpsellRowComponent({
 
   const showShippingMessage = shippingPayer === 'buyer';
   const bundleTotal = bundleItems.reduce((sum, i) => sum + i.price, 0);
-  const formattedBundleTotal = formatFromFiat(bundleTotal, currencyCode, { displayMode });
+  const formattedBundleTotal = formatFromFiat(bundleTotal, 'GBP', { displayMode });
 
   return (
     <View style={styles.container}>
@@ -78,7 +78,7 @@ function BundleUpsellRowComponent({
 
       <View style={styles.thumbRow}>
         {bundleItems.map((bundleItem) => {
-          const formattedPrice = formatFromFiat(bundleItem.price, currencyCode, { displayMode });
+          const formattedPrice = formatFromFiat(bundleItem.price, 'GBP', { displayMode });
           return (
             <Pressable
               key={bundleItem.id}

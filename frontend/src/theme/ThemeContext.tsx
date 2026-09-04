@@ -6,6 +6,13 @@ import {
   subscribeThemePreferenceChange,
   type ThemePreference,
 } from './themePreference';
+import {
+  getStoredAccentPreference,
+  applyAccentPreference,
+  subscribeAccentPreferenceChange,
+  getAccentColors,
+  type AccentPreset,
+} from './accentPreference';
 import { useAccessibilityPreferences } from '../context/AccessibilityPreferencesContext';
 import {
   DARK_COLORS as RAW_DARK_COLORS,
@@ -122,10 +129,12 @@ const LIGHT_COLORS: ThemeColors = RAW_LIGHT_COLORS as ThemeColors;
 
 interface ThemeContextValue {
   themePreference: ThemePreference;
+  accentPreset: AccentPreset;
   resolvedTheme: ThemeMode;
   colors: ThemeColors;
   isDark: boolean;
   setThemePreference: (preference: ThemePreference) => void;
+  setAccentPreset: (preset: AccentPreset) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -137,8 +146,16 @@ function resolveThemeMode(preference: ThemePreference): ThemeMode {
   return preference;
 }
 
-function getColorsForTheme(mode: ThemeMode): ThemeColors {
-  return mode === 'light' ? LIGHT_COLORS : DARK_COLORS;
+function getColorsForTheme(mode: ThemeMode, accentPreset: AccentPreset): ThemeColors {
+  const base = mode === 'light' ? LIGHT_COLORS : DARK_COLORS;
+  const accent = getAccentColors(accentPreset, mode === 'dark');
+  return {
+    ...base,
+    brand: accent.brand,
+    brandPressed: accent.brandPressed,
+    brandSubtle: accent.brandSubtle,
+    brandBorder: accent.brandBorder,
+  };
 }
 
 /**
@@ -179,18 +196,24 @@ function applyHighContrast(base: ThemeColors, isDark: boolean): ThemeColors {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [themePreference, setThemePreferenceState] = useState<ThemePreference>('system');
+  const [accentPreset, setAccentPresetState] = useState<AccentPreset>('default');
   const [resolvedTheme, setResolvedTheme] = useState<ThemeMode>('dark');
   const { highContrast } = useAccessibilityPreferences();
 
-  // Initialize on mount
+  // Initialize on mount — load both theme and accent preferences
   useEffect(() => {
     let mounted = true;
-    getStoredThemePreference().then((pref) => {
+    Promise.all([
+      getStoredThemePreference(),
+      getStoredAccentPreference(),
+    ]).then(([pref, accent]) => {
       if (!mounted) return;
       setThemePreferenceState(pref);
+      setAccentPresetState(accent);
       const mode = resolveThemeMode(pref);
       setResolvedTheme(mode);
       applyThemePreference(pref);
+      applyAccentPreference(accent);
     });
     return () => { mounted = false; };
   }, []);
@@ -215,10 +238,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
+  // Subscribe to accent preference changes (from other tabs or settings)
+  useEffect(() => {
+    const unsubscribe = subscribeAccentPreferenceChange((preset) => {
+      setAccentPresetState(preset);
+    });
+    return unsubscribe;
+  }, []);
+
   const colors = useMemo(() => {
-    const base = getColorsForTheme(resolvedTheme);
+    const base = getColorsForTheme(resolvedTheme, accentPreset);
     return highContrast ? applyHighContrast(base, resolvedTheme === 'dark') : base;
-  }, [resolvedTheme, highContrast]);
+  }, [resolvedTheme, accentPreset, highContrast]);
 
   const setThemePreference = useCallback((preference: ThemePreference) => {
     applyThemePreference(preference);
@@ -226,15 +257,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setResolvedTheme(resolveThemeMode(preference));
   }, []);
 
+  const setAccentPreset = useCallback((preset: AccentPreset) => {
+    applyAccentPreference(preset);
+    setAccentPresetState(preset);
+  }, []);
+
   const value = useMemo(
     () => ({
       themePreference,
+      accentPreset,
       resolvedTheme,
       colors,
       isDark: resolvedTheme === 'dark',
       setThemePreference,
+      setAccentPreset,
     }),
-    [themePreference, resolvedTheme, colors, setThemePreference]
+    [themePreference, accentPreset, resolvedTheme, colors, setThemePreference, setAccentPreset]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

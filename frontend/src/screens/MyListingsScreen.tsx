@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, RefreshControl, Pressable } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useNavigation, RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -9,13 +9,14 @@ import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList } from '../navigation/types';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
-import { FlagshipScreen, FlagshipHeader, FlagshipState, DenseListScreen } from '../components/flagship';
+import { FlagshipScreen, FlagshipHeader, FlagshipState } from '../components/flagship';
 import { CachedImage } from '../components/CachedImage';
 import { SellerStandardsBadges } from '../components/profile/SellerStandardsBadges';
 import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useSellerTrust } from '../platform/product';
 import { fetchUserListingsFromApi, ListingApiItem } from '../services/listingsApi';
+import { fetchSellerInventoryTotals, type SellerInventoryTotals } from '../services/sellerHubApi';
 import { haptics } from '../utils/haptics';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { t } from '../i18n';
@@ -48,7 +49,7 @@ const TABS: TabConfig[] = [
 function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => void }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { currencyCode, currencySymbol, formatFromFiat } = useFormattedPrice();
+  const { currencySymbol, formatFromFiat } = useFormattedPrice();
 
   const statusColor =
     item.status === 'active' ? colors.success
@@ -79,7 +80,7 @@ function ListingRow({ item, onPress }: { item: ListingApiItem; onPress: () => vo
       )}
       <View style={styles.rowBody}>
         <Text style={styles.rowTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.rowPrice}>{formatFromFiat(item.priceGbp, currencyCode, { displayMode: 'fiat' })}</Text>
+        <Text style={styles.rowPrice}>{formatFromFiat(item.priceGbp, 'GBP')}</Text>
         <View style={styles.rowMeta}>
           {/* Status pill — only visible containment on this row (status boundary) */}
           <View style={[styles.statusBadge, { backgroundColor: statusColor + '20', borderColor: statusColor + '40' }]}>
@@ -145,11 +146,15 @@ export default function MyListingsScreen() {
   const currentUser = useStore((s) => s.currentUser);
   const filterType = route.params?.type;
   const { data: sellerTrust } = useSellerTrust(currentUser?.id);
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   const [listings, setListings] = useState<ListingApiItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [totals, setTotals] = useState<SellerInventoryTotals | null>(null);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   const headerTitle =
@@ -159,15 +164,40 @@ export default function MyListingsScreen() {
       ? t('myListings.emptyCoOwn')
       : t('myListings.empty');
 
+  const PAGE_SIZE = 50;
+
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
+    setCursor(null);
+    setHasMore(false);
     try {
-      const res = await fetchUserListingsFromApi(currentUser.id, { limit: 100 });
+      const [res, invTotals] = await Promise.all([
+        fetchUserListingsFromApi(currentUser.id, { limit: PAGE_SIZE }),
+        fetchSellerInventoryTotals().catch(() => null),
+      ]);
       setListings(res.items);
+      setCursor(res.nextCursor ?? null);
+      setHasMore(Boolean(res.nextCursor));
+      if (invTotals) setTotals(invTotals);
     } catch (e) {
       show(t('myListings.couldNotLoad'), 'error');
     }
   }, [currentUser?.id, show]);
+
+  const loadMore = useCallback(async () => {
+    if (!currentUser?.id || isLoadingMore || !hasMore || !cursor) return;
+    setIsLoadingMore(true);
+    try {
+      const res = await fetchUserListingsFromApi(currentUser.id, { limit: PAGE_SIZE, cursor });
+      setListings((prev) => [...prev, ...res.items]);
+      setCursor(res.nextCursor ?? null);
+      setHasMore(Boolean(res.nextCursor));
+    } catch {
+      // Non-fatal — user can pull to refresh to retry
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [currentUser?.id, isLoadingMore, hasMore, cursor]);
 
   // useFocusEffect ensures listings re-fetch when the user navigates back
   // (e.g., after editing or managing a listing from this screen).
@@ -186,7 +216,8 @@ export default function MyListingsScreen() {
     setIsRefreshing(false);
   };
 
-  // Aggregate seller analytics derived from listings data
+  // Aggregate seller analytics — status counts from server totals (uncapped),
+  // value metrics from loaded listings.
   const analytics = useMemo(() => {
     const active = listings.filter((l) => l.status === 'active');
     const sold = listings.filter((l) => l.status === 'sold');
@@ -194,6 +225,18 @@ export default function MyListingsScreen() {
     const totalSoldValue = sold.reduce((sum, l) => sum + l.priceGbp, 0);
     const avgActivePrice = active.length > 0 ? totalActiveValue / active.length : 0;
     const avgSoldPrice = sold.length > 0 ? totalSoldValue / sold.length : 0;
+    if (totals) {
+      return {
+        total: totals.active + totals.drafts + totals.paused + totals.sold,
+        activeCount: totals.active,
+        soldCount: totals.sold,
+        draftCount: totals.drafts,
+        pausedCount: totals.paused,
+        totalActiveValue: totals.listedValueGbp,
+        totalSoldValue,
+        avgActivePrice,
+        avgSoldPrice };
+    }
     return {
       total: listings.length,
       activeCount: active.length,
@@ -204,15 +247,15 @@ export default function MyListingsScreen() {
       totalSoldValue,
       avgActivePrice,
       avgSoldPrice };
-  }, [listings]);
+  }, [listings, totals]);
 
   // ── Tab counts for filter badges ──
   const tabCounts = useMemo(() => ({
-    all: listings.length,
+    all: analytics.total,
     active: analytics.activeCount,
     draft: analytics.draftCount,
     sold: analytics.soldCount,
-    paused: analytics.pausedCount }), [listings, analytics]);
+    paused: analytics.pausedCount }), [analytics]);
 
   // ── Filtered listings based on active tab ──
   const filteredListings = useMemo(() => {
@@ -261,12 +304,12 @@ export default function MyListingsScreen() {
           <FlagshipMetricLine
             icon="wallet"
             label={t('myListings.statAvgPrice')}
-            value={formatFromFiat(analytics.avgActivePrice, currencyCode, { displayMode: 'fiat' })}
+            value={formatFromFiat(analytics.avgActivePrice, 'GBP')}
           />
           <FlagshipMetricLine
             icon="trending"
             label={t('myListings.statActiveValue')}
-            value={formatFromFiat(analytics.totalActiveValue, currencyCode, { displayMode: 'fiat' })}
+            value={formatFromFiat(analytics.totalActiveValue, 'GBP')}
           />
         </View>
 
@@ -340,6 +383,7 @@ export default function MyListingsScreen() {
               key={tab.key}
               style={({ pressed }) => [styles.filterTab, pressed && { opacity: 0.85 }]}
               onPress={() => { haptics.tap(); setActiveTab(tab.key); }}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
               accessibilityLabel={`${tab.label} tab, ${count} listing${count === 1 ? '' : 's'}`}
@@ -393,48 +437,57 @@ export default function MyListingsScreen() {
   };
 
   return (
-    <DenseListScreen
-      testID="my-listings-screen"
+    <FlagshipScreen
       header={<FlagshipHeader title={headerTitle} onBack={() => navigation.goBack()} />}
-      banner={<OfflineBanner onRetry={() => void onRefresh()} />}
-      list={
-        listings.length === 0 ? (
-          <View style={styles.body}>
-            <EmptyState
-              icon="bag-handle-outline"
-              title={t('myListings.noListings')}
-              subtitle={emptySubtitle}
-              ctaLabel={t('myListings.startSelling')}
-              onCtaPress={() => navigation.navigate('Sell')}
-            />
-          </View>
-        ) : (
-          <FlashList
-            data={filteredListings}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.list}
-            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
-            ListHeaderComponent={
-              <View>
-                {renderHeader()}
-                {renderFilterBar()}
-                {/* Listing count for current filter */}
-                <View style={styles.listingsHeaderRow}>
-                  <Text style={styles.listingsHeaderText}>
-                    {t('myListings.listingCount', { count: filteredListings.length, word: filteredListings.length === 1 ? t('myListings.listingWord') : t('myListings.listingWordPlural') })}
-                    {activeTab !== 'all' ? ` · ${TABS.find(t2 => t2.key === activeTab)?.label}` : ''}
-                  </Text>
-                </View>
-              </View>
-            }
-            ListEmptyComponent={renderFilteredEmpty()}
-            renderItem={renderListingItem}
-            // Performance: long seller lists; FlashList v2 handles recycling
-            // automatically.
+      scrollEnabled={false}
+      contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+    >
+      <OfflineBanner onRetry={() => void onRefresh()} />
+      {listings.length === 0 ? (
+        <View style={styles.body}>
+          <EmptyState
+            icon="bag-handle-outline"
+            title={t('myListings.noListings')}
+            subtitle={emptySubtitle}
+            ctaLabel={t('myListings.startSelling')}
+            onCtaPress={() => navigation.navigate('Sell')}
           />
-        )
-      }
-    />
+        </View>
+      ) : (
+        <FlashList
+          data={filteredListings}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListHeaderComponent={
+            <View>
+              {renderHeader()}
+              {renderFilterBar()}
+              {/* Listing count for current filter */}
+              <View style={styles.listingsHeaderRow}>
+                <Text style={styles.listingsHeaderText}>
+                  {t('myListings.listingCount', { count: filteredListings.length, word: filteredListings.length === 1 ? t('myListings.listingWord') : t('myListings.listingWordPlural') })}
+                  {activeTab !== 'all' ? ` · ${TABS.find(t2 => t2.key === activeTab)?.label}` : ''}
+                </Text>
+              </View>
+            </View>
+          }
+          ListEmptyComponent={renderFilteredEmpty()}
+          ListFooterComponent={
+            isLoadingMore ? (
+              <View style={{ paddingVertical: Space.md, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={colors.textMuted} />
+              </View>
+            ) : null
+          }
+          renderItem={renderListingItem}
+          // Performance: long seller lists; FlashList v2 handles recycling
+          // automatically.
+        />
+      )}
+    </FlagshipScreen>
   );
 }
 
@@ -546,7 +599,6 @@ function createStyles(colors: ThemeColors) {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    textTransform: 'uppercase',
     letterSpacing: TypographyV2.label.letterSpacing },
 
   /* ── Listing row ── */

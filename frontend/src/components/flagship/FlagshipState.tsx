@@ -19,90 +19,199 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Space, Radius, IconGrammar, Stroke} from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
+import {
+  StateVariant,
+  Domain,
+  IconConcept,
+  StateCopyContext,
+  getStateCopy,
+  resolveStateCopy,
+} from './stateCopyRegistry';
+
+/**
+ * Map semantic icon concepts (from the state copy registry) to concrete
+ * Ionicons outline glyphs. Keeps one icon family / optical band per surface
+ * (AGENTS §4 icon grammar). Concepts decouple copy from glyph names so the
+ * registry never imports vector-icon internals.
+ */
+const ICON_CONCEPT_GLYPHS: Record<IconConcept, React.ComponentProps<typeof Ionicons>['name']> = {
+  search: 'search-outline',
+  camera: 'camera-outline',
+  chat: 'chatbubble-outline',
+  bookmark: 'bookmark-outline',
+  archive: 'archive-outline',
+  store: 'storefront-outline',
+  chart: 'bar-chart-outline',
+  bag: 'bag-outline',
+  tag: 'pricetag-outline',
+  star: 'star-outline',
+  bell: 'notifications-outline',
+  wifi: 'wifi-outline',
+  lock: 'lock-closed-outline',
+  clock: 'time-outline',
+  image: 'image-outline',
+  sync: 'sync-outline',
+  alert: 'alert-circle-outline',
+  refresh: 'refresh-outline',
+  back: 'chevron-back-outline',
+};
 
 export interface FlagshipStateProps {
-  variant: 'loading' | 'empty' | 'error' | 'offline' | 'unavailable';
+  variant: StateVariant;
+  /**
+   * Context for contextual copy resolution. When provided, the component
+   * resolves screen-specific first-use / cleared / error-adjacent copy from
+   * the registry (preserving working context such as the active query or
+   * missing permission). Explicit title/subtitle/actionLabel props still win.
+   */
+  context?: StateCopyContext;
+  /** Legacy domain key. Used when `context` is not supplied. */
+  domain?: Domain;
+  /** @deprecated use `context` + registry `headline`. */
   title?: string;
+  /** @deprecated use `context` + registry `body`. */
   subtitle?: string;
   actionLabel?: string;
   onAction?: () => void;
   icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** Icon concept for the state glyph / primary action. */
+  actionIcon?: IconConcept;
   /** Optional secondary action (e.g. "Go back") shown below the primary. */
   secondaryActionLabel?: string;
+  /** @deprecated alias for `secondaryActionLabel`. */
+  secondaryAction?: string;
   onSecondaryAction?: () => void;
-  style?: StyleProp<ViewStyle>;
-  /** Optional children rendered below the subtitle (e.g. dev error detail). */
+  /**
+   * Optional skeleton layout to render in place of the generic loading
+   * shimmer when `variant === 'loading'`. Pass one of the composed skeleton
+   * layouts (e.g. `<FeedSkeleton />`, `<ProductDetailSkeleton />`) so the
+   * loading state matches the final screen geometry exactly — no layout
+   * shift when data resolves. Per AGENTS §27.4 and 2026 skeleton research:
+   * skeletons work best for predictable layouts (feeds, lists, profiles).
+   */
+  skeleton?: React.ReactNode;
   children?: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
 }
 
-const DEFAULT_TITLES: Record<string, string> = {
+const DEFAULT_TITLES: Record<StateVariant, string> = {
   loading: 'Loading',
   empty: 'Nothing here yet',
-  error: 'Could not load this',
+  error: 'Something went wrong',
   offline: 'You are offline',
-  unavailable: 'Not available' };
+  unavailable: 'Not available',
+  partial: 'Some items did not load',
+  conflict: 'This changed' };
 
-const DEFAULT_SUBTITLES: Record<string, string> = {
+const DEFAULT_SUBTITLES: Record<StateVariant, string> = {
   loading: 'One moment while we get this ready.',
   empty: 'When content appears, you\'ll see it here.',
   error: 'We could not load this. Tap below to try again.',
   offline: 'Check your connection and try again.',
-  unavailable: 'This feature is not available right now.' };
+  unavailable: 'This feature is not available right now.',
+  partial: 'You can still browse what loaded.',
+  conflict: 'Someone else updated this. Refresh to see the latest.' };
 
-const DEFAULT_ICONS: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
+const DEFAULT_ICONS: Record<StateVariant, React.ComponentProps<typeof Ionicons>['name']> = {
   loading: 'sync-outline',
   empty: 'image-outline',
   error: 'alert-circle-outline',
   offline: 'cloud-offline-outline',
-  unavailable: 'lock-closed-outline' };
+  unavailable: 'lock-closed-outline',
+  partial: 'alert-outline',
+  conflict: 'refresh-outline' };
 
 const AnimatedLinearGradient = Reanimated.createAnimatedComponent(LinearGradient);
 
 /**
  * FlagshipState — the canonical loading / empty / error / offline / unavailable
- * surface for ThryftVerse.
+ * / partial / conflict surface for ThryftVerse.
  *
  * Design principles (AGENTS §14, §27.4):
  *   - loading uses a skeleton-style shimmer, not a generic centred spinner;
  *   - empty/error/offline get a restrained icon circle, clear title, helpful
  *     subtitle, and a recovery action with the correct haptic level;
- *   - error/offline retry fires a medium haptic (action commit);
+ *   - partial shows what loaded and offers retry for the rest;
+ *   - conflict signals server-side change and offers refresh;
+ *   - error/offline/partial/conflict retry fires a medium haptic (action commit);
  *   - reduced motion collapses the shimmer to a static placeholder.
+ *
+ * Copy resolution: when `context` is provided, screen-specific first-use /
+ * cleared / error-adjacent copy is pulled from the state copy registry
+ * (preserving working context such as the active query or a missing
+ * permission). When only `domain` is provided, legacy domain copy is used.
+ * Explicit title/subtitle/actionLabel props always win. See
+ * stateCopyRegistry.ts and TERMINOLOGY.md.
  */
 export function FlagshipState({
   variant,
+  context,
+  domain,
   title,
   subtitle,
   actionLabel,
   onAction,
   icon,
+  actionIcon,
   secondaryActionLabel,
+  secondaryAction,
   onSecondaryAction,
-  style,
-  children }: FlagshipStateProps) {
+  skeleton,
+  children,
+  style }: FlagshipStateProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
   const reducedMotionEnabled = useReducedMotion();
 
-  // ── Loading: skeleton shimmer instead of a generic spinner ──────────────
+  // ── Copy resolution ─────────────────────────────────────────────────────
+  // Priority: explicit props > context-aware registry copy > legacy domain
+  // copy > legacy defaults. Context (screen + empty/error reason) selects the
+  // refined, anti-generic messages; domain is the legacy fallback.
+  const contextCopy = context ? resolveStateCopy(variant, context) : undefined;
+  const domainCopy = !context && domain ? getStateCopy(domain, variant) : undefined;
+  const registryCopy = contextCopy ?? domainCopy;
+  const resolvedHeadline = title ?? registryCopy?.headline ?? registryCopy?.title ?? DEFAULT_TITLES[variant];
+  const resolvedBody = subtitle ?? registryCopy?.body ?? registryCopy?.subtitle ?? DEFAULT_SUBTITLES[variant];
+  const resolvedActionLabel = actionLabel ?? registryCopy?.actionLabel;
+  const resolvedSecondaryActionLabel =
+    secondaryActionLabel ?? secondaryAction ?? registryCopy?.secondaryAction ?? registryCopy?.secondaryActionLabel;
+  // State glyph: explicit `icon` > concept from `actionIcon` prop > concept
+  // from registry copy > variant default.
+  const resolvedConcept = actionIcon ?? registryCopy?.actionIcon;
+  const resolvedIconName = icon ?? (resolvedConcept ? ICON_CONCEPT_GLYPHS[resolvedConcept] : undefined);
+
+  // ── Loading: skeleton layout or skeleton shimmer ────────────────────────
+  // When a `skeleton` prop is provided, render it in place of the generic
+  // shimmer so the loading state matches the final screen geometry exactly
+  // (no layout shift when data resolves). Per AGENTS §27.4 and 2026 skeleton
+  // research: skeletons work best for predictable layouts (feeds, lists,
+  // profiles). The generic shimmer remains the fallback for unpredictable
+  // or short-load surfaces.
   if (variant === 'loading') {
+    if (skeleton) {
+      return (
+        <View style={[styles.skeletonWrap, style]} accessibilityLiveRegion="polite">
+          {skeleton}
+        </View>
+      );
+    }
     return (
       <View style={[styles.center, style]} accessibilityLiveRegion="polite">
         <LoadingShimmer colors={colors} reduced={reducedMotionEnabled} />
         <Text style={[styles.loadingText, { color: colors.textMuted }]}>
-          {title ?? DEFAULT_TITLES.loading}
+          {resolvedHeadline}
         </Text>
-        {subtitle ? (
+        {resolvedBody ? (
           <Text style={[styles.loadingSub, { color: colors.textMuted }]}>
-            {subtitle}
+            {resolvedBody}
           </Text>
         ) : null}
       </View>
     );
   }
 
-  const effectiveIcon = icon ?? DEFAULT_ICONS[variant];
-  const isErrorish = variant === 'error' || variant === 'offline';
+  const effectiveIcon = resolvedIconName ?? DEFAULT_ICONS[variant];
+  const isErrorish = variant === 'error' || variant === 'offline' || variant === 'partial' || variant === 'conflict';
 
   const handleAction = () => {
     // Recovery actions commit a real retry — medium haptic per AGENTS §13.
@@ -140,47 +249,50 @@ export function FlagshipState({
       <Reanimated.Text
         entering={enter}
         style={[styles.title, { color: colors.textPrimary }]}
+        accessibilityRole="header"
       >
-        {title ?? DEFAULT_TITLES[variant]}
+        {resolvedHeadline}
       </Reanimated.Text>
-      <Reanimated.Text
-        entering={enter}
-        style={[styles.subtitle, { color: colors.textSecondary }]}
-      >
-        {subtitle ?? DEFAULT_SUBTITLES[variant]}
-      </Reanimated.Text>
-      {children}
-      {actionLabel && onAction && (
+      {resolvedBody ? (
+        <Reanimated.Text
+          entering={enter}
+          style={[styles.subtitle, { color: colors.textSecondary }]}
+        >
+          {resolvedBody}
+        </Reanimated.Text>
+      ) : null}
+      {resolvedActionLabel && onAction && (
         <Reanimated.View entering={enter}>
           <AnimatedPressable
             onPress={handleAction}
             scaleValue={0.97}
             hapticFeedback="none"
             accessibilityRole="button"
-            accessibilityLabel={actionLabel}
+            accessibilityLabel={resolvedActionLabel}
             accessibilityHint={isErrorish ? 'Tries loading this again' : undefined}
             style={[styles.actionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
           >
-            <Text style={[styles.actionText, { color: colors.textPrimary }]}>{actionLabel}</Text>
+            <Text style={[styles.actionText, { color: colors.textPrimary }]}>{resolvedActionLabel}</Text>
           </AnimatedPressable>
         </Reanimated.View>
       )}
-      {secondaryActionLabel && onSecondaryAction && (
+      {resolvedSecondaryActionLabel && onSecondaryAction && (
         <Reanimated.View entering={enter}>
           <AnimatedPressable
             onPress={handleSecondary}
             scaleValue={0.98}
             hapticFeedback="none"
             accessibilityRole="button"
-            accessibilityLabel={secondaryActionLabel}
+            accessibilityLabel={resolvedSecondaryActionLabel}
             style={styles.secondaryBtn}
           >
             <Text style={[styles.secondaryText, { color: colors.textSecondary }]}>
-              {secondaryActionLabel}
+              {resolvedSecondaryActionLabel}
             </Text>
           </AnimatedPressable>
         </Reanimated.View>
       )}
+      {children}
     </Reanimated.View>
   );
 }
@@ -298,6 +410,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: Space.xl,
     paddingHorizontal: Space.md },
+  /** Skeleton wrapper — fills the available space so the skeleton layout
+   *  controls its own geometry (matching the final screen). No centring;
+   *  the skeleton is the content, not a placeholder indicator. */
+  skeletonWrap: {
+    flex: 1 },
   loadingText: {
     marginTop: Space.md,
     fontSize: TypographyV2.sectionTitle.size,

@@ -57,6 +57,16 @@ export interface SellerHubBusinessPulse {
   netSalesGbp: number;
   orders: number;
   completeness: 'complete' | 'partial';
+  /**
+   * Week-over-week net sales change (percentage points). Optional — only
+   * present when the backend has a prior-week comparison. Renders a trend
+   * indicator on the Seller Hub pulse (P2-08). Null/absent = no trend shown.
+   */
+  netSalesWoWPct?: number | null;
+  /**
+   * Week-over-week order count change (percentage points). Optional.
+   */
+  ordersWoWPct?: number | null;
 }
 
 export interface SellerHubOverview {
@@ -85,6 +95,24 @@ interface SellerHubOverviewResponse {
 export async function fetchSellerHubOverview(): Promise<SellerHubOverview> {
   const response = await fetchJson<SellerHubOverviewResponse>('/seller-hub/overview');
   return response.overview;
+}
+
+export interface SellerInventoryTotals {
+  active: number;
+  drafts: number;
+  paused: number;
+  sold: number;
+  listedValueGbp: number;
+}
+
+interface SellerInventoryTotalsResponse {
+  ok: boolean;
+  totals: SellerInventoryTotals;
+}
+
+export async function fetchSellerInventoryTotals(): Promise<SellerInventoryTotals> {
+  const response = await fetchJson<SellerInventoryTotalsResponse>('/seller-hub/inventory/totals');
+  return response.totals;
 }
 
 // ── Batch command types ──

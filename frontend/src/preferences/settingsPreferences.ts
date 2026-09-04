@@ -129,10 +129,10 @@ export interface SettingsPreferences {
    */
   biometricLoginEnabled: boolean;
   /**
-   * Device-local privacy preferences. These toggles are persisted to
-   * AsyncStorage so they survive app restarts. They are not synced to a
-   * backend account profile — the banner in DataPrivacyScreen is truthful
-   * about this device-local scope.
+   * Privacy preferences synced to the backend consent record via
+   * PATCH /users/me/consent. Local AsyncStorage provides immediate UI
+   * feedback; the backend is the authoritative source and is fetched
+   * on app launch to initialise the analytics gate.
    */
   personalizedAds: boolean;
   recommendationPersonalization: boolean;

@@ -1,0 +1,171 @@
+{
+  "department": "product_wide",
+  "audit_date": "2026-09-03",
+  "campaign": "flagship-autopilot-benchmark-parity",
+  "source_document": "docs/flagship-research/38_2026_BENCHMARK_GAP_ANALYSIS.md",
+  "competitors": ["Instagram", "Pinterest", "Snapchat", "Vinted"],
+  "gaps": [
+    {
+      "id": "G1",
+      "severity": "P0",
+      "title": "Algorithm controls are demo-mode mock in dev",
+      "evidence": "algorithmTransparencyApi.ts:129 — ALGORITHM_DEMO_MODE = __DEV__; fetchFeedExplanation() is pure mock",
+      "competitor_evidence": "Instagram I5: 'Your Algorithm' quick signals is a headline trust feature",
+      "status": "closed",
+      "fix": "Wire YourAlgorithmScreen + FeedExplanationSheet to real ml-service ranker; add per-signal more/less/off with persistence",
+      "closure": "2026-09-03: Runtime demo state, real backend explain endpoint, wired See more/Show less/Remove to real API"
+    },
+    {
+      "id": "G2",
+      "severity": "P0",
+      "title": "No in-feed algorithm quick signals",
+      "evidence": "HomeScreen.tsx:1023-1055 — only 2 feed-mode tabs, no swipe-down signal row",
+      "competitor_evidence": "Instagram I5: category-tag buttons one swipe away from feed",
+      "status": "closed",
+      "fix": "Add swipe-down signal row on Home with category-tag chips writing into ranker-feedback API",
+      "closure": "2026-09-03: Already implemented — Quick Signals chip rail with 8 categories calling updateTopicWeight"
+    },
+    {
+      "id": "G3",
+      "severity": "P0",
+      "title": "Feed is 2 static modes, not pinnable views",
+      "evidence": "HomeScreen.tsx:242 — only 'foryou' | 'following'; no Latest/Saved/Posts-only",
+      "competitor_evidence": "Instagram I4: 6 rearrangeable feed types incl. chronological and Saved-as-feed",
+      "status": "closed",
+      "fix": "Extend feed-mode tabs: Latest + Saved + Posts-only; persist order + last-used (MMKV)",
+      "closure": "2026-09-03: 4 modes already existed (foryou/following/latest/saved); added MMKV persistence"
+    },
+    {
+      "id": "G4",
+      "severity": "P0",
+      "title": "Profile grid reorder not exposed",
+      "evidence": "storefrontApi.ts:139 — setFeaturedListings exists but not called; MyProfileScreen.tsx:921 — plain FlashList, no drag",
+      "competitor_evidence": "Instagram I2: long-press + drag any post; pinned stay top",
+      "status": "closed",
+      "fix": "Add long-press drag-reorder on MyProfileScreen grid writing setFeaturedListings order",
+      "closure": "2026-09-03: Already implemented — Arrange/Done mode, pin/unpin, shift left/right, setFeaturedListings persistence"
+    },
+    {
+      "id": "G5",
+      "severity": "P0",
+      "title": "Push notifications are not per-type components",
+      "evidence": "App.tsx:163 — only single iOS notification category (message); no NSE, no grouped summaries",
+      "competitor_evidence": "Instagram runs ~9 per-type push variants; #1 retention surface",
+      "status": "closed",
+      "fix": "Add per-type iOS categories (order/auction/social), NSE for rich media, grouped summaries",
+      "closure": "2026-09-03: 4 iOS categories (message/order/auction/social) with inline actions, threadIdentifier for grouped stacking, action handler in usePushNotificationTap"
+    },
+    {
+      "id": "G6",
+      "severity": "P1",
+      "title": "Visual search result quality + long-press entry",
+      "evidence": "visualSimilarity.ts:1-25 — deterministic heuristic, not embeddings; no long-press-to-search on feed",
+      "competitor_evidence": "Pinterest P2: VLM-generated vocabulary, animated glow on shoppable objects",
+      "status": "partially_closed",
+      "fix": "Wire real learned embeddings; add long-press entry from discovery tiles; glow overlay"
+    },
+    {
+      "id": "G7",
+      "severity": "P1",
+      "title": "Conversational search has no cross-session context",
+      "evidence": "conversationalSearchApi.ts:300 — MOCK_CONVERSATIONS in-memory Map; no persistence; no saved/closet seeding",
+      "competitor_evidence": "Pinterest P1: context retained across sessions for multi-step queries",
+      "status": "open",
+      "fix": "Persist conversation threads; seed context from wishlist/closet/style graph"
+    },
+    {
+      "id": "G8",
+      "severity": "P1",
+      "title": "Response time is not a ranking signal",
+      "evidence": "ranking.py:31-39 — no response-velocity feature; avgResponseHours doesn't exist",
+      "competitor_evidence": "Vinted V2: <1h response materially boosts visibility",
+      "status": "closed",
+      "fix": "Compute real avgResponseHours from message events; add response_velocity feature to ranker",
+      "closure": "2026-09-03: Real median response hours from chat_messages, response_velocity feature in ranker (6% weight), seller_response_hours in candidate payload"
+    },
+    {
+      "id": "G9",
+      "severity": "P1",
+      "title": "Listing photo quality gating",
+      "evidence": "listingQualityApi.ts:36 — LISTING_QUALITY_DEMO_MODE = __DEV__; not wired into SellScreen",
+      "competitor_evidence": "Vinted V1: AI image moderation auto-flags blur/dark photos",
+      "status": "closed",
+      "fix": "Wire quality score into publish flow: warn on blur/dark photos before submission",
+      "closure": "2026-09-03: ListingQualityMeter rendered in SellScreen above publish footer when score < 80, showing actionable photo/title/description/pricing/completeness suggestions"
+    },
+    {
+      "id": "G10",
+      "severity": "P1",
+      "title": "AI listing First Draft",
+      "evidence": "useListingAutofill.ts:145 — filename heuristic only; no vision-based draft",
+      "competitor_evidence": "Instagram I6: AI edits first cut of Reel in <10s",
+      "status": "partially_closed",
+      "fix": "Real (non-demo) AI title/description draft from photos at capture time"
+    },
+    {
+      "id": "G11",
+      "severity": "P1",
+      "title": "Refinement bar doesn't feed retrieval",
+      "evidence": "VisualSearchScreen.tsx:454 — basic facets reach backend but no style/occasion/color",
+      "competitor_evidence": "Pinterest P2: refinement bar (style/occasion/color/fabric)",
+      "status": "closed",
+      "fix": "Add style/occasion/color facet chips; pass through to backend retrieval query",
+      "closure": "2026-09-03: Added 10 color facet chips + 8 style facet chips as horizontal rails in VisualSearchScreen. Client-side text matching on title/description. Applied to both API results and cached fallback."
+    },
+    {
+      "id": "G12",
+      "severity": "P1",
+      "title": "No swipe-to-switch-tab gesture",
+      "evidence": "TabNavigator.tsx:271-307 — no swipeEnabled, no gesture handling",
+      "competitor_evidence": "Instagram I1/I7: horizontal swipe on tab navigator",
+      "status": "closed",
+      "fix": "Implement horizontal pan/swipe to switch tabs; gate with reduced-motion",
+      "closure": "2026-09-03: useTabSwipe hook with Gesture.Pan manualActivation, wired into TabNavigator, respects guest gating"
+    },
+    {
+      "id": "G13",
+      "severity": "P2",
+      "title": "Board/collection conversational memory",
+      "evidence": "No 'continue planning' entry; style graph not wired to collections",
+      "competitor_evidence": "Pinterest P1: context across sessions for multi-step projects",
+      "status": "open",
+      "fix": "Expose 'continue planning' entry; wire style graph into collections"
+    },
+    {
+      "id": "G14",
+      "severity": "P2",
+      "title": "Seller AI toolkit",
+      "evidence": "chatAgentsApi.ts:52 — CHAT_AGENTS_DEMO_MODE = __DEV__; mock suggestions only",
+      "competitor_evidence": "Vinted V4: negotiation, auto-reply, follow-ups; 80% sales close in first reply window",
+      "status": "partially_closed",
+      "fix": "Replace demo logic with real backend inference; real negotiation/auto-reply/follow-up"
+    },
+    {
+      "id": "G15",
+      "severity": "P2",
+      "title": "Push-level grouped digests",
+      "evidence": "pushHandler.ts:79-107 — one push per device; no grouped summaries",
+      "competitor_evidence": "Instagram: grouped 'Maya and 8 others' push",
+      "status": "partially_closed",
+      "fix": "Add iOS notification-summary / Android group-summary push payloads"
+    },
+    {
+      "id": "G16",
+      "severity": "P2",
+      "title": "Referral give-get + association files",
+      "evidence": "InviteFriendsScreen.tsx:64 — browser link; no AASA/assetlinks; /invite/:code not in linking",
+      "competitor_evidence": "Vinted V4: referral deep link",
+      "status": "open",
+      "fix": "Host AASA/assetlinks; align invite URLs; add /invite/:code to linking.ts"
+    },
+    {
+      "id": "G17",
+      "severity": "P2",
+      "title": "Tablet/iPad layout",
+      "evidence": "useBreakpoint exists but not consumed by HomeScreen; no isExpanded branching",
+      "competitor_evidence": "Instagram: most-requested native iPad UI",
+      "status": "partially_closed",
+      "fix": "Adopt useBreakpoint in major screens; build isMedium/isExpanded branching for iPad"
+    }
+  ]
+}

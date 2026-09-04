@@ -1,0 +1,221 @@
+{
+  "department": "product_detail_page",
+  "audit_date": "2026-09-03",
+  "campaign": "flagship-autopilot-pdp-visual-quality",
+  "competitor_research_sources": [
+    {
+      "url": "https://onlinestorenews.com/how-to-build-a-high-converting-mobile-pdp-in-2026/",
+      "title": "How to Build a High-Converting Mobile PDP in 2026",
+      "publisher": "Online Store News",
+      "date": "2026-07-09",
+      "claims": ["74% of ecommerce sessions on mobile", "Sticky ATC in thumb-zone bottom 60%", "4:5 portrait hero gallery", "4-6 images not 12", "Price first CTA immediately after", "Trust signals within first 2 scrolls", "Progressive disclosure description"]
+    },
+    {
+      "url": "https://michaeldishmon.com/writing/pdp-patterns-convert-mobile-2026",
+      "title": "PDP patterns that actually convert on mobile in 2026",
+      "publisher": "Michael Dishmon",
+      "date": "2026",
+      "claims": ["1:1 or 4:5 aspect ratio", "4-6 primary images", "Price 18-20px minimum mobile", "Sticky CTA with variant selection + price"]
+    },
+    {
+      "url": "https://ecomdesignpro.com/mobile-sticky-add-to-cart-bar/",
+      "title": "PDP Sticky Add to Cart Bar That Works on Mobile (2026)",
+      "publisher": "Ecom Design Pro",
+      "date": "2026",
+      "claims": ["Bar 64-80px tall", "Left zone: thumbnail+price+variant", "Right zone: CTA 44px min", "Truncate long variant names"]
+    },
+    {
+      "url": "https://www.laioutr.com/en/blog/product-image-gallery-zoom-ux-pdp-storefronts-2026",
+      "title": "Product Image Gallery and Zoom UX",
+      "publisher": "Laioutr",
+      "date": "2026",
+      "claims": ["Swipe carousel with snap points on mobile", "Dots or numeric indicator (3/8)", "No auto-rotate", "Thumbnail rail hidden on mobile or bottom scrollbar"]
+    },
+    {
+      "url": "https://mobbin.com/explore/screens/bc6e0939-6370-4e18-bf8e-abae5295c0ab",
+      "title": "Pinterest iOS Product Details",
+      "publisher": "Mobbin",
+      "date": "2026",
+      "claims": ["Expanded product details with shop similar section", "Accordion gallery", "Pricing card"]
+    },
+    {
+      "url": "https://jpg.now/blog/instagram-shop-image-specs",
+      "title": "Instagram Shop Image Specs: The Hidden Rules",
+      "publisher": "JPG.now",
+      "date": "2026",
+      "claims": ["PDP 4:5 portrait 1080x1350", "Up to 20 additional images", "Additional images display at native aspect ratio"]
+    }
+  ],
+  "gaps": [
+    {
+      "id": "PDP-001",
+      "severity": "P1",
+      "title": "ProductCommerceSummary is dead code with AI-tell card composition",
+      "evidence": "frontend/src/components/product/ProductCommerceSummary.tsx — not imported by ItemDetailScreen. Has surface fill card (backgroundColor: colors.surface, borderRadius: Radius.lg) with 'Purchase confidence' section title — label-everything disease + card-on-canvas.",
+      "competitor_evidence": "2026 PDP best practice: flat canvas with hairline dividers, no nested cards for commerce facts. eBay/Depop use flat disclosure rows.",
+      "impact": "Dead code pollutes the component department. If reused, it introduces AI-made card composition.",
+      "fix": "Delete ProductCommerceSummary.tsx — ItemDetailScreen already uses CommerceDetailDisclosureRow + ShippingReturnsInfo + CommerceDetailMetricRow which are flat-canvas compliant.",
+      "status": "resolved",
+      "resolved_wave": 1,
+      "resolved_date": "2026-09-03"
+    },
+    {
+      "id": "PDP-002",
+      "severity": "P1",
+      "title": "ProductDetailHeader is legacy dead code with circle-container AI tell",
+      "evidence": "frontend/src/components/product/ProductDetailHeader.tsx — not imported by ItemDetailScreen. iconBtn style: width:44, height:44, borderRadius: Radius.xxl (circle) — AGENTS.md §4: 'Ordinary Back, search, overflow controls default to transparent 44pt targets' not circle containers.",
+      "competitor_evidence": "Instagram/Pinterest/eBay 2026: floating header controls are transparent hit targets with glyph shadows, not grey/overlay circles.",
+      "impact": "Dead code. If reused, introduces circle-container AI tell on navigation controls.",
+      "fix": "Delete ProductDetailHeader.tsx — ItemDetailScreen uses CommerceDetailHeader + CommerceDetailMediaRail which are spec-compliant.",
+      "status": "resolved",
+      "resolved_wave": 1,
+      "resolved_date": "2026-09-03"
+    },
+    {
+      "id": "PDP-003",
+      "severity": "P1",
+      "title": "ProductMediaGallery is legacy dead code with overlay-circle AI tell",
+      "evidence": "frontend/src/components/product/ProductMediaGallery.tsx — not imported by ItemDetailScreen. controlBtn: backgroundColor: colors.overlay, borderRadius: Radius.xxl — grey circle containers for back/share/save. topScrim uses glassBg. Violates AGENTS.md §4: 'Separate hit area from visible shape.'",
+      "competitor_evidence": "CommerceDetailMediaRail (the active component) correctly uses transparent 44pt hit targets with GlyphShadow only. ProductMediaGallery is the old AI-tell version.",
+      "impact": "Dead code, 543 lines of AI-tell patterns that could be accidentally reused.",
+      "fix": "Delete ProductMediaGallery.tsx — CommerceMediaStage is the active, spec-compliant replacement.",
+      "status": "resolved",
+      "resolved_wave": 1,
+      "resolved_date": "2026-09-03"
+    },
+    {
+      "id": "PDP-004",
+      "severity": "P2",
+      "title": "BundleUpsellRow has card-like container and undersized section title",
+      "evidence": "frontend/src/components/product/BundleUpsellRow.tsx lines 138-144: container has marginHorizontal: Space.md, paddingVertical: Space.sm, paddingHorizontal: Space.md, borderTopWidth — creates a nested surface feel. sectionTitle uses TypographyV2.meta.size (11px) which is too small for a section header per Design.md typography rules.",
+      "competitor_evidence": "Depop bundle sections use flat canvas with proper section-title typography (17px semibold). eBay 'Buy 2+ save' messaging uses body-strong scale.",
+      "impact": "Section reads as a card, not flat canvas. Title is too quiet for its hierarchy level.",
+      "fix": "Remove paddingHorizontal/marginHorizontal from container (use parent padding). Upgrade sectionTitle to TypographyV2.bodyStrong. Remove the surface-alt bundleCountBadge — use plain text.",
+      "status": "resolved",
+      "resolved_wave": 1,
+      "resolved_date": "2026-09-03"
+    },
+    {
+      "id": "PDP-005",
+      "severity": "P2",
+      "title": "SellerInfoCard 'View Shop' label is verbose duplicate",
+      "evidence": "frontend/src/components/product/SellerInfoCard.tsx line 132-134: 'View Shop' text + chevron. The avatar+name already communicate the destination. Per AGENTS.md §4: 'Real apps show less: the object is the label.'",
+      "competitor_evidence": "Instagram profile row: just the chevron. Depop seller row: just chevron. eBay: 'Visit store' is quiet text without chevron duplication.",
+      "impact": "Label-everything disease — the seller name IS the label for the shop destination.",
+      "fix": "Remove 'View Shop' text, keep only the chevron. The accessibility label already says 'View seller's shop'.",
+      "status": "resolved",
+      "resolved_wave": 1,
+      "resolved_date": "2026-09-03"
+    },
+    {
+      "id": "PDP-006",
+      "severity": "P2",
+      "title": "ShippingReturnsInfo uses uppercase group labels — AGENTS.md violation",
+      "evidence": "frontend/src/components/commerce/detail/ShippingReturnsInfo.tsx lines 212-218: groupLabel style has textTransform: 'uppercase'. AGENTS.md §4: 'Avoid bureaucratic uppercase labels in profile/account forms.' TypographyV2.label role has textTransform: 'uppercase' but Design.md says 'Section headers must be quieter than content.'",
+      "competitor_evidence": "eBay/Depop/Vinted 2026: shipping section headers use sentence case, not uppercase. Uppercase is an AI tell for 'premium' that reads as bureaucratic.",
+      "impact": "Reads as AI-generated bureaucratic chrome, not authored product surface.",
+      "fix": "Remove textTransform: 'uppercase' from groupLabel. Use TypographyV2.bodyStrong for group labels instead of label role.",
+      "status": "resolved",
+      "resolved_wave": 1,
+      "resolved_date": "2026-09-03"
+    },
+    {
+      "id": "PDP-007",
+      "severity": "P1",
+      "title": "MoreLikeThisGrid card width constraints cause inconsistent gaps",
+      "evidence": "frontend/src/components/product/MoreLikeThisGrid.tsx lines 105-109: moreLikeThisCard uses flex:1, minWidth:'47%', maxWidth:'49%' — percentage-based width with flex can cause uneven spacing depending on content. The gap:Space.sm (8px) is correct but the card width math is imprecise.",
+      "competitor_evidence": "Pinterest masonry uses exact column widths computed from screen width. eBay similar-items grid uses fixed 50%-8px gap math.",
+      "impact": "Cards may have inconsistent visual rhythm — AI-tell of imprecise composition.",
+      "fix": "Use flexBasis: '48%' with flexGrow:0, flexShrink:0 for predictable 2-column grid, or compute width from screenWidth.",
+      "status": "resolved",
+      "resolved_wave": 1,
+      "resolved_date": "2026-09-03",
+      "resolution_note": "MoreLikeThisGrid.tsx deleted — was dead code duplicated by inline IIFE in ItemDetailScreen"
+    },
+    {
+      "id": "PDP-008",
+      "severity": "P1",
+      "title": "Dead product components polluting the department",
+      "evidence": "Multiple components in frontend/src/components/product/ are not imported by ItemDetailScreen: ProductActionBar, ProductDescription, ProductDescriptionSection, SellerTrustCard, TrustFactsSection, ProductAttributeChips, ProductIdentitySummary, ProductFamilyBadge (legacy), AttributeSummaryRow, DiscoveryGrid, CuratedCollectionsRail, PriceInsightStrip, BuyerProtectionStrip, SustainabilityBadge. These are superseded by commerce/detail/ components.",
+      "competitor_evidence": "Flagship apps have one canonical component per surface role. Having 14+ dead components is over-scaffolding.",
+      "impact": "Code pollution, import confusion, potential for accidentally reintroducing AI-tell patterns.",
+      "fix": "Audit each for imports across the codebase. Delete truly dead ones. Keep any still referenced by other screens.",
+      "status": "resolved",
+      "resolved_wave": 1,
+      "resolved_date": "2026-09-03",
+      "resolution_note": "26 dead component files deleted, barrel reduced from 29 to 9 exports"
+    },
+    {
+      "id": "PDP-009",
+      "severity": "P1",
+      "title": "Shipping zone three-level label stack — duplicate headings AI tell",
+      "evidence": "ItemDetailScreen shipping zone had CommerceDetailSection (label suppressed via continuation) + CommerceDetailDisclosureRow ('Costs, delivery & protection') + ShippingReturnsInfo (hideHeader) — two competing expandable interactions for related information.",
+      "competitor_evidence": "Instagram/Pinterest/eBay shipping zones have one clear header and one expandable interaction, not stacked disclosure rows.",
+      "impact": "Duplicate-heading AI tell. Users see two competing chevrons for related information.",
+      "fix": "Removed section wrapper and disclosure row. Let ShippingReturnsInfo show its own header. Added quiet 'Cost breakdown' text link for the cost sheet.",
+      "status": "resolved",
+      "resolved_wave": 2,
+      "resolved_date": "2026-09-03"
+    },
+    {
+      "id": "PDP-010",
+      "severity": "P2",
+      "title": "Trust facts inline IIFE — over-scaffolding in screen body",
+      "evidence": "ItemDetailScreen had 80-line inline IIFE for trust facts rows, duplicating logic that should be in a component.",
+      "competitor_evidence": "Flagship apps extract repeated patterns into components, not inline IIFEs in screen bodies.",
+      "impact": "Code quality — inline IIFE is hard to test, reuse, and maintain.",
+      "fix": "Replaced with CommerceDetailTrustFacts component (already existed as untracked file, now wired up).",
+      "status": "resolved",
+      "resolved_wave": 2,
+      "resolved_date": "2026-09-03"
+    },
+    {
+      "id": "PDP-011",
+      "severity": "P2",
+      "title": "More-like-this orphaned styles — dead code from IIFE extraction",
+      "evidence": "ItemDetailScreen had 7 orphaned moreLikeThis styles and unused AspectRatio import after the IIFE was replaced by CommerceDetailMoreLikeThis component.",
+      "competitor_evidence": "N/A — code quality issue.",
+      "impact": "Dead code pollutes the stylesheet.",
+      "fix": "Removed orphaned styles and unused import.",
+      "status": "resolved",
+      "resolved_wave": 2,
+      "resolved_date": "2026-09-03"
+    },
+    {
+      "id": "PDP-012",
+      "severity": "P2",
+      "title": "Verbose recommendations unavailable copy — label-everything disease",
+      "evidence": "ItemDetailScreen showed 'Recommendations unavailable' / 'Try again later.' error block when recommendations failed to load.",
+      "competitor_evidence": "Instagram/Pinterest don't show error messages for missing recommendations — they just don't show them.",
+      "impact": "Drawing attention to a non-critical failure. Label-everything disease.",
+      "fix": "Removed the recsError block entirely. Recommendations are nice-to-have, not critical.",
+      "status": "resolved",
+      "resolved_wave": 2,
+      "resolved_date": "2026-09-03"
+    },
+    {
+      "id": "PDP-013",
+      "severity": "P2",
+      "title": "SeenInLooksRail test/screen mismatch — spec 12 violation",
+      "evidence": "Two tests (directDetailFlagshipClosure, nativeVisualAcceptance) assert SeenInLooksRail should be removed per spec 12 ('One high-quality continuation section is better than 3 repetitive rails'). ItemDetailScreen still rendered it.",
+      "competitor_evidence": "Instagram/Pinterest consolidate discovery to one continuation section, not multiple repetitive rails.",
+      "impact": "Test/screen mismatch. Three discovery rails (BundleUpsell, MoreLikeThis, SeenInLooks) is over-scaffolding.",
+      "fix": "Removed SeenInLooksRail from ItemDetailScreen. Updated Design.md to remove Seen in Looks reference.",
+      "status": "resolved",
+      "resolved_wave": 2,
+      "resolved_date": "2026-09-03"
+    },
+    {
+      "id": "PDP-014",
+      "severity": "P2",
+      "title": "Swipe-to-dismiss inline worklet — over-scaffolding in screen body",
+      "evidence": "ItemDetailScreen had 90-line inline worklet for swipe-to-dismiss gesture, duplicating logic that should be in a hook.",
+      "competitor_evidence": "Flagship apps extract gesture logic into hooks, not inline worklets in screen bodies.",
+      "impact": "Code quality — inline worklet is hard to test, reuse, and maintain. 7 unused Reanimated/gesture imports after extraction.",
+      "fix": "Replaced with useSwipeToDismiss hook (already existed at hooks/useSwipeToDismiss.ts, now wired up). Removed unused imports.",
+      "status": "resolved",
+      "resolved_wave": 2,
+      "resolved_date": "2026-09-03"
+    }
+  ]
+}

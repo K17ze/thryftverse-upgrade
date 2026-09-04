@@ -5,9 +5,9 @@
  * categories of events trigger email notifications. All categories default
  * to sensible values (security alerts on, marketing off).
  *
- * Categories are grouped into sections (Essential, Shopping, Co-Own, Marketing)
- * with coloured icon badges for visual identity — Pinterest/Instagram-quality
- * information hierarchy, not a flat list.
+ * Categories are grouped into sections (Essential, Shopping, Co-Own, Marketing).
+ * Flat composition per AGENTS.md §4: hairline separators, no decorative icon
+ * chrome, one-line rows.
  */
 
 import React from 'react';
@@ -34,113 +34,88 @@ type Props = NativeStackScreenProps<RootStackParamList, 'EmailNotifications'>;
 interface CategoryConfig {
   key: keyof EmailPreferences;
   label: string;
-  description: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
-  iconColor?: Exclude<keyof ThemeColors, 'outfitBackgrounds'>;
   defaultEnabled: boolean;
   locked?: boolean;
 }
 
 interface CategoryGroup {
   title: string;
-  description: string;
   categories: CategoryConfig[];
 }
 
 const GROUPS: CategoryGroup[] = [
   {
     title: 'Essential',
-    description: 'Critical account and transaction emails',
     categories: [
       {
         key: 'securityAlerts',
         label: 'Security alerts',
-        description: 'New device logins, password changes, 2FA updates',
         icon: 'lock-closed-outline',
-        iconColor: 'success',
         defaultEnabled: true,
         locked: true,
       },
       {
         key: 'orderUpdates',
         label: 'Order updates',
-        description: 'Purchases, shipping, delivery confirmations',
         icon: 'bag',
-        iconColor: 'commerceTrust',
         defaultEnabled: true,
       },
       {
         key: 'messageNotifications',
         label: 'Messages',
-        description: 'New messages from buyers and sellers',
         icon: 'mail',
-        iconColor: 'social',
         defaultEnabled: true,
       },
     ],
   },
   {
     title: 'Shopping',
-    description: 'Items, prices, and sellers you follow',
     categories: [
       {
         key: 'priceDropAlerts',
-        label: 'Price drop alerts',
-        description: 'When saved items drop in price',
+        label: 'Price drops',
         icon: 'trending-down',
-        iconColor: 'danger',
         defaultEnabled: true,
       },
       {
         key: 'newListingsFromFollowing',
-        label: 'New listings from followed sellers',
-        description: 'When a followed seller posts a new item',
+        label: 'New listings',
         icon: 'person-add',
-        iconColor: 'discovery',
         defaultEnabled: true,
       },
       {
         key: 'auctionAlerts',
         label: 'Auction alerts',
-        description: 'Outbid, auction ending, and auction won alerts',
         icon: 'trophy-outline',
-        iconColor: 'bronze',
         defaultEnabled: true,
       },
     ],
   },
   {
     title: 'Co-Own',
-    description: 'Distribution payments and governance events',
     categories: [
       {
         key: 'distributionNotices',
         label: 'Distribution notices',
-        description: 'Dividend and revenue-share payments',
         icon: 'cash',
-        iconColor: 'success',
         defaultEnabled: true,
       },
       {
         key: 'corporateActionNotices',
         label: 'Corporate actions',
-        description: 'Governance votes, buybacks, splits',
         icon: 'briefcase',
-        iconColor: 'bronze',
         defaultEnabled: true,
       },
     ],
   },
   {
     title: 'Marketing',
-    description: 'Optional promotional content',
     categories: [
       {
         key: 'marketing',
-        label: 'Promotions and offers',
-        description: 'Featured collections, seasonal campaigns',
-        icon: 'cash-outline',
-        iconColor: 'antiqueGold',
+        label: 'Promotions',
+        icon: 'megaphone-outline',
         defaultEnabled: false,
       },
     ],
@@ -200,7 +175,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
   if (isLoading) {
     return (
       <FlagshipScreen
-        header={<FlagshipHeader title="Email Notifications" onBack={() => navigation.goBack()} />}
+        header={<FlagshipHeader title="Email notifications" onBack={() => navigation.goBack()} />}
       >
         <FlagshipState variant="loading" />
       </FlagshipScreen>
@@ -209,7 +184,7 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
 
   return (
     <FlagshipScreen
-      header={<FlagshipHeader title="Email Notifications" onBack={() => navigation.goBack()} />}
+      header={<FlagshipHeader title="Email notifications" onBack={() => navigation.goBack()} />}
       scrollEnabled={false}
       contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
     >
@@ -231,7 +206,6 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
           <EmptyState
             icon="cloud-offline-outline"
             title="Couldn't load preferences"
-            subtitle={error}
             ctaLabel="Retry"
             onCtaPress={() => {
               setIsLoading(true);
@@ -240,14 +214,12 @@ export default function EmailNotificationsScreen({ navigation }: Props) {
           />
         ) : (
           GROUPS.map((group) => (
-            <SettingsSection key={group.title} title={group.title} description={group.description} noCard>
+            <SettingsSection key={group.title} title={group.title} noCard>
               {group.categories.map((category, idx) => (
                 <SettingsRow
                   key={category.key}
                   icon={category.icon}
-                  iconColor={category.iconColor ? colors[category.iconColor] : undefined}
                   title={category.label}
-                  subtitle={category.description}
                   value={category.locked ? 'Always on' : undefined}
                   toggleValue={preferences?.[category.key] ?? category.defaultEnabled}
                   onToggle={(v) => handleToggle(category, v)}

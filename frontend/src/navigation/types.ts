@@ -177,7 +177,10 @@ export type RootStackParamList = {
   DistributionHistory: { assetId?: string } | undefined;
 
   // ── Chat & Messaging ──
-  Inbox: { filterItemId?: string } | undefined;
+  // Optional listingId preserves the source listing context when navigating
+  // from ManageListing → Questions, so the inbox can scope to that item's
+  // conversations instead of dropping context (P2-06).
+  Inbox: { listingId?: string } | undefined;
   Chat: {
     conversationId: string;
     focusQuery?: string;
@@ -197,13 +200,13 @@ export type RootStackParamList = {
   GroupChat: { groupId: string; groupName: string };
   GroupChatInfo: { conversationId: string };
   GroupMembers: { conversationId: string };
-  GroupPermissions: { conversationId: string };
   GroupBotManagement: { conversationId: string };
   BotDirectory: undefined;
   BotDetail: { botId: string; conversationId?: string };
   CustomBots: undefined;
   BotBuilder: { botId?: string };
   EditGroup: { conversationId: string };
+  GroupPermissions: { conversationId: string };
 
   // ── Social / Profile ──
   UserProfile: { userId: string };
@@ -222,7 +225,6 @@ export type RootStackParamList = {
   Personalisation: { fromOnboarding?: boolean } | undefined;
   Settings: undefined;
   EditProfile: { focus?: 'avatar' | 'cover' };
-  AccountSettings: undefined;
   AccountControl: undefined;
   AccountSecurity: undefined;
   AccountSecurityRecovery: { caseId: string } | undefined;
@@ -392,7 +394,7 @@ export type RootStackParamList = {
   CoOwnRecurringOrders: undefined;
 
   // ── Chat & Messaging ── (media preview)
-  ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video' | 'document'; senderLabel?: string; timestamp?: string; messageId?: string };
+  ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };
 
   // ── Commerce ── (collection editing)
   // UI-18 — Reference-perfect product UX
@@ -473,8 +475,10 @@ export type RootStackParamList = {
   // Trust & Verification
   Verification: undefined;
   VerificationStatus: undefined;
-  // Seller analytics (entry via MyListings)
-  SellerAnalytics: { listingId?: string; listingTitle?: string } | undefined;
+  // Seller analytics (entry via MyListings / ManageListing / Seller Hub)
+  // Optional listing context preserves the source listing so the analytics
+  // surface can scope to a single item instead of dropping context (P2-06).
+  SellerAnalytics: { listingId?: string; listingTitle?: string; listingImage?: string } | undefined;
   // Seller Hub — unified seller management dashboard
   SellerHub: undefined;
   // Creator analytics — creator-side performance insights (views, engagement, timeline)
@@ -567,7 +571,6 @@ export const ROOT_STACK_ROUTES = [
   'GroupChat',
   'GroupChatInfo',
   'GroupMembers',
-  'GroupPermissions',
   'GroupBotManagement',
   'BotDirectory',
   'BotDetail',
@@ -584,7 +587,6 @@ export const ROOT_STACK_ROUTES = [
   'Personalisation',
   'Settings',
   'EditProfile',
-  'AccountSettings',
   'AccountControl',
   'AccountSecurity',
   'AccountSecurityRecovery',
@@ -735,7 +737,7 @@ export type ExploreTabParamList = {
 };
 
 export type InboxTabParamList = {
-  Inbox: undefined;
+  Inbox: { listingId?: string } | undefined;
 };
 
 export type ProfileTabParamList = {

@@ -3,9 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -14,39 +12,24 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { parseApiError } from '../lib/apiClient';
-import { requestMyDataExport, deleteMyAccount } from '../services/accountApi';
-import { logoutFromSession } from '../services/authApi';
-import { clearUserScopedQueryCache } from '../platform/server';
+import { requestMyDataExport } from '../services/accountApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { Space, Radius, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-import { AppIcon } from '../components/common/AppIcon';
-import { IconSize } from '../theme/iconTokens';
 type Props = NativeStackScreenProps<RootStackParamList, 'AccountControl'>;
-
-type Phase = 'overview' | 'export' | 'delete-info' | 'delete-confirm';
-
-const DELETE_CONFIRM_PHRASE = 'DELETE';
 
 export default function AccountControlScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
-  const logout = useStore((state) => state.logout);
   const { show } = useToast();
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [phase, setPhase] = useState<Phase>('overview');
   const [isExporting, setIsExporting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const username = currentUser?.username ?? '';
 
   const handleDownloadData = useCallback(async () => {
     if (!currentUser?.id) {
@@ -58,7 +41,6 @@ export default function AccountControlScreen({ navigation }: Props) {
       const result = await requestMyDataExport();
       const recordText = result.estimatedRecords > 0 ? ` (${result.estimatedRecords} records)` : '';
       show(`Data export generated${recordText}. Request ID: ${result.requestId}`, 'success');
-      setPhase('overview');
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to export account data right now.');
       show(parsed.message, 'error');
@@ -67,218 +49,12 @@ export default function AccountControlScreen({ navigation }: Props) {
     }
   }, [currentUser?.id, show]);
 
-  const confirmDeleteAccount = useCallback(async () => {
-    if (!currentUser?.id) {
-      show('Sign in before deleting your account.', 'error');
-      return;
-    }
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-      const result = await deleteMyAccount('User initiated account deletion from mobile settings');
-      await logoutFromSession();
-      clearUserScopedQueryCache();
-      logout();
-      haptic.heavy();
-      show(`Account deletion submitted. Request ID: ${result.requestId}`, 'success');
-      navigation.reset({ index: 0, routes: [{ name: 'AuthLanding' }] });
-    } catch (error) {
-      const parsed = parseApiError(error, 'Unable to delete account right now.');
-      setDeleteError(parsed.message);
-      haptic.light();
-    } finally {
-      setIsDeleting(false);
-    }
-  }, [currentUser?.id, logout, show, haptic, navigation]);
-
-  const canConfirmDelete = deleteConfirmText.trim().toUpperCase() === DELETE_CONFIRM_PHRASE;
-
-  const renderOverview = () => (
-    <>
-      {/* Download data — flat section, no card wrapper or decorative icon circle */}
-      <SettingsSection
-        title="Download your data"
-        description="We'll generate a data export covering your addresses, payment methods, orders, bids, co-own holdings and consent records. A request ID is issued for tracking."
-      >
-        <View style={styles.optionActionWrap}>
-          <AnimatedPressable
-            style={[styles.optionBtn, { borderColor: colors.border }]}
-            onPress={handleDownloadData}
-            disabled={isExporting}
-            activeOpacity={0.8}
-            scaleValue={0.98}
-            hapticFeedback="medium"
-            accessibilityRole="button"
-            accessibilityLabel="Download your data"
-            accessibilityState={{ disabled: isExporting }}
-          >
-            {isExporting ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
-            ) : (
-              <Text style={[styles.optionBtnText, { color: colors.textPrimary }]}>Request export</Text>
-            )}
-          </AnimatedPressable>
-        </View>
-      </SettingsSection>
-
-      {/* Delete — flat section, no card wrapper or decorative icon circle */}
-      <SettingsSection
-        title="Delete account permanently"
-        description="This permanently erases your account, personal data, addresses, payment methods and wallet history. This action cannot be undone."
-      >
-        <View style={styles.optionActionWrap}>
-          <AnimatedPressable
-            style={[styles.optionBtn, { borderColor: colors.border }]}
-            onPress={() => { haptic.medium(); setPhase('delete-info'); }}
-            activeOpacity={0.8}
-            scaleValue={0.98}
-            hapticFeedback="medium"
-            accessibilityRole="button"
-            accessibilityLabel="Continue to account deletion"
-          >
-            <Text style={[styles.optionBtnText, { color: colors.textPrimary }]}>Review deletion details</Text>
-          </AnimatedPressable>
-        </View>
-      </SettingsSection>
-    </>
-  );
-
-  const renderDeleteInfo = () => (
-    <>
-      <View style={styles.introBlock}>
-        <Text style={styles.introTitle}>Before you delete</Text>
-        <Text style={[styles.introBody, { color: colors.textSecondary }]}>
-          Review what happens when you permanently delete your Thryftverse account.
-        </Text>
-      </View>
-
-      <SettingsSection title="What happens when you delete">
-        <ConsequenceRow icon="profile" text="Your username, email, password and profile are erased immediately." isFirst />
-        <ConsequenceRow icon="location" text="All saved delivery addresses are removed." />
-        <ConsequenceRow icon="card" text="Saved payment methods and bank details are removed." />
-        <ConsequenceRow icon="wallet" text="Wallet history and payout records are deleted." />
-        <ConsequenceRow icon="box" text="Active listings remain visible to buyers until they expire, but you'll no longer manage them from this account." />
-        <ConsequenceRow icon="warning" text="Pending payouts, open disputes or active orders may need to be resolved before full erasure. Contact support if you have outstanding obligations." isLast />
-      </SettingsSection>
-
-      <Text style={[styles.consequenceFootnote, { color: colors.textMuted }]}>
-        If you have unresolved orders or payouts, we recommend resolving them before deletion. Contact support for help too.
-      </Text>
-
-      <View style={styles.deleteInfoActions}>
-        <AnimatedPressable
-          style={[styles.secondaryBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
-          onPress={() => { haptic.light(); setPhase('overview'); }}
-          activeOpacity={0.8}
-          scaleValue={0.98}
-          hapticFeedback="light"
-          accessibilityRole="button"
-          accessibilityLabel="Go back to account control"
-        >
-          <Text style={[styles.secondaryBtnText, { color: colors.textPrimary }]}>Back</Text>
-        </AnimatedPressable>
-        <AnimatedPressable
-          style={[styles.dangerBtn, { backgroundColor: colors.danger, borderColor: colors.danger }]}
-          onPress={() => { haptic.heavy(); setPhase('delete-confirm'); }}
-          activeOpacity={0.85}
-          scaleValue={0.98}
-          hapticFeedback="heavy"
-          accessibilityRole="button"
-          accessibilityLabel="Continue to final confirmation"
-        >
-          <Text style={[styles.dangerBtnText, { color: colors.textInverse }]}>Continue to confirm</Text>
-        </AnimatedPressable>
-      </View>
-    </>
-  );
-
-  const renderDeleteConfirm = () => (
-    <>
-      <View style={styles.introBlock}>
-        <Text style={styles.introTitle}>Type DELETE to confirm</Text>
-        <Text style={[styles.introBody, { color: colors.textSecondary }]}>
-          This is your last chance to cancel. Once you confirm, your account cannot be recovered.
-        </Text>
-      </View>
-
-      <View style={styles.confirmFieldWrap}>
-        <Text style={[styles.confirmLabel, { color: colors.textSecondary }]}>
-          Type {DELETE_CONFIRM_PHRASE} to permanently delete your account
-        </Text>
-        <TextInput
-          style={[styles.confirmInput, { color: colors.textPrimary, borderColor: colors.border }]}
-          value={deleteConfirmText}
-          onChangeText={setDeleteConfirmText}
-          autoCapitalize="characters"
-          placeholder={DELETE_CONFIRM_PHRASE}
-          placeholderTextColor={colors.textMuted}
-          accessibilityLabel="Type DELETE to confirm account deletion"
-        />
-        {username ? (
-          <Text style={[styles.confirmAccountLabel, { color: colors.textMuted }]}>
-            Account: @{username}
-          </Text>
-        ) : null}
-        {deleteError ? (
-          <View style={styles.deleteErrorRow}>
-            <AppIcon name="warning" size={IconSize.xs} color="danger" opticalCenter accessible={false} />
-            <Text style={styles.deleteErrorText}>{deleteError}</Text>
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.deleteConfirmActions}>
-        <AnimatedPressable
-          style={[styles.secondaryBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
-          onPress={() => { haptic.light(); setDeleteConfirmText(''); setDeleteError(null); setPhase('delete-info'); }}
-          activeOpacity={0.8}
-          scaleValue={0.98}
-          hapticFeedback="light"
-          disabled={isDeleting}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel and go back"
-        >
-          <Text style={[styles.secondaryBtnText, { color: colors.textPrimary }]}>Cancel</Text>
-        </AnimatedPressable>
-        <AnimatedPressable
-          style={[styles.dangerBtn, { backgroundColor: colors.danger, borderColor: colors.danger, opacity: (!canConfirmDelete || isDeleting) ? 0.4 : 1 }]}
-          onPress={confirmDeleteAccount}
-          activeOpacity={0.85}
-          scaleValue={0.98}
-          hapticFeedback="heavy"
-          disabled={!canConfirmDelete || isDeleting}
-          accessibilityRole="button"
-          accessibilityLabel="Permanently delete account"
-          accessibilityState={{ disabled: !canConfirmDelete || isDeleting }}
-        >
-          {isDeleting ? (
-            <ActivityIndicator color={colors.textInverse} size="small" />
-          ) : (
-            <Text style={[styles.dangerBtnText, { color: colors.textInverse }]}>Delete permanently</Text>
-          )}
-        </AnimatedPressable>
-      </View>
-    </>
-  );
-
   return (
     <FlagshipScreen
       header={
         <FlagshipHeader
           title="Account control"
-          onBack={() => {
-            if (phase === 'overview') {
-              navigation.goBack();
-            } else if (phase === 'delete-info') {
-              setPhase('overview');
-            } else if (phase === 'delete-confirm') {
-              setDeleteConfirmText('');
-              setDeleteError(null);
-              setPhase('delete-info');
-            } else if (phase === 'export') {
-              setPhase('overview');
-            }
-          }}
+          onBack={() => navigation.goBack()}
         />
       }
       scrollEnabled={false}
@@ -291,44 +67,43 @@ export default function AccountControlScreen({ navigation }: Props) {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          {phase === 'overview' && renderOverview()}
-          {phase === 'delete-info' && renderDeleteInfo()}
-          {phase === 'delete-confirm' && renderDeleteConfirm()}
+        {/* Download data — flat section, no card wrapper or decorative icon circle */}
+        <SettingsSection
+          title="Download your data"
+          description="We'll generate a data export covering your addresses, payment methods, orders, bids, co-own holdings and consent records. A request ID is issued for tracking."
+        >
+          <View style={styles.optionActionWrap}>
+            <AnimatedPressable
+              style={[styles.optionBtn, { borderColor: colors.border }]}
+              onPress={handleDownloadData}
+              disabled={isExporting}
+              activeOpacity={0.8}
+              scaleValue={0.98}
+              hapticFeedback="medium"
+              accessibilityRole="button"
+              accessibilityLabel="Download your data"
+              accessibilityState={{ disabled: isExporting }}
+            >
+              {isExporting ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Text style={[styles.optionBtnText, { color: colors.textPrimary }]}>Request export</Text>
+              )}
+            </AnimatedPressable>
+          </View>
+        </SettingsSection>
+
+        {/* Delete account — removed from this screen. The destructive
+            delete ritual lives at the bottom of the settings hub as a
+            dedicated danger row (§4 destructive separation principle).
+            AccountControl now focuses on data export only. */}
       </KeyboardAwareScrollView>
     </FlagshipScreen>
   );
 }
 
-function ConsequenceRow({ icon, text, isFirst, isLast }: { icon: string; text: string; isFirst?: boolean; isLast?: boolean }) {
-  const { colors } = useAppTheme();
-  return (
-    <View style={[
-      { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: Space.md, paddingHorizontal: Space.md, gap: Space.sm, paddingTop: isFirst ? Space.sm : Space.md },
-      !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
-    ]}>
-      <AppIcon name={icon} size={IconSize.md} color="textMuted" opticalCenter accessible={false} />
-      <Text style={{ flex: 1, fontSize: TypographyV2.body.size, fontFamily: TypographyV2.body.fontFamily, lineHeight: TypographyV2.body.lineHeight + 2, letterSpacing: TypographyV2.body.letterSpacing, color: colors.textSecondary }}>{text}</Text>
-    </View>
-  );
-}
-
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  introBlock: {
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-    gap: Space.xs },
-  introTitle: {
-    fontSize: TypographyV2.screenTitle.size,
-    fontFamily: TypographyV2.screenTitle.fontFamily,
-    color: colors.textPrimary,
-    letterSpacing: TypographyV2.screenTitle.letterSpacing,
-    lineHeight: TypographyV2.screenTitle.lineHeight },
-  introBody: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    lineHeight: TypographyV2.body.lineHeight + 2,
-    letterSpacing: TypographyV2.body.letterSpacing },
   optionActionWrap: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm },
@@ -342,76 +117,5 @@ function createStyles(colors: ThemeColors) {
   optionBtnText: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: TypographyV2.body.letterSpacing },
-  consequenceFootnote: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    lineHeight: TypographyV2.meta.lineHeight + 2,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    marginBottom: Space.lg,
-    paddingHorizontal: Space.md },
-  deleteInfoActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginBottom: Space.lg },
-  deleteConfirmActions: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    marginBottom: Space.lg },
-  secondaryBtn: {
-    flex: 1,
-    borderRadius: Radius.md,
-    paddingVertical: Space.smMd,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: Space.xxl },
-  secondaryBtnText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: TypographyV2.body.letterSpacing },
-  dangerBtn: {
-    flex: 1,
-    borderRadius: Radius.md,
-    paddingVertical: Space.smMd,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: Space.xxl },
-  dangerBtnText: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: TypographyV2.body.letterSpacing },
-  confirmFieldWrap: {
-    marginBottom: Space.xl },
-  confirmLabel: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    marginBottom: Space.sm,
-    letterSpacing: TypographyV2.body.letterSpacing },
-  confirmInput: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.md,
-    paddingVertical: Space.sm + 2,
-    paddingHorizontal: Space.md,
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    letterSpacing: Space.xs / 2,
-    minHeight: Space.xxl },
-  confirmAccountLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    marginTop: Space.sm,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  deleteErrorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    marginTop: Space.sm },
-  deleteErrorText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
-    letterSpacing: TypographyV2.meta.letterSpacing } });
+    letterSpacing: TypographyV2.body.letterSpacing } });
 }

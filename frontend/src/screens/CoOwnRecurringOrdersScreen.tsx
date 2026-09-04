@@ -72,7 +72,7 @@ export default function CoOwnRecurringOrdersScreen({ navigation }: Props) {
   const { formatFromFiat, currencySymbol, currencyCode } = useFormattedPrice();
 
   const formatGbp = React.useCallback(
-    (minor: number) => formatFromFiat(minor / 100, currencyCode),
+    (minor: number) => formatFromFiat(minor / 100, 'GBP'),
     [formatFromFiat, currencyCode]
   );
 

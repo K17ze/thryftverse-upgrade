@@ -1,12 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Reanimated, {
   withTiming,
   withSpring,
   type EntryExitAnimationFunction } from 'react-native-reanimated';
-import { Space, Radius, TypeStyles, Stroke, AspectRatio, FontFamily } from '../../theme/designTokens';
-import { colorForId } from '../../utils/avatarColor';
+import { Space, Radius, TypeStyles, Stroke, AspectRatio } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -30,6 +29,52 @@ interface ReplyInfo {
   text: string;
 }
 
+// ── Search highlight helper ───────────────────────────────────────────
+// Splits the text into segments around the case-insensitive match and
+// wraps the matching segment with a contrasting background style.
+function highlightSearchMatch(
+  text: string,
+  query: string,
+  baseColor: string,
+  highlightColor: string,
+  isDark: boolean,
+): React.ReactNode[] {
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const segments: React.ReactNode[] = [];
+  let cursor = 0;
+  let key = 0;
+
+  while (cursor < text.length) {
+    const matchIdx = lowerText.indexOf(lowerQuery, cursor);
+    if (matchIdx === -1) {
+      segments.push(<Text key={key++} style={{ color: baseColor }}>{text.slice(cursor)}</Text>);
+      break;
+    }
+    // Text before the match
+    if (matchIdx > cursor) {
+      segments.push(<Text key={key++} style={{ color: baseColor }}>{text.slice(cursor, matchIdx)}</Text>);
+    }
+    // The match itself — highlighted with a subtle background
+    segments.push(
+      <Text
+        key={key++}
+        style={{
+          color: isDark ? '#000000' : '#FFFFFF',
+          backgroundColor: highlightColor,
+          borderRadius: 2,
+          paddingHorizontal: 1,
+        }}
+      >
+        {text.slice(matchIdx, matchIdx + query.length)}
+      </Text>,
+    );
+    cursor = matchIdx + query.length;
+  }
+
+  return segments;
+}
+
 interface MessageBubbleProps {
   id: string;
   conversationId: string;
@@ -39,13 +84,13 @@ interface MessageBubbleProps {
   timestamp?: string;
   status?: 'sending' | 'sent' | 'failed' | 'draft';
   readStatus?: 'sending' | 'sent' | 'delivered' | 'read';
+  readBy?: string[];
+  isGroup?: boolean;
+  currentUserId?: string;
   reactions?: Reaction[];
   mediaUri?: string;
-  mediaType?: 'image' | 'video' | 'document';
+  mediaType?: 'image' | 'video';
   uploadStatus?: 'uploading' | 'failed' | 'sent';
-  documentUri?: string;
-  documentName?: string;
-  documentMimeType?: string;
   voiceDurationMs?: number;
   voiceWaveform?: number[];
   voiceContainer?: 'm4a' | 'ogg' | 'webm' | 'mp4';
@@ -73,8 +118,14 @@ interface MessageBubbleProps {
   onReplyPress?: () => void;
   /** Called when the user confirms an agent draft. */
   onConfirmDraft?: () => void;
+  documentUri?: string;
+  documentName?: string;
+  documentMimeType?: string;
   /** Called when the user taps a failed agent draft to retry the send. */
   onRetryDraft?: () => void;
+  /** Search query to highlight within the message text. When set, the
+   *  matching substring is highlighted with a contrasting background. */
+  searchHighlight?: string;
 }
 
 function MessageBubbleBase({
@@ -86,6 +137,9 @@ function MessageBubbleBase({
   timestamp,
   status,
   readStatus,
+  readBy,
+  isGroup,
+  currentUserId,
   reactions,
   mediaUri,
   mediaType,
@@ -112,8 +166,9 @@ function MessageBubbleBase({
   onReactionPress,
   onRetry,
   onMediaPress,
-  onReplyPress }: MessageBubbleProps) {
-  const { colors } = useAppTheme();
+  onReplyPress,
+  searchHighlight }: MessageBubbleProps) {
+  const { colors, isDark } = useAppTheme();
   const { isEnabled: motionEnabled, spring } = useMotionConfig();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { t } = useAppTranslation('messaging');
@@ -127,6 +182,7 @@ function MessageBubbleBase({
     isLoading: isTranslating,
     isTranslated,
     isForeignLanguage,
+    sourceLanguageName,
     error: translationError,
     translate,
     revert,
@@ -172,8 +228,18 @@ function MessageBubbleBase({
   const isUploading = uploadStatus === 'uploading' || status === 'sending';
   const isMedia = !!mediaUri;
 
+  const otherReaders = (readBy ?? []).filter((uid) => uid !== currentUserId);
+  const readCount = otherReaders.length;
+  const isRead = readCount > 0;
+
+  const bubbleBg = isMe
+    ? colors.brand
+    : isAgent
+      ? colors.brandSubtle
+      : colors.surfaceAlt;
   const bubbleText = isMe ? colors.textInverse : colors.textPrimary;
   const metaColor = isMe ? colors.scrimTextTertiary : colors.textMuted;
+  const bubbleBorder = undefined;
 
   const isStandalone = isFirstInCluster && isLastInCluster;
   const isTop = isFirstInCluster && !isLastInCluster;
@@ -203,11 +269,6 @@ function MessageBubbleBase({
       : { borderTopLeftRadius: Radius.chat, borderTopRightRadius: Radius.chat, borderBottomLeftRadius: Radius.sm, borderBottomRightRadius: Radius.chat }
     : { borderTopLeftRadius: Radius.chat, borderTopRightRadius: Radius.chat, borderBottomLeftRadius: Radius.chat, borderBottomRightRadius: Radius.chat };
 
-  const senderColor = React.useMemo(() => {
-    if (isAgent) return colors.brand;
-    return colorForId(senderLabel || 'member');
-  }, [isAgent, senderLabel, colors.brand]);
-
   return (
     <Reanimated.View style={[styles.row, isMe && styles.rowRight]} entering={bubbleEntering}>
       {showAvatar && !isMe ? (
@@ -220,7 +281,7 @@ function MessageBubbleBase({
             />
           </View>
         ) : (
-          <View style={[styles.avatar, { backgroundColor: senderColor }]}>
+          <View style={styles.avatar}>
             <Text style={styles.avatarText}>{(senderLabel ?? '?')[0].toUpperCase()}</Text>
           </View>
         )
@@ -231,10 +292,11 @@ function MessageBubbleBase({
       <View style={styles.bubbleColumn}>
         {senderLabel && !isMe && isFirstInCluster ? (
           <View style={styles.senderLabelRow}>
-            <Text style={[styles.senderName, { color: senderColor }]}>{senderLabel}</Text>
+            <Text style={styles.senderName}>{senderLabel}</Text>
             {isAgent ? (
               <View style={[styles.aiChip, { backgroundColor: colors.brandSubtle, borderColor: colors.borderSubtle }]}>
-                <Ionicons name="bulb-outline" size={10} color={colors.brand} />
+                <Ionicons name="bulb-outline" size={9} color={colors.brand} />
+                <Text style={[styles.aiChipText, { color: colors.brand }]}>AI</Text>
               </View>
             ) : null}
           </View>
@@ -251,6 +313,7 @@ function MessageBubbleBase({
             { opacity: pressed ? 0.88 : 1 },
             hasFailed && styles.bubbleFailed,
             isDraft && styles.bubbleDraft,
+            !!bubbleBorder && { borderColor: bubbleBorder },
           ]}
         accessibilityRole="button"
         >
@@ -282,44 +345,9 @@ function MessageBubbleBase({
                   <View style={styles.uploadProgressBar}>
                     <ActivityIndicator size="small" color={colors.textInverse} />
                   </View>
+                  <Text style={styles.uploadText}>Sending…</Text>
                 </View>
               ) : null}
-            </Pressable>
-          ) : null}
-
-          {documentUri ? (
-            <Pressable
-              onPress={() => {
-                if (documentUri.startsWith('http')) {
-                  Linking.openURL(documentUri).catch(() => {});
-                }
-              }}
-              style={[styles.documentWrap, { backgroundColor: isMe ? 'rgba(255,255,255,0.12)' : colors.surfaceAlt }]}
-              accessibilityRole="button"
-              accessibilityLabel={`Document: ${documentName ?? 'file'}`}
-            >
-              <View style={[styles.documentIconWrap, { backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : colors.brandSubtle }]}>
-                <Ionicons
-                  name={
-                    documentMimeType?.includes('pdf') ? 'document-text-outline'
-                    : documentMimeType?.includes('zip') || documentMimeType?.includes('compressed') ? 'archive-outline'
-                    : 'document-outline'
-                  }
-                  size={24}
-                  color={isMe ? colors.textInverse : colors.brand}
-                />
-              </View>
-              <View style={styles.documentInfo}>
-                <Text style={[styles.documentName, { color: bubbleText }]} numberOfLines={2}>
-                  {documentName ?? 'File'}
-                </Text>
-                {documentMimeType ? (
-                  <Text style={[styles.documentMeta, { color: metaColor }]} numberOfLines={1}>
-                    {documentMimeType}
-                  </Text>
-                ) : null}
-              </View>
-              <Ionicons name="download-outline" size={18} color={isMe ? colors.textInverse : colors.textMuted} />
             </Pressable>
           ) : null}
 
@@ -344,10 +372,19 @@ function MessageBubbleBase({
 
           {text ? (
             <>
-              <Text style={[styles.messageText, { color: bubbleText }]}>{text}</Text>
+              {isDraft ? (
+                <View style={styles.draftBadge}>
+                  <Ionicons name="create-outline" size={10} color={colors.textMuted} />
+                  <Text style={[styles.draftLabel, { color: colors.textMuted }]}>Draft</Text>
+                </View>
+              ) : null}
+              <Text style={[styles.messageText, { color: bubbleText }]}>
+                {searchHighlight && text
+                  ? highlightSearchMatch(text, searchHighlight, bubbleText, colors.brand, isDark)
+                  : text}
+              </Text>
 
-              {/* AI translation — WhatsApp/Telegram inline pattern: one
-                  subtle link, no meta chrome. */}
+              {/* AI translation — WhatsApp/Instagram/Telegram inline pattern */}
               {isForeignLanguage && !isMe && !isDraft ? (
                 <View style={styles.translationRow}>
                   {isTranslated && translatedText ? (
@@ -355,16 +392,22 @@ function MessageBubbleBase({
                       <Text style={[styles.translatedText, { color: bubbleText }]}>
                         {translatedText}
                       </Text>
-                      <Pressable
-                        onPress={revert}
-                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
-                        accessibilityRole="button"
-                        accessibilityLabel={t('messaging.translation.showOriginal')}
-                      >
-                        <Text style={[styles.translationLink, { color: metaColor }]}>
-                          {t('messaging.translation.showOriginal')}
+                      <View style={styles.translationMetaRow}>
+                        <Text style={[styles.translationSourceLabel, { color: metaColor }]}>
+                          {t('messaging.translation.translatedFrom', { language: sourceLanguageName })}
                         </Text>
-                      </Pressable>
+                        <Text style={[styles.translationDot, { color: metaColor }]}>·</Text>
+                        <Pressable
+                          onPress={revert}
+                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('messaging.translation.showOriginal')}
+                        >
+                          <Text style={[styles.translationLink, { color: metaColor }]}>
+                            {t('messaging.translation.showOriginal')}
+                          </Text>
+                        </Pressable>
+                      </View>
                     </>
                   ) : isTranslating ? (
                     <View style={styles.translationLoadingRow}>
@@ -410,18 +453,28 @@ function MessageBubbleBase({
                 ) : hasFailed ? (
                   <Ionicons name="alert-circle" size={12} color={isMe ? colors.textInverse : colors.danger} />
                 ) : readStatus ? (
-                  <Ionicons
-                    name={readStatus === 'sent' ? 'checkmark' : 'checkmark-done'}
-                    size={13}
-                    color={readStatus === 'read' ? (isMe ? colors.textInverse : colors.brand) : metaColor}
-                    accessibilityLabel={
-                      readStatus === 'read'
-                        ? 'Message read'
-                        : readStatus === 'delivered'
-                          ? 'Message delivered'
-                          : 'Message sent'
-                    }
-                  />
+                  <>
+                    <Ionicons
+                      name={isRead || readStatus === 'read' ? 'checkmark-done' : 'checkmark'}
+                      size={13}
+                      color={isRead || readStatus === 'read' ? (isMe ? colors.textInverse : colors.brand) : metaColor}
+                      accessibilityLabel={
+                        isRead || readStatus === 'read'
+                          ? 'Message read'
+                          : readStatus === 'delivered'
+                            ? 'Message delivered'
+                            : 'Message sent'
+                      }
+                    />
+                    {isRead && isLastInCluster ? (
+                      <Text
+                        style={[styles.readReceiptText, { color: isMe ? colors.scrimTextTertiary : colors.brand }]}
+                        accessibilityLabel={isGroup ? `Read by ${readCount}` : 'Seen'}
+                      >
+                        {isGroup ? `Read by ${readCount}` : 'Seen'}
+                      </Text>
+                    ) : null}
+                  </>
                 ) : (
                   <Ionicons name="checkmark" size={13} color={metaColor} accessibilityLabel="Message sent" />
                 )}
@@ -431,8 +484,9 @@ function MessageBubbleBase({
         </Pressable>
 
         {hasFailed && onRetry ? (
-          <Pressable onPress={onRetry} style={styles.retryBadge} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Retry sending message">
-            <Ionicons name="refresh" size={14} color={colors.danger} />
+          <Pressable onPress={onRetry} style={styles.retryBadge} accessibilityRole="button">
+            <Ionicons name="refresh" size={11} color={colors.danger} />
+            <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
         ) : null}
 
@@ -447,7 +501,8 @@ function MessageBubbleBase({
             accessibilityRole="button"
             accessibilityLabel="Retry sending agent draft"
           >
-            <Ionicons name="refresh" size={14} color={colors.danger} />
+            <Ionicons name="refresh" size={11} color={colors.danger} />
+            <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
         ) : null}
 
@@ -462,7 +517,8 @@ function MessageBubbleBase({
             accessibilityRole="button"
             accessibilityLabel="Send agent draft"
           >
-            <Ionicons name="send" size={14} color={colors.brand} />
+            <Ionicons name="send" size={11} color={colors.brand} />
+            <Text style={[styles.draftConfirmText, { color: colors.brand }]}>Send</Text>
           </Pressable>
         ) : null}
 
@@ -495,11 +551,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: Radius.full,
+    backgroundColor: colors.surfaceAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Space.xs,
-    borderWidth: 1.5,
-    borderColor: colors.background },
+    marginBottom: Space.xs },
   agentAvatar: {
     width: 28,
     height: 28,
@@ -509,9 +564,9 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.xs,
     borderWidth: StyleSheet.hairlineWidth },
   avatarText: {
-    fontSize: 12,
-    fontFamily: FontFamily.bold,
-    color: '#FFFFFF' },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textPrimary },
   avatarSpacer: {
     width: 28 },
   bubbleColumn: {
@@ -525,7 +580,8 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginLeft: Space.xs },
   senderName: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.bold },
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textSecondary },
   aiChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -534,6 +590,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: 1,
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth },
+  aiChipText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
   bubble: {
     paddingHorizontal: Space.sm + 2,
     paddingVertical: Space.sm - 1,
@@ -549,27 +610,40 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignSelf: 'flex-start' },
   bubbleThem: {
     backgroundColor: colors.surfaceAlt,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle },
+    alignSelf: 'flex-start' },
   bubbleFailed: {
     backgroundColor: colors.dangerSubtle,
     borderWidth: Stroke.standard,
     borderColor: colors.dangerBorder },
   bubbleDraft: {
+    // TODO: no surfaceAltSubtle token available
     backgroundColor: `${colors.surfaceAlt}80`,
     borderWidth: Stroke.standard,
     borderColor: colors.borderSubtle },
-  draftConfirmBadge: {
+  draftBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 3,
+    marginBottom: Space.xs },
+  draftLabel: {
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
+  draftConfirmBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginTop: Space.xs,
     marginLeft: Space.xs,
-    width: 32,
-    height: 32,
+    paddingHorizontal: Space.sm - 1,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
     backgroundColor: colors.brandSubtle,
-    alignSelf: 'flex-start' },
+    alignSelf: 'flex-start',
+    minHeight: 32 },
+  draftConfirmText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   replyBlock: {
     borderLeftWidth: 2,
     paddingLeft: Space.sm - 1,
@@ -603,6 +677,10 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2 },
+  readReceiptText: {
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing },
   mediaWrap: {
     backgroundColor: 'transparent',
     position: 'relative' },
@@ -630,17 +708,26 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: Space.xs },
   uploadProgressBar: {
-    marginBottom: 0 },
+    marginBottom: 2 },
+  uploadText: {
+    color: colors.textInverse,
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily },
   retryBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
     marginTop: Space.xs,
     marginLeft: Space.xs,
-    width: 32,
-    height: 32,
+    paddingHorizontal: Space.sm - 1,
+    paddingVertical: Space.xs,
     borderRadius: Radius.full,
     backgroundColor: colors.dangerSubtle,
     alignSelf: 'flex-start' },
+  retryText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.danger },
   reactions: {
     flexDirection: 'row',
     gap: 4,
@@ -677,41 +764,32 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  translationMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexWrap: 'wrap',
+  },
   translatedText: {
-    fontSize: TypographyV2.body.size,
+    fontSize: TypographyV2.body.size - 1,
     fontFamily: TypeStyles.body.fontFamily,
     lineHeight: TypographyV2.body.lineHeight + 1,
     letterSpacing: TypographyV2.body.letterSpacing,
     fontStyle: 'italic',
   },
+  translationSourceLabel: {
+    fontSize: TypographyV2.meta.size - 2,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    opacity: 0.8,
+  },
+  translationDot: {
+    fontSize: TypographyV2.meta.size - 2,
+    opacity: 0.5,
+  },
   translationLink: {
-    fontSize: TypographyV2.meta.size,
+    fontSize: TypographyV2.meta.size - 1,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing,
     textDecorationLine: 'underline',
-  },
-  // ── Document attachment ───────────────────────────────────────────
-  documentWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    borderRadius: Radius.md,
-    padding: Space.sm,
-    marginBottom: Space.xs },
-  documentIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  documentInfo: {
-    flex: 1,
-    gap: 2 },
-  documentName: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    lineHeight: TypographyV2.body.lineHeight },
-  documentMeta: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-});
+  } });

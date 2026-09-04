@@ -354,6 +354,7 @@ const CanvasItem = React.memo(function CanvasItem({
             style={{ width: ITEM_BASE_SIZE, height: ITEM_BASE_SIZE } as ImageStyle}
             contentFit="cover"
             priority="normal"
+            accessible={false}
           />
         </View>
       </Reanimated.View>
@@ -387,6 +388,7 @@ const PickerTile = React.memo(function PickerTile({ item, onPress }: PickerTileP
         style={styles.pickerTileImage as ImageStyle}
         contentFit="cover"
         priority="normal"
+        accessible={false}
       />
       <Text style={styles.pickerTileTitle} numberOfLines={1}>
         {item.title}
@@ -1050,9 +1052,9 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
       {/* Demo mode banner — truthful per AGENTS.md §11 */}
       {MOODBOARD_DEMO_MODE && (
         <View style={styles.demoBanner}>
-          <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} />
+          <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} accessible={false} aria-hidden={true} />
           <Text style={styles.demoBannerText}>
-            Demo mode — moodboards are not persisted. Changes will be lost when the app restarts.
+            Demo mode — moodboards aren't persisted.
           </Text>
         </View>
       )}
@@ -1087,7 +1089,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
               setCommentsSheetVisible(true);
             }}
             activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Comments"
             accessibilityHint="View and add comments on this moodboard"
@@ -1101,7 +1103,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
               setVersionHistoryVisible(true);
             }}
             activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Version history"
             accessibilityHint="View saved versions and restore"
@@ -1115,7 +1117,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
               setCollaboratorSheetVisible(true);
             }}
             activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Collaborators"
             accessibilityHint="Invite collaborators and manage roles"
@@ -1126,7 +1128,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
             style={styles.headerActionButton}
             onPress={handlePublishAsPoster}
             activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Publish as poster"
             accessibilityHint="Publishes this moodboard as a poster to your feed"
@@ -1152,7 +1154,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
               density="compact"
               icon="create-outline"
               title="Start your moodboard"
-              subtitle="Tap a listing below to place it on the canvas."
+              subtitle="Tap a listing below to begin."
               {...(pickerItems.length > 0
                 ? { ctaLabel: 'Add items', onCtaPress: () => void handleAddItem(pickerItems[0]) }
                 : {})}
@@ -1184,7 +1186,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
                 {selectedItemIds.size} selected
               </Text>
               <Pressable
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 onPress={handleCancelMultiSelect}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel multi-select"
@@ -1263,7 +1265,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
                 <Ionicons name="alert-circle-outline" size={18} color={colors.warning} />
                 <Text style={styles.conflictText}>{conflictDetail.message}</Text>
                 <Pressable
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   onPress={() => {
                     setLocalConflictSnapshot(moodboard);
                     setConflictCompareVisible(true);
@@ -1274,7 +1276,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
                   <Text style={styles.conflictDismiss}>Compare</Text>
                 </Pressable>
                 <Pressable
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   onPress={() => {
                     setSyncStatus('idle');
                     setConflictDetail(null);
@@ -1328,7 +1330,7 @@ export default function MoodboardEditorScreen({ route, navigation }: Props) {
         )}
 
         {/* Picker rail — items to add */}
-        <Text style={styles.pickerSectionLabel}>ADD TO CANVAS</Text>
+        <Text style={styles.pickerSectionLabel}>Add to canvas</Text>
         {pickerItems.length > 0 ? (
           <HorizontalRail
             contentContainerStyle={styles.pickerRailContent}
@@ -1422,7 +1424,7 @@ const styles = StyleSheet.create({
   pickerTileTitle: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: LetterSpacing.normal - 0.1 },
+    letterSpacing: LetterSpacing.normal },
   pickerTilePrice: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily },
@@ -1640,7 +1642,7 @@ function useStyles() {
           fontSize: TypographyV2.meta.size,
           fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted,
-          letterSpacing: LetterSpacing.caps,
+          letterSpacing: LetterSpacing.wide,
           paddingHorizontal: Space.md,
           paddingBottom: Space.xs },
         pickerRailContent: {
@@ -1691,9 +1693,9 @@ function useStyles() {
           alignItems: 'center',
           justifyContent: 'center' },
         liveDot: {
-          width: 8,
-          height: 8,
-          borderRadius: 4,
+          width: Space.sm,
+          height: Space.sm,
+          borderRadius: Radius.sm,
           backgroundColor: colors.success },
         pickerSkeletonRail: {
           flexDirection: 'row',

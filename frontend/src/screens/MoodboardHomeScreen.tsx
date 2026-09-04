@@ -102,6 +102,7 @@ const CoverCollage = React.memo(function CoverCollage({
         style={{ width, height } as ImageStyle}
         contentFit="cover"
         priority="normal"
+        accessible={false}
       />
     );
   }
@@ -124,6 +125,7 @@ const CoverCollage = React.memo(function CoverCollage({
               style={{ width: '100%', height: '100%' } as ImageStyle}
               contentFit="cover"
               priority="normal"
+              accessible={false}
             />
           </View>
         );
@@ -217,6 +219,7 @@ const PublicMoodboardCard = React.memo(function PublicMoodboardCard({
             uri={moodboard.curatorAvatar}
             style={styles.publicCardAvatar}
             contentFit="cover"
+            accessible={false}
           />
           <Text style={styles.publicCardCurator} numberOfLines={1}>
             {moodboard.curator}
@@ -281,13 +284,12 @@ function DiscoverMasonrySkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// Section header — eyebrow + title
+// Section header — single title, no decorative eyebrow
 // ---------------------------------------------------------------------------
-function SectionHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
+function SectionHeader({ title }: { title: string }) {
   const styles = useStyles();
   return (
     <View style={styles.sectionHeaderWrap}>
-      <Text style={styles.sectionEyebrow}>{eyebrow}</Text>
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
   );
@@ -495,7 +497,7 @@ export default function MoodboardHomeScreen() {
             suffix={
               searchQuery.length > 0 ? (
                 <Pressable
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  hitSlop={{ top: 13, bottom: 13, left: 13, right: 13 }}
                   onPress={() => setSearchQuery('')}
                   accessibilityRole="button"
                   accessibilityLabel="Clear search"
@@ -511,12 +513,12 @@ export default function MoodboardHomeScreen() {
         {/* ── Section 1: Your Moodboards rail ── */}
         {loading ? (
           <View style={styles.sectionWrap}>
-            <SectionHeader eyebrow="YOUR MOODBOARDS" title="Your collages" />
+            <SectionHeader title="Your moodboards" />
             <UserRailSkeleton />
           </View>
         ) : userMoodboards.length > 0 ? (
           <Reanimated.View entering={reducedMotion ? undefined : FadeIn.duration(250)} style={styles.sectionWrap}>
-            <SectionHeader eyebrow="YOUR MOODBOARDS" title="Your collages" />
+            <SectionHeader title="Your moodboards" />
             <HorizontalRail
               contentContainerStyle={styles.railContent}
               showsHorizontalScrollIndicator={false}
@@ -536,24 +538,30 @@ export default function MoodboardHomeScreen() {
         {/* ── Section 2: Discover Moodboards — header + loading/empty states ── */}
         {loading ? (
           <View style={styles.sectionWrap}>
-            <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
+            <SectionHeader title="Discover" />
             <DiscoverMasonrySkeleton />
           </View>
         ) : searchQuery.trim().length > 0 && filteredPublicMoodboards.length === 0 ? (
           <View style={styles.sectionWrap}>
-            <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
+            <SectionHeader title="Discover" />
             <View style={styles.searchEmptyWrap}>
-              <Ionicons name="search-outline" size={32} color={colors.textMuted} />
               <Text style={styles.searchEmptyTitle}>
                 No moodboards match '{searchQuery.trim()}'
               </Text>
-              <Text style={styles.searchEmptySubtitle}>
-                Try a different title, curator, or keyword.
-              </Text>
+              <AnimatedPressable
+                style={styles.searchEmptyCta}
+                onPress={() => setSearchQuery('')}
+                activeOpacity={0.8}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search query"
+              >
+                <Text style={styles.searchEmptyCtaText}>Clear search</Text>
+              </AnimatedPressable>
             </View>
           </View>
         ) : filteredPublicMoodboards.length > 0 ? (
-          <SectionHeader eyebrow="DISCOVER" title="Moodboards from the community" />
+          <SectionHeader title="Discover" />
         ) : null}
       </View>
     ),
@@ -578,24 +586,18 @@ export default function MoodboardHomeScreen() {
       !loading && userMoodboards.length === 0 && publicMoodboards.length > 0 ? (
         <View style={{ marginHorizontal: -(MASONRY_PADDING - MASONRY_GAP / 2), marginTop: Space.lg }}>
           <View style={styles.inlineEmptyWrap}>
-            <View style={styles.inlineEmptyCard}>
-              <Ionicons name="grid-outline" size={28} color={colors.brand} />
-              <Text style={styles.inlineEmptyTitle}>Create your first moodboard</Text>
-              <Text style={styles.inlineEmptySubtitle}>
-                Arrange listings into a collage that expresses your style.
-              </Text>
-              <AnimatedPressable
-                style={styles.inlineEmptyCta}
-                onPress={handleCreatePress}
-                activeOpacity={0.8}
-                scaleValue={0.97}
-                accessibilityRole="button"
-                accessibilityLabel="Create your first moodboard"
-                accessibilityHint="Opens the moodboard editor"
-              >
-                <Text style={styles.inlineEmptyCtaText}>Start creating</Text>
-              </AnimatedPressable>
-            </View>
+            <Text style={styles.inlineEmptyTitle}>Create your first moodboard</Text>
+            <AnimatedPressable
+              style={styles.inlineEmptyCta}
+              onPress={handleCreatePress}
+              activeOpacity={0.8}
+              scaleValue={0.97}
+              accessibilityRole="button"
+              accessibilityLabel="Create your first moodboard"
+              accessibilityHint="Opens the moodboard editor"
+            >
+              <Text style={styles.inlineEmptyCtaText}>Start creating</Text>
+            </AnimatedPressable>
           </View>
         </View>
       ) : null,
@@ -630,7 +632,7 @@ export default function MoodboardHomeScreen() {
         <EmptyState
           icon="images-outline"
           title="No moodboards yet"
-          subtitle="Create your first collage — arrange listings into a composition that tells your story."
+          subtitle="Create a collage from your listings."
           ctaLabel="Create a moodboard"
           onCtaPress={handleCreatePress}
         />
@@ -645,15 +647,15 @@ export default function MoodboardHomeScreen() {
       {/* Offline banner */}
       {isOffline && (
         <View style={styles.offlineBanner}>
-          <Ionicons name="cloud-offline-outline" size={14} color={colors.textInverse} />
-          <Text style={styles.offlineBannerText}>Offline — moodboards aren't refreshing. Reconnect to load latest.</Text>
+          <Ionicons name="cloud-offline-outline" size={14} color={colors.textInverse} accessible={false} aria-hidden={true} />
+          <Text style={styles.offlineBannerText}>Offline — moodboards aren't refreshing.</Text>
         </View>
       )}
 
       {/* Demo mode banner — truthful per AGENTS.md §11 */}
       {MOODBOARD_DEMO_MODE && (
         <View style={styles.demoBanner}>
-          <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} />
+          <Ionicons name="information-circle-outline" size={13} color={colors.textSecondary} accessible={false} aria-hidden={true} />
           <Text style={styles.demoBannerText}>
             Demo mode — moodboards are not persisted. Changes will be lost when the app restarts.
           </Text>
@@ -796,7 +798,7 @@ function useStyles() {
         searchInput: {
           fontSize: TypographyV2.body.size,
           fontFamily: TypographyV2.body.fontFamily,
-          paddingVertical: 8 },
+          paddingVertical: Space.sm },
         searchEmptyWrap: {
           alignItems: 'center',
           gap: Space.sm,
@@ -808,12 +810,17 @@ function useStyles() {
           color: colors.textPrimary,
           textAlign: 'center',
           letterSpacing: TypographyV2.body.letterSpacing },
-        searchEmptySubtitle: {
-          fontSize: TypographyV2.body.size,
-          fontFamily: TypographyV2.body.fontFamily,
-          color: colors.textMuted,
-          textAlign: 'center',
-          lineHeight: TypographyV2.body.lineHeight },
+        searchEmptyCta: {
+          marginTop: Space.xs,
+          backgroundColor: colors.brand,
+          paddingHorizontal: Space.lg,
+          paddingVertical: Space.sm,
+          borderRadius: Radius.full },
+        searchEmptyCtaText: {
+          fontSize: TypographyV2.bodyStrong.size,
+          fontFamily: TypographyV2.bodyStrong.fontFamily,
+          color: colors.textInverse,
+          letterSpacing: LetterSpacing.wide },
         // Beta badge — additive indicator gated by the moodboard_beta flag.
         // A compact label on the Create button so users know the collage
         // tooling is in beta. Absent when the flag is off.
@@ -829,8 +836,7 @@ function useStyles() {
           lineHeight: TypographyV2.meta.lineHeight,
           fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textInverse,
-          letterSpacing: 0.3,
-          textTransform: 'uppercase' },
+          letterSpacing: LetterSpacing.normal },
         // ── Section wrappers ──
         sectionWrap: {
           marginBottom: Space.lg },
@@ -838,12 +844,6 @@ function useStyles() {
           paddingHorizontal: Space.md,
           paddingTop: Space.lg,
           paddingBottom: Space.md },
-        sectionEyebrow: {
-          fontSize: TypographyV2.label.size,
-          fontFamily: TypographyV2.label.fontFamily,
-          color: colors.textMuted,
-          letterSpacing: TypographyV2.label.letterSpacing,
-          marginBottom: Space.xs },
         sectionTitle: {
           fontSize: TypographyV2.sectionTitle.size,
           lineHeight: TypographyV2.sectionTitle.lineHeight,
@@ -926,27 +926,15 @@ function useStyles() {
         inlineEmptyWrap: {
           paddingHorizontal: Space.md,
           paddingTop: Space.lg,
-          paddingBottom: Space.xl },
-        inlineEmptyCard: {
+          paddingBottom: Space.xl,
           alignItems: 'center',
-          gap: Space.sm,
-          paddingVertical: Space.xl,
-          paddingHorizontal: Space.lg,
-          borderRadius: Radius.xl,
-          backgroundColor: colors.surface,
-          borderWidth: Stroke.hairline,
-          borderColor: colors.border },
+          gap: Space.sm },
         inlineEmptyTitle: {
           fontSize: TypographyV2.sectionTitle.size,
           fontFamily: TypographyV2.sectionTitle.fontFamily,
           color: colors.textPrimary,
-          letterSpacing: TypographyV2.sectionTitle.letterSpacing },
-        inlineEmptySubtitle: {
-          fontSize: TypographyV2.body.size,
-          fontFamily: TypographyV2.body.fontFamily,
-          color: colors.textMuted,
-          textAlign: 'center',
-          lineHeight: TypographyV2.body.lineHeight },
+          letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+          textAlign: 'center' },
         inlineEmptyCta: {
           marginTop: Space.xs,
           backgroundColor: colors.brand,

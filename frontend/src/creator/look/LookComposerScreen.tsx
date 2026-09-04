@@ -27,6 +27,8 @@ import type { CreatorLayer } from '../composition';
 import { computeLookLayout, LOOK_DEFAULT_ASPECT_RATIO, safeValidateDocument } from '../composition';
 import { layerTypeLabel } from '../shared/layerUtils';
 import { CreatorCanvas } from '../CreatorCanvas';
+import { LayerFloatingMenu, type LayerFloatingMenuAction } from '../LayerFloatingMenu';
+import { InstantCutSheet } from '../InstantCutSheet';
 import { CreatorLayersSheet } from '../CreatorLayersSheet';
 import { CreatorPublishSheet } from '../CreatorPublishSheet';
 import { CreatorSettingsSheet } from '../CreatorSettingsSheet';
@@ -181,6 +183,7 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
     removeLayer,
     duplicateLayer,
     reorderLayer,
+    toggleLayerLock,
     updateLayer,
     updateLayerLive,
     addLayer,
@@ -568,6 +571,77 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
   }, [canRedo, redo, haptic]);
 
   const selectedLayer = page?.layers.find((l) => l.id === selectedLayerId) ?? null;
+
+  // ── Floating z-order / context menu for the selected layer ──
+  // Appears above the selected layer's top edge. Provides quick access
+  // to z-order, duplicate, lock, and delete without opening the Layers
+  // sheet (§3.3 gap: "z-order hidden in a sheet").
+  const [floatingMenuVisible, setFloatingMenuVisible] = useState(false);
+
+  // ── Instant Cut sheet (Snapchat Quick Cut equivalent) ──
+  // One-tap auto-compose + publish path for the casual majority.
+  const [instantCutVisible, setInstantCutVisible] = useState(false);
+
+  // Show the floating menu when a single layer is selected (not in
+  // multi-select mode, which has its own bulk actions).
+  useEffect(() => {
+    setFloatingMenuVisible(!!selectedLayerId && !multiSelectMode && !editingTextLayerId);
+  }, [selectedLayerId, multiSelectMode, editingTextLayerId]);
+
+  // Compute the floating menu position from the selected layer's
+  // normalized coordinates and the canvas layout.
+  const floatingMenuPos = useMemo(() => {
+    if (!selectedLayer || !canvasLayoutRef.current) return { x: 0, y: 0 };
+    const layout = canvasLayoutRef.current;
+    // Layer center in screen coords
+    const centerX = layout.x + selectedLayer.x * canvasWidth;
+    // Top edge of the layer in screen coords
+    const topY = layout.y + (selectedLayer.y - selectedLayer.height * selectedLayer.scale / 2) * canvasHeight;
+    return {
+      x: centerX,
+      y: Math.max(layout.y + Space.sm, topY - 48),
+    };
+  }, [selectedLayer, canvasWidth, canvasHeight]);
+
+  const floatingMenuActions = useMemo<LayerFloatingMenuAction[]>(() => {
+    if (!selectedLayerId) return [];
+    const actions: LayerFloatingMenuAction[] = [
+      {
+        id: 'front',
+        icon: 'arrow-up-circle-outline',
+        label: 'Bring to front',
+        onPress: () => { reorderLayer(selectedLayerId, 'front'); haptic.light(); },
+      },
+      {
+        id: 'back',
+        icon: 'arrow-down-circle-outline',
+        label: 'Send to back',
+        onPress: () => { reorderLayer(selectedLayerId, 'back'); haptic.light(); },
+      },
+      {
+        id: 'duplicate',
+        icon: 'copy-outline',
+        label: 'Duplicate',
+        onPress: () => { duplicateLayer(selectedLayerId); haptic.light(); },
+      },
+    ];
+    if (selectedLayer?.locked !== undefined) {
+      actions.push({
+        id: 'lock',
+        icon: selectedLayer.locked ? 'lock-open-outline' : 'lock-closed-outline',
+        label: selectedLayer.locked ? 'Unlock' : 'Lock',
+        onPress: () => { toggleLayerLock?.(selectedLayerId); haptic.light(); },
+      });
+    }
+    actions.push({
+      id: 'delete',
+      icon: 'trash-outline',
+      label: 'Delete',
+      onPress: () => { removeLayer(selectedLayerId); haptic.medium(); },
+      destructive: true,
+    });
+    return actions;
+  }, [selectedLayerId, selectedLayer, reorderLayer, duplicateLayer, removeLayer, haptic, toggleLayerLock]);
 
   // Background media URI for draw-on-media (Snapchat/Instagram pattern)
   const backgroundMediaUri = useMemo(() => {
@@ -1307,6 +1381,17 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
             isInTrashZoneSV={isInTrashZoneSV}
           />
 
+          {/* ── Floating z-order / context menu for the selected layer ── */}
+          {/* Appears above the selected layer. Provides quick access to
+              z-order, duplicate, lock, and delete without opening the
+              Layers sheet (§3.3 gap: "z-order hidden in a sheet"). */}
+          <LayerFloatingMenu
+            visible={floatingMenuVisible && !isManipulating}
+            actions={floatingMenuActions}
+            x={floatingMenuPos.x}
+            y={floatingMenuPos.y}
+          />
+
           {/* ── In-place text content editor (Snapchat/Instagram pattern) ── */}
           {/* Renders a TextInput AT the text layer's position so the user can
               type in place while the canvas stays visible. The modal
@@ -1480,6 +1565,17 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 </View>
 
                 <View style={styles.topRightGroup}>
+                  {hasMultipleMedia ? (
+                    <PressScale
+                      onPress={() => { haptic.light(); setInstantCutVisible(true); }}
+                      style={styles.topBtn}
+                      accessibilityLabel="Instant Cut"
+                      accessibilityHint="Auto-compose and publish instantly"
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    >
+                      <Ionicons name="flash-outline" size={IconGrammar.standard} color={colors.textPrimary} />
+                    </PressScale>
+                  ) : null}
                   <PressScale
                     onPress={() => { haptic.medium(); setShowPublish(true); }}
                     style={[styles.publishBtn, { backgroundColor: colors.brand }]}
@@ -1630,20 +1726,22 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 onIntensityChange={handleEffectIntensityChange}
                 onIntensityCommit={handleEffectIntensityCommit}
               />
-              {/* ── AI Effects entry (folded under Effects) ── */}
+              {/* ── Style effects entry (folded under Effects) ── */}
               {/* Opens the AIEffectBrowserSheet from within the effects
-                  panel. AI effects are not a separate destination — they
-                  live inside the effects surface. */}
+                  panel. Effects are not a separate destination — they
+                  live inside the effects surface. §11: label says "Styles"
+                  not "AI" because the current effect set is deterministic
+                  filters, not ML/generative. */}
               <PressScale
                 onPress={() => { haptic.medium(); setShowAIEffects(true); }}
                 style={[styles.aiEffectsBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
-                accessibilityLabel="AI Effects"
+                accessibilityLabel="Style effects"
                 accessibilityHint="Browse photo effects"
                 scale={0.97}
               >
                 <Ionicons name="bulb-outline" size={IconGrammar.metadata} color={colors.textPrimary} />
                 <Text style={[styles.aiEffectsBtnText, { color: colors.textPrimary }]}>
-                  AI Styles
+                  Style effects
                 </Text>
                 <Ionicons name="chevron-forward" size={IconGrammar.metadata} color={colors.textMuted} />
               </PressScale>
@@ -1760,6 +1858,22 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
       )}
       <CreatorLayersSheet visible={state.mode.type === 'arrangingLayers'} onClose={() => setShowLayers(false)} />
       <CreatorPublishSheet visible={state.mode.type === 'publishing'} onClose={() => setShowPublish(false)} editingLookId={editingLookId ?? undefined} />
+
+      {/* ── Instant Cut sheet (Snapchat Quick Cut equivalent) ── */}
+      {/* One-tap auto-compose + publish path. Opens from the source tray
+          when the user has 2+ media assets selected. */}
+      <InstantCutSheet
+        visible={instantCutVisible}
+        assetUris={mediaAssetUris}
+        onClose={() => setInstantCutVisible(false)}
+        onPublish={(_layoutId) => {
+          setInstantCutVisible(false);
+          setShowPublish(true);
+        }}
+        onOpenEditor={(_layoutId) => {
+          setInstantCutVisible(false);
+        }}
+      />
       <CreatorSettingsSheet visible={state.mode.type === 'settings'} onClose={() => setShowSettings(false)} />
       <HelpShortcutsSheet visible={state.mode.type === 'help'} onClose={() => setShowHelp(false)} />
       {/* ── Background picker sheet ─────────────────────────────────── */}
@@ -2145,7 +2259,7 @@ const styles = StyleSheet.create({
   publishBtn: {
     height: 36,
     borderRadius: RadiusRoleValue.pillAvatar,
-    paddingHorizontal: 16,
+    paddingHorizontal: Space.md,
     justifyContent: 'center',
     alignItems: 'center' },
   publishBtnText: {

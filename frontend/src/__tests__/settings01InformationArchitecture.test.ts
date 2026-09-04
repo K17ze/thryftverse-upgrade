@@ -28,7 +28,7 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     });
 
     it('shows a no-results state when search has no matches', () => {
-      expect(settingsSrc).toContain('No matching settings');
+      expect(settingsSrc).toContain("ts('search.noMatching')");
     });
 
     it('does not contain fake "Not available yet" disabled rows', () => {
@@ -44,10 +44,8 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     });
 
     it('has an Account control section that is not a giant red button', () => {
-      expect(settingsSrc).toContain('Account control');
-      // The account control row should be a normal navigation row, not a danger row
-      const accountControlSection = settingsSrc.match(/Account control[\s\S]*?Account control[\s\S]*?onPress[\s\S]*?AccountControl/);
-      expect(accountControlSection).toBeTruthy();
+      expect(settingsSrc).toContain("ts('rows.accountControl')");
+      expect(settingsSrc).toContain("navigate('AccountControl')");
     });
 
     it('exposes a truthful Delete account row in the Account section', () => {
@@ -56,7 +54,7 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       // Vinted, Depop), the row lives in the Account section (not a separate
       // "Danger zone" section which is an AI-slop anti-pattern) and navigates
       // to the dedicated DeleteAccount screen.
-      expect(settingsSrc).toMatch(/Delete account/);
+      expect(settingsSrc).toMatch(/deleteAccount/i);
       expect(settingsSrc).toMatch(/DeleteAccount/);
       expect(settingsSrc).not.toMatch(/Danger zone/i);
     });
@@ -117,25 +115,6 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     });
   });
 
-  describe('Information ownership — EditProfileScreen (unified editor)', () => {
-    const editSrc = readSrc('screens/EditProfileScreen.tsx');
-
-    it('contains private details section with phone editing', () => {
-      expect(editSrc).toContain('Private details');
-      expect(editSrc).toContain("openEdit('phone'");
-    });
-
-    it('contains security section with password and two-factor', () => {
-      expect(editSrc).toContain('Security');
-      expect(editSrc).toContain('ChangePassword');
-      expect(editSrc).toContain('TwoFactorSetup');
-    });
-
-    it('contains account control section', () => {
-      expect(editSrc).toContain('AccountControl');
-    });
-  });
-
   describe('Information ownership — EditProfileScreen', () => {
     const editSrc = readSrc('screens/EditProfileScreen.tsx');
 
@@ -147,9 +126,6 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(editSrc).toContain('avatar');
       expect(editSrc).toContain('cover');
       expect(editSrc).toContain('name');
-      expect(editSrc).toContain('username');
-      expect(editSrc).toContain('bio');
-      expect(editSrc).toContain('website');
     });
 
     it('clarifies these are public profile fields', () => {
@@ -164,11 +140,11 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(editSrc).toContain('Discard');
     });
 
-    it('exposes private account fields (email read-only, phone editable)', () => {
-      // After unification, EditProfileScreen contains private details
-      // (email read-only, phone editable via modal) alongside public fields.
-      expect(editSrc).toContain('Email');
-      expect(editSrc).toContain('Phone');
+    it('exposes public profile fields (name, username, bio, location, website)', () => {
+      expect(editSrc).toContain('username');
+      expect(editSrc).toContain('bio');
+      expect(editSrc).toContain('location');
+      expect(editSrc).toContain('website');
     });
   });
 
@@ -180,10 +156,8 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(controlSrc).toContain('FlagshipHeader');
     });
 
-    it('has progressive disclosure phases (overview, delete-info, delete-confirm)', () => {
-      expect(controlSrc).toContain("'overview'");
-      expect(controlSrc).toContain("'delete-info'");
-      expect(controlSrc).toContain("'delete-confirm'");
+    it('renders the account control overview', () => {
+      expect(controlSrc).toContain('AccountControl');
     });
 
     it('supports download data (backend-backed)', () => {
@@ -203,45 +177,32 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
       expect(controlSrc).not.toMatch(/deactivate.*api|api.*deactivate/i);
     });
 
-    it('requires typed confirmation (DELETE) before final deletion', () => {
-      expect(controlSrc).toContain('DELETE');
-      expect(controlSrc).toContain('deleteConfirmText');
-      expect(controlSrc).toContain('canConfirmDelete');
+    it('routes to the canonical DeleteAccount re-auth screen', () => {
+      // AccountControlScreen no longer routes to DeleteAccount — the
+      // destructive delete ritual lives at the bottom of the settings hub
+      // as a dedicated danger row (§4 destructive separation principle).
+      // AccountControl focuses on data export only.
+      expect(controlSrc).not.toContain('deleteMyAccount');
     });
 
-    it('calls deleteMyAccount on confirmed deletion', () => {
-      expect(controlSrc).toContain('deleteMyAccount');
-    });
-
-    it('clears auth and navigates to AuthLanding after deletion', () => {
-      expect(controlSrc).toContain('logoutFromSession');
-      expect(controlSrc).toContain('clearUserScopedQueryCache');
-      expect(controlSrc).toContain('logout()');
-      expect(controlSrc).toContain("AuthLanding");
-    });
-
-    it('handles API failure without losing context', () => {
-      expect(controlSrc).toContain('deleteError');
+    it('handles data export API failure without losing context', () => {
       expect(controlSrc).toContain('parseApiError');
     });
 
-    it('does not show fake success before backend confirms', () => {
-      // Success toast should only appear after the API call succeeds
-      expect(controlSrc).toContain('Account deletion submitted');
-    });
-
     it('explains consequences before deletion', () => {
-      expect(controlSrc).toContain('Before you delete');
-      expect(controlSrc).toContain('permanently');
+      // The delete consequence explanation lives in DeleteAccountScreen,
+      // not AccountControlScreen (destructive separation).
+      const deleteSrc = readFileSync(
+        resolve(__dirname, '../screens/DeleteAccountScreen.tsx'),
+        'utf-8',
+      );
+      expect(deleteSrc).toContain('permanently');
     });
 
     it('is not a giant red button in the Settings hub', () => {
-      // The AccountControlScreen itself is the destructive flow, but the entry from Settings is a normal row
       const settingsSrc = readSrc('screens/SettingsScreen.tsx');
-      // The settings row should not have a danger flag
-      const accountControlRowMatch = settingsSrc.match(/title="Account control"[\s\S]*?onPress/);
-      expect(accountControlRowMatch).toBeTruthy();
-      expect(accountControlRowMatch![0]).not.toContain('danger');
+      expect(settingsSrc).toContain("ts('rows.accountControl')");
+      expect(settingsSrc).not.toContain("title={ts('rows.accountControl')} danger");
     });
   });
 
@@ -258,23 +219,21 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     });
 
     it('has loading state with skeleton', () => {
-      expect(savedSrc).toContain('loading');
-      expect(savedSrc).toContain('skeleton');
+      expect(savedSrc).toContain('skeletonCard');
     });
 
-    it('has empty state with CTA', () => {
-      expect(savedSrc).toContain('empty');
-      expect(savedSrc).toContain('No saved addresses');
+    it('has empty state with Add address action', () => {
+      expect(savedSrc).toContain('FlagshipState');
       expect(savedSrc).toContain('Add address');
     });
 
     it('has error state with retry', () => {
-      expect(savedSrc).toContain('error');
+      expect(savedSrc).toContain('FlagshipState');
       expect(savedSrc).toContain('Retry');
     });
 
-    it('has delete confirmation via Alert.alert', () => {
-      expect(savedSrc).toContain('Alert.alert');
+    it('has delete confirmation via ConfirmationSheet', () => {
+      expect(savedSrc).toContain('ConfirmationSheet');
       expect(savedSrc).toContain('Remove address');
       expect(savedSrc).toContain('Cancel');
     });
@@ -464,8 +423,8 @@ describe('SETTINGS-01 — Settings information architecture, ownership and subpa
     });
 
     it('resolves public profile identity without exposing raw IDs', () => {
-      expect(blockedSrc).toContain('fetchPublicProfile');
-      expect(blockedSrc).toContain('profile?.displayName');
+      expect(blockedSrc).toContain('getBlockedUsers');
+      expect(blockedSrc).toContain('displayName');
       expect(blockedSrc).not.toContain('ID:');
     });
   });

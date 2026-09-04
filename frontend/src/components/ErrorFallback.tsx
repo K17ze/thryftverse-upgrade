@@ -50,7 +50,7 @@ export function ErrorFallback({ screenName, errorMessage, errorStack, onRetry, o
     >
       {showDevMessage ? (
         <Text
-          style={styles.devMessage}
+          style={[styles.devMessage, { color: colors.textMuted }]}
           accessibilityLabel={`Error detail: ${errorMessage}`}
         >
           {screenName ? `[${screenName}] ` : ''}{errorMessage}
@@ -69,7 +69,6 @@ const styles = StyleSheet.create({
   devMessage: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: '#888',
     marginTop: Space.sm,
     paddingHorizontal: Space.lg,
   },

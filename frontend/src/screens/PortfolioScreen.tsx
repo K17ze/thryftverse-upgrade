@@ -40,7 +40,7 @@ export default function PortfolioScreen() {
   const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { width: screenWidth } = useWindowDimensions();
   const { listings } = useBackendData();
@@ -267,16 +267,16 @@ export default function PortfolioScreen() {
         unitsOwned={item.unitsOwned}
         totalUnits={item.totalUnits}
         ownershipPct={item.ownershipPct}
-        currentValueLabel={formatFromFiat(item.currentValueGbp, currencyCode)}
-        avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, currencyCode)}
+        currentValueLabel={formatFromFiat(item.currentValueGbp, 'GBP')}
+        avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, 'GBP')}
         unrealizedLabel={item.unrealizedPnlGbp >= 0
-          ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), currencyCode)}`
-          : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), currencyCode)}`
+          ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
+          : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
         }
         realizedLabel={item.realizedPnlGbp !== 0
           ? (item.realizedPnlGbp >= 0
-            ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), currencyCode)}`
-            : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), currencyCode)}`)
+            ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`
+            : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`)
           : undefined
         }
         status={formatPositionStatus(item)}
@@ -383,7 +383,7 @@ export default function PortfolioScreen() {
         <CoOwnStateCanvas
           variant="empty"
           title="No positions yet"
-          subtitle="Buy units to start your portfolio."
+          subtitle="Buy units to start."
           actionLabel="Browse items"
           onAction={() => navigation.navigate('CoOwnHub')}
           emptyGraphicVariant="bag"
@@ -398,7 +398,6 @@ export default function PortfolioScreen() {
       header={
         <FlagshipHeader
           title="Portfolio"
-          subtitle="Your Co-Own positions"
           onBack={handleBack}
           rightAction={
             <AnimatedPressable
@@ -555,6 +554,7 @@ export default function PortfolioScreen() {
               <Pressable
                 onPress={() => { haptics.selection(); setActivePortfolioTab('positions'); }}
                 style={({ pressed }) => [styles.portfolioTab, activePortfolioTab === 'positions' && { borderBottomColor: colors.textPrimary }, pressed && { opacity: 0.7 }]}
+                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                 accessibilityRole="tab"
                 accessibilityLabel="Positions tab"
                 accessibilityState={{ selected: activePortfolioTab === 'positions' }}
@@ -572,6 +572,7 @@ export default function PortfolioScreen() {
               <Pressable
                 onPress={() => { haptics.selection(); setActivePortfolioTab('insights'); }}
                 style={({ pressed }) => [styles.portfolioTab, activePortfolioTab === 'insights' && { borderBottomColor: colors.textPrimary }, pressed && { opacity: 0.7 }]}
+                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                 accessibilityRole="tab"
                 accessibilityLabel="Insights tab"
                 accessibilityState={{ selected: activePortfolioTab === 'insights' }}
@@ -771,7 +772,7 @@ export default function PortfolioScreen() {
             {performers.best && performers.best.avgEntryPriceGbp > 0 && (
               <CoOwnPortfolioStorytelling
                 premiumPct={null}
-                lastPriceLabel={formatFromFiat(performers.best.currentValueGbp / performers.best.unitsOwned, currencyCode)}
+                lastPriceLabel={formatFromFiat(performers.best.currentValueGbp / performers.best.unitsOwned, 'GBP')}
                 markSourceLabel="Last trade"
                 markAgeLabel={undefined}
               />
@@ -801,9 +802,9 @@ export default function PortfolioScreen() {
             <View style={[styles.rightsCard, { borderBottomColor: colors.border }]}>
               <View style={styles.rightsHeader}>
                 <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
-                <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Rights are instrument-specific</Text>
+                <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Rights depend on the instrument</Text>
               </View>
-              <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Rights depend on the instrument. Open a position to review.</Text>
+              <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Open a position to review.</Text>
             </View>
             </>
             )}
@@ -823,6 +824,7 @@ export default function PortfolioScreen() {
                   accessibilityLabel="View distribution history"
                   scaleValue={0.96}
                   hapticFeedback="light"
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
                   <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Distributions</Text>
                 </AnimatedPressable>
@@ -832,6 +834,7 @@ export default function PortfolioScreen() {
                   accessibilityLabel="Open market overview"
                   scaleValue={0.96}
                   hapticFeedback="light"
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
                   <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Market overview</Text>
                 </AnimatedPressable>
@@ -853,7 +856,7 @@ export default function PortfolioScreen() {
         title={actionSheetAsset?.title ?? ''}
         unitsOwned={actionSheetAsset?.unitsOwned ?? 0}
         ownershipPct={actionSheetAsset?.ownershipPct ?? 0}
-        currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, currencyCode) : ''}
+        currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, 'GBP') : ''}
         statusLabel={actionSheetAsset ? (actionSheetAsset.isOpen ? 'Active' : 'Closed') : ''}
         actions={actionSheetActions}
       />

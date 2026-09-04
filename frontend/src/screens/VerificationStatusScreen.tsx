@@ -43,7 +43,6 @@ export default function VerificationStatusScreen({ navigation }: Props) {
   const { isOffline } = useConnectivity();
 
   const currentUser = useStore((state) => state.currentUser);
-  const coOwnCompliance = useStore((state) => state.coOwnCompliance);
 
   const [backendStatus, setBackendStatus] = useState<KycStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -80,18 +79,18 @@ export default function VerificationStatusScreen({ navigation }: Props) {
   }, [loadStatus]);
 
   // ── Derive effective status ──
+  // §11 truthfulness: KYC status must be backend-authoritative only.
   const emailVerified = currentUser?.emailVerified ?? false;
-  const kycVerifiedLocal = coOwnCompliance.kycVerified;
   const backendVerified = backendStatus?.status === 'verified';
   const backendPending = backendStatus?.status === 'pending';
   const backendRejected = backendStatus?.status === 'rejected';
 
   const effectiveStatus: EffectiveStatus = useMemo(() => {
-    if (kycVerifiedLocal || backendVerified) return 'verified';
+    if (backendVerified) return 'verified';
     if (backendRejected) return 'rejected';
     if (backendPending) return 'in_review';
     return 'unverified';
-  }, [kycVerifiedLocal, backendVerified, backendRejected, backendPending]);
+  }, [backendVerified, backendRejected, backendPending]);
 
   const handleStartVerification = useCallback(() => {
     haptic.light();

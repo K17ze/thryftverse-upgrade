@@ -13,7 +13,6 @@ interface Props {
   totalPaid: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   formatFromFiat: (amount: number, currency?: any, opts?: any) => string;
-  currencyCode: string;
   fiatOpts: { displayMode: 'fiat' };
 }
 
@@ -24,7 +23,6 @@ export function TransactionBreakdown({
   postageFee,
   totalPaid,
   formatFromFiat,
-  currencyCode,
   fiatOpts }: Props) {
   const { colors } = useAppTheme();
 
@@ -35,17 +33,17 @@ export function TransactionBreakdown({
   return (
     <View style={styles.transactionSection}>
       <Text style={[styles.sectionLabel, themed.sectionLabel]}>Transaction</Text>
-      <TxRow label="Item" value={formatFromFiat(subtotal, currencyCode, fiatOpts)} />
-      <TxRow label="Platform charge" value={formatFromFiat(platformCharge, currencyCode, fiatOpts)} />
+      <TxRow label="Item" value={formatFromFiat(subtotal, 'GBP', fiatOpts)} />
+      <TxRow label="Platform charge" value={formatFromFiat(platformCharge, 'GBP', fiatOpts)} />
       {buyerProtectionFee != null && buyerProtectionFee !== 0 && buyerProtectionFee !== platformCharge ? (
-        <TxRow label="Buyer protection fee" value={formatFromFiat(buyerProtectionFee, currencyCode, fiatOpts)} />
+        <TxRow label="Buyer protection fee" value={formatFromFiat(buyerProtectionFee, 'GBP', fiatOpts)} />
       ) : null}
       <TxRow
         label="Delivery"
-        value={postageFee != null ? formatFromFiat(postageFee, currencyCode, fiatOpts) : 'Not recorded'}
+        value={postageFee != null ? formatFromFiat(postageFee, 'GBP', fiatOpts) : 'Not recorded'}
       />
       <View style={[styles.txDivider, themed.txDivider]} />
-      <TxRow label="Total" value={formatFromFiat(totalPaid, currencyCode, fiatOpts)} bold />
+      <TxRow label="Total" value={formatFromFiat(totalPaid, 'GBP', fiatOpts)} bold />
     </View>
   );
 }

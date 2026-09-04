@@ -50,6 +50,7 @@ const ALLOWED_COLOR_FILES = new Set([
   join(SRC, 'theme', 'ThemeContext.tsx'),
   join(SRC, 'theme', 'gradients.ts'),
   join(SRC, 'constants', 'colors.ts'),
+  join(SRC, 'utils', 'avatarColor.ts'),
 ]);
 
 // Camera/poster/live/creative surfaces may use hardcoded colors for

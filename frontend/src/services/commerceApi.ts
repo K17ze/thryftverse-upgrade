@@ -823,10 +823,38 @@ export interface TopPerformerListing {
 
 export async function fetchTopPerformers(
   sellerId: string,
-  limit: number = 10
+  limit: number = 10,
+  period: '7d' | '30d' | '90d' = '30d'
 ): Promise<TopPerformerListing[]> {
   const payload = await fetchJson<{ ok: true; items: TopPerformerListing[] }>(
-    `/sellers/${encodeURIComponent(sellerId)}/analytics/top-performers?limit=${limit}`
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/top-performers?limit=${limit}&period=${period}`
+  );
+  return payload.items;
+}
+
+export interface NeedsAttentionListing {
+  listingId: string;
+  title: string;
+  coverImageUrl: string | null;
+  status: string;
+  priceGbp: number;
+  category: string | null;
+  brand: string | null;
+  createdAt: string;
+  views: number;
+  likes: number;
+  offerCount: number;
+  reason: string;
+  priority: 'high' | 'medium';
+}
+
+export async function fetchNeedsAttention(
+  sellerId: string,
+  limit: number = 5,
+  period: '7d' | '30d' | '90d' = '30d'
+): Promise<NeedsAttentionListing[]> {
+  const payload = await fetchJson<{ ok: true; items: NeedsAttentionListing[] }>(
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/attention?limit=${limit}&period=${period}`
   );
   return payload.items;
 }

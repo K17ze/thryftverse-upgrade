@@ -33,7 +33,7 @@ export function MoreLikeThisGrid({
   onPressItem,
   colors,
 }: MoreLikeThisGridProps) {
-  const { currencyCode } = useFormattedPrice();
+  
   const visualSimilar = backendListings
     .filter((l) =>
       l.id !== item.id &&
@@ -54,7 +54,7 @@ export function MoreLikeThisGrid({
       <View style={styles.moreLikeThisGrid}>
         {visualSimilar.map((simItem) => {
           const simPriceFormatted = simItem.price != null
-            ? formatFromFiat(simItem.price, currencyCode, { displayMode: 'fiat' })
+            ? formatFromFiat(simItem.price, 'GBP', { displayMode: 'fiat' })
             : null;
           return (
             <Pressable

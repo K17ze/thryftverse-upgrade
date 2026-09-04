@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 
 (globalThis as any).__DEV__ = true;
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock('@react-native-async-storage/async-storage', () => {
   return {
@@ -155,6 +156,12 @@ vi.mock('react-native', async () => {
       get: () => ({ width: 375, height: 812, scale: 3, fontScale: 1 }),
     },
     useWindowDimensions: () => ({ width: 375, height: 812, scale: 3, fontScale: 1 }),
+    I18nManager: {
+      isRTL: false,
+      forceRTL: vi.fn(),
+      allowRTL: vi.fn(),
+      swapLeftAndRightInRTL: vi.fn(),
+    },
     Appearance: {
       getColorScheme: () => 'light',
       addChangeListener: () => ({ remove: () => {} }),
@@ -287,6 +294,7 @@ vi.mock('expo-image', () => {
 vi.mock('expo-modules-core', () => {
   const React = require('react');
   return {
+    Platform: { OS: 'ios', select: (obj: any) => obj.ios },
     EventEmitter: class {
       addListener() { return { remove: () => {} }; }
       emit() {}
@@ -304,6 +312,11 @@ vi.mock('expo-modules-core', () => {
     NativeModule: class {},
   };
 });
+
+vi.mock('expo-localization', () => ({
+  getLocales: () => [{ languageCode: 'en', regionCode: 'GB', languageTag: 'en-GB' }],
+  getCalendars: () => [{ calendar: 'gregorian', timeZone: 'Europe/London' }],
+}));
 
 vi.mock('expo-network', () => ({
   getNetworkStateAsync: vi.fn(() => Promise.resolve({ isConnected: true, type: 'wifi' })),
@@ -330,3 +343,21 @@ vi.mock('expo-notifications', () => ({
   getLastNotificationResponseAsync: vi.fn(() => Promise.resolve(null)),
   setNotificationHandler: vi.fn(),
 }));
+
+vi.mock('expo-image-manipulator', () => ({
+  manipulateAsync: vi.fn(async (uri: string) => ({
+    uri,
+    width: 1080,
+    height: 1080,
+  })),
+  SaveFormat: {
+    JPEG: 'jpeg',
+    PNG: 'png',
+    WEBP: 'webp',
+  },
+  ActionResize: {},
+  ActionCrop: {},
+  ActionRotate: {},
+  ActionFlip: {},
+}));
+

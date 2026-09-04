@@ -97,7 +97,7 @@ function ViewerChip({ count, compact = false }: { count: number; compact?: boole
   const formatted = count >= 1000 ? `${(count / 1000).toFixed(1)}K` : String(count);
   return (
     <View style={[styles.viewerChip, compact && styles.viewerChipCompact]}>
-      <Ionicons name="eye" size={16} color={colors.scrimTextPrimary} />
+      <Ionicons name="eye" size={16} color={colors.scrimTextPrimary} accessible={false} />
       <Text style={[styles.viewerChipText, compact && styles.viewerChipTextCompact]}>{formatted}</Text>
     </View>
   );
@@ -132,6 +132,7 @@ const FeaturedLiveCard = React.memo(function FeaturedLiveCard({
           style={StyleSheet.absoluteFill}
           containerStyle={StyleSheet.absoluteFill}
           contentFit="cover"
+          accessible={false}
         />
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.78)']}
@@ -149,12 +150,13 @@ const FeaturedLiveCard = React.memo(function FeaturedLiveCard({
               uri={session.sellerAvatar}
               style={styles.featuredAvatar}
               contentFit="cover"
+              accessible={false}
             />
             <View style={styles.featuredSellerText}>
               <View style={styles.featuredNameRow}>
                 <Text style={styles.featuredSellerName} numberOfLines={1}>{session.sellerName}</Text>
                 {session.sellerVerified && (
-                  <Ionicons name="checkmark-circle" size={16} color={colors.commerceTrust} />
+                  <Ionicons name="checkmark-circle" size={16} color={colors.commerceTrust} accessible={false} />
                 )}
               </View>
               <Text style={styles.featuredCategory}>{session.category}</Text>
@@ -218,6 +220,7 @@ const ReplayCard = React.memo(function ReplayCard({
           style={StyleSheet.absoluteFill}
           containerStyle={StyleSheet.absoluteFill}
           contentFit="cover"
+          accessible={false}
         />
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.6)']}
@@ -225,8 +228,8 @@ const ReplayCard = React.memo(function ReplayCard({
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
-        <View style={styles.replayPlayOverlay}>
-          <Ionicons name="play" size={20} color={colors.scrimTextPrimary} />
+        <View style={styles.replayPlayIcon}>
+          <Ionicons name="play" size={20} color={colors.scrimTextPrimary} accessible={false} />
         </View>
         {durationLabel && (
           <View style={styles.replayDurationBadge}>
@@ -240,12 +243,13 @@ const ReplayCard = React.memo(function ReplayCard({
             uri={session.sellerAvatar}
             style={styles.replayAvatar}
             contentFit="cover"
+            accessible={false}
           />
           <View style={styles.replaySellerText}>
             <View style={styles.replayNameRow}>
               <Text style={styles.replaySellerName} numberOfLines={1}>{session.sellerName}</Text>
               {session.sellerVerified && (
-                <Ionicons name="checkmark-circle" size={12} color={colors.brand} />
+                <Ionicons name="checkmark-circle" size={12} color={colors.brand} accessible={false} />
               )}
             </View>
             <Text style={styles.replayEndedLabel}>{endedLabel}</Text>
@@ -286,9 +290,10 @@ const UpcomingRow = React.memo(function UpcomingRow({
             style={StyleSheet.absoluteFill}
             containerStyle={StyleSheet.absoluteFill}
             contentFit="cover"
+            accessible={false}
           />
-          <View style={styles.upcomingThumbOverlay}>
-            <Ionicons name="time-outline" size={16} color={colors.scrimTextPrimary} />
+          <View style={styles.upcomingThumbIcon}>
+            <Ionicons name="time-outline" size={16} color={colors.scrimTextPrimary} accessible={false} />
           </View>
         </View>
         <View style={styles.upcomingBody}>
@@ -298,15 +303,16 @@ const UpcomingRow = React.memo(function UpcomingRow({
               uri={session.sellerAvatar}
               style={styles.upcomingAvatar}
               contentFit="cover"
+              accessible={false}
             />
             <Text style={styles.upcomingSellerName} numberOfLines={1}>{session.sellerName}</Text>
             {session.sellerVerified && (
-              <Ionicons name="checkmark-circle" size={14} color={colors.brand} />
+              <Ionicons name="checkmark-circle" size={14} color={colors.brand} accessible={false} />
             )}
           </View>
           <Text style={styles.upcomingTitle} numberOfLines={2}>{session.title}</Text>
           <View style={styles.upcomingMetaRow}>
-            <Ionicons name="people-outline" size={16} color={styles.upcomingMetaText.color} />
+            <Ionicons name="people-outline" size={16} color={styles.upcomingMetaText.color} accessible={false} />
             <Text style={styles.upcomingMetaText}>{session.watchers} {t('upcoming.waiting')}</Text>
           </View>
         </View>
@@ -320,6 +326,7 @@ const UpcomingRow = React.memo(function UpcomingRow({
         activeOpacity={0.8}
         scaleValue={0.95}
         hapticFeedback="selection"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         accessibilityRole="button"
         accessibilityLabel={notified ? `Notifications on for ${session.title}` : `Notify me when ${session.title} starts`}
       >
@@ -327,6 +334,7 @@ const UpcomingRow = React.memo(function UpcomingRow({
           name={notified ? 'notifications' : 'notifications-outline'}
           size={16}
           color={notified ? colors.scrimTextPrimary : styles.notifyBtnText.color}
+          accessible={false}
         />
         <Text style={[styles.notifyBtnText, notified && styles.notifyBtnTextActive]}>
           {notified ? t('upcoming.notified') : t('upcoming.notifyMe')}
@@ -416,7 +424,7 @@ export default function LiveShoppingHomeScreen() {
   const styles = useStyles();
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { width } = useWindowDimensions();
   const { t } = useAppTranslation('liveShopping');
 
@@ -463,8 +471,8 @@ export default function LiveShoppingHomeScreen() {
   );
 
   const formatBid = useCallback(
-    (gbp: number) => formatFromFiat(gbp, currencyCode) ?? '',
-    [formatFromFiat, currencyCode],
+    (gbp: number) => formatFromFiat(gbp, 'GBP') ?? '',
+    [formatFromFiat],
   );
 
   const formatScheduled = useCallback((iso: string) => {
@@ -539,7 +547,7 @@ export default function LiveShoppingHomeScreen() {
             <Text style={styles.headerTitle}>{t('header.title')}</Text>
             <LivePulse size={10} color={colors.danger} />
             {LIVE_SHOPPING_DEMO_MODE && (
-              <View style={styles.demoPill}>
+              <View style={styles.demoPill} accessible={false}>
                 <Text style={styles.demoPillText}>{t('live.demo')}</Text>
               </View>
             )}
@@ -629,7 +637,7 @@ export default function LiveShoppingHomeScreen() {
               </View>
             ) : (
               <View style={styles.noLiveStrip}>
-                <Ionicons name="radio-button-off" size={20} color={colors.textMuted} />
+                <Ionicons name="radio-button-off" size={20} color={colors.textMuted} accessible={false} />
                 <Text style={styles.noLiveText}>{t('noLive.text')}</Text>
               </View>
             )}
@@ -777,7 +785,7 @@ function useStyles() {
           paddingHorizontal: Space.sm,
           paddingVertical: Space.xs,
           borderRadius: Radius.full,
-          backgroundColor: 'rgba(255,59,48,0.92)' },
+          backgroundColor: colors.danger },
         liveBadgeCompact: {
           paddingHorizontal: Space.xs + 2,
           paddingVertical: Space.xs / 2 + 1,
@@ -859,8 +867,7 @@ function useStyles() {
           lineHeight: TypographyV2.label.lineHeight,
           fontFamily: TypographyV2.label.fontFamily,
           color: colors.scrimTextSecondary,
-          letterSpacing: TypographyV2.label.letterSpacing,
-          textTransform: 'uppercase' },
+          letterSpacing: TypographyV2.label.letterSpacing },
         featuredBidValue: {
           fontSize: TypographyV2.priceList.size,
           lineHeight: TypographyV2.priceList.lineHeight,
@@ -886,16 +893,10 @@ function useStyles() {
           height: UPCOMING_THUMB_SIZE,
           borderRadius: Radius.md,
           overflow: 'hidden' },
-        upcomingThumbOverlay: {
+        upcomingThumbIcon: {
           position: 'absolute',
           bottom: Space.xs,
-          right: Space.xs,
-          width: Space.sm + 6,
-          height: Space.sm + 6,
-          borderRadius: Radius.lg,
-          backgroundColor: colors.overlay,
-          alignItems: 'center',
-          justifyContent: 'center' },
+          right: Space.xs },
         upcomingBody: {
           flex: 1,
           gap: Space.xs / 2 },
@@ -978,16 +979,10 @@ function useStyles() {
           width: '100%',
           height: 180,
           position: 'relative' },
-        replayPlayOverlay: {
+        replayPlayIcon: {
           position: 'absolute',
           bottom: Space.sm,
-          left: Space.sm,
-          width: Space.xl + Space.xs,
-          height: Space.xl + Space.xs,
-          borderRadius: Radius.full,
-          backgroundColor: colors.overlay,
-          alignItems: 'center',
-          justifyContent: 'center' },
+          left: Space.sm },
         replayDurationBadge: {
           position: 'absolute',
           bottom: Space.sm,

@@ -19,6 +19,7 @@ import { EmptyState } from '../components/EmptyState';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { PinterestMasonryGrid } from '../components/discover/PinterestMasonryGrid';
 import { SkeletonLoader } from '../components/SkeletonLoader';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { Space, Typography, Control, Stroke, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useStore, type BrowseSortOption } from '../store/useStore';
@@ -414,7 +415,7 @@ export default function CategoryDetailScreen() {
             <PinterestMasonryGrid
               items={gridData}
               onPressItem={(item) =>
-                navigation.push('ItemDetail', { itemId: item.id })
+                openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'CategoryDetail' })
               }
               numColumns={2}
               showSaveButton

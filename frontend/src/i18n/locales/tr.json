@@ -60,7 +60,10 @@
       "off": "Kapalı",
       "none": "Yok",
       "notSignedIn": "Oturum açılmadı"
-    }
+    },
+    "on": "Açık",
+    "off": "Kapalı",
+    "none": "Yok"
   },
   "home": {
     "brandTitle": "Thryftverse",
@@ -210,15 +213,20 @@
       "helpLegal": "Yardım & yasal",
       "advanced": "Gelişmiş",
       "account": "Hesap",
-      "profile": "Profile",
-      "accountSecurity": "Account & security",
-      "privacy": "Privacy",
-      "selling": "Selling",
-      "appearance": "Appearance",
-      "dataStorage": "Data & storage",
-      "support": "Support",
-      "about": "About",
-      "developer": "Developer"
+      "profile": "Profil",
+      "accountSecurity": "Hesap ve Güvenlik",
+      "privacy": "Gizlilik",
+      "selling": "Satış",
+      "appearance": "Görünüm",
+      "dataStorage": "Veri ve Depolama",
+      "support": "Destek",
+      "about": "Hakkında",
+      "developer": "Geliştirici",
+      "profileLogin": "Profil ve giriş",
+      "privacyData": "Gizlilik ve veriler",
+      "paymentsPayouts": "Ödemeler ve ödemeler",
+      "sellerTools": "Satıcı araçları",
+      "aboutSupport": "Hakkında ve destek"
     },
     "rows": {
       "verification": "Doğrulama",
@@ -310,9 +318,8 @@
       "autoTranslate": "Mesajları otomatik çevir",
       "autoTranslateEnabled": "Yabancı mesajlar otomatik çevrildi",
       "autoTranslateDisabled": "Yabancı mesajları manuel çevirmek için dokunun",
-      "enabled": "On",
-      "disabled": "Off",
-      "appVersion": "v{{version}}"
+      "twoFADisabled": "2FA devre dışı",
+      "blockedUsersSubtitle": "Engellenen hesapları yönet"
     },
     "toast": {
       "themeApplying": "{{theme}} teması uygulanıyor…",
@@ -402,75 +409,57 @@
       "manageListing": "İlanı yönet"
     },
     "edit": {
-      "couldNotLoad": "Couldn't load this listing",
-      "retryLoad": "Retry",
-      "discardTitle": "Discard changes?",
-      "discardMessage": "Your changes haven't been saved.",
-      "discard": "Discard",
-      "keepEditing": "Keep editing",
-      "unsaved": "Unsaved changes",
-      "updated": "Listing updated",
-      "updateFailed": "Couldn't update the listing. Try again.",
-      "titlePlaceholder": "e.g. Vintage Levi's 501 Denim Jacket",
-      "descriptionPlaceholder": "Describe the item's condition, size, and details",
-      "selectCategory": "Select category",
-      "selectCondition": "Select condition",
-      "selectSize": "Select size",
-      "selectBrand": "Select brand",
-      "select": "Select",
-      "remove": "Remove",
-      "pricing": "Pricing",
+      "couldNotLoad": "Bu ilan yüklenemedi",
+      "retryLoad": "Tekrar dene",
+      "discardTitle": "Değişiklikler silinsin mi?",
+      "discardMessage": "Değişiklikleriniz henüz kaydedilmedi.",
+      "discard": "Sil",
+      "keepEditing": "Düzenlemeye devam et",
+      "unsaved": "Kaydedilmemiş değişiklikler",
+      "updated": "İlan güncellendi",
+      "updateFailed": "İlan güncellenemedi. Tekrar deneyin.",
+      "titlePlaceholder": "ör. Vintage Levi's 501 Denim Ceket",
+      "descriptionPlaceholder": "Ürünün durumunu, bedenini ve detaylarını açıklayın",
+      "selectCategory": "Kategori seç",
+      "selectCondition": "Durum seç",
+      "selectSize": "Beden seç",
+      "selectBrand": "Marka seç",
+      "select": "Seç",
+      "remove": "Kaldır",
+      "pricing": "Fiyatlandırma",
       "format": "Format",
-      "formatFixedPrice": "Fixed price",
-      "formatHelper": "Choose how buyers can purchase this item",
-      "restricted": "Some categories can't be listed yet",
-      "shipping": "Shipping",
-      "shippingMethod": "Shipping method",
-      "shippingStandard": "Standard",
-      "shippingExpress": "Express",
-      "selectMethod": "Select method",
-      "whoPays": "Who pays shipping?",
-      "selectPayer": "Select payer",
-      "payerSeller": "You pay",
-      "payerBuyer": "Buyer pays",
-      "toggleShippingMethod": "Change shipping method",
-      "toggleShippingPayer": "Change who pays shipping",
-      "expandPhotoTips": "Photo tips",
-      "collapsePhotoTips": "Hide photo tips",
-      "showTips": "Show tips",
-      "hideTips": "Hide tips",
-      "tipsToImprove": "Tips to improve your listing",
-      "listingQuality": "Listing quality",
-      "allowCamera": "Allow camera access",
-      "allowGallery": "Allow photo library access",
-      "noPermission": "Camera access is off. Enable it in Settings.",
-      "couldNotOpenCamera": "Couldn't open the camera",
-      "couldNotOpenLibrary": "Couldn't open your photo library",
-      "mediaFailedRetry": "A photo failed to load. Retry.",
-      "retry": "Retry",
-      "lockedPhotos": "Photos locked while editing",
-      "statusDraft": "Draft",
-      "statusActive": "Active",
-      "statusPaused": "Paused",
-      "statusSold": "Sold",
-      "saving": "Saving…",
-      "saved": "Saved",
-      "offlineChanges": "Offline changes",
-      "conflict": "Conflict",
-      "conflictTitle": "Listing edited elsewhere",
-      "conflictMessage": "This listing was edited on another device. Would you like to:",
-      "conflictKeepMine": "Keep my changes",
-      "conflictUseTheirs": "Use their changes",
-      "conflictCompare": "Compare changes",
-      "conflictCompareTitle": "Your changes vs their changes",
-      "draftFound": "Unsaved draft found",
-      "draftRestore": "Restore draft from {date}?",
-      "draftRestoreAction": "Restore",
-      "draftDiscard": "Discard draft",
-      "saveButton": "Save",
-      "retrySave": "Retry",
-      "savingButton": "Saving…",
-      "mediaUploading": "Uploading media…"
+      "formatFixedPrice": "Sabit fiyat",
+      "formatHelper": "Alıcıların bu ürünü nasıl satın alabileceğini seçin",
+      "restricted": "Bazı kategoriler henüz listelenemiyor",
+      "shipping": "Kargo",
+      "shippingMethod": "Kargo yöntemi",
+      "shippingStandard": "Standart",
+      "shippingExpress": "Ekspres",
+      "selectMethod": "Yöntem seç",
+      "whoPays": "Kargoyu kim ödüyor?",
+      "selectPayer": "Ödeyeni seç",
+      "payerSeller": "Sen ödersin",
+      "payerBuyer": "Alıcı öder",
+      "toggleShippingMethod": "Kargo yöntemini değiştir",
+      "toggleShippingPayer": "Kargoyu ödeyeni değiştir",
+      "expandPhotoTips": "Fotoğraf ipuçları",
+      "collapsePhotoTips": "Fotoğraf ipuçlarını gizle",
+      "showTips": "İpuçlarını göster",
+      "hideTips": "İpuçlarını gizle",
+      "tipsToImprove": "İlanınızı geliştirmek için ipuçları",
+      "listingQuality": "İlan kalitesi",
+      "allowCamera": "Kamera erişimine izin ver",
+      "allowGallery": "Fotoğraf kitaplığına erişime izin ver",
+      "noPermission": "Kamera erişimi kapalı. Ayarlar'dan etkinleştirin.",
+      "couldNotOpenCamera": "Kamera açılamadı",
+      "couldNotOpenLibrary": "Fotoğraf kitaplığınız açılamadı",
+      "mediaFailedRetry": "Bir fotoğraf yüklenemedi. Tekrar deneyin.",
+      "retry": "Tekrar dene",
+      "lockedPhotos": "Düzenleme sırasında fotoğraflar kilitli",
+      "statusDraft": "Taslak",
+      "statusActive": "Aktif",
+      "statusPaused": "Duraklatıldı",
+      "statusSold": "Satıldı"
     }
   },
   "messaging": {
@@ -518,14 +507,12 @@
       "undoMessageDeletion": "Mesaj silmeyi geri al",
       "reactWith": "{{emoji}} ile tepki ver",
       "openLink": "{{domain}} bağlantısını aç",
-      "typingIndicator": "Yazıyor...",
-      "edited": "Edited"
+      "typingIndicator": "Yazıyor..."
     },
     "inbox": {
       "primary": "Ana",
       "buying": "Alım",
       "selling": "Satım",
-      "requests": "İstekler",
       "tabBadge": "{{label}} sekmesi{{plural}}",
       "newBadge": ", {{count}} yeni",
       "openConversation": "{{title}} öğesini aç",
@@ -614,11 +601,7 @@
       "shareListing": "İlanı Paylaş",
       "orderStatus": "Sipariş Durumu",
       "payment": "Ödeme",
-      "agent": "Ajan",
-      "location": "Location",
-      "shareLocation": "Share a pinned location",
-      "document": "Document",
-      "shareDocument": "Share a file from your device"
+      "agent": "Ajan"
     },
     "offers": {
       "declineOffer": "Teklifi reddet",
@@ -735,7 +718,9 @@
       "title": "Ödemeleri ThryftVerse üzerinde tutun",
       "body": "Platform dışı ödemeler Alıcı Koruması kapsamında değildir. Bu meşru bir işlemse, korunmak için uygulamada tamamlayın.",
       "dismiss": "Uyarıyı kapat",
-      "reportConversation": "Bu sohbeti raporla"
+      "reportConversation": "Bu sohbeti raporla",
+      "scamWarningBody": "Bu mesaj platform dışı iletişim bilgileri içerebilir. Kendinizi korumak için ödemeleri ve iletişimi Thryftverse üzerinde tutun.",
+      "scamBlockToast": "Bu mesaj olası dolandırıcılıktan sizi korumak için engellendi. Ödemeleri platform üzerinde tutun."
     },
     "search": {
       "placeholder": "Sohbette ara",
@@ -897,18 +882,6 @@
       "statusDelivered": "Teslim edildi",
       "statusCancelled": "İptal edildi",
       "statusRefunded": "Geri ödendi"
-    },
-    "sellerAnalytics": {
-      "metricsTitle": "What do these metrics mean?",
-      "metricsExpand": "Show metric definitions",
-      "metricsCollapse": "Hide metric definitions",
-      "exportReport": "Export report",
-      "exporting": "Exporting…",
-      "exportSuccess": "Report exported",
-      "exportFailed": "Couldn't export report. Try again.",
-      "scopeListing": "Per listing",
-      "scopeSeller": "Per seller",
-      "scopePlatform": "Platform-wide"
     }
   },
   "myProfile": {
@@ -1231,8 +1204,8 @@
       "minNextBid": "En düşük sonraki teklif",
       "cancel": "İptal",
       "close": "Kapat",
-      "riskDisclosure": "Bids are binding. If you win, you must complete payment within 48 hours. No retraction after confirmation.",
-      "paymentDeadline": "Payment due within 48 hours of auction close."
+      "riskDisclosure": "Teklifler bağlayıcıdır. Kazanırsanız, ödemeyi 48 saat içinde tamamlamalısınız. Onaydan sonra geri alınamaz.",
+      "paymentDeadline": "Açık artırma kapanışından sonra 48 saat içinde ödeme gereklidir."
     },
     "unknown": {
       "title": "Teklif durumu bilinmiyor",
@@ -1783,115 +1756,18 @@
       "appealFailed": "İtiraz gönderilemedi. Bağlantınızı kontrol edin ve tekrar deneyin."
     }
   },
-  "stateCopy": {
-    "actions": {
-      "tryAgain": "Try again",
-      "refresh": "Refresh",
-      "clearFilters": "Clear filters"
-    },
-    "conversations": {
-      "loading": "Loading your conversations…",
-      "empty": "No conversations yet. Start one from a listing or profile.",
-      "emptyFiltered": "No conversations match this filter.",
-      "error": "Couldn't load your conversations. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached conversations.",
-      "stale": "These conversations may be out of date. Pull to refresh.",
-      "permissionDenied": "Sign in to see your conversations."
-    },
-    "messages": {
-      "loading": "Loading messages…",
-      "empty": "No messages yet. Say hello to start the conversation.",
-      "error": "Couldn't load messages. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached messages.",
-      "stale": "These messages may be out of date. Pull to refresh."
-    },
-    "listings": {
-      "loading": "Loading listings…",
-      "empty": "No listings yet. List your first item to start selling.",
-      "emptyFiltered": "No listings match these filters.",
-      "error": "Couldn't load listings. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached listings.",
-      "stale": "These listings may be out of date. Pull to refresh."
-    },
-    "inventory": {
-      "loading": "Loading your inventory…",
-      "empty": "No items in your inventory. List an item to get started.",
-      "emptyFiltered": "No items match these filters.",
-      "error": "Couldn't load your inventory. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached inventory.",
-      "stale": "Your inventory may be out of date. Pull to refresh."
-    },
-    "orders": {
-      "loading": "Loading your orders…",
-      "empty": "No orders yet. When you buy or sell something, your orders will show up here.",
-      "emptyFiltered": "No orders match these filters.",
-      "error": "Couldn't load your orders. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached orders.",
-      "stale": "These orders may be out of date. Pull to refresh."
-    },
-    "analytics": {
-      "loading": "Loading your analytics…",
-      "empty": "No analytics data yet. List an item to start tracking performance.",
-      "emptyFiltered": "No data for this period.",
-      "error": "Couldn't load your analytics. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached analytics.",
-      "stale": "This data may be out of date. Pull to refresh."
-    },
-    "wallet": {
-      "loading": "Loading your wallet…",
-      "empty": "No wallet activity yet. Your balance and transactions will appear here.",
-      "emptyFiltered": "No transactions match these filters.",
-      "error": "Couldn't load your wallet. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached wallet data.",
-      "stale": "Your wallet balance may be out of date. Pull to refresh."
-    },
-    "search": {
-      "loading": "Searching…",
-      "empty": "No results found. Try a different search term.",
-      "emptyFiltered": "No results match these filters.",
-      "error": "Search isn't available right now. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Search requires a connection.",
-      "stale": "These results may be out of date. Search again to refresh."
-    },
-    "sellerHub": {
-      "loading": "Loading your seller dashboard…",
-      "empty": "No seller activity yet. List an item to start selling.",
-      "emptyFiltered": "No data for this period.",
-      "error": "Couldn't load your seller dashboard. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached seller data.",
-      "stale": "This data may be out of date. Pull to refresh."
-    },
-    "profile": {
-      "loading": "Loading profile…",
-      "empty": "This profile has no public activity yet.",
-      "emptyFiltered": "No listings match these filters.",
-      "error": "Couldn't load this profile. Check your connection and try again.",
-      "errorRecovery": "Try again",
-      "offline": "You're offline. Showing cached profile data.",
-      "stale": "This profile may be out of date. Pull to refresh."
-    }
-  },
   "coOwn": {
     "tradeComposer": {
-      "riskDisclosure": "Fractional ownership is irrevocable. Shares are subject to corporate actions and market volatility. Past performance does not guarantee future returns. You may lose some or all of your investment.",
-      "noGuarantee": "No guaranteed returns",
-      "irrevocable": "Irrevocable commitment"
+      "riskDisclosure": "Hisseli mülkiyet geri alınamaz. Paylar kurumsal eylemlere ve piyasa oynaklığına tabidir. Geçmiş performans gelecekteki getirileri garanti etmez. Yatırımınızın bir kısmını veya tamamını kaybedebilirsiniz.",
+      "noGuarantee": "Garantili getiri yok",
+      "irrevocable": "Geri alınamaz taahhüt"
     },
     "detail": {
-      "issuerTrust": "Issuer",
-      "sharePrice": "Share price",
-      "totalValue": "Total asset value",
-      "ownershipPercent": "Your ownership",
-      "distributions": "Distributions"
+      "issuerTrust": "İhraççı",
+      "sharePrice": "Pay başına fiyat",
+      "totalValue": "Toplam varlık değeri",
+      "ownershipPercent": "Sahiplik payınız",
+      "distributions": "Dağıtımlar"
     }
   }
 }

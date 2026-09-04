@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, RefreshControl, Pressable } from 'react-native';
-import type { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -37,18 +37,17 @@ import { IconSize, type SemanticIconName } from '../theme/iconTokens';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
-// ── Task metadata: icon, label, route per task type ──
-// Single source of truth for how each task type renders. No branching
-// scattered across the screen — one map, one grammar.
-const TASK_META: Record<SellerHubTaskType, {
-  icon: SemanticIconName | React.ComponentProps<typeof Ionicons>['name'];
-  route: keyof RootStackParamList;
-}> = {
-  ship_order: { icon: 'car-outline', route: 'MyOrders' },
-  respond_offer: { icon: 'chat', route: 'Inbox' },
-  listing_issue: { icon: 'edit', route: 'InventoryManagement' },
-  catalogue_awaiting: { icon: 'download', route: 'CatalogImportProgress' },
-  payout_hold: { icon: 'wallet', route: 'Wallet' } };
+// ── Task icon metadata per task type ──
+// The route and label come from the backend (task.actionRoute /
+// task.actionLabel) — this map holds only the icon, which is a pure
+// UI concern. Keeping the route on the server means task destinations
+// can change without a frontend release.
+const TASK_ICON: Record<SellerHubTaskType, SemanticIconName | React.ComponentProps<typeof Ionicons>['name']> = {
+  ship_order: 'car-outline',
+  respond_offer: 'chat',
+  listing_issue: 'edit',
+  catalogue_awaiting: 'download',
+  payout_hold: 'wallet' };
 
 function formatDueAt(dueAt: string | null): string | null {
   if (!dueAt) return null;
@@ -95,10 +94,10 @@ export default function SellerHubScreen() {
 
   const formatMoney = useCallback((value: number): string => {
     if (value >= 1000) {
-      return `${formatFromFiat(value, currencyCode, { displayMode: 'fiat', minimumFractionDigits: 1 })}k`;
+      return `${formatFromFiat(value / 1000, 'GBP', { displayMode: 'fiat', minimumFractionDigits: 1 })}k`;
     }
-    return formatFromFiat(value, currencyCode, { displayMode: 'fiat', minimumFractionDigits: 0 });
-  }, [formatFromFiat, currencyCode]);
+    return formatFromFiat(value, 'GBP', { displayMode: 'fiat', minimumFractionDigits: 0 });
+  }, [formatFromFiat]);
 
   const [overview, setOverview] = useState<SellerHubOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -215,14 +214,41 @@ export default function SellerHubScreen() {
   const { topTask, tasks, money, inventory, businessPulse } = overview;
 
   // ── Navigate to task route ──
+  // The route comes from the backend (task.actionRoute) so task
+  // destinations are server-authoritative, not hardcoded on-device.
   const navigateToTask = (task: SellerHubTask) => {
     haptics.tap();
-    const meta = TASK_META[task.type];
-    // Each target route takes no required params, so we navigate without
-    // params. The cast is needed because TS can't prove the param shape
-    // for a union of route keys at compile time.
-    (navigation as unknown as { navigate: (route: keyof RootStackParamList) => void }).navigate(meta.route);
+    (navigation as unknown as { navigate: (route: keyof RootStackParamList) => void }).navigate(task.actionRoute as keyof RootStackParamList);
   };
+
+  // ── Compressed secondary facts: counts derived from tasks + inventory ──
+  // Per Report 17 §6.2 + Design.md §9.4: dense rows (56-60pt), not cards.
+  // Only show rows with real signal — zero-count rows are omitted.
+  const pendingOrdersCount = useMemo(
+    () => tasks.filter((t) => t.type === 'ship_order').reduce((sum, t) => sum + t.count, 0),
+    [tasks],
+  );
+  const unansweredOffersCount = useMemo(
+    () => tasks.filter((t) => t.type === 'respond_offer').reduce((sum, t) => sum + t.count, 0),
+    [tasks],
+  );
+  const listingIssuesCount = useMemo(
+    () => tasks.filter((t) => t.type === 'listing_issue').reduce((sum, t) => sum + t.count, 0),
+    [tasks],
+  );
+
+  // ── Trend indicator for business pulse (P2-08) ──
+  // Renders ▲/▼/— with percentage when the backend provides a week-over-week
+  // comparison. Absent = no trend shown (honest, no fabricated delta).
+  const renderTrend = useCallback(
+    (pct: number | null | undefined): string | undefined => {
+      if (pct == null || !Number.isFinite(pct)) return undefined;
+      if (Math.abs(pct) < 0.5) return '— flat vs last week';
+      const arrow = pct > 0 ? '▲' : '▼';
+      return `${arrow} ${Math.abs(Math.round(pct))}% vs last week`;
+    },
+    [],
+  );
 
   return (
     <TaskQueueScreen
@@ -232,375 +258,454 @@ export default function SellerHubScreen() {
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       contentContainerStyle={{ paddingHorizontal: 0 }}
       urgentTask={
+        /* ── URGENT TASK HERO — the dominant first-viewport object ──
+           Per Report 17 §6.1: one critical task, only if real.
+           Verification banner sits above when it gates a capability.
+           If no tasks and all sources fresh → "all caught up" positive state.
+           If no tasks but sources unavailable → truthful partial notice. */
         <>
-        {/* ── Verification status — only when it gates a real capability ── */}
-        {!isVerified && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.verificationBanner,
-              { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder },
-              pressed && { opacity: 0.7 },
-            ]}
-            onPress={() => { haptics.tap(); navigation.navigate('KYCVerification'); }}
-            accessibilityRole="button"
-            accessibilityLabel="Get verified to build buyer trust"
-            accessibilityHint="Opens the identity verification flow"
-          >
-            <AppIcon name="verified" size={IconSize.sm} color="warning" opticalCenter accessible={false} />
-            <View style={styles.verificationBannerText}>
-              <Text style={[styles.verificationBannerTitle, { color: colors.textPrimary }]}>
-                Get verified
-              </Text>
-              <Text style={[styles.verificationBannerSub, { color: colors.textSecondary }]}>
-                Build buyer trust with a verified badge
-              </Text>
-            </View>
-            <AppIcon name="forward" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-          </Pressable>
-        )}
+          {!isVerified && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.verificationBanner,
+                { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder },
+                pressed && { opacity: 0.7 },
+              ]}
+              onPress={() => { haptics.tap(); navigation.navigate('KYCVerification'); }}
+              accessibilityRole="button"
+              accessibilityLabel="Get verified to build buyer trust"
+              accessibilityHint="Opens the identity verification flow"
+            >
+              <AppIcon name="verified" size={IconSize.sm} color="warning" opticalCenter accessible={false} />
+              <View style={styles.verificationBannerText}>
+                <Text style={[styles.verificationBannerTitle, { color: colors.textPrimary }]}>
+                  Get verified
+                </Text>
+                <Text style={[styles.verificationBannerSub, { color: colors.textSecondary }]}>
+                  Build buyer trust with a verified badge
+                </Text>
+              </View>
+              <AppIcon name="forward" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
+            </Pressable>
+          )}
 
-        {/* ── Top task — the dominant first-viewport object ──
-            Per Report 17 §6.1: "one critical task, only if real".
-            This is the single most important thing the seller must do.
-            Flat, no card chrome — the task IS the content. */}
-        {topTask && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.topTaskRow,
-              { backgroundColor: topTask.priority === 'critical' ? colors.dangerSubtle : colors.surfaceAlt },
-              pressed && { opacity: 0.7 },
-            ]}
-            onPress={() => navigateToTask(topTask)}
-            accessibilityRole="button"
-            accessibilityLabel={`${topTask.actionLabel}, ${topTask.count} items`}
-            accessibilityHint={`Opens ${topTask.actionLabel}`}
-          >
-            <View style={styles.topTaskIconWrap}>
-              <AppIcon
-                name={TASK_META[topTask.type].icon}
-                size={IconSize.lg}
-                color={topTask.priority === 'critical' ? 'danger' : 'brand'}
-                opticalCenter
-                accessible={false}
-              />
-            </View>
-            <View style={styles.topTaskContent}>
-              <Text style={[styles.topTaskTitle, { color: colors.textPrimary }]} numberOfLines={2}>
-                {topTask.count > 1
-                  ? `${topTask.count} ${topTask.actionLabel.toLowerCase()}`
-                  : topTask.actionLabel}
+          {topTask && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.topTaskRow,
+                { backgroundColor: topTask.priority === 'critical' ? colors.dangerSubtle : colors.surfaceAlt },
+                pressed && { opacity: 0.7 },
+              ]}
+              onPress={() => navigateToTask(topTask)}
+              accessibilityRole="button"
+              accessibilityLabel={`${topTask.actionLabel}, ${topTask.count} items`}
+              accessibilityHint={`Opens ${topTask.actionLabel}`}
+            >
+              <View style={styles.topTaskIconWrap}>
+                <AppIcon
+                  name={TASK_ICON[topTask.type]}
+                  size={IconSize.lg}
+                  color={topTask.priority === 'critical' ? 'danger' : 'brand'}
+                  opticalCenter
+                  accessible={false}
+                />
+              </View>
+              <View style={styles.topTaskContent}>
+                <Text style={[styles.topTaskTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                  {topTask.count > 1
+                    ? `${topTask.count} ${topTask.actionLabel.toLowerCase()}`
+                    : topTask.actionLabel}
+                </Text>
+                {(() => {
+                  const dueLabel = formatDueAt(topTask.dueAt);
+                  if (dueLabel) {
+                    return (
+                      <Text
+                        style={[
+                          styles.topTaskDue,
+                          { color: dueLabel === 'Overdue' ? colors.danger : colors.textMuted },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {dueLabel}
+                      </Text>
+                    );
+                  }
+                  if (topTask.consequence?.kind === 'money' && topTask.consequence.amountGbp) {
+                    return (
+                      <Text style={[styles.topTaskDue, { color: colors.textMuted }]} numberOfLines={1}>
+                        {formatMoney(topTask.consequence.amountGbp)} at stake
+                      </Text>
+                    );
+                  }
+                  return null;
+                })()}
+              </View>
+              <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
+            </Pressable>
+          )}
+
+          {/* ── "All caught up" — ONLY when all task sources are fresh ── */}
+          {tasks.length === 0 && allTaskSourcesFresh && (
+            <View style={styles.allCaughtUp}>
+              <AppIcon name="checkmark-circle" focused size={IconSize.md} color="success" opticalCenter accessible={false} />
+              <Text style={[styles.allCaughtUpText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+                You're all caught up
               </Text>
-              {(() => {
-                const dueLabel = formatDueAt(topTask.dueAt);
-                if (dueLabel) {
-                  return (
-                    <Text
-                      style={[
-                        styles.topTaskDue,
-                        { color: dueLabel === 'Overdue' ? colors.danger : colors.textMuted },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {dueLabel}
-                    </Text>
-                  );
-                }
-                if (topTask.consequence?.kind === 'money' && topTask.consequence.amountGbp) {
-                  return (
-                    <Text style={[styles.topTaskDue, { color: colors.textMuted }]} numberOfLines={1}>
-                      {formatMoney(topTask.consequence.amountGbp)} at stake
-                    </Text>
-                  );
-                }
-                return null;
-              })()}
             </View>
-            <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-          </Pressable>
-        )}
+          )}
+
+          {/* ── Partial data notice — when some sources are unavailable ── */}
+          {tasks.length === 0 && !allTaskSourcesFresh && (
+            <View style={styles.partialNotice}>
+              <AppIcon name="offline" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
+              <Text style={[styles.partialNoticeText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
+                Some data is unavailable. Pull to refresh.
+              </Text>
+            </View>
+          )}
         </>
       }
     >
-      {/* ── Money posture — available, processing, held ──
-            Per Report 17 §6.1: "{currencySymbol}428 available {currencySymbol}91 processing {currencySymbol}35 held"
-            Flat metric lines, not cards. One line per state.
-            Asking-price inventory value is NOT shown here — it's not money. */}
-        {money && (
-          <View style={styles.moneySection}>
-            <FlagshipMetricLine
-              label="Available"
-              value={formatMoney(money.availableGbp)}
-              subLabel={money.nextPayoutAt ? `Next payout ${new Date(money.nextPayoutAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : undefined}
-              emphasis
-            />
-            <FlagshipMetricLine
-              label="Processing"
-              value={formatMoney(money.processingGbp)}
-              subLabel="Pending escrow release"
-              separated
-            />
-            {money.heldGbp > 0 && (
-              <FlagshipMetricLine
-                label="Held in reserve"
-                value={formatMoney(money.heldGbp)}
-                subLabel="Rolling reserve"
-                separated
-              />
-            )}
-          </View>
-        )}
+      {/* ════════════════════════════════════════════════════════════════
+          SECONDARY FACTS — compressed, below the hero
+          Per Design.md §9.4: "Seller Hub gives more space to one urgent
+          task, then compresses secondary facts."
+          ════════════════════════════════════════════════════════════════ */}
 
-        {/* ── Tasks — flat rows, one per task type ──
-            Per Report 17 §6.2: "Flat task rows with item identity, due
-            time and consequence." No card wrapping. */}
-        {tasks.length > 0 && (
-          <FlagshipFormSection variant="flat" title="Needs you">
-            {tasks.map((task) => {
-              const meta = TASK_META[task.type];
-              const dueLabel = formatDueAt(task.dueAt);
-              const subtitleParts: string[] = [];
-              if (dueLabel) subtitleParts.push(dueLabel);
-              if (task.consequence?.kind === 'money' && task.consequence.amountGbp) {
-                subtitleParts.push(`${formatMoney(task.consequence.amountGbp)} at stake`);
-              } else if (task.consequence?.kind === 'trust') {
-                subtitleParts.push('Affects seller rating');
-              } else if (task.consequence?.kind === 'listing') {
-                subtitleParts.push('Missing required details');
-              }
-              return (
-                <FlagshipNavigationRow
-                  key={task.id}
-                  title={task.count > 1
-                    ? `${task.count} ${task.actionLabel.toLowerCase()}`
-                    : task.actionLabel}
-                  subtitle={subtitleParts.join(' · ') || undefined}
-                  icon={meta.icon}
-                  iconColor={task.priority === 'critical' ? colors.danger : undefined}
-                  onPress={() => navigateToTask(task)}
-                  accessibilityLabel={`${task.actionLabel}, ${task.count} items${dueLabel ? `, ${dueLabel}` : ''}`}
-                />
-              );
-            })}
-          </FlagshipFormSection>
-        )}
-
-        {/* ── "All caught up" — ONLY when all task sources are fresh ──
-            Per Report 17 P0: suppress false "all caught up" when
-            order/offer sources aren't checked. This only renders when
-            the freshness matrix confirms all sources are fresh AND
-            there are no tasks. */}
-        {tasks.length === 0 && allTaskSourcesFresh && (
-          <View style={styles.allCaughtUp}>
-            <AppIcon name="checkmark-circle" focused size={IconSize.md} color="success" opticalCenter accessible={false} />
-            <Text style={[styles.allCaughtUpText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
-              You're all caught up
-            </Text>
-          </View>
-        )}
-
-        {/* ── Partial data notice — when some sources are unavailable ──
-            Per Report 17 §6.4: "Keep available modules; identify failed
-            source and slice retry." Truthful labelling, not silent merge. */}
-        {tasks.length === 0 && !allTaskSourcesFresh && (
-          <View style={styles.partialNotice}>
-            <AppIcon name="offline" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            <Text style={[styles.partialNoticeText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.3}>
-              Some data is unavailable. Pull to refresh.
-            </Text>
-          </View>
-        )}
-
-        {/* ── Business pulse — 30-day settled order facts ──
-            Per Report 17 P0: revenue from settled orders, not asking price.
-            Shows gross sales, refunds, fees, net — the real money story. */}
-        {businessPulse && businessPulse.orders > 0 && (
-          <FlagshipFormSection variant="flat" title="Last 30 days">
-            <FlagshipMetricLine
-              label="Gross sales"
-              value={formatMoney(businessPulse.grossSalesGbp)}
-              subLabel={`${businessPulse.orders} order${businessPulse.orders === 1 ? '' : 's'}`}
-            />
-            {businessPulse.refundsGbp > 0 && (
-              <FlagshipMetricLine
-                label="Refunds"
-                value={`-${formatMoney(businessPulse.refundsGbp)}`}
-                danger
-                separated
-              />
-            )}
-            {businessPulse.feesGbp > 0 && (
-              <FlagshipMetricLine
-                label="Fees"
-                value={`-${formatMoney(businessPulse.feesGbp)}`}
-                muted
-                separated
-              />
-            )}
-            <FlagshipMetricLine
-              label="Net sales"
-              value={formatMoney(businessPulse.netSalesGbp)}
-              success={businessPulse.netSalesGbp > 0}
-              emphasis
-              separated
-            />
-            {businessPulse.completeness === 'partial' && (
-              <Text style={[styles.partialLabel, { color: colors.textMuted }]}>
-                Fee and refund data may be incomplete
-              </Text>
-            )}
-          </FlagshipFormSection>
-        )}
-
-        {/* ── Catalogue imports (blueprint §5.1) ── */}
-        <FlagshipFormSection variant="flat" title="Catalogue imports">
-          {visibleImportBatches.length > 0 ? (
-            visibleImportBatches.map((batch) => (
-              <FlagshipNavigationRow
-                key={batch.id}
-                title={IMPORT_SOURCE_LABEL[batch.source] ?? 'Catalogue import'}
-                subtitle={importBatchStatusText(batch)}
-                icon="download"
-                onPress={() => navigation.navigate('CatalogImportProgress', { batchId: batch.id })}
-                accessibilityLabel={`${IMPORT_SOURCE_LABEL[batch.source] ?? 'Catalogue import'}, ${importBatchStatusText(batch)}`}
-                accessibilityHint="Opens the import progress screen"
-              />
-            ))
-          ) : (
-            <FlagshipNavigationRow
-              title="Import a shop"
-              subtitle="Bring your existing listings from eBay or a file"
-              icon="download"
-              onPress={() => navigation.navigate('CatalogImportStart')}
-              accessibilityLabel="Import a shop"
-              accessibilityHint="Start a catalogue import from eBay or a file"
-            />
-          )}
-        </FlagshipFormSection>
-
-        {/* ── New seller guidance ──
-            Only shows when the seller has no listings and no completed sales.
-            Restrained — one heading, three tips, no decorative chrome. */}
-        {isNewSeller && (
-          <View style={styles.newSellerCard}>
-            <View style={styles.newSellerHeader}>
-              <AppIcon name="storefront-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
-              <Text style={[styles.newSellerTitle, { color: colors.textPrimary }]}>
-                New to selling?
-              </Text>
-            </View>
-            <View style={styles.newSellerTipRow}>
-              <AppIcon name="camera" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-              <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
-                Clear photos sell.
-              </Text>
-            </View>
-            <View style={styles.newSellerTipRow}>
-              <AppIcon name="cash-outline" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-              <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
-                Price against sold items.
-              </Text>
-            </View>
-            <View style={styles.newSellerTipRow}>
-              <AppIcon name="chat" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-              <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
-                Reply fast to build trust.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Create listing -- primary action */}
-        <View style={styles.ctaWrap}>
-          <AppButton
-            title="Create listing"
-            icon={<AppIcon name="plus" size={IconSize.sm} color={colors.background} opticalCenter accessible={false} />}
-            variant="primary"
-            size="lg"
-            onPress={() => navigation.navigate('Sell')}
-            accessibilityLabel="Create a new listing"
-            hapticFeedback="light"
-          />
-        </View>
-
-        {/* ── Inventory — flat metric lines from server aggregate ──
-            Per Report 17: counts are uncapped (server-side COUNT, not
-            on-device reduction over 100 listings). Listed value is
-            asking price, labelled honestly — NOT revenue. */}
-        <FlagshipFormSection variant="flat" title="Inventory">
-          <FlagshipMetricLine label="Active" value={String(inventory.active)} />
-          <FlagshipMetricLine label="Draft" value={String(inventory.drafts)} separated />
-          <FlagshipMetricLine label="Sold" value={String(inventory.sold)} separated />
-          <FlagshipMetricLine label="Paused" value={String(inventory.paused)} separated />
+      {/* ── Money posture — available (dominant), processing, held ──
+          Per Report 17 §6.1: flat metric lines, not a grid of equal tiles.
+          Available is the dominant number (emphasis + tabular numerals). */}
+      {money && (
+        <View style={styles.moneySection}>
           <FlagshipMetricLine
-            label="Listed value"
-            value={formatMoney(inventory.listedValueGbp)}
-            subLabel="Asking price, not revenue"
+            label="Available"
+            value={formatMoney(money.availableGbp)}
+            subLabel={money.nextPayoutAt ? `Next payout ${new Date(money.nextPayoutAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : undefined}
+            emphasis
+          />
+          <FlagshipMetricLine
+            label="Processing"
+            value={formatMoney(money.processingGbp)}
+            subLabel="Pending escrow release"
             separated
           />
-          <FlagshipNavigationRow
-            title="Manage listings"
-            subtitle="Active, draft, sold and paused"
-            icon="list"
-            onPress={() => navigation.navigate('MyListings')}
-            accessibilityLabel="Manage all your listings"
-            accessibilityHint="Opens your listings"
-          />
-          <FlagshipNavigationRow
-            title="Inventory dashboard"
-            subtitle="Filters and bulk actions"
-            icon="grid"
-            onPress={() => navigation.navigate('InventoryManagement')}
-            accessibilityLabel="Open inventory management dashboard"
-            accessibilityHint="Opens the inventory management screen"
-          />
-        </FlagshipFormSection>
+          {money.heldGbp > 0 && (
+            <FlagshipMetricLine
+              label="Held in reserve"
+              value={formatMoney(money.heldGbp)}
+              subLabel="Rolling reserve"
+              separated
+            />
+          )}
+        </View>
+      )}
 
-        {/* Store -- only real destinations. */}
-        <FlagshipFormSection variant="flat" title="Store">
+      {/* ── Compressed secondary facts — dense rows, not cards ──
+          Active listings, pending orders, unanswered offers, listing issues.
+          Only rows with real signal render. 56-60pt rows via FlagshipNavigationRow. */}
+      <FlagshipFormSection variant="flat" title="Shop">
+        <FlagshipNavigationRow
+          title="Active listings"
+          subtitle={inventory.active > 0 ? `${inventory.active} live` : 'None yet'}
+          icon="list"
+          onPress={() => navigation.navigate('MyListings')}
+          accessibilityLabel={`Active listings, ${inventory.active}`}
+          accessibilityHint="Opens your listings"
+        />
+        {pendingOrdersCount > 0 && (
           <FlagshipNavigationRow
-            title="Analytics"
-            subtitle="Views, sales and engagement"
+            title="Pending orders"
+            subtitle={`${pendingOrdersCount} to ship`}
+            icon="car-outline"
+            iconColor={colors.warning}
+            onPress={() => navigation.navigate('MyOrders')}
+            accessibilityLabel={`Pending orders, ${pendingOrdersCount} to ship`}
+            accessibilityHint="Opens your orders"
+          />
+        )}
+        {unansweredOffersCount > 0 && (
+          <FlagshipNavigationRow
+            title="Unanswered offers"
+            subtitle={`${unansweredOffersCount} waiting`}
+            icon="chat"
+            onPress={() => navigation.navigate('Inbox')}
+            accessibilityLabel={`Unanswered offers, ${unansweredOffersCount} waiting`}
+            accessibilityHint="Opens your inbox"
+          />
+        )}
+        {listingIssuesCount > 0 && (
+          <FlagshipNavigationRow
+            title="Listing issues"
+            subtitle={`${listingIssuesCount} need details`}
+            icon="edit"
+            iconColor={colors.warning}
+            onPress={() => navigation.navigate('InventoryManagement')}
+            accessibilityLabel={`Listing issues, ${listingIssuesCount} need details`}
+            accessibilityHint="Opens inventory management"
+          />
+        )}
+      </FlagshipFormSection>
+
+      {/* ── Tools — quick access, flat rows ── */}
+      <FlagshipFormSection variant="flat" title="Tools">
+        <FlagshipNavigationRow
+          title="Add listing"
+          icon="plus"
+          onPress={() => navigation.navigate('Sell')}
+          accessibilityLabel="Add a new listing"
+          accessibilityHint="Opens the listing creator"
+        />
+        <FlagshipNavigationRow
+          title="Manage inventory"
+          subtitle="Filters and bulk actions"
+          icon="grid"
+          onPress={() => navigation.navigate('InventoryManagement')}
+          accessibilityLabel="Manage inventory"
+          accessibilityHint="Opens the inventory management screen"
+        />
+        <FlagshipNavigationRow
+          title="View analytics"
+          subtitle="Views, sales and engagement"
+          icon="analytics"
+          onPress={() => navigation.navigate('SellerAnalytics')}
+          accessibilityLabel="View seller analytics"
+          accessibilityHint="Opens the seller analytics dashboard"
+        />
+        <FlagshipNavigationRow
+          title="Export data"
+          icon="download"
+          onPress={() => navigation.navigate('DataExport')}
+          accessibilityLabel="Export your data"
+          accessibilityHint="Opens the data export screen"
+        />
+      </FlagshipFormSection>
+
+      {/* ── Tasks — flat rows, one per task type ──
+          Per Report 17 §6.2: "Flat task rows with item identity, due
+          time and consequence." No card wrapping. */}
+      {tasks.length > 0 && (
+        <FlagshipFormSection variant="flat" title="Needs you">
+          {tasks.map((task) => {
+            const dueLabel = formatDueAt(task.dueAt);
+            const subtitleParts: string[] = [];
+            if (dueLabel) subtitleParts.push(dueLabel);
+            if (task.consequence?.kind === 'money' && task.consequence.amountGbp) {
+              subtitleParts.push(`${formatMoney(task.consequence.amountGbp)} at stake`);
+            } else if (task.consequence?.kind === 'trust') {
+              subtitleParts.push('Affects seller rating');
+            } else if (task.consequence?.kind === 'listing') {
+              subtitleParts.push('Missing required details');
+            }
+            return (
+              <FlagshipNavigationRow
+                key={task.id}
+                title={task.count > 1
+                  ? `${task.count} ${task.actionLabel.toLowerCase()}`
+                  : task.actionLabel}
+                subtitle={subtitleParts.join(' · ') || undefined}
+                icon={TASK_ICON[task.type]}
+                iconColor={task.priority === 'critical' ? colors.danger : undefined}
+                onPress={() => navigateToTask(task)}
+                accessibilityLabel={`${task.actionLabel}, ${task.count} items${dueLabel ? `, ${dueLabel}` : ''}`}
+              />
+            );
+          })}
+        </FlagshipFormSection>
+      )}
+
+      {/* ── Business pulse — 30-day settled order facts + trend (P2-08) ──
+          Per Report 17 P0: revenue from settled orders, not asking price.
+          Trend indicator (▲/▼/—) renders only when the backend provides a
+          week-over-week comparison. "View details" links to full analytics. */}
+      {businessPulse && businessPulse.orders > 0 && (
+        <FlagshipFormSection variant="flat" title="Last 30 days">
+          <FlagshipMetricLine
+            label="Gross sales"
+            value={formatMoney(businessPulse.grossSalesGbp)}
+            subLabel={`${businessPulse.orders} order${businessPulse.orders === 1 ? '' : 's'}`}
+          />
+          {businessPulse.refundsGbp > 0 && (
+            <FlagshipMetricLine
+              label="Refunds"
+              value={`-${formatMoney(businessPulse.refundsGbp)}`}
+              danger
+              separated
+            />
+          )}
+          {businessPulse.feesGbp > 0 && (
+            <FlagshipMetricLine
+              label="Fees"
+              value={`-${formatMoney(businessPulse.feesGbp)}`}
+              muted
+              separated
+            />
+          )}
+          <FlagshipMetricLine
+            label="Net sales"
+            value={formatMoney(businessPulse.netSalesGbp)}
+            subLabel={renderTrend(businessPulse.netSalesWoWPct)}
+            success={businessPulse.netSalesGbp > 0}
+            emphasis
+            separated
+          />
+          {businessPulse.completeness === 'partial' && (
+            <Text style={[styles.partialLabel, { color: colors.textMuted }]}>
+              Fee and refund data may be incomplete
+            </Text>
+          )}
+          <FlagshipNavigationRow
+            title="View details"
             icon="analytics"
             onPress={() => navigation.navigate('SellerAnalytics')}
-            accessibilityLabel="View seller analytics"
+            accessibilityLabel="View full analytics"
             accessibilityHint="Opens the seller analytics dashboard"
           />
-          <FlagshipNavigationRow
-            title="Auctions"
-            icon="hammer"
-            onPress={() => navigation.navigate('SellerAuctionCentre')}
-            accessibilityLabel="Auctions"
-            accessibilityHint="Opens the seller auction centre"
-          />
-          <FlagshipNavigationRow
-            title="Market ledger"
-            subtitle="Trade history and settlement log"
-            icon="receipt-outline"
-            onPress={() => navigation.navigate('MarketLedger')}
-            accessibilityLabel="View market ledger"
-            accessibilityHint="Opens the market ledger"
-          />
         </FlagshipFormSection>
+      )}
 
-        {/* Account -- payouts + verification */}
-        <FlagshipFormSection variant="flat" title="Account">
+      {/* ── Catalogue imports (blueprint §5.1) ── */}
+      <FlagshipFormSection variant="flat" title="Catalogue imports">
+        {visibleImportBatches.length > 0 ? (
+          visibleImportBatches.map((batch) => (
+            <FlagshipNavigationRow
+              key={batch.id}
+              title={IMPORT_SOURCE_LABEL[batch.source] ?? 'Catalogue import'}
+              subtitle={importBatchStatusText(batch)}
+              icon="download"
+              onPress={() => navigation.navigate('CatalogImportProgress', { batchId: batch.id })}
+              accessibilityLabel={`${IMPORT_SOURCE_LABEL[batch.source] ?? 'Catalogue import'}, ${importBatchStatusText(batch)}`}
+              accessibilityHint="Opens the import progress screen"
+            />
+          ))
+        ) : (
           <FlagshipNavigationRow
-            title="Payouts"
-            icon="wallet"
-            onPress={() => navigation.navigate('Wallet')}
-            accessibilityLabel="Payouts and wallet"
-            accessibilityHint="Opens your wallet"
+            title="Import a shop"
+            subtitle="Bring your existing listings from eBay or a file"
+            icon="download"
+            onPress={() => navigation.navigate('CatalogImportStart')}
+            accessibilityLabel="Import a shop"
+            accessibilityHint="Start a catalogue import from eBay or a file"
           />
-          <FlagshipNavigationRow
-            title="Verification"
-            subtitle={isVerified ? 'Verified' : 'Required'}
-            icon={isVerified ? 'checkmark-circle' : 'profile'}
-            iconColor={isVerified ? colors.success : undefined}
-            onPress={() => navigation.navigate('Verification')}
-            accessibilityLabel="Verification status"
-            accessibilityHint="Opens verification settings"
-          />
-        </FlagshipFormSection>
+        )}
+      </FlagshipFormSection>
+
+      {/* ── New seller guidance ──
+          Only shows when the seller has no listings and no completed sales.
+          Restrained — one heading, three tips, no decorative chrome. */}
+      {isNewSeller && (
+        <View style={styles.newSellerCard}>
+          <View style={styles.newSellerHeader}>
+            <AppIcon name="storefront-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
+            <Text style={[styles.newSellerTitle, { color: colors.textPrimary }]}>
+              New to selling?
+            </Text>
+          </View>
+          <View style={styles.newSellerTipRow}>
+            <AppIcon name="camera" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
+            <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
+              Clear photos sell.
+            </Text>
+          </View>
+          <View style={styles.newSellerTipRow}>
+            <AppIcon name="cash-outline" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
+            <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
+              Price against sold items.
+            </Text>
+          </View>
+          <View style={styles.newSellerTipRow}>
+            <AppIcon name="chat" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
+            <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
+              Reply fast to build trust.
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Create listing -- primary action */}
+      <View style={styles.ctaWrap}>
+        <AppButton
+          title="Create listing"
+          icon={<AppIcon name="plus" size={IconSize.sm} color={colors.background} opticalCenter accessible={false} />}
+          variant="primary"
+          size="lg"
+          onPress={() => navigation.navigate('Sell')}
+          accessibilityLabel="Create a new listing"
+          hapticFeedback="light"
+        />
+      </View>
+
+      {/* ── Inventory — flat metric lines from server aggregate ──
+          Per Report 17: counts are uncapped (server-side COUNT, not
+          on-device reduction over 100 listings). Listed value is
+          asking price, labelled honestly — NOT revenue. */}
+      <FlagshipFormSection variant="flat" title="Inventory">
+        <FlagshipMetricLine label="Active" value={String(inventory.active)} />
+        <FlagshipMetricLine label="Draft" value={String(inventory.drafts)} separated />
+        <FlagshipMetricLine label="Sold" value={String(inventory.sold)} separated />
+        <FlagshipMetricLine label="Paused" value={String(inventory.paused)} separated />
+        <FlagshipMetricLine
+          label="Listed value"
+          value={formatMoney(inventory.listedValueGbp)}
+          subLabel="Asking price, not revenue"
+          separated
+        />
+        <FlagshipNavigationRow
+          title="Manage listings"
+          subtitle="Active, draft, sold and paused"
+          icon="list"
+          onPress={() => navigation.navigate('MyListings')}
+          accessibilityLabel="Manage all your listings"
+          accessibilityHint="Opens your listings"
+        />
+        <FlagshipNavigationRow
+          title="Inventory dashboard"
+          subtitle="Filters and bulk actions"
+          icon="grid"
+          onPress={() => navigation.navigate('InventoryManagement')}
+          accessibilityLabel="Open inventory management dashboard"
+          accessibilityHint="Opens the inventory management screen"
+        />
+      </FlagshipFormSection>
+
+      {/* Store -- only real destinations. */}
+      <FlagshipFormSection variant="flat" title="Store">
+        <FlagshipNavigationRow
+          title="Analytics"
+          subtitle="Views, sales and engagement"
+          icon="analytics"
+          onPress={() => navigation.navigate('SellerAnalytics')}
+          accessibilityLabel="View seller analytics"
+          accessibilityHint="Opens the seller analytics dashboard"
+        />
+        <FlagshipNavigationRow
+          title="Auctions"
+          icon="hammer"
+          onPress={() => navigation.navigate('SellerAuctionCentre')}
+          accessibilityLabel="Auctions"
+          accessibilityHint="Opens the seller auction centre"
+        />
+      </FlagshipFormSection>
+
+      {/* Account -- payouts + verification */}
+      <FlagshipFormSection variant="flat" title="Account">
+        <FlagshipNavigationRow
+          title="Payouts"
+          icon="wallet"
+          onPress={() => navigation.navigate('Wallet')}
+          accessibilityLabel="Payouts and wallet"
+          accessibilityHint="Opens your wallet"
+        />
+        <FlagshipNavigationRow
+          title="Verification"
+          subtitle={isVerified ? 'Verified' : 'Required'}
+          icon={isVerified ? 'checkmark-circle' : 'profile'}
+          iconColor={isVerified ? colors.success : undefined}
+          onPress={() => navigation.navigate('Verification')}
+          accessibilityLabel="Verification status"
+          accessibilityHint="Opens verification settings"
+        />
+      </FlagshipFormSection>
     </TaskQueueScreen>
   );
 }

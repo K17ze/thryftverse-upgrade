@@ -171,6 +171,17 @@ export default function BotDetailScreen({ navigation, route }: Props) {
       >
         <View style={styles.center}>
           <Caption color={colors.textMuted}>Agent not found</Caption>
+          <AnimatedPressable
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            activeOpacity={0.7}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Text style={styles.backBtnText}>Go back</Text>
+          </AnimatedPressable>
         </View>
       </FlagshipScreen>
     );
@@ -290,20 +301,15 @@ export default function BotDetailScreen({ navigation, route }: Props) {
 
         <Text style={styles.description}>{bot.description}</Text>
 
-        <ChatInfoSection title="HOW IT JOINS">
+        <ChatInfoSection title="How it joins">
           <ChatInfoRow
             icon={bot.agentConfig?.triggerMode === 'mention' ? 'at' : 'terminal-outline'}
             label={invocation}
-            subtitle={
-              bot.agentConfig?.triggerMode === 'always'
-                ? 'Responds automatically to messages in connected chats'
-                : 'Use this in a connected chat to invoke the agent'
-            }
           />
         </ChatInfoSection>
 
         {bot.agentConfig ? (
-          <ChatInfoSection title="VOICE & QUALITY">
+          <ChatInfoSection title="Voice & quality">
             <ChatInfoRow icon="server-outline" label="Model" detail={bot.agentConfig.model} />
             <ChatInfoRow icon="chatbox-outline" label="Voice" detail={bot.agentConfig.tone} />
             <ChatInfoRow
@@ -315,13 +321,13 @@ export default function BotDetailScreen({ navigation, route }: Props) {
               <ChatInfoRow
                 icon="alert-circle-outline"
                 label="Runtime unavailable"
-                subtitle={bot.runtimeReadinessReason || 'The AI provider is not configured.'}
+                subtitle={bot.runtimeReadinessReason || 'Provider not configured'}
               />
             ) : null}
           </ChatInfoSection>
         ) : null}
 
-        <ChatInfoSection title="ACCESS">
+        <ChatInfoSection title="Access">
           {bot.permissions.length > 0 ? (
             bot.permissions.map((permission) => (
               <ChatInfoRow
@@ -334,7 +340,6 @@ export default function BotDetailScreen({ navigation, route }: Props) {
             <ChatInfoRow
               icon="lock-closed-outline"
               label="No additional access"
-              subtitle="This agent does not request special permissions"
             />
           )}
           <ChatInfoRow
@@ -345,7 +350,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
         </ChatInfoSection>
 
         {connectedGroups.length > 0 ? (
-          <ChatInfoSection title="CONNECTED CHATS">
+          <ChatInfoSection title="Connected chats">
             {connectedGroups.map((group) => (
               <ChatInfoRow
                 key={group.id}
@@ -477,7 +482,7 @@ export default function BotDetailScreen({ navigation, route }: Props) {
               </View>
             ) : !versions || versions.length === 0 ? (
               <Text style={styles.versionsEmpty}>
-                No published versions yet. Publish from the editor to create one.
+                No published versions yet.
               </Text>
             ) : (
               <View style={styles.versionList}>
@@ -559,7 +564,17 @@ function createStyles(colors: ThemeColors) {
   center: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center' },
+    justifyContent: 'center',
+    gap: Space.md },
+  backBtn: {
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.sm,
+    borderRadius: Radius.xxl,
+    backgroundColor: colors.textPrimary },
+  backBtnText: {
+    color: colors.background,
+    fontFamily: Typography.family.semibold,
+    fontSize: TypographyV2.body.size },
   headerAction: {
     width: Control.hit,
     height: Control.hit,
@@ -645,10 +660,7 @@ function createStyles(colors: ThemeColors) {
   rollbackButton: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    minHeight: Control.icon,
+    minHeight: Control.hit,
     alignItems: 'center',
     justifyContent: 'center' },
   rollbackText: {
@@ -672,10 +684,7 @@ function createStyles(colors: ThemeColors) {
   clearButton: {
     paddingHorizontal: Space.sm,
     paddingVertical: Space.xs,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    minHeight: Control.icon,
+    minHeight: Control.hit,
     alignItems: 'center',
     justifyContent: 'center' },
   clearText: {

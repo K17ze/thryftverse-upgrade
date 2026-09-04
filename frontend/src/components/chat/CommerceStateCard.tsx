@@ -258,11 +258,6 @@ const createStyles = (colors: ThemeColors) =>
       gap: Space.sm + 1,
       width: '100%',
       maxWidth: 340,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
-      elevation: 2,
     },
     headerRow: {
       flexDirection: 'row',

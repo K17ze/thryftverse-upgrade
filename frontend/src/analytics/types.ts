@@ -319,6 +319,7 @@ export interface AgeVerificationCompletedProperties {
 export interface PushNotificationTappedProperties {
   notification_type: string | null;
   target_screen: string | null;
+  action_id: string | null;
 }
 
 export interface PushNotificationReceivedProperties {

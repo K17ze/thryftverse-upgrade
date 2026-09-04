@@ -51,8 +51,8 @@ function RailCard({
   showAccent }: RailCardProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
-  const formattedPrice = formatFromFiat(item.price, currencyCode);
+  const { formatFromFiat } = useFormattedPrice();
+  const formattedPrice = formatFromFiat(item.price, 'GBP');
   const imageUri = item.images?.[0];
 
   const handlePress = () => {
