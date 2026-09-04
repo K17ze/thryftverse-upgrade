@@ -52,7 +52,7 @@ interface SelectableUser extends UserSearchResult {
   avatar: string | null;
 }
 
-export default function CreateGroupChatScreen({ navigation }: Props) {
+export default function CreateGroupChatScreen({ navigation, route }: Props) {
   const currentUser = useStore((state) => state.currentUser);
   const conversations = useStore((state) => state.conversations);
   const upsertConversation = useStore((state) => state.upsertConversation);
@@ -63,10 +63,14 @@ export default function CreateGroupChatScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
+  const { prefillMemberIds, prefillTitle } = route?.params ?? {};
+
   const [stage, setStage] = useState<Stage>('select');
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(prefillTitle ?? '');
   const [description, setDescription] = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(
+    prefillMemberIds ? prefillMemberIds.filter((id) => id !== currentUser?.id) : []
+  );
   const [selectedUsers, setSelectedUsers] = useState<Map<string, SelectableUser>>(new Map());
   const [isCreating, setIsCreating] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

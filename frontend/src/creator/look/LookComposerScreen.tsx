@@ -16,7 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, runOnJS, useAnimatedStyle, useAnimatedReaction, withTiming } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
-import { Space, Radius, Typography, FontFamily, FontSize, Control, IconGrammar, Stroke, Elevation} from '../../theme/designTokens';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Space, Radius, Typography, FontFamily, FontSize, Control, IconGrammar, Stroke, Elevation, Scrim } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../theme/ThemeContext';
@@ -154,7 +155,7 @@ type GlobalOverflowGroup = {
   items: GlobalOverflowItem[];
 };
 
-function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'look' | 'poster') => void }) {
+function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'look' | 'poster' | 'moodboard') => void }) {
   const navigation = useNavigation<LookComposerNavProp>();
   const route = useRoute<LookComposerRouteProp>();
   const { colors } = useAppTheme();
@@ -1407,10 +1408,10 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
                 canvasTopOffset={canvasVerticalOffset}
                 screenWidth={screenWidth}
                 screenHeight={screenHeight}
-                onCommit={(text) => {
+                onCommit={(text, styleUpdates) => {
                   updateLayer(editingTextLayer.id, {
                     type: 'text',
-                    payload: { ...editingTextLayer.payload, text } }, 'Edit text content');
+                    payload: { ...editingTextLayer.payload, text, ...(styleUpdates ?? {}) } }, 'Edit text content');
                 }}
                 onDismiss={() => setEditingTextLayerId(null)}
               />
@@ -1455,6 +1456,12 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           of Poster). Close · Undo · Redo on the left; Next on the right.
           During selection: Done · object label · More. */}
       <Reanimated.View style={[styles.topBarContainer, { paddingTop: insets.top }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
+        <LinearGradient
+          colors={Scrim.top.colors}
+          locations={Scrim.top.locations}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
         <View style={styles.topBar}>
           <View style={styles.topBarRow}>
             {multiSelectMode ? (
@@ -1609,6 +1616,12 @@ function LookComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'l
           Each tool's onPress calls an EXISTING handler — no new capabilities. */}
       {bottomSurface === 'tools' && (
         <Reanimated.View style={[styles.bottomBarContainer, { paddingBottom: insets.bottom }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
+          <LinearGradient
+            colors={Scrim.bottom.colors}
+            locations={Scrim.bottom.locations}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
           <View style={styles.bottomBar}>
             {/* ── Source tray peek strip (§8.3: source tray peeking from bottom) ── */}
             {/* A thin strip of item thumbnails above the tool rail, making
@@ -2161,7 +2174,7 @@ export function LookComposerScreen(props: {
   initialMedia?: CreatorInitialMedia[];
   startBlank?: boolean;
   openTemplates?: boolean;
-  onEntryTypeChange: (type: 'look' | 'poster') => void;
+  onEntryTypeChange: (type: 'look' | 'poster' | 'moodboard') => void;
 }) {
   // Lazy import to avoid circular dependency at module load time
   const { CreatorProvider } = require('../CreatorContext');

@@ -29,11 +29,13 @@ function ShimmerBar({
   height = 14,
   style,
   color,
+  shimmerColor,
   shimmer }: {
   width: number | string;
   height?: number;
   style?: any;
   color: string;
+  shimmerColor: string;
   shimmer: ReturnType<typeof useSharedValue<number>>;
 }) {
   const shimmerStyle = useAnimatedStyle(() => ({
@@ -48,7 +50,7 @@ function ShimmerBar({
       ]}
     >
       <AnimatedLinearGradient
-        colors={['transparent', 'rgba(255,255,255,0.06)', 'transparent']}
+        colors={['transparent', shimmerColor, 'transparent']}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         style={[StyleSheet.absoluteFill, shimmerStyle]}
@@ -79,6 +81,7 @@ export function SkeletonChatLoader({ count = 8 }: { count?: number }) {
   }, [shimmer, reducedMotion]);
 
   const barColor = colors.border;
+  const shimmerColor = colors.border;
 
   return (
     <View style={styles.container}>
@@ -104,6 +107,7 @@ export function SkeletonChatLoader({ count = 8 }: { count?: number }) {
                   height={28}
                   style={{ borderRadius: Radius.full }}
                   color={colors.surfaceAlt}
+                  shimmerColor={shimmerColor}
                   shimmer={shimmer}
                 />
               </View>
@@ -116,6 +120,7 @@ export function SkeletonChatLoader({ count = 8 }: { count?: number }) {
                   height={TypographyV2.meta.size}
                   style={styles.senderName}
                   color={barColor}
+                  shimmerColor={shimmerColor}
                   shimmer={shimmer}
                 />
               )}
@@ -132,6 +137,7 @@ export function SkeletonChatLoader({ count = 8 }: { count?: number }) {
                   width="100%"
                   height={12}
                   color={isMe ? colors.scrimTextTertiary : barColor}
+                  shimmerColor={shimmerColor}
                   shimmer={shimmer}
                 />
                 <ShimmerBar
@@ -139,6 +145,7 @@ export function SkeletonChatLoader({ count = 8 }: { count?: number }) {
                   height={12}
                   style={{ marginTop: Space.xs }}
                   color={isMe ? colors.scrimTextTertiary : barColor}
+                  shimmerColor={shimmerColor}
                   shimmer={shimmer}
                 />
               </View>

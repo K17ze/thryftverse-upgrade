@@ -5,7 +5,7 @@ import Reanimated, {
   withTiming,
   withSpring,
   type EntryExitAnimationFunction } from 'react-native-reanimated';
-import { Space, Radius, TypeStyles, Stroke, AspectRatio } from '../../theme/designTokens';
+import { Space, Radius, Stroke, AspectRatio } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { Motion } from '../../theme/motionTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -60,7 +60,7 @@ function highlightSearchMatch(
       <Text
         key={key++}
         style={{
-          color: isDark ? '#000000' : '#FFFFFF',
+          color: baseColor,
           backgroundColor: highlightColor,
           borderRadius: 2,
           paddingHorizontal: 1,
@@ -245,6 +245,12 @@ function MessageBubbleBase({
   const isTop = isFirstInCluster && !isLastInCluster;
   const isBottom = !isFirstInCluster && isLastInCluster;
 
+  const a11yLabel = [
+    isMe ? 'Your message' : senderLabel ? `${senderLabel}'s message` : 'Message',
+    text ? text.slice(0, 100) : mediaUri ? (mediaType === 'video' ? 'video' : 'photo') : undefined,
+    status === 'failed' ? 'failed to send' : status === 'sending' ? 'sending' : undefined,
+  ].filter(Boolean).join(', ');
+
   // WhatsApp 2026 style: fully-rounded 20px bubbles with asymmetric tail radius
   const meRadius = isStandalone
     ? { borderTopRightRadius: Radius.chat, borderBottomRightRadius: Radius.sm }
@@ -305,7 +311,8 @@ function MessageBubbleBase({
         <Pressable
           onLongPress={onLongPress}
           delayLongPress={350}
-          accessibilityLabel="Message"
+          accessibilityLabel={a11yLabel}
+          accessibilityRole="button"
           style={({ pressed }) => [
             styles.bubble,
             isMe ? styles.bubbleMe : isAgent ? styles.bubbleAgent : styles.bubbleThem,
@@ -315,7 +322,6 @@ function MessageBubbleBase({
             isDraft && styles.bubbleDraft,
             !!bubbleBorder && { borderColor: bubbleBorder },
           ]}
-        accessibilityRole="button"
         >
           {replyTo ? (
             <Pressable onPress={onReplyPress} style={[styles.replyBlock, { borderLeftColor: isMe ? colors.scrimTextTertiary : colors.border }]} accessibilityRole="button">
@@ -329,7 +335,7 @@ function MessageBubbleBase({
           ) : null}
 
           {mediaUri ? (
-            <Pressable onPress={onMediaPress} style={styles.mediaWrap} accessibilityRole="button" accessibilityLabel="Media Press">
+            <Pressable onPress={onMediaPress} style={styles.mediaWrap} accessibilityRole="button" accessibilityLabel={mediaType === 'video' ? 'Open video' : 'Open photo'}>
               <CachedImage
                 uri={mediaUri}
                 style={[styles.mediaImage, mediaRadius]}
@@ -484,7 +490,7 @@ function MessageBubbleBase({
         </Pressable>
 
         {hasFailed && onRetry ? (
-          <Pressable onPress={onRetry} style={styles.retryBadge} accessibilityRole="button">
+          <Pressable onPress={onRetry} style={styles.retryBadge} accessibilityRole="button" accessibilityLabel="Retry sending message">
             <Ionicons name="refresh" size={11} color={colors.danger} />
             <Text style={styles.retryText}>Tap to retry</Text>
           </Pressable>
@@ -523,7 +529,7 @@ function MessageBubbleBase({
         ) : null}
 
         {reactions && reactions.length > 0 ? (
-          <Pressable onPress={onReactionPress} style={[styles.reactions, isMe && styles.reactionsRight]} accessibilityRole="button">
+          <Pressable onPress={onReactionPress} style={[styles.reactions, isMe && styles.reactionsRight]} accessibilityRole="button" accessibilityLabel="Reactions">
             {reactions.slice(0, 3).map((r, i) => (
               <Reanimated.View key={i} entering={reactionEntering} style={[styles.reactionChip, r.reactedByMe && styles.reactionChipActive]}>
                 <Text style={styles.reactionEmoji}>{r.emoji}</Text>
@@ -626,7 +632,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 3,
     marginBottom: Space.xs },
   draftLabel: {
-    fontSize: TypographyV2.meta.size - 2,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing },
   draftConfirmBadge: {
@@ -645,7 +651,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily },
   replyBlock: {
-    borderLeftWidth: 2,
+    borderLeftWidth: Stroke.emphasis,
     paddingLeft: Space.sm - 1,
     marginBottom: Space.xs,
     gap: 1 },
@@ -654,11 +660,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: TypographyV2.meta.fontFamily },
   replyText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     lineHeight: TypographyV2.meta.lineHeight },
   messageText: {
     fontSize: TypographyV2.body.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     lineHeight: TypographyV2.body.lineHeight + 2,
     letterSpacing: TypographyV2.body.letterSpacing },
   metaRow: {
@@ -671,14 +677,14 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   metaRowMe: {
     opacity: 0.7 },
   timestamp: {
-    fontSize: TypographyV2.meta.size - 1,
-    fontFamily: TypeStyles.body.fontFamily },
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.body.fontFamily },
   statusWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2 },
   readReceiptText: {
-    fontSize: TypographyV2.meta.size - 2,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing },
   mediaWrap: {
@@ -772,23 +778,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   translatedText: {
     fontSize: TypographyV2.body.size - 1,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     lineHeight: TypographyV2.body.lineHeight + 1,
     letterSpacing: TypographyV2.body.letterSpacing,
     fontStyle: 'italic',
   },
   translationSourceLabel: {
-    fontSize: TypographyV2.meta.size - 2,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing,
     opacity: 0.8,
   },
   translationDot: {
-    fontSize: TypographyV2.meta.size - 2,
+    fontSize: TypographyV2.meta.size,
     opacity: 0.5,
   },
   translationLink: {
-    fontSize: TypographyV2.meta.size - 1,
+    fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing,
     textDecorationLine: 'underline',

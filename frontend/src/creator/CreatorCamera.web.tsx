@@ -13,7 +13,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import type { CaptureViewport } from './capture/CaptureViewport';
 
 export interface CreatorCameraProps {
-  mode: 'poster' | 'look' | 'visual-search';
+  mode: 'poster' | 'look' | 'visual-search' | 'moodboard';
   onCapture: (uri: string) => void;
   onCaptureBatch?: (captures: CreatorInitialMedia[]) => void;
   onGallery: () => void;

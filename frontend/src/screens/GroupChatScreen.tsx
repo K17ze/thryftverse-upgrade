@@ -83,12 +83,15 @@ function toEmojiReactions(
 }
 
 export default function GroupChatScreen({ navigation, route }: Props) {
-  const { groupId, groupName } = route.params ?? {};
+  const { groupId, groupName, initialSearch } = route.params ?? {};
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
   const { formatFromFiat } = useFormattedPrice();
+
+  const [isSearchActive, setIsSearchActive] = useState(Boolean(initialSearch));
+  const [searchQuery, setSearchQuery] = useState('');
 
   const conversations = useStore((state) => state.conversations);
   const currentUser = useStore((state) => state.currentUser);
@@ -176,35 +179,11 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   const hydratedMessages = useMemo<Message[]>(() => {
     if (!conversation?.messages.length) return [];
     return conversation.messages.map((entry) => {
-      const isCurrentUserSender =
-        entry.senderId === 'me' || entry.senderId === currentUser?.id;
-      const sender: 'me' | 'other' = isCurrentUserSender ? 'me' : 'other';
       const senderLabel =
         conversation.participantProfiles?.find((p) => p.id === entry.senderId)?.displayName ??
         conversation.participantProfiles?.find((p) => p.id === entry.senderId)?.username ??
         'Member';
-      return {
-        id: entry.id,
-        type: entry.isSystem || entry.type === 'system' ? 'system' : entry.mediaUri ? 'media' : 'text',
-        sender,
-        senderId: entry.senderId,
-        senderLabel,
-        timestamp: entry.timestamp ?? entry.date ?? new Date().toISOString(),
-        text: entry.text ?? entry.systemTitle ?? '',
-        isSystem: entry.isSystem,
-        systemTitle: entry.systemTitle,
-        date: entry.timestamp,
-        mediaUri: entry.mediaUri,
-        mediaType: entry.mediaType,
-        documentUri: entry.documentUri,
-        documentName: entry.documentName,
-        documentMimeType: entry.documentMimeType,
-        reactions: entry.reactions?.map((r) => ({
-          emoji: r.emoji,
-          userIds: r.userIds,
-          count: r.userIds.length,
-          reactedByMe: r.userIds.includes(currentUser?.id ?? 'me') })),
-        replyToMessageId: entry.replyToMessageId };
+      return { ...entry, senderLabel };
     });
   }, [conversation, currentUser?.id]);
 
@@ -326,12 +305,10 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   );
 
   const handleSendPendingDocument = useCallback(
-    (caption: string) => {
-      if (!pendingDocument) return;
-      hookSendMessage(caption || pendingDocument.name, null, () => {}, () => {});
+    () => {
       setPendingDocument(null);
     },
-    [hookSendMessage, pendingDocument, setPendingDocument],
+    [setPendingDocument],
   );
 
   // ─── Context menu + reactions ───────────────────────────────────────
@@ -343,7 +320,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
 
   // ── @mention suggestion state ──
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [cursorPosition, setCursorPosition] = useState(0);
+  const cursorPositionRef = useRef(0);
 
   // Build mention candidates from participant profiles
   const mentionCandidates = useMemo<MentionCandidate[]>(() => {
@@ -360,23 +337,24 @@ export default function GroupChatScreen({ navigation, route }: Props) {
   // Detect @mention being typed
   const handleInputChange = useCallback((text: string) => {
     setTypingInput(text);
-    const query = extractMentionAtCursor(text, text.length);
+    const query = extractMentionAtCursor(text, cursorPositionRef.current);
     setMentionQuery(query);
   }, [setTypingInput]);
 
   const handleMentionSelect = useCallback((candidate: MentionCandidate | { id: 'all'; displayName: string }) => {
-    const handle = candidate.displayName;
+    const handle = candidate.id === 'all' ? 'all' : (candidate as MentionCandidate).username ?? candidate.displayName;
     const currentInput = input;
-    // Find the last @ and replace the partial mention
-    const atIdx = currentInput.lastIndexOf('@');
+    const cursor = cursorPositionRef.current;
+    const beforeCursor = currentInput.substring(0, cursor);
+    const atIdx = beforeCursor.lastIndexOf('@');
     if (atIdx === -1) return;
     const before = currentInput.substring(0, atIdx);
-    const after = currentInput.substring(atIdx + 1 + (mentionQuery?.length ?? 0));
+    const after = currentInput.substring(cursor);
     const newText = `${before}@${handle} ${after}`;
     setTypingInput(newText);
     setMentionQuery(null);
     haptic.selection();
-  }, [input, mentionQuery, setTypingInput, haptic]);
+  }, [input, setTypingInput, haptic]);
 
   // Reset dismissed state when switching groups
   useEffect(() => {
@@ -505,6 +483,12 @@ export default function GroupChatScreen({ navigation, route }: Props) {
     ? typingLabel
     : `${memberCount} members`;
 
+  const displayMessages = useMemo(() => {
+    if (!isSearchActive || !searchQuery.trim()) return messages;
+    const q = searchQuery.toLowerCase();
+    return messages.filter((m) => (m.text ?? '').toLowerCase().includes(q));
+  }, [messages, isSearchActive, searchQuery]);
+
   // ─── Loading / error states ─────────────────────────────────────────
   const showLoading = isSyncing && messages.length === 0;
   const showError = syncError && messages.length === 0;
@@ -518,6 +502,14 @@ export default function GroupChatScreen({ navigation, route }: Props) {
           avatarUrl={conversation?.avatar ?? null}
           groupId={groupId}
           variant="group"
+          isSearchActive={isSearchActive}
+          searchValue={searchQuery}
+          onSearchValueChange={setSearchQuery}
+          onCloseSearch={() => {
+            setIsSearchActive(false);
+            setSearchQuery('');
+          }}
+          onSearch={() => setIsSearchActive(true)}
           onBack={() => navigation.goBack()}
           onInfo={() => navigation.navigate('GroupChatInfo', { conversationId: groupId })}
           onTitlePress={() => navigation.navigate('GroupChatInfo', { conversationId: groupId })}
@@ -570,7 +562,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
             ) : null}
             <FlashList
               ref={listRef}
-              data={messages}
+              data={displayMessages}
               keyExtractor={keyExtractor}
               renderItem={renderMessage}
               contentContainerStyle={styles.listContent}
@@ -659,6 +651,9 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               <ChatComposerBar
                 value={input}
                 onChangeText={handleInputChange}
+                onSelectionChange={(e) => {
+                  cursorPositionRef.current = e.nativeEvent.selection.end;
+                }}
                 onSend={handleSend}
                 onAttachmentPress={() => setAttachmentPickerVisible(true)}
                 onCameraPress={() => handleAttachmentSelect("camera")}
@@ -676,8 +671,9 @@ export default function GroupChatScreen({ navigation, route }: Props) {
         <ChatActionSheet
           visible={attachmentPickerVisible && !composerSending}
           onClose={() => setAttachmentPickerVisible(false)}
+          hideDocument
           onSelect={(action) => {
-            if (action === "gallery" || action === "camera" || action === "document" || action === "location") {
+            if (action === "gallery" || action === "camera" || action === "location") {
               handleAttachmentSelect(action);
             }
           }}
@@ -726,12 +722,13 @@ export default function GroupChatScreen({ navigation, route }: Props) {
                   undefined,
                   undefined,
                   currentUser?.id,
-                ).catch(() => show('Failed to forward message', 'error'));
+                )
+                  .then(() => show('Message forwarded', 'success'))
+                  .catch(() => show('Failed to forward message', 'error'));
               }
             }
             setForwardSheetVisible(false);
             setForwardingMessage(null);
-            show('Message forwarded', 'success');
           }}
           onClose={() => {
             setForwardSheetVisible(false);

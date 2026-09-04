@@ -465,7 +465,7 @@ function AlbumRow({ album, isActive, onSelect, colors, styles }: AlbumRowProps) 
     let cancelled = false;
     MediaLibrary.getAssetsAsync({ album: album.id, first: 1, mediaType: ['photo', 'video'] })
       .then((result) => {
-        if (!cancelled && result.assets[0]) {
+        if (!cancelled && result.assets.length > 0) {
           setCoverUri(result.assets[0].uri);
         }
       })
@@ -809,7 +809,7 @@ export function MediaBrowserSheet({
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.9 });
-    if (!result.canceled && result.assets[0]) {
+    if (!result.canceled && result.assets.length > 0) {
       const captured: SelectedAsset = {
         uri: result.assets[0].uri,
         mediaType: 'image',

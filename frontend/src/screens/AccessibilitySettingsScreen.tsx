@@ -14,17 +14,17 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  Pressable } from 'react-native';
+  ScrollView } from 'react-native';
 import type { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Typography, Stroke, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, Typography, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { RootStackParamList } from '../navigation/types';
 import { useAccessibilityPreferences } from '../context/AccessibilityPreferencesContext';
 import type { TextSize } from '../preferences/accessibilityPreferences';
@@ -137,14 +137,17 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
         {/* Text Size — visual segmented selector with live preview */}
         <SettingsSection title="Text size" description="Adjust the size of text throughout the app. Works with your device's text size settings.">
           <View style={styles.textSizeOptions}>
-            {TEXT_SIZES.map((option) => {
+            {TEXT_SIZES.map((option, index) => {
               const isSelected = textSize === option.value;
               return (
-                <Pressable
+                <AnimatedPressable
                   key={option.value}
+                  scaleValue={0.98}
+                  hapticFeedback="light"
                   style={[
                     styles.textSizeOption,
-                    isSelected && { backgroundColor: colors.brand, borderColor: colors.brand },
+                    index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+                    isSelected && { backgroundColor: colors.brand },
                   ]}
                   onPress={() => { haptic.selection(); setContextTextSize(option.value); }}
                   accessibilityRole="button"
@@ -152,6 +155,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
                   accessibilityState={{ selected: isSelected }}
                 >
                   <Text
+                    maxFontSizeMultiplier={1.5}
                     style={[
                       styles.textSizeSample,
                       { fontSize: option.sample },
@@ -161,6 +165,7 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
                     Aa
                   </Text>
                   <Text
+                    maxFontSizeMultiplier={1.5}
                     style={[
                       styles.textSizeLabel,
                       isSelected && { color: colors.textInverse },
@@ -168,15 +173,16 @@ export default function AccessibilitySettingsScreen({ navigation }: Props) {
                   >
                     {option.label}
                   </Text>
-                </Pressable>
+                </AnimatedPressable>
               );
             })}
           </View>
 
           {/* Live preview — flat text block, no card wrapper.
               Shows how body text will look at the selected size and weight. */}
-          <Text style={styles.previewLabel}>Preview</Text>
+          <Text maxFontSizeMultiplier={1.5} style={styles.previewLabel}>Preview</Text>
           <Text
+            maxFontSizeMultiplier={1.5}
             style={[
               styles.previewText,
               {
@@ -228,17 +234,15 @@ function createStyles(colors: ThemeColors) {
 
     // Text size selector
     textSizeOptions: {
-      flexDirection: 'row',
-      gap: Space.sm },
-    textSizeOption: {
-      flex: 1,
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingVertical: Space.md,
+      backgroundColor: colors.surfaceAlt,
       borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-      borderColor: colors.border,
-      backgroundColor: colors.surface },
+      overflow: 'hidden' },
+    textSizeOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Space.sm,
+      paddingVertical: Space.md },
     textSizeSample: {
       fontFamily: Typography.family.bold,
       color: colors.textPrimary },

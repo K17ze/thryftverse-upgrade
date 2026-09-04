@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Linking,
-  Pressable,
   Share,
   Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +16,7 @@ import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 
 import { Space, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -102,18 +102,20 @@ export default function AboutScreen({ navigation }: Props) {
               <AppIcon name="storefront" size={IconSize.hero} color="brand" opticalCenter accessible={false} />
             </View>
             <View style={styles.heroText}>
-              <Text style={styles.brandName}>Thryftverse</Text>
-              <Pressable
+              <Text maxFontSizeMultiplier={1.3} style={styles.brandName}>Thryftverse</Text>
+              <AnimatedPressable
+                scaleValue={0.98}
+                hapticFeedback="light"
                 onPress={handleVersionTap}
                 accessibilityRole="text"
                 accessibilityLabel="Thryftverse version"
                 hitSlop={16}
               >
-                <Text style={styles.brandVersion}>
+                <Text maxFontSizeMultiplier={1.5} style={styles.brandVersion}>
                   Version 1.0.0 (Build 2026.06.05)
                   {developerMode ? ' · Developer' : ''}
                 </Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
           </View>
         </View>

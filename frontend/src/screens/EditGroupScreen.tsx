@@ -28,6 +28,7 @@ import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
 import { GroupMediaSourceSheet, type GroupMediaSource } from '../components/chat/GroupMediaSourceSheet';
 import { useHaptic } from '../hooks/useHaptic';
 import { useGroupMediaUpload } from '../hooks/useGroupMediaUpload';
+import { GROUP_AESTHETIC_PRESETS, getAestheticPresets } from '../constants/groupAesthetics';
 import { AppButton } from '../components/ui/AppButton';
 import { Caption, Meta } from '../components/ui/Text';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
@@ -210,11 +211,11 @@ export default function EditGroupScreen({ navigation, route }: Props) {
 
     const avatarChanged = avatar !== initialAvatar;
     const coverChanged = coverPhoto !== initialCoverPhoto;
-    if (avatarChanged && avatar && !avatarFinalizationId) {
+    if (avatarChanged && avatar && groupMedia.avatar.status === 'uploading' && !avatarFinalizationId) {
       setSaveIssue('The group photo is not ready. Choose it again to retry the upload.');
       return;
     }
-    if (coverChanged && coverPhoto && !coverPhotoFinalizationId) {
+    if (coverChanged && coverPhoto && groupMedia.cover.status === 'uploading' && !coverPhotoFinalizationId) {
       setSaveIssue('The cover photo is not ready. Choose it again to retry the upload.');
       return;
     }
@@ -230,6 +231,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     // response below reconciles the final canonical URLs.
     const optimisticAvatar = groupMedia.avatarDisplayUri ?? avatar;
     const optimisticCover = groupMedia.coverDisplayUri ?? coverPhoto;
+    const previousConversation = conversation;
     upsertConversation({
       ...conversation,
       title: trimmedName,
@@ -249,7 +251,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
       } = {};
       if (trimmedName !== (conversation.title ?? '').trim()) updates.title = trimmedName;
       if (description.trim() !== (conversation.description ?? '').trim()) {
-        updates.description = description.trim();
+        updates.description = description.trim() || undefined;
       }
       if (avatarChanged) {
         updates.avatar = avatar;
@@ -290,6 +292,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         setOutcomeUnknown(true);
       } else {
         pendingSaveKeyRef.current = null;
+        upsertConversation(previousConversation);
         setSaveIssue(parsed.message);
         setOutcomeUnknown(false);
       }
@@ -639,6 +642,21 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         onClose={() => setMediaSourceSheet((prev) => ({ ...prev, visible: false }))}
         onSelect={handleMediaSourceSelect}
         title={mediaSourceSheet.target === 'avatar' ? 'Group photo' : 'Cover photo'}
+        presets={getAestheticPresets(mediaSourceSheet.target)}
+        onSelectPreset={(url) => {
+          if (mediaSourceSheet.target === 'avatar') {
+            groupMedia.setAvatarUrl(url);
+          } else {
+            groupMedia.setCoverUrl(url);
+          }
+          clearPendingSave();
+        }}
+        canRemove={Boolean(
+          mediaSourceSheet.target === 'avatar'
+            ? groupMedia.avatarDisplayUri || groupMedia.avatar.confirmedRemote
+            : groupMedia.coverDisplayUri || groupMedia.cover.confirmedRemote
+        )}
+        onRemove={mediaSourceSheet.target === 'avatar' ? handleRemovePhoto : handleRemoveCoverPhoto}
       />
     </FlagshipScreen>
   );

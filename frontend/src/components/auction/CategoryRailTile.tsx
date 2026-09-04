@@ -46,7 +46,7 @@ export const CategoryRailTile = memo(function CategoryRailTile({
       )}
       {/* Restrained gradient only behind label */}
       <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.75)']}
+        colors={['transparent', colors.mediaOverlayScrim]}
         locations={[0.45, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"

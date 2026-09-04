@@ -86,6 +86,12 @@ import { track, trackFunnelStep } from '../analytics';
 
 type RouteT = RouteProp<RootStackParamList, 'Checkout'>;
 
+const safeMark = (name: string) => {
+  if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+    performance.mark(name);
+  }
+};
+
 export default function CheckoutScreen() {
   const a11yRef = useRef<any>(null);
   useA11yAudit(a11yRef, 'CheckoutScreen');
@@ -542,7 +548,7 @@ export default function CheckoutScreen() {
     if (!userId || !item) return;
 
     // Performance mark: checkout flow start (user confirmed payment).
-    performance.mark('checkout:start');
+    safeMark('checkout:start');
     track('checkout_started', { item_id: item.id, total: item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp });
     trackFunnelStep('checkout', 'checkout_started', { listing_id: item.id });
 
@@ -673,7 +679,7 @@ export default function CheckoutScreen() {
           setStage('payment_succeeded');
           pendingIntentIdRef.current = null;
           isSubmittingRef.current = false;
-          performance.mark('checkout:complete');
+          safeMark('checkout:complete');
           track('purchase_completed', { item_id: item.id, total: item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp, payment_method: 'oneze' });
           trackFunnelStep('checkout', 'purchase_completed', { order_id: orderId });
           handleSettlementNavigation('succeeded', orderId, attemptId);
@@ -786,7 +792,7 @@ export default function CheckoutScreen() {
         pendingIntentIdRef.current = null;
         isSubmittingRef.current = false;
         // Performance mark: checkout flow complete (payment settled).
-        performance.mark('checkout:complete');
+        safeMark('checkout:complete');
         track('purchase_completed', { item_id: item.id, total: item.price + calculatePlatformChargeGbp(item.price) + postageOption.priceFromGbp, payment_method: savedPaymentMethod?.type ?? 'wallet' });
         trackFunnelStep('checkout', 'purchase_completed', { order_id: orderId });
         handleSettlementNavigation('succeeded', orderId, attemptId);
@@ -1166,7 +1172,7 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} importantForAccessibility="no" />
           </Pressable>
           <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
           <View style={styles.headerSpacer} />
@@ -1194,13 +1200,13 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} importantForAccessibility="no" />
           </Pressable>
           <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
-          <Ionicons name="lock-closed-outline" size={28} color={colors.textMuted} aria-hidden={true} />
+          <Ionicons name="lock-closed-outline" size={28} color={colors.textMuted} importantForAccessibility="no" />
           <Text style={[styles.signedOutTitle, t.signedOutTitle]} maxFontSizeMultiplier={2}>Sign in to checkout</Text>
           <Text style={[styles.signedOutBody, t.signedOutBody]} maxFontSizeMultiplier={2}>
             You need to be signed in to complete your purchase.
@@ -1230,13 +1236,13 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
+            <Ionicons name="close" size={22} color={colors.textPrimary} importantForAccessibility="no" />
           </Pressable>
           <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
-          <Ionicons name="person-circle-outline" size={28} color={colors.textMuted} aria-hidden={true} />
+          <Ionicons name="person-circle-outline" size={28} color={colors.textMuted} importantForAccessibility="no" />
           <Text style={[styles.signedOutTitle, t.signedOutTitle]} maxFontSizeMultiplier={2}>Cannot purchase your own listing</Text>
           <Text style={[styles.signedOutBody, t.signedOutBody]} maxFontSizeMultiplier={2}>
             You cannot buy an item you listed for sale.
@@ -1350,7 +1356,7 @@ export default function CheckoutScreen() {
           accessibilityRole="button"
           accessibilityLabel="Close checkout"
         >
-          <Ionicons name="close" size={22} color={colors.textPrimary} aria-hidden={true} />
+          <Ionicons name="close" size={22} color={colors.textPrimary} importantForAccessibility="no" />
         </Pressable>
         <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
         <View style={styles.headerSpacer} />
@@ -1383,7 +1389,7 @@ export default function CheckoutScreen() {
           still usable. Distinct from full error states. */}
       {partialDataPrompt ? (
         <View style={[styles.partialDataBanner, t.partialDataBanner]}>
-          <Ionicons name={partialDataPrompt.icon} size={16} color={colors.warning} aria-hidden={true} />
+          <Ionicons name={partialDataPrompt.icon} size={16} color={colors.warning} importantForAccessibility="no" />
           <Text style={[styles.partialDataMessage, t.partialDataMessage]} numberOfLines={3} maxFontSizeMultiplier={2}>
             {partialDataPrompt.message}
           </Text>
@@ -1470,6 +1476,7 @@ export default function CheckoutScreen() {
                 : shippingError ?? undefined
           }
           accessibilityLabel={`Delivery: ${postageOption.label}, ${postageOption.etaLabel}, ${postageOption.liveQuote ? 'Live quote' : 'Estimated'}, ${formatFromFiat(POSTAGE_FEE, 'GBP')}`}
+          accessibilityHint={canChangePostage ? 'Change delivery method and carrier' : undefined}
         />
 
         {/* 5. Payment method â€” unified with address/delivery row family */}
@@ -1517,7 +1524,7 @@ export default function CheckoutScreen() {
             accessibilityLabel={`Pay with 1ZE Wallet. ${onezeBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} 1ZE available. ${Math.ceil(GROSS_TOTAL).toLocaleString()} 1ZE needed.`}
             accessibilityHint="Switch to paying with your 1ZE wallet balance"
           >
-            <Ionicons name="wallet-outline" size={20} color={colors.brand} aria-hidden={true} />
+            <Ionicons name="wallet-outline" size={20} color={colors.brand} importantForAccessibility="no" />
             <View style={styles.onezeOptionTextCol}>
               <Text style={[styles.onezeOptionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1}>
                 1ZE Wallet
@@ -1526,7 +1533,7 @@ export default function CheckoutScreen() {
                 {onezeBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} 1ZE Â· {Math.ceil(GROSS_TOTAL).toLocaleString()} 1ZE needed
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} importantForAccessibility="no" />
           </Pressable>
         )}
 
@@ -1536,19 +1543,19 @@ export default function CheckoutScreen() {
             effective than security badges in the footer." */}
         <View style={styles.trustCluster}>
           <View style={styles.trustRow}>
-            <Ionicons name="shield-checkmark-outline" size={13} color={colors.success} aria-hidden={true} />
+            <Ionicons name="shield-checkmark-outline" size={13} color={colors.success} importantForAccessibility="no" />
             <Text style={[styles.trustText, { color: colors.success }]} maxFontSizeMultiplier={1}>
               Buyer protection included
             </Text>
           </View>
           <View style={styles.trustRow}>
-            <Ionicons name="lock-closed" size={13} color={colors.textMuted} aria-hidden={true} />
+            <Ionicons name="lock-closed" size={13} color={colors.textMuted} importantForAccessibility="no" />
             <Text style={[styles.trustText, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>
               Secure payment · encrypted
             </Text>
           </View>
           <View style={styles.trustRow}>
-            <Ionicons name="return-down-back-outline" size={13} color={colors.textMuted} aria-hidden={true} />
+            <Ionicons name="return-down-back-outline" size={13} color={colors.textMuted} importantForAccessibility="no" />
             <Text style={[styles.trustText, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>
               14-day returns
             </Text>
@@ -1581,6 +1588,7 @@ export default function CheckoutScreen() {
               }}
               accessibilityRole="switch"
               accessibilityLabel="Use wallet balance"
+              accessibilityHint="Apply wallet credit to reduce the total"
               accessibilityState={{ checked: useBalance }}
             >
               <View style={[styles.balanceSwitch, t.balanceSwitch, useBalance && t.balanceSwitchOn]}>
@@ -1598,7 +1606,7 @@ export default function CheckoutScreen() {
 
         {useBalance && balanceApplied > 0 && (
           <View style={[styles.savingsBadge, t.savingsBadge]}>
-            <Ionicons name="wallet-outline" size={12} color={colors.success} aria-hidden={true} />
+            <Ionicons name="wallet-outline" size={12} color={colors.success} importantForAccessibility="no" />
             <Text style={[styles.savingsText, t.savingsText]} maxFontSizeMultiplier={1}>
               Saving {formatFromFiat(balanceApplied, 'GBP')} with wallet balance
             </Text>
@@ -1697,7 +1705,7 @@ export default function CheckoutScreen() {
             </View>
             <View style={styles.breakdownChevron}>
               <Text style={[styles.breakdownChevronText, t.breakdownChevronText]} maxFontSizeMultiplier={1}>View full breakdown</Text>
-              <Ionicons name="chevron-up" size={16} color={colors.textMuted} aria-hidden={true} />
+              <Ionicons name="chevron-up" size={16} color={colors.textMuted} importantForAccessibility="no" />
             </View>
           </View>
         </Pressable>
@@ -1723,9 +1731,10 @@ export default function CheckoutScreen() {
               disabled={!checkoutEligible || isInteractionLocked}
               accessibilityRole="button"
               accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Apple Pay`}
+              accessibilityHint="Complete checkout using Apple Pay"
               accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
             >
-              <Ionicons name="logo-apple" size={22} color={colors.textInverse} aria-hidden={true} />
+              <Ionicons name="logo-apple" size={22} color={colors.textInverse} importantForAccessibility="no" />
               <Text style={[styles.walletBtnText, { color: colors.textInverse }]} maxFontSizeMultiplier={1}>Pay with Apple Pay</Text>
             </Pressable>
           )}
@@ -1743,9 +1752,10 @@ export default function CheckoutScreen() {
               disabled={!checkoutEligible || isInteractionLocked}
               accessibilityRole="button"
               accessibilityLabel={`Pay ${formatFromFiat(TOTAL, 'GBP')} with Google Pay`}
+              accessibilityHint="Complete checkout using Google Pay"
               accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
             >
-              <Ionicons name="logo-google" size={22} color={colors.textInverse} aria-hidden={true} />
+              <Ionicons name="logo-google" size={22} color={colors.textInverse} importantForAccessibility="no" />
               <Text style={[styles.walletBtnText, { color: colors.textInverse }]} maxFontSizeMultiplier={1}>Pay with Google Pay</Text>
             </Pressable>
           )}
@@ -1765,6 +1775,7 @@ export default function CheckoutScreen() {
                 ? `Pay ${formatFromFiat(TOTAL, 'GBP')} with card`
                 : `Pay ${formatFromFiat(TOTAL, 'GBP')}`
             }
+            accessibilityHint="Complete your purchase"
             accessibilityState={{
               disabled: !checkoutEligible || isInteractionLocked,
               busy: isSubmitting,
@@ -1777,7 +1788,7 @@ export default function CheckoutScreen() {
                 name="lock-closed"
                 size={16}
                 color={walletAvailable ? colors.textPrimary : colors.textInverse}
-                aria-hidden={true}
+                importantForAccessibility="no"
               />
             )}
             <Text
@@ -1833,7 +1844,7 @@ export default function CheckoutScreen() {
             value={formatFromFiat(POSTAGE_FEE, 'GBP')}
           />
           <View style={styles.protectionIncludedRow}>
-            <Ionicons name="checkmark-circle" size={12} color={colors.success} aria-hidden={true} />
+            <Ionicons name="checkmark-circle" size={12} color={colors.success} importantForAccessibility="no" />
             <Text style={[styles.protectionIncludedText, t.protectionIncludedText]}>
               Includes buyer protection â€” funds held until you receive your order
             </Text>
@@ -1859,7 +1870,7 @@ export default function CheckoutScreen() {
           </View>
           <View style={[styles.breakdownSheetDivider, t.breakdownSheetDivider]} />
           <View style={styles.breakdownSheetPolicyRow}>
-            <Ionicons name="return-down-back-outline" size={16} color={colors.textMuted} aria-hidden={true} />
+            <Ionicons name="return-down-back-outline" size={16} color={colors.textMuted} importantForAccessibility="no" />
             <Text style={[styles.breakdownSheetPolicyText, t.breakdownSheetLabel]}>
               Returns accepted within 14 days. Refunds issued to your original payment method.
             </Text>

@@ -58,15 +58,15 @@ export interface SellerHubBusinessPulse {
   orders: number;
   completeness: 'complete' | 'partial';
   /**
-   * Week-over-week net sales change (percentage points). Optional — only
-   * present when the backend has a prior-week comparison. Renders a trend
-   * indicator on the Seller Hub pulse (P2-08). Null/absent = no trend shown.
+   * Net sales change vs the previous 30-day period (percentage points).
+   * Null when the previous period had zero sales (division by zero avoided).
    */
-  netSalesWoWPct?: number | null;
+  netSalesPrevPeriodPct: number | null;
   /**
-   * Week-over-week order count change (percentage points). Optional.
+   * Order count change vs the previous 30-day period (percentage points).
+   * Null when the previous period had zero orders.
    */
-  ordersWoWPct?: number | null;
+  ordersPrevPeriodPct: number | null;
 }
 
 export interface SellerHubOverview {
@@ -117,7 +117,7 @@ export async function fetchSellerInventoryTotals(): Promise<SellerInventoryTotal
 
 // ── Batch command types ──
 
-export type SellerHubBatchCommand = 'pause' | 'resume' | 'delete' | 'mark_sold_external';
+export type SellerHubBatchCommand = 'pause' | 'resume' | 'delete';
 
 export interface SellerHubBatchItem {
   listingId: string;
@@ -126,16 +126,21 @@ export interface SellerHubBatchItem {
 
 export interface SellerHubBatchResult {
   listingId: string;
-  state: 'applied' | 'rejected' | 'conflict' | 'unknown';
-  code?: string;
+  state: 'applied' | 'rejected' | 'conflict';
+  newStatus?: string;
+  reason?: string;
   currentStatus?: string;
 }
 
 export interface SellerHubBatchResponse {
   ok: boolean;
   batchId: string;
+  idempotencyKey: string;
   state: 'complete' | 'partial';
   results: SellerHubBatchResult[];
+  appliedCount: number;
+  rejectedCount: number;
+  conflictCount: number;
 }
 
 export async function submitSellerHubBatchCommand(

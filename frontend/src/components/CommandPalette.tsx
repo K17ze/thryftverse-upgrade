@@ -177,7 +177,7 @@ export function CommandPalette() {
       }
     }
 
-    // Recently searched queries — navigate to GlobalSearch.
+    // Recently searched queries — navigate to UnifiedDiscovery.
     for (const term of recentSearches) {
       if (!term) continue;
       items.push({
@@ -186,7 +186,7 @@ export function CommandPalette() {
         subtitle: 'Recent search',
         category: 'search',
         icon: 'time-outline',
-        action: () => navigation.navigate('GlobalSearch'),
+        action: () => navigation.navigate('UnifiedDiscovery'),
         keywords: [term] });
     }
     return items;

@@ -151,18 +151,18 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
            MIN(CASE WHEN m.sender_user_id = $1 THEN m.created_at END) AS first_seller_msg,
            MIN(CASE WHEN m.sender_user_id != $1 THEN m.created_at END) AS first_buyer_msg
          FROM chat_messages m
-         JOIN conversations c ON c.id = m.conversation_id
-         WHERE c.seller_id = $1
+         JOIN chat_conversations c ON c.id = m.conversation_id
+         LEFT JOIN listings l ON l.id = c.item_id
+         WHERE (c.owner_id = $1 OR l.seller_id = $1)
            AND m.sender_user_id IS NOT NULL
            AND m.deleted_for_everyone_at IS NULL
            AND m.created_at > NOW() - INTERVAL '30 days'
          GROUP BY c.id
        )
-       SELECT COALESCE(
-         PERCENTILE_CONT(0.5) WITHIN GROUP (
-           ORDER BY EXTRACT(EPOCH FROM (first_seller_msg - first_buyer_msg)) / 3600
-         ), 0
-       )::numeric(10,1) AS avg_response_hours
+       SELECT
+        PERCENTILE_CONT(0.5) WITHIN GROUP (
+          ORDER BY EXTRACT(EPOCH FROM (first_seller_msg - first_buyer_msg)) / 3600
+        )::numeric(10,1) AS avg_response_hours
        FROM seller_replies
        WHERE first_seller_msg IS NOT NULL AND first_buyer_msg IS NOT NULL
          AND first_seller_msg > first_buyer_msg`,
@@ -310,10 +310,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     }
 
     // Summary: average, total, distribution + reproducibility metadata.
-    // A LEFT JOIN to review_publication_state is included so that once the
-    // table is populated we can filter to eligible (published, not removed,
-    // not incentivized) reviews. Until then every review is eligible and the
-    // join is a no-op (ps.state defaults to 'published' via COALESCE).
+    // A LEFT JOIN to review_publication_state filters to eligible (published
+    // or restored, not removed/pending) reviews. Until the table is populated
+    // every review is eligible (ps.state defaults to 'published' via COALESCE).
     const summaryRes = await readDb.query<{
       avg_rating: string | null;
       review_count: string;
@@ -329,9 +328,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
          AVG(r.rating)::numeric(3,2) AS avg_rating,
          COUNT(*)::text AS review_count,
          COUNT(*) FILTER (
-           WHERE COALESCE(ps.state, 'published') = 'published'
-              AND COALESCE(ps.removed, false) = false
-              AND COALESCE(ps.incentivized, false) = false
+           WHERE COALESCE(ps.state, 'published') IN ('published', 'restored')
          )::text AS eligible_count,
          MAX(r.created_at) AS as_of,
          COUNT(*) FILTER (WHERE r.rating = 1)::text AS d1,
@@ -538,7 +535,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           FROM listings l
           LEFT JOIN interactions i ON i.listing_id = l.id
             AND i.created_at >= NOW() - $2::interval
-          WHERE l.seller_id = $1
+          WHERE l.seller_id = $1 AND l.status != 'deleted'
         `,
         [sellerId, intervalStr]
       ),
@@ -621,6 +618,8 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         [sellerId, prevIntervalStr, intervalStr]
       ),
       // 7. Daily trend — current period (zero-filled via generate_series)
+      //    Lower bound filter ensures orders before the period start are
+      //    excluded even on the boundary calendar day.
       readDb.query<{ date: string; value: string | number }>(
         `
           WITH date_range AS (
@@ -637,18 +636,21 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             AND o.seller_id = $1
             AND o.status IN ('paid', 'shipped', 'delivered')
             AND o.paid_at IS NOT NULL
+            AND o.paid_at >= NOW() - $2::interval
           GROUP BY dr.d
           ORDER BY dr.d
         `,
         [sellerId, intervalStr]
       ),
       // 8. Daily trend — previous period (zero-filled via generate_series)
+      //    Upper bound is exclusive: the series ends one day BEFORE the
+      //    current period starts, so the two series are disjoint.
       readDb.query<{ date: string; value: string | number }>(
         `
           WITH date_range AS (
             SELECT generate_series(
               (NOW() - $2::interval)::date,
-              (NOW() - $3::interval)::date,
+              ((NOW() - $3::interval)::date - '1 day'::interval)::date,
               '1 day'::interval
             )::date AS d
           )
@@ -659,6 +661,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             AND o.seller_id = $1
             AND o.status IN ('paid', 'shipped', 'delivered')
             AND o.paid_at IS NOT NULL
+            AND o.paid_at < (NOW() - $3::interval)::date
           GROUP BY dr.d
           ORDER BY dr.d
         `,
@@ -698,6 +701,8 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     //     'partial' and these remain null.
     let refundsGbpMinor: number | null = null;
     let feesGbpMinor: number | null = null;
+    let prevRefundsGbpMinor: number | null = null;
+    let prevFeesGbpMinor: number | null = null;
     let completeness: 'complete' | 'partial' = 'partial';
     const ledgerCheck = await readDb.query<{ exists: boolean }>(
       `SELECT to_regclass('public.ledger_accounts') IS NOT NULL
@@ -705,14 +710,14 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     );
     if (ledgerCheck.rows[0]?.exists) {
       completeness = 'complete';
-      const [refundsResult, feesResult] = await Promise.all([
+      const [refundsResult, feesResult, prevRefundsResult, prevFeesResult] = await Promise.all([
         readDb.query<{ refunds: string | null }>(
           `
             SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS refunds
             FROM ledger_entries
             WHERE account_id = (
               SELECT id FROM ledger_accounts
-              WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+              WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
               LIMIT 1
             )
             AND source_type = 'refund'
@@ -727,7 +732,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             FROM ledger_entries
             WHERE account_id = (
               SELECT id FROM ledger_accounts
-              WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+              WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
               LIMIT 1
             )
             AND source_type = 'order_payment'
@@ -737,9 +742,46 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           `,
           [sellerId, intervalStr]
         ),
+        // Previous-period refunds (same account, shifted time window)
+        readDb.query<{ refunds: string | null }>(
+          `
+            SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS refunds
+            FROM ledger_entries
+            WHERE account_id = (
+              SELECT id FROM ledger_accounts
+              WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+              LIMIT 1
+            )
+            AND source_type = 'refund'
+            AND direction = 'debit'
+            AND created_at >= NOW() - $2::interval
+            AND created_at < NOW() - $3::interval
+          `,
+          [sellerId, prevIntervalStr, intervalStr]
+        ),
+        // Previous-period fees (same account, shifted time window)
+        readDb.query<{ fees: string | null }>(
+          `
+            SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS fees
+            FROM ledger_entries
+            WHERE account_id = (
+              SELECT id FROM ledger_accounts
+              WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+              LIMIT 1
+            )
+            AND source_type = 'order_payment'
+            AND direction = 'debit'
+            AND line_type = 'platform_fee'
+            AND created_at >= NOW() - $2::interval
+            AND created_at < NOW() - $3::interval
+          `,
+          [sellerId, prevIntervalStr, intervalStr]
+        ),
       ]);
       refundsGbpMinor = Number(refundsResult.rows[0]?.refunds ?? 0);
       feesGbpMinor = Number(feesResult.rows[0]?.fees ?? 0);
+      prevRefundsGbpMinor = Number(prevRefundsResult.rows[0]?.refunds ?? 0);
+      prevFeesGbpMinor = Number(prevFeesResult.rows[0]?.fees ?? 0);
     }
 
     const row = engagementResult.rows[0] ?? {};
@@ -759,22 +801,26 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     // ── Comparison (previous equal period) ────────────────────────────
     // The previous period is always complete (it's entirely in the past).
     const prevRevenueGbpMinor = Number(prevOrders.revenue_gbp_minor ?? 0);
+    const prevNetSalesGbpMinor =
+      prevRefundsGbpMinor !== null && prevFeesGbpMinor !== null
+        ? prevRevenueGbpMinor - prevRefundsGbpMinor - prevFeesGbpMinor
+        : null;
     const comparison = {
       revenueGbpMinor: prevRevenueGbpMinor,
-      netSalesGbpMinor:
-        refundsGbpMinor !== null && feesGbpMinor !== null
-          ? prevRevenueGbpMinor
-          : null,
+      netSalesGbpMinor: prevNetSalesGbpMinor,
       itemsSold: Number(prevOrders.items_sold ?? 0),
       totalViews: Number(prevEngagement.total_views ?? 0),
       totalLikes: Number(prevEngagement.total_likes ?? 0),
       totalSaves: Number(prevEngagement.total_saves ?? 0),
-      complete: true,
+      complete: prevNetSalesGbpMinor !== null,
     };
 
     // ── Trend (daily series, current + previous) ──────────────────────
+    // NOTE: the daily series is gross revenue (SUM(subtotal_gbp)). Per-day
+    // refund/fee subtraction is not implemented yet, so the metric label is
+    // always 'revenue' to avoid mislabeling gross revenue as net sales.
     const trend = {
-      metric: completeness === 'complete' ? 'netSales' as const : 'revenue' as const,
+      metric: 'revenue' as const,
       current: trendCurrentResult.rows.map((r) => ({
         date: r.date,
         value: Number(r.value ?? 0),
@@ -851,7 +897,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     const result = await readDb.query<{
       id: string;
       title: string;
-      price_gbp_minor: number | string;
+      price_gbp: string | number;
       views_count: string | number;
       likes_count: string | number;
       saved_count: string | number;
@@ -860,14 +906,14 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     }>(
       `
         SELECT
-          l.id, l.title, l.price_gbp_minor, l.status, l.created_at,
+          l.id, l.title, l.price_gbp, l.status, l.created_at,
           COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views_count,
           COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS likes_count,
           COUNT(i.id) FILTER (WHERE i.action = 'save') AS saved_count
         FROM listings l
         LEFT JOIN interactions i ON i.listing_id = l.id AND i.created_at >= NOW() - $3::interval
         WHERE l.seller_id = $1
-        GROUP BY l.id, l.title, l.price_gbp_minor, l.status, l.created_at
+        GROUP BY l.id, l.title, l.price_gbp, l.status, l.created_at
         ORDER BY (
           COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view'))
           + COUNT(i.id) FILTER (WHERE i.action = 'wishlist') * 3
@@ -887,7 +933,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         return {
           id: row.id,
           title: row.title,
-          priceGbpMinor: Number(row.price_gbp_minor),
+          priceGbpMinor: Math.round(Number(row.price_gbp) * 100),
           viewsCount: views,
           likesCount: likes,
           savedCount: saves,
@@ -905,7 +951,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       reply.code(401);
       return { ok: false, error: 'Unauthorized' };
     }
-    const { sellerId } = request.params as { sellerId: string };
+    const { sellerId } = sellerIdParamsSchema.parse(request.params);
     if (request.authUser.userId !== sellerId) {
       reply.code(403);
       return { ok: false, error: 'Forbidden' };
@@ -918,7 +964,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
 
     const result = await db.query(
-      `SELECT l.id, l.title, l.cover_image_url, l.status, l.price_gbp_minor,
+      `SELECT l.id, l.title, l.image_url, l.status, l.price_gbp,
               l.category, l.brand, l.created_at,
               COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')
                 AND i.created_at >= NOW() - make_interval(days => $2)) AS views,
@@ -929,7 +975,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
        FROM listings l
        LEFT JOIN interactions i ON i.listing_id = l.id
        WHERE l.seller_id = $1 AND l.status = 'active'
-       GROUP BY l.id, l.title, l.cover_image_url, l.status, l.price_gbp_minor,
+       GROUP BY l.id, l.title, l.image_url, l.status, l.price_gbp,
                 l.category, l.brand, l.created_at
        HAVING COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')
                 AND i.created_at >= NOW() - make_interval(days => $2)) < 10
@@ -943,9 +989,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       items: result.rows.map((r: any) => ({
         listingId: r.id,
         title: r.title,
-        coverImageUrl: r.cover_image_url,
+        coverImageUrl: r.image_url,
         status: r.status,
-        priceGbp: r.price_gbp_minor,
+        priceGbp: Number(r.price_gbp),
         category: r.category,
         brand: r.brand,
         createdAt: r.created_at,
@@ -980,29 +1026,40 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     const { period } = querySchema.parse(request.query);
     const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
 
-    // ── Parallel: listing identity, period-scoped engagement, price history ──
-    const [listingResult, engagementResult, priceHistoryResult, comparablesResult] =
+    // ── Step 1: Listing identity (needed before comparables) ──────────────
+    const listingResult = await readDb.query<{
+      id: string;
+      title: string;
+      price_gbp: number | string;
+      status: string;
+      image_url: string | null;
+      category: string | null;
+      brand: string | null;
+      condition: string | null;
+      created_at: string;
+      sold_at: string | null;
+    }>(
+      `SELECT l.id, l.title, l.price_gbp, l.status, l.image_url,
+              l.category, l.brand, l.condition, l.created_at,
+              (SELECT o.paid_at FROM orders o
+               WHERE o.listing_id = l.id AND o.status IN ('paid','shipped','delivered')
+                 AND o.paid_at IS NOT NULL
+               ORDER BY o.paid_at DESC LIMIT 1) AS sold_at
+       FROM listings l
+       WHERE l.id = $1 AND l.seller_id = $2 LIMIT 1`,
+      [listingId, sellerId]
+    );
+
+    const listing = listingResult.rows[0];
+    if (!listing) {
+      reply.code(404);
+      return { ok: false, error: 'Listing not found' };
+    }
+
+    // ── Step 2: Parallel — engagement, price history, comparables ──────────
+    const [engagementResult, priceHistoryResult, comparablesResult] =
       await Promise.all([
-        // 1. Listing identity
-        readDb.query<{
-          id: string;
-          title: string;
-          price_gbp_minor: number | string;
-          status: string;
-          cover_image_url: string | null;
-          image_url: string | null;
-          category: string | null;
-          brand: string | null;
-          condition: string | null;
-          created_at: string;
-          sold_at: string | null;
-        }>(
-          `SELECT id, title, price_gbp_minor, status, cover_image_url, image_url,
-                  category, brand, condition, created_at, sold_at
-           FROM listings WHERE id = $1 AND seller_id = $2 LIMIT 1`,
-          [listingId, sellerId]
-        ),
-        // 2. Period-scoped engagement (views, saves, offers, likes)
+        // 1. Period-scoped engagement (views, saves, offers, likes)
         readDb.query<{
           views: string | number;
           saves: string | number;
@@ -1020,7 +1077,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           `,
           [listingId, `${periodDays} days`]
         ),
-        // 3. Price history
+        // 2. Price history
         readDb.query<{
           previous_price_gbp: number | string;
           new_price_gbp: number | string;
@@ -1033,10 +1090,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
            LIMIT 50`,
           [listingId]
         ),
-        // 4. Sold comparables (same category/brand)
+        // 3. Sold comparables (same category/brand)
         (async () => {
-          const sourceRow = listingResult.rows[0];
-          if (!sourceRow?.category) return null;
+          if (!listing.category) return null;
           const compResult = await readDb.query<{ price_gbp: number | string; sold_at: string }>(
             `SELECT o.subtotal_gbp AS price_gbp, o.paid_at AS sold_at
              FROM orders o
@@ -1049,7 +1105,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
                AND ($3::text IS NULL OR LOWER(l.brand) = LOWER($3))
              ORDER BY o.paid_at DESC
              LIMIT 100`,
-            [listingId, sourceRow.category, sourceRow.brand ?? null]
+            [listingId, listing.category, listing.brand ?? null]
           );
           const prices = compResult.rows
             .map((r) => Number(r.price_gbp))
@@ -1070,12 +1126,6 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           };
         })(),
       ]);
-
-    const listing = listingResult.rows[0];
-    if (!listing) {
-      reply.code(404);
-      return { ok: false, error: 'Listing not found' };
-    }
 
     const eng = engagementResult.rows[0] ?? {};
     const views = Number(eng.views ?? 0);
@@ -1112,9 +1162,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         listing: {
           id: listing.id,
           title: listing.title,
-          priceGbpMinor: Number(listing.price_gbp_minor),
+          priceGbpMinor: Math.round(Number(listing.price_gbp) * 100),
           status: listing.status,
-          imageUrl: listing.cover_image_url ?? listing.image_url,
+          imageUrl: listing.image_url,
           category: listing.category,
           brand: listing.brand,
           condition: listing.condition,

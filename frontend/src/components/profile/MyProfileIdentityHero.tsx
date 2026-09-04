@@ -86,7 +86,6 @@ function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: 
 
 const AVATAR_SIZE = 96; // design contract: 96-128pt seam avatar — matches ProfileHero (2026 standard)
 const AVATAR_OVERLAP = AVATAR_SIZE / 2;
-const ACTION_RADIUS = 11;
 const ACTION_HEIGHT = 44;
 
 interface MyProfileIdentityHeroProps {
@@ -353,7 +352,7 @@ function ProfileStat({ value, label, styles, onPress, a11yLabel }: {
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={a11yLabel ?? value}
-        hitSlop={4}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Text style={styles.seamStatValue} numberOfLines={1}>{value}</Text>
         <Text style={styles.seamStatLabel} numberOfLines={1}>{label}</Text>
@@ -548,7 +547,7 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     gap: Space.xs + 3,
     height: ACTION_HEIGHT,
-    borderRadius: ACTION_RADIUS },
+    borderRadius: Radius.lg },
   editAction: {
     backgroundColor: colors.brand },
   editActionText: {

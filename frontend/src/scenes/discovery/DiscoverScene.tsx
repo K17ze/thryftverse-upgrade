@@ -30,6 +30,8 @@ import { fetchPosterStories, type PosterStory } from '../../services/postersApi'
 import { fetchPublicMoodboards, type Moodboard } from '../../services/moodboardApi';
 import type { RootStackParamList } from '../../navigation/types';
 import { useReadiness } from '../../performance/visuallyComplete';
+import { useDynamicAlgorithmSignals } from '../../hooks/useDynamicAlgorithmSignals';
+import { matchesSignal } from '../../services/algorithmicSignalsService';
 import { useA11yAudit } from '../../hooks/useA11yAudit';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -43,6 +45,7 @@ type DiscoverNavigation = NativeStackNavigationProp<RootStackParamList>;
 interface DiscoverCategoryOption {
   id: string;
   name: string;
+  isPersonalized?: boolean;
 }
 
 interface DiscoverCategoryBarProps {
@@ -80,12 +83,19 @@ function DiscoverCategoryBar({ activeCategory, categories, onSelect }: DiscoverC
           return (
             <Pressable
               key={`cat-${idx}-${category.id}`}
-              style={[styles.pill, isActive && styles.pillActive]}
+              style={[
+                styles.pill,
+                isActive && styles.pillActive,
+                category.isPersonalized && !isActive && styles.pillPersonalized,
+              ]}
               onPress={() => onSelect(category.id)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isActive }}
-              accessibilityLabel={`${category.name} category`}
+              accessibilityLabel={`${category.name} category${category.isPersonalized ? ', personalized' : ''}`}
             >
+              {category.isPersonalized && category.id !== 'All' ? (
+                <View style={styles.pillDot} />
+              ) : null}
               <Text style={[styles.pillText, isActive && styles.pillTextActive]}>
                 {category.name}
               </Text>
@@ -117,9 +127,20 @@ function createCategoryBarStyles(colors: ThemeColors) {
       paddingVertical: Space.sm,
       paddingHorizontal: Space.smMd,
       borderRadius: Radius.md,
-      backgroundColor: 'transparent' },
+      backgroundColor: 'transparent',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5 },
+    pillPersonalized: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle },
     pillActive: {
       backgroundColor: colors.surfaceAlt },
+    pillDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: colors.brand },
     pillText: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
@@ -251,17 +272,29 @@ export function DiscoverScene({
     [colors],
   );
 
-  // Category bar options built from taxonomy root categories, keyed by their
-  // stable taxonomy ID (not display name) so filtering is decoupled from
-  // localization/renaming. "All" is a synthetic option that shows everything.
-  const discoverCategories = useMemo<DiscoverCategoryOption[]>(
-    () => [
-      { id: 'All', name: 'All' },
-      ...taxonomyCategories
-        .filter((c) => c.parentId === null)
-        .map((c) => ({ id: c.id, name: c.name })),
-    ],
-    [taxonomyCategories],
+  // Category bar options dynamically driven by user algorithm topics & recommendation vectors.
+  // "All" is always first; subsequent categories are prioritized according to user affinity.
+  const { signals: algorithmSignals, selectSignal } = useDynamicAlgorithmSignals({ surface: 'discover' });
+
+  const discoverCategories = useMemo<DiscoverCategoryOption[]>(() => {
+    return algorithmSignals.map((signal) => ({
+      id: signal.filterKey === 'all' ? 'All' : signal.id,
+      name: signal.label,
+      isPersonalized: signal.isPersonalized,
+    }));
+  }, [algorithmSignals]);
+
+  const handleSelectCategory = useCallback(
+    (categoryId: string) => {
+      setActiveCategory(categoryId);
+      const targetSignal = algorithmSignals.find(
+        (s) => (categoryId === 'All' ? s.filterKey === 'all' : s.id === categoryId || s.filterKey === categoryId.toLowerCase())
+      );
+      if (targetSignal) {
+        selectSignal(targetSignal);
+      }
+    },
+    [algorithmSignals, selectSignal],
   );
 
   // Map each root/ancestor category ID to the set of all descendant IDs, so
@@ -281,24 +314,22 @@ export function DiscoverScene({
     return map;
   }, [taxonomyCategories]);
 
-  // Build a filter predicate from a taxonomy category ID. Returns null for
-  // "All" (no filtering). Matches listings whose `category` equals the
-  // selected root ID or is a descendant of it; also falls back to matching
-  // the listing's `subcategory` string against descendant IDs for listings
-  // that carry subcategory text instead of a taxonomy category ID.
+  // Build a filter predicate from a category ID or algorithmic signal.
   const getFilterFn = useCallback(
     (categoryId: string): ((listing: Listing) => boolean) | null => {
       if (categoryId === 'All') return null;
+      const targetSignal = algorithmSignals.find((s) => s.id === categoryId || s.filterKey === categoryId.toLowerCase());
       const descendants = descendantMap.get(categoryId);
       const descendantList = descendants ? [...descendants] : [];
       return (l: Listing) => {
         if (l.category === categoryId) return true;
         if (descendants && descendants.has(l.category)) return true;
         if (l.subcategory && descendantList.some((d) => l.subcategory!.includes(d))) return true;
+        if (targetSignal && matchesSignal(l, targetSignal)) return true;
         return false;
       };
     },
-    [descendantMap],
+    [descendantMap, algorithmSignals],
   );
 
   // Personalised listings: use the For You feed when it has results and the
@@ -435,7 +466,7 @@ export function DiscoverScene({
         <DiscoverCategoryBar
           activeCategory={activeCategory}
           categories={discoverCategories}
-          onSelect={setActiveCategory}
+          onSelect={handleSelectCategory}
         />
         {isOffline && <OfflineBanner />}
       </>
@@ -522,6 +553,7 @@ export function DiscoverScene({
         onScroll={handleScroll}
         scrollRef={scrollRef}
         listHeaderComponent={categoryBar}
+        enableImagePrefetch
       />
     </View>
   );

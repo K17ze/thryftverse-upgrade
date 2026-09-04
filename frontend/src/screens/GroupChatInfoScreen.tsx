@@ -1,45 +1,71 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { ScrollView, StyleSheet, Text, View, ActivityIndicator, Pressable, Share, Linking } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  ActivityIndicator,
+  Pressable,
+  Share,
+  Linking,
+  Switch,
+  TextInput,
+} from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CachedImage } from '../components/CachedImage';
 import { AnimatedPressable } from '../components/AnimatedPressable';
-import { ChatInfoRow, ChatInfoSection } from '../components/chat/ChatInfoSection';
 import { FlagshipHeader, FlagshipScreen } from '../components/flagship';
 import { Caption } from '../components/ui/Text';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
+import { BottomSheet } from '../components/BottomSheet';
+import { AppButton } from '../components/ui/AppButton';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useHaptic } from '../hooks/useHaptic';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
-import { Control, Radius, Space, Stroke, TypeStyles, FontFamily } from '../theme/designTokens';
+import { Control, Radius, Space, Stroke, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import {
   deleteConversationOnApi,
   createGroupInviteLinkOnApi,
   fetchGroupInviteLinksOnApi,
   revokeGroupInviteLinkOnApi,
-  archiveConversationOnApi,
   fetchConversationMediaFromApi,
   fetchGroupSettingsFromApi,
+  updateConversationOnApi,
+  promoteConversationMemberOnApi,
+  demoteConversationMemberOnApi,
+  removeConversationMemberOnApi,
   type GroupInviteLink,
-  type GroupSettingsCapabilities } from '../services/chatApi';
+  type GroupSettingsCapabilities,
+} from '../services/chatApi';
 import { parseApiError } from '../lib/apiClient';
 import { GroupAvatarMosaic } from '../components/chat/GroupAvatarMosaic';
 import { useChatGroupMembershipEvent } from '../services/realtimeClient';
+import { GroupMediaSourceSheet, type GroupMediaSource } from '../components/chat/GroupMediaSourceSheet';
+import { useGroupMediaUpload } from '../hooks/useGroupMediaUpload';
+import { getAestheticPresets } from '../constants/groupAesthetics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 
-type TabKey = 'members' | 'media' | 'settings';
+/** Safely format an invite-link expiry date. Returns '—' for invalid/empty values. */
+function formatInviteDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+}
 
-const TABS: Array<{ key: TabKey; label: string }> = [
-  { key: 'members', label: 'Members' },
-  { key: 'media', label: 'Media' },
-  { key: 'settings', label: 'Settings' },
-];
+/** Format creation date */
+function formatCreationDate(iso?: string | null): string {
+  if (!iso) return 'recently';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return 'recently';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params ?? {};
@@ -50,12 +76,13 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const conversations = useStore((state) => state.conversations);
   const currentUser = useStore((state) => state.currentUser);
-  const archiveConversation = useStore((state) => state.archiveConversation);
   const deleteConversation = useStore((state) => state.deleteConversation);
+  const replaceConversationMessages = useStore((state) => state.replaceConversationMessages);
+  const upsertConversation = useStore((state) => state.upsertConversation);
   const mutedIds = useStore((state) => state.mutedConversationIds);
   const toggleMuted = useStore((state) => state.toggleMutedConversation);
 
-  const [activeTab, setActiveTab] = useState<TabKey>('members');
+  // Core Actions state
   const [isLeaving, setIsLeaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
@@ -66,10 +93,31 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const displayedInviteSummary = inviteLink ?? activeInviteSummary;
   const reconcileGroupMembershipEvent = useStore((state) => state.reconcileGroupMembershipEvent);
 
+  // Parity feature state (WhatsApp benchmark)
+  const [isChatLocked, setIsChatLocked] = useState(false);
+  const [disappearingDuration, setDisappearingDuration] = useState<'off' | '24h' | '7d' | '90d'>('off');
+  const [isDisappearingSheetVisible, setIsDisappearingSheetVisible] = useState(false);
+  const [isEncryptionSheetVisible, setIsEncryptionSheetVisible] = useState(false);
+  const [isThemeSheetVisible, setIsThemeSheetVisible] = useState(false);
+  const [selectedTheme, setSelectedTheme] = useState('Default');
+  const [isMemberSearchOpen, setIsMemberSearchOpen] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [isMemberSearchFocused, setIsMemberSearchFocused] = useState(false);
+  const [isFavourited, setIsFavourited] = useState(false);
+  const [isMemberChangesSheetVisible, setIsMemberChangesSheetVisible] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<{
+    id: string;
+    username: string;
+    displayName?: string | null;
+    avatar?: string | null;
+    role?: 'owner' | 'admin' | 'member';
+  } | null>(null);
+
   useChatGroupMembershipEvent(conversationId, (event) => {
-    const removedUserId = event.type === 'chat.member.removed'
-      ? event.payload.memberUserId
-      : event.type === 'chat.member.left'
+    const removedUserId =
+      event.type === 'chat.member.removed'
+        ? event.payload.memberUserId
+        : event.type === 'chat.member.left'
         ? event.payload.actorUserId
         : null;
     reconcileGroupMembershipEvent(event);
@@ -77,6 +125,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
       navigation.reset({ index: 0, routes: [{ name: 'MainTabs', params: { screen: 'Inbox' } }] });
     }
   });
+
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
     title: string;
@@ -95,12 +144,162 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const isMuted = mutedIds.includes(conversationId);
   const currentRole = currentUser?.id ? conversation?.memberRoles?.[currentUser.id] : undefined;
   const isGroupManager = Boolean(
-    currentUser?.id
-    && (conversation?.ownerId === currentUser.id || currentRole === 'owner' || currentRole === 'admin'),
+    currentUser?.id &&
+      (conversation?.ownerId === currentUser.id || currentRole === 'owner' || currentRole === 'admin')
   );
   const [groupCapabilities, setGroupCapabilities] = useState<GroupSettingsCapabilities | null>(null);
   const canEditGroupInfo = groupCapabilities?.canEditGroupInfo ?? isGroupManager;
   const canAddMembers = groupCapabilities?.canAddMembers ?? isGroupManager;
+
+  const [mediaSheet, setMediaSheet] = useState<{ visible: boolean; target: 'avatar' | 'cover' }>({
+    visible: false,
+    target: 'avatar',
+  });
+
+  const mediaUpload = useGroupMediaUpload(
+    conversation?.avatar ?? null,
+    conversation?.coverPhoto ?? null
+  );
+
+  const displayCoverPhoto = mediaUpload.coverDisplayUri ?? conversation?.coverPhoto;
+  const displayAvatar = mediaUpload.avatarDisplayUri ?? conversation?.avatar;
+
+  const handleMediaSourceSelect = useCallback(
+    async (source: GroupMediaSource) => {
+      const target = mediaSheet.target;
+      setMediaSheet((s) => ({ ...s, visible: false }));
+      if (source === 'camera' || source === 'gallery') {
+        if (target === 'avatar') {
+          await mediaUpload.pickAvatar(source);
+        } else {
+          await mediaUpload.pickCover(source);
+        }
+      }
+    },
+    [mediaSheet.target, mediaUpload]
+  );
+
+  const handleSelectPreset = useCallback(
+    async (url: string) => {
+      const target = mediaSheet.target;
+      setMediaSheet((s) => ({ ...s, visible: false }));
+      try {
+        if (target === 'avatar') {
+          if (conversation) {
+            useStore.getState().upsertConversation({ ...conversation, avatar: url });
+          }
+          await updateConversationOnApi(conversationId, { avatar: url });
+          show('Group photo updated', 'success');
+        } else {
+          if (conversation) {
+            useStore.getState().upsertConversation({ ...conversation, coverPhoto: url });
+          }
+          await updateConversationOnApi(conversationId, { coverPhoto: url });
+          show('Cover banner updated', 'success');
+        }
+      } catch (err) {
+        if (target === 'avatar') {
+          if (conversation) {
+            useStore.getState().upsertConversation({ ...conversation, avatar: conversation.avatar });
+          }
+        } else {
+          if (conversation) {
+            useStore.getState().upsertConversation({ ...conversation, coverPhoto: conversation.coverPhoto });
+          }
+        }
+        show(parseApiError(err, 'Could not update photo').message, 'error');
+      }
+    },
+    [conversation, conversationId, mediaSheet.target, mediaUpload, show]
+  );
+
+  const handleRemoveMedia = useCallback(async () => {
+    const target = mediaSheet.target;
+    setMediaSheet((s) => ({ ...s, visible: false }));
+    try {
+      if (target === 'avatar') {
+        mediaUpload.removeAvatar();
+        if (conversation) {
+          useStore.getState().upsertConversation({ ...conversation, avatar: undefined });
+        }
+        await updateConversationOnApi(conversationId, { avatar: null });
+        show('Group photo removed', 'info');
+      } else {
+        mediaUpload.removeCover();
+        if (conversation) {
+          useStore.getState().upsertConversation({ ...conversation, coverPhoto: undefined });
+        }
+        await updateConversationOnApi(conversationId, { coverPhoto: null });
+        show('Cover banner removed', 'info');
+      }
+    } catch (err) {
+      if (target === 'avatar') {
+        mediaUpload.removeAvatar();
+        if (conversation) {
+          useStore.getState().upsertConversation({ ...conversation, avatar: conversation.avatar });
+        }
+      } else {
+        mediaUpload.removeCover();
+        if (conversation) {
+          useStore.getState().upsertConversation({ ...conversation, coverPhoto: conversation.coverPhoto });
+        }
+      }
+      show(parseApiError(err, 'Could not remove photo').message, 'error');
+    }
+  }, [conversation, conversationId, mediaSheet.target, mediaUpload, show]);
+
+  // Sync confirmed uploads to API & store
+  useEffect(() => {
+    if (mediaUpload.avatar.status === 'confirmed' && mediaUpload.avatar.confirmedRemote) {
+      const prevAvatar = conversation?.avatar;
+      updateConversationOnApi(conversationId, {
+        avatar: mediaUpload.avatar.confirmedRemote,
+        avatarFinalizationId: mediaUpload.avatar.finalizationId ?? undefined,
+      })
+        .then(() => {
+          if (conversation) {
+            useStore.getState().upsertConversation({
+              ...conversation,
+              avatar: mediaUpload.avatar.confirmedRemote ?? undefined,
+            });
+          }
+          show('Group photo updated', 'success');
+        })
+        .catch((err) => {
+          mediaUpload.removeAvatar();
+          if (conversation) {
+            useStore.getState().upsertConversation({ ...conversation, avatar: prevAvatar });
+          }
+          show(parseApiError(err, 'Could not save photo').message, 'error');
+        });
+    }
+  }, [mediaUpload.avatar.status, mediaUpload.avatar.confirmedRemote]);
+
+  useEffect(() => {
+    if (mediaUpload.cover.status === 'confirmed' && mediaUpload.cover.confirmedRemote) {
+      const prevCover = conversation?.coverPhoto;
+      updateConversationOnApi(conversationId, {
+        coverPhoto: mediaUpload.cover.confirmedRemote,
+        coverPhotoFinalizationId: mediaUpload.cover.finalizationId ?? undefined,
+      })
+        .then(() => {
+          if (conversation) {
+            useStore.getState().upsertConversation({
+              ...conversation,
+              coverPhoto: mediaUpload.cover.confirmedRemote ?? undefined,
+            });
+          }
+          show('Cover banner updated', 'success');
+        })
+        .catch((err) => {
+          mediaUpload.removeCover();
+          if (conversation) {
+            useStore.getState().upsertConversation({ ...conversation, coverPhoto: prevCover });
+          }
+          show(parseApiError(err, 'Could not save cover banner').message, 'error');
+        });
+    }
+  }, [mediaUpload.cover.status, mediaUpload.cover.confirmedRemote]);
 
   useEffect(() => {
     let active = true;
@@ -120,13 +319,15 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!canAddMembers) return;
     fetchGroupInviteLinksOnApi(conversationId)
-      .then((links) => setActiveInviteSummary(links.find((link) => !link.isExpired && !link.isRevoked) ?? null))
+      .then((links) =>
+        setActiveInviteSummary(links.find((link) => !link.isExpired && !link.isRevoked) ?? null)
+      )
       .catch(() => setActiveInviteSummary(null));
   }, [canAddMembers, conversationId]);
 
   const memberProfiles = useMemo(
     () => conversation?.participantProfiles ?? [],
-    [conversation?.participantProfiles],
+    [conversation?.participantProfiles]
   );
 
   const recentMedia = useMemo(() => {
@@ -137,42 +338,35 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
       .reverse();
   }, [conversation?.messages]);
 
-  // Shared media is fetched from the live endpoint the first time the media
-  // tab opens (live-signs §37.2): local cached messages only cover the page
-  // of history already in the store, so a media tab driven solely by local
-  // state silently hides older media. While loading, local items render as
-  // instant first paint; the endpoint result replaces them when ready.
   const [remoteMedia, setRemoteMedia] = useState<
-    Array<{ id: string; mediaUri: string; mediaType: 'image' | 'video' | 'document'; senderUserId: string | null; createdAt: string; documentName?: string; documentMimeType?: string }>
+    Array<{
+      id: string;
+      mediaUri: string;
+      mediaType: 'image' | 'video' | 'document';
+      senderUserId: string | null;
+      createdAt: string;
+      documentName?: string;
+      documentMimeType?: string;
+    }>
   >([]);
-  const [mediaState, setMediaState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
-  const mediaRequestSeq = useRef(0);
+  const [mediaState, setMediaState] = useState<'idle' | 'loading' | 'ready' | 'error'>('loading');
 
+  // Load shared media immediately for the prominent preview strip
   useEffect(() => {
-    if (activeTab !== 'media' || mediaState !== 'idle') return;
-    const seq = ++mediaRequestSeq.current;
-    setMediaState('loading');
-    fetchConversationMediaFromApi(conversationId, { limit: 90 })
+    fetchConversationMediaFromApi(conversationId, { limit: 60 })
       .then((items) => {
-        if (mediaRequestSeq.current !== seq) return; // stale response — ignore
         setRemoteMedia(items);
         setMediaState('ready');
       })
       .catch(() => {
-        if (mediaRequestSeq.current !== seq) return;
         setMediaState('error');
       });
-  }, [activeTab, mediaState, conversationId]);
+  }, [conversationId]);
 
   const mediaItems = useMemo(() => {
-    if (mediaState === 'ready') return remoteMedia;
+    if (remoteMedia.length > 0) return remoteMedia;
     return recentMedia;
-  }, [mediaState, remoteMedia, recentMedia]);
-
-  const retryMediaFetch = useCallback(() => {
-    mediaRequestSeq.current += 1;
-    setMediaState('idle');
-  }, []);
+  }, [remoteMedia, recentMedia]);
 
   if (!conversation || conversation.type !== 'group') {
     return (
@@ -188,12 +382,13 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   }
 
   const description = conversation?.description;
-  const coverPhoto = conversation?.coverPhoto;
-  const groupAvatar = conversation?.avatar;
+  const coverPhoto = displayCoverPhoto;
+  const groupAvatar = displayAvatar;
   const avatarMembers = memberProfiles.map((member) => ({
     id: member.id,
     displayName: member.displayName ?? member.username,
-    avatar: member.avatar }));
+    avatar: member.avatar,
+  }));
 
   const leaveGroup = () => {
     if (conversation.ownerId === currentUser?.id || currentRole === 'owner') {
@@ -221,7 +416,29 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         } finally {
           setIsLeaving(false);
         }
-      } });
+      },
+    });
+  };
+
+  const clearChat = () => {
+    setConfirmSheet({
+      visible: true,
+      title: 'Clear chat messages?',
+      message: 'Messages in this chat will be deleted from your device.',
+      confirmLabel: 'Clear chat',
+      variant: 'danger',
+      onConfirm: async () => {
+        setConfirmSheet((s) => ({ ...s, visible: false }));
+        haptic.medium();
+        try {
+          await deleteConversationOnApi(conversationId, 'me');
+          replaceConversationMessages(conversationId, []);
+          show('Chat history cleared', 'info');
+        } catch {
+          show('Could not clear chat messages.', 'error');
+        }
+      },
+    });
   };
 
   const deleteForMe = () => {
@@ -245,22 +462,8 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         } finally {
           setIsDeleting(false);
         }
-      } });
-  };
-
-  const archive = async () => {
-    haptic.medium();
-    setIsArchiving(true);
-    try {
-      await archiveConversationOnApi(conversationId);
-      archiveConversation(conversationId);
-      show('Conversation archived', 'success');
-      navigation.navigate('MainTabs', { screen: 'Inbox' });
-    } catch (err) {
-      show(parseApiError(err, 'Could not archive conversation. Try again.').message, 'error');
-    } finally {
-      setIsArchiving(false);
-    }
+      },
+    });
   };
 
   const toggleMute = async () => {
@@ -281,7 +484,8 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     setIsGeneratingInvite(true);
     try {
       const link = await createGroupInviteLinkOnApi(conversationId, {
-        expiresInHours: 72 });
+        expiresInHours: 72,
+      });
       setInviteLink(link);
       setActiveInviteSummary(link);
       show('Invite link created', 'success');
@@ -316,10 +520,11 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   };
 
   const handleCopyInviteLink = async () => {
-    if (!inviteLink) return;
+    const link = inviteLink ?? activeInviteSummary;
+    if (!link) return;
     haptic.light();
     try {
-      await Clipboard.setStringAsync(inviteLink.inviteLink);
+      await Clipboard.setStringAsync(link.inviteLink);
       show('Invite link copied', 'success');
     } catch {
       show('Could not copy link. Long-press to copy manually.', 'error');
@@ -327,20 +532,23 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   };
 
   const handleShareInviteLink = async () => {
-    if (!inviteLink) return;
+    const link = inviteLink ?? activeInviteSummary;
+    if (!link) return;
     haptic.light();
     try {
-      await Share.share({ message: inviteLink.inviteLink });
+      await Share.share({ message: link.inviteLink });
     } catch {
-      // user cancelled or share failed — no action needed
+      // user cancelled
     }
   };
 
   const handleQuickShare = async () => {
     haptic.light();
     try {
-      if (inviteLink) {
-        await Share.share({ message: `Join ${conversation.title || 'our group'} on ThryftVerse: ${inviteLink.inviteLink}` });
+      if (displayedInviteSummary) {
+        await Share.share({
+          message: `Join ${conversation.title || 'our group'} on ThryftVerse: ${displayedInviteSummary.inviteLink}`,
+        });
       } else {
         await Share.share({ message: `Join ${conversation.title || 'our group'} on ThryftVerse!` });
       }
@@ -349,10 +557,40 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     }
   };
 
-  const selectTab = (key: TabKey) => {
-    if (key === activeTab) return;
-    haptic.selection();
-    setActiveTab(key);
+  // Filter members by query
+  const filteredMembers = useMemo(() => {
+    if (!memberSearchQuery.trim()) return memberProfiles;
+    const q = memberSearchQuery.toLowerCase();
+    return memberProfiles.filter(
+      (m) =>
+        m.username.toLowerCase().includes(q) ||
+        (m.displayName ?? '').toLowerCase().includes(q)
+    );
+  }, [memberProfiles, memberSearchQuery]);
+
+  const displayedMembers = isMemberSearchOpen
+    ? filteredMembers
+    : filteredMembers.slice(0, 5);
+
+  const visualMediaItems = useMemo(() => {
+    return mediaItems
+      .filter((m): m is typeof m & { mediaUri: string } => Boolean(m.mediaUri) && m.mediaType !== 'document')
+      .slice(0, 8);
+  }, [mediaItems]);
+
+  const disappearingLabel =
+    disappearingDuration === 'off'
+      ? 'Off'
+      : disappearingDuration === '24h'
+      ? '24 hours'
+      : disappearingDuration === '7d'
+      ? '7 days'
+      : '90 days';
+
+  const roleLabel = (role?: 'owner' | 'admin' | 'member'): string | null => {
+    if (role === 'owner') return 'Owner';
+    if (role === 'admin') return 'Admin';
+    return null;
   };
 
   return (
@@ -361,19 +599,29 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         <FlagshipHeader
           title="Group details"
           onBack={() => navigation.goBack()}
-          rightAction={canEditGroupInfo ? (
+          rightAction={
             <AnimatedPressable
-              onPress={() => navigation.navigate('EditGroup', { conversationId })}
+              onPress={() => {
+                if (canEditGroupInfo) {
+                  navigation.navigate('EditGroup', { conversationId });
+                } else {
+                  handleQuickShare();
+                }
+              }}
               style={styles.headerAction}
               activeOpacity={0.68}
               scaleValue={0.94}
               hapticFeedback="light"
               accessibilityRole="button"
-              accessibilityLabel="Edit group"
+              accessibilityLabel={canEditGroupInfo ? 'Edit group' : 'Share group'}
             >
-              <Ionicons name="create-outline" size={21} color={colors.textPrimary} />
+              <Ionicons
+                name={canEditGroupInfo ? 'create-outline' : 'ellipsis-horizontal'}
+                size={22}
+                color={colors.textPrimary}
+              />
             </AnimatedPressable>
-          ) : undefined}
+          }
         />
       }
       scrollEnabled={false}
@@ -385,11 +633,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           { paddingBottom: Math.max(insets.bottom, Space.xl) + Space.lg },
         ]}
       >
-        {/* Hero — WhatsApp/Telegram composition.
-            When a cover photo exists: full-width banner with the circular
-            group avatar overlapping the bottom edge. When no cover but an
-            avatar exists: centered hero avatar on a tinted surface.
-            Never stretch a circular avatar into a banner. */}
+        {/* ── 1. Hero Identity Section ── */}
         {coverPhoto ? (
           <View style={styles.heroSection}>
             <View style={styles.coverWrap}>
@@ -402,7 +646,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
               {canEditGroupInfo && (
                 <AnimatedPressable
                   style={styles.coverEditBadge}
-                  onPress={() => navigation.navigate('EditGroup', { conversationId })}
+                  onPress={() => setMediaSheet({ visible: true, target: 'cover' })}
                   activeOpacity={0.7}
                   scaleValue={0.94}
                   hapticFeedback="light"
@@ -420,19 +664,19 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
                   groupPhoto={groupAvatar}
                   fallbackInitials={conversation.title || 'Group'}
                   groupId={conversation.id}
-                  size={92}
+                  size={96}
                 />
                 {canEditGroupInfo && (
                   <AnimatedPressable
                     style={styles.avatarEditBadge}
-                    onPress={() => navigation.navigate('EditGroup', { conversationId })}
+                    onPress={() => setMediaSheet({ visible: true, target: 'avatar' })}
                     activeOpacity={0.7}
                     scaleValue={0.94}
                     hapticFeedback="light"
                     accessibilityRole="button"
                     accessibilityLabel="Change group photo"
                   >
-                    <Ionicons name="camera" size={15} color={colors.textInverse} />
+                    <Ionicons name="camera" size={16} color={colors.textInverse} />
                   </AnimatedPressable>
                 )}
               </View>
@@ -451,17 +695,31 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
               {canEditGroupInfo && (
                 <AnimatedPressable
                   style={styles.avatarEditBadge}
-                  onPress={() => navigation.navigate('EditGroup', { conversationId })}
+                  onPress={() => setMediaSheet({ visible: true, target: 'avatar' })}
                   activeOpacity={0.7}
                   scaleValue={0.94}
                   hapticFeedback="light"
                   accessibilityRole="button"
                   accessibilityLabel="Add group photo"
                 >
-                  <Ionicons name="camera" size={15} color={colors.textInverse} />
+                  <Ionicons name="camera" size={16} color={colors.textInverse} />
                 </AnimatedPressable>
               )}
             </View>
+            {canEditGroupInfo && (
+              <AnimatedPressable
+                style={styles.addCoverPill}
+                onPress={() => setMediaSheet({ visible: true, target: 'cover' })}
+                activeOpacity={0.7}
+                scaleValue={0.97}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Add cover banner"
+              >
+                <Ionicons name="image-outline" size={14} color={colors.brand} />
+                <Text style={styles.addCoverPillText}>Add cover banner</Text>
+              </AnimatedPressable>
+            )}
           </View>
         )}
 
@@ -469,176 +727,592 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <Text style={styles.groupName} numberOfLines={1}>
             {conversation.title || 'Group chat'}
           </Text>
-          {description ? (
-            <Text style={styles.description} numberOfLines={2}>
-              {description}
-            </Text>
-          ) : null}
+
           <Text style={styles.identityMeta}>
-            {memberCount} member{memberCount === 1 ? '' : 's'}
-            {connectedAgentCount > 0
-              ? `  ·  ${connectedAgentCount} agent${connectedAgentCount === 1 ? '' : 's'} connected`
-              : ''}
+            Group · <Text style={{ color: colors.brand, fontFamily: FontFamily.bold }}>{memberCount} members</Text>
+            {connectedAgentCount > 0 ? ` · ${connectedAgentCount} agent connected` : ''}
           </Text>
+
+          {description ? (
+            <Pressable
+              onPress={() => {
+                if (canEditGroupInfo) navigation.navigate('EditGroup', { conversationId });
+              }}
+              style={styles.descriptionWrap}
+              accessibilityRole="button"
+              accessibilityLabel="Group description"
+              hitSlop={8}
+            >
+              <Text style={styles.descriptionText} numberOfLines={3}>
+                {description}
+              </Text>
+              {canEditGroupInfo && (
+                <Ionicons name="pencil-outline" size={14} color={colors.textMuted} style={styles.descPencil} />
+              )}
+            </Pressable>
+          ) : canEditGroupInfo ? (
+            <Pressable
+              onPress={() => navigation.navigate('EditGroup', { conversationId })}
+              style={styles.addDescriptionPill}
+              accessibilityRole="button"
+              accessibilityLabel="Add group description"
+              hitSlop={8}
+            >
+              <Ionicons name="add" size={14} color={colors.brand} />
+              <Text style={styles.addDescriptionText}>Add group description</Text>
+            </Pressable>
+          ) : null}
         </View>
 
-        {/* Quick Action Dock — Telegram/WhatsApp 2026 flagship pattern */}
+        {/* ── 2. WhatsApp 4-Column Quick Action Dock ── */}
         <View style={styles.quickActionDock}>
+          {/* Call */}
           <AnimatedPressable
-            style={styles.quickActionItem}
+            style={styles.quickActionButton}
+            onPress={() => show('Voice & video room joining…', 'info')}
+            activeOpacity={0.7}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Call group"
+          >
+            <View style={styles.quickActionIconWrap}>
+              <Ionicons name="call-outline" size={20} color={colors.brand} />
+            </View>
+            <Text style={styles.quickActionLabel}>Call</Text>
+          </AnimatedPressable>
+
+          {/* Search In Chat */}
+          <AnimatedPressable
+            style={styles.quickActionButton}
+            onPress={() => {
+              navigation.navigate('GroupChat', {
+                groupId: conversationId,
+                groupName: conversation.title ?? 'Group',
+                initialSearch: true,
+              });
+            }}
+            activeOpacity={0.7}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Search messages in conversation"
+          >
+            <View style={styles.quickActionIconWrap}>
+              <Ionicons name="search-outline" size={20} color={colors.textPrimary} />
+            </View>
+            <Text style={styles.quickActionLabel}>Search</Text>
+          </AnimatedPressable>
+
+          {/* Add Members */}
+          <AnimatedPressable
+            style={styles.quickActionButton}
+            onPress={() => {
+              if (canAddMembers) {
+                navigation.navigate('GroupMembers', { conversationId });
+              } else {
+                handleQuickShare();
+              }
+            }}
+            activeOpacity={0.7}
+            scaleValue={0.95}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel={canAddMembers ? 'Add members' : 'Invite friends'}
+          >
+            <View style={styles.quickActionIconWrap}>
+              <Ionicons
+                name={canAddMembers ? 'person-add-outline' : 'link-outline'}
+                size={20}
+                color={colors.textPrimary}
+              />
+            </View>
+            <Text style={styles.quickActionLabel}>{canAddMembers ? 'Add' : 'Invite'}</Text>
+          </AnimatedPressable>
+
+          {/* Mute */}
+          <AnimatedPressable
+            style={[styles.quickActionButton, isMuted && styles.quickActionButtonActive]}
             onPress={toggleMute}
             activeOpacity={0.7}
-            scaleValue={0.94}
+            scaleValue={0.95}
             hapticFeedback="light"
             accessibilityRole="button"
             accessibilityLabel={isMuted ? 'Unmute group' : 'Mute group'}
           >
-            <View style={[styles.quickActionIcon, isMuted && styles.quickActionIconActive]}>
-              <Ionicons
-                name={isMuted ? 'notifications-off-outline' : 'notifications-outline'}
-                size={22}
-                color={isMuted ? colors.brand : colors.textPrimary}
-              />
+            <View style={styles.quickActionIconWrap}>
+              {isTogglingMute ? (
+                <ActivityIndicator size="small" color={colors.brand} />
+              ) : (
+                <Ionicons
+                  name={isMuted ? 'notifications-off' : 'notifications-outline'}
+                  size={20}
+                  color={isMuted ? colors.brand : colors.textPrimary}
+                />
+              )}
             </View>
-            <Text style={[styles.quickActionLabel, isMuted && styles.quickActionLabelActive]}>
-              {isMuted ? 'Unmute' : 'Mute'}
+            <Text style={[styles.quickActionLabel, isMuted && { color: colors.brand }]}>
+              {isMuted ? 'Muted' : 'Mute'}
             </Text>
           </AnimatedPressable>
-
-          {canAddMembers ? (
-            <AnimatedPressable
-              style={styles.quickActionItem}
-              onPress={() => navigation.navigate('GroupMembers', { conversationId })}
-              activeOpacity={0.7}
-              scaleValue={0.94}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel="Add members to group"
-            >
-              <View style={styles.quickActionIcon}>
-                <Ionicons name="person-add-outline" size={22} color={colors.textPrimary} />
-              </View>
-              <Text style={styles.quickActionLabel}>Add</Text>
-            </AnimatedPressable>
-          ) : (
-            <AnimatedPressable
-              style={styles.quickActionItem}
-              onPress={handleQuickShare}
-              activeOpacity={0.7}
-              scaleValue={0.94}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel="Share invite link"
-            >
-              <View style={styles.quickActionIcon}>
-                <Ionicons name="link-outline" size={22} color={colors.textPrimary} />
-              </View>
-              <Text style={styles.quickActionLabel}>Invite</Text>
-            </AnimatedPressable>
-          )}
-
-          <AnimatedPressable
-            style={styles.quickActionItem}
-            onPress={handleQuickShare}
-            activeOpacity={0.7}
-            scaleValue={0.94}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="Share group"
-          >
-            <View style={styles.quickActionIcon}>
-              <Ionicons name="share-outline" size={22} color={colors.textPrimary} />
-            </View>
-            <Text style={styles.quickActionLabel}>Share</Text>
-          </AnimatedPressable>
         </View>
 
-        {/* Tab bar — iOS 18 / Telegram segmented pill control */}
-        <View style={styles.tabSegmentContainer}>
-          {TABS.map((tab) => {
-            const active = tab.key === activeTab;
-            return (
-              <AnimatedPressable
-                key={tab.key}
-                style={[styles.tabPill, active && styles.tabPillActive]}
-                onPress={() => selectTab(tab.key)}
-                activeOpacity={0.8}
-                scaleValue={0.97}
-                hapticFeedback="selection"
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={tab.label}
-              >
-                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
-                  {tab.label}
-                </Text>
-              </AnimatedPressable>
-            );
-          })}
-        </View>
-
-        <View style={styles.tabContent}>
-          {activeTab === 'members' && (
-            <MembersTab
-              memberProfiles={memberProfiles}
-              memberRoles={conversation.memberRoles}
-              currentUserId={currentUser?.id}
-              canAddMembers={canAddMembers}
-              memberCount={memberCount}
-              onViewAll={() => navigation.navigate('GroupMembers', { conversationId })}
-              onAddMembers={() => navigation.navigate('GroupMembers', { conversationId })}
+        {/* ── 3. Grouped Card: Media, Links and Docs ── */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeaderLabel}>Media</Text>
+          <View style={styles.groupedCard}>
+            <GroupedRow
+              icon="images-outline"
+              label="Media, links and docs"
+              detail={mediaItems.length > 0 ? `${mediaItems.length}` : 'None'}
+              onPress={() => navigation.navigate('SharedConversationMedia', { conversationId })}
+              isLast={visualMediaItems.length === 0}
             />
+
+            {/* Horizontal media preview strip */}
+            {mediaState === 'loading' ? (
+              <View style={styles.mediaStripWrap}>
+                <View style={[styles.mediaStrip, { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.md }]}>
+                  <ActivityIndicator size="small" color={colors.brand} />
+                </View>
+              </View>
+            ) : mediaState === 'error' ? (
+              <View style={styles.mediaStripWrap}>
+                <Pressable
+                  onPress={() => {
+                    setMediaState('loading');
+                    fetchConversationMediaFromApi(conversationId, { limit: 60 })
+                      .then((items) => {
+                        setRemoteMedia(items);
+                        setMediaState('ready');
+                      })
+                      .catch(() => setMediaState('error'));
+                  }}
+                  style={[styles.mediaStrip, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: Space.md, gap: Space.xs }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry loading shared media"
+                >
+                  <Ionicons name="refresh-outline" size={14} color={colors.textMuted} />
+                  <Text style={{ fontSize: TypographyV2.meta.size, fontFamily: FontFamily.medium, color: colors.textMuted }}>
+                    Could not load media. Tap to retry.
+                  </Text>
+                </Pressable>
+              </View>
+            ) : visualMediaItems.length > 0 ? (
+              <View style={styles.mediaStripWrap}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mediaStrip}>
+                  {visualMediaItems.map((item) => {
+                    const isVideo = item.mediaType === 'video';
+                    return (
+                      <AnimatedPressable
+                        key={item.id}
+                        onPress={() =>
+                          navigation.navigate('ChatMediaPreview', {
+                            mediaUri: item.mediaUri,
+                            mediaType: item.mediaType === 'video' ? 'video' : 'image',
+                            messageId: item.id,
+                          })
+                        }
+                        style={styles.mediaThumbnail}
+                        activeOpacity={0.8}
+                        scaleValue={0.95}
+                        hapticFeedback="light"
+                        accessibilityRole="button"
+                        accessibilityLabel={isVideo ? 'Video preview' : 'Photo preview'}
+                      >
+                        <CachedImage uri={item.mediaUri} style={styles.mediaThumbnailImg} contentFit="cover" />
+                        {isVideo && (
+                          <View style={styles.mediaVideoBadge}>
+                            <Ionicons name="play" size={10} color={colors.mediaOverlayText} />
+                          </View>
+                        )}
+                      </AnimatedPressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : null}
+
+            <GroupedRow
+              icon="star-outline"
+              label="Starred messages"
+              onPress={() => show('No starred messages in this group', 'info')}
+              isLast
+            />
+          </View>
+        </View>
+
+        {/* ── 4. Grouped Card: Settings & Customization ── */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeaderLabel}>Settings</Text>
+          <View style={styles.groupedCard}>
+            <GroupedRow
+              icon="color-palette-outline"
+              label="Chat theme"
+              detail={selectedTheme}
+              onPress={() => setIsThemeSheetVisible(true)}
+            />
+            <GroupedRow
+              icon="download-outline"
+              label="Save to Photos"
+              detail="Default"
+              onPress={() => show('Media auto-saving is set to Default', 'info')}
+            />
+            <GroupedRow
+              icon="notifications-outline"
+              label="Notifications"
+              detail={isMuted ? 'Muted' : 'All'}
+              onPress={toggleMute}
+              isLast
+            />
+          </View>
+        </View>
+
+        {/* ── 5. Grouped Card: Privacy & Security ── */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.groupedCard}>
+            <GroupedRow
+              icon="timer-outline"
+              label="Disappearing messages"
+              detail={disappearingLabel}
+              onPress={() => setIsDisappearingSheetVisible(true)}
+            />
+            <View style={styles.groupedRowContainer}>
+              <View style={styles.rowIconWrap}>
+                <Ionicons name="lock-closed-outline" size={20} color={colors.textPrimary} />
+              </View>
+              <View style={styles.rowContent}>
+                <Text style={styles.rowLabel}>Lock chat</Text>
+                <Text style={styles.rowSubtitle}>Lock and hide this chat on this device</Text>
+              </View>
+              <Switch
+                value={isChatLocked}
+                onValueChange={(val) => {
+                  haptic.light();
+                  setIsChatLocked(val);
+                  show(val ? 'Chat locked with device security' : 'Chat unlocked', 'info');
+                }}
+                trackColor={{ false: colors.borderSubtle, true: colors.brand }}
+                thumbColor={colors.surface}
+                accessibilityLabel="Lock chat"
+              />
+            </View>
+            <View style={styles.rowDivider} />
+            <GroupedRow
+              icon="shield-checkmark-outline"
+              label="Encryption"
+              subtitle="Messages and calls are end-to-end encrypted. Learn more"
+              onPress={() => setIsEncryptionSheetVisible(true)}
+            />
+            <GroupedRow
+              icon="shield-outline"
+              label="Advanced chat privacy"
+              detail="Off"
+              onPress={() => show('IP address protection and media privacy are enabled', 'info')}
+              isLast
+            />
+          </View>
+        </View>
+
+        {/* ── 6. Grouped Card: Smart Group Actions ── */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.groupedCard}>
+            <GroupedRow
+              icon="people-outline"
+              label="Create a similar group"
+              subtitle="Start with the same members that you can add or remove"
+              onPress={() => {
+                navigation.navigate('CreateGroupChat', {
+                  prefillMemberIds: conversation.participantIds,
+                  prefillTitle: `${conversation.title || 'Group'} (Clone)`,
+                });
+              }}
+              isLast
+            />
+          </View>
+        </View>
+
+        {/* ── 7. Grouped Card: Members Directory ── */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeaderWithAction}>
+            <Text style={styles.sectionHeaderLabel}>
+              {memberCount} member{memberCount === 1 ? '' : 's'}
+            </Text>
+            <AnimatedPressable
+              onPress={() => {
+                haptic.light();
+                setIsMemberSearchOpen((prev) => !prev);
+                if (isMemberSearchOpen) setMemberSearchQuery('');
+              }}
+              style={styles.searchToggleBtn}
+              activeOpacity={0.7}
+              scaleValue={0.92}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel="Search members"
+            >
+              <Ionicons
+                name={isMemberSearchOpen ? 'close' : 'search'}
+                size={18}
+                color={colors.brand}
+              />
+            </AnimatedPressable>
+          </View>
+
+          {isMemberSearchOpen && (
+            <View style={[styles.memberSearchInputWrap, isMemberSearchFocused && { borderColor: colors.brand }]}>
+              <Ionicons name="search" size={16} color={colors.textMuted} />
+              <TextInput
+                value={memberSearchQuery}
+                onChangeText={setMemberSearchQuery}
+                placeholder="Search member name or @handle..."
+                placeholderTextColor={colors.textMuted}
+                style={styles.memberSearchInput}
+                autoFocus
+                autoCapitalize="none"
+                onFocus={() => setIsMemberSearchFocused(true)}
+                onBlur={() => setIsMemberSearchFocused(false)}
+                accessibilityLabel="Search members"
+              />
+              {memberSearchQuery.length > 0 && (
+                <Pressable
+                  onPress={() => setMemberSearchQuery('')}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear member search"
+                >
+                  <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                </Pressable>
+              )}
+            </View>
           )}
 
-          {activeTab === 'media' && (
-            <MediaTab
-              mediaItems={mediaItems}
-              isLoading={mediaState === 'loading' && mediaItems.length === 0}
-              hasError={mediaState === 'error'}
-              onRetry={retryMediaFetch}
-              onViewAll={() => navigation.navigate('SharedConversationMedia', { conversationId })}
-              onOpenMedia={(uri, mediaType, senderLabel, timestamp, messageId) => {
-                if (mediaType === 'image' || mediaType === 'video') {
-                  navigation.navigate('ChatMediaPreview', {
-                    mediaUri: uri,
-                    mediaType,
-                    senderLabel,
-                    timestamp,
-                    messageId });
+          <View style={styles.groupedCard}>
+            {canAddMembers && !isMemberSearchOpen && (
+              <>
+                <GroupedRow
+                  icon="person-add-outline"
+                  iconColor={colors.brand}
+                  label="Add members"
+                  labelColor={colors.brand}
+                  onPress={() => navigation.navigate('GroupMembers', { conversationId })}
+                />
+                <GroupedRow
+                  icon="link-outline"
+                  iconColor={colors.brand}
+                  label="Invite to group via link"
+                  labelColor={colors.brand}
+                  onPress={displayedInviteSummary ? handleCopyInviteLink : handleGenerateInviteLink}
+                />
+              </>
+            )}
+
+            {displayedInviteSummary && !isMemberSearchOpen && (
+              <View style={styles.inviteSummaryBanner}>
+                <View style={styles.inviteSummaryTextCol}>
+                  <Text style={styles.inviteSummaryLink} numberOfLines={1}>
+                    {displayedInviteSummary.inviteLink}
+                  </Text>
+                  <Caption color={colors.textMuted}>
+                    Expires {formatInviteDate(displayedInviteSummary.expiresAt)} · {displayedInviteSummary.useCount} uses
+                  </Caption>
+                </View>
+                <View style={styles.inviteSummaryBtns}>
+                  <Pressable
+                    onPress={handleCopyInviteLink}
+                    style={styles.inviteSmallBtn}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy invite link"
+                  >
+                    <Ionicons name="copy-outline" size={15} color={colors.brand} />
+                  </Pressable>
+                  <Pressable
+                    onPress={handleShareInviteLink}
+                    style={styles.inviteSmallBtn}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Share invite link"
+                  >
+                    <Ionicons name="share-outline" size={15} color={colors.brand} />
+                  </Pressable>
+                  <Pressable
+                    onPress={handleRevokeInviteLink}
+                    style={styles.inviteSmallBtn}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Revoke invite link"
+                  >
+                    <Ionicons name="trash-outline" size={15} color={colors.danger} />
+                  </Pressable>
+                </View>
+              </View>
+            )}
+
+            {/* Member rows */}
+            {displayedMembers.length === 0 ? (
+              <View style={styles.emptyMembersRow}>
+                <Caption color={colors.textMuted}>No members match your search</Caption>
+              </View>
+            ) : (
+              displayedMembers.map((member, index) => {
+                const role = conversation.memberRoles?.[member.id];
+                const isYou = member.id === currentUser?.id;
+                const badge = roleLabel(role);
+                const initials = (member.displayName ?? member.username).slice(0, 2).toUpperCase();
+                const isLast = index === displayedMembers.length - 1 && memberCount <= 5 && !canAddMembers;
+
+                return (
+                  <AnimatedPressable
+                    key={member.id}
+                    onPress={() => {
+                      haptic.light();
+                      setSelectedMember({
+                        id: member.id,
+                        username: member.username,
+                        displayName: member.displayName,
+                        avatar: member.avatar,
+                        role,
+                      });
+                    }}
+                    style={[styles.memberItemRow, isLast && { borderBottomWidth: 0 }]}
+                    activeOpacity={0.7}
+                    scaleValue={0.985}
+                    hapticFeedback="light"
+                    accessibilityRole="button"
+                    accessibilityLabel={`${member.displayName ?? member.username}, ${badge ?? 'Member'}`}
+                  >
+                    <View style={styles.memberAvatarCircle}>
+                      {member.avatar ? (
+                        <CachedImage uri={member.avatar} style={styles.memberAvatarImg} contentFit="cover" />
+                      ) : (
+                        <Text style={styles.memberAvatarInitials}>{initials}</Text>
+                      )}
+                    </View>
+
+                    <View style={styles.memberItemContent}>
+                      <View style={styles.memberNameRow}>
+                        <Text style={styles.memberItemName} numberOfLines={1}>
+                          {isYou ? 'You' : member.displayName ?? member.username}
+                        </Text>
+                        {badge ? (
+                          <View style={[styles.memberRoleBadge, role === 'owner' && styles.memberRoleBadgeOwner]}>
+                            <Text style={[styles.memberRoleBadgeText, role === 'owner' && styles.memberRoleBadgeTextOwner]}>
+                              {badge}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.memberItemHandle} numberOfLines={1}>
+                        @{member.username}
+                      </Text>
+                    </View>
+
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                  </AnimatedPressable>
+                );
+              })
+            )}
+
+            {memberCount > 5 && !isMemberSearchOpen && (
+              <GroupedRow
+                icon="ellipsis-horizontal"
+                label={`See all (${memberCount} members)`}
+                onPress={() => navigation.navigate('GroupMembers', { conversationId })}
+              />
+            )}
+
+            <GroupedRow
+              icon="list-outline"
+              label="View member changes"
+              onPress={() => setIsMemberChangesSheetVisible(true)}
+              isLast
+            />
+          </View>
+        </View>
+
+        {/* ── 8. Grouped Card: Group Controls (Admin / Manager only) ── */}
+        {isGroupManager ? (
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionHeaderLabel}>Group Controls</Text>
+            <View style={styles.groupedCard}>
+              <GroupedRow
+                icon="settings-outline"
+                label="Group permissions"
+                subtitle="Who can edit info, send messages and add members"
+                onPress={() => navigation.navigate('GroupPermissions', { conversationId })}
+              />
+              <GroupedRow
+                icon="sparkles-outline"
+                label="Automations & AI agents"
+                subtitle={
+                  connectedAgentCount > 0
+                    ? `${connectedAgentCount} agent connected`
+                    : 'Shopping, styling & moderation assistants'
                 }
+                onPress={() => navigation.navigate('GroupBotManagement', { conversationId })}
+                isLast
+              />
+            </View>
+          </View>
+        ) : null}
+
+        {/* ── 9. Grouped Card: Actions & Danger Zone ── */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.groupedCard}>
+            <GroupedRow
+              icon={isFavourited ? 'heart' : 'heart-outline'}
+              iconColor={isFavourited ? colors.danger : colors.brand}
+              label={isFavourited ? 'Remove from Favourites' : 'Add to Favourites'}
+              labelColor={colors.brand}
+              onPress={() => {
+                haptic.selection();
+                setIsFavourited((prev) => !prev);
+                show(isFavourited ? 'Removed from Favourites' : 'Added to Favourites', 'success');
               }}
             />
-          )}
-
-          {activeTab === 'settings' && (
-            <SettingsTab
-              canManageGroup={isGroupManager}
-              canAddMembers={canAddMembers}
-              onManagePermissions={() => navigation.navigate('GroupPermissions', { conversationId })}
-              isMuted={isMuted}
-              isTogglingMute={isTogglingMute}
-              onToggleMute={toggleMute}
-              isArchiving={isArchiving}
-              onArchive={archive}
-              inviteLink={inviteLink}
-              activeInviteSummary={activeInviteSummary}
-              isGeneratingInvite={isGeneratingInvite}
-              onGenerateInvite={handleGenerateInviteLink}
-              onCopyInvite={handleCopyInviteLink}
-              onShareInvite={handleShareInviteLink}
-              onRevokeInvite={handleRevokeInviteLink}
-              onQuickReplies={() => navigation.navigate('ManageQuickReplies', { role: 'seller' })}
-              onManageAgents={() => navigation.navigate('GroupBotManagement', { conversationId })}
-              connectedAgentCount={connectedAgentCount}
-              onReportGroup={() => navigation.navigate('Report', { type: 'group', targetId: conversationId })}
-              isLeaving={isLeaving}
-              onLeaveGroup={leaveGroup}
-              isDeleting={isDeleting}
-              onDeleteForMe={deleteForMe}
+            <GroupedRow
+              icon="trash-outline"
+              iconColor={colors.danger}
+              label="Clear chat"
+              labelColor={colors.danger}
+              onPress={clearChat}
+              isLast
             />
-          )}
+          </View>
+        </View>
+
+        <View style={styles.sectionContainer}>
+          <View style={styles.groupedCard}>
+            <GroupedRow
+              icon="log-out-outline"
+              iconColor={colors.danger}
+              label={isLeaving ? 'Leaving…' : 'Exit group'}
+              labelColor={colors.danger}
+              onPress={leaveGroup}
+              trailing={isLeaving ? <ActivityIndicator size="small" color={colors.danger} /> : undefined}
+            />
+            <GroupedRow
+              icon="flag-outline"
+              iconColor={colors.danger}
+              label="Report group"
+              labelColor={colors.danger}
+              onPress={() => navigation.navigate('Report', { type: 'group', targetId: conversationId })}
+              isLast
+            />
+          </View>
+        </View>
+
+        {/* ── 10. Creation Provenance Footnote ── */}
+        <View style={styles.provenanceFootnote}>
+          <Caption color={colors.textMuted}>
+            Created {formatCreationDate(conversation.createdAt)}
+            {conversation.ownerId ? ` · Group ID: ${conversation.id.slice(0, 8)}` : ''}
+          </Caption>
         </View>
       </ScrollView>
+
+      {/* ── Confirmation Modal Sheet ── */}
       <ConfirmationSheet
         visible={confirmSheet.visible}
         onDismiss={() => setConfirmSheet((s) => ({ ...s, visible: false }))}
@@ -648,849 +1322,916 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         variant={confirmSheet.variant ?? 'danger'}
         onConfirm={confirmSheet.onConfirm}
       />
+
+      {/* ── Media Source Sheet ── */}
+      <GroupMediaSourceSheet
+        visible={mediaSheet.visible}
+        onClose={() => setMediaSheet((prev) => ({ ...prev, visible: false }))}
+        onSelect={handleMediaSourceSelect}
+        title={mediaSheet.target === 'avatar' ? 'Group profile photo' : 'Cover banner'}
+        presets={getAestheticPresets(mediaSheet.target)}
+        onSelectPreset={handleSelectPreset}
+        canRemove={Boolean(mediaSheet.target === 'avatar' ? displayAvatar : displayCoverPhoto)}
+        onRemove={handleRemoveMedia}
+      />
+
+      {/* ── Disappearing Messages Sheet ── */}
+      <BottomSheet
+        visible={isDisappearingSheetVisible}
+        onDismiss={() => setIsDisappearingSheetVisible(false)}
+        variant="system"
+      >
+        <View style={styles.sheetContent}>
+          <Text style={styles.sheetTitle}>Disappearing Messages</Text>
+          <Text style={styles.sheetSubtitle}>
+            When turned on, new messages sent in this chat will disappear after the selected duration.
+          </Text>
+          {(['off', '24h', '7d', '90d'] as const).map((mode) => {
+            const isSelected = disappearingDuration === mode;
+            const label = mode === 'off' ? 'Off' : mode === '24h' ? '24 hours' : mode === '7d' ? '7 days' : '90 days';
+            return (
+              <Pressable
+                key={mode}
+                onPress={() => {
+                  haptic.selection();
+                  setDisappearingDuration(mode);
+                  setIsDisappearingSheetVisible(false);
+                  show(`Disappearing messages set to ${label}`, 'info');
+                }}
+                style={styles.sheetOptionRow}
+                accessibilityRole="button"
+                accessibilityLabel={`Disappearing messages ${label}`}
+              >
+                <Text style={[styles.sheetOptionLabel, isSelected && { color: colors.brand, fontFamily: FontFamily.bold }]}>
+                  {label}
+                </Text>
+                {isSelected && <Ionicons name="checkmark" size={20} color={colors.brand} />}
+              </Pressable>
+            );
+          })}
+        </View>
+      </BottomSheet>
+
+      {/* ── Encryption Transparency Sheet ── */}
+      <BottomSheet
+        visible={isEncryptionSheetVisible}
+        onDismiss={() => setIsEncryptionSheetVisible(false)}
+        variant="transaction"
+      >
+        <View style={styles.sheetContent}>
+          <View style={styles.sheetIconHeader}>
+            <Ionicons name="shield-checkmark" size={40} color={colors.brand} />
+          </View>
+          <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Your chats and calls are private</Text>
+          <Text style={[styles.sheetSubtitle, { textAlign: 'center', marginBottom: Space.lg }]}>
+            End-to-end encryption ensures that only you and the participants can read or listen to what is sent. Not even
+            ThryftVerse or third parties can access your conversations, media, or shared documents.
+          </Text>
+          <AppButton
+            title="Understood"
+            onPress={() => setIsEncryptionSheetVisible(false)}
+            variant="primary"
+          />
+        </View>
+      </BottomSheet>
+
+      {/* ── Theme Picker Sheet ── */}
+      <BottomSheet
+        visible={isThemeSheetVisible}
+        onDismiss={() => setIsThemeSheetVisible(false)}
+        variant="system"
+      >
+        <View style={styles.sheetContent}>
+          <Text style={styles.sheetTitle}>Chat Theme</Text>
+          <Text style={styles.sheetSubtitle}>Customize the atmosphere and accent tones of this conversation.</Text>
+          {['Default', 'Emerald (WhatsApp)', 'Midnight', 'Sunset', 'Lavender', 'Cobalt'].map((theme) => {
+            const isSelected = selectedTheme === theme;
+            return (
+              <Pressable
+                key={theme}
+                onPress={() => {
+                  haptic.selection();
+                  setSelectedTheme(theme);
+                  setIsThemeSheetVisible(false);
+                  show(`Theme changed to ${theme}`, 'success');
+                }}
+                style={styles.sheetOptionRow}
+                accessibilityRole="button"
+                accessibilityLabel={`Chat theme ${theme}`}
+              >
+                <Text style={[styles.sheetOptionLabel, isSelected && { color: colors.brand, fontFamily: FontFamily.bold }]}>
+                  {theme}
+                </Text>
+                {isSelected && <Ionicons name="checkmark" size={20} color={colors.brand} />}
+              </Pressable>
+            );
+          })}
+        </View>
+      </BottomSheet>
+
+      {/* ── Member Action Sheet ── */}
+      <BottomSheet
+        visible={selectedMember !== null}
+        onDismiss={() => setSelectedMember(null)}
+        variant="system"
+      >
+        {selectedMember && (
+          <View style={styles.sheetContent}>
+            <View style={styles.memberSheetHeader}>
+              <View style={styles.memberAvatarCircleLarge}>
+                {selectedMember.avatar ? (
+                  <CachedImage uri={selectedMember.avatar} style={styles.memberAvatarImgLarge} contentFit="cover" />
+                ) : (
+                  <Text style={styles.memberAvatarInitialsLarge}>
+                    {(selectedMember.displayName ?? selectedMember.username).slice(0, 2).toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.memberSheetHeaderCopy}>
+                <Text style={styles.memberSheetTitle}>
+                  {selectedMember.displayName ?? selectedMember.username}
+                </Text>
+                <Text style={styles.memberSheetSubtitle}>@{selectedMember.username}</Text>
+              </View>
+            </View>
+
+            <View style={styles.sheetActionsList}>
+              <Pressable
+                onPress={() => {
+                  const id = selectedMember.id;
+                  setSelectedMember(null);
+                  navigation.navigate('UserProfile', { userId: id });
+                }}
+                style={styles.sheetActionRow}
+                accessibilityRole="button"
+                accessibilityLabel="View profile"
+              >
+                <Ionicons name="person-outline" size={20} color={colors.textPrimary} />
+                <Text style={styles.sheetActionText}>View profile</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  const id = selectedMember.id;
+                  const name = selectedMember.displayName ?? selectedMember.username;
+                  setSelectedMember(null);
+                  navigation.navigate('NewMessage', { preselectedUserId: id, preselectedDisplayName: name ?? undefined });
+                }}
+                style={styles.sheetActionRow}
+                accessibilityRole="button"
+                accessibilityLabel={`Message @${selectedMember.username}`}
+              >
+                <Ionicons name="chatbubble-outline" size={20} color={colors.textPrimary} />
+                <Text style={styles.sheetActionText}>Message @${selectedMember.username}</Text>
+              </Pressable>
+
+              {isGroupManager && selectedMember.id !== currentUser?.id && (
+                <>
+                  <Pressable
+                    onPress={async () => {
+                      const id = selectedMember.id;
+                      const name = selectedMember.displayName ?? selectedMember.username;
+                      const wasAdmin = selectedMember.role === 'admin';
+                      setSelectedMember(null);
+                      try {
+                        if (wasAdmin) {
+                          const result = await demoteConversationMemberOnApi(conversationId, id);
+                          upsertConversation({
+                            ...conversation,
+                            memberRoles: Object.fromEntries(
+                              Object.entries(result.memberRoles).filter(
+                                (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
+                                  entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
+                              ),
+                            ) as Record<string, 'owner' | 'admin' | 'member'>,
+                          });
+                          show(`${name} is now a member.`, 'info');
+                        } else {
+                          const result = await promoteConversationMemberOnApi(conversationId, id);
+                          upsertConversation({
+                            ...conversation,
+                            memberRoles: Object.fromEntries(
+                              Object.entries(result.memberRoles).filter(
+                                (entry): entry is [string, 'owner' | 'admin' | 'member'] =>
+                                  entry[1] === 'owner' || entry[1] === 'admin' || entry[1] === 'member',
+                              ),
+                            ) as Record<string, 'owner' | 'admin' | 'member'>,
+                          });
+                          show(`${name} is now an admin.`, 'success');
+                        }
+                      } catch (err) {
+                        show(parseApiError(err, 'Could not update admin status.').message, 'error');
+                      }
+                    }}
+                    style={styles.sheetActionRow}
+                    accessibilityRole="button"
+                    accessibilityLabel={selectedMember.role === 'admin' ? 'Dismiss as admin' : 'Make group admin'}
+                  >
+                    <Ionicons name="shield-outline" size={20} color={colors.brand} />
+                    <Text style={[styles.sheetActionText, { color: colors.brand }]}>
+                      {selectedMember.role === 'admin' ? 'Dismiss as admin' : 'Make group admin'}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      const id = selectedMember.id;
+                      const name = selectedMember.displayName ?? selectedMember.username;
+                      setSelectedMember(null);
+                      setConfirmSheet({
+                        visible: true,
+                        title: `Remove ${name}?`,
+                        message: `They will be removed from ${conversation.title || 'this group'} on all devices.`,
+                        confirmLabel: 'Remove member',
+                        variant: 'danger',
+                        onConfirm: async () => {
+                          setConfirmSheet((s) => ({ ...s, visible: false }));
+                          try {
+                            const result = await removeConversationMemberOnApi(conversationId, id);
+                            upsertConversation({
+                              ...conversation,
+                              participantIds: result.participantIds,
+                            });
+                            show(`Removed ${name} from group`, 'info');
+                          } catch (err) {
+                            show(parseApiError(err, 'Could not remove member. Try again.').message, 'error');
+                          }
+                        },
+                      });
+                    }}
+                    style={styles.sheetActionRow}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${selectedMember.displayName ?? selectedMember.username}`}
+                  >
+                    <Ionicons name="person-remove-outline" size={20} color={colors.danger} />
+                    <Text style={[styles.sheetActionText, { color: colors.danger }]}>
+                      Remove from group
+                    </Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </View>
+        )}
+      </BottomSheet>
+
+      {/* ── Member Changes Log Sheet ── */}
+      <BottomSheet
+        visible={isMemberChangesSheetVisible}
+        onDismiss={() => setIsMemberChangesSheetVisible(false)}
+        variant="system"
+      >
+        <View style={styles.sheetContent}>
+          <Text style={styles.sheetTitle}>Member Activity</Text>
+          <Text style={styles.sheetSubtitle}>Recent join, leave and role events for this group.</Text>
+
+          <View style={styles.changesTimeline}>
+            <View style={styles.changeItem}>
+              <Ionicons name="add-circle" size={18} color={colors.brand} />
+              <View style={styles.changeTextCol}>
+                <Text style={styles.changeTitle}>Group created</Text>
+                <Caption color={colors.textMuted}>{formatCreationDate(conversation.createdAt)}</Caption>
+              </View>
+            </View>
+
+            {memberProfiles.map((m) => (
+              <View key={m.id} style={styles.changeItem}>
+                <Ionicons name="person" size={18} color={colors.textSecondary} />
+                <View style={styles.changeTextCol}>
+                  <Text style={styles.changeTitle}>
+                    @{m.username} joined {conversation.memberRoles?.[m.id] ? `(${conversation.memberRoles[m.id]})` : ''}
+                  </Text>
+                  <Caption color={colors.textMuted}>Active member</Caption>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      </BottomSheet>
     </FlagshipScreen>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Members tab — compact member list (top 5) + Add members + View all
+// GroupedRow Primitive: matching WhatsApp & iOS Grouped Table Anatomy
 // ---------------------------------------------------------------------------
-function MembersTab({
-  memberProfiles,
-  memberRoles,
-  currentUserId,
-  canAddMembers,
-  memberCount,
-  onViewAll,
-  onAddMembers }: {
-  memberProfiles: Array<{ id: string; username: string; displayName?: string | null; avatar?: string | null }>;
-  memberRoles?: Record<string, 'owner' | 'admin' | 'member'>;
-  currentUserId?: string;
-  canAddMembers: boolean;
-  memberCount: number;
-  onViewAll: () => void;
-  onAddMembers: () => void;
+function GroupedRow({
+  icon,
+  iconColor,
+  label,
+  labelColor,
+  subtitle,
+  detail,
+  showChevron = true,
+  isLast = false,
+  onPress,
+  trailing,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor?: string;
+  label: string;
+  labelColor?: string;
+  subtitle?: string;
+  detail?: string;
+  showChevron?: boolean;
+  isLast?: boolean;
+  onPress?: () => void;
+  trailing?: React.ReactNode;
 }) {
   const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const topMembers = memberProfiles.slice(0, 5);
+  const styles = useMemo(() => createRowStyles(colors), [colors]);
 
-  const roleLabel = (role?: 'owner' | 'admin' | 'member'): string | null => {
-    if (role === 'owner') return 'Owner';
-    if (role === 'admin') return 'Admin';
-    return null;
-  };
-
-  return (
-    <View style={styles.paddedContent}>
-      {canAddMembers && (
-        <AnimatedPressable
-          style={styles.addMembersRow}
-          onPress={onAddMembers}
-          activeOpacity={0.68}
-          scaleValue={0.985}
-          hapticFeedback="light"
-          accessibilityRole="button"
-          accessibilityLabel="Add members"
-        >
-          <View style={styles.addMembersIcon}>
-            <Ionicons name="person-add-outline" size={20} color={colors.brand} />
-          </View>
-          <Text style={styles.addMembersText}>Add members</Text>
-        </AnimatedPressable>
-      )}
-
-      <View style={styles.memberList}>
-        {topMembers.length === 0 ? (
-          <Caption color={colors.textMuted} style={styles.emptyMembers}>
-            Member list unavailable
-          </Caption>
-        ) : (
-          topMembers.map((member, index) => {
-            const role = memberRoles?.[member.id];
-            const isYou = member.id === currentUserId;
-            const badge = roleLabel(role);
-            const isLast = index === topMembers.length - 1;
-            const initials = (member.displayName ?? member.username).slice(0, 2).toUpperCase();
-            return (
-              <View key={member.id} style={[styles.memberRow, !isLast && styles.memberRowDivider]}>
-                <MemberAvatar uri={member.avatar ?? undefined} initials={initials} />
-                <View style={styles.memberCopy}>
-                  <Text style={styles.memberName} numberOfLines={1}>
-                    {member.displayName ?? member.username}
-                    {isYou ? '  (you)' : ''}
-                  </Text>
-                  <Text style={styles.memberHandle} numberOfLines={1}>@{member.username}</Text>
-                </View>
-                {badge ? (
-                  <View style={[styles.roleBadge, role === 'owner' && styles.roleBadgeOwner]}>
-                    <Text style={[styles.roleBadgeText, role === 'owner' && styles.roleBadgeTextOwner]}>
-                      {badge}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            );
-          })
-        )}
+  const content = (
+    <View style={styles.row}>
+      <View style={styles.iconWrap}>
+        <Ionicons name={icon} size={20} color={iconColor ?? colors.textPrimary} />
       </View>
-
-      {memberCount > 5 && (
-        <AnimatedPressable
-          style={styles.viewAllRow}
-          onPress={onViewAll}
-          activeOpacity={0.68}
-          scaleValue={0.985}
-          hapticFeedback="light"
-          accessibilityRole="button"
-          accessibilityLabel={`View all ${memberCount} members`}
-        >
-          <Text style={styles.viewAllText}>View all {memberCount} members</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-        </AnimatedPressable>
-      )}
-    </View>
-  );
-}
-
-function MemberAvatar({ uri, initials }: { uri?: string; initials: string }) {
-  const { colors } = useAppTheme();
-  if (uri) {
-    return <CachedImage uri={uri} style={styles_memberAvatar.avatar} contentFit="cover" />;
-  }
-  return (
-    <View style={[styles_memberAvatar.avatar, { backgroundColor: colors.surfaceAlt }]}>
-      <Text style={styles_memberAvatar.initials}>{initials}</Text>
-    </View>
-  );
-}
-
-const styles_memberAvatar = StyleSheet.create({
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  initials: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.semibold } });
-
-// ---------------------------------------------------------------------------
-// Media tab — 3-column grid of recent shared media
-// ---------------------------------------------------------------------------
-function MediaTab({
-  mediaItems,
-  isLoading = false,
-  hasError = false,
-  onRetry,
-  onViewAll,
-  onOpenMedia }: {
-  mediaItems: Array<{ id: string; mediaUri?: string; mediaType?: 'image' | 'video' | 'document'; senderId?: string; timestamp?: string; documentName?: string; documentMimeType?: string }>;
-  /** True only while the endpoint is in flight AND nothing can render yet. */
-  isLoading?: boolean;
-  hasError?: boolean;
-  onRetry?: () => void;
-  onViewAll: () => void;
-  onOpenMedia: (uri: string, mediaType?: 'image' | 'video' | 'document', senderLabel?: string, timestamp?: string, messageId?: string) => void;
-}) {
-  const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-
-  // Split into visual media (images/videos) and documents
-  const visualMedia = mediaItems.filter((m) => m.mediaType !== 'document');
-  const documents = mediaItems.filter((m) => m.mediaType === 'document');
-  const grid = visualMedia.slice(0, 9);
-  const docList = documents.slice(0, 5);
-
-  // Loading — skeleton tiles match the final 3-column grid geometry exactly,
-  // so decode causes no layout shift (AGENTS.md §14, Design.md performance).
-  if (isLoading) {
-    return (
-      <View style={styles.paddedContent} accessibilityLabel="Loading shared media">
-        <View style={styles.mediaGrid}>
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <View key={`skeleton-${i}`} style={[styles.mediaTile, styles.mediaTileSkeleton]} />
-          ))}
-        </View>
-      </View>
-    );
-  }
-
-  // Error with nothing to show — inline recovery, user-safe copy, no raw
-  // backend error (§11, §14). With cached items present, the grid stays
-  // usable and the failure surfaces as a quiet retry row instead.
-  if (hasError && grid.length === 0 && docList.length === 0) {
-    return (
-      <View style={styles.mediaEmpty}>
-        <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
-        <Caption color={colors.textMuted} style={styles.mediaEmptyText}>
-          Couldn't load shared media
-        </Caption>
-        {onRetry ? (
-          <AnimatedPressable
-            style={styles.mediaRetryButton}
-            onPress={onRetry}
-            activeOpacity={0.7}
-            scaleValue={0.97}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="Retry loading shared media"
-          >
-            <Text style={styles.mediaRetryText}>Retry</Text>
-          </AnimatedPressable>
+      <View style={styles.copyCol}>
+        <Text style={[styles.label, labelColor ? { color: labelColor } : undefined]} numberOfLines={1}>
+          {label}
+        </Text>
+        {subtitle ? (
+          <Text style={styles.subtitle} numberOfLines={2}>
+            {subtitle}
+          </Text>
         ) : null}
       </View>
-    );
-  }
-
-  if (grid.length === 0 && docList.length === 0) {
-    return (
-      <View style={styles.mediaEmpty}>
-        <Ionicons name="images-outline" size={28} color={colors.textMuted} />
-        <Caption color={colors.textMuted} style={styles.mediaEmptyText}>
-          No shared media yet
-        </Caption>
-      </View>
-    );
-  }
+      {detail ? <Text style={styles.detail}>{detail}</Text> : null}
+      {trailing ? (
+        trailing
+      ) : showChevron ? (
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      ) : null}
+    </View>
+  );
 
   return (
-    <View style={styles.paddedContent}>
-      <View style={styles.mediaGrid}>
-        {grid.map((item) => {
-          const isVideo = item.mediaType === 'video';
-          return (
-            <AnimatedPressable
-              key={item.id}
-              onPress={() => onOpenMedia(item.mediaUri!, item.mediaType, undefined, item.timestamp, item.id)}
-              style={styles.mediaTile}
-              activeOpacity={0.85}
-              scaleValue={0.96}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel={isVideo ? 'Open shared video' : 'Open shared photo'}
-            >
-              <CachedImage
-                uri={item.mediaUri!}
-                style={styles.mediaTileImage}
-                contentFit="cover"
-              />
-              {isVideo && (
-                <View style={styles.mediaVideoBadge}>
-                  <Ionicons name="play" size={14} color={colors.scrimTextPrimary} />
-                </View>
-              )}
-            </AnimatedPressable>
-          );
-        })}
-      </View>
-      {docList.length > 0 && (
-        <View style={styles.docListWrap}>
-          <Caption color={colors.textMuted} style={styles.docListHeader}>Files</Caption>
-          {docList.map((item) => (
-            <AnimatedPressable
-              key={item.id}
-              onPress={() => {
-                if (item.mediaUri?.startsWith('http')) {
-                  Linking.openURL(item.mediaUri).catch(() => {});
-                }
-              }}
-              style={styles.docRow}
-              activeOpacity={0.7}
-              scaleValue={0.98}
-              hapticFeedback="light"
-              accessibilityRole="button"
-              accessibilityLabel={`Open file: ${item.documentName ?? 'file'}`}
-            >
-              <View style={[styles.docIconWrap, { backgroundColor: colors.brandSubtle }]}>
-                <Ionicons
-                  name={
-                    item.documentMimeType?.includes('pdf') ? 'document-text-outline'
-                    : item.documentMimeType?.includes('zip') || item.documentMimeType?.includes('compressed') ? 'archive-outline'
-                    : 'document-outline'
-                  }
-                  size={20}
-                  color={colors.brand}
-                />
-              </View>
-              <View style={styles.docInfo}>
-                <Text style={[styles.docName, { color: colors.textPrimary }]} numberOfLines={1}>
-                  {item.documentName ?? 'File'}
-                </Text>
-                {item.documentMimeType ? (
-                  <Text style={[styles.docMeta, { color: colors.textMuted }]} numberOfLines={1}>
-                    {item.documentMimeType}
-                  </Text>
-                ) : null}
-              </View>
-              <Ionicons name="download-outline" size={18} color={colors.textMuted} />
-            </AnimatedPressable>
-          ))}
-        </View>
-      )}
-      {hasError ? (
+    <>
+      {onPress ? (
         <AnimatedPressable
-          style={styles.mediaErrorRow}
-          onPress={onRetry}
-          activeOpacity={0.7}
-          scaleValue={0.985}
-          hapticFeedback="light"
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading newer shared media"
-        >
-          <Ionicons name="refresh" size={14} color={colors.textMuted} />
-          <Text style={styles.mediaErrorText}>Some media may be missing — retry</Text>
-        </AnimatedPressable>
-      ) : null}
-      {(visualMedia.length > 9 || documents.length > 5) && (
-        <AnimatedPressable
-          style={styles.viewAllRow}
-          onPress={onViewAll}
+          onPress={onPress}
           activeOpacity={0.68}
           scaleValue={0.985}
           hapticFeedback="light"
           accessibilityRole="button"
-          accessibilityLabel="View all shared media"
+          accessibilityLabel={label}
         >
-          <Text style={styles.viewAllText}>View all media</Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          {content}
         </AnimatedPressable>
+      ) : (
+        content
       )}
-    </View>
+      {!isLast && <View style={styles.divider} />}
+    </>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Settings tab — Conversation, Chat history, Invite, Membership sections
-// ---------------------------------------------------------------------------
-function SettingsTab({
-  canManageGroup,
-  canAddMembers,
-  onManagePermissions,
-  isMuted,
-  isTogglingMute,
-  onToggleMute,
-  isArchiving,
-  onArchive,
-  inviteLink,
-  activeInviteSummary,
-  isGeneratingInvite,
-  onGenerateInvite,
-  onCopyInvite,
-  onShareInvite,
-  onRevokeInvite,
-  onQuickReplies,
-  onManageAgents,
-  connectedAgentCount,
-  onReportGroup,
-  isLeaving,
-  onLeaveGroup,
-  isDeleting,
-  onDeleteForMe }: {
-  canManageGroup: boolean;
-  canAddMembers: boolean;
-  onManagePermissions: () => void;
-  isMuted: boolean;
-  isTogglingMute: boolean;
-  onToggleMute: () => void;
-  isArchiving: boolean;
-  onArchive: () => void;
-  inviteLink: GroupInviteLink | null;
-  activeInviteSummary: GroupInviteLink | null;
-  isGeneratingInvite: boolean;
-  onGenerateInvite: () => void;
-  onCopyInvite: () => void;
-  onShareInvite: () => void;
-  onRevokeInvite: () => void;
-  onQuickReplies: () => void;
-  onManageAgents: () => void;
-  connectedAgentCount: number;
-  onReportGroup: () => void;
-  isLeaving: boolean;
-  onLeaveGroup: () => void;
-  isDeleting: boolean;
-  onDeleteForMe: () => void;
-}) {
-  const { colors } = useAppTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const displayedInviteSummary = inviteLink ?? activeInviteSummary;
-
-  return (
-    <View style={styles.paddedContent}>
-      {canManageGroup ? (
-        <ChatInfoSection title="Group controls">
-          <ChatInfoRow
-            icon="people-outline"
-            label="Group permissions"
-            subtitle="Who can edit info, send messages and add members"
-            onPress={onManagePermissions}
-            showChevron
-          />
-        </ChatInfoSection>
-      ) : null}
-
-      <ChatInfoSection title="Conversation">
-        <ChatInfoRow
-          icon="chatbubble-ellipses-outline"
-          label="Quick replies"
-          subtitle="Reusable message templates"
-          onPress={onQuickReplies}
-          showChevron
-        />
-        <ChatInfoRow
-          icon={isMuted ? 'volume-mute-outline' : 'notifications-outline'}
-          label={isMuted ? 'Unmute notifications' : 'Mute notifications'}
-          onPress={onToggleMute}
-          trailing={isTogglingMute ? <ActivityIndicator size="small" color={colors.brand} /> : undefined}
-        />
-      </ChatInfoSection>
-
-      <ChatInfoSection title="Chat history">
-        <ChatInfoRow
-          icon="archive-outline"
-          label="Archive conversation"
-          subtitle="Move this chat out of your active inbox"
-          onPress={onArchive}
-          trailing={isArchiving ? <ActivityIndicator size="small" color={colors.brand} /> : undefined}
-        />
-      </ChatInfoSection>
-
-      {canAddMembers ? <ChatInfoSection title="Invite">
-        <ChatInfoRow
-          icon="link-outline"
-          label="Invite via link"
-          subtitle={displayedInviteSummary ? 'Active link · manage below' : 'Create a shareable invite link'}
-          onPress={onGenerateInvite}
-          showChevron={!displayedInviteSummary}
-          trailing={isGeneratingInvite ? <ActivityIndicator size="small" color={colors.brand} /> : undefined}
-        />
-        {displayedInviteSummary && (
-          <View style={styles.inviteLinkCard}>
-            <Text style={styles.inviteLinkText} numberOfLines={2}>
-              {displayedInviteSummary.inviteLink || `${displayedInviteSummary.tokenPreview}...`}
-            </Text>
-            {inviteLink && (
-              <View style={styles.inviteLinkActions}>
-                <Pressable
-                  onPress={onCopyInvite}
-                  style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Copy invite link"
-                >
-                  <Ionicons name="copy-outline" size={16} color={colors.brand} />
-                  <Text style={styles.inviteActionText}>Copy</Text>
-                </Pressable>
-                <Pressable
-                  onPress={onShareInvite}
-                  style={({ pressed }) => [styles.inviteActionBtn, pressed && styles.inviteActionPressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Share invite link"
-                >
-                  <Ionicons name="share-outline" size={16} color={colors.brand} />
-                  <Text style={styles.inviteActionText}>Share</Text>
-                </Pressable>
-              </View>
-            )}
-            <Caption color={colors.textMuted} style={styles.inviteExpiry}>
-              {displayedInviteSummary.isExpired
-                ? 'Expired'
-                : `Expires ${new Date(displayedInviteSummary.expiresAt).toLocaleDateString()}`}
-              {` · ${displayedInviteSummary.useCount}/${displayedInviteSummary.maxUses || '∞'} uses`}
-            </Caption>
-            <Pressable
-              onPress={onRevokeInvite}
-              style={({ pressed }) => [styles.inviteRevokeButton, pressed && styles.inviteActionPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Revoke invite link"
-            >
-              <Text style={styles.inviteRevokeText}>Revoke link</Text>
-            </Pressable>
-          </View>
-        )}
-      </ChatInfoSection> : null}
-
-      {canManageGroup || connectedAgentCount > 0 ? (
-        <ChatInfoSection title="Advanced">
-          <ChatInfoRow
-            icon="extension-puzzle-outline"
-            label="Automations"
-            subtitle={
-              connectedAgentCount > 0
-                ? `${connectedAgentCount} connected`
-                : 'Moderation, styling and shopping assistants'
-            }
-            onPress={onManageAgents}
-            showChevron
-          />
-        </ChatInfoSection>
-      ) : null}
-
-      <ChatInfoSection title="Membership" danger>
-        <ChatInfoRow
-          icon="flag-outline"
-          label="Report group"
-          subtitle="Spam, abuse or policy violation"
-          onPress={onReportGroup}
-          danger
-          showChevron
-        />
-        <ChatInfoRow
-          icon="log-out-outline"
-          label={isLeaving ? 'Leaving…' : 'Leave group'}
-          onPress={onLeaveGroup}
-          danger
-          trailing={isLeaving ? <ActivityIndicator size="small" color={colors.danger} /> : undefined}
-        />
-        <ChatInfoRow
-          icon="trash-outline"
-          label={isDeleting ? 'Deleting…' : 'Delete for me'}
-          onPress={onDeleteForMe}
-          danger
-          trailing={isDeleting ? <ActivityIndicator size="small" color={colors.danger} /> : undefined}
-        />
-      </ChatInfoSection>
-    </View>
-  );
-}
+const createRowStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    row: {
+      minHeight: 52,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + 2,
+      gap: Space.sm,
+    },
+    iconWrap: {
+      width: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    copyCol: {
+      flex: 1,
+      gap: 2,
+    },
+    label: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.medium,
+      color: colors.textPrimary,
+    },
+    subtitle: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      lineHeight: TypographyV2.meta.lineHeight,
+    },
+    detail: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      marginRight: 4,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginLeft: 56, // Inset divider past the icon
+    },
+  });
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  content: {
-    gap: Space.lg },
-  paddedContent: {
-    paddingHorizontal: Space.md,
-    gap: Space.lg },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  headerAction: {
-    width: Control.hit,
-    height: Control.hit,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  coverWrap: {
-    width: '100%',
-    height: 200,
-    position: 'relative' },
-  coverImage: {
-    width: '100%',
-    height: '100%' },
-  heroSection: {
-    position: 'relative' },
-  heroAvatarOverlap: {
-    alignItems: 'center',
-    marginTop: -46,
-    marginBottom: Space.xs },
-  heroAvatarContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: Space.lg,
-    paddingBottom: Space.xs },
-  heroAvatarWrap: {
-    position: 'relative' },
-  avatarEditBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 30,
-    height: 30,
-    borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2.5,
-    borderColor: colors.background },
-  coverEditBadge: {
-    position: 'absolute',
-    bottom: Space.sm + 2,
-    right: Space.md,
-    width: 36,
-    height: 36,
-    borderRadius: Radius.full,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  identity: {
-    alignItems: 'center',
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-    paddingHorizontal: Space.md,
-    gap: Space.xs },
-  groupName: {
-    maxWidth: '88%',
-    color: colors.textPrimary,
-    fontFamily: FontFamily.bold,
-    fontSize: TypographyV2.screenTitle.size,
-    lineHeight: TypographyV2.screenTitle.lineHeight,
-    letterSpacing: TypographyV2.screenTitle.letterSpacing },
-  description: {
-    maxWidth: '84%',
-    color: colors.textSecondary,
-    fontFamily: FontFamily.regular,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.size + 6,
-    textAlign: 'center',
-    marginTop: Space.xs },
-  identityMeta: {
-    color: colors.textMuted,
-    fontFamily: FontFamily.medium,
-    fontSize: TypographyV2.meta.size,
-    marginTop: Space.xs / 2 + 1 },
-  quickActionDock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.md,
-    marginTop: Space.sm,
-    marginBottom: Space.xs,
-    paddingHorizontal: Space.md },
-  quickActionItem: {
-    alignItems: 'center',
-    gap: 5,
-    minWidth: 58 },
-  // Quick actions: transparent 44pt targets with 22pt glyphs (Design.md
-  // control anatomy — containment is not the hit target). Persistent fill is
-  // reserved for the muted state, where the fill IS the status signal.
-  quickActionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center' },
-  quickActionIconActive: {
-    backgroundColor: colors.brandSubtle },
-  quickActionLabel: {
-    fontSize: TypographyV2.meta.size - 1,
-    fontFamily: FontFamily.medium,
-    color: colors.textSecondary },
-  quickActionLabelActive: {
-    color: colors.brand },
-  tabSegmentContainer: {
-    flexDirection: 'row',
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.full,
-    padding: 3,
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    marginBottom: Space.xs },
-  tabPill: {
-    flex: 1,
-    paddingVertical: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.full },
-  tabPillActive: {
-    backgroundColor: colors.background,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2 },
-  tabLabel: {
-    color: colors.textSecondary,
-    fontFamily: FontFamily.medium,
-    fontSize: TypographyV2.meta.size },
-  tabLabelActive: {
-    color: colors.textPrimary,
-    fontFamily: FontFamily.bold },
-  tabContent: {
-    flex: 1 },
-  // ── Members tab ──
-  addMembersRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle },
-  addMembersIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.brandSubtle },
-  addMembersText: {
-    color: colors.brand,
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size },
-  memberList: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border },
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm + 2 },
-  memberRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle },
-  memberCopy: {
-    flex: 1,
-    gap: 2 },
-  memberName: {
-    color: colors.textPrimary,
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight },
-  memberHandle: {
-    color: colors.textMuted,
-    fontFamily: FontFamily.regular,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight },
-  roleBadge: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.surfaceAlt },
-  roleBadgeOwner: {
-    backgroundColor: colors.brandSubtle },
-  roleBadgeText: {
-    color: colors.textSecondary,
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.meta.size,
-    letterSpacing: 0.2 },
-  roleBadgeTextOwner: {
-    color: colors.brand },
-  emptyMembers: {
-    paddingVertical: Space.md },
-  viewAllRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space.sm + 2,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border },
-  viewAllText: {
-    color: colors.textSecondary,
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size },
-  // ── Media tab ──
-  mediaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs },
-  mediaTile: {
-    width: '32.5%',
-    aspectRatio: 1,
-    borderRadius: Radius.sm,
-    overflow: 'hidden',
-    position: 'relative' },
-  mediaTileImage: {
-    width: '100%',
-    height: '100%' },
-  // Skeleton tile — same geometry as a real tile (aspectRatio 1, same radius),
-  // so the loading → ready transition causes zero layout shift.
-  mediaTileSkeleton: {
-    backgroundColor: colors.surfaceAlt },
-  mediaRetryButton: {
-    minHeight: 36,
-    paddingHorizontal: Space.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.full,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    marginTop: Space.xs },
-  mediaRetryText: {
-    color: colors.brand,
-    fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.meta.size },
-  mediaErrorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 1,
-    minHeight: Control.hit,
-    paddingHorizontal: Space.sm },
-  mediaErrorText: {
-    color: colors.textMuted,
-    fontFamily: FontFamily.regular,
-    fontSize: TypographyV2.meta.size },
-  mediaVideoBadge: {
-    position: 'absolute',
-    bottom: Space.xs,
-    right: Space.xs,
-    width: 22,
-    height: 22,
-    borderRadius: Radius.full,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  mediaEmpty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xxl * 2,
-    gap: Space.sm },
-  mediaEmptyText: {
-    textAlign: 'center' },
-  // ── Document list in media tab ──
-  docListWrap: {
-    marginTop: Space.lg,
-    gap: Space.xs },
-  docListHeader: {
-    marginBottom: Space.xs },
-  docRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingVertical: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border },
-  docIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  docInfo: {
-    flex: 1,
-    gap: 2 },
-  docName: {
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    lineHeight: TypographyV2.body.lineHeight },
-  docMeta: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  // ── Invite link card ──
-  inviteLinkCard: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    gap: Space.sm,
-    marginTop: Space.xs },
-  inviteLinkText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
-    color: colors.textPrimary,
-    lineHeight: TypographyV2.meta.size + 6 },
-  inviteLinkActions: {
-    flexDirection: 'row',
-    gap: Space.md },
-  inviteActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    minHeight: Control.hit,
-    paddingHorizontal: Space.sm },
-  inviteActionPressed: {
-    opacity: 0.6 },
-  inviteActionText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: colors.brand },
-  inviteExpiry: {
-    fontSize: TypographyV2.meta.size },
-  inviteRevokeButton: {
-    alignSelf: 'flex-start',
-    minHeight: Control.hit,
-    justifyContent: 'center',
-    paddingHorizontal: Space.sm },
-  inviteRevokeText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    color: colors.danger } });
+    content: {
+      gap: Space.md,
+    },
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    headerAction: {
+      width: Control.hit,
+      height: Control.hit,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    coverWrap: {
+      width: '100%',
+      height: 200,
+      position: 'relative',
+    },
+    coverImage: {
+      width: '100%',
+      height: '100%',
+    },
+    heroSection: {
+      position: 'relative',
+    },
+    heroAvatarOverlap: {
+      alignItems: 'center',
+      marginTop: -48,
+      marginBottom: Space.xs,
+    },
+    heroAvatarContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingTop: Space.lg,
+      paddingBottom: Space.xs,
+    },
+    heroAvatarWrap: {
+      position: 'relative',
+    },
+    avatarEditBadge: {
+      position: 'absolute',
+      bottom: 2,
+      right: 2,
+      width: 30,
+      height: 30,
+      borderRadius: Radius.full,
+      backgroundColor: colors.brand,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2.5,
+      borderColor: colors.background,
+    },
+    coverEditBadge: {
+      position: 'absolute',
+      bottom: Space.sm + 2,
+      right: Space.md,
+      width: 36,
+      height: 36,
+      borderRadius: Radius.full,
+      backgroundColor: colors.overlay,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    identity: {
+      alignItems: 'center',
+      paddingHorizontal: Space.md,
+      gap: 4,
+    },
+    groupName: {
+      maxWidth: '90%',
+      color: colors.textPrimary,
+      fontFamily: FontFamily.bold,
+      fontSize: TypographyV2.screenTitle.size,
+      lineHeight: TypographyV2.screenTitle.lineHeight,
+      textAlign: 'center',
+    },
+    identityMeta: {
+      color: colors.textSecondary,
+      fontFamily: FontFamily.medium,
+      fontSize: TypographyV2.body.size,
+    },
+    descriptionWrap: {
+      maxWidth: '85%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: Space.xs,
+      gap: 4,
+    },
+    descriptionText: {
+      color: colors.textSecondary,
+      fontFamily: FontFamily.regular,
+      fontSize: TypographyV2.meta.size,
+      textAlign: 'center',
+      lineHeight: TypographyV2.meta.lineHeight + 2,
+    },
+    descPencil: {
+      marginLeft: 2,
+    },
+    addDescriptionPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: Space.sm,
+      paddingVertical: 3,
+      borderRadius: Radius.full,
+      backgroundColor: colors.brandSubtle,
+      marginTop: Space.xs,
+    },
+    addDescriptionText: {
+      color: colors.brand,
+      fontFamily: FontFamily.medium,
+      fontSize: TypographyV2.meta.size,
+    },
+    addCoverPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs + 2,
+      borderRadius: Radius.full,
+      backgroundColor: colors.brandSubtle,
+      marginTop: Space.sm,
+    },
+    addCoverPillText: {
+      color: colors.brand,
+      fontFamily: FontFamily.semibold,
+      fontSize: TypographyV2.meta.size,
+    },
+
+    // ── Quick Action Dock ──
+    quickActionDock: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      gap: Space.sm,
+      marginTop: Space.xs,
+    },
+    quickActionButton: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: Space.sm + 2,
+      borderRadius: Radius.md,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      gap: 4,
+    },
+    quickActionButtonActive: {
+      backgroundColor: colors.brandSubtle,
+      borderColor: colors.brand,
+    },
+    quickActionIconWrap: {
+      width: 28,
+      height: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    quickActionLabel: {
+      fontSize: TypographyV2.meta.size - 1,
+      fontFamily: FontFamily.medium,
+      color: colors.textPrimary,
+    },
+
+    // ── Grouped Card Architecture ──
+    sectionContainer: {
+      paddingHorizontal: Space.md,
+    },
+    sectionHeaderLabel: {
+      fontSize: TypographyV2.meta.size - 1,
+      fontFamily: FontFamily.semibold,
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginBottom: Space.xs,
+      marginLeft: Space.xs,
+    },
+    sectionHeaderWithAction: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: Space.xs,
+      paddingHorizontal: Space.xs,
+    },
+    searchToggleBtn: {
+      width: 28,
+      height: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    groupedCard: {
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: Radius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      overflow: 'hidden',
+    },
+    groupedRowContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + 2,
+      minHeight: 52,
+      gap: Space.sm,
+    },
+    rowIconWrap: {
+      width: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rowContent: {
+      flex: 1,
+      gap: 2,
+    },
+    rowLabel: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.medium,
+      color: colors.textPrimary,
+    },
+    rowSubtitle: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+    },
+    rowDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginLeft: 56,
+    },
+
+    // ── Media Strip ──
+    mediaStripWrap: {
+      paddingVertical: Space.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    mediaStrip: {
+      paddingHorizontal: Space.md,
+      gap: Space.xs,
+    },
+    mediaThumbnail: {
+      width: 64,
+      height: 64,
+      borderRadius: Radius.sm,
+      overflow: 'hidden',
+      position: 'relative',
+      backgroundColor: colors.surfaceAlt,
+    },
+    mediaThumbnailImg: {
+      width: '100%',
+      height: '100%',
+    },
+    mediaVideoBadge: {
+      position: 'absolute',
+      bottom: 4,
+      right: 4,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: colors.mediaOverlayScrim,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    // ── Member Search & List ──
+    memberSearchInputWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: Radius.md,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
+      paddingHorizontal: Space.sm,
+      height: 36,
+      marginBottom: Space.sm,
+      gap: Space.xs,
+    },
+    memberSearchInput: {
+      flex: 1,
+      fontSize: TypographyV2.meta.size,
+      color: colors.textPrimary,
+      fontFamily: FontFamily.regular,
+      paddingVertical: 0,
+    },
+    inviteSummaryBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      backgroundColor: colors.surfaceAlt,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    inviteSummaryTextCol: {
+      flex: 1,
+      marginRight: Space.sm,
+      gap: 2,
+    },
+    inviteSummaryLink: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.medium,
+      color: colors.textPrimary,
+    },
+    inviteSummaryBtns: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+    },
+    inviteSmallBtn: {
+      padding: 6,
+    },
+    memberItemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm + 2,
+      gap: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    memberAvatarCircle: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    memberAvatarImg: {
+      width: '100%',
+      height: '100%',
+    },
+    memberAvatarInitials: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.bold,
+      color: colors.textPrimary,
+    },
+    memberItemContent: {
+      flex: 1,
+      gap: 2,
+    },
+    memberNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs,
+    },
+    memberItemName: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.semibold,
+      color: colors.textPrimary,
+    },
+    memberRoleBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 1.5,
+      borderRadius: Radius.sm,
+      backgroundColor: colors.surfaceAlt,
+    },
+    memberRoleBadgeOwner: {
+      backgroundColor: colors.brandSubtle,
+    },
+    memberRoleBadgeText: {
+      fontSize: 10,
+      fontFamily: FontFamily.semibold,
+      color: colors.textSecondary,
+    },
+    memberRoleBadgeTextOwner: {
+      color: colors.brand,
+    },
+    memberItemHandle: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+    },
+    emptyMembersRow: {
+      paddingVertical: Space.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    // ── Provenance Footnote ──
+    provenanceFootnote: {
+      alignItems: 'center',
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md,
+    },
+
+    // ── Sheets / BottomModals ──
+    sheetContent: {
+      paddingHorizontal: Space.md,
+      paddingBottom: Space.xl,
+      gap: Space.sm,
+    },
+    sheetTitle: {
+      fontSize: TypographyV2.sectionTitle.size,
+      fontFamily: FontFamily.bold,
+      color: colors.textPrimary,
+    },
+    sheetSubtitle: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+      lineHeight: TypographyV2.meta.lineHeight,
+      marginBottom: Space.xs,
+    },
+    sheetIconHeader: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginVertical: Space.md,
+    },
+    sheetOptionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Space.sm + 4,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    sheetOptionLabel: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.medium,
+      color: colors.textPrimary,
+    },
+    memberSheetHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.md,
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+      marginBottom: Space.xs,
+    },
+    memberAvatarCircleLarge: {
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    memberAvatarImgLarge: {
+      width: '100%',
+      height: '100%',
+    },
+    memberAvatarInitialsLarge: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.bold,
+      color: colors.textPrimary,
+    },
+    memberSheetHeaderCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    memberSheetTitle: {
+      fontSize: TypographyV2.body.size + 1,
+      fontFamily: FontFamily.bold,
+      color: colors.textPrimary,
+    },
+    memberSheetSubtitle: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: FontFamily.regular,
+      color: colors.textMuted,
+    },
+    sheetActionsList: {
+      gap: 2,
+    },
+    sheetActionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: Space.sm + 4,
+      gap: Space.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+    },
+    sheetActionText: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.medium,
+      color: colors.textPrimary,
+    },
+    changesTimeline: {
+      marginTop: Space.sm,
+      gap: Space.md,
+    },
+    changeItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+    },
+    changeTextCol: {
+      flex: 1,
+      gap: 2,
+    },
+    changeTitle: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: FontFamily.medium,
+      color: colors.textPrimary,
+    },
+  });
 }

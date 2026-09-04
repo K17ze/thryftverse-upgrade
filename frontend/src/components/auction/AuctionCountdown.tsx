@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 
 type CountdownStage = 'upcoming' | 'plenty' | 'moderate' | 'urgent' | 'final' | 'ended';
@@ -97,7 +97,7 @@ export function AuctionCountdown({ text, urgent, compact, progress, stage, showP
   const colors2 = stageColors[resolvedStage];
   const stageLabel = STAGE_LABELS[resolvedStage];
   const iconSize = prominent ? 16 : compact ? 11 : 13;
-  const fontSize = prominent ? 20 : compact ? 12 : 14;
+  const fontSize = prominent ? TypographyV2.sectionTitle.size : compact ? TypographyV2.meta.size : TypographyV2.body.size;
   const isFinalOrUrgent = resolvedStage === 'final' || resolvedStage === 'urgent';
 
   // Rate-limited accessibility label — only meaningful thresholds, not every tick.
@@ -171,20 +171,20 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     gap: 3,
   },
   text: {
-    fontFamily: Typography.family.semibold,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.2,
   },
   stageLabel: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: Typography.family.medium,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
     opacity: 0.7,
     marginLeft: 2,
   },
   textUrgent: {
-    fontFamily: Typography.family.bold,
+    fontFamily: TypographyV2.display.fontFamily,
   },
   textProminent: {
     lineHeight: 24,

@@ -136,14 +136,14 @@ export default function MyProfileScreen() {
     trustBadgeText: { color: colors.textSecondary },
     trustBadgeVerified: { color: colors.success },
     trustBadgeSep: { backgroundColor: colors.borderSubtle },
-    completionCard: { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
+    profileStatusPanel: { backgroundColor: colors.surfaceAlt },
+    profileStatusDivider: { backgroundColor: colors.borderSubtle },
     completionTrack: { backgroundColor: colors.borderSubtle },
     completionFill: { backgroundColor: colors.brand },
     completionTitle: { color: colors.textPrimary },
     completionPercent: { color: colors.textMuted },
     completionCta: { backgroundColor: colors.brand },
     completionCtaText: { color: colors.textInverse },
-    growthCard: { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
     growthTitle: { color: colors.textPrimary },
     growthRow: { borderColor: colors.borderSubtle },
     growthRowTitle: { color: colors.textPrimary },
@@ -153,7 +153,7 @@ export default function MyProfileScreen() {
     portfolioHoldingTitle: { color: colors.textPrimary },
     portfolioHoldingUnits: { color: colors.textMuted } };
   const tMyProfile = {
-    awayBanner: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    awayBanner: { backgroundColor: colors.surfaceAlt },
     awayBannerTitle: { color: colors.textPrimary },
     awayBannerSub: { color: colors.textMuted } };
 
@@ -753,7 +753,7 @@ export default function MyProfileScreen() {
                     <View style={[styles.rankBadge, t.pinnedBadge]} pointerEvents="none">
                       <Text
                         style={[styles.rankBadgeText, t.soldText]}
-                        allowFontScaling={false}
+                        maxFontSizeMultiplier={1.3}
                       >
                         {featuredRank}
                       </Text>
@@ -1338,96 +1338,98 @@ export default function MyProfileScreen() {
         )}
         </View>
 
-        {/* ── COMPLETION & GROWTH PROMPTS — below the fold, not competing with identity ── */}
-        {/* These are optional onboarding prompts that recede below the tab
-            content so identity dominates the first viewport. They are still
-            accessible by scrolling down. */}
-        {showCompletionPrompt ? (
-          <View style={[styles.completionCard, t.completionCard]}>
-            <View style={styles.completionHead}>
-              <View style={styles.completionHeadText}>
-                <Text style={[styles.completionTitle, t.completionTitle]}>{tt('completion.title')}</Text>
-                <Text style={[styles.completionPercent, t.completionPercent]}>
-                  {tt('completion.progress', { percent: completion.percent, done: completion.done, total: completion.total })}
-                </Text>
-              </View>
-              <AnimatedPressable
-                // TODO: replace `${colors.textMuted}14` with textMutedSubtle token when available
-                style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
-                onPress={() => { haptic.light(); setCompletionDismissed(true); }}
-                accessibilityRole="button"
-                accessibilityLabel={tt('accessibility.dismissCompletion')}
-              >
-                <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
-              </AnimatedPressable>
-            </View>
-            <View style={[styles.completionTrack, t.completionTrack]}>
-              <View style={[styles.completionFill, t.completionFill, { width: `${completion.percent}%` }]} />
-            </View>
-            <AnimatedPressable
-              style={[styles.completionCta, t.completionCta]}
-              onPress={() => {
-                haptic.light();
-                navigation.navigate('EditProfile', completionCta.focus ? { focus: completionCta.focus } : {});
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={completionCta.label}
-            >
-              <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
-              <Ionicons name="chevron-forward" size={12} color={colors.textInverse} aria-hidden={true} />
-            </AnimatedPressable>
-          </View>
-        ) : null}
-
-        {showGrowthPrompt ? (
-          <View style={[styles.growthCard, t.growthCard]}>
-            <View style={styles.growthHead}>
-              <Text style={[styles.growthTitle, t.growthTitle]}>{tt('growth.title')}</Text>
-              <AnimatedPressable
-                // TODO: replace `${colors.textMuted}14` with textMutedSubtle token when available
-                style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
-                onPress={() => { haptic.light(); setGrowthDismissed(true); }}
-                accessibilityRole="button"
-                accessibilityLabel={tt('accessibility.dismissGrowth')}
-              >
-                <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
-              </AnimatedPressable>
-            </View>
-
-            {showFirstListingGrowth ? (
-              <AnimatedPressable
-                style={[styles.growthRow, t.growthRow]}
-                onPress={() => { haptic.light(); navigation.navigate('Sell'); }}
-                accessibilityRole="button"
-                accessibilityLabel={tt('growth.listFirstItemTitle')}
-                accessibilityHint={tt('accessibility.listFirstItemHint')}
-              >
-                <View style={styles.growthRowText}>
-                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.listFirstItemTitle')}</Text>
-                  <Text style={[styles.growthRowSub, t.growthRowSub]}>
-                    {tt('growth.listFirstItemSub')}
-                  </Text>
+        {showCompletionPrompt || showGrowthPrompt ? (
+          <View style={[styles.profileStatusPanel, t.profileStatusPanel]}>
+            {showCompletionPrompt ? (
+              <View style={styles.completionSection}>
+                <View style={styles.completionHead}>
+                  <View style={styles.completionHeadText}>
+                    <Text style={[styles.completionTitle, t.completionTitle]}>{tt('completion.title')}</Text>
+                    <Text style={[styles.completionPercent, t.completionPercent]}>
+                      {tt('completion.progress', { percent: completion.percent, done: completion.done, total: completion.total })}
+                    </Text>
+                  </View>
+                  <AnimatedPressable
+                    style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
+                    onPress={() => { haptic.light(); setCompletionDismissed(true); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={tt('accessibility.dismissCompletion')}
+                  >
+                    <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
+                  </AnimatedPressable>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-              </AnimatedPressable>
+                <View style={[styles.completionTrack, t.completionTrack]}>
+                  <View style={[styles.completionFill, t.completionFill, { width: `${completion.percent}%` }]} />
+                </View>
+                <AnimatedPressable
+                  style={[styles.completionCta, t.completionCta]}
+                  onPress={() => {
+                    haptic.light();
+                    navigation.navigate('EditProfile', completionCta.focus ? { focus: completionCta.focus } : {});
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={completionCta.label}
+                >
+                  <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
+                  <Ionicons name="chevron-forward" size={12} color={colors.textInverse} aria-hidden={true} />
+                </AnimatedPressable>
+              </View>
             ) : null}
 
-            {showAudienceGrowth ? (
-              <AnimatedPressable
-                style={[styles.growthRow, t.growthRow, styles.growthRowLast]}
-                onPress={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
-                accessibilityRole="button"
-                accessibilityLabel={tt('growth.growAudienceTitle')}
-                accessibilityHint={tt('accessibility.growAudienceHint')}
-              >
-                <View style={styles.growthRowText}>
-                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.growAudienceTitle')}</Text>
-                  <Text style={[styles.growthRowSub, t.growthRowSub]}>
-                    {tt('growth.growAudienceSub')}
-                  </Text>
+            {showCompletionPrompt && showGrowthPrompt ? (
+              <View style={[styles.profileStatusDivider, t.profileStatusDivider]} />
+            ) : null}
+
+            {showGrowthPrompt ? (
+              <View style={styles.growthSection}>
+                <View style={styles.growthHead}>
+                  <Text style={[styles.growthTitle, t.growthTitle]}>{tt('growth.title')}</Text>
+                  <AnimatedPressable
+                    style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
+                    onPress={() => { haptic.light(); setGrowthDismissed(true); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={tt('accessibility.dismissGrowth')}
+                  >
+                    <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
+                  </AnimatedPressable>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-              </AnimatedPressable>
+
+                {showFirstListingGrowth ? (
+                  <AnimatedPressable
+                    style={[styles.growthRow, t.growthRow]}
+                    onPress={() => { haptic.light(); navigation.navigate('Sell'); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={tt('growth.listFirstItemTitle')}
+                    accessibilityHint={tt('accessibility.listFirstItemHint')}
+                  >
+                    <View style={styles.growthRowText}>
+                      <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.listFirstItemTitle')}</Text>
+                      <Text style={[styles.growthRowSub, t.growthRowSub]}>
+                        {tt('growth.listFirstItemSub')}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+                  </AnimatedPressable>
+                ) : null}
+
+                {showAudienceGrowth ? (
+                  <AnimatedPressable
+                    style={[styles.growthRow, t.growthRow, styles.growthRowLast]}
+                    onPress={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={tt('growth.growAudienceTitle')}
+                    accessibilityHint={tt('accessibility.growAudienceHint')}
+                  >
+                    <View style={styles.growthRowText}>
+                      <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.growAudienceTitle')}</Text>
+                      <Text style={[styles.growthRowSub, t.growthRowSub]}>
+                        {tt('growth.growAudienceSub')}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+                  </AnimatedPressable>
+                ) : null}
+              </View>
             ) : null}
           </View>
         ) : null}
@@ -1445,8 +1447,7 @@ const myProfileStyles = StyleSheet.create({
     marginBottom: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md - 2,
-    borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: StyleSheet.hairlineWidth },
+    borderRadius: RadiusRoleValue.sheetDialog },
   awayBannerTextWrap: {
     flex: 1,
     gap: Space.xs / 2 },
@@ -1859,14 +1860,16 @@ const styles = StyleSheet.create({
     width: StyleSheet.hairlineWidth,
     height: Space.sm + Space.xxs },
 
-  // Profile completion prompt — flagship elevated card
-  completionCard: {
+  profileStatusPanel: {
     marginHorizontal: Space.md,
     marginBottom: Space.md,
+    borderRadius: RadiusRoleValue.sheetDialog,
+    overflow: 'hidden' },
+  profileStatusDivider: {
+    height: StyleSheet.hairlineWidth },
+  completionSection: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: StyleSheet.hairlineWidth,
     gap: Space.md },
   completionHead: {
     flexDirection: 'row',
@@ -1914,14 +1917,9 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     letterSpacing: 0.1 },
 
-  // Growth tasks — optional onboarding prompts (first listing / audience)
-  growthCard: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.md,
+  growthSection: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: StyleSheet.hairlineWidth,
     gap: Space.sm },
   growthHead: {
     flexDirection: 'row',

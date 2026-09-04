@@ -11,7 +11,7 @@ import Reanimated, {
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { Motion } from '../../theme/motionTokens';
-import { Space, Radius, TypeStyles, Typography, Stroke } from '../../theme/designTokens';
+import { Space, Radius, Typography, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -293,24 +293,24 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   // Name: Type.bodyStrong — clear, readable, emphasis on identity
   name: {
     fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     letterSpacing: TypographyV2.bodyStrong.letterSpacing,
     lineHeight: TypographyV2.bodyStrong.lineHeight },
   nameUnread: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily },
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   metaIcon: {
     marginLeft: 1 },
   // Timestamp: Type.caption — quiet metadata, tabular-nums for stable layout
   time: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
     paddingLeft: Space.xs,
     letterSpacing: TypographyV2.meta.letterSpacing,
     fontVariant: ['tabular-nums'] as ['tabular-nums'] },
   timeUnread: {
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary },
   bottomLine: {
     flexDirection: 'row',
@@ -318,23 +318,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: Space.xs },
   memberCount: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textMuted },
   draftLabel: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.brand },
   // Snippet: Type.body — readable, not cramped. Single line for density.
   preview: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary,
     lineHeight: TypographyV2.meta.lineHeight,
     letterSpacing: TypographyV2.meta.letterSpacing },
   typingPreview: {
     color: colors.brand,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily },
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   typingDotsWrap: {
     flex: 1,
     flexDirection: 'row',
@@ -342,7 +342,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     height: TypographyV2.meta.lineHeight },
   previewUnread: {
     color: colors.textPrimary,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily },
+    fontFamily: TypographyV2.bodyStrong.fontFamily },
   // Compact commerce status badge — quiet tinted pill, no chrome.
   commerceBadge: {
     borderRadius: Radius.sm,

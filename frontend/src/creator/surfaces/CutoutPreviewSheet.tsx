@@ -46,8 +46,6 @@ import type { MaskStroke } from '../core/cutout/MaskRenderer';
 
 // ── Brush colours ──────────────────────────────────────────────────
 // Green = keep (add to mask), red = erase (remove from mask).
-const KEEP_BRUSH = '#34C759';
-const ERASE_BRUSH = '#FF3B30';
 const BRUSH_RADIUS = 18;
 
 // ── Brush mode ids ─────────────────────────────────────────────────
@@ -58,8 +56,6 @@ type ModeId = BrushMode | 'restore';
 // A 2-tone checkerboard so the user can see transparent regions in the
 // cutout result. Rendered as a repeating grid of squares.
 const CHECKER_SIZE = 16;
-const CHECKER_LIGHT = '#E8E8E8';
-const CHECKER_DARK = '#C8C8C8';
 
 // ── SkeletonBlock — one-time shimmer sweep ──────
 function SkeletonBlock({ width, height, radius }: { width: DimensionValue; height: number; radius?: number }) {
@@ -99,6 +95,7 @@ function CutoutPreviewSkeleton({ width, height }: { width: number; height: numbe
 }
 
 function Checkerboard({ size }: { size: { width: number; height: number } }) {
+  const { colors } = useAppTheme();
   const cols = Math.ceil(size.width / CHECKER_SIZE);
   const rows = Math.ceil(size.height / CHECKER_SIZE);
   const squares: React.ReactNode[] = [];
@@ -114,7 +111,7 @@ function Checkerboard({ size }: { size: { width: number; height: number } }) {
             top: r * CHECKER_SIZE,
             width: CHECKER_SIZE,
             height: CHECKER_SIZE,
-            backgroundColor: isLight ? CHECKER_LIGHT : CHECKER_DARK }}
+            backgroundColor: isLight ? colors.surfaceAlt : colors.border }}
         />,
       );
     }
@@ -470,7 +467,7 @@ export function CutoutPreviewSheet({
 
   // ── Brush colour for the current mode ─────────────────────────────
   const currentBrushColor =
-    brushMode === 'erase' ? ERASE_BRUSH : KEEP_BRUSH;
+    brushMode === 'erase' ? colors.danger : colors.success;
 
   // ── Mode button config ────────────────────────────────────────────
   const modeButtons: { id: ModeId; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [

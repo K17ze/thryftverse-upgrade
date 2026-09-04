@@ -1,0 +1,72 @@
+[    1289ms] [WARNING] [expo-notifications] Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    1301ms] [LOG] Running application "main" with appParams:
+ {rootTag: #root, hydrate: undefined} 
+Development-level warnings: ON.
+Performance optimizations: OFF. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    1323ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    1381ms] [WARNING] [sslPinning] status: not-installed. Initialisation failed — pinning NOT active. Error: Cannot find module 'react-native-ssl-public-key-pinning'
+    at metroRequire (http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:61:15)
+    at metroRequire.metroImportAll [as importAll] (http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:105:21)
+    at importAll (http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:153047:37)
+    at asyncRequireImpl (http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:153055:16)
+    at asyncRequire (http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:153074:17)
+    at initializeSslPinning (http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:223577:89)
+    at initializeAppBootstrapState (http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:120335:96)
+    at http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:120381:7
+    at Object.react_stack_bottom_frame (http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:141303:20)
+    at runWithFiberInDEV (http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:128591:70) @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    1496ms] [WARNING] [apiClient] SecureStore unavailable — auth tokens will fall back to unencrypted AsyncStorage @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3621ms] [WARNING] "shadow*" style props are deprecated. Use "boxShadow". @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3627ms] [WARNING] [Reanimated] Reduced motion setting is overwritten with mode 'system'. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3671ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3673ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3673ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3674ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3675ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3676ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3676ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3677ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3678ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3679ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3680ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3681ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3682ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3682ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3683ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3684ms] [WARNING] Require cycle: src/i18n/index.ts -> src/i18n/i18n.ts -> src/i18n/index.ts
+
+Require cycles are allowed, but can result in uninitialized values. Consider refactoring to remove the need for a cycle. @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3776ms] [INFO] [telemetry] screen_view {screen: AgeVerification, session_id: 44d8e994-3644-45d5-915b-9d00e4635234, timestamp: 2026-09-03T00:36:46.944Z} @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    3789ms] [INFO] [backendDiagnostics] sync — count=10 error=none baseUrl=http://localhost:4000/api/v1 @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:124750
+[    5882ms] [ERROR] WebSocket connection to 'ws://localhost:4000/api/v1/realtime/ws?topics=' failed: HTTP Authentication failed; no valid credentials available @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:491559
+[    7582ms] [ERROR] WebSocket connection to 'ws://localhost:4000/api/v1/realtime/ws?topics=' failed: HTTP Authentication failed; no valid credentials available @ http://localhost:8083/index.ts.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable:491559

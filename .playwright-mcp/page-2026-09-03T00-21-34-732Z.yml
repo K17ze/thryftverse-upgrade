@@ -1,0 +1,180 @@
+- generic [ref=e12]:
+  - generic [ref=e38]:
+    - generic [ref=e39]:
+      - generic:
+        - generic [aria-hidden]:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic: Thryftverse
+                          - generic:
+                            - button:
+                              - generic: 
+                            - button:
+                              - generic: 
+                            - button:
+                              - generic: 
+                              - generic: "27"
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - tablist:
+                                      - tab:
+                                        - generic: For you
+                                      - tab:
+                                        - generic: Following
+                                        - generic: "7"
+                                    - generic:
+                                      - generic:
+                                        - generic: 
+                                        - generic: No recommendations yet
+                                        - generic: We're learning what you like. Browse listings and save items to build your feed.
+                                        - generic:
+                                          - button:
+                                            - generic: Browse all
+                                        - generic:
+                                          - button:
+                                            - generic: Refresh
+      - generic [ref=e144]:
+        - generic [ref=e145]:
+          - generic [ref=e146]: Inbox
+          - generic [ref=e147]:
+            - button "Search messages" [ref=e148] [cursor=pointer]:
+              - generic [ref=e149]: 
+            - button "More filters" [ref=e150] [cursor=pointer]:
+              - generic [ref=e151]: 
+            - button "Message settings" [ref=e152] [cursor=pointer]:
+              - generic [ref=e153]: 
+            - button "New message" [ref=e154] [cursor=pointer]:
+              - generic [ref=e155]: 
+              - generic [ref=e156]: New
+        - generic [ref=e159]:
+          - tab "Primary tab" [ref=e160] [cursor=pointer]:
+            - generic [ref=e161]: Primary
+          - tab "Buying tab" [ref=e163] [cursor=pointer]:
+            - generic [ref=e164]: Buying
+          - tab "Selling tab" [ref=e166] [cursor=pointer]:
+            - generic [ref=e167]: Selling
+          - tab "Requests tab" [ref=e169] [cursor=pointer]:
+            - generic [ref=e170]: Requests
+        - generic [ref=e172]:
+          - generic [ref=e173]: T
+          - generic [ref=e178]:
+            - generic "Scott Art" [ref=e181]:
+              - generic:
+                - generic:
+                  - generic: 
+                  - generic: Mark read
+              - generic:
+                - generic:
+                  - generic: 
+                  - generic: Archive
+              - button "Scott Art, No messages yet, 2026-08-14 02:39:52.862968+00" [ref=e183] [cursor=pointer]:
+                - generic [ref=e192]:
+                  - generic [ref=e193]:
+                    - generic [ref=e194]: Scott Art
+                    - generic [ref=e196]: 2026-08-14 02:39:52.862968+00
+                  - generic [ref=e197]: No messages yet
+            - generic "Scott Art" [ref=e202]:
+              - generic:
+                - generic:
+                  - generic: 
+                  - generic: Mark read
+              - generic:
+                - generic:
+                  - generic: 
+                  - generic: Archive
+              - button "Scott Art, Deal! I'll make an offer now., 2026-07-31 03:15:38.036607+00" [ref=e204] [cursor=pointer]:
+                - generic [ref=e213]:
+                  - generic [ref=e214]:
+                    - generic [ref=e215]: Scott Art
+                    - generic [ref=e217]: 2026-07-31 03:15:38.036607+00
+                  - generic [ref=e218]:
+                    - generic [ref=e219]: Deal! I'll make an offer now.
+                    - generic [ref=e220]: 
+            - generic "Thryft user" [ref=e225]:
+              - generic:
+                - generic:
+                  - generic: 
+                  - generic: Mark read
+              - generic:
+                - generic:
+                  - generic: 
+                  - generic: Archive
+              - button "Thryft user, Sorry, I'm tied up at the moment – I'll p..., 13 hours ago" [ref=e227] [cursor=pointer]:
+                - generic [ref=e228]:
+                  - generic [ref=e229]: T
+                  - generic [ref=e234]:
+                    - generic [ref=e235]:
+                      - generic [ref=e236]: Thryft user
+                      - generic [ref=e238]: 13 hours ago
+                    - generic [ref=e239]:
+                      - generic [ref=e240]: Sorry, I'm tied up at the moment – I'll p...
+                      - generic [ref=e241]: 
+            - generic "Thryft user" [ref=e246]:
+              - generic:
+                - generic:
+                  - generic: 
+                  - generic: Mark read
+              - generic:
+                - generic:
+                  - generic: 
+                  - generic: Archive
+              - button "Thryft user, Shout if you want more pics or questio..., a day ago" [ref=e248] [cursor=pointer]:
+                - generic [ref=e249]:
+                  - generic [ref=e250]: T
+                  - generic [ref=e255]:
+                    - generic [ref=e256]:
+                      - generic [ref=e257]: Thryft user
+                      - generic [ref=e259]: a day ago
+                    - generic [ref=e260]:
+                      - generic [ref=e261]: Shout if you want more pics or questio...
+                      - generic [ref=e262]: 
+            - generic "Thryft Snipers" [ref=e267]:
+              - generic:
+                - generic:
+                  - generic: 
+                  - generic: Mark read
+              - generic:
+                - generic:
+                  - generic: 
+                  - generic: Archive
+              - 'button "Thryft Snipers, TradeOps: New auction watchlist for tonight is live., 20m ago, 3 members" [ref=e269] [cursor=pointer]':
+                - generic [ref=e270]:
+                  - generic [ref=e272]:
+                    - generic [ref=e273]: TS
+                    - generic [ref=e274]: 
+                  - generic [ref=e276]:
+                    - generic [ref=e277]:
+                      - generic [ref=e278]: Thryft Snipers
+                      - generic [ref=e280]: 20m ago
+                    - generic [ref=e281]:
+                      - generic [ref=e282]: 3 members
+                      - generic [ref=e283]: "TradeOps: New auction watchlist for tonight is live."
+    - tablist [ref=e87]:
+      - tab "Home" [ref=e89] [cursor=pointer]:
+        - generic [ref=e90]:
+          - generic [ref=e91]: 
+          - generic [ref=e94]: 
+      - tab "Explore" [ref=e99] [cursor=pointer]:
+        - generic [ref=e100]:
+          - generic [ref=e101]: 
+          - generic [ref=e104]: 
+      - button "Create" [ref=e109] [cursor=pointer]:
+        - generic [ref=e110]: 
+      - tab "Inbox" [active] [selected] [ref=e113] [cursor=pointer]:
+        - generic [ref=e114]:
+          - generic [ref=e115]: 
+          - generic [ref=e118]: 
+      - tab "Profile" [ref=e123] [cursor=pointer]
+  - button "Open command palette" [ref=e32] [cursor=pointer]:
+    - generic [ref=e33]: 

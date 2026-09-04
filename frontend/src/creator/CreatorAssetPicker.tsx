@@ -755,7 +755,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.9 });
-    if (!result.canceled && result.assets[0]) {
+    if (!result.canceled && result.assets.length > 0) {
       onAddLayer({
         ...baseLayer(createStableId('media'), 0),
         type: 'media',
@@ -775,7 +775,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       quality: 0.9 });
-    if (!result.canceled && result.assets[0]) {
+    if (!result.canceled && result.assets.length > 0) {
       const durationMs = result.assets[0].duration ?? 0;
       if (durationMs > MAX_VIDEO_DURATION_MS) {
         haptic.error();

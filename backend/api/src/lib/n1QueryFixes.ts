@@ -229,7 +229,7 @@ export async function batchLoadSellerPayableBalances(
         FROM ledger_entries le
         JOIN ledger_accounts la ON la.id = le.account_id
         WHERE la.owner_type = 'user'
-          AND la.code = 'seller_payable'
+          AND la.account_code = 'seller_payable'
           AND la.owner_id = ANY($1::text[])
           AND le.direction = 'credit'
         GROUP BY la.owner_id

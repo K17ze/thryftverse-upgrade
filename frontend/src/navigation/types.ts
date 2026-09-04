@@ -196,8 +196,8 @@ export type RootStackParamList = {
       counterRound: number;
     };
   };
-  CreateGroupChat: undefined;
-  GroupChat: { groupId: string; groupName: string };
+  CreateGroupChat: { prefillMemberIds?: string[]; prefillTitle?: string } | undefined;
+  GroupChat: { groupId: string; groupName: string; initialSearch?: boolean };
   GroupChatInfo: { conversationId: string };
   GroupMembers: { conversationId: string };
   GroupBotManagement: { conversationId: string };
@@ -259,7 +259,6 @@ export type RootStackParamList = {
   Withdraw: undefined;
   CategoryTree: { categoryPrefix: string };
   // Phase 24 new screens
-  GlobalSearch: { initialQuery?: string } | undefined;
   /** Unified discovery surface — combines Galleria editorial, personalised
    *  listings, looks, mood boards, pulse and curated collections into one
    *  flagship discovery entry from the Home search button. */
@@ -309,7 +308,7 @@ export type RootStackParamList = {
   // ── Creator Studio ── (looks, camera, studio, outfits, explore)
   // Explore / Creator screens
   CreatorStudio: {
-    type: 'look' | 'poster';
+    type: 'look' | 'poster' | 'moodboard';
     draftId?: string;
     templateId?: string;
     sourceDocumentId?: string;
@@ -609,7 +608,6 @@ export const ROOT_STACK_ROUTES = [
   'EditListing',
   'Withdraw',
   'CategoryTree',
-  'GlobalSearch',
   'CollectionDetail',
   'Filter',
   'ListingSuccess',

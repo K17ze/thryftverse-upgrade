@@ -209,7 +209,7 @@
   },
   "reanimated": {
     "staticFeatureFlags": {
-      "ENABLE_SHARED_ELEMENT_TRANSITIONS": true,
+      "ENABLE_SHARED_ELEMENT_TRANSITIONS": false,
       "ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS": true,
       "IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS": true
     }

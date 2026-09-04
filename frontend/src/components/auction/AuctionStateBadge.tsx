@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
+import { TypographyV2 } from '../../theme/typography.v2';
 
 type AuctionState = 'live' | 'upcoming' | 'ended' | 'cancelled' | 'settled';
 
@@ -36,7 +37,7 @@ export function AuctionStateBadge({ state, compact }: Props) {
     >
       {cfg.dot && <View style={[styles.dot, { width: compact ? 5 : 6, height: compact ? 5 : 6 }]} />}
       {cfg.icon && <Ionicons name={cfg.icon} size={size} color={cfg.fg} />}
-      <Text style={[styles.label, { color: cfg.fg, fontSize: compact ? 9 : 10 }]}>{cfg.label}</Text>
+      <Text style={[styles.label, { color: cfg.fg, fontSize: TypographyV2.meta.size }]}>{cfg.label}</Text>
     </View>
   );
 }
@@ -57,7 +58,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
     backgroundColor: colors.danger,
   },
   label: {
-    fontFamily: Typography.family.bold,
+    fontFamily: TypographyV2.display.fontFamily,
     letterSpacing: 0.8,
   },
 });

@@ -27,6 +27,7 @@ import { RootStackParamList } from '../navigation/types';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../theme/ThemeContext';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import type { Listing } from '../services/listingsApi';
 import type { DisplayReadyListing } from '../services/listingMapper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -93,7 +94,7 @@ import {
   type RecommendationLook,
 } from '../platform/product';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
-import { Space, FontFamily, DockConstants, Control, AspectRatio, Stroke, LetterSpacing, PressScale } from '../theme/designTokens';
+import { Space, FontFamily, DockConstants, Control, AspectRatio, Stroke, LetterSpacing } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { t } from '../i18n';
@@ -919,18 +920,18 @@ export default function ItemDetailScreen() {
                     buyers, so it earns its own affordance and a tap
                     target that opens the definition. */}
                 {item.condition ? (
-                  <Pressable
-                    onPress={() => { haptic.light(); setConditionInfoVisible(true); }}
+                  <AnimatedPressable
+                    onPress={() => setConditionInfoVisible(true)}
                     hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
-                    style={({ pressed }) => [
+                    style={[
                       styles.conditionChip,
                       {
-                        // TODO: replace `${conditionMeta.color}66` and `${conditionMeta.color}14` with conditionColorSubtle token when available
                         borderColor: conditionMeta ? `${conditionMeta.color}66` : colors.borderSubtle,
                         backgroundColor: conditionMeta ? `${conditionMeta.color}14` : 'transparent',
                       },
-                      pressed && styles.pressed,
                     ]}
+                    scaleValue={0.98}
+                    hapticFeedback="light"
                     accessibilityLabel={`Condition: ${item.condition}. Tap for definition.`}
                     accessibilityRole="button"
                   >
@@ -939,7 +940,7 @@ export default function ItemDetailScreen() {
                       {item.condition}
                     </Text>
                     <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
                 {(() => {
                   const remaining = [
@@ -963,17 +964,19 @@ export default function ItemDetailScreen() {
                 ) : null}
               </View>
               {item.size && (
-                <Pressable
-                  onPress={() => { haptic.light(); setSizeGuideVisible(true); }}
+                <AnimatedPressable
+                  onPress={() => setSizeGuideVisible(true)}
                   hitSlop={8}
-                  style={({ pressed }) => [styles.quietTextTarget, pressed && styles.pressed]}
+                  style={styles.quietTextTarget}
+                  scaleValue={0.98}
+                  hapticFeedback="light"
                   accessibilityLabel="View size guide"
                   accessibilityRole="button"
                 >
                   <Text style={[styles.sizeGuideLink, { color: colors.brand }]} maxFontSizeMultiplier={1}>
                     Size guide
                   </Text>
-                </Pressable>
+                </AnimatedPressable>
               )}
             </View>
           ) : null}
@@ -1121,10 +1124,12 @@ export default function ItemDetailScreen() {
                 )}
               </Pressable>
               {item.description.length > 120 && (
-                <Pressable
+                <AnimatedPressable
                   onPress={() => setDescriptionExpanded((prev) => !prev)}
                   hitSlop={8}
-                  style={({ pressed }) => [styles.quietTextTarget, pressed && styles.pressed]}
+                  style={styles.quietTextTarget}
+                  scaleValue={0.98}
+                  hapticFeedback="light"
                   accessibilityLabel={descriptionExpanded ? 'Show less' : 'Read more'}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: descriptionExpanded }}
@@ -1132,7 +1137,7 @@ export default function ItemDetailScreen() {
                   <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1}>
                     {descriptionExpanded ? 'Show less' : 'Read more'}
                   </Text>
-                </Pressable>
+                </AnimatedPressable>
               )}
             </View>
           ) : null}
@@ -1349,10 +1354,12 @@ export default function ItemDetailScreen() {
                   />
                 ))}
                 {hasDiscount && discountPercent && discountPercent > 0 ? (
-                  <Pressable
+                  <AnimatedPressable
                     onPress={handleTogglePriceAlert}
                     disabled={priceAlertLoading}
-                    style={({ pressed }) => [styles.alertRow, pressed && styles.pressed]}
+                    style={styles.alertRow}
+                    scaleValue={0.98}
+                    hapticFeedback="light"
                     accessibilityRole="switch"
                     accessibilityState={{
                       checked: priceAlertEnabled,
@@ -1374,7 +1381,7 @@ export default function ItemDetailScreen() {
                     <View style={[styles.toggleTrack, { borderColor: priceAlertEnabled ? colors.brand : colors.border, backgroundColor: priceAlertEnabled ? colors.brandSubtle : colors.surfaceAlt }]}>
                       <View style={[styles.toggleThumb, { backgroundColor: priceAlertEnabled ? colors.brand : colors.textMuted, alignSelf: priceAlertEnabled ? 'flex-end' : 'flex-start' }]} />
                     </View>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
               </CommerceDetailSection>
             ) : null}
@@ -1431,9 +1438,11 @@ export default function ItemDetailScreen() {
                       ? formatFromFiat(simItem.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
                       : null;
                     return (
-                    <Pressable
+                    <AnimatedPressable
                       key={simItem.id}
-                      style={({ pressed }) => [styles.moreLikeThisCard, pressed && styles.pressed]}
+                      style={styles.moreLikeThisCard}
+                      scaleValue={0.98}
+                      hapticFeedback="light"
                       onPress={() => handlePressRecommendation(simItem, 'similar_items')}
                       hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
                       accessibilityRole="button"
@@ -1462,7 +1471,7 @@ export default function ItemDetailScreen() {
                       <Text style={[styles.moreLikeThisPrice, { color: colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={2}>
                         {simPriceFormatted}
                       </Text>
-                    </Pressable>
+                    </AnimatedPressable>
                     );
                   })}
                 </View>
@@ -1754,14 +1763,16 @@ export default function ItemDetailScreen() {
               Confirmed terms for this listing
             </Text>
           </View>
-          <Pressable
+          <AnimatedPressable
             onPress={() => setPurchaseDetailsVisible(false)}
             style={styles.sheetCloseTarget}
+            scaleValue={0.98}
+            hapticFeedback="light"
             accessibilityLabel="Close costs, delivery and protection"
             accessibilityRole="button"
           >
             <Ionicons name="close" size={22} color={colors.textSecondary} />
-          </Pressable>
+          </AnimatedPressable>
         </View>
         <View style={styles.purchaseSheetBody}>
           {hasPrice ? (
@@ -1831,15 +1842,17 @@ export default function ItemDetailScreen() {
           <Text style={[styles.qaSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
             Questions & answers
           </Text>
-          <Pressable
+          <AnimatedPressable
             onPress={() => setQaSheetVisible(false)}
             hitSlop={12}
             style={styles.sheetCloseTarget}
+            scaleValue={0.98}
+            hapticFeedback="light"
             accessibilityLabel="Close questions and answers"
             accessibilityRole="button"
           >
             <Ionicons name="close" size={22} color={colors.textSecondary} />
-          </Pressable>
+          </AnimatedPressable>
         </View>
         <ListingQA
           listingId={item.id}
@@ -1857,8 +1870,10 @@ export default function ItemDetailScreen() {
         <View style={[styles.overflowHeader, { borderColor: colors.border }]}>
           <Text style={[styles.overflowTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>More actions</Text>
         </View>
-        <Pressable
-          style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+        <AnimatedPressable
+          style={styles.overflowRow}
+          scaleValue={0.98}
+          hapticFeedback="light"
           onPress={() => {
             setOverflowVisible(false);
             handleShare();
@@ -1868,9 +1883,11 @@ export default function ItemDetailScreen() {
         >
           <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
           <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>Share listing</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.overflowRow}
+          scaleValue={0.98}
+          hapticFeedback="light"
           onPress={() => {
             setOverflowVisible(false);
             handleToggleFav();
@@ -1883,9 +1900,11 @@ export default function ItemDetailScreen() {
           <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
             {isFav ? 'Remove from wishlist' : 'Add to wishlist'}
           </Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={styles.overflowRow}
+          scaleValue={0.98}
+          hapticFeedback="light"
           onPress={() => {
             setOverflowVisible(false);
             navigation.navigate('Report', { type: 'item', targetId: item.id });
@@ -1895,7 +1914,7 @@ export default function ItemDetailScreen() {
         >
           <Ionicons name="flag-outline" size={20} color={colors.textSecondary} />
           <Text style={[styles.overflowRowText, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>Report listing</Text>
-        </Pressable>
+        </AnimatedPressable>
       </BottomSheet>
 
       <MakeOfferSheet
@@ -1933,18 +1952,19 @@ export default function ItemDetailScreen() {
             <Text style={[styles.conditionSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
               Condition
             </Text>
-            <Pressable
+            <AnimatedPressable
               onPress={() => setConditionInfoVisible(false)}
               style={styles.sheetCloseTarget}
+              scaleValue={0.98}
+              hapticFeedback="light"
               accessibilityLabel="Close condition definition"
               accessibilityRole="button"
             >
               <Ionicons name="close" size={22} color={colors.textSecondary} />
-            </Pressable>
+            </AnimatedPressable>
           </View>
           <View style={styles.conditionSheetBody}>
-            {/* TODO: replace `${conditionMeta.color}1F` with conditionColorSubtle token when available */}
-            <View style={[styles.conditionSheetBadge, { backgroundColor: conditionMeta ? `${conditionMeta.color}1F` : colors.surfaceAlt }]}>
+            <View style={[styles.conditionSheetBadge, { backgroundColor: conditionMeta ? `${conditionMeta.color}14` : colors.surfaceAlt }]}>
               <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
               <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]} maxFontSizeMultiplier={1}>
                 {item.condition}
@@ -1956,14 +1976,15 @@ export default function ItemDetailScreen() {
               </Text>
             ) : null}
             {item.images && item.images.length > 1 ? (
-              <Pressable
-                style={({ pressed }) => [styles.conditionEvidenceJump, pressed && styles.pressed]}
+              <AnimatedPressable
+                style={styles.conditionEvidenceJump}
+                scaleValue={0.98}
+                hapticFeedback="light"
                 onPress={() => {
                   setConditionInfoVisible(false);
                   // Jump to the last photo (detail/flaw shot per policy)
                   const evidenceIndex = item.images!.length - 1;
                   media.openViewer(evidenceIndex);
-                  haptic.light();
                 }}
                 accessibilityLabel="View condition evidence photos"
                 accessibilityRole="button"
@@ -1973,7 +1994,7 @@ export default function ItemDetailScreen() {
                   View condition photos
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.brand} />
-              </Pressable>
+              </AnimatedPressable>
             ) : null}
           </View>
         </View>
@@ -2345,10 +2366,6 @@ const styles = StyleSheet.create({
   overflowRowText: {
     fontSize: TypographyV2.body.size,
     fontFamily: FontFamily.medium,
-  },
-  pressed: {
-    opacity: 0.85,
-    transform: [{ scale: PressScale.gentle }],
   },
   // ── Condition definition sheet ──
   conditionSheetWrap: {

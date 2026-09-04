@@ -250,8 +250,6 @@ const createStyles = (themed: {
   providerMark: {
     width: 48,
     height: 48,
-    borderRadius: Radius.xxl,
-    backgroundColor: themed.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Space.md },

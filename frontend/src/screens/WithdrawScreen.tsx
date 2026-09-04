@@ -341,7 +341,7 @@ export default function WithdrawScreen() {
       throw new Error('Sign in to connect a payout profile.');
     }
 
-    const gatewayPriority = resolvedCapabilities?.payouts.gatewayPriority ?? ['stripe_americas'];
+    const gatewayPriority = resolvedCapabilities?.payouts?.gatewayPriority ?? ['stripe_americas'];
     if (!gatewayPriority.includes('stripe_americas')) {
       throw new Error('A verified payout provider is not available for your country policy right now.');
     }
@@ -727,12 +727,12 @@ export default function WithdrawScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={{ alignItems: 'center', paddingHorizontal: Space.md }}>
-            <View style={[styles.successIconCircle, { backgroundColor: colors.successSubtle }]}>
-              <Ionicons name="checkmark-circle" size={40} color={colors.success} />
+            <View style={styles.successHeaderRow}>
+              <Ionicons name="checkmark-circle" size={24} color={colors.success} />
+              <Text style={[styles.successTitle, { color: colors.textPrimary }]}>
+                Withdrawal requested
+              </Text>
             </View>
-            <Text style={[styles.successTitle, { color: colors.textPrimary }]}>
-              Withdrawal requested
-            </Text>
             <Text style={[styles.successSubtitle, { color: colors.textSecondary }]}>
               {formatFromFiat(successData.amountGbp, 'GBP', { displayMode: 'fiat' })} is on its way
             </Text>
@@ -1206,19 +1206,16 @@ function createStyles(colors: ThemeColors) {
     marginTop: Space.md },
 
   // ── Success step ──
-  successIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.full,
+  successHeaderRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: Space.sm,
     marginBottom: Space.md },
   successTitle: {
     fontSize: TypographyV2.screenTitle.size,
     lineHeight: TypographyV2.screenTitle.lineHeight,
     fontFamily: TypographyV2.screenTitle.fontFamily,
     letterSpacing: TypographyV2.screenTitle.letterSpacing,
-    textAlign: 'center',
     marginBottom: Space.xs },
   successSubtitle: {
     fontSize: TypographyV2.body.size,

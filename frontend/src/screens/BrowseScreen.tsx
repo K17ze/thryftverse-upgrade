@@ -47,6 +47,8 @@ import { Space, Radius, Elevation, Typography, AspectRatio, Control, IconSize } 
 import { AppIcon } from '../components/common/AppIcon';
 import { AppIconButton } from '../components/common/AppIconButton';
 import { TypographyV2 } from '../theme/typography.v2';
+import { useDynamicAlgorithmSignals } from '../hooks/useDynamicAlgorithmSignals';
+import { matchesSignal } from '../services/algorithmicSignalsService';
 const GRID_SPACING = 16;
 
 const BROWSE_SORT_PREF_KEY = 'thryftverse:browse-sort-pref:v1';
@@ -110,6 +112,11 @@ export default function BrowseScreen() {
   const reducedMotion = useReducedMotion();
   const { width: windowWidth } = useWindowDimensions();
   const itemWidth = (windowWidth - 40 - GRID_SPACING) / 2;
+  const {
+    signals: browseSignals,
+    activeSignal: activeBrowseSignal,
+    selectSignal: selectBrowseSignal,
+  } = useDynamicAlgorithmSignals({ surface: 'browse' });
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -161,7 +168,7 @@ export default function BrowseScreen() {
       backgroundColor: 'transparent' },
     filterPillActive: {
       borderColor: colors.textPrimary },
-    filterPillTextActive: { color: colors.textPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamilySemibold ?? TypographyV2.meta.fontFamily },
+    filterPillTextActive: { color: colors.textPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.bodyStrong.fontFamily },
     filterPillOutline: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -240,6 +247,51 @@ export default function BrowseScreen() {
       height: Control.iconCompact,
       alignItems: 'center',
       justifyContent: 'center' },
+    signalSubRail: {
+      paddingBottom: Space.sm,
+    },
+    signalSubRailContent: {
+      paddingHorizontal: Space.md,
+      gap: Space.xs,
+      alignItems: 'center',
+    },
+    signalSubChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: 'transparent',
+    },
+    signalSubChipPersonalized: {
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.surfaceAlt,
+    },
+    signalSubChipActive: {
+      backgroundColor: colors.textPrimary,
+      borderColor: colors.textPrimary,
+    },
+    signalSubDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: colors.brand,
+    },
+    signalSubDotActive: {
+      backgroundColor: colors.background,
+    },
+    signalSubText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+    },
+    signalSubTextActive: {
+      color: colors.background,
+      fontFamily: Typography.family.semibold,
+    },
     activeBadgeDivider: {
       width: StyleSheet.hairlineWidth,
       height: Space.md,
@@ -633,8 +685,12 @@ export default function BrowseScreen() {
         break;
     }
 
+    if (activeBrowseSignal.filterKey !== 'all') {
+      return sorted.filter((listing) => matchesSignal(listing, activeBrowseSignal));
+    }
+
     return sorted;
-  }, [browseFilters, categoryId, listings, subcategoryId, title]);
+  }, [browseFilters, categoryId, listings, subcategoryId, title, activeBrowseSignal]);
 
   const showBrowseLoadingSkeleton = isSyncing && dataToRender.length === 0 && !lastError;
 
@@ -677,7 +733,7 @@ export default function BrowseScreen() {
           />
           <AppIconButton
             name="search"
-            onPress={() => navigation.navigate('GlobalSearch')}
+            onPress={() => navigation.navigate('UnifiedDiscovery')}
             accessibilityLabel="Search listings"
           />
         </View>
@@ -813,6 +869,51 @@ export default function BrowseScreen() {
               </Text>
             </AnimatedPressable>
           )}
+        </ScrollView>
+      </View>
+
+      {/* Dynamic Algorithmic Signal Rail for Current Browse Context */}
+      <View style={styles.signalSubRail}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.signalSubRailContent}
+          accessibilityRole="tablist"
+          accessibilityLabel="Browse style suggestions"
+        >
+          {browseSignals.map((signal) => {
+            const isSelected = activeBrowseSignal.filterKey === signal.filterKey;
+            return (
+              <AnimatedPressable
+                key={`browse-signal-${signal.id}-${signal.filterKey}`}
+                style={[
+                  styles.signalSubChip,
+                  isSelected && styles.signalSubChipActive,
+                  signal.isPersonalized && !isSelected && styles.signalSubChipPersonalized,
+                ]}
+                onPress={() => {
+                  haptic.selection();
+                  selectBrowseSignal(signal);
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${signal.label}${signal.isPersonalized ? ', personalized' : ''}`}
+                accessibilityState={{ selected: isSelected }}
+              >
+                {signal.isPersonalized && signal.kind !== 'all' ? (
+                  <View style={[styles.signalSubDot, isSelected && styles.signalSubDotActive]} />
+                ) : null}
+                <Text
+                  style={[
+                    styles.signalSubText,
+                    isSelected && styles.signalSubTextActive,
+                  ]}
+                >
+                  {signal.label}
+                </Text>
+              </AnimatedPressable>
+            );
+          })}
         </ScrollView>
       </View>
 
@@ -975,6 +1076,7 @@ export default function BrowseScreen() {
             horizontalPadding={Space.md}
             testIDPrefix="golden-browse-product-card"
             firstItemTestID="golden-browse-first-product"
+            enableImagePrefetch
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}

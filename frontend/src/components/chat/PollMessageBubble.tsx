@@ -77,6 +77,7 @@ export function PollMessageBubble({
               key={idx}
               onPress={() => handlePress(idx)}
               disabled={disabled || isClosed || isVoting}
+              accessibilityRole="button"
               style={({ pressed }) => [
                 styles.optionRow,
                 pressed && styles.optionPressed,

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -13,34 +13,50 @@ import { Space, Radius, Elevation } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
+import { CachedImage } from '../CachedImage';
 import { Caption, BodyEmphasis } from '../ui/Text';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
+import { haptics } from '../../utils/haptics';
 
 export type GroupMediaSource = 'camera' | 'gallery';
+
+export interface GroupMediaSourcePreset {
+  id: string;
+  label: string;
+  uri: string;
+}
 
 interface GroupMediaSourceSheetProps {
   visible: boolean;
   onClose: () => void;
   onSelect: (source: GroupMediaSource) => void;
-  /** Optional label for the title row — e.g. "Change group photo". */
   title?: string;
+  canRemove?: boolean;
+  onRemove?: () => void;
+  presets?: GroupMediaSourcePreset[];
+  onSelectPreset?: (uri: string) => void;
 }
 
 /**
- * GroupMediaSourceSheet — bottom sheet for choosing the photo source.
+ * GroupMediaSourceSheet — WhatsApp & Telegram flagship bottom sheet for
+ * changing group avatar or banner cover photos.
  *
- * Two options: Camera / Gallery. Matches WhatsApp/Telegram's source
- * selection pattern. Deliberately minimal — no emoji/web-search (those
- * add moderation/licensing complexity for marginal value in a marketplace
- * chat context). The sheet is content-sized, drag-to-dismiss, with
- * haptic feedback on selection.
+ * Supports:
+ *  - Take photo with camera
+ *  - Choose from photo library
+ *  - Curated group aesthetic presets
+ *  - Remove photo
  */
 export function GroupMediaSourceSheet({
   visible,
   onClose,
   onSelect,
   title,
+  canRemove,
+  onRemove,
+  presets,
+  onSelectPreset,
 }: GroupMediaSourceSheetProps) {
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
@@ -77,7 +93,20 @@ export function GroupMediaSourceSheet({
     });
 
   const handleSelect = (source: GroupMediaSource) => {
+    haptics.tap();
     onSelect(source);
+    onClose();
+  };
+
+  const handlePresetSelect = (uri: string) => {
+    haptics.success();
+    onSelectPreset?.(uri);
+    onClose();
+  };
+
+  const handleRemove = () => {
+    haptics.press();
+    onRemove?.();
     onClose();
   };
 
@@ -85,7 +114,7 @@ export function GroupMediaSourceSheet({
 
   const options: { id: GroupMediaSource; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
     { id: 'camera', label: 'Take photo', icon: 'camera-outline' },
-    { id: 'gallery', label: 'Choose from gallery', icon: 'images-outline' },
+    { id: 'gallery', label: 'Choose from library', icon: 'images-outline' },
   ];
 
   return (
@@ -102,6 +131,38 @@ export function GroupMediaSourceSheet({
             <BodyEmphasis style={[styles.title, { color: colors.textPrimary }]}>{title}</BodyEmphasis>
           ) : null}
 
+          {/* Curated Aesthetic Presets Strip */}
+          {presets && presets.length > 0 && onSelectPreset ? (
+            <View style={[styles.presetSection, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.presetSectionLabel, { color: colors.textSecondary }]}>
+                Curated Aesthetics
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.presetRail}
+              >
+                {presets.map((preset) => (
+                  <AnimatedPressable
+                    key={preset.id}
+                    style={[styles.presetItem, { borderColor: colors.border }]}
+                    onPress={() => handlePresetSelect(preset.uri)}
+                    activeOpacity={0.75}
+                    scaleValue={0.96}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Choose ${preset.label} preset`}
+                  >
+                    <CachedImage uri={preset.uri} style={styles.presetThumb} contentFit="cover" />
+                    <Text style={[styles.presetItemText, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {preset.label}
+                    </Text>
+                  </AnimatedPressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {/* Main Picker Options */}
           {options.map((opt) => (
             <AnimatedPressable
               key={opt.id}
@@ -118,6 +179,23 @@ export function GroupMediaSourceSheet({
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </AnimatedPressable>
           ))}
+
+          {/* Remove Photo Action */}
+          {canRemove && onRemove ? (
+            <AnimatedPressable
+              style={[styles.optionRow, { borderBottomColor: colors.border }]}
+              onPress={handleRemove}
+              activeOpacity={0.7}
+              scaleValue={0.98}
+              hapticFeedback="medium"
+              accessibilityRole="button"
+              accessibilityLabel="Remove photo"
+            >
+              <Ionicons name="trash-outline" size={22} color={colors.danger} />
+              <Caption color={colors.danger} style={styles.optionLabel}>Remove photo</Caption>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </AnimatedPressable>
+          ) : null}
 
           <AnimatedPressable
             style={[styles.cancelBtn, { backgroundColor: colors.surfaceAlt }]}
@@ -165,6 +243,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     paddingBottom: Space.sm,
   },
+  presetSection: {
+    marginBottom: Space.sm,
+    paddingBottom: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  presetSectionLabel: {
+    fontSize: TypographyV2.caption.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    marginBottom: Space.xs,
+    paddingHorizontal: Space.sm,
+  },
+  presetRail: {
+    gap: Space.sm,
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xs,
+  },
+  presetItem: {
+    width: 72,
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+    paddingBottom: 4,
+  },
+  presetThumb: {
+    width: 72,
+    height: 54,
+    marginBottom: 4,
+  },
+  presetItemText: {
+    fontSize: 10,
+    fontFamily: TypographyV2.caption.fontFamily,
+    textAlign: 'center',
+    paddingHorizontal: 2,
+  },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -179,11 +292,10 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.body.size,
   },
   cancelBtn: {
-    borderRadius: Radius.lg,
-    paddingVertical: Space.md,
-    alignItems: 'center',
     marginTop: Space.md,
-    minHeight: 48,
+    paddingVertical: Space.smMd,
+    borderRadius: Radius.full,
+    alignItems: 'center',
     justifyContent: 'center',
   },
 });

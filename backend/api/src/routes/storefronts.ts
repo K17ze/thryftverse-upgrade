@@ -224,11 +224,11 @@ export const registerStorefrontRoutes = ({
     const featuredResult = await readDb.query<{
       listing_id: string;
       title: string;
-      price_gbp_minor: number;
+      price_gbp: number | string;
       image_url: string | null;
       status: string;
     }>(
-      `SELECT l.id AS listing_id, l.title, l.price_gbp_minor, l.image_url, l.status
+      `SELECT l.id AS listing_id, l.title, l.price_gbp, l.image_url, l.status
        FROM storefront_featured_listings fl
        JOIN listings l ON l.id = fl.listing_id
        WHERE fl.storefront_id = $1
@@ -242,7 +242,7 @@ export const registerStorefrontRoutes = ({
       featuredListings: featuredResult.rows.map((r) => ({
         id: r.listing_id,
         title: r.title,
-        priceGbpMinor: Number(r.price_gbp_minor),
+        priceGbpMinor: Math.round(Number(r.price_gbp) * 100),
         imageUrl: r.image_url,
         status: r.status,
       })),

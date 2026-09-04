@@ -309,7 +309,7 @@ export function logIdentityFallbackTelemetry(listing: Listing): void {
 
 /**
  * Friendly, premium-toned error copy. Never exposes raw fetch URLs or stack.
- * Used by BrowseScreen / GlobalSearchScreen / sync banners so users never see
+ * Used by BrowseScreen / UnifiedDiscoveryScreen / sync banners so users never see
  * "Network request failed for http://10.0.2.2:4000/listings?..." style text.
  */
 export function friendlyBackendError(error: unknown): string {

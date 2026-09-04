@@ -186,7 +186,7 @@ export default function ClosetScreen() {
   }, [navigation]);
 
   const handleBrowse = useCallback(() => {
-    navigation.navigate('GlobalSearch');
+    navigation.navigate('UnifiedDiscovery');
   }, [navigation]);
 
   const savedItems = useMemo(

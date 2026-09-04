@@ -124,7 +124,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.bodyStrong.size,
       fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textPrimary,
-      letterSpacing: -0.2 },
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
     scrollContent: {
       paddingHorizontal: Space.md,
       gap: Space.sm },

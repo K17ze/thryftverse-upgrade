@@ -134,7 +134,7 @@ function getPhotoMimeType(containerFormat: string): string | undefined {
 
 export interface CreatorCameraProps {
   /** Camera mode — determines framing guide + labels */
-  mode: 'poster' | 'look' | 'visual-search';
+  mode: 'poster' | 'look' | 'visual-search' | 'moodboard';
   /** Called when the user captures a photo and confirms it via quick-review.
    *  Used for single captures and backward-compatible callers (visual search,
    *  legacy poster CameraCapture). */
@@ -311,7 +311,7 @@ export default function CreatorCamera({
 
   // Capture intent is owned by the studio shell. Entry-mode changes remount
   // the correct canonical composer before media is committed.
-  const isPoster = mode === 'poster';
+  const isPoster = mode === 'poster' || mode === 'moodboard';
   const isVisualSearch = mode === 'visual-search';
   const zoomLabel = ZOOM_STEPS[zoomIndex].label;
   const zoomValue = ZOOM_STEPS[zoomIndex].value;

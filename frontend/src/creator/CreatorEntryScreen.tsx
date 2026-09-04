@@ -61,10 +61,10 @@ function formatRelativeTime(iso: string): string {
 // Items (ProductBrowserSheet) and Templates (CreatorTemplateBrowser) are
 // accessible from inside the editor, NOT from the entry screen.
 
-export type CreatorCameraMode = 'look' | 'poster' | 'visual-search';
+export type CreatorCameraMode = 'look' | 'poster' | 'moodboard' | 'visual-search';
 
 export interface CreatorEntryScreenProps {
-  documentType: 'look' | 'poster';
+  documentType: 'look' | 'poster' | 'moodboard';
   onClose: () => void;
   /**
    * Returns the selected media in tap/selection order as a typed
@@ -74,7 +74,7 @@ export interface CreatorEntryScreenProps {
    */
   onMediaSelected: (media: CreatorInitialMedia[]) => void;
   /** Switches the canonical composer before any media is committed. */
-  onDocumentTypeChange: (type: 'look' | 'poster') => void;
+  onDocumentTypeChange: (type: 'look' | 'poster' | 'moodboard') => void;
   onBlankStart: () => void;
   /**
    * Optional: apply a template selected from inside the editor. Kept on the

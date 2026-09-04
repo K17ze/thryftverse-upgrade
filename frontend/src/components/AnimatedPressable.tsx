@@ -134,7 +134,7 @@ export function AnimatedPressable({
     'worklet';
     return {
       transform: [{ scale: scale.value }],
-      opacity: opacity.value,
+      opacity: disabled ? 0.4 : opacity.value,
     };
   });
 

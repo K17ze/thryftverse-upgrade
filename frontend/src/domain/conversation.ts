@@ -161,6 +161,7 @@ export interface Conversation {
   itemId?: string;
   ownerId?: string;
   creatorId?: string;
+  createdAt?: string;
   participantIds?: string[];
   participantProfiles?: Array<{
     id: string;

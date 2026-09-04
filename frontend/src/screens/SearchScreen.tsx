@@ -30,6 +30,7 @@ import { SearchAutocomplete } from '../components/search/SearchAutocomplete';
 import { loadRecentSearchStrings, recordRecentSearch, clearRecentSearches } from '../services/searchHistory';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 import { useTaxonomy } from '../context/TaxonomyContext';
+import { useDynamicAlgorithmSignals } from '../hooks/useDynamicAlgorithmSignals';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -44,6 +45,15 @@ export default function SearchScreen() {
   const isSavedProduct = useStore((state) => state.isSavedProduct);
   const haptic = useHaptic();
   const { categories } = useTaxonomy();
+
+  const { signals: algorithmSignals } = useDynamicAlgorithmSignals({ surface: 'search' });
+
+  const suggestedSearches = useMemo(() => {
+    return algorithmSignals
+      .filter((s) => s.kind !== 'all' && s.isPersonalized)
+      .slice(0, 4)
+      .map((s) => s.label);
+  }, [algorithmSignals]);
 
   const trendingSearches = useMemo(
     () =>
@@ -89,7 +99,7 @@ export default function SearchScreen() {
     recordRecentSearch(trimmed, currentUser?.id)
       .then((updated) => setRecentSearches(updated.map((e) => e.query)))
       .catch(() => undefined);
-    navigation.navigate('GlobalSearch', { initialQuery: trimmed });
+    navigation.navigate('UnifiedDiscovery', { initialQuery: trimmed });
   }, [navigation, currentUser?.id]);
 
   const handleRefresh = async () => {
@@ -286,6 +296,7 @@ export default function SearchScreen() {
             <SearchAutocomplete
               query={searchQuery}
               visible={isSearchFocused}
+              suggested={suggestedSearches}
               trending={trendingSearches}
               recent={recentSearches}
               userId={currentUser?.id}

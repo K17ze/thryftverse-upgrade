@@ -1,0 +1,38 @@
+env: load .env
+env: export EXPO_PUBLIC_API_BASE_URL EXPO_PUBLIC_ENVIRONMENT
+Starting project at C:\Users\User\Desktop\thryftverse-upgrade\frontend
+Logs: C:\Users\User\Desktop\thryftverse-upgrade\frontend\.expo\dev\logs\start.log
+Starting Metro Bundler
+
+Waiting on http://localhost:8081
+
+An update for expo is available: 57.0.15 → ~57.0.19
+19 other packages may need updating. Run npx expo install --check for details.
+Logs for your project will appear below.
+› Detected a change in babel.config.js. Restart the server to see the new results. You may need to clear the bundler cache with the --clear flag for your changes to take effect.
+› Detected a change in babel.config.js. Restart the server to see the new results. You may need to clear the bundler cache with the --clear flag for your changes to take effect.
+› Detected a change in babel.config.js. Restart the server to see the new results. You may need to clear the bundler cache with the --clear flag for your changes to take effect.
+Android Bundling failed 10938ms index.ts (2757 modules)
+Unable to resolve "../screens/settings/SettingsAboutSupportScreen" from "src\navigation\AppNavigator.tsx"
+[0m [90m 354 |[39m       [33m<[39m[33mStack[39m[33m.[39m[33mScreen[39m name[33m=[39m[32m"SettingsSellerTools"[39m getComponent[33m=[39m{() [33m=>[39m require([32m'../screens/settings/SettingsSellerToolsScreen'[39m)[33m.[39m[36mdefault[39m} [33m/[39m[33m>[39m
+ [90m 355 |[39m       [33m<[39m[33mStack[39m[33m.[39m[33mScreen[39m name[33m=[39m[32m"SettingsAppearance"[39m getComponent[33m=[39m{() [33m=>[39m require([32m'../screens/settings/SettingsAppearanceScreen'[39m)[33m.[39m[36mdefault[39m} [33m/[39m[33m>[39m
+[31m[1m>[22m[39m[90m 356 |[39m       [33m<[39m[33mStack[39m[33m.[39m[33mScreen[39m name[33m=[39m[32m"SettingsAboutSupport"[39m getComponent[33m=[39m{() [33m=>[39m require([32m'../screens/settings/SettingsAboutSupportScreen'[39m)[33m.[39m[36mdefault[39m} [33m/[39m[33m>[39m
+ [90m     |[39m                                                                              [31m[1m^[22m[39m
+ [90m 357 |[39m
+ [90m 358 |[39m       {[90m/* ── Wallet & Payments ── */[39m}
+ [90m 359 |[39m       [33m<[39m[33mStack[39m[33m.[39m[33mScreen[39m name[33m=[39m[32m"Wallet"[39m getComponent[33m=[39m{() [33m=>[39m require([32m'../screens/WalletScreen'[39m)[33m.[39m[36mdefault[39m} [33m/[39m[33m>[39m[0m
+
+Import stack:
+
+ src\navigation\AppNavigator.tsx
+ | import "../screens/settings/SettingsAboutSupportScreen"
+
+ App.tsx
+ | import "./src/navigation/AppNavigator"
+
+ index.ts
+ | import "./App"
+
+ 
+ | import "./index.ts"
+

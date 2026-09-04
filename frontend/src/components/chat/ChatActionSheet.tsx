@@ -15,6 +15,7 @@ interface ChatActionSheetProps {
   onSelect: (action: ChatAction) => void;
   hasLinkedListing?: boolean;
   isSeller?: boolean;
+  hideDocument?: boolean;
 }
 
 interface ActionDef {
@@ -32,6 +33,7 @@ export function ChatActionSheet({
   onSelect,
   hasLinkedListing = false,
   isSeller = false,
+  hideDocument = false,
 }: ChatActionSheetProps) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
@@ -47,11 +49,15 @@ export function ChatActionSheet({
         icon: "camera-outline",
         label: t('attachments.camera'),
         description: t('attachments.takePhotoOrVideo') },
-      {
-        id: "document",
-        icon: "document-attach-outline",
-        label: "File",
-        description: "Send PDF, ZIP, or other file" },
+      ...(hideDocument
+        ? []
+        : [
+            {
+              id: "document" as ChatAction,
+              icon: "document-attach-outline" as const,
+              label: "File",
+              description: "Send PDF, ZIP, or other file" },
+          ]),
       ...(hasLinkedListing && !isSeller
         ? [
             {
@@ -78,7 +84,7 @@ export function ChatActionSheet({
         label: t('agentPicker.addAssistant'),
         description: t('agentPicker.addAssistantDescription') },
     ],
-    [t, hasLinkedListing, isSeller],
+    [t, hasLinkedListing, isSeller, hideDocument],
   );
 
   return (

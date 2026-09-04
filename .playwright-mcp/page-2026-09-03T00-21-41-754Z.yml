@@ -1,0 +1,37 @@
+- generic [ref=e12]:
+  - generic [ref=e289]:
+    - generic [ref=e291]:
+      - button "Go back" [ref=e292] [cursor=pointer]:
+        - generic [ref=e293]: 
+      - button "Open group info" [ref=e294] [cursor=pointer]:
+        - generic [ref=e295]: TS
+        - generic [ref=e297]:
+          - generic [ref=e298]: Thryft Snipers
+          - generic [ref=e300]: 3 members
+      - generic [ref=e301]:
+        - button "Search messages" [ref=e302] [cursor=pointer]:
+          - generic [ref=e303]: 
+        - button "Group info" [ref=e304] [cursor=pointer]:
+          - generic [ref=e305]: 
+    - generic [ref=e310]:
+      - generic [ref=e314]:
+        - generic [ref=e315]: 
+        - generic [ref=e316]: Thryft Snipers was created by @thryftuser.
+      - generic [ref=e320]:
+        - generic [ref=e321]: D
+        - generic [ref=e323]:
+          - generic [ref=e324]: dankdunksuk
+          - button "Message" [ref=e326] [cursor=pointer]:
+            - generic [ref=e327]: Let us coordinate bids for tonight drops.
+      - button "Message" [ref=e334] [cursor=pointer]:
+        - generic [ref=e335]: "TradeOps: New auction watchlist for tonight is live."
+        - generic [ref=e336]: 20m ago
+    - generic [ref=e341]:
+      - button "Add attachment" [ref=e342] [cursor=pointer]:
+        - generic [ref=e343]: 
+      - textbox "Message input" [ref=e345]:
+        - /placeholder: Message...
+      - button "Open camera" [ref=e346] [cursor=pointer]:
+        - generic [ref=e347]: 
+  - button "Open command palette" [ref=e32] [cursor=pointer]:
+    - generic [ref=e33]: 

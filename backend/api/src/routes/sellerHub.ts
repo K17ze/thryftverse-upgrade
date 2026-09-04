@@ -21,7 +21,7 @@ type SellerHubRouteDependencies = {
 async function tableExists(pool: Pool, tableName: string): Promise<boolean> {
   try {
     const result = await pool.query<{ exists: boolean }>(
-      `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)`,
+      `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public')`,
       [tableName],
     );
     return Boolean(result.rows[0]?.exists);
@@ -77,6 +77,10 @@ interface SellerOverviewV2 {
     netSalesGbp: number;
     orders: number;
     completeness: 'complete' | 'partial';
+    /** Net sales change vs the previous 30-day period (percentage points). Null when previous period had zero sales. */
+    netSalesPrevPeriodPct: number | null;
+    /** Order count change vs the previous 30-day period (percentage points). Null when previous period had zero orders. */
+    ordersPrevPeriodPct: number | null;
   } | null;
 }
 
@@ -388,7 +392,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
           FROM ledger_entries
           WHERE account_id = (
             SELECT id FROM ledger_accounts
-            WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+            WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
             LIMIT 1
           )
         `,
@@ -462,64 +466,125 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
     let businessPulse: SellerOverviewV2['businessPulse'] = null;
     if (ordersAvailable) {
       try {
-        const pulseResult = await readDb.query<{
-          gross_sales: string | null;
-          orders: string;
-        }>(
-          `
-          SELECT
-            COALESCE(SUM(subtotal_gbp), 0) AS gross_sales,
-            COUNT(*) AS orders
-          FROM orders
-          WHERE seller_id = $1
-            AND status IN ('paid', 'shipped', 'delivered')
-            AND paid_at >= NOW() - INTERVAL '30 days'
-        `,
-          [sellerId],
-        );
+        const [pulseResult, prevPulseResult] = await Promise.all([
+          readDb.query<{
+            gross_sales: string | null;
+            orders: string;
+          }>(
+            `
+            SELECT
+              COALESCE(SUM(subtotal_gbp), 0) AS gross_sales,
+              COUNT(*) AS orders
+            FROM orders
+            WHERE seller_id = $1
+              AND status IN ('paid', 'shipped', 'delivered')
+              AND paid_at >= NOW() - INTERVAL '30 days'
+          `,
+            [sellerId],
+          ),
+          // Previous 30-day period for period-over-period comparison
+          readDb.query<{
+            gross_sales: string | null;
+            orders: string;
+          }>(
+            `
+            SELECT
+              COALESCE(SUM(subtotal_gbp), 0) AS gross_sales,
+              COUNT(*) AS orders
+            FROM orders
+            WHERE seller_id = $1
+              AND status IN ('paid', 'shipped', 'delivered')
+              AND paid_at >= NOW() - INTERVAL '60 days'
+              AND paid_at < NOW() - INTERVAL '30 days'
+          `,
+            [sellerId],
+          ),
+        ]);
         const grossSalesGbp = parseFloat(String(pulseResult.rows[0]?.gross_sales ?? '0')) || 0;
         const orders = parseInt(pulseResult.rows[0]?.orders ?? '0', 10) || 0;
+        const prevGrossSalesGbp = parseFloat(String(prevPulseResult.rows[0]?.gross_sales ?? '0')) || 0;
+        const prevOrders = parseInt(prevPulseResult.rows[0]?.orders ?? '0', 10) || 0;
 
-        // Refunds and fees from ledger (if available)
+        // Refunds and fees from ledger (if available), current + previous period
         let refundsGbp = 0;
         let feesGbp = 0;
+        let prevRefundsGbp = 0;
+        let prevFeesGbp = 0;
         let completeness: 'complete' | 'partial' = 'complete';
         if (ledgerAvailable) {
           try {
-            const refundsResult = await readDb.query<{ refunds: string | null }>(
-              `
-              SELECT COALESCE(SUM(amount_gbp), 0)::text AS refunds
-              FROM ledger_entries
-              WHERE account_id = (
-                SELECT id FROM ledger_accounts
-                WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
-                LIMIT 1
-              )
-              AND source_type = 'refund'
-              AND direction = 'debit'
-              AND created_at >= NOW() - INTERVAL '30 days'
-            `,
-              [sellerId],
-            );
+            const [refundsResult, feesResult, prevRefundsResult, prevFeesResult] = await Promise.all([
+              readDb.query<{ refunds: string | null }>(
+                `
+                SELECT COALESCE(SUM(amount_gbp), 0)::text AS refunds
+                FROM ledger_entries
+                WHERE account_id = (
+                  SELECT id FROM ledger_accounts
+                  WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+                  LIMIT 1
+                )
+                AND source_type = 'refund'
+                AND direction = 'debit'
+                AND created_at >= NOW() - INTERVAL '30 days'
+              `,
+                [sellerId],
+              ),
+              readDb.query<{ fees: string | null }>(
+                `
+                SELECT COALESCE(SUM(amount_gbp), 0)::text AS fees
+                FROM ledger_entries
+                WHERE account_id = (
+                  SELECT id FROM ledger_accounts
+                  WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+                  LIMIT 1
+                )
+                AND source_type = 'order_payment'
+                AND direction = 'debit'
+                AND line_type = 'platform_fee'
+                AND created_at >= NOW() - INTERVAL '30 days'
+              `,
+                [sellerId],
+              ),
+              // Previous-period refunds
+              readDb.query<{ refunds: string | null }>(
+                `
+                SELECT COALESCE(SUM(amount_gbp), 0)::text AS refunds
+                FROM ledger_entries
+                WHERE account_id = (
+                  SELECT id FROM ledger_accounts
+                  WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+                  LIMIT 1
+                )
+                AND source_type = 'refund'
+                AND direction = 'debit'
+                AND created_at >= NOW() - INTERVAL '60 days'
+                AND created_at < NOW() - INTERVAL '30 days'
+              `,
+                [sellerId],
+              ),
+              // Previous-period fees
+              readDb.query<{ fees: string | null }>(
+                `
+                SELECT COALESCE(SUM(amount_gbp), 0)::text AS fees
+                FROM ledger_entries
+                WHERE account_id = (
+                  SELECT id FROM ledger_accounts
+                  WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+                  LIMIT 1
+                )
+                AND source_type = 'order_payment'
+                AND direction = 'debit'
+                AND line_type = 'platform_fee'
+                AND created_at >= NOW() - INTERVAL '60 days'
+                AND created_at < NOW() - INTERVAL '30 days'
+              `,
+                [sellerId],
+              ),
+            ]);
             refundsGbp = parseFloat(String(refundsResult.rows[0]?.refunds ?? '0')) || 0;
-
-            const feesResult = await readDb.query<{ fees: string | null }>(
-              `
-              SELECT COALESCE(SUM(amount_gbp), 0)::text AS fees
-              FROM ledger_entries
-              WHERE account_id = (
-                SELECT id FROM ledger_accounts
-                WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
-                LIMIT 1
-              )
-              AND source_type = 'order_payment'
-              AND direction = 'debit'
-              AND line_type = 'platform_fee'
-              AND created_at >= NOW() - INTERVAL '30 days'
-            `,
-              [sellerId],
-            );
             feesGbp = parseFloat(String(feesResult.rows[0]?.fees ?? '0')) || 0;
+            prevRefundsGbp = parseFloat(String(prevRefundsResult.rows[0]?.refunds ?? '0')) || 0;
+            prevFeesGbp = parseFloat(String(prevFeesResult.rows[0]?.fees ?? '0')) || 0;
           } catch {
             completeness = 'partial';
           }
@@ -528,6 +593,25 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         }
 
         const netSalesGbp = grossSalesGbp - refundsGbp - feesGbp;
+        const prevNetSalesGbp = prevGrossSalesGbp - prevRefundsGbp - prevFeesGbp;
+
+        // Period-over-period percentage change.
+        // - Null when previous period was zero (avoids division-by-zero).
+        // - Null when previous period was negative (refunds > revenue) — the
+        //   percentage sign is semantically meaningless for negative bases.
+        // - Clamped to ±999% to prevent multi-thousand-percent displays from
+        //   tiny previous-period denominators.
+        const clampPct = (pct: number): number =>
+          Math.min(Math.max(Math.round(pct * 10) / 10, -999), 999);
+
+        const netSalesPrevPeriodPct =
+          prevNetSalesGbp > 0
+            ? clampPct(((netSalesGbp - prevNetSalesGbp) / prevNetSalesGbp) * 100)
+            : null;
+        const ordersPrevPeriodPct =
+          prevOrders > 0
+            ? clampPct(((orders - prevOrders) / prevOrders) * 100)
+            : null;
 
         businessPulse = {
           period: '30d',
@@ -537,6 +621,8 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
           netSalesGbp: Math.round(netSalesGbp * 100) / 100,
           orders,
           completeness,
+          netSalesPrevPeriodPct,
+          ordersPrevPeriodPct,
         };
         freshness.business_pulse = { asOf: generatedAt, state: 'fresh' };
       } catch {
@@ -749,9 +835,49 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
     // transition validation, search index side effects, offer cancellation,
     // and audit recording.
     for (const item of items) {
-      // Ownership is verified inside the canonical service via the locked
-      // listing row. We map the batch command to a ListingCommand and let
-      // the service own all side effects.
+      // Ownership is verified BEFORE executing the command to prevent
+      // a seller from mutating another seller's listing. The canonical
+      // service is generic (no sellerId parameter), so we enforce the
+      // authorization boundary here, prior to any mutation.
+      const ownerCheck = await db.query<{ seller_id: string }>(
+        `SELECT seller_id FROM listings WHERE id = $1 LIMIT 1`,
+        [item.listingId],
+      );
+      if (!ownerCheck.rows[0]) {
+        results.push({
+          listingId: item.listingId,
+          state: 'rejected',
+          newStatus: undefined,
+          reason: 'not_found',
+          currentStatus: undefined,
+        });
+        rejectedCount += 1;
+        await db.query(
+          `INSERT INTO listing_batch_items
+             (job_id, listing_id, state, reason, current_status, new_status)
+           VALUES ($1, $2, 'rejected', 'not_found', NULL, NULL)`,
+          [batchId, item.listingId],
+        );
+        continue;
+      }
+      if (ownerCheck.rows[0].seller_id !== sellerId) {
+        results.push({
+          listingId: item.listingId,
+          state: 'rejected',
+          newStatus: undefined,
+          reason: 'forbidden',
+          currentStatus: undefined,
+        });
+        rejectedCount += 1;
+        await db.query(
+          `INSERT INTO listing_batch_items
+             (job_id, listing_id, state, reason, current_status, new_status)
+           VALUES ($1, $2, 'rejected', 'forbidden', NULL, NULL)`,
+          [batchId, item.listingId],
+        );
+        continue;
+      }
+
       const listingCommand: ListingCommand = {
         type: command,
         listingId: item.listingId,
@@ -779,25 +905,6 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         reason = result.reason;
         currentStatus = result.currentStatus;
         conflictCount += 1;
-      }
-
-      // Ownership check: the canonical service does not know the seller
-      // identity, so we additionally verify ownership here and override
-      // the result to `rejected` when the listing belongs to another
-      // seller. This keeps the service generic (no sellerId parameter)
-      // while preserving the authorization boundary.
-      if (state === 'applied') {
-        const ownerCheck = await db.query<{ seller_id: string }>(
-          `SELECT seller_id FROM listings WHERE id = $1 LIMIT 1`,
-          [item.listingId],
-        );
-        if (ownerCheck.rows[0]?.seller_id !== sellerId) {
-          state = 'rejected';
-          reason = 'forbidden';
-          newStatus = undefined;
-          appliedCount -= 1;
-          rejectedCount += 1;
-        }
       }
 
       results.push({

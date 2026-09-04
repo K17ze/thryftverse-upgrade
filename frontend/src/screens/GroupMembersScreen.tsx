@@ -21,7 +21,7 @@ import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { ActionSheet } from '../components/sheets/ActionSheet';
 import { useHaptic } from '../hooks/useHaptic';
 import { useToast } from '../context/ToastContext';
-import { Caption, BodyEmphasis, Meta } from '../components/ui/Text';
+import { Caption, BodyEmphasis } from '../components/ui/Text';
 import {
   addConversationMembersOnApi,
   fetchGroupSettingsFromApi,
@@ -228,11 +228,35 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
     if (selectedToAdd.size === 0) return;
     haptic.medium();
     setIsAdding(true);
+    const prevParticipantIds = conversation?.participantIds;
+    const prevParticipantProfiles = conversation?.participantProfiles;
+    const prevMemberRoles = conversation?.memberRoles;
+    const prevOwnerId = conversation?.ownerId;
+    const existingIds = new Set(conversation?.participantIds ?? []);
+    const addedIds = Array.from(selectedToAdd).filter((id) => !existingIds.has(id));
+    const addedProfiles = searchResults
+      .filter((u) => selectedToAdd.has(u.id))
+      .map((u) => ({
+        id: u.id,
+        username: u.username,
+        displayName: u.displayName,
+        avatar: u.avatar,
+      }));
+    const existingProfileIds = new Set((conversation?.participantProfiles ?? []).map((p) => p.id));
+    const mergedProfiles = [
+      ...(conversation?.participantProfiles ?? []),
+      ...addedProfiles.filter((p) => !existingProfileIds.has(p.id)),
+    ];
+    upsertConversation({
+      ...conversation!,
+      participantIds: [...(conversation?.participantIds ?? []), ...addedIds],
+      participantProfiles: mergedProfiles });
     try {
       const result = await addConversationMembersOnApi(conversationId, Array.from(selectedToAdd));
       upsertConversation({
         ...conversation!,
-        participantIds: result.participantIds });
+        participantIds: result.participantIds,
+        participantProfiles: mergedProfiles });
       show(`${selectedToAdd.size} member${selectedToAdd.size === 1 ? '' : 's'} added`, 'success');
       setSelectedToAdd(new Set());
       setAddQuery('');
@@ -240,6 +264,12 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
       setHasSearched(false);
       setShowAddMembers(false);
     } catch (err) {
+      upsertConversation({
+        ...conversation!,
+        participantIds: prevParticipantIds,
+        participantProfiles: prevParticipantProfiles,
+        memberRoles: prevMemberRoles,
+        ownerId: prevOwnerId });
       show(parseApiError(err, 'Could not add members. Try again.').message, 'error');
     } finally {
       setIsAdding(false);
@@ -257,13 +287,28 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         setConfirmSheet((s) => ({ ...s, visible: false }));
         haptic.heavy();
         setRemovingId(memberId);
+        const prevParticipantIds = conversation?.participantIds;
+        const prevParticipantProfiles = conversation?.participantProfiles;
+        const prevMemberRoles = conversation?.memberRoles;
+        const prevOwnerId = conversation?.ownerId;
+        upsertConversation({
+          ...conversation!,
+          participantIds: (conversation?.participantIds ?? []).filter((id) => id !== memberId),
+          participantProfiles: (conversation?.participantProfiles ?? []).filter((p) => p.id !== memberId) });
         try {
           const result = await removeConversationMemberOnApi(conversationId, memberId);
           upsertConversation({
             ...conversation!,
-            participantIds: result.participantIds });
+            participantIds: result.participantIds,
+            participantProfiles: (conversation?.participantProfiles ?? []).filter((p) => p.id !== memberId) });
           show('Member removed', 'info');
         } catch (err) {
+          upsertConversation({
+            ...conversation!,
+            participantIds: prevParticipantIds,
+            participantProfiles: prevParticipantProfiles,
+            memberRoles: prevMemberRoles,
+            ownerId: prevOwnerId });
           show(parseApiError(err, 'Could not remove member. Try again.').message, 'error');
         } finally {
           setRemovingId(null);
@@ -282,6 +327,11 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         setConfirmSheet((s) => ({ ...s, visible: false }));
         haptic.medium();
         setRemovingId(memberId);
+        const prevMemberRoles = conversation?.memberRoles;
+        const prevOwnerId = conversation?.ownerId;
+        upsertConversation({
+          ...conversation!,
+          memberRoles: { ...(conversation?.memberRoles ?? {}), [memberId]: 'admin' as const } });
         try {
           const result = await promoteConversationMemberOnApi(conversationId, memberId);
           upsertConversation({
@@ -294,6 +344,10 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
             ) as Record<string, 'owner' | 'admin' | 'member'> });
           show(`${memberName} is now an admin.`, 'success');
         } catch (err) {
+          upsertConversation({
+            ...conversation!,
+            memberRoles: prevMemberRoles,
+            ownerId: prevOwnerId });
           show(parseApiError(err, 'Could not promote member.').message, 'error');
         } finally {
           setRemovingId(null);
@@ -312,6 +366,11 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         setConfirmSheet((s) => ({ ...s, visible: false }));
         haptic.medium();
         setRemovingId(memberId);
+        const prevMemberRoles = conversation?.memberRoles;
+        const prevOwnerId = conversation?.ownerId;
+        upsertConversation({
+          ...conversation!,
+          memberRoles: { ...(conversation?.memberRoles ?? {}), [memberId]: 'member' as const } });
         try {
           const result = await demoteConversationMemberOnApi(conversationId, memberId);
           upsertConversation({
@@ -324,6 +383,10 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
             ) as Record<string, 'owner' | 'admin' | 'member'> });
           show(`${memberName} is now a member.`, 'info');
         } catch (err) {
+          upsertConversation({
+            ...conversation!,
+            memberRoles: prevMemberRoles,
+            ownerId: prevOwnerId });
           show(parseApiError(err, 'Could not demote member.').message, 'error');
         } finally {
           setRemovingId(null);
@@ -342,6 +405,16 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         setConfirmSheet((s) => ({ ...s, visible: false }));
         haptic.heavy();
         setRemovingId(memberId);
+        const prevMemberRoles = conversation?.memberRoles;
+        const prevOwnerId = conversation?.ownerId;
+        upsertConversation({
+          ...conversation!,
+          ownerId: memberId,
+          memberRoles: {
+            ...(conversation?.memberRoles ?? {}),
+            [memberId]: 'owner' as const,
+            ...(currentUser?.id ? { [currentUser.id]: 'admin' as const } : {}),
+          } });
         try {
           const result = await transferConversationOwnershipOnApi(conversationId, memberId);
           upsertConversation({
@@ -355,6 +428,10 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
             ) as Record<string, 'owner' | 'admin' | 'member'> });
           show(`Ownership transferred to ${memberName}.`, 'success');
         } catch (err) {
+          upsertConversation({
+            ...conversation!,
+            memberRoles: prevMemberRoles,
+            ownerId: prevOwnerId });
           show(parseApiError(err, 'Could not transfer ownership.').message, 'error');
         } finally {
           setRemovingId(null);
@@ -372,7 +449,9 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
     } else if (member.role === 'admin') {
       actions.push({ label: 'Demote to member', onPress: () => handleDemoteMember(member.id, member.name) });
     }
-    actions.push({ label: 'Remove from group', destructive: true, onPress: () => handleRemoveMember(member.id, member.name) });
+    if (member.role !== 'owner') {
+      actions.push({ label: 'Remove from group', destructive: true, onPress: () => handleRemoveMember(member.id, member.name) });
+    }
 
     // Only owner can transfer ownership
     if (isOwner && member.id !== currentUser?.id) {
@@ -393,7 +472,11 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
         haptic.heavy();
         setIsLeaving(true);
         try {
-          await leaveGroupOnApi(conversationId, currentUser?.id ?? '');
+          if (!currentUser?.id) {
+            show('Authentication required', 'error');
+            return;
+          }
+          await leaveGroupOnApi(conversationId, currentUser.id);
           deleteConversation(conversationId);
           show('You left the group', 'info');
           navigation.navigate('MainTabs', { screen: 'Inbox' });
@@ -418,8 +501,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
   const roleBadge = (role: MemberRole) => {
     const roleColors = {
       owner: { bg: colors.brandSubtle, text: colors.brand },
-      // TODO: replace `${colors.textPrimary}15` with textPrimarySubtle token when available
-      admin: { bg: `${colors.textPrimary}15`, text: colors.textPrimary },
+      admin: { bg: colors.surfaceAlt, text: colors.textPrimary },
       member: { bg: colors.surfaceAlt, text: colors.textMuted } };
     const labels = { owner: 'Owner', admin: 'Admin', member: 'Member' };
     return (
@@ -680,9 +762,6 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background },
   center: {
     flex: 1,
     justifyContent: 'center',
@@ -691,35 +770,6 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingBottom: Space.xxl,
     gap: Space.md },
-  listCard: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    overflow: 'hidden' },
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.smMd,
-    gap: Space.sm },
-  memberAvatar: {
-    width: Space.xl + 8,
-    height: Space.xl + 8,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center' },
-  memberAvatarText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textPrimary },
-  memberText: {
-    flex: 1,
-    justifyContent: 'center' },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-    marginLeft: Space.md + 40 + Space.sm },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -731,15 +781,6 @@ function createStyles(colors: ThemeColors) {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     marginBottom: Space.sm },
-  searchInput: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    fontFamily: TypographyV2.body.fontFamily,
-    color: colors.textPrimary },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm },
   roleBadge: {
     paddingHorizontal: Space.xs + 2,
     paddingVertical: Space.xs - 2,
@@ -747,17 +788,6 @@ function createStyles(colors: ThemeColors) {
   roleBadgeText: {
     fontSize: TypographyV2.meta.size - 1,
     fontFamily: TypographyV2.meta.fontFamily },
-  emptyWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.xl,
-    gap: Space.sm,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border },
-  emptyText: {
-    textAlign: 'center' },
   memberList: {
     gap: 0 },
   memberRowV2: {

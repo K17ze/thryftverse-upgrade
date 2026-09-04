@@ -81,7 +81,7 @@ export default function SavedSearchesScreen({ navigation }: Props) {
   };
 
   const handleDiscoverSellers = () => {
-    navigation.navigate('GlobalSearch');
+    navigation.navigate('UnifiedDiscovery');
   };
 
   const styles = useMemo(() => StyleSheet.create({

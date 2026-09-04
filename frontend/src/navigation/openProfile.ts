@@ -6,7 +6,7 @@ import type { RootStackParamList, TabParamList } from './types';
  * Minimal navigation surface required by openProfile.
  *
  * Screens receive route-specific NativeStackNavigationProp instances
- * (e.g. NativeStackNavigationProp<RootStackParamList, 'GlobalSearch'>)
+ * (e.g. NativeStackNavigationProp<RootStackParamList, 'UnifiedDiscovery'>)
  * whose setParams signatures are incompatible with the unparameterised
  * NativeStackNavigationProp<RootStackParamList>.  Extracting only the
  * navigate method avoids this variance issue while preserving full type

@@ -11,7 +11,7 @@ export interface RecentSearchEntry {
 /**
  * Load recent searches for a user (or guest). Returns newest-first.
  * This is the single source of truth for recent search history —
- * replaces both the AsyncStorage calls in SearchScreen/GlobalSearchScreen
+ * replaces both the AsyncStorage calls in SearchScreen/UnifiedDiscoveryScreen
  * and the in-memory store in searchAutocompleteApi.
  */
 export async function loadRecentSearches(userId?: string): Promise<RecentSearchEntry[]> {

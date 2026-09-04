@@ -15,9 +15,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const CREATE_MODE_PREF_STORAGE_KEY = 'thryftverse:create-mode-pref:v1';
 
 /** Creation modes that are persisted as the user's preferred default. */
-export type PersistedCreateMode = 'look' | 'poster';
+export type PersistedCreateMode = 'look' | 'poster' | 'moodboard';
 
-const VALID_PERSISTED_MODES: PersistedCreateMode[] = ['look', 'poster'];
+const VALID_PERSISTED_MODES: PersistedCreateMode[] = ['look', 'poster', 'moodboard'];
 
 const DEFAULT_CREATE_MODE: PersistedCreateMode = 'look';
 

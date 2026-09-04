@@ -1,0 +1,44 @@
+- generic [ref=f5e12]:
+  - generic [ref=f5e38]:
+    - generic [ref=f5e46]:
+      - generic [ref=f5e49]:
+        - generic [ref=f5e50]: Thryftverse
+        - generic [ref=f5e52]:
+          - button "List an item" [ref=f5e53] [cursor=pointer]:
+            - generic [ref=f5e54]: 
+          - button "Search and discover" [ref=f5e55] [cursor=pointer]:
+            - generic [ref=f5e56]: 
+          - button "Notifications, 27 unread" [ref=f5e57] [cursor=pointer]:
+            - generic [ref=f5e58]: 
+            - generic: "27"
+      - generic [ref=f5e65]:
+        - tablist [ref=f5e66]:
+          - tab "For you feed" [ref=f5e67] [cursor=pointer]:
+            - generic [ref=f5e68]: For you
+          - tab "Following feed, 7 listings" [ref=f5e70] [cursor=pointer]:
+            - generic [ref=f5e71]: Following
+            - generic [ref=f5e72]: "7"
+        - generic [ref=f5e74]:
+          - generic [ref=f5e75]: 
+          - generic [ref=f5e77]: No recommendations yet
+          - generic [ref=f5e78]: We're learning what you like. Browse listings and save items to build your feed.
+          - button "Browse all" [ref=f5e80] [cursor=pointer]
+          - button "Refresh" [ref=f5e83] [cursor=pointer]
+    - tablist [ref=f5e87]:
+      - tab "Home" [selected] [ref=f5e89] [cursor=pointer]:
+        - generic [ref=f5e90]:
+          - generic [ref=f5e91]: 
+          - generic [ref=f5e94]: 
+      - tab "Explore" [ref=f5e99] [cursor=pointer]:
+        - generic [ref=f5e100]:
+          - generic [ref=f5e101]: 
+          - generic [ref=f5e104]: 
+      - button "Create" [ref=f5e109] [cursor=pointer]:
+        - generic [ref=f5e110]: 
+      - tab "Inbox" [ref=f5e113] [cursor=pointer]:
+        - generic [ref=f5e114]:
+          - generic [ref=f5e115]: 
+          - generic [ref=f5e118]: 
+      - tab "Profile" [ref=f5e123] [cursor=pointer]
+  - button "Open command palette" [ref=f5e32] [cursor=pointer]:
+    - generic [ref=f5e33]: 

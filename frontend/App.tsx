@@ -72,6 +72,7 @@ import { SignupWallProvider } from './src/hooks/useSignupWall';
 import { usePushNotificationTap, setNavigationReady } from './src/hooks/usePushNotificationTap';
 import { useUnreadNotificationCount } from './src/hooks/useUnreadNotificationCount';
 import { usePushTokenCleanup } from './src/hooks/usePushTokenCleanup';
+import { useDeepLinkAuth } from './src/hooks/useDeepLinkAuth';
 import { useScreenshotTracking } from './src/platform/screenCapture';
 import { trackScreenView } from './src/lib/telemetry';
 import { trackScreenChange } from './src/analytics/useScreenTracking';
@@ -152,33 +153,67 @@ Notifications.setNotificationHandler({
 });
 
 // ──────────────────────────────────────────────────────────────────────────
-// Notification action categories — interactive buttons on message notifications.
+// Notification action categories — interactive buttons on notifications.
 // ----------------------------------------------------------------------------
-// Registers a "message" category with "Reply" and "Mark as read" actions so
-// the OS presents inline action buttons on chat message notifications. The
-// notification tap handler (usePushNotificationTap) already handles navigation
-// on tap; these actions are registered so the buttons are available, with
-// response handling as a no-op for now.
+// G5: Per-type iOS notification categories so the OS presents inline action
+// buttons relevant to the event type, not just chat messages.
 // ──────────────────────────────────────────────────────────────────────────
+
+// Message category: Reply + Mark as read
 Notifications.setNotificationCategoryAsync('message', [
   {
     identifier: 'reply',
     buttonTitle: 'Reply',
-    options: {
-      opensAppToForeground: false,
-    },
+    options: { opensAppToForeground: false },
   },
   {
     identifier: 'mark_as_read',
     buttonTitle: 'Mark as read',
-    options: {
-      opensAppToForeground: false,
-      isDestructive: false,
-    },
+    options: { opensAppToForeground: false, isDestructive: false },
   },
-]).catch(() => {
-  // Category registration is best-effort — must not crash app startup.
-});
+]).catch(() => { /* best-effort */ });
+
+// Order category: Track order + Mark as read
+Notifications.setNotificationCategoryAsync('order', [
+  {
+    identifier: 'track_order',
+    buttonTitle: 'Track',
+    options: { opensAppToForeground: true },
+  },
+  {
+    identifier: 'mark_as_read',
+    buttonTitle: 'Mark as read',
+    options: { opensAppToForeground: false, isDestructive: false },
+  },
+]).catch(() => { /* best-effort */ });
+
+// Auction category: View bid + Dismiss
+Notifications.setNotificationCategoryAsync('auction', [
+  {
+    identifier: 'view_bid',
+    buttonTitle: 'View',
+    options: { opensAppToForeground: true },
+  },
+  {
+    identifier: 'mark_as_read',
+    buttonTitle: 'Dismiss',
+    options: { opensAppToForeground: false, isDestructive: false },
+  },
+]).catch(() => { /* best-effort */ });
+
+// Social category: View + Mark as read
+Notifications.setNotificationCategoryAsync('social', [
+  {
+    identifier: 'view',
+    buttonTitle: 'View',
+    options: { opensAppToForeground: true },
+  },
+  {
+    identifier: 'mark_as_read',
+    buttonTitle: 'Mark as read',
+    options: { opensAppToForeground: false, isDestructive: false },
+  },
+]).catch(() => { /* best-effort */ });
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -241,6 +276,10 @@ export default function App() {
   usePushNotificationTap();
   useUnreadNotificationCount();
   usePushTokenCleanup();
+  // Authentication-aware deep-link redirect: intercepts auth-required deep
+  // links when the user is unauthenticated, stores the intended destination,
+  // and replays it after a successful login. See DEEP_LINK_INVENTORY.md.
+  useDeepLinkAuth();
   // Detect screenshots on non-protected screens and report them to analytics.
   // Protected screens block screenshots at the OS level, so this listener only
   // fires on surfaces where tracking (not blocking) is the desired behaviour.
@@ -381,6 +420,7 @@ export default function App() {
         store.login(localAuthSnapshot.user);
         store.setTwoFactorEnabled(localAuthSnapshot.twoFactorEnabled);
         runSyncListingDraft();
+        store.hydrateBlockedUsers().catch(() => undefined);
       }
 
       if (storedProfileMedia.avatar) {
@@ -411,6 +451,7 @@ export default function App() {
           latestStore.login(restoredSession.storeUser);
           latestStore.setTwoFactorEnabled(restoredSession.user.twoFactorEnabled);
           runSyncListingDraft();
+          latestStore.hydrateBlockedUsers().catch(() => undefined);
         })
         .catch(() => {
           // Session refresh is best-effort and should not interrupt app usage.

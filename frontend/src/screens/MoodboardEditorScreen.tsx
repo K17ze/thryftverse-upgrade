@@ -85,6 +85,7 @@ import {
   type MoodboardItemPosition,
   type MoodboardTheme,
   type MoodboardOperationResponse } from '../services/moodboardApi';
+import { invalidatePosterCache } from '../services/postersApi';
 import { createStableId } from '../utils/createStableId';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MoodboardEditor'>;

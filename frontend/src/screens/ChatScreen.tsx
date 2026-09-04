@@ -1892,7 +1892,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                   setSuggestedRepliesDismissed(true);
                 }}
                 style={styles.suggestedRepliesClose}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
                 accessibilityLabel="Dismiss suggested replies"
                 accessibilityRole="button"
                 accessibilityHint="Hides suggested replies for this conversation"

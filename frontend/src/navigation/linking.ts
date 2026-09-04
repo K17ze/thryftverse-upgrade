@@ -124,7 +124,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
       Checkout: 'checkout/:itemId',
 
       // Discovery (root stack — cross-tab)
-      GlobalSearch: 'search',
+      UnifiedDiscovery: 'search',
 
       // Settings & account (root stack — cross-tab)
       EditProfile: 'me/edit',

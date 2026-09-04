@@ -1,0 +1,50 @@
+- generic [ref=e12]:
+  - generic [ref=e69]:
+    - generic [ref=e77]:
+      - generic [ref=e80]:
+        - generic [ref=e81]: Thryftverse
+        - generic [ref=e83]:
+          - button "List an item" [ref=e84] [cursor=pointer]:
+            - generic [ref=e85]: 
+          - button "Search and discover" [ref=e86] [cursor=pointer]:
+            - generic [ref=e87]: 
+          - button "Notifications, 27 unread" [ref=e88] [cursor=pointer]:
+            - generic [ref=e89]: 
+            - generic: "27"
+      - generic [ref=e96]:
+        - tablist [ref=e97]:
+          - tab "For you feed" [ref=e98] [cursor=pointer]:
+            - generic [ref=e99]: For you
+          - tab "Following feed, 7 listings" [ref=e101] [cursor=pointer]:
+            - generic [ref=e102]: Following
+            - generic [ref=e103]: "7"
+        - generic [ref=e105]:
+          - generic [ref=e106]: 
+          - generic [ref=e108]: No recommendations yet
+          - generic [ref=e109]: We're learning what you like. Browse listings and save items to build your feed.
+          - button "Browse all" [ref=e111] [cursor=pointer]
+          - button "Refresh" [ref=e114] [cursor=pointer]
+    - tablist [ref=e118]:
+      - tab "Home" [selected] [ref=e120] [cursor=pointer]:
+        - generic [ref=e121]:
+          - generic [ref=e122]: 
+          - generic [ref=e125]: 
+      - tab "Explore" [ref=e130] [cursor=pointer]:
+        - generic [ref=e131]:
+          - generic [ref=e132]: 
+          - generic [ref=e135]: 
+      - button "Create" [ref=e140] [cursor=pointer]:
+        - generic [ref=e141]: 
+      - tab "Inbox, 1 unread" [ref=e144] [cursor=pointer]:
+        - generic [ref=e145]:
+          - generic [ref=e147]:
+            - generic [ref=e148]: 
+            - generic "1 unread" [ref=e149]: "1"
+          - generic [ref=e152]:
+            - generic [ref=e153]: 
+            - generic "1 unread" [ref=e154]: "1"
+        - generic [ref=e156]: Inbox
+      - tab "Profile, Marie Fullery" [ref=e158] [cursor=pointer]:
+        - generic [ref=e172]: Profile
+  - button "Open command palette" [ref=e32] [cursor=pointer]:
+    - generic [ref=e33]: 

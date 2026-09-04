@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   RefreshControl,
-  Pressable,
   StatusBar,
   Text,
   ScrollView,
@@ -33,6 +32,7 @@ import {
   scopeToApiStatus,
   sortToApiSort } from '../utils/auctionHomeLogic';
 import { HorizontalRail } from '../components/HorizontalRail';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useConnectivity } from '../hooks/useConnectivity';
@@ -570,14 +570,15 @@ export default function AuctionHomeScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.searchOverlayHeader}>
-          <Pressable
+          <AnimatedPressable
             onPress={() => { haptics.tap(); setSearchOverlayVisible(false); handleClearSearch(); }}
             hitSlop={12}
             accessibilityRole="button"
             accessibilityLabel="Close search"
+            scaleValue={0.95}
           >
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-          </Pressable>
+          </AnimatedPressable>
           <TextInput
             value={searchQuery}
             onChangeText={handleSearchChange}
@@ -588,14 +589,15 @@ export default function AuctionHomeScreen() {
             style={styles.searchOverlayInput}
           />
           {searchQuery.length > 0 && (
-            <Pressable
+            <AnimatedPressable
               onPress={handleClearSearch}
               hitSlop={12}
               accessibilityRole="button"
               accessibilityLabel="Clear search"
+              scaleValue={0.95}
             >
               <Ionicons name="close-circle" size={20} color={colors.textMuted} />
-            </Pressable>
+            </AnimatedPressable>
           )}
         </View>
 
@@ -645,27 +647,30 @@ export default function AuctionHomeScreen() {
               <View style={styles.searchIdleSection}>
                 <View style={styles.searchIdleSectionHeader}>
                   <Text style={styles.searchIdleSectionTitle}>Recent searches</Text>
-                  <Pressable
+                  <AnimatedPressable
                     onPress={() => { haptics.tap(); clearRecentSearches(); }}
                     hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel="Clear recent searches"
+                    scaleValue={0.95}
                   >
                     <Text style={styles.searchIdleClearBtn}>Clear</Text>
-                  </Pressable>
+                  </AnimatedPressable>
                 </View>
                 <View style={styles.searchIdleChips}>
                   {recentSearches.map((term, idx) => (
-                    <Pressable
+                    <AnimatedPressable
                       key={idx}
                       style={styles.searchIdleChip}
                       onPress={() => { haptics.tap(); handleSearchChange(term); }}
                       accessibilityRole="button"
                       accessibilityLabel={`Search for ${term}`}
+                      scaleValue={0.97}
+                      hapticFeedback="light"
                     >
                       <Ionicons name="time-outline" size={13} color={colors.textMuted} />
                       <Text style={styles.searchIdleChipText} numberOfLines={1}>{term}</Text>
-                    </Pressable>
+                    </AnimatedPressable>
                   ))}
                 </View>
               </View>
@@ -677,16 +682,18 @@ export default function AuctionHomeScreen() {
                 <Text style={styles.searchIdleSectionTitle}>Browse by category</Text>
                 <View style={styles.searchIdleChips}>
                   {homeData.categoryWorlds.slice(0, 6).map((world) => (
-                    <Pressable
+                    <AnimatedPressable
                       key={world.categoryKey}
                       style={styles.searchIdleChip}
                       onPress={() => { haptics.tap(); handleSearchChange(world.displayName); }}
                       accessibilityRole="button"
                       accessibilityLabel={`Search ${world.displayName} auctions`}
+                      scaleValue={0.97}
+                      hapticFeedback="light"
                     >
                       <Ionicons name="bag-handle-outline" size={13} color={colors.textMuted} />
                       <Text style={styles.searchIdleChipText} numberOfLines={1}>{world.displayName}</Text>
-                    </Pressable>
+                    </AnimatedPressable>
                   ))}
                 </View>
               </View>
@@ -1263,27 +1270,30 @@ export default function AuctionHomeScreen() {
               contentContainerStyle={styles.filterChipsContent}
             >
               {activeFilterChips.map((chip) => (
-                <Pressable
+                <AnimatedPressable
                   key={chip.key}
                   style={styles.filterChip}
                   onPress={() => removeFilterChip(chip.type, chip.value)}
                   hitSlop={4}
                   accessibilityRole="button"
                   accessibilityLabel={`Remove filter ${chip.label}`}
+                  scaleValue={0.97}
+                  hapticFeedback="light"
                 >
                   <Text style={styles.filterChipText} numberOfLines={1}>{chip.label}</Text>
                   <Ionicons name="close" size={13} color={colors.textSecondary} />
-                </Pressable>
+                </AnimatedPressable>
               ))}
-              <Pressable
+              <AnimatedPressable
                 style={styles.filterChipClear}
                 onPress={clearAllFilters}
                 hitSlop={4}
                 accessibilityRole="button"
                 accessibilityLabel="Clear all filters"
+                scaleValue={0.95}
               >
                 <Text style={styles.filterChipClearText}>Clear all</Text>
-              </Pressable>
+              </AnimatedPressable>
             </ScrollView>
           </View>
         )}

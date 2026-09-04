@@ -25,7 +25,7 @@ import { setStoredCreateMode } from '../../preferences/createModePreferences';
 // Look/Poster preference is persisted by the canonical Create preference
 // owner. Visual Search is intentionally transient.
 
-export type CreatorCaptureMode = 'look' | 'poster' | 'visual-search';
+export type CreatorCaptureMode = 'look' | 'poster' | 'moodboard' | 'visual-search';
 
 export interface CreatorModeSwitchProps {
   /** Currently active mode. */
@@ -37,6 +37,7 @@ export interface CreatorModeSwitchProps {
 const MODES: { key: CreatorCaptureMode; label: string }[] = [
   { key: 'look', label: 'Look' },
   { key: 'poster', label: 'Poster' },
+  { key: 'moodboard', label: 'Board' },
   { key: 'visual-search', label: 'Search' },
 ];
 

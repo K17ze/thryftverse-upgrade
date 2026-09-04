@@ -17,7 +17,8 @@ import type { VideoPlayer } from 'expo-video';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, withDelay } from 'react-native-reanimated';
 import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
-import { Space, FontFamily, Radius, IconGrammar, Stroke } from '../../theme/designTokens';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Space, FontFamily, Radius, IconGrammar, Stroke, Scrim } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { RadiusRoleValue } from '../../theme/surfaceRadiusRules';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -132,7 +133,7 @@ import { usePerformanceMonitor } from '../core/performance/usePerformanceMonitor
 
 const ZOOM_INDICATOR_HIDE_DELAY_MS = 700;
 
-function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'look' | 'poster') => void }) {
+function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 'look' | 'poster' | 'moodboard') => void }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'CreatorStudio'>>();
   const route = useRoute<RouteProp<RootStackParamList, 'CreatorStudio'>>();
   const { colors } = useAppTheme();
@@ -341,6 +342,35 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       },
     });
   }, [isDirty, navigation, saveDraft]);
+
+  // ── Flagship Story Top Bar: Live audio mute & quick save ──────────
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const handleToggleAudioMute = useCallback(() => {
+    haptic.selection();
+    setIsAudioMuted((prev) => {
+      const next = !prev;
+      if (videoPlayerRef.current) {
+        videoPlayerRef.current.muted = next;
+      }
+      show(next ? 'Audio muted' : 'Audio unmuted', 'info');
+      return next;
+    });
+  }, [haptic, show]);
+
+  const [isQuickSaving, setIsQuickSaving] = useState(false);
+  const handleQuickSaveDraft = useCallback(async () => {
+    if (isQuickSaving) return;
+    try {
+      setIsQuickSaving(true);
+      haptic.medium();
+      await saveDraft();
+      show('Saved to drafts', 'info');
+    } catch {
+      show('Could not save draft', 'error');
+    } finally {
+      setIsQuickSaving(false);
+    }
+  }, [isQuickSaving, haptic, saveDraft, show]);
 
   // ── Keyboard shortcuts (web/tablet only) ───────────────────────────
   useEffect(() => {
@@ -1270,10 +1300,51 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     navigation.goBack();
   }, [navigation]);
 
-  // ── Frame navigation (swipe horizontal) ────────────────────────────
-  // One current frame fills the viewport. Swipe horizontally to go to
-  // the next/prev frame. The gesture only acts when there are multiple
-  // frames and no layer is being dragged.
+  // ── Frame navigation & Filter gesture (swipe horizontal) ───────────
+  // One current frame fills the viewport.
+  // When there are multiple frames, horizontal swipe navigates between them.
+  // When editing a single frame (standard story/poster), horizontal swipe
+  // cycles live Skia photo filters with an animated HUD pill (Instagram/Snapchat parity).
+  const [filterHudName, setFilterHudName] = useState<string | null>(null);
+  const filterHudOpacitySV = useSharedValue(0);
+  const filterHudScaleSV = useSharedValue(0.85);
+  const filterHudTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filterHudAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: filterHudOpacitySV.value,
+    transform: [{ scale: filterHudScaleSV.value }],
+  }));
+
+  const cycleFilter = useCallback((direction: 'next' | 'prev') => {
+    const targetMedia = (selectedLayer?.type === 'media' ? selectedLayer : page?.layers?.find((l) => l.type === 'media')) ?? null;
+    if (!targetMedia || targetMedia.type !== 'media') return;
+    const layerEffects: EffectNode[] = targetMedia.payload.effects ?? [];
+    const currentFilterNode = layerEffects.find((n) => n.type === 'filter');
+    const currentFilterId = currentFilterNode?.type === 'filter' ? currentFilterNode.id : 'original';
+    let idx = FILTER_PRESETS.findIndex((p) => p.id === currentFilterId);
+    if (idx < 0) idx = 0;
+    const nextIdx = direction === 'next'
+      ? (idx + 1) % FILTER_PRESETS.length
+      : (idx - 1 + FILTER_PRESETS.length) % FILTER_PRESETS.length;
+    const nextPreset = FILTER_PRESETS[nextIdx];
+    const newEffects: EffectNode[] = [
+      ...layerEffects.filter((n) => n.type !== 'filter'),
+      ...(nextPreset.id !== 'original' ? [{ type: 'filter' as const, id: nextPreset.id, amount: 1 }] : []),
+    ];
+    updateLayer(targetMedia.id, {
+      type: 'media',
+      payload: { ...targetMedia.payload, effects: newEffects },
+    }, 'Apply filter');
+    haptic.selection();
+    setFilterHudName(nextPreset.name.toUpperCase());
+    filterHudOpacitySV.value = withTiming(1, { duration: 150 });
+    filterHudScaleSV.value = withTiming(1, { duration: 180 });
+    if (filterHudTimeoutRef.current) clearTimeout(filterHudTimeoutRef.current);
+    filterHudTimeoutRef.current = setTimeout(() => {
+      filterHudOpacitySV.value = withTiming(0, { duration: 320 });
+      filterHudScaleSV.value = withTiming(0.9, { duration: 320 });
+    }, 900);
+  }, [selectedLayer, page, updateLayer, haptic, filterHudOpacitySV, filterHudScaleSV]);
+
   const goToFrame = useCallback((index: number) => {
     if (index < 0 || index >= pageCount) return;
     if (index === activePageIndex) return;
@@ -1314,15 +1385,20 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
         const dx = e.x - frameSwipeStartXSV.value;
         const threshold = screenWidth * 0.18;
         if (Math.abs(dx) < threshold) return;
-        if (dx < 0) {
-          // Swipe left → next frame
-          runOnJS(goToFrame)(activePageIndex + 1);
+        if (hasMultipleFrames) {
+          if (dx < 0) {
+            // Swipe left → next frame
+            runOnJS(goToFrame)(activePageIndex + 1);
+          } else {
+            // Swipe right → prev frame
+            runOnJS(goToFrame)(activePageIndex - 1);
+          }
         } else {
-          // Swipe right → prev frame
-          runOnJS(goToFrame)(activePageIndex - 1);
+          // Single-frame story/poster: swipe-to-filter (Instagram/Snapchat flagship pattern)
+          runOnJS(cycleFilter)(dx < 0 ? 'next' : 'prev');
         }
       });
-  }, [screenWidth, activePageIndex, goToFrame, frameSwipeStartXSV, frameSwipeStartYSV, frameSwipeLockedDirSV]);
+  }, [screenWidth, hasMultipleFrames, activePageIndex, goToFrame, cycleFilter, frameSwipeStartXSV, frameSwipeStartYSV, frameSwipeLockedDirSV]);
 
   // ── Object action handlers (context toolbar) ───────────────────────
   const handleDeleteLayer = useCallback((id: string) => {
@@ -1756,13 +1832,14 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     });
 
     // Overflow tools shared across contexts (Layers, Preview, Safe Zone,
-    // Templates, Drafts, Settings, Add Frame)
+    // Templates, Moodboard, Drafts, Settings, Add Frame)
     const sharedOverflow: ToolDefinition[] = [
       mk('transitions', 'Transitions', 'swap-horizontal-outline', () => { haptic.light(); openSheet('transitions'); }, 'Transitions', 'Opens the transition picker for the current frame'),
       mk('layers', 'Layers', 'layers-outline', () => { openSheet('layers'); }, 'Layers', 'Opens the layers panel', 'layers'),
       mk('preview', 'Preview', 'eye-outline', () => { setShowPreview(true); }, 'Preview', 'Previews the story'),
       mk('safe-zone', 'Safe Zone', 'scan-outline', () => { setShowSafeZone((p) => !p); }, 'Safe Zone', 'Toggles the safe zone overlay', 'safe-zone', showSafeZone),
       mk('templates', 'Templates', 'grid-outline', () => { setShowTemplates(true); }, 'Templates', 'Opens the template browser'),
+      mk('moodboard', 'Moodboard', 'albums-outline', () => { onEntryTypeChange('moodboard'); }, 'Moodboard Studio', 'Switch to Moodboard Studio'),
       mk('drafts', 'Drafts', 'document-text-outline', () => { navigation.navigate('CreatorDraftList'); }, 'Drafts', 'Opens saved drafts'),
       mk('settings', 'Settings', 'settings-outline', () => { openSheet('settings'); }, 'Settings', 'Opens composer settings'),
     ];
@@ -1985,7 +2062,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
     handleAddFrame, handleTimelineToggle, handleEditLayer, handleReorderLayer, handleDuplicateLayer,
     handleDeleteLayer, handleCropAction, handleCutoutAction, handleAdjustAction, handleAutoAdjust,
     selectedLayer, updateLayer, haptic, show, navigation,
-    pageCount, cutoutSupported, showSafeZone, bottomSurface, openSheet,
+    pageCount, cutoutSupported, showSafeZone, bottomSurface, openSheet, onEntryTypeChange,
   ]);
 
   // ── Active context resolution ──────────────────────────────────────
@@ -2161,6 +2238,18 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
             />
           </View>
 
+          {/* ── Filter HUD pill (Instagram/Snapchat swipe-to-filter indicator) ── */}
+          {filterHudName && (
+            <Reanimated.View
+              style={[styles.filterHudPill, filterHudAnimatedStyle, { top: insets.top + 64 }]}
+              pointerEvents="none"
+              accessibilityRole="alert"
+              accessibilityLiveRegion="polite"
+            >
+              <Text style={styles.filterHudText}>{filterHudName}</Text>
+            </Reanimated.View>
+          )}
+
           {/* ── In-place text content editor (Snapchat/Instagram pattern) ── */}
           {/* Renders a TextInput AT the text layer's position so the user can
               type in place while the canvas stays visible. The modal
@@ -2176,9 +2265,9 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 canvasTopOffset={canvasVerticalOffset}
                 screenWidth={screenWidth}
                 screenHeight={screenHeight}
-                onCommit={(text) => {
+                onCommit={(text, styleUpdates) => {
                   updateLayer(editingTextLayer.id, {
-                    payload: { ...editingTextLayer.payload, text },
+                    payload: { ...editingTextLayer.payload, text, ...(styleUpdates ?? {}) },
                   } as Partial<CreatorLayer>, 'Edit text content');
                 }}
                 onDismiss={() => setEditingTextLayerId(null)}
@@ -2259,6 +2348,12 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           recedes (fades to 0.15 opacity) during active layer manipulation,
           making the canvas feel infinite (Snapchat/Instagram pattern). */}
       <Reanimated.View style={[styles.topBarContainer, { paddingTop: insets.top }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
+        <LinearGradient
+          colors={Scrim.top.colors}
+          locations={Scrim.top.locations}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
         <View style={styles.topBar}>
           <View style={styles.topBarRow}>
             {selectedLayer ? (
@@ -2289,7 +2384,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 </View>
               </>
             ) : (
-              /* Default: Close · Undo · Redo · Next (Instagram minimalism) */
+              /* Default: Close · Audio · Save · Undo · Redo · Next (Instagram/Snapchat flagship) */
               <>
                 <View style={styles.topLeftGroup}>
                   <PressScale
@@ -2305,6 +2400,35 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                 </View>
 
                 <View style={styles.topCenterGroup}>
+                  {/* Video/audio live mute toggle */}
+                  {(hasAudioContent || hasVideoContent) && (
+                    <PressScale
+                      onPress={handleToggleAudioMute}
+                      style={styles.topBtn}
+                      accessibilityLabel={isAudioMuted ? 'Unmute video audio' : 'Mute video audio'}
+                      accessibilityHint="Toggles audio playback mute state"
+                      hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                    >
+                      <Ionicons
+                        name={isAudioMuted ? 'volume-mute' : 'volume-high'}
+                        size={IconGrammar.standard}
+                        color={isAudioMuted ? colors.brand : colors.textPrimary}
+                      />
+                    </PressScale>
+                  )}
+
+                  {/* Quick Save to drafts */}
+                  <PressScale
+                    onPress={handleQuickSaveDraft}
+                    disabled={isQuickSaving}
+                    style={[styles.topBtn, { opacity: isQuickSaving ? 0.5 : 1 }]}
+                    accessibilityLabel="Save draft"
+                    accessibilityHint="Saves the current story to drafts"
+                    hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="bookmark-outline" size={IconGrammar.standard} color={colors.textPrimary} />
+                  </PressScale>
+
                   <PressScale
                     onPress={handleUndo}
                     disabled={!canUndo}
@@ -2313,7 +2437,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     accessibilityHint={undoLabel ? `Undo ${undoLabel}` : 'Reverts the last edit'}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canUndo }}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                   >
                     <Ionicons name="arrow-undo" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
@@ -2325,7 +2449,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
                     accessibilityHint={redoLabel ? `Redo ${redoLabel}` : 'Reapplies the last undone edit'}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canRedo }}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                   >
                     <Ionicons name="arrow-redo" size={IconGrammar.standard} color={colors.textPrimary} />
                   </PressScale>
@@ -2621,24 +2745,43 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           button to return here; the effects sheet has its own Done button. */}
       {bottomSurface === 'tools' && (
         <Reanimated.View style={[styles.bottomRailContainer, { paddingBottom: insets.bottom }, chromeFadeStyle]} pointerEvents={isManipulating ? 'none' : 'auto'}>
+          <LinearGradient
+            colors={Scrim.bottom.colors}
+            locations={Scrim.bottom.locations}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
           <View style={styles.bottomRailContent}>
             {/* Frame position label — non-interactive; page dots at top
                 handle navigation. The frame organizer is in the More menu. */}
             {hasMultipleFrames && !selectedLayer && (
-              <>
+              <View style={styles.frameBadgePill}>
                 <Text style={styles.frameCountText}>
                   {activePageIndex + 1}/{pageCount}
                 </Text>
-                <View style={styles.railDivider} />
-              </>
+              </View>
             )}
 
-            <ContextToolRail
-              context={activeToolContext}
-              groups={toolGroups}
-              onOverflowPress={() => openSheet('overflow')}
-              style={styles.contextRail}
-            />
+            <View style={styles.bottomRailGlassDock}>
+              <ContextToolRail
+                context={activeToolContext}
+                groups={toolGroups}
+                onOverflowPress={() => openSheet('overflow')}
+                style={styles.contextRail}
+              />
+            </View>
+
+            {/* Direct 1-tap Send / Story action (Snapchat / Instagram flagship pattern) */}
+            <PressScale
+              onPress={() => { haptic.medium(); openSheet('publish'); }}
+              style={[styles.bottomStoryPostBtn, { backgroundColor: colors.brand }]}
+              accessibilityLabel="Share story"
+              accessibilityHint="Opens publish sheet to share your story"
+              scale={0.94}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="paper-plane" size={17} color={colors.textInverse} />
+            </PressScale>
           </View>
         </Reanimated.View>
       )}
@@ -3175,7 +3318,7 @@ export function PosterComposerScreen(props: {
   initialMedia?: CreatorInitialMedia[];
   startBlank?: boolean;
   openTemplates?: boolean;
-  onEntryTypeChange: (type: 'look' | 'poster') => void;
+  onEntryTypeChange: (type: 'look' | 'poster' | 'moodboard') => void;
 }) {
   return (
     <PosterComposerScreenWithProvider {...props} />
@@ -3193,7 +3336,7 @@ function PosterComposerScreenWithProvider(props: {
   initialMedia?: CreatorInitialMedia[];
   startBlank?: boolean;
   openTemplates?: boolean;
-  onEntryTypeChange: (type: 'look' | 'poster') => void;
+  onEntryTypeChange: (type: 'look' | 'poster' | 'moodboard') => void;
 }) {
   // Lazy import to avoid circular dependency at module load time
   const { CreatorProvider } = require('../CreatorContext');
@@ -3256,6 +3399,30 @@ function createStyles(colors: ThemeColors) {
   // ── Full-screen canvas stage ──
   canvasStage: {
     ...StyleSheet.absoluteFill,
+  },
+  // ── Filter HUD pill (Instagram/Snapchat swipe-to-filter indicator) ──
+  filterHudPill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    backgroundColor: colors.mediaOverlayScrim,
+    paddingHorizontal: Space.md,
+    paddingVertical: 7,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    zIndex: 150,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  filterHudText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 13,
+    letterSpacing: 1.6,
+    color: colors.scrimTextPrimary,
+    textAlign: 'center',
   },
   // ── Top bar ──
   topBarContainer: {
@@ -3502,27 +3669,45 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Space.sm,
-    gap: Space.md,
+    gap: Space.xs,
     paddingVertical: Space.xs,
-    backgroundColor: colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    backgroundColor: 'transparent',
+  },
+  bottomRailGlassDock: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.mediaOverlayScrim,
+    borderRadius: Radius.xxl,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingHorizontal: 2,
+    overflow: 'hidden',
+  },
+  frameBadgePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.mediaOverlayScrim,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   frameCountText: {
     fontFamily: FontFamily.semibold,
-    fontSize: TypographyV2.body.size,
+    fontSize: TypographyV2.meta.size,
     color: colors.scrimTextPrimary,
   },
-  railDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: colors.scrimTextTertiary,
-  },
-  railMoreBtn: {
+  bottomStoryPostBtn: {
     width: 44,
     height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
   },
   // ── Overflow menu ──
   overflowContainer: {

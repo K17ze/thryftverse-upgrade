@@ -279,7 +279,7 @@ export default function CategoryDetailScreen() {
           rightAction={
             <AnimatedPressable
               style={{ width: Control.hit, height: Control.hit, alignItems: 'center', justifyContent: 'center' }}
-              onPress={() => navigation.navigate('GlobalSearch')}
+              onPress={() => navigation.navigate('UnifiedDiscovery')}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel="Search listings"

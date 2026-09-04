@@ -69,12 +69,13 @@ import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { buildListingFeedUnit, type DiscoveryFeedUnit } from '../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 import { openProductDetail } from '../platform/product/openProductDetail';
+import { useDynamicAlgorithmSignals } from '../hooks/useDynamicAlgorithmSignals';
+import { matchesSignal, type DynamicSignalChip } from '../services/algorithmicSignalsService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'UnifiedDiscovery'>;
 
 // ── Category pills ──
-const CATEGORY_PILLS = ['All', 'New', 'Vintage', 'Streetwear', 'Designer', 'Home', 'Tech'] as const;
-type CategoryPill = typeof CATEGORY_PILLS[number];
+type CategoryPill = string;
 
 // ── Search debounce ──
 const SEARCH_DEBOUNCE_MS = 180;
@@ -95,6 +96,37 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
 
   // ── Discovery feed state ──
   const [activeCategory, setActiveCategory] = useState<CategoryPill>('All');
+  const { signals: dynamicCategorySignals, selectSignal: boostCategorySignal } = useDynamicAlgorithmSignals({ surface: 'discovery' });
+
+  const categoryPills = useMemo<DynamicSignalChip[]>(() => {
+    return [
+      { id: 'all', label: 'All', filterKey: 'all', kind: 'all', score: 100, isPersonalized: false },
+      { id: 'new', label: 'New', filterKey: 'new', kind: 'curated', score: 98, isPersonalized: false },
+      ...dynamicCategorySignals.filter((s) => s.filterKey !== 'all'),
+    ];
+  }, [dynamicCategorySignals]);
+
+  const activeSignalChip = useMemo(() => {
+    return (
+      categoryPills.find(
+        (p) => p.filterKey === activeCategory.toLowerCase() || p.label.toLowerCase() === activeCategory.toLowerCase(),
+      ) || categoryPills[0]
+    );
+  }, [categoryPills, activeCategory]);
+
+  const handleCategoryChange = useCallback(
+    (pill: string) => {
+      setActiveCategory(pill);
+      const chip = categoryPills.find(
+        (p) => p.label === pill || p.filterKey === pill.toLowerCase(),
+      );
+      if (chip) {
+        boostCategorySignal(chip);
+      }
+    },
+    [categoryPills, boostCategorySignal],
+  );
+
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [posters, setPosters] = useState<PosterStory[]>([]);
   const [moodboards, setMoodboards] = useState<Moodboard[]>([]);
@@ -233,7 +265,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     return backendListings;
   }, [forYouFeed.listings, backendListings]);
 
-  // ── Category filter — pills are functional, not decorative ──
+  // ── Category filter — dynamically matches category, brand, style or recency ──
   const personalisedListings = useMemo(() => {
     if (activeCategory === 'All') return baseListings;
     if (activeCategory === 'New') {
@@ -242,14 +274,8 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
         new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
       );
     }
-    const cat = activeCategory.toLowerCase();
-    return baseListings.filter((listing) => {
-      const lc = (listing.category ?? '').toLowerCase();
-      const sub = (listing.subcategory ?? '').toLowerCase();
-      const brand = (listing.brand ?? '').toLowerCase();
-      return lc.includes(cat) || sub.includes(cat) || brand.includes(cat);
-    });
-  }, [baseListings, activeCategory]);
+    return baseListings.filter((listing) => matchesSignal(listing, activeSignalChip));
+  }, [baseListings, activeCategory, activeSignalChip]);
 
   // ── Assemble the heterogeneous discovery feed ──
   const feedUnits = useMemo(
@@ -397,7 +423,8 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             greeting={greeting}
             firstName={firstName}
             activeCategory={activeCategory}
-            onCategoryChange={setActiveCategory}
+            onCategoryChange={handleCategoryChange}
+            categoryPills={categoryPills}
             heroEditorial={heroEditorial}
             collections={collections}
             featuredAssets={featuredAssets}
@@ -434,6 +461,7 @@ function DiscoveryFeedView({
   firstName,
   activeCategory,
   onCategoryChange,
+  categoryPills,
   heroEditorial,
   collections,
   featuredAssets,
@@ -458,6 +486,7 @@ function DiscoveryFeedView({
   firstName: string;
   activeCategory: CategoryPill;
   onCategoryChange: (c: CategoryPill) => void;
+  categoryPills: DynamicSignalChip[];
   heroEditorial?: GalleriaEditorial;
   collections: GalleriaCollection[];
   featuredAssets: GalleriaFeaturedAsset[];
@@ -532,7 +561,7 @@ function DiscoveryFeedView({
         </Text>
       </View>
 
-      {/* Category pills — horizontal scroll, pill = filter not decoration.
+      {/* Category pills — horizontal scroll, dynamically driven by user algorithm.
           Wrapped in a ScrollView so 8+ pills scroll on narrow screens with a
           partial next pill visible at the edge (paddingRight: Space.md). */}
       <View style={styles.categoryBar}>
@@ -541,26 +570,35 @@ function DiscoveryFeedView({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryBarContent}
         >
-          {(CATEGORY_PILLS as readonly CategoryPill[]).map((pill) => (
-            <Pressable
-              key={pill}
-              onPress={() => onCategoryChange(pill)}
-              style={[
-                styles.categoryPill,
-                activeCategory === pill && styles.categoryPillActive,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={`Filter by ${pill}`}
-              accessibilityState={{ selected: activeCategory === pill }}
-            >
-              <Text style={[
-                styles.categoryPillText,
-                activeCategory === pill && styles.categoryPillTextActive,
-              ]}>
-                {pill}
-              </Text>
-            </Pressable>
-          ))}
+          {categoryPills.map((chip) => {
+            const isSelected = activeCategory === chip.label;
+            return (
+              <Pressable
+                key={`pill-${chip.id}-${chip.filterKey}`}
+                onPress={() => onCategoryChange(chip.label)}
+                style={[
+                  styles.categoryPill,
+                  isSelected && styles.categoryPillActive,
+                  chip.isPersonalized && !isSelected && styles.categoryPillPersonalized,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${chip.label}${chip.isPersonalized ? ', personalized' : ''}`}
+                accessibilityState={{ selected: isSelected }}
+              >
+                {chip.isPersonalized && chip.kind !== 'all' && chip.filterKey !== 'new' ? (
+                  <View style={[styles.categoryDot, isSelected && styles.categoryDotActive]} />
+                ) : null}
+                <Text
+                  style={[
+                    styles.categoryPillText,
+                    isSelected && styles.categoryPillTextActive,
+                  ]}
+                >
+                  {chip.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       </View>
 
@@ -908,12 +946,28 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
       alignItems: 'center' },
     categoryPill: {
-      paddingHorizontal: Space.sm + 2,
-      paddingVertical: Space.xs + 2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
       borderRadius: Radius.full,
+      backgroundColor: 'transparent',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle },
+    categoryPillPersonalized: {
+      borderColor: colors.border,
       backgroundColor: colors.surfaceAlt },
     categoryPillActive: {
-      backgroundColor: colors.textPrimary },
+      backgroundColor: colors.textPrimary,
+      borderColor: colors.textPrimary },
+    categoryDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: colors.brand },
+    categoryDotActive: {
+      backgroundColor: colors.background },
     categoryPillText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,

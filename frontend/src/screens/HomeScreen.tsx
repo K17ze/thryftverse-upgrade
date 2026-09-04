@@ -56,10 +56,10 @@ import { HomeDiscoveryCard } from '../components/discover/HomeDiscoveryCard';
 import { toHomeDiscoveryItemVM, type HomeDiscoveryItemVM } from '../presentation/homeDiscoveryViewModel';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri } from '../utils/media';
+import { preloadCriticalImages } from '../utils/imagePreloader';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, FontFamily, Stroke, Elevation, Control, AvatarSize } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Control, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
-import { updateTopicWeight } from '../services/algorithmTransparencyApi';
 import { appStorage } from '../storage/mmkv';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
@@ -67,7 +67,6 @@ import { openProductDetail } from '../platform/product/openProductDetail';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { useForYouFeed } from '../hooks/useForYouFeed';
 import { useRecommendationImpressions } from '../hooks/useRecommendationImpressions';
-import { markInteractive } from '../platform/monitoring';
 import { useFeatureFlag } from '../analytics';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
 
@@ -86,7 +85,6 @@ function safeMarkInteractive(attributes: Record<string, string | number | boolea
     // Observability must never crash the app.
   }
 }
-import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 
@@ -96,12 +94,8 @@ const HEADER_EXPANDED = 58;
 const HEADER_COLLAPSED = 52;
 // Design.md Component B: 8pt gutters for dense media/discovery surfaces.
 const GRID_GAP = Space.sm;
-// Missing media is not photography and should not dominate discovery like it is.
-// Keep the fallback compact while real assets continue to use their API geometry.
-const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
 const POSTER_CARD_WIDTH = 76;
 const POSTER_CARD_HEIGHT = 135;
-const LISTING_CARD_CHROME_HEIGHT = 110;
 // Look rail card dimensions — used in the feed interruption rail for Looks.
 const LOOK_CARD_WIDTH = 120;
 const LOOK_CARD_HEIGHT = 160;
@@ -156,6 +150,13 @@ function isLookMarker(item: FeedDataItem): item is LookFeedMarker {
   return (item as LookFeedMarker).type === 'looks';
 }
 
+function extractFeedImageUri(item: FeedDataItem): string | null {
+  if (isLookMarker(item)) {
+    return item.looks[0]?.mediaUri ?? null;
+  }
+  return item.media.posterUri || item.media.uri || null;
+}
+
 const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { story: PosterStory }) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -208,12 +209,13 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
   );
 });
 
-// G2: In-feed quick signal chips for fast category filtering.
-// These are high-level fashion categories that map to common browsing intents.
-const QUICK_SIGNALS = ['All', 'Denim', 'Sneakers', 'Outerwear', 'Vintage', 'Minimal', 'Streetwear', 'Luxury'] as const;
+// G2: In-feed quick signal chips dynamically driven by the user's algorithm.
+// Replaces static categories with real-time intent topics & recommendation vectors.
+import { useDynamicAlgorithmSignals } from '../hooks/useDynamicAlgorithmSignals';
+import { matchesSignal, type DynamicSignalChip } from '../services/algorithmicSignalsService';
 
-// G3: Feed mode type — expanded to include 'latest' and 'saved' views.
-type FeedMode = 'foryou' | 'following' | 'latest' | 'saved';
+// Flagship Feed mode type — focused on personalised 'foryou' and creator 'following' feeds.
+type FeedMode = 'foryou' | 'following';
 
 export default function HomeScreen() {
   const { colors, isDark } = useAppTheme();
@@ -250,12 +252,12 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<HomeDiscoveryItemVM | null>(null);
   const [newListingIds, setNewListingIds] = React.useState<Set<string>>(() => new Set());
-  // G3: Persist feed mode across sessions via MMKV so the user's last-used
-  // feed view (For you / Following / Latest / Saved) is restored on app launch.
+  // Persist feed mode across sessions via MMKV so the user's last-used
+  // feed view (For you / Following) is restored on app launch.
   const [feedMode, setFeedModeState] = React.useState<FeedMode>(() => {
     try {
       const stored = appStorage.getString('home.feedMode');
-      if (stored === 'foryou' || stored === 'following' || stored === 'latest' || stored === 'saved') {
+      if (stored === 'foryou' || stored === 'following') {
         return stored;
       }
     } catch {}
@@ -265,7 +267,12 @@ export default function HomeScreen() {
     setFeedModeState(mode);
     try { appStorage.set('home.feedMode', mode); } catch {}
   }, []);
-  const [selectedSignal, setSelectedSignal] = React.useState<string>('All');
+  const {
+    signals: dynamicSignals,
+    activeSignal: selectedSignalChip,
+    selectSignal: handleSelectSignalChip,
+    isPersonalized: hasPersonalizedSignals,
+  } = useDynamicAlgorithmSignals({ surface: 'home' });
 
   // Viewability-driven video autoplay: only the most-visible feed tile plays
   // its video. Settlement delay (350ms) avoids spinning up players during fast
@@ -299,6 +306,7 @@ export default function HomeScreen() {
   const knownListingIdsRef = React.useRef<Set<string>>(new Set());
   const seededKnownListingIdsRef = React.useRef(false);
   const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPrefetchedIndexRef = React.useRef(-1);
 
   const headerExpandedHeight = React.useMemo(() => HEADER_EXPANDED + insets.top, [insets.top]);
   const headerCollapsedHeight = React.useMemo(() => HEADER_COLLAPSED + insets.top, [insets.top]);
@@ -372,8 +380,8 @@ export default function HomeScreen() {
   });
 
   const headerShadowStyle = useAnimatedStyle(() => {
-    const shadowOpacity = interpolate(scrollY.value, [0, 60], [0, 0.12], Extrapolation.CLAMP);
-    const shadowRadius = interpolate(scrollY.value, [0, 60], [0, 12], Extrapolation.CLAMP);
+    const shadowOpacity = interpolate(scrollY.value, [0, 60], [0, Elevation.floating.shadowOpacity], Extrapolation.CLAMP);
+    const shadowRadius = interpolate(scrollY.value, [0, 60], [0, Elevation.floating.shadowRadius], Extrapolation.CLAMP);
     return {
       shadowOpacity,
       shadowRadius,
@@ -463,11 +471,7 @@ export default function HomeScreen() {
     await refreshListings();
     void followingFeed.refresh();
     void forYouFeed.refresh();
-    setPostersLoading(true);
-    fetchPosterStories({ active: true, limit: 20 })
-      .then((res) => setRealPosters(res.items))
-      .catch(() => {})
-      .finally(() => setPostersLoading(false));
+    loadPostersAndLooks();
     acknowledgeNewListings();
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => {
@@ -594,45 +598,6 @@ export default function HomeScreen() {
       featured: computeFeatured(index) }));
   }, [forYouFeed.listings, wishlist, followedSellerIdsSet, computeFeatured]);
 
-  // G3: Latest feed — chronologically sorted listings.
-  const latestExploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
-    return [...listings]
-      .sort((a, b) => {
-        const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return db - da;
-      })
-      .map((listing) =>
-        toHomeDiscoveryItemVM(listing, {
-          isSaved: wishlist.includes(listing.id),
-          currency: currencyCode,
-          followedSellerIds: followedSellerIdsSet,
-        }),
-      )
-      .map((vm, index) => ({
-        ...vm,
-        featured: computeFeatured(index),
-      }));
-  }, [listings, wishlist, currencyCode, followedSellerIdsSet, computeFeatured]);
-
-  // G3: Saved feed — items in the user's wishlist.
-  const savedExploreData = React.useMemo<HomeDiscoveryItemVM[]>(() => {
-    const savedSet = new Set(wishlist);
-    return listings
-      .filter((l) => savedSet.has(l.id))
-      .map((listing) =>
-        toHomeDiscoveryItemVM(listing, {
-          isSaved: true,
-          currency: currencyCode,
-          followedSellerIds: followedSellerIdsSet,
-        }),
-      )
-      .map((vm, index) => ({
-        ...vm,
-        featured: computeFeatured(index),
-      }));
-  }, [listings, wishlist, currencyCode, followedSellerIdsSet, computeFeatured]);
-
   // For You mode uses personalised recommendations. When the feed is empty
   // or errored, we do NOT silently substitute general listings. The empty/
   // error state renders an honest message and the user can pull to refresh
@@ -642,43 +607,26 @@ export default function HomeScreen() {
   const forYouHasError = feedMode === 'foryou' && forYouFeed.error !== null && forYouFeed.listings.length === 0;
   const forYouIsDegraded = feedMode === 'foryou' && forYouFeed.serveMode === 'degraded_baseline' && forYouFeed.listings.length > 0;
 
-  // G3: Base feed data switches across all 4 feed modes.
+  // Base feed data switches between Following and For You feeds.
   const baseFeedData = React.useMemo(() => {
-    switch (feedMode) {
-      case 'following':
-        return followingExploreData;
-      case 'latest':
-        return latestExploreData;
-      case 'saved':
-        return savedExploreData;
-      case 'foryou':
-      default:
-        return effectiveForYouData;
+    if (feedMode === 'following') {
+      return followingExploreData;
     }
-  }, [feedMode, followingExploreData, latestExploreData, savedExploreData, effectiveForYouData]);
+    return effectiveForYouData;
+  }, [feedMode, followingExploreData, effectiveForYouData]);
 
-  // G2: Apply quick signal filtering to the base feed data.
+  // G2: Apply dynamic quick signal filtering to the base feed data.
   const activeFeedData = React.useMemo(() => {
-    if (selectedSignal === 'All') return baseFeedData;
-    const lowerSignal = selectedSignal.toLowerCase();
-    return baseFeedData.filter((item) => {
-      const primaryMatch = item.identity?.primary?.toLowerCase().includes(lowerSignal);
-      const secondaryMatch = item.identity?.secondary?.toLowerCase().includes(lowerSignal);
-      const categoryMatch = (item as any).category?.toLowerCase()?.includes(lowerSignal);
-      return Boolean(primaryMatch || secondaryMatch || categoryMatch);
-    });
-  }, [baseFeedData, selectedSignal]);
+    if (selectedSignalChip.filterKey === 'all') return baseFeedData;
+    return baseFeedData.filter((item) => matchesSignal(item, selectedSignalChip));
+  }, [baseFeedData, selectedSignalChip]);
 
   const handleSelectSignal = React.useCallback(
-    (signal: string) => {
+    (signal: DynamicSignalChip) => {
       haptic.selection();
-      setSelectedSignal(signal);
-      // G2: Wire signal selection to topic weight API so it influences the feed.
-      if (currentUser?.id && signal !== 'All') {
-        void updateTopicWeight(signal.toLowerCase(), 'high').catch(() => {});
-      }
+      handleSelectSignalChip(signal);
     },
-    [currentUser?.id, haptic]
+    [handleSelectSignalChip, haptic]
   );
 
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
@@ -736,8 +684,9 @@ export default function HomeScreen() {
     // Reset viewability playback when the feed content swaps so a stale
     // activeIndex does not cause a now-offscreen video to keep playing.
     resetPlayback();
+    lastPrefetchedIndexRef.current = -1;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [feedMode, selectedSignal]);
+  }, [feedMode, selectedSignalChip.filterKey]);
 
   const feedOpacityStyle = useAnimatedStyle(() => ({
     opacity: feedOpacity.value }));
@@ -1105,6 +1054,21 @@ export default function HomeScreen() {
         onViewableItemsChanged={(info: { changed: import('react-native').ViewToken[]; viewableItems: import('react-native').ViewToken[] }) => {
           onPlaybackViewableItemsChanged(info);
           onImpressionViewableItemsChanged(info);
+          const maxVisibleIndex = info.viewableItems.reduce((max, token) => {
+            const idx = typeof token.index === 'number' ? token.index : -1;
+            return idx > max ? idx : max;
+          }, -1);
+          if (maxVisibleIndex < 0 || maxVisibleIndex <= lastPrefetchedIndexRef.current) return;
+          lastPrefetchedIndexRef.current = maxVisibleIndex;
+          const ahead = feedGridData.slice(maxVisibleIndex + 1, maxVisibleIndex + 11);
+          const uris: string[] = [];
+          for (const item of ahead) {
+            const uri = extractFeedImageUri(item);
+            if (uri) uris.push(uri);
+          }
+          if (uris.length > 0) {
+            void preloadCriticalImages(uris, { priority: 'normal', cachePolicy: 'disk' });
+          }
         }}
         onEndReached={() => {
           if (hasMore && !isLoadingMore) void loadMoreListings();
@@ -1124,13 +1088,11 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <View>
             <View style={styles.feedTabBar} accessibilityRole="tablist">
-              {(['foryou', 'following', 'latest', 'saved'] as const).map((option) => {
+              {(['foryou', 'following'] as const).map((option) => {
                 const isSelected = feedMode === option;
                 const labels: Record<typeof option, string> = {
                   foryou: 'For you',
                   following: 'Following',
-                  latest: 'Latest',
-                  saved: 'Saved',
                 };
                 const label = labels[option];
                 return (
@@ -1163,31 +1125,38 @@ export default function HomeScreen() {
               })}
             </View>
 
-            {/* G2: Quick signal chips — fast category filtering on the feed.
-                Horizontal scroll rail with haptic feedback. Selecting a signal
-                filters the feed and boosts the topic weight via the API. */}
+            {/* G2: Dynamic quick signal chips driven by user algorithm topics & recommendation vectors.
+                Horizontal scroll rail with haptic feedback and closed-loop learning. */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.signalRail}
               contentContainerStyle={styles.signalRailContent}
               accessibilityRole="tablist"
+              accessibilityLabel="Personalized category signals"
             >
-              {QUICK_SIGNALS.map((signal) => {
-                const active = selectedSignal === signal;
+              {dynamicSignals.map((signal) => {
+                const active = selectedSignalChip.filterKey === signal.filterKey;
                 return (
                   <AnimatedPressable
-                    key={`signal-${signal}`}
-                    style={[styles.signalChip, active && styles.signalChipActive]}
+                    key={`signal-${signal.id}-${signal.filterKey}`}
+                    style={[
+                      styles.signalChip,
+                      active && styles.signalChipActive,
+                      signal.isPersonalized && !active && styles.signalChipPersonalized,
+                    ]}
                     onPress={() => handleSelectSignal(signal)}
                     activeOpacity={0.85}
                     hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel={`Filter by ${signal}`}
+                    accessibilityLabel={`Filter by ${signal.label}${signal.isPersonalized ? ', personalized' : ''}`}
                     accessibilityState={{ selected: active }}
                   >
+                    {signal.isPersonalized && signal.kind !== 'all' ? (
+                      <View style={[styles.signalDot, active && styles.signalDotActive]} />
+                    ) : null}
                     <Text style={[styles.signalChipText, active && styles.signalChipTextActive]}>
-                      {signal}
+                      {signal.label}
                     </Text>
                   </AnimatedPressable>
                 );
@@ -1470,7 +1439,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.danger,
-    letterSpacing: 0.2 },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // New home feed editorial header — additive section gated by the
   // new_home_feed feature flag. An eyebrow + title pair that introduces the
   // feed with an authored, curated voice.
@@ -1479,11 +1448,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.sm,
     gap: Space.xxs },
   editorialEyebrow: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.brand,
-    letterSpacing: TypographyV2.meta.letterSpacing,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase' },
   editorialTitle: {
     fontSize: TypographyV2.sectionTitle.size,
@@ -1554,10 +1523,23 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingVertical: Space.xs,
     borderRadius: RadiusRoleValue.pillAvatar,
     borderWidth: Stroke.hairline,
-    borderColor: colors.border },
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5 },
+  signalChipPersonalized: {
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.surfaceAlt },
   signalChipActive: {
     backgroundColor: colors.textPrimary,
     borderColor: colors.textPrimary },
+  signalDot: {
+    width: 5,
+    height: 5,
+    borderRadius: Radius.full,
+    backgroundColor: colors.brand },
+  signalDotActive: {
+    backgroundColor: colors.background },
   signalChipText: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
@@ -1614,7 +1596,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.background,
-    letterSpacing: 0.2 },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   postersSection: {
     marginTop: 0,
@@ -1675,81 +1657,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterShade: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.overlay },
-  posterAvatarOverlay: {
-    position: 'absolute',
-    top: 5,
-    left: 5,
-    width: AvatarSize.inline,
-    height: AvatarSize.inline,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-    borderWidth: Stroke.emphasis,
-    borderColor: colors.scrimTextPrimary,
-    ...Elevation.floating },
-  posterAvatarOverlayWrap: {
-    width: AvatarSize.inline,
-    height: AvatarSize.inline,
-    borderRadius: Radius.full },
-  posterAvatarOverlayImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: Radius.full },
-  posterTopRow: {
-    position: 'absolute',
-    top: 5,
-    left: 5,
-    right: 5,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Space.xs },
-  posterOwnerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.overlay,
-    paddingHorizontal: 5,
-    paddingVertical: 3,
-    borderRadius: Radius.lg,
-    flex: 1,
-    gap: Space.xs },
-  posterOwnerAvatarWrap: {
-    width: 14,
-    height: 14,
-    borderRadius: Radius.full },
-  posterOwnerAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: Radius.full },
-  posterOwnerName: {
-    color: colors.scrimTextPrimary,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-    flex: 1 },
-  posterExpiryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.overlay,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 6,
-    paddingVertical: 3 },
-  posterExpiryText: {
-    color: colors.scrimTextPrimary,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.bold },
-  posterBottomOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 7,
-    backgroundColor: colors.overlay },
-  posterCaption: {
-    color: colors.scrimTextPrimary,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium },
   posterCreatorOverlay: {
     position: 'absolute',
     left: 5,

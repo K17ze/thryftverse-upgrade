@@ -1,0 +1,43 @@
+- generic [ref=e12]:
+  - generic [ref=e352]:
+    - generic [ref=e355]:
+      - button "Go back" [ref=e356] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e357]: 
+      - generic [ref=e358]: Group details
+    - generic [ref=e364]:
+      - generic [ref=e365]: T
+      - generic [ref=e370]:
+        - generic [ref=e371]: Thryft Snipers
+        - generic [ref=e372]: 3 members · 1 agent connected
+      - generic [ref=e373]:
+        - button "Mute group" [ref=e374] [cursor=pointer]:
+          - generic [ref=e375]: 
+          - generic [ref=e377]: Mute
+        - button "Share invite link" [ref=e378] [cursor=pointer]:
+          - generic [ref=e379]: 
+          - generic [ref=e381]: Invite
+        - button "Share group" [ref=e382] [cursor=pointer]:
+          - generic [ref=e383]: 
+          - generic [ref=e385]: Share
+      - generic [ref=e386]:
+        - tab "Members" [ref=e387] [cursor=pointer]
+        - tab "Media" [ref=e389] [cursor=pointer]
+        - tab "Settings" [ref=e391] [cursor=pointer]
+      - generic [ref=e395]:
+        - generic [ref=e396]:
+          - generic [ref=e397]: TH
+          - generic [ref=e399]:
+            - generic [ref=e400]: thryftuser
+            - generic [ref=e401]: "@thryftuser"
+        - generic [ref=e402]:
+          - generic [ref=e403]: MA
+          - generic [ref=e405]:
+            - generic [ref=e406]: mariefullery
+            - generic [ref=e407]: "@mariefullery"
+        - generic [ref=e408]:
+          - generic [ref=e409]: DA
+          - generic [ref=e411]:
+            - generic [ref=e412]: dankdunksuk
+            - generic [ref=e413]: "@dankdunksuk"
+  - button "Open command palette" [ref=e32] [cursor=pointer]:
+    - generic [ref=e33]: 

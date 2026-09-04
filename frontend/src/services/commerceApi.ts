@@ -769,6 +769,38 @@ export async function createBuyerProtectionClaim(
 
 /* ─── Seller Analytics ─── */
 
+export interface SellerAnalyticsComparison {
+  revenueGbpMinor: number;
+  netSalesGbpMinor: number | null;
+  itemsSold: number;
+  totalViews: number;
+  totalLikes: number;
+  totalSaves: number;
+  complete: boolean;
+}
+
+export interface SellerAnalyticsTrendPoint {
+  /** ISO date string (YYYY-MM-DD) */
+  date: string;
+  value: number;
+}
+
+export interface SellerAnalyticsTrend {
+  /** The daily series metric. Currently always 'revenue' (gross). Per-day
+   *  refund/fee subtraction is not yet implemented in the backend. */
+  metric: 'revenue';
+  current: SellerAnalyticsTrendPoint[];
+  previous: SellerAnalyticsTrendPoint[];
+}
+
+export interface SellerAnalyticsFunnel {
+  impressions: number;
+  views: number;
+  saves: number;
+  offers: number;
+  purchases: number;
+}
+
 export interface SellerAnalytics {
   totalListings: number;
   activeListings: number;
@@ -792,6 +824,12 @@ export interface SellerAnalytics {
   totalSales: number | null;
   positiveRatingPct: number | null;
   period: string;
+  /** Previous equal-period comparison — always complete (entirely in the past). */
+  comparison: SellerAnalyticsComparison;
+  /** Daily trend series for current + previous period. */
+  trend: SellerAnalyticsTrend;
+  /** Conversion funnel: impressions → views → saves → offers → purchases. */
+  funnel: SellerAnalyticsFunnel;
 }
 
 export async function fetchSellerAnalytics(
@@ -878,4 +916,55 @@ export async function fetchDailyBreakdown(
     `/sellers/${encodeURIComponent(sellerId)}/analytics/daily?period=${period}`
   );
   return payload.days;
+}
+
+/* ─── Listing Analytics — product-specific metrics, funnel, comparables & price history ─── */
+
+export interface ListingAnalyticsComparables {
+  sampleSize: number;
+  minPrice: number | null;
+  medianPrice: number | null;
+  maxPrice: number | null;
+}
+
+export interface ListingPriceHistoryEvent {
+  previousPrice: number;
+  newPrice: number;
+  changedAt: string;
+}
+
+export interface ListingAnalyticsData {
+  listing: {
+    id: string;
+    title: string;
+    priceGbpMinor: number;
+    status: string;
+    imageUrl: string | null;
+    category: string | null;
+    brand: string | null;
+    condition: string | null;
+    createdAt: string;
+    soldAt: string | null;
+  };
+  views: number;
+  saves: number;
+  offers: number;
+  likes: number;
+  purchases: number;
+  conversionRate: number | null;
+  timeOnMarketDays: number;
+  priceHistory: ListingPriceHistoryEvent[];
+  comparables: ListingAnalyticsComparables | null;
+  period: string;
+}
+
+export async function fetchListingAnalytics(
+  sellerId: string,
+  listingId: string,
+  period: '7d' | '30d' | '90d' = '30d'
+): Promise<ListingAnalyticsData> {
+  const payload = await fetchJson<{ ok: true; analytics: ListingAnalyticsData }>(
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/listing/${encodeURIComponent(listingId)}?period=${period}`
+  );
+  return payload.analytics;
 }
