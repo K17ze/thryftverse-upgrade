@@ -488,7 +488,6 @@ const VideoPage = React.memo(function VideoPage({
     return (
       <View
         style={[subComponentStyles.page, { width, height }]}
-        accessible
         accessibilityRole="imagebutton"
         accessibilityLabel={`Look video ${pageIndex + 1} of ${totalPages}, unavailable`}
       >
@@ -510,7 +509,6 @@ const VideoPage = React.memo(function VideoPage({
   return (
     <View
       style={[subComponentStyles.page, { width, height }]}
-      accessible
       accessibilityRole="imagebutton"
       accessibilityLabel={`Look video ${pageIndex + 1} of ${totalPages}`}
     >

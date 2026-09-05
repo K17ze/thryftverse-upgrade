@@ -473,7 +473,6 @@ function VideoPage({
   return (
     <View
       style={[subComponentStyles.page, { width, height }]}
-      accessible
       accessibilityLabel={item.altText ?? 'Product video'}
     >
       <VideoView

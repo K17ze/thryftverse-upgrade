@@ -280,7 +280,7 @@ export interface ProfileViewedProperties {
   user_id: string;
 }
 
-export interface SellerDashboardViewedProperties {}
+export type SellerDashboardViewedProperties = { scopedListingId?: string };
 
 export interface FollowToggledProperties {
   user_id: string;
@@ -297,20 +297,20 @@ export interface VoiceMessageSentProperties {
   duration_seconds: number;
 }
 
-export interface WalletViewedProperties {}
+export type WalletViewedProperties = Record<string, never>;
 
 export interface WithdrawalInitiatedProperties {
   amount: number;
   currency: string;
 }
 
-export interface BiometricLoginAttemptedProperties {}
+export type BiometricLoginAttemptedProperties = Record<string, never>;
 
-export interface BiometricLoginSuccessProperties {}
+export type BiometricLoginSuccessProperties = Record<string, never>;
 
-export interface BiometricLoginCancelledProperties {}
+export type BiometricLoginCancelledProperties = Record<string, never>;
 
-export interface OnboardingCompletedProperties {}
+export type OnboardingCompletedProperties = Record<string, never>;
 
 export interface AgeVerificationCompletedProperties {
   method: string;

@@ -31,6 +31,8 @@ import { appStorage } from '../../storage/mmkv';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { getAlgorithmDemoMode } from '../../services/algorithmTransparencyApi';
+import { CONVERSATIONAL_SEARCH_DEMO_MODE } from '../../services/conversationalSearchApi';
 
 const DISMISSED_KEY = '@thryftverse/ai_disclosure_dismissed';
 const DISMISSED_TIMESTAMP_KEY = '@thryftverse/ai_disclosure_dismissed_at';
@@ -55,6 +57,8 @@ export interface AITransparencyDisclosureProps {
 interface FeatureInfo {
   title: string;
   description: string;
+  /** Description shown when the feature is in demo/illustrative mode. */
+  demoDescription?: string;
   dataProcessed: string[];
 }
 
@@ -63,6 +67,8 @@ const FEATURE_INFO: Record<AIFeature, FeatureInfo> = {
     title: 'Personalized Recommendations',
     description:
       'We use a recommendation engine that analyses your browsing history, likes, purchases, and saved items to suggest listings you may be interested in. The model runs on our servers and does not access your private messages.',
+    demoDescription:
+      'Recommendations are shown in demo mode using illustrative data. No browsing history or personal data is processed by a server-side model. When the recommendation engine is live, it will analyse your activity to suggest relevant listings.',
     dataProcessed: ['Browsing history', 'Liked items', 'Purchase history', 'Saved searches'] },
   search: {
     title: 'AI-Powered Search',
@@ -78,6 +84,8 @@ const FEATURE_INFO: Record<AIFeature, FeatureInfo> = {
     title: 'Conversational AI Search',
     description:
       'You can search using natural language. Your query is sent to our AI service, which interprets intent and returns relevant listings. Queries are not stored beyond the session.',
+    demoDescription:
+      'Conversational search is in demo mode. Your query is processed locally with illustrative results — no data is sent to an AI service. When the live AI service is available, your query will be sent to our servers for interpretation.',
     dataProcessed: ['Search query text', 'Session ID'] },
   'price-prediction': {
     title: 'Price Predictions',
@@ -145,7 +153,18 @@ export function AITransparencyDisclosure({
   const [expandedFeature, setExpandedFeature] = useState<AIFeature | null>(null);
 
   const activeFeatures = useMemo(
-    () => features.map((f) => FEATURE_INFO[f]).filter(Boolean),
+    () => features.map((f) => {
+      const info = FEATURE_INFO[f];
+      if (!info) return null;
+      // Use demo description when the feature is in demo mode and a demo
+      // description is available — truthful UI per AGENTS.md §11.
+      const useDemo =
+        (f === 'recommendations' && getAlgorithmDemoMode()) ||
+        (f === 'conversational-search' && CONVERSATIONAL_SEARCH_DEMO_MODE);
+      return useDemo && info.demoDescription
+        ? { ...info, description: info.demoDescription }
+        : info;
+    }).filter((info): info is FeatureInfo => info !== null),
     [features],
   );
 
@@ -281,7 +300,7 @@ export function AITransparencyDisclosure({
       color: colors.textInverse } });
 
   return (
-    <Modal visible={visible} transparent animationType="slide" accessible accessibilityRole={summaryRole}>
+    <Modal visible={visible} transparent animationType="slide" accessibilityRole={summaryRole}>
       <Pressable style={styles.overlay} onPress={handleDismiss} accessibilityRole="button" accessibilityLabel="Close disclosure">
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()} accessibilityRole="none">
           <View style={styles.handle} />

@@ -175,6 +175,9 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 
   // Start a direct chat with an AI agent. Creates a local demo conversation
   // (AGENTS.md §11 — truthful: the agent is demo-mode, clearly labelled).
+  // NOTE: This conversation ID is locally generated for demo-mode agent chats.
+  // It is NOT a backend conversation ID and is only reachable when
+  // CHAT_AGENTS_DEMO_MODE is active. The conversation is marked isDemo.
   const handleStartAgentChat = useCallback((agent: ChatAgent) => {
     haptic.light();
     const conversationId = `agent_dm_${agent.id}`;

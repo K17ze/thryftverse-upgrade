@@ -152,7 +152,7 @@ export function InboxNotesTray({ onNotePress }: InboxNotesTrayProps) {
           <View style={styles.avatarWrap}>
             {userAvatar || currentUser?.avatar ? (
               <CachedImage
-                uri={userAvatar || currentUser?.avatar!}
+                uri={userAvatar ?? currentUser?.avatar ?? ''}
                 style={styles.avatar}
                 contentFit="cover"
               />
