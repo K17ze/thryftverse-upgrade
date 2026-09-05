@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
 import { View, StyleSheet, Pressable, Text, type TextStyle } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -8,6 +7,7 @@ import { Space, Typography, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useRenderTrace } from '../../performance/renderTrace';
 import { isLookVideo, isLookCarousel, isLookMultiLayer } from '../../utils/lookTemplates';
+import { CachedImage } from '../CachedImage';
 import { AppIcon } from '../common/AppIcon';
 import { IconSize } from '../../theme/iconTokens';
 import type { LookApiItem } from '../../services/looksApi';
@@ -56,13 +56,11 @@ function LookMasonryTileImpl({
         testID={testID}
       >
         <View style={[styles.imageWrap, { aspectRatio }]}>
-          <ExpoImage
-            source={{ uri: look.mediaUrl }}
+          <CachedImage
+            uri={look.mediaUrl}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            cachePolicy="disk"
-            recyclingKey={look.id}
-            transition={160}
+            priority="high"
           />
 
           {/* Media-type badge — bare glyph top-right with drop-shadow for
@@ -112,13 +110,11 @@ function LookMasonryTileImpl({
       testID={testID}
     >
       <View style={[styles.imageWrap, { aspectRatio }]}>
-        <ExpoImage
-          source={{ uri: look.mediaUrl }}
+        <CachedImage
+          uri={look.mediaUrl}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          cachePolicy="memory-disk"
-          recyclingKey={look.id}
-          transition={160}
+          priority="normal"
         />
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.5)']}

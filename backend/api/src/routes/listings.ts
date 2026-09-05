@@ -136,7 +136,8 @@ export const registerListingRoutes = ({
   fraudShadowService,
   ipReputationProvider,
 }: ListingRouteDependencies) => {
-app.get('/listings', async (request) => {
+app.get('/listings', async (request, reply) => {
+  try {
   const querySchema = z.object({
     q: z.string().trim().min(1).max(120).optional(),
     category: z.string().optional(),
@@ -382,6 +383,11 @@ app.get('/listings', async (request) => {
     }),
     nextCursor,
   };
+  } catch (err) {
+    request.log.error({ err }, 'GET /listings failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to load listings' };
+  }
 });
 
 app.get('/search/listings', async (request) => {
@@ -3626,6 +3632,7 @@ app.post('/listings/:listingId/report', async (request, reply) => {
 });
 
 app.get('/listings/:listingId/related', async (request, reply) => {
+  try {
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const { listingId } = paramsSchema.parse(request.params);
 
@@ -3720,6 +3727,11 @@ app.get('/listings/:listingId/related', async (request, reply) => {
         : null,
     })),
   };
+  } catch (err) {
+    request.log.error({ err }, 'GET /listings/:listingId/related failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to fetch related listings' };
+  }
 });
 
 // â”€â”€ Sectioned recommendations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -3741,6 +3753,7 @@ function getComplementaryCategories(category: string | null): string[] {
 }
 
 app.get('/listings/:listingId/recommendations', async (request, reply) => {
+  try {
   const paramsSchema = z.object({ listingId: z.string().min(2) });
   const querySchema = z.object({
     sections: z.string().optional(),
@@ -4218,6 +4231,11 @@ app.get('/listings/:listingId/recommendations', async (request, reply) => {
     },
     sections,
   };
+  } catch (err) {
+    request.log.error({ err }, 'GET /listings/:listingId/recommendations failed');
+    reply.code(500);
+    return { ok: false, error: 'Failed to fetch recommendations' };
+  }
 });
 
 app.patch('/listings/:listingId', async (request, reply) => {

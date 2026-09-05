@@ -5,7 +5,6 @@
 
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from './AnimatedPressable';
@@ -613,9 +612,6 @@ function ProductDiscoveryTileBase({
   // "Do not rely on cover blindly"). Converted to ExpoImage's
   // `contentPosition` format — the same mechanism CachedImage uses.
   const focalPoint = getCategoryFocalPoint(item.category);
-  const contentPosition = {
-    top: `${Math.round(focalPoint.y * 100)}%`,
-    left: `${Math.round(focalPoint.x * 100)}%` };
 
   // Condition badge — single state marker only (sold > condition). Sits over
   // the media on the semantic `overlay` scrim; "New with tags" uses the
@@ -654,15 +650,12 @@ function ProductDiscoveryTileBase({
     >
       <View style={[tileStyles.media, { aspectRatio: ratio, backgroundColor: colors.surfaceAlt }]}>
         {primaryImage ? (
-          <ExpoImage
-            source={{ uri: primaryImage }}
+          <CachedImage
+            uri={primaryImage}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            contentPosition={contentPosition}
-            recyclingKey={item.id}
-            placeholder={colors.surfaceAlt}
-            transition={200}
-            cachePolicy="memory-disk"
+            focalPoint={focalPoint}
+            priority="high"
           />
         ) : (
           <ImageEmptyGraphic icon="shirt-outline" style={StyleSheet.absoluteFill} />

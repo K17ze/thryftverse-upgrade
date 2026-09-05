@@ -119,7 +119,8 @@ const discoverQuerySchema = z.object({
  *   GET /feed/discover   — heterogeneous discovery feed with constrained composition (public)
  */
 export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): void => {
-  app.get('/feed/looks', async () => {
+  app.get('/feed/looks', async (request, reply) => {
+    try {
     const now = Date.now();
 
     const realLooksResult = await db.query<{
@@ -164,9 +165,15 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     return {
       items: realLooks.sort((a, b) => a.rank - b.rank),
     };
+    } catch (err) {
+      request.log.error({ err }, 'GET /feed/looks failed');
+      reply.code(500);
+      return { ok: false, error: 'Failed to fetch looks feed' };
+    }
   });
 
-  app.get('/feed/home', async (request) => {
+  app.get('/feed/home', async (request, reply) => {
+    try {
     const { limit, cursor } = homeQuerySchema.parse(request.query ?? {});
 
     const viewerUserId = request.authUser?.userId ?? null;
@@ -332,6 +339,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     }));
 
     return { items, nextCursor };
+    } catch (err) {
+      request.log.error({ err }, 'GET /feed/home failed');
+      reply.code(500);
+      return { ok: false, error: 'Failed to fetch home feed' };
+    }
   });
 
   // GET /feed/trending — trending listings based on engagement velocity.

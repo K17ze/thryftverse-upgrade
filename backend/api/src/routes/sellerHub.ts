@@ -829,6 +829,19 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
     let rejectedCount = 0;
     let conflictCount = 0;
 
+    // ── Batch ownership check ─────────────────────────────────────────
+    // Fetch all listing ownership in a single query instead of per-item
+    // round-trips. This reduces N+1 from 200 queries to 1.
+    const listingIds = items.map((i) => i.listingId);
+    const ownershipResult = await db.query<{ id: string; seller_id: string }>(
+      `SELECT id, seller_id FROM listings WHERE id = ANY($1)`,
+      [listingIds],
+    );
+    const ownershipMap = new Map<string, string>();
+    for (const row of ownershipResult.rows) {
+      ownershipMap.set(row.id, row.seller_id);
+    }
+
     // Execute each item independently through the canonical listing command
     // service. A failure on one item does NOT affect the others — this is
     // the core correctness fix. The canonical service handles the row lock,
@@ -839,11 +852,8 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       // a seller from mutating another seller's listing. The canonical
       // service is generic (no sellerId parameter), so we enforce the
       // authorization boundary here, prior to any mutation.
-      const ownerCheck = await db.query<{ seller_id: string }>(
-        `SELECT seller_id FROM listings WHERE id = $1 LIMIT 1`,
-        [item.listingId],
-      );
-      if (!ownerCheck.rows[0]) {
+      const ownerSellerId = ownershipMap.get(item.listingId);
+      if (!ownerSellerId) {
         results.push({
           listingId: item.listingId,
           state: 'rejected',
@@ -860,7 +870,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         );
         continue;
       }
-      if (ownerCheck.rows[0].seller_id !== sellerId) {
+      if (ownerSellerId !== sellerId) {
         results.push({
           listingId: item.listingId,
           state: 'rejected',

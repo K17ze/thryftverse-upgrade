@@ -122,6 +122,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
       // Marketplace / product surfaces (root stack — cross-tab)
       ItemDetail: 'product/:itemId',
       Checkout: 'checkout/:itemId',
+      Browse: 'browse/:categoryId',
 
       // Discovery (root stack — cross-tab)
       UnifiedDiscovery: 'search',
