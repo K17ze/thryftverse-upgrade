@@ -844,7 +844,7 @@ export default function BrowseScreen() {
                 styles.filterPillText,
                 browseFilters.sustainableOnly && styles.filterPillTextActive,
               ]}
-            >
+             maxFontSizeMultiplier={2}>
               Sustainable
             </Text>
           </AnimatedPressable>
@@ -864,7 +864,7 @@ export default function BrowseScreen() {
                 color={isCurrentSaved ? colors.brand : colors.textSecondary}
                 aria-hidden={true}
               />
-              <Text style={[styles.filterPillText, isCurrentSaved && styles.saveSearchTextActive]}>
+              <Text style={[styles.filterPillText, isCurrentSaved && styles.saveSearchTextActive]} maxFontSizeMultiplier={2}>
                 {isCurrentSaved ? 'Saved' : 'Save search'}
               </Text>
             </AnimatedPressable>
@@ -908,7 +908,7 @@ export default function BrowseScreen() {
                     styles.signalSubText,
                     isSelected && styles.signalSubTextActive,
                   ]}
-                >
+                 maxFontSizeMultiplier={2}>
                   {signal.label}
                 </Text>
               </AnimatedPressable>
@@ -931,7 +931,7 @@ export default function BrowseScreen() {
                 accessibilityLabel={`Sort by ${opt.label}`}
                 accessibilityState={{ selected: isActive }}
               >
-                <Text style={[styles.sortMenuItemText, isActive && styles.sortMenuItemTextActive]}>
+                <Text style={[styles.sortMenuItemText, isActive && styles.sortMenuItemTextActive]} maxFontSizeMultiplier={2}>
                   {opt.label}
                 </Text>
                 {isActive ? <Ionicons name="checkmark" size={16} color={colors.brand} aria-hidden={true} /> : null}

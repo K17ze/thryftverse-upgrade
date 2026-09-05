@@ -207,7 +207,13 @@ export default function SellerHubScreen() {
       <FlagshipScreen
         header={<FlagshipHeader title="Seller Hub" onBack={() => navigation.goBack()} />}
       >
-        <FlagshipState variant="error" />
+        <FlagshipState
+          variant="empty"
+          title="No shop data yet"
+          subtitle="List your first item to start selling."
+          actionLabel="List an item"
+          onAction={() => navigation.navigate('Sell')}
+        />
       </FlagshipScreen>
     );
   }
@@ -247,7 +253,7 @@ export default function SellerHubScreen() {
                 <CachedImage uri={currentUser.avatar} style={styles.shopAvatar} contentFit="cover" />
               ) : (
                 <View style={[styles.shopAvatar, { backgroundColor: colors.surfaceAlt }]}>
-                  <Text style={styles.shopAvatarInitials}>
+                  <Text style={styles.shopAvatarInitials} maxFontSizeMultiplier={2}>
                     {(currentUser?.displayName || currentUser?.username || 'S').slice(0, 2).toUpperCase()}
                   </Text>
                 </View>
@@ -255,7 +261,7 @@ export default function SellerHubScreen() {
             </View>
             <View style={styles.shopInfo}>
               <View style={styles.shopTitleRow}>
-                <Text style={styles.shopTitle} numberOfLines={1}>
+                <Text style={styles.shopTitle} numberOfLines={1} maxFontSizeMultiplier={2}>
                   {currentUser?.displayName || currentUser?.username || 'My Shop'}
                 </Text>
                 {isVerified && (
@@ -265,7 +271,7 @@ export default function SellerHubScreen() {
                   </View>
                 )}
               </View>
-              <Text style={styles.shopSub}>
+              <Text style={styles.shopSub} maxFontSizeMultiplier={2}>
                 {sellerTrust?.rating ? `${sellerTrust.rating.toFixed(1)} ★ rating` : 'Active Seller'}
                 {sellerTrust?.completedSales ? ` · ${sellerTrust.completedSales} sales` : ''}
               </Text>
@@ -294,7 +300,7 @@ export default function SellerHubScreen() {
               <View style={styles.financialHeroTop}>
                 <View style={styles.financialHeroNetCol}>
                   <Text style={styles.financialHeroNetLabel}>30-Day Net Sales</Text>
-                  <Text style={styles.financialHeroNetValue}>
+                  <Text style={styles.financialHeroNetValue} maxFontSizeMultiplier={2}>
                     {formatMoney(businessPulse?.netSalesGbp ?? 0)}
                   </Text>
                 </View>
@@ -364,7 +370,7 @@ export default function SellerHubScreen() {
               {money.nextPayoutAt && (
                 <View style={styles.nextPayoutScheduleRow}>
                   <Ionicons name="calendar-outline" size={13} color={colors.brand} />
-                  <Text style={styles.nextPayoutScheduleText}>
+                  <Text style={styles.nextPayoutScheduleText} maxFontSizeMultiplier={2}>
                     Next automated transfer: {new Date(money.nextPayoutAt).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
                   </Text>
                 </View>
@@ -389,10 +395,10 @@ export default function SellerHubScreen() {
             >
               <AppIcon name="verified" size={IconSize.sm} color="warning" opticalCenter accessible={false} />
               <View style={styles.verificationBannerText}>
-                <Text style={[styles.verificationBannerTitle, { color: colors.textPrimary }]}>
+                <Text style={[styles.verificationBannerTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
                   Unlock Verified Seller Status
                 </Text>
-                <Text style={[styles.verificationBannerSub, { color: colors.textSecondary }]}>
+                <Text style={[styles.verificationBannerSub, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
                   Build instant buyer trust and unlock instant payouts
                 </Text>
               </View>
@@ -422,7 +428,7 @@ export default function SellerHubScreen() {
                 />
               </View>
               <View style={styles.topTaskContent}>
-                <Text style={[styles.topTaskTitle, { color: colors.textPrimary }]} numberOfLines={2}>
+                <Text style={[styles.topTaskTitle, { color: colors.textPrimary }]} numberOfLines={2} maxFontSizeMultiplier={2}>
                   {topTask.count > 1 ? `${topTask.count} ${topTask.actionLabel.toLowerCase()}` : topTask.actionLabel}
                 </Text>
                 {(() => {
@@ -435,14 +441,14 @@ export default function SellerHubScreen() {
                           { color: dueLabel === 'Overdue' ? colors.danger : colors.textMuted },
                         ]}
                         numberOfLines={1}
-                      >
+                       maxFontSizeMultiplier={2}>
                         {dueLabel}
                       </Text>
                     );
                   }
                   if (topTask.consequence?.kind === 'money' && topTask.consequence.amountGbp) {
                     return (
-                      <Text style={[styles.topTaskDue, { color: colors.textMuted }]} numberOfLines={1}>
+                      <Text style={[styles.topTaskDue, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={2}>
                         {formatMoney(topTask.consequence.amountGbp)} at stake
                       </Text>
                     );
@@ -458,7 +464,7 @@ export default function SellerHubScreen() {
           {tasks.length === 0 && allTaskSourcesFresh && (
             <View style={styles.allCaughtUp}>
               <AppIcon name="checkmark-circle" focused size={IconSize.md} color="success" opticalCenter accessible={false} />
-              <Text style={[styles.allCaughtUpText, { color: colors.textMuted }]}>
+              <Text style={[styles.allCaughtUpText, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
                 All fulfillment and buyer inquiries are up to date
               </Text>
             </View>
@@ -467,7 +473,7 @@ export default function SellerHubScreen() {
           {tasks.length === 0 && !allTaskSourcesFresh && (
             <View style={styles.partialNotice}>
               <AppIcon name="offline" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-              <Text style={[styles.partialNoticeText, { color: colors.textMuted }]}>
+              <Text style={[styles.partialNoticeText, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
                 Some data sources are currently synchronising. Pull to refresh.
               </Text>
             </View>
@@ -559,7 +565,7 @@ export default function SellerHubScreen() {
             hapticFeedback="light"
           >
             <View style={styles.pipelineCardHeader}>
-              <Text style={[styles.pipelineCardCount, pendingOrdersCount > 0 && styles.pipelineCardCountActive]}>
+              <Text style={[styles.pipelineCardCount, pendingOrdersCount > 0 && styles.pipelineCardCountActive]} maxFontSizeMultiplier={2}>
                 {pendingOrdersCount}
               </Text>
               {pendingOrdersCount > 0 && (
@@ -578,7 +584,7 @@ export default function SellerHubScreen() {
             scaleValue={0.96}
             hapticFeedback="light"
           >
-            <Text style={styles.pipelineCardCount}>
+            <Text style={styles.pipelineCardCount} maxFontSizeMultiplier={2}>
               {businessPulse?.orders ?? 0}
             </Text>
             <Text style={styles.pipelineCardLabel}>Orders (30d)</Text>
@@ -616,7 +622,7 @@ export default function SellerHubScreen() {
             <Ionicons name="sparkles" size={15} color={colors.brand} />
             <Text style={styles.healthInsightTitle}>Storefront Optimization</Text>
           </View>
-          <Text style={styles.healthInsightCopy}>
+          <Text style={styles.healthInsightCopy} maxFontSizeMultiplier={2}>
             {inventory.drafts > 0
               ? `You have ${inventory.drafts} draft${inventory.drafts === 1 ? '' : 's'} waiting. Finish pricing and publish to receive offers.`
               : 'Benchmark your asking prices with real sold comparables to accelerate seller velocity.'}
@@ -650,7 +656,7 @@ export default function SellerHubScreen() {
 
         <View style={styles.scorecardGrid}>
           <View style={[styles.scorecardItem, styles.scorecardItemFirst]}>
-            <Text style={styles.scorecardValue}>
+            <Text style={styles.scorecardValue} maxFontSizeMultiplier={2}>
               {sellerTrust?.dispatchTimeLabel ?? '—'}
             </Text>
             <Text style={styles.scorecardLabel}>Dispatch Speed</Text>
@@ -658,7 +664,7 @@ export default function SellerHubScreen() {
           </View>
 
           <View style={styles.scorecardItem}>
-            <Text style={styles.scorecardValue}>
+            <Text style={styles.scorecardValue} maxFontSizeMultiplier={2}>
               {sellerTrust?.responseTimeLabel ?? '—'}
             </Text>
             <Text style={styles.scorecardLabel}>Inquiry Reply</Text>
@@ -666,7 +672,7 @@ export default function SellerHubScreen() {
           </View>
 
           <View style={styles.scorecardItem}>
-            <Text style={styles.scorecardValue}>
+            <Text style={styles.scorecardValue} maxFontSizeMultiplier={2}>
               {sellerTrust?.rating ? `${sellerTrust.rating.toFixed(1)} ★` : '—'}
             </Text>
             <Text style={styles.scorecardLabel}>Buyer Feedback</Text>
@@ -737,7 +743,7 @@ export default function SellerHubScreen() {
             separated
           />
           {businessPulse.completeness === 'partial' && (
-            <Text style={[styles.partialLabel, { color: colors.textMuted }]}>
+            <Text style={[styles.partialLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
               Fee and refund data may be incomplete
             </Text>
           )}
@@ -813,25 +819,25 @@ export default function SellerHubScreen() {
         <View style={styles.newSellerCard}>
           <View style={styles.newSellerHeader}>
             <AppIcon name="storefront-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
-            <Text style={[styles.newSellerTitle, { color: colors.textPrimary }]}>
+            <Text style={[styles.newSellerTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
               New seller playbook
             </Text>
           </View>
           <View style={styles.newSellerTipRow}>
             <AppIcon name="camera" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-            <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
+            <Text style={[styles.newSellerTip, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
               High-resolution, well-lit photos help buyers assess items and make offers with confidence.
             </Text>
           </View>
           <View style={styles.newSellerTipRow}>
             <AppIcon name="cash-outline" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-            <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
+            <Text style={[styles.newSellerTip, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
               Check sold market comparables before pricing your items.
             </Text>
           </View>
           <View style={styles.newSellerTipRow}>
             <AppIcon name="chat" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-            <Text style={[styles.newSellerTip, { color: colors.textSecondary }]}>
+            <Text style={[styles.newSellerTip, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
               Responding to buyer offers within 1 hour significantly increases conversion.
             </Text>
           </View>

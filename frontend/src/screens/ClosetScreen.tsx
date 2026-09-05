@@ -696,7 +696,7 @@ export default function ClosetScreen() {
                   accessibilityState={{ selected: isActive }}
                   accessibilityLabel={`${tabLabel.toLowerCase()} tab, ${tabCounts[tab]} items`}
                 >
-                  <Text style={[styles.tabLabel, t.tabLabel, isActive && styles.tabLabelActive, isActive && t.tabLabelActive]}>
+                  <Text style={[styles.tabLabel, t.tabLabel, isActive && styles.tabLabelActive, isActive && t.tabLabelActive]} maxFontSizeMultiplier={2}>
                     {tabLabel}
                   </Text>
                   {isActive && <View style={[styles.tabIndicator, t.tabIndicator]} />}
@@ -822,7 +822,7 @@ export default function ClosetScreen() {
               accessibilityLabel={`Filter price drops: ${priceDropCount} items on sale`}
             >
               <Ionicons name="cash-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
-              <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]}>
+              <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]} maxFontSizeMultiplier={2}>
                 Price drops ({priceDropCount})
               </Text>
             </AnimatedPressable>
@@ -855,7 +855,7 @@ export default function ClosetScreen() {
             {closetStats.totalSavings > 0 ? (
               <View style={[styles.savingsRow, t.savingsRow]}>
                 <Ionicons name="trending-down" size={12} color={colors.success} />
-                <Text style={[styles.savingsText, t.savingsText]}>
+                <Text style={[styles.savingsText, t.savingsText]} maxFontSizeMultiplier={2}>
                   {formatFromFiat(closetStats.totalSavings, 'GBP')} in price drops tracked
                 </Text>
               </View>

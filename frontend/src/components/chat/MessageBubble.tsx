@@ -529,7 +529,7 @@ function MessageBubbleBase({
         ) : null}
 
         {reactions && reactions.length > 0 ? (
-          <Pressable onPress={onReactionPress} style={[styles.reactions, isMe && styles.reactionsRight]} accessibilityRole="button" accessibilityLabel="Reactions">
+          <Pressable onPress={onReactionPress} style={[styles.reactions, isMe && styles.reactionsRight]} accessibilityRole="button" accessibilityLabel="Reactions" hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}>
             {reactions.slice(0, 3).map((r, i) => (
               <Reanimated.View key={i} entering={reactionEntering} style={[styles.reactionChip, r.reactedByMe && styles.reactionChipActive]}>
                 <Text style={styles.reactionEmoji}>{r.emoji}</Text>

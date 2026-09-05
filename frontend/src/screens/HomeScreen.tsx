@@ -202,7 +202,7 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
   const backgroundColor = firstFrame?.backgroundColor ?? colors.surfaceAlt;
   return (
     <View style={[styles.posterTextArtwork, { backgroundColor }]}>
-      <Text style={styles.posterTextArtworkCopy} numberOfLines={5}>
+      <Text style={styles.posterTextArtworkCopy} numberOfLines={5} maxFontSizeMultiplier={2}>
         {firstFrame?.caption || 'Poster'}
       </Text>
     </View>
@@ -919,7 +919,7 @@ export default function HomeScreen() {
                     />
                     {look.taggedCount && look.taggedCount > 0 ? (
                       <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: colors.overlay, borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: Space.xxs }}>
-                        <Text style={{ color: colors.scrimTextPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily }}>
+                        <Text style={{ color: colors.scrimTextPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily }} maxFontSizeMultiplier={2}>
                           {look.taggedCount} items
                         </Text>
                       </View>
@@ -1155,7 +1155,7 @@ export default function HomeScreen() {
                     {signal.isPersonalized && signal.kind !== 'all' ? (
                       <View style={[styles.signalDot, active && styles.signalDotActive]} />
                     ) : null}
-                    <Text style={[styles.signalChipText, active && styles.signalChipTextActive]}>
+                    <Text style={[styles.signalChipText, active && styles.signalChipTextActive]} maxFontSizeMultiplier={2}>
                       {signal.label}
                     </Text>
                   </AnimatedPressable>
@@ -1170,10 +1170,10 @@ export default function HomeScreen() {
                 generic product grid. */}
             {newHomeFeedEnabled ? (
               <View style={styles.editorialHeader}>
-                <Text style={styles.editorialEyebrow} numberOfLines={1}>
+                <Text style={styles.editorialEyebrow} numberOfLines={1} maxFontSizeMultiplier={2}>
                   Fresh today
                 </Text>
-                <Text style={styles.editorialTitle} numberOfLines={1}>
+                <Text style={styles.editorialTitle} numberOfLines={1} maxFontSizeMultiplier={2}>
                   New listings from sellers you follow
                 </Text>
               </View>
@@ -1209,7 +1209,33 @@ export default function HomeScreen() {
             {showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading ? (
               renderExploreLoadingState()
             ) : feedGridData.length === 0 ? (
-              feedMode === 'following' ? (
+              isOffline ? (
+                <View style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon="cloud-offline-outline"
+                    title="You are offline"
+                    subtitle="Connect to the internet to load listings."
+                    ctaLabel="Retry"
+                    onCtaPress={() => void handleRefresh()}
+                    secondaryCtaLabel="Browse cached"
+                    onSecondaryCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                  />
+                </View>
+              ) : feedMode === 'following' && followingFeed.error ? (
+                <View style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon="cloud-offline-outline"
+                    title="Couldn't load your Following feed"
+                    subtitle={followingFeed.error ?? 'Pull to refresh or browse all listings.'}
+                    ctaLabel="Retry"
+                    onCtaPress={() => void followingFeed.refresh()}
+                    secondaryCtaLabel="Browse all"
+                    onSecondaryCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                  />
+                </View>
+              ) : feedMode === 'following' ? (
                 <View style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"

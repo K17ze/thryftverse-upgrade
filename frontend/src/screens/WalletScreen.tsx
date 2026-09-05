@@ -436,14 +436,14 @@ export default function WalletScreen({ navigation }: Props) {
               style={[styles.balanceMasked, { color: colors.textMuted }]}
               accessibilityLabel={t('commerce.wallet.balanceHidden')}
               accessibilityHint={t('commerce.wallet.a11y.activateEyeToReveal')}
-            >
+             maxFontSizeMultiplier={2}>
               ••••••
             </Text>
           ) : (
             <Text
               style={[styles.balanceValue, { color: colors.textPrimary }]}
               accessibilityLabel={`${formatBalance(balance.available)} 1ZE`}
-            >
+             maxFontSizeMultiplier={2}>
               {formatBalance(balance.available)}
               <Text style={[styles.balanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
             </Text>
@@ -451,7 +451,7 @@ export default function WalletScreen({ navigation }: Props) {
           {usdLabel && !balanceHidden && (
             <View style={styles.localFiatRow}>
               <Ionicons name="cash-outline" size={IconGrammar.badge} color={colors.textMuted} />
-              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${usdLabel} USD at par`}>
+              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${usdLabel} USD at par`} maxFontSizeMultiplier={2}>
                 {usdLabel}
                 <Text style={styles.localFiatSuffix}> USD · at par</Text>
               </Text>
@@ -569,7 +569,7 @@ export default function WalletScreen({ navigation }: Props) {
               <Ionicons name="arrow-down-circle-outline" size={IconGrammar.metadata} color={colors.textMuted} />
               <Text style={[styles.withdrawableLabel, { color: colors.textMuted }]}>{t('commerce.wallet.withdrawable')}</Text>
             </View>
-            <Text style={[styles.withdrawableValue, { color: colors.textSecondary }]}>
+            <Text style={[styles.withdrawableValue, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
               {formatBalance(withdrawable)}
               <Text style={[styles.subBalanceUnit, { color: colors.textMuted }]}> 1ZE</Text>
             </Text>
@@ -596,7 +596,7 @@ export default function WalletScreen({ navigation }: Props) {
         <View style={styles.disclosureSection}>
           <View style={styles.infoHeader}>
             <Ionicons name="checkmark-circle-outline" size={IconGrammar.metadata} color={colors.brand} />
-            <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>
+            <Text style={[styles.infoTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
               {balance.safeguarded
                 ? balance.safeguardingPartner
                   ? t('commerce.wallet.safeguardedAt', { partner: balance.safeguardingPartner })
@@ -604,7 +604,7 @@ export default function WalletScreen({ navigation }: Props) {
                 : t('commerce.wallet.safeguardingPending')}
             </Text>
           </View>
-          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+          <Text style={[styles.infoBody, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
             {balance.safeguarded
               ? t('commerce.wallet.safeguardedBody', { currency: currencyCode })
               : t('commerce.wallet.safeguardingPendingBody', { currency: currencyCode })}
@@ -639,7 +639,7 @@ export default function WalletScreen({ navigation }: Props) {
 
           <View style={[styles.infoDivider, { borderColor: colors.border }]} />
 
-          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+          <Text style={[styles.infoBody, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
             {t('commerce.wallet.1zeDisclosure')}
           </Text>
         </View>
@@ -683,12 +683,12 @@ function SubBalanceRow({
       <Text
         style={[styles.subBalanceLabel, { color: emphasize ? colors.textSecondary : colors.textMuted }]}
         numberOfLines={1}
-      >
+       maxFontSizeMultiplier={2}>
         {label}
       </Text>
       <Text
         style={[styles.subBalanceValue, { color: emphasize ? colors.textPrimary : colors.textSecondary }]}
-      >
+       maxFontSizeMultiplier={2}>
         {formatBalance(value)}
         <Text style={[styles.subBalanceUnit, { color: colors.textMuted }]}> 1ZE</Text>
       </Text>

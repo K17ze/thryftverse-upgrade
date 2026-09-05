@@ -1062,23 +1062,23 @@ export function LookCommentsSheet({
             <Text style={styles.menuTitle} numberOfLines={1}>
               {menuComment?.author.username ?? 'Comment'}
             </Text>
-            <Pressable style={styles.menuItem} onPress={handleMenuReply} accessibilityRole="button">
+            <Pressable style={styles.menuItem} onPress={handleMenuReply} accessibilityRole="button" accessibilityLabel="Reply to comment" accessibilityHint="Opens reply composer">
               <Ionicons name="arrow-undo" size={20} color={colors.textPrimary} />
               <Text style={styles.menuItemText}>Reply</Text>
             </Pressable>
             {!!menuComment?.body && (
-              <Pressable style={styles.menuItem} onPress={handleMenuCopy} accessibilityRole="button">
+              <Pressable style={styles.menuItem} onPress={handleMenuCopy} accessibilityRole="button" accessibilityLabel="Copy comment text" accessibilityHint="Copies text to clipboard">
                 <Ionicons name="copy-outline" size={20} color={colors.textPrimary} />
                 <Text style={styles.menuItemText}>Copy text</Text>
               </Pressable>
             )}
             {menuComment && currentUserId === menuComment.authorId && isAuthenticated && (
-              <Pressable style={styles.menuItem} onPress={handleMenuDelete} accessibilityRole="button">
+              <Pressable style={styles.menuItem} onPress={handleMenuDelete} accessibilityRole="button" accessibilityLabel="Delete comment" accessibilityHint="Removes this comment permanently">
                 <Ionicons name="trash-outline" size={20} color={colors.danger} />
                 <Text style={[styles.menuItemText, { color: colors.danger }]}>Delete comment</Text>
               </Pressable>
             )}
-            <Pressable style={styles.menuCancel} onPress={closeMenu} accessibilityRole="button">
+            <Pressable style={styles.menuCancel} onPress={closeMenu} accessibilityRole="button" accessibilityLabel="Cancel" accessibilityHint="Closes the menu">
               <Text style={styles.menuCancelText}>Cancel</Text>
             </Pressable>
           </View>

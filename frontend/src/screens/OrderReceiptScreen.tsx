@@ -26,6 +26,7 @@ import { normaliseOrderStatus, humaniseStatus, isTerminalStatus } from '../compo
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { haptics } from '../utils/haptics';
 import { t } from '../i18n';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 
 type OrderReceiptRoute = RouteProp<{ OrderReceipt: { orderId: string } }, 'OrderReceipt'>;
@@ -49,6 +50,7 @@ export default function OrderReceiptScreen() {
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const { colors, isDark } = useAppTheme();
+  const { isOffline } = useConnectivity();
 
   // Theme-aware color overrides for the static styles.
   const themed = React.useMemo(() => ({
@@ -181,7 +183,7 @@ export default function OrderReceiptScreen() {
     );
   }
 
-  if (loadError || !order) {
+  if (loadError) {
     return (
       <View style={[styles.container, themed.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
@@ -191,11 +193,30 @@ export default function OrderReceiptScreen() {
           style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
         />
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
-          <Text style={[styles.errorTitle, themed.errorTitle]}>Receipt could not be loaded</Text>
+          <Ionicons name={isOffline ? 'cloud-offline-outline' : 'alert-circle-outline'} size={36} color={colors.textMuted} />
+          <Text style={[styles.errorTitle, themed.errorTitle]} maxFontSizeMultiplier={2}>{isOffline ? 'You are offline' : 'Receipt could not be loaded'}</Text>
+          {!isOffline && <Text style={[themed.pendingText, { color: colors.textMuted, marginTop: 4 }]} maxFontSizeMultiplier={2}>Check your connection and try again.</Text>}
           <Pressable style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && styles.retryBtnPressed]} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
-            <Text style={[styles.retryBtnText, themed.retryBtnText]}>Retry</Text>
+            <Text style={[styles.retryBtnText, themed.retryBtnText]} maxFontSizeMultiplier={2}>Retry</Text>
           </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  if (!order) {
+    return (
+      <View style={[styles.container, themed.container]}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <ScreenHeader
+          title="Receipt"
+          onBack={() => navigation.goBack()}
+          style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+        />
+        <View style={styles.errorContainer}>
+          <Ionicons name="document-text-outline" size={36} color={colors.textMuted} />
+          <Text style={[styles.errorTitle, themed.errorTitle]} maxFontSizeMultiplier={2}>Order not found</Text>
+          <Text style={[themed.pendingText, { color: colors.textMuted, marginTop: 4 }]} maxFontSizeMultiplier={2}>This order may have been removed or is no longer available.</Text>
         </View>
       </View>
     );

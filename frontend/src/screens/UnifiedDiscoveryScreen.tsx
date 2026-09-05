@@ -556,7 +556,7 @@ function DiscoveryFeedView({
 
       {/* Personalised greeting — one line, no decorative subtitle */}
       <View style={styles.greetingWrap}>
-        <Text style={styles.greetingText}>
+        <Text style={styles.greetingText} maxFontSizeMultiplier={2}>
           {greeting}{firstName ? `, ${firstName}` : ''}
         </Text>
       </View>
@@ -593,7 +593,7 @@ function DiscoveryFeedView({
                     styles.categoryPillText,
                     isSelected && styles.categoryPillTextActive,
                   ]}
-                >
+                 maxFontSizeMultiplier={2}>
                   {chip.label}
                 </Text>
               </Pressable>
@@ -617,10 +617,10 @@ function DiscoveryFeedView({
           />
           <View style={styles.heroOverlay} pointerEvents="none">
             <Text style={styles.heroEyebrow}>EDITORIAL</Text>
-            <Text style={styles.heroTitle} numberOfLines={3}>
+            <Text style={styles.heroTitle} numberOfLines={3} maxFontSizeMultiplier={2}>
               {heroEditorial.title}
             </Text>
-            <Text style={styles.heroMeta} numberOfLines={1}>
+            <Text style={styles.heroMeta} numberOfLines={1} maxFontSizeMultiplier={2}>
               {heroEditorial.author} · {heroEditorial.readTime}
             </Text>
           </View>
@@ -724,7 +724,7 @@ function SearchResultsView({
           accessibilityRole="button"
           accessibilityState={{ selected: searchScope === 'items' }}
         >
-          <Text style={[styles.scopeTabText, searchScope === 'items' && styles.scopeTabTextActive]}>
+          <Text style={[styles.scopeTabText, searchScope === 'items' && styles.scopeTabTextActive]} maxFontSizeMultiplier={2}>
             Items
           </Text>
           {searchScope === 'items' && <View style={styles.scopeIndicator} />}
@@ -735,7 +735,7 @@ function SearchResultsView({
           accessibilityRole="button"
           accessibilityState={{ selected: searchScope === 'people' }}
         >
-          <Text style={[styles.scopeTabText, searchScope === 'people' && styles.scopeTabTextActive]}>
+          <Text style={[styles.scopeTabText, searchScope === 'people' && styles.scopeTabTextActive]} maxFontSizeMultiplier={2}>
             People
           </Text>
           {searchScope === 'people' && <View style={styles.scopeIndicator} />}
@@ -831,13 +831,13 @@ function CollectionRailCard({
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.sm, right: Space.sm, bottom: Space.sm }} pointerEvents="none">
-          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.semibold, fontSize: TypographyV2.meta.size, letterSpacing: 0.5 }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.semibold, fontSize: TypographyV2.meta.size, letterSpacing: 0.5 }} numberOfLines={1} maxFontSizeMultiplier={2}>
             {collection.theme.toUpperCase()}
           </Text>
-          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.bold, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight }} numberOfLines={2}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.bold, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight }} numberOfLines={2} maxFontSizeMultiplier={2}>
             {collection.title}
           </Text>
-          <Text style={{ color: colors.scrimTextSecondary, fontFamily: FontFamily.regular, fontSize: TypographyV2.meta.size }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextSecondary, fontFamily: FontFamily.regular, fontSize: TypographyV2.meta.size }} numberOfLines={1} maxFontSizeMultiplier={2}>
             {collection.curator}
           </Text>
         </View>
@@ -881,11 +881,11 @@ function PeopleResultRow({
         </View>
       )}
       <View style={styles.peopleInfo}>
-        <Text style={styles.peopleName} numberOfLines={1}>
+        <Text style={styles.peopleName} numberOfLines={1} maxFontSizeMultiplier={2}>
           {user.displayName || `@${user.username}`}
         </Text>
         {user.displayName && (
-          <Text style={styles.peopleUsername} numberOfLines={1}>
+          <Text style={styles.peopleUsername} numberOfLines={1} maxFontSizeMultiplier={2}>
             @{user.username}
           </Text>
         )}

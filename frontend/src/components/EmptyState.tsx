@@ -82,7 +82,7 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
 
       {ctaLabel && onCtaPress && (
         <Reanimated.View entering={enter}>
-          <AnimatedPressable style={[styles.cta, compact && styles.ctaCompact]} onPress={onCtaPress} hapticFeedback="selection">
+          <AnimatedPressable style={[styles.cta, compact && styles.ctaCompact]} onPress={onCtaPress} hapticFeedback="selection" accessibilityRole="button" accessibilityLabel={ctaLabel} accessibilityHint={`Activates ${ctaLabel}`}>
             <Text style={styles.ctaText}>{ctaLabel}</Text>
           </AnimatedPressable>
         </Reanimated.View>
@@ -90,7 +90,7 @@ export function EmptyState({ icon, title, subtitle, hint, ctaLabel, onCtaPress, 
 
       {secondaryCtaLabel && onSecondaryCtaPress && (
         <Reanimated.View entering={enter}>
-          <AnimatedPressable style={styles.ctaSecondary} onPress={onSecondaryCtaPress} hapticFeedback="light">
+          <AnimatedPressable style={styles.ctaSecondary} onPress={onSecondaryCtaPress} hapticFeedback="light" accessibilityRole="button" accessibilityLabel={secondaryCtaLabel} accessibilityHint={`Activates ${secondaryCtaLabel}`}>
             <Text style={styles.ctaSecondaryText}>{secondaryCtaLabel}</Text>
           </AnimatedPressable>
         </Reanimated.View>

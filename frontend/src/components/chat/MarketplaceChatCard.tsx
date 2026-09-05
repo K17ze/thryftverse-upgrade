@@ -295,6 +295,9 @@ export function MarketplaceChatCard({
                 activeOpacity={0.8}
                 scaleValue={0.96}
                 hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="View order"
+                accessibilityHint="Opens the order details"
               >
                 <Text style={styles.offerStatusActionText}>View Order</Text>
               </AnimatedPressable>
@@ -320,6 +323,9 @@ export function MarketplaceChatCard({
                 activeOpacity={0.8}
                 scaleValue={0.96}
                 hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Make new offer"
+                accessibilityHint="Opens the offer composer"
               >
                 <Text style={styles.offerStatusActionText}>New Offer</Text>
               </AnimatedPressable>
@@ -345,6 +351,9 @@ export function MarketplaceChatCard({
                 activeOpacity={0.8}
                 scaleValue={0.96}
                 hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Retry offer"
+                accessibilityHint="Opens the offer composer"
               >
                 <Text style={styles.offerStatusActionText}>Retry</Text>
               </AnimatedPressable>
@@ -514,6 +523,9 @@ export function MarketplaceChatCard({
             activeOpacity={0.8}
             scaleValue={0.98}
             hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="View order receipt"
+            accessibilityHint="Opens the order receipt"
           >
             <Text style={styles.receiptActionText}>View order receipt</Text>
             <Ionicons name="chevron-forward" size={13} color={colors.brand} />

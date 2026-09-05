@@ -808,7 +808,7 @@ export default function MyProfileScreen() {
                 </View>
               ) : null}
             </SharedTransitionView>
-            <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
+            <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1} maxFontSizeMultiplier={2}>
               {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
             </Text>
             {item.brand ? (
@@ -897,7 +897,7 @@ export default function MyProfileScreen() {
           <View style={[styles.coverFailure, t.coverFailure]}>
             <View style={styles.coverFailureCopy}>
               <Ionicons name="alert-circle-outline" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
-              <Text style={[styles.coverFailureText, t.coverFailureText]} numberOfLines={1}>
+              <Text style={[styles.coverFailureText, t.coverFailureText]} numberOfLines={1} maxFontSizeMultiplier={2}>
                 {coverState.error || tt('cover.uploadFailed')}
               </Text>
             </View>
@@ -995,7 +995,7 @@ export default function MyProfileScreen() {
               <Ionicons name="pause-circle" size={18} color={colors.textMuted} aria-hidden={true} />
               <View style={myProfileStyles.awayBannerTextWrap}>
                 <Text style={[myProfileStyles.awayBannerTitle, tMyProfile.awayBannerTitle]}>{tt('holiday.title')}</Text>
-                <Text style={[myProfileStyles.awayBannerSub, tMyProfile.awayBannerSub]}>
+                <Text style={[myProfileStyles.awayBannerSub, tMyProfile.awayBannerSub]} maxFontSizeMultiplier={2}>
                   {tt('holiday.subtitle')}
                 </Text>
               </View>
@@ -1063,7 +1063,7 @@ export default function MyProfileScreen() {
               <View style={styles.listingsEmpty}>
                 <Ionicons name="bag-add-outline" size={28} color={colors.textSecondary} aria-hidden={true} />
                 <Text style={[styles.listingsEmptyTitle, t.listingsEmptyTitle]}>{tt('listings.emptyTitle')}</Text>
-                <Text style={[styles.listingsEmptyBody, t.listingsEmptyBody]}>
+                <Text style={[styles.listingsEmptyBody, t.listingsEmptyBody]} maxFontSizeMultiplier={2}>
                   {tt('listings.emptyBody')}
                 </Text>
                 <AnimatedPressable
@@ -1083,7 +1083,7 @@ export default function MyProfileScreen() {
                   accessibilityHint={tt('accessibility.importListingsHint')}
                   hitSlop={8}
                 >
-                  <Text style={[styles.listingsEmptyImportText, { color: colors.brand }]}>
+                  <Text style={[styles.listingsEmptyImportText, { color: colors.brand }]} maxFontSizeMultiplier={2}>
                     {tt('listings.bringOverListings')}
                   </Text>
                 </AnimatedPressable>
@@ -1110,7 +1110,7 @@ export default function MyProfileScreen() {
                       {isSavingReorder ? (
                         <ActivityIndicator size="small" color={colors.brand} />
                       ) : (
-                        <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>
+                        <Text style={[styles.gridHeaderAction, t.gridHeaderAction]} maxFontSizeMultiplier={2}>
                           {isReorderMode ? tt('listings.done') : tt('listings.editOrder')}
                         </Text>
                       )}
@@ -1222,10 +1222,10 @@ export default function MyProfileScreen() {
                         <View style={[styles.portfolioHoldingImage, { backgroundColor: colors.surfaceAlt }]} />
                       )}
                       <View style={styles.portfolioHoldingInfo}>
-                        <Text style={[styles.portfolioHoldingTitle, t.portfolioHoldingTitle]} numberOfLines={1}>
+                        <Text style={[styles.portfolioHoldingTitle, t.portfolioHoldingTitle]} numberOfLines={1} maxFontSizeMultiplier={2}>
                           {h.title}
                         </Text>
-                        <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>
+                        <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]} maxFontSizeMultiplier={2}>
                           {h.yourUnits} {h.yourUnits === 1 ? tt('about.unit') : tt('about.units')}
                         </Text>
                       </View>
@@ -1258,7 +1258,7 @@ export default function MyProfileScreen() {
               </View>
               <View style={[styles.aboutRow, t.aboutRow]}>
                 <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.shipping')}</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]}>
+                <Text style={[styles.aboutValue, t.aboutValue]} maxFontSizeMultiplier={2}>
                   {sellerTrust?.dispatchTimeLabel
                     ? tt('about.shippingSeller', { label: sellerTrust.dispatchTimeLabel.toLowerCase() })
                     : tt('about.shippingDefault')}
@@ -1276,7 +1276,7 @@ export default function MyProfileScreen() {
               ) : null}
               <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
                 <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.response')}</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]}>
+                <Text style={[styles.aboutValue, t.aboutValue]} maxFontSizeMultiplier={2}>
                   {sellerTrust?.responseTimeLabel
                     ? tt('about.responseSeller', { label: sellerTrust.responseTimeLabel.toLowerCase() })
                     : tt('about.responseDefault')}
@@ -1345,7 +1345,7 @@ export default function MyProfileScreen() {
                 <View style={styles.completionHead}>
                   <View style={styles.completionHeadText}>
                     <Text style={[styles.completionTitle, t.completionTitle]}>{tt('completion.title')}</Text>
-                    <Text style={[styles.completionPercent, t.completionPercent]}>
+                    <Text style={[styles.completionPercent, t.completionPercent]} maxFontSizeMultiplier={2}>
                       {tt('completion.progress', { percent: completion.percent, done: completion.done, total: completion.total })}
                     </Text>
                   </View>
@@ -1404,7 +1404,7 @@ export default function MyProfileScreen() {
                   >
                     <View style={styles.growthRowText}>
                       <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.listFirstItemTitle')}</Text>
-                      <Text style={[styles.growthRowSub, t.growthRowSub]}>
+                      <Text style={[styles.growthRowSub, t.growthRowSub]} maxFontSizeMultiplier={2}>
                         {tt('growth.listFirstItemSub')}
                       </Text>
                     </View>
@@ -1422,7 +1422,7 @@ export default function MyProfileScreen() {
                   >
                     <View style={styles.growthRowText}>
                       <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.growAudienceTitle')}</Text>
-                      <Text style={[styles.growthRowSub, t.growthRowSub]}>
+                      <Text style={[styles.growthRowSub, t.growthRowSub]} maxFontSizeMultiplier={2}>
                         {tt('growth.growAudienceSub')}
                       </Text>
                     </View>

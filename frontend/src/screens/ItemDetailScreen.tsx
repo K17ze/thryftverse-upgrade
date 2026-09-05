@@ -856,39 +856,12 @@ export default function ItemDetailScreen() {
 
         <CommerceDetailOfflineBanner isOffline={isOffline} />
 
-        {/* ── First-viewport seller trust row (display-only) ──
-            Per spec: seller identity + verification badge + stats line
-            must appear in the first viewport, right after the media
-            stage and before the price. This is the buyer's first trust
-            signal — who is selling this item. Display-only — no onPress.
-            The full SellerInfoCard (with Follow / Message / View shop
-            actions and the "More from this seller" rail) lives in Zone
-            E below and is the sole profile navigation point. */}
-        {seller ? (
-          <View style={[styles.firstViewportSellerRow, { borderBottomColor: colors.borderSubtle }]}>
-            <CommerceDetailSellerRow
-              variant="rich"
-              avatarUri={seller.avatar ?? undefined}
-              name={seller.username}
-              verified={sellerVerified}
-              statsLine={sellerStatsLine}
-              ratingLine={
-                seller?.rating != null && seller.rating > 0
-                  ? (seller.reviewCount != null && seller.reviewCount > 0
-                    ? `${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
-                    : `${seller.rating.toFixed(1)}`)
-                  : undefined
-              }
-              locationLine={seller?.location ?? undefined}
-            />
-          </View>
-        ) : null}
-
         {/* ── Zone B — Identity seam ──
             Direct keeps critical copy off arbitrary seller photography.
             Media establishes desire first; the stable editorial canvas
             then owns brand, identity and price. The dock is the only
-            actionable repetition of that price. */}
+            actionable repetition of that price. Per 2026 PDP research:
+            the buyer sees *what* and *how much* before *who*. */}
         <View style={styles.editorialIdentityChapter}>
           <CommerceDetailIdentity
             family="direct"
@@ -990,6 +963,33 @@ export default function ItemDetailScreen() {
             </Text>
           ) : null}
         </View>
+
+        {/* ── First-viewport seller trust row (display-only) ──
+            Seller identity + verification badge + stats line appears
+            after the price/identity chapter. This is the buyer's trust
+            signal — who is selling this item. Display-only — no onPress.
+            The full SellerInfoCard (with Follow / Message / View shop
+            actions and the "More from this seller" rail) lives in Zone
+            E below and is the sole profile navigation point. */}
+        {seller ? (
+          <View style={[styles.firstViewportSellerRow, { borderBottomColor: colors.borderSubtle }]}>
+            <CommerceDetailSellerRow
+              variant="rich"
+              avatarUri={seller.avatar ?? undefined}
+              name={seller.username}
+              verified={sellerVerified}
+              statsLine={sellerStatsLine}
+              ratingLine={
+                seller?.rating != null && seller.rating > 0
+                  ? (seller.reviewCount != null && seller.reviewCount > 0
+                    ? `${seller.rating.toFixed(1)} · ${seller.reviewCount} reviews`
+                    : `${seller.rating.toFixed(1)}`)
+                  : undefined
+              }
+              locationLine={seller?.location ?? undefined}
+            />
+          </View>
+        ) : null}
 
         {/* ── Zone C — Trust facts (max 3) ──
             Seller rating and dispatch time — the facts a buyer needs

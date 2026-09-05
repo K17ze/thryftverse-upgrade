@@ -1602,7 +1602,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                         : colors.textSecondary },
               ]}
               numberOfLines={2}
-            >
+             maxFontSizeMultiplier={2}>
               {conversationSafetyWarning.message}
             </Text>
           </View>
@@ -1622,12 +1622,12 @@ export default function ChatScreen({ navigation, route }: Props) {
             <Text
               style={[styles.blockBannerText, { color: colors.textSecondary }]}
               numberOfLines={2}
-            >
+             maxFontSizeMultiplier={2}>
               You blocked this user.{" "}
               <Text
                 style={[styles.blockBannerAction, { color: colors.textPrimary }]}
                 onPress={handleUnblockPartner}
-              >
+               maxFontSizeMultiplier={2}>
                 Unblock to continue.
               </Text>
             </Text>
@@ -1852,7 +1852,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     <Text
                       style={styles.undoBannerText}
                       accessibilityLiveRegion="polite"
-                    >
+                     maxFontSizeMultiplier={2}>
                       {recentlyDeleted.length} message
                       {recentlyDeleted.length === 1 ? "" : "s"} deleted
                     </Text>
@@ -1930,7 +1930,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                   size={13}
                   color={colors.brand}
                 />
-                <Text style={[styles.agentChipText, { color: colors.brand }]}>
+                <Text style={[styles.agentChipText, { color: colors.brand }]} maxFontSizeMultiplier={2}>
                   {deployedChatAgents.length === 1
                     ? `${deployedChatAgents[0].name} active`
                     : `${deployedChatAgents.length} agents active`}
