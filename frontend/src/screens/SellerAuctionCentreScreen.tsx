@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   RefreshControl,
-  Pressable,
   StatusBar,
   Text,
   ScrollView,
@@ -601,18 +600,15 @@ export default function SellerAuctionCentreScreen() {
         <Text style={styles.inlineStateTitle}>{cfg.title}</Text>
         <Text style={styles.inlineStateMessage}>{cfg.message}</Text>
         {cfg.cta && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.inlineCtaBtn,
-              pressed && styles.inlineCtaPressed,
-            ]}
+          <AnimatedPressable
+            style={styles.inlineCtaBtn}
             onPress={navigateToCreate}
             accessibilityRole="button"
             accessibilityLabel={cfg.cta}
           >
             <Text style={styles.inlineCtaText}>{cfg.cta}</Text>
             <Ionicons name="add" size={15} color={colors.brand} style={styles.inlineCtaIcon} />
-          </Pressable>
+          </AnimatedPressable>
         )}
       </View>
     );
@@ -632,12 +628,9 @@ export default function SellerAuctionCentreScreen() {
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key;
           return (
-            <Pressable
+            <AnimatedPressable
               key={tab.key}
-              style={({ pressed }) => [
-                styles.tab,
-                pressed && styles.tabPressed,
-              ]}
+              style={styles.tab}
               onPress={() => handleTabPress(tab.key)}
               onLayout={(e) => {
                 tabLayoutsRef.current[tab.key] = {
@@ -657,7 +650,7 @@ export default function SellerAuctionCentreScreen() {
                 </Text>
               )}
               {isActive && <View style={styles.tabIndicator} />}
-            </Pressable>
+            </AnimatedPressable>
           );
         })}
       </ScrollView>
@@ -759,36 +752,30 @@ export default function SellerAuctionCentreScreen() {
       {/* Header — native, deliberate, 44pt touch targets, no filled icon backgrounds */}
       <View style={[styles.header, { paddingTop: insets.top + Space.sm }]}>
         <View style={styles.headerRow}>
-          <Pressable
+          <AnimatedPressable
             onPress={handleBack}
             hitSlop={{ top: 8, bottom: 8, left: 12, right: 8 }}
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            style={({ pressed }) => [
-              styles.headerIconBtn,
-              pressed && styles.headerIconPressed,
-            ]}
+            style={styles.headerIconBtn}
           >
             <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
-          </Pressable>
+          </AnimatedPressable>
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle} numberOfLines={1}>Seller Centre</Text>
             <Text style={styles.headerSubtitle} numberOfLines={1}>
               {stats.total > 0 ? `${stats.total} auctions` : 'Auction listings'}
             </Text>
           </View>
-          <Pressable
+          <AnimatedPressable
             onPress={navigateToCreate}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Create new auction"
-            style={({ pressed }) => [
-              styles.headerIconBtn,
-              pressed && styles.headerIconPressed,
-            ]}
+            style={styles.headerIconBtn}
           >
             <Ionicons name="add" size={26} color={colors.textPrimary} />
-          </Pressable>
+          </AnimatedPressable>
         </View>
       </View>
 

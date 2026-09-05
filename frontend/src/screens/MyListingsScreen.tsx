@@ -379,9 +379,9 @@ export default function MyListingsScreen() {
           // Hide tabs with zero count (except 'all')
           if (tab.key !== 'all' && count === 0) return null;
           return (
-            <Pressable
+            <AnimatedPressable
               key={tab.key}
-              style={({ pressed }) => [styles.filterTab, pressed && { opacity: 0.85 }]}
+              style={styles.filterTab}
               onPress={() => { haptics.tap(); setActiveTab(tab.key); }}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
               accessibilityRole="tab"
@@ -404,7 +404,7 @@ export default function MyListingsScreen() {
                 </Text>
               )}
               {isActive && <View style={[styles.filterTabIndicator, { backgroundColor: colors.brand }]} />}
-            </Pressable>
+            </AnimatedPressable>
           );
         })}
       </View>
@@ -421,17 +421,16 @@ export default function MyListingsScreen() {
         <Text style={[styles.filteredEmptyTitle, { color: colors.textSecondary }]}>
           {t('myListings.noTabListings', { tab: tabLabel.toLowerCase() })}
         </Text>
-        <Pressable
+        <AnimatedPressable
           onPress={() => { haptics.tap(); setActiveTab('all'); }}
           hitSlop={8}
-          style={({ pressed }) => pressed && { opacity: 0.85 }}
           accessibilityRole="button"
           accessibilityLabel={t('myListings.showAll')}
         >
           <Text style={[styles.filteredEmptyAction, { color: colors.brand }]}>
             {t('myListings.showAll')}
           </Text>
-        </Pressable>
+        </AnimatedPressable>
       </View>
     );
   };

@@ -1174,19 +1174,16 @@ export default function PosterViewerScreen() {
                     top: tag.y * SCREEN_HEIGHT },
                 ]}
               >
-                <Pressable
+                <AnimatedPressable
                   hitSlop={12}
                   accessibilityLabel={tag.label}
                   accessibilityRole="button"
                   accessibilityHint="View tagged product"
                   onPress={() => handleTagPress(tag, activeStory, navigation, haptic, show, analyticsEvent)}
-                  style={({ pressed }) => [
-                    styles.tagDot,
-                    pressed && styles.tagDotPressed,
-                  ]}
+                  style={styles.tagDot}
                 >
                   <View style={[styles.tagDotInner, { backgroundColor: colors.brand }]} />
-                </Pressable>
+                </AnimatedPressable>
                 <View style={styles.tagLabelWrap}>
                   <Text style={styles.tagLabelText} numberOfLines={1}>
                     {tag.label}

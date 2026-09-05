@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, RefreshControl, useWindowDimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -551,9 +551,9 @@ export default function PortfolioScreen() {
                 Positions shows holdings immediately; Insights moves allocations,
                 P&L decomposition, performers and storytelling to a separate tab. */}
             <View style={[styles.portfolioTabRow, { borderColor: colors.border }]}>
-              <Pressable
+              <AnimatedPressable
                 onPress={() => { haptics.selection(); setActivePortfolioTab('positions'); }}
-                style={({ pressed }) => [styles.portfolioTab, activePortfolioTab === 'positions' && { borderBottomColor: colors.textPrimary }, pressed && { opacity: 0.7 }]}
+                style={[styles.portfolioTab, activePortfolioTab === 'positions' && { borderBottomColor: colors.textPrimary }]}
                 hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                 accessibilityRole="tab"
                 accessibilityLabel="Positions tab"
@@ -568,10 +568,10 @@ export default function PortfolioScreen() {
                 ]}>
                   Positions
                 </Text>
-              </Pressable>
-              <Pressable
+              </AnimatedPressable>
+              <AnimatedPressable
                 onPress={() => { haptics.selection(); setActivePortfolioTab('insights'); }}
-                style={({ pressed }) => [styles.portfolioTab, activePortfolioTab === 'insights' && { borderBottomColor: colors.textPrimary }, pressed && { opacity: 0.7 }]}
+                style={[styles.portfolioTab, activePortfolioTab === 'insights' && { borderBottomColor: colors.textPrimary }]}
                 hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                 accessibilityRole="tab"
                 accessibilityLabel="Insights tab"
@@ -586,7 +586,7 @@ export default function PortfolioScreen() {
                 ]}>
                   Insights
                 </Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
 
             {/* ── Insights tab ──
@@ -601,8 +601,8 @@ export default function PortfolioScreen() {
             {(performers.best || performers.worst) && (
               <View style={[styles.insightCard, { borderBottomColor: colors.border }]}>
                 {performers.best && performers.best.avgEntryPriceGbp > 0 && (
-                  <Pressable
-                    style={({ pressed }) => [styles.insightRow, pressed && { opacity: 0.7 }]}
+                  <AnimatedPressable
+                    style={styles.insightRow}
                     onPress={() => handlePositionPress(performers.best!)}
                     accessibilityRole="button"
                     accessibilityLabel={`Best position: ${performers.best.title}`}
@@ -622,11 +622,11 @@ export default function PortfolioScreen() {
                       showGlyph={false}
                       color={colors.success}
                     />
-                  </Pressable>
+                  </AnimatedPressable>
                 )}
                 {performers.worst && performers.worst.avgEntryPriceGbp > 0 && performers.worst.assetId !== performers.best?.assetId && (
-                  <Pressable
-                    style={({ pressed }) => [styles.insightRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }, pressed && { opacity: 0.7 }]}
+                  <AnimatedPressable
+                    style={[styles.insightRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
                     onPress={() => handlePositionPress(performers.worst!)}
                     accessibilityRole="button"
                     accessibilityLabel={`Worst position: ${performers.worst.title}`}
@@ -646,7 +646,7 @@ export default function PortfolioScreen() {
                       showGlyph={false}
                       color={colors.danger}
                     />
-                  </Pressable>
+                  </AnimatedPressable>
                 )}
               </View>
             )}
@@ -655,8 +655,8 @@ export default function PortfolioScreen() {
                 Collapsed by default to calm the screen; expands on tap. */}
             {allocationBars.length > 0 && (
               <View style={[styles.allocationCard, { borderBottomColor: colors.border }]}>
-                <Pressable
-                  style={({ pressed }) => [styles.allocationHeader, pressed && { opacity: 0.7 }]}
+                <AnimatedPressable
+                  style={styles.allocationHeader}
                   onPress={() => setAllocationExpanded((prev) => !prev)}
                   accessibilityRole="button"
                   accessibilityLabel={allocationExpanded ? 'Collapse allocation breakdown' : 'Expand allocation breakdown'}
@@ -674,7 +674,7 @@ export default function PortfolioScreen() {
                     size={18}
                     color={colors.textSecondary}
                   />
-                </Pressable>
+                </AnimatedPressable>
                 {allocationExpanded && (
                   <>
                     <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By asset</Text>

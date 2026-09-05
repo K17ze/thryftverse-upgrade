@@ -337,12 +337,9 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
     const selected = selectedIds.includes(item.id);
     const displayName = item.displayName ?? item.username;
     return (
-      <Pressable
+      <AnimatedPressable
         onPress={() => toggleMember(item)}
-        style={({ pressed }) => [
-          styles.memberRow,
-          pressed && styles.memberRowPressed,
-        ]}
+        style={styles.memberRow}
         accessibilityRole="button"
         accessibilityLabel={`${selected ? 'Deselect' : 'Select'} ${item.displayName ?? '@' + item.username}`}
         accessibilityHint="Toggles this member for the new group"
@@ -368,7 +365,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
             <Ionicons name="ellipse-outline" size={22} color={colors.textMuted} />
           )}
         </View>
-      </Pressable>
+      </AnimatedPressable>
     );
   };
 
@@ -385,15 +382,14 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
                 <View style={styles.createErrorBanner}>
                   <Ionicons name="alert-circle" size={16} color={colors.danger} />
                   <Text style={styles.createErrorText}>{createError}</Text>
-                  <Pressable
+                  <AnimatedPressable
                     onPress={handleRetryCreate}
                     hitSlop={8}
-                    style={({ pressed }) => pressed && { opacity: 0.5 }}
                     accessibilityRole="button"
                     accessibilityLabel="Retry creating group"
                   >
                     <Text style={styles.retryText}>Retry</Text>
-                  </Pressable>
+                  </AnimatedPressable>
                 </View>
               ) : null}
               <View style={[styles.stickyAction, { paddingBottom: Math.max(insets.bottom, Space.sm) + 8 }]}>
@@ -414,13 +410,10 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
         >
           {/* Cover photo — wide banner, optional. Separate from the circular
               group avatar. Matches WhatsApp/Telegram group creation pattern. */}
-          <Pressable
+          <AnimatedPressable
             onPress={handlePickCoverPhoto}
             disabled={isUploadingCover}
-            style={({ pressed }) => [
-              styles.coverSelector,
-              pressed && styles.avatarSelectorPressed,
-            ]}
+            style={styles.coverSelector}
             accessibilityRole="button"
             accessibilityLabel={groupMedia.coverDisplayUri ? 'Change cover photo' : 'Add cover photo'}
             accessibilityHint="Choose a wide cover image from camera or gallery"
@@ -456,16 +449,13 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
                 <Ionicons name="close-circle" size={22} color={colors.scrimTextPrimary} />
               </Pressable>
             ) : null}
-          </Pressable>
+          </AnimatedPressable>
 
           <View style={styles.avatarSelectorWrap}>
-            <Pressable
+            <AnimatedPressable
               onPress={handlePickGroupPhoto}
               disabled={isUploadingPhoto}
-              style={({ pressed }) => [
-                styles.avatarSelectorPressable,
-                pressed && styles.avatarSelectorPressed,
-              ]}
+              style={styles.avatarSelectorPressable}
               accessibilityRole="button"
               accessibilityLabel="Set group photo"
               accessibilityHint="Choose a group photo from camera or gallery"
@@ -486,7 +476,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
                   <Ionicons name="camera" size={14} color={colors.textInverse} />
                 </View>
               )}
-            </Pressable>
+            </AnimatedPressable>
             <Caption color={colors.textMuted} style={styles.avatarHint}>
               {isUploadingPhoto
                 ? 'Uploading photo...'

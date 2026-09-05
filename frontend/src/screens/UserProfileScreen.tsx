@@ -857,8 +857,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     if (activeQuery.isLoading) return null;
     if (activeQuery.error) {
       return (
-        <Pressable
-          style={({ pressed }) => [styles.listState, pressed && { opacity: 0.7 }]}
+        <AnimatedPressable
+          style={styles.listState}
           onPress={() => activeQuery.refetch()}
           accessibilityRole="button"
           accessibilityLabel="Retry loading content"
@@ -866,7 +866,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           <Ionicons name="cloud-offline-outline" size={32} color={MUTED} />
           <Text style={[styles.listStateTitle, t.listStateTitle]}>Couldn't load {activeTab === 'Listings' ? 'listings' : activeTab === 'Looks' ? 'Looks' : 'reviews'}</Text>
           <Text style={[styles.listStateSub, t.listStateSub]}>Tap to retry</Text>
-        </Pressable>
+        </AnimatedPressable>
       );
     }
     if (listData.length === 0) {

@@ -461,12 +461,11 @@ export default function WalletScreen({ navigation }: Props) {
 
         {/* ── Primary actions — 3 equal-width buttons in a row (spec 17 viewport 1) ── */}
         <View style={styles.actionRow}>
-          <Pressable
-            style={({ pressed }) => [
+          <AnimatedPressable
+            style={[
               styles.actionBtn,
               styles.actionBtnPrimary,
               { backgroundColor: colors.brand },
-              pressed && { opacity: 0.85 },
               !isWalletOperational && { opacity: 0.5 },
             ]}
             onPress={handleAddMoney}
@@ -477,13 +476,12 @@ export default function WalletScreen({ navigation }: Props) {
           >
             <Ionicons name="add-circle-outline" size={IconGrammar.standard} color={colors.background} />
             <Text style={[styles.actionBtnLabel, { color: colors.background }]}>{t('commerce.wallet.addMoney')}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={[
               styles.actionBtn,
               styles.actionBtnSecondary,
               { borderColor: colors.border },
-              pressed && { opacity: 0.7 },
               !isWalletOperational && { opacity: 0.5 },
             ]}
             onPress={handleWithdraw}
@@ -494,13 +492,12 @@ export default function WalletScreen({ navigation }: Props) {
           >
             <Ionicons name="arrow-down-circle-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>{t('commerce.wallet.withdraw')}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={[
               styles.actionBtn,
               styles.actionBtnSecondary,
               { borderColor: colors.border },
-              pressed && { opacity: 0.7 },
               (balance.available <= 0 || !isWalletOperational) && { opacity: 0.5 },
             ]}
             onPress={handleConvert}
@@ -511,7 +508,7 @@ export default function WalletScreen({ navigation }: Props) {
           >
             <Ionicons name="swap-horizontal-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>{t('commerce.wallet.convert')}</Text>
-          </Pressable>
+          </AnimatedPressable>
         </View>
 
         {/* ── Pending attention — if real (spec 17 viewport 1) ── */}
@@ -613,26 +610,24 @@ export default function WalletScreen({ navigation }: Props) {
           {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
             <View style={styles.safeguardingLinksRow}>
               {balance.safeguardingEvidenceUrl ? (
-                <Pressable
+                <AnimatedPressable
                   onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
                   accessibilityRole="link"
                   accessibilityLabel={t('commerce.wallet.a11y.viewSafeguardingEvidence')}
                   accessibilityHint={t('commerce.wallet.a11y.opensExternalBrowser')}
                 >
                   <Text style={[styles.safeguardingLink, { color: colors.brand }]}>{t('commerce.wallet.evidence')}</Text>
-                </Pressable>
+                </AnimatedPressable>
               ) : null}
               {balance.safeguardingTermsUrl ? (
-                <Pressable
+                <AnimatedPressable
                   onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
                   accessibilityRole="link"
                   accessibilityLabel={t('commerce.wallet.a11y.viewSafeguardingTerms')}
                   accessibilityHint={t('commerce.wallet.a11y.opensExternalBrowser')}
                 >
                   <Text style={[styles.safeguardingLink, { color: colors.brand }]}>{t('commerce.wallet.terms')}</Text>
-                </Pressable>
+                </AnimatedPressable>
               ) : null}
             </View>
           ) : null}

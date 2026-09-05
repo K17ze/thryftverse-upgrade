@@ -194,7 +194,7 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
   }
 
   if (firstFrame?.mediaUrl) {
-    return <CachedImage uri={firstFrame.mediaUrl} style={styles.posterImage} contentFit="cover" />;
+    return <CachedImage uri={firstFrame.mediaUrl} style={styles.posterImage} contentFit="cover" priority="high" />;
   }
 
   // Quiet text-only Poster preview — no decorative sparkle/orb. The caption

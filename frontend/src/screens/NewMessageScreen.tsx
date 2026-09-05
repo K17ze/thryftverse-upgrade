@@ -578,23 +578,23 @@ export default function NewMessageScreen({ navigation, route }: Props) {
               accessibilityLabel="Invite link input"
             />
             <View style={joinStyles.actions}>
-              <Pressable
+              <AnimatedPressable
                 onPress={() => setJoinModalVisible(false)}
-                style={({ pressed }) => [joinStyles.actionBtn, pressed && { opacity: 0.6 }]}
+                style={joinStyles.actionBtn}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
               >
                 <Text style={[joinStyles.actionText, { color: colors.textMuted }]}>Cancel</Text>
-              </Pressable>
-              <Pressable
+              </AnimatedPressable>
+              <AnimatedPressable
                 onPress={handleConfirmJoinGroup}
                 disabled={!joinLinkInput.trim()}
-                style={({ pressed }) => [joinStyles.actionBtn, pressed && { opacity: 0.6 }, !joinLinkInput.trim() && { opacity: 0.4 }]}
+                style={[joinStyles.actionBtn, !joinLinkInput.trim() && { opacity: 0.4 }]}
                 accessibilityRole="button"
                 accessibilityLabel="Join group"
               >
                 <Text style={[joinStyles.actionText, { color: colors.brand }]}>Join</Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
           </View>
         </KeyboardAvoidingView>

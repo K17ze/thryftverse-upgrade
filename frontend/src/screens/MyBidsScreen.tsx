@@ -280,8 +280,8 @@ export default function MyBidsScreen() {
               </View>
             )}
             {item.bidState === 'outbid' && (
-              <Pressable
-                style={({ pressed }) => [styles.bidAgainBtn, pressed && { opacity: 0.8 }]}
+              <AnimatedPressable
+                style={styles.bidAgainBtn}
                 onPress={() => navigation.navigate('AuctionDetail', {
                   auctionId: item.auctionId,
                   openBidSheet: true })}
@@ -290,7 +290,7 @@ export default function MyBidsScreen() {
               >
                 <Ionicons name="trending-up" size={12} color={colors.textInverse} />
                 <Text style={styles.bidAgainText}>Bid again</Text>
-              </Pressable>
+              </AnimatedPressable>
             )}
             {item.bidState !== 'outbid' && (
               <View style={styles.activityNextRow}>
@@ -324,9 +324,9 @@ export default function MyBidsScreen() {
         contentContainerStyle={styles.stateRailContent}
       >
           {BID_FILTERS.map((opt) => (
-            <Pressable
+            <AnimatedPressable
               key={opt.value}
-              style={({ pressed }) => [styles.stateRailTab, filter === opt.value && styles.stateRailTabActive, pressed && styles.stateRailTabPressed]}
+              style={[styles.stateRailTab, filter === opt.value && styles.stateRailTabActive]}
               onPress={() => { haptics.selection(); setFilter(opt.value); }}
               accessibilityRole="button"
               accessibilityLabel={opt.accessibilityLabel}
@@ -335,11 +335,11 @@ export default function MyBidsScreen() {
               <Text style={[styles.stateRailText, filter === opt.value && styles.stateRailTextActive]}>
                 {opt.label}
               </Text>
-            </Pressable>
+            </AnimatedPressable>
           ))}
-          <Pressable
+          <AnimatedPressable
             key={WATCHING_FILTER.value}
-            style={({ pressed }) => [styles.stateRailTab, filter === WATCHING_FILTER.value && styles.stateRailTabActive, pressed && styles.stateRailTabPressed]}
+            style={[styles.stateRailTab, filter === WATCHING_FILTER.value && styles.stateRailTabActive]}
             onPress={() => { haptics.selection(); setFilter(WATCHING_FILTER.value); }}
             accessibilityRole="button"
             accessibilityLabel={WATCHING_FILTER.accessibilityLabel}
@@ -348,7 +348,7 @@ export default function MyBidsScreen() {
             <Text style={[styles.stateRailText, filter === WATCHING_FILTER.value && styles.stateRailTextActive]}>
               {WATCHING_FILTER.label}
             </Text>
-          </Pressable>
+          </AnimatedPressable>
           {/* Ending-soonest sort toggle — integrated into filter rail */}
           {(filter === 'all' || filter === 'active' || filter === 'outbid' || filter === 'leading') && items.length > 1 && (
             <>

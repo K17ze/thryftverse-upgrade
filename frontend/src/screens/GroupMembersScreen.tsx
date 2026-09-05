@@ -589,9 +589,9 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                   const isSelected = selectedToAdd.has(user.id);
                   return (
                     <View key={user.id}>
-                      <Pressable
+                      <AnimatedPressable
                         onPress={() => toggleSelectToAdd(user.id)}
-                        style={({ pressed }) => [styles.searchResultRow, pressed && styles.rowPressed]}
+                        style={styles.searchResultRow}
                         accessibilityRole="button"
                         accessibilityLabel={`Select ${user.displayName ?? user.username}`}
                       >
@@ -607,7 +607,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                         <View style={[styles.selectCircle, isSelected && { backgroundColor: colors.brand, borderColor: colors.brand }]}>
                           <Ionicons name="checkmark" size={16} color={colors.surface} />
                         </View>
-                      </Pressable>
+                      </AnimatedPressable>
                       {idx < searchResults.length - 1 && <View style={styles.memberDivider} />}
                     </View>
                   );
@@ -681,11 +681,11 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                     </AnimatedPressable>
 
                     {member.isMe ? (
-                      <Pressable
+                      <AnimatedPressable
                         onPress={handleLeaveGroup}
                         disabled={isLeaving}
                         hitSlop={8}
-                        style={({ pressed }) => [styles.actionBtn, pressed && styles.actionPressed]}
+                        style={styles.actionBtn}
                         accessibilityRole="button"
                         accessibilityLabel="Leave group"
                       >
@@ -694,13 +694,13 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                         ) : (
                           <Text style={styles.leaveText}>Leave</Text>
                         )}
-                      </Pressable>
+                      </AnimatedPressable>
                     ) : canRemove ? (
-                      <Pressable
+                      <AnimatedPressable
                         onPress={() => handleRemoveMember(member.id, member.name)}
                         disabled={isRemovingThis}
                         hitSlop={8}
-                        style={({ pressed }) => [styles.actionBtn, pressed && styles.actionPressed]}
+                        style={styles.actionBtn}
                         accessibilityRole="button"
                         accessibilityLabel={`Remove ${member.name}`}
                       >
@@ -709,7 +709,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                         ) : (
                           <Text style={styles.removeText}>Remove</Text>
                         )}
-                      </Pressable>
+                      </AnimatedPressable>
                     ) : null}
                   </View>
                   {index < filteredMembers.length - 1 && (
@@ -738,9 +738,9 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
           <View style={styles.memberActionSheet}>
             <Text style={styles.memberActionTitle}>{memberActionMenu.member.name}</Text>
             {memberActionMenu.actions.map((action) => (
-              <Pressable
+              <AnimatedPressable
                 key={action.label}
-                style={({ pressed }) => [styles.memberActionRow, pressed && styles.memberActionRowPressed]}
+                style={styles.memberActionRow}
                 onPress={() => {
                   setMemberActionMenu(null);
                   action.onPress();
@@ -751,7 +751,7 @@ export default function GroupMembersScreen({ navigation, route }: Props) {
                 <Text style={[styles.memberActionLabel, action.destructive && styles.memberActionLabelDanger]}>
                   {action.label}
                 </Text>
-              </Pressable>
+              </AnimatedPressable>
             ))}
           </View>
         )}

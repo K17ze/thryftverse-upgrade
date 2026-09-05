@@ -380,11 +380,10 @@ export default function SellerHubScreen() {
 
           {/* ── KYC Verification Prompt (if unverified) ── */}
           {!isVerified && (
-            <Pressable
-              style={({ pressed }) => [
+            <AnimatedPressable
+              style={[
                 styles.verificationBanner,
                 { backgroundColor: colors.warningSubtle },
-                pressed && { opacity: 0.7 },
               ]}
               onPress={() => {
                 haptics.tap();
@@ -403,16 +402,15 @@ export default function SellerHubScreen() {
                 </Text>
               </View>
               <AppIcon name="forward" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
+            </AnimatedPressable>
           )}
 
           {/* ── Dominant Top Task (if present) ── */}
           {topTask && (
-            <Pressable
-              style={({ pressed }) => [
+            <AnimatedPressable
+              style={[
                 styles.topTaskRow,
                 { backgroundColor: topTask.priority === 'critical' ? colors.dangerSubtle : colors.surfaceAlt },
-                pressed && { opacity: 0.7 },
               ]}
               onPress={() => navigateToTask(topTask)}
               accessibilityRole="button"
@@ -457,7 +455,7 @@ export default function SellerHubScreen() {
                 })()}
               </View>
               <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
+            </AnimatedPressable>
           )}
 
           {/* ── "All caught up" positive state ── */}

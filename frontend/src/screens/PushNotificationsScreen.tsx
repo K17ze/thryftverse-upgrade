@@ -314,8 +314,8 @@ export default function PushNotificationsScreen({ navigation }: Props) {
         />
         {quietHours.enabled ? (
           <View style={styles.quietHoursRow}>
-            <Pressable
-              style={({ pressed }) => [styles.quietTimePicker, pressed && styles.quietTimePickerPressed]}
+            <AnimatedPressable
+              style={styles.quietTimePicker}
               onPress={() => setEditingQuietTime(editingQuietTime === 'start' ? null : 'start')}
               accessibilityRole="button"
               accessibilityLabel={`Quiet hours start: ${formatHour(quietHours.startHour)}. Tap to change.`}
@@ -323,10 +323,10 @@ export default function PushNotificationsScreen({ navigation }: Props) {
               <Text style={styles.quietTimeLabel}>From</Text>
               <Text style={styles.quietTimeValue}>{formatHour(quietHours.startHour)}</Text>
               <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-            </Pressable>
+            </AnimatedPressable>
             <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
-            <Pressable
-              style={({ pressed }) => [styles.quietTimePicker, { backgroundColor: colors.surfaceAlt }, pressed && styles.quietTimePickerPressed]}
+            <AnimatedPressable
+              style={[styles.quietTimePicker, { backgroundColor: colors.surfaceAlt }]}
               onPress={() => setEditingQuietTime(editingQuietTime === 'end' ? null : 'end')}
               accessibilityRole="button"
               accessibilityLabel={`Quiet hours end: ${formatHour(quietHours.endHour)}. Tap to change.`}
@@ -334,7 +334,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
               <Text style={[styles.quietTimeLabel, { color: colors.textMuted }]}>To</Text>
               <Text style={[styles.quietTimeValue, { color: colors.textPrimary }]}>{formatHour(quietHours.endHour)}</Text>
               <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-            </Pressable>
+            </AnimatedPressable>
           </View>
         ) : null}
         {quietHours.enabled && editingQuietTime ? (
@@ -348,13 +348,12 @@ export default function PushNotificationsScreen({ navigation }: Props) {
                   ? quietHours.startHour === h
                   : quietHours.endHour === h;
                 return (
-                  <Pressable
+                  <AnimatedPressable
                     key={h}
-                    style={({ pressed }) => [
+                    style={[
                       styles.quietHourCell,
                       { backgroundColor: colors.surfaceAlt },
                       selected && [styles.quietHourCellActive, { backgroundColor: colors.brand }],
-                      pressed && styles.quietHourCellPressed,
                     ]}
                     onPress={() => {
                       haptics.tap();
@@ -371,7 +370,7 @@ export default function PushNotificationsScreen({ navigation }: Props) {
                     <Text style={[styles.quietHourCellText, { color: colors.textPrimary }, selected && [styles.quietHourCellTextActive, { color: colors.textInverse }]]}>
                       {formatHour(h)}
                     </Text>
-                  </Pressable>
+                  </AnimatedPressable>
                 );
               })}
             </View>

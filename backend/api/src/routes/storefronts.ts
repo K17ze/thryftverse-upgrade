@@ -343,31 +343,57 @@ export const registerStorefrontRoutes = ({
 
     // ── Replace sections if provided ───────────────────────────────────
     if (payload.sections !== undefined) {
-      // Delete existing sections.
-      await db.query(`DELETE FROM storefront_sections WHERE storefront_id = $1`, [storefrontId]);
-
-      // Insert new sections.
-      for (const section of payload.sections) {
-        const sectionId = `section_${crypto.randomUUID()}`;
-        await db.query(
-          `INSERT INTO storefront_sections (
-             id, storefront_id, kind, title, item_limit,
-             collection_ref, media_asset_ref, link_url, link_label, sort_order
-           )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-          [
-            sectionId,
-            storefrontId,
-            section.kind,
-            section.title,
-            section.itemLimit ?? null,
-            section.collectionRef ?? null,
-            section.mediaAssetRef ?? null,
-            section.linkUrl ?? null,
-            section.linkLabel ?? null,
-            section.sortOrder,
-          ]
+      // Delete + insert in a transaction so a failure leaves the
+      // storefront intact rather than partially empty.
+      const client = await db.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `DELETE FROM storefront_sections WHERE storefront_id = $1`,
+          [storefrontId],
         );
+
+        if (payload.sections.length > 0) {
+          // Batch all section inserts into a single multi-row INSERT
+          // instead of N round-trips.
+          const values: string[] = [];
+          const params: unknown[] = [];
+          for (let i = 0; i < payload.sections.length; i++) {
+            const section = payload.sections[i];
+            const sectionId = `section_${crypto.randomUUID()}`;
+            const base = i * 10;
+            values.push(
+              `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10})`,
+            );
+            params.push(
+              sectionId,
+              storefrontId,
+              section.kind,
+              section.title,
+              section.itemLimit ?? null,
+              section.collectionRef ?? null,
+              section.mediaAssetRef ?? null,
+              section.linkUrl ?? null,
+              section.linkLabel ?? null,
+              section.sortOrder,
+            );
+          }
+          await client.query(
+            `INSERT INTO storefront_sections (
+               id, storefront_id, kind, title, item_limit,
+               collection_ref, media_asset_ref, link_url, link_label, sort_order
+             )
+             VALUES ${values.join(', ')}`,
+            params,
+          );
+        }
+
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
       }
     }
 

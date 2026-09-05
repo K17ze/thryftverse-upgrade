@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  Pressable,
   ActivityIndicator } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -287,8 +286,8 @@ export default function BulkListingScreen({ navigation }: Props) {
     return (
       <View style={styles.bulkBarWrap}>
         <View style={styles.bulkBar}>
-          <Pressable
-            style={({ pressed }) => [styles.bulkAction, { borderColor: colors.border }, pressed && { opacity: 0.6 }]}
+          <AnimatedPressable
+            style={[styles.bulkAction, { borderColor: colors.border }]}
             onPress={validateAll}
             disabled={isPublishing}
             accessibilityRole="button"
@@ -296,9 +295,9 @@ export default function BulkListingScreen({ navigation }: Props) {
           >
             <Ionicons name="checkmark-done-outline" size={16} color={colors.brand} />
             <Text style={[styles.bulkActionText, { color: colors.brand }]}>Validate all</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.bulkAction, { borderColor: colors.border }, pressed && { opacity: 0.6 }]}
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={[styles.bulkAction, { borderColor: colors.border }]}
             onPress={publishAll}
             disabled={!canPublish}
             accessibilityRole="button"
@@ -306,9 +305,9 @@ export default function BulkListingScreen({ navigation }: Props) {
           >
             <Ionicons name="cloud-upload-outline" size={16} color={canPublish ? colors.success : colors.textMuted} />
             <Text style={[styles.bulkActionText, { color: canPublish ? colors.success : colors.textMuted }]}>Publish all</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.bulkAction, { borderColor: colors.dangerBorder }, pressed && { opacity: 0.6 }]}
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={[styles.bulkAction, { borderColor: colors.dangerBorder }]}
             onPress={clearAll}
             disabled={isPublishing}
             accessibilityRole="button"
@@ -316,7 +315,7 @@ export default function BulkListingScreen({ navigation }: Props) {
           >
             <Ionicons name="trash-outline" size={16} color={colors.danger} />
             <Text style={[styles.bulkActionText, { color: colors.danger }]}>Clear all</Text>
-          </Pressable>
+          </AnimatedPressable>
         </View>
         {(readyCount > 0 || errorCount > 0) && (
           <View style={styles.statusSummaryRow}>
@@ -485,8 +484,8 @@ const BulkRow = React.memo(function BulkRow({
 
   return (
     <View style={styles.rowWrap}>
-      <Pressable
-        style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+      <AnimatedPressable
+        style={styles.row}
         onPress={onToggleExpand}
         accessibilityRole="button"
         accessibilityLabel={`Draft ${item.title || 'untitled'}, status ${meta.label}. Tap to expand.`}
@@ -539,7 +538,7 @@ const BulkRow = React.memo(function BulkRow({
         <Reanimated.View style={chevronStyle}>
           <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
         </Reanimated.View>
-      </Pressable>
+      </AnimatedPressable>
 
       {/* Expanded detail */}
       {expanded && (
@@ -635,26 +634,26 @@ function DraftForm({
           {form.images.map((uri, i) => (
             <View key={`${uri}-${i}`} style={[styles.photoTile, { borderColor: colors.border }]}>
               <CachedImage uri={uri} style={styles.photoImg} containerStyle={styles.photoImgWrap} contentFit="cover" />
-              <Pressable
-                style={({ pressed }) => [styles.photoRemove, { backgroundColor: colors.danger }, pressed && { opacity: 0.6 }]}
+              <AnimatedPressable
+                style={[styles.photoRemove, { backgroundColor: colors.danger }]}
                 onPress={() => onRemovePhoto(i)}
                 accessibilityRole="button"
                 accessibilityLabel="Remove photo"
               >
                 <Ionicons name="close" size={12} color={colors.textInverse} />
-              </Pressable>
+              </AnimatedPressable>
             </View>
           ))}
           {form.images.length < 10 && (
-            <Pressable
-              style={({ pressed }) => [styles.photoAdd, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }, pressed && { opacity: 0.6 }]}
+            <AnimatedPressable
+              style={[styles.photoAdd, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
               onPress={onPickPhotos}
               accessibilityRole="button"
               accessibilityLabel="Add photos"
             >
               <Ionicons name="camera-outline" size={20} color={colors.brand} />
               <Text style={[styles.photoAddText, { color: colors.brand }]}>Add</Text>
-            </Pressable>
+            </AnimatedPressable>
           )}
         </View>
       </View>
@@ -700,8 +699,8 @@ function DraftForm({
       </View>
 
       <View style={styles.fieldRow}>
-        <Pressable
-          style={({ pressed }) => [styles.pickerField, { borderColor: colors.border, backgroundColor: colors.input }, pressed && { opacity: 0.6 }]}
+        <AnimatedPressable
+          style={[styles.pickerField, { borderColor: colors.border, backgroundColor: colors.input }]}
           onPress={() => onOpenPicker('Category')}
           accessibilityRole="button"
           accessibilityLabel="Select category"
@@ -713,9 +712,9 @@ function DraftForm({
             </Text>
             <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
           </View>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.pickerField, { borderColor: colors.border, backgroundColor: colors.input }, pressed && { opacity: 0.6 }]}
+        </AnimatedPressable>
+        <AnimatedPressable
+          style={[styles.pickerField, { borderColor: colors.border, backgroundColor: colors.input }]}
           onPress={() => onOpenPicker('Condition')}
           accessibilityRole="button"
           accessibilityLabel="Select condition"
@@ -727,7 +726,7 @@ function DraftForm({
             </Text>
             <Ionicons name="chevron-down" size={16} color={colors.textMuted} />
           </View>
-        </Pressable>
+        </AnimatedPressable>
       </View>
 
       <AppInput

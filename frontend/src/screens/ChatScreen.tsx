@@ -1911,12 +1911,9 @@ export default function ChatScreen({ navigation, route }: Props) {
           {isContextualSlotVisible("agentRow") &&
             deployedChatAgents.length > 0 && (
             <View style={styles.agentRow}>
-              <Pressable
+              <AnimatedPressable
                 onPress={() => setChatAgentPickerVisible(true)}
-                style={({ pressed }) => [
-                  styles.agentChip,
-                  pressed && styles.agentChipPressed,
-                ]}
+                style={styles.agentChip}
                 accessibilityLabel={
                   deployedChatAgents.length === 1
                     ? `${deployedChatAgents[0].name} is active. Tap to manage agents.`
@@ -1935,7 +1932,7 @@ export default function ChatScreen({ navigation, route }: Props) {
                     ? `${deployedChatAgents[0].name} active`
                     : `${deployedChatAgents.length} agents active`}
                 </Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
           )}
 
