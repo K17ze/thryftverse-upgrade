@@ -544,7 +544,7 @@ export default function LiveShoppingHomeScreen() {
         {/* ── Header ── */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle}>{t('header.title')}</Text>
+            <Text style={styles.headerTitle} accessibilityRole="header">{t('header.title')}</Text>
             <LivePulse size={10} color={colors.danger} />
             {LIVE_SHOPPING_DEMO_MODE && (
               <View style={styles.demoPill} accessible={false}>

@@ -1413,27 +1413,27 @@ export default function ItemDetailScreen() {
           onOpenBundleBag={(sellerId, sellerName) => navigation.navigate('BundleBag', { sellerId, sellerName })}
         />
 
-        {/* More like this — visual-similar grid by category/brand.
-            Contextual heading: prefer brand when available, fall back
-            to category, then to the generic label. */}
+        {/* More like this — backend-driven recommendations.
+            Uses the similar_style section from GET /listings/:id/recommendations,
+            falling back to same_brand. Per 2026 PDP research: show only when
+            >=3 items are available; hide silently when fewer. */}
         {(() => {
-          const visualSimilar = backendListings
-            .filter((l) =>
-              l.id !== item.id &&
-              !l.isSold &&
-              (l.category === item.category || l.brand === item.brand)
-            )
-            .slice(0, 4);
-          if (visualSimilar.length < 2) return null;
-          const discoveryLabel = item.brand
+          const similarSection = recommendationSections.find((s) => s.key === 'similar_style')
+            ?? recommendationSections.find((s) => s.key === 'same_brand');
+          if (!similarSection || similarSection.items.length < 3) return null;
+          const similarItems = similarSection.items
+            .filter((i): i is CatalogListing => !isRecommendationLook(i))
+            .slice(0, 6) as unknown as Listing[];
+          if (similarItems.length < 3) return null;
+          const discoveryLabel = similarSection.title || (item.brand
             ? `More from ${item.brand}`
             : item.category
             ? `More ${item.category.toLowerCase()}`
-            : 'More like this';
+            : 'More like this');
           return (
             <CommerceDetailSection label={discoveryLabel} divider variant="discovery">
                 <View style={styles.moreLikeThisGrid}>
-                  {visualSimilar.map((simItem) => {
+                  {similarItems.map((simItem) => {
                     const simPriceFormatted = simItem.price != null
                       ? formatFromFiat(simItem.price, DEFAULT_CURRENCY_CODE, { displayMode: 'fiat' })
                       : null;
@@ -1443,7 +1443,7 @@ export default function ItemDetailScreen() {
                       style={styles.moreLikeThisCard}
                       scaleValue={0.98}
                       hapticFeedback="light"
-                      onPress={() => handlePressRecommendation(simItem, 'similar_items')}
+                      onPress={() => handlePressRecommendation(simItem, similarSection.key)}
                       hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
                       accessibilityRole="button"
                       accessibilityLabel={`View ${simItem.title}${simPriceFormatted ? `, ${simPriceFormatted}` : ''}${simItem.brand ? `, ${simItem.brand}` : ''}`}

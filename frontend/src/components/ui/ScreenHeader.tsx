@@ -66,6 +66,7 @@ export function ScreenHeader({
               letterSpacing: variant === 'large' ? TypographyV2.screenTitle.letterSpacing : TypographyV2.sectionTitle.letterSpacing },
           ]}
           numberOfLines={1}
+          accessibilityRole="header"
         >
           {title}
         </Text>

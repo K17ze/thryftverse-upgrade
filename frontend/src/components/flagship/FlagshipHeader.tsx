@@ -74,6 +74,7 @@ export function FlagshipHeader({
               opacity: compactTitleOpacity },
           ]}
           numberOfLines={1}
+          accessibilityRole="header"
         >
           {title}
         </Text>

@@ -1174,7 +1174,7 @@ export default function CheckoutScreen() {
           >
             <Ionicons name="close" size={22} color={colors.textPrimary} importantForAccessibility="no" />
           </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
+          <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2} accessibilityRole="header">Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <EmptyState
@@ -1202,7 +1202,7 @@ export default function CheckoutScreen() {
           >
             <Ionicons name="close" size={22} color={colors.textPrimary} importantForAccessibility="no" />
           </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
+          <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2} accessibilityRole="header">Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
@@ -1238,7 +1238,7 @@ export default function CheckoutScreen() {
           >
             <Ionicons name="close" size={22} color={colors.textPrimary} importantForAccessibility="no" />
           </Pressable>
-          <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
+          <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2} accessibilityRole="header">Checkout</Text>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.signedOutContainer}>
@@ -1358,7 +1358,7 @@ export default function CheckoutScreen() {
         >
           <Ionicons name="close" size={22} color={colors.textPrimary} importantForAccessibility="no" />
         </Pressable>
-        <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2}>Checkout</Text>
+        <Text style={[styles.headerTitle, t.headerTitle]} maxFontSizeMultiplier={2} accessibilityRole="header">Checkout</Text>
         <View style={styles.headerSpacer} />
       </View>
 

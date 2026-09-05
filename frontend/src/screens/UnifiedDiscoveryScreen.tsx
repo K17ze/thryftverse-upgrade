@@ -92,6 +92,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   // ── Search state ──
   const [query, setQuery] = useState(route.params?.initialQuery ?? '');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [searchRetryCount, setSearchRetryCount] = useState(0);
   const normalizedQuery = query.trim().toLowerCase();
 
   // ── Discovery feed state ──
@@ -134,10 +135,12 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const [editorials, setEditorials] = useState<GalleriaEditorial[]>([]);
   const [featuredAssets, setFeaturedAssets] = useState<GalleriaFeaturedAsset[]>([]);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(true);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
 
   // ── Search results state ──
   const [searchResults, setSearchResults] = useState<DiscoveryFeedUnit[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [peopleResults, setPeopleResults] = useState<UserSearchResult[]>([]);
   const [isSearchingPeople, setIsSearchingPeople] = useState(false);
   const [searchScope, setSearchScope] = useState<'items' | 'people'>('items');
@@ -161,6 +164,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   // ── Load all discovery content ──
   const loadDiscoveryContent = useCallback(async () => {
     setIsDiscoveryLoading(true);
+    setDiscoveryError(null);
     const [looksRes, postersRes, moodboardsRes, colsRes, edsRes, assetsRes] = await Promise.allSettled([
       fetchLooksFromApi({ status: 'published', sort: 'foryou', limit: 6 }),
       fetchPosterStories({ active: true, limit: 4 }),
@@ -170,14 +174,21 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
       fetchFeaturedAssets(),
     ]);
 
-    if (looksRes.status === 'fulfilled') setLooks(looksRes.value.items ?? []);
-    if (postersRes.status === 'fulfilled') setPosters(postersRes.value.items ?? []);
+    let fulfilled = 0;
+    if (looksRes.status === 'fulfilled') { setLooks(looksRes.value.items ?? []); fulfilled++; }
+    if (postersRes.status === 'fulfilled') { setPosters(postersRes.value.items ?? []); fulfilled++; }
     if (moodboardsRes.status === 'fulfilled') {
       setMoodboards(moodboardsRes.value.filter((m) => !m.isDemo));
+      fulfilled++;
     }
-    if (colsRes.status === 'fulfilled') setCollections(colsRes.value);
-    if (edsRes.status === 'fulfilled') setEditorials(edsRes.value);
-    if (assetsRes.status === 'fulfilled') setFeaturedAssets(assetsRes.value);
+    if (colsRes.status === 'fulfilled') { setCollections(colsRes.value); fulfilled++; }
+    if (edsRes.status === 'fulfilled') { setEditorials(edsRes.value); fulfilled++; }
+    if (assetsRes.status === 'fulfilled') { setFeaturedAssets(assetsRes.value); fulfilled++; }
+
+    // If every discovery endpoint failed, surface an error state.
+    if (fulfilled === 0) {
+      setDiscoveryError('Discovery content is temporarily unavailable.');
+    }
     setIsDiscoveryLoading(false);
   }, []);
 
@@ -189,6 +200,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!normalizedQuery || normalizedQuery.length < 2) {
       setSearchResults([]);
+      setSearchError(null);
       setPeopleResults([]);
       setIsSearching(false);
       setIsSearchingPeople(false);
@@ -205,7 +217,9 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
           if (cancelled) return;
           if (result.error) {
             setSearchResults([]);
+            setSearchError('Search is temporarily unavailable. Try again.');
           } else {
+            setSearchError(null);
             // Map search results to feed units directly — each result becomes
             // a ListingFeedUnit with its real media URI.
             setSearchResults(result.items.map((item) => buildListingFeedUnit(
@@ -239,7 +253,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     }, SEARCH_DEBOUNCE_MS);
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [normalizedQuery]);
+  }, [normalizedQuery, searchRetryCount]);
 
   // ── People search ──
   useEffect(() => {
@@ -339,7 +353,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
 
   const hasAnyContent = personalisedListings.length > 0 || looks.length > 0 || posters.length > 0 || moodboards.length > 0 || featuredAssets.length > 0;
   const showLoadingSkeleton = !hasAnyContent && (isDiscoveryLoading || forYouFeed.isLoading || (isSyncing && !lastError));
-  const showError = !hasAnyContent && Boolean(lastError) && !isSyncing && !isDiscoveryLoading && !forYouFeed.isLoading;
+  const showError = !hasAnyContent && (Boolean(lastError) || Boolean(discoveryError)) && !isSyncing && !isDiscoveryLoading && !forYouFeed.isLoading;
   const showEmpty = !hasAnyContent && !isSyncing && !lastError && !isDiscoveryLoading && !forYouFeed.isLoading;
   // Filtered-empty: a category pill is selected but returns 0 listings. This
   // is distinct from the generic empty state (no data at all) — here we have
@@ -402,6 +416,11 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             isSearchingPeople={isSearchingPeople}
             peopleResults={peopleResults}
             searchScope={searchScope}
+            searchError={searchError}
+            onRetry={() => {
+              setSearchError(null);
+              setSearchRetryCount((c) => c + 1);
+            }}
             onScopeChange={setSearchScope}
             onListingPress={handleListingPress}
             onLookPress={handleLookPress}
@@ -549,17 +568,12 @@ function DiscoveryFeedView({
   }
 
   // Build the header component for the masonry grid:
-  // greeting + category pills + hero editorial + collections rail
+  // category pills + hero editorial (compact) + collections rail
+  // Per 2026 research: product media should own the first viewport.
+  // Greeting removed — not needed on a search-first surface.
   const listHeader = (
     <>
-      {isOffline && <OfflineBanner />}
-
-      {/* Personalised greeting — one line, no decorative subtitle */}
-      <View style={styles.greetingWrap}>
-        <Text style={styles.greetingText} maxFontSizeMultiplier={2}>
-          {greeting}{firstName ? `, ${firstName}` : ''}
-        </Text>
-      </View>
+      {isOffline && <OfflineBanner onRetry={onRefresh} />}
 
       {/* Category pills — horizontal scroll, dynamically driven by user algorithm.
           Wrapped in a ScrollView so 8+ pills scroll on narrow screens with a
@@ -602,7 +616,8 @@ function DiscoveryFeedView({
         </ScrollView>
       </View>
 
-      {/* Hero editorial — full-width media object, no decorative chrome */}
+      {/* Hero editorial — compact media strip, no decorative chrome.
+          Per 2026 research: hero max 96-120pt on discovery feeds. */}
       {heroEditorial && heroEditorial.heroImage && (
         <View style={styles.heroWrap}>
           <CachedImage
@@ -617,7 +632,7 @@ function DiscoveryFeedView({
           />
           <View style={styles.heroOverlay} pointerEvents="none">
             <Text style={styles.heroEyebrow}>EDITORIAL</Text>
-            <Text style={styles.heroTitle} numberOfLines={3} maxFontSizeMultiplier={2}>
+            <Text style={styles.heroTitle} numberOfLines={2} maxFontSizeMultiplier={2}>
               {heroEditorial.title}
             </Text>
             <Text style={styles.heroMeta} numberOfLines={1} maxFontSizeMultiplier={2}>
@@ -645,11 +660,6 @@ function DiscoveryFeedView({
           </HorizontalRail>
         </View>
       )}
-
-      {/* For You section label — quiet, one line */}
-      <View style={styles.feedLabelWrap}>
-        <Text style={styles.feedLabel}>For you</Text>
-      </View>
     </>
   );
 
@@ -690,6 +700,8 @@ function SearchResultsView({
   isSearchingPeople,
   peopleResults,
   searchScope,
+  searchError,
+  onRetry,
   onScopeChange,
   onListingPress,
   onLookPress,
@@ -703,6 +715,8 @@ function SearchResultsView({
   isSearchingPeople: boolean;
   peopleResults: UserSearchResult[];
   searchScope: 'items' | 'people';
+  searchError: string | null;
+  onRetry: () => void;
   onScopeChange: (s: 'items' | 'people') => void;
   onListingPress: (listing: DiscoveryListingSummary) => void;
   onLookPress: (id: string) => void;
@@ -746,6 +760,17 @@ function SearchResultsView({
         isSearching && units.length === 0 ? (
           <View style={styles.searchingWrap}>
             <ActivityIndicator size="large" color={colors.brand} />
+          </View>
+        ) : searchError && units.length === 0 ? (
+          <View style={styles.stateWrap}>
+            <EmptyState
+              density="compact"
+              icon="cloud-offline-outline"
+              title="Search unavailable"
+              subtitle={searchError}
+              ctaLabel="Retry"
+              onCtaPress={onRetry}
+            />
           </View>
         ) : units.length === 0 ? (
           <View style={styles.stateWrap}>
@@ -977,7 +1002,7 @@ function createStyles(colors: ThemeColors) {
     // Hero editorial
     heroWrap: {
       width: '100%',
-      height: 280,
+      height: 120,
       marginVertical: Space.sm,
       position: 'relative' },
     heroImage: {

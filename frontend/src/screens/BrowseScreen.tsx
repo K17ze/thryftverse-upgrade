@@ -740,7 +740,7 @@ export default function BrowseScreen() {
       </View>
 
       <View style={styles.titleContainer}>
-        <Text style={styles.hugeTitle}>{title}</Text>
+        <Text style={styles.hugeTitle} accessibilityRole="header">{title}</Text>
         <View style={styles.itemCountPill} accessibilityLiveRegion="polite" accessibilityLabel={backendLoading ? 'Loading items' : `${displayCount} items`}>
           <AppIcon name="bag-handle-outline" size={IconSize.micro} color="textMuted" accessible={false} />
           <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
@@ -927,6 +927,7 @@ export default function BrowseScreen() {
                 key={opt.value}
                 onPress={() => handleSortSelect(opt.value)}
                 style={[styles.sortMenuItem, idx === sortOpts.length - 1 && { borderBottomWidth: 0 }]}
+                hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={`Sort by ${opt.label}`}
                 accessibilityState={{ selected: isActive }}

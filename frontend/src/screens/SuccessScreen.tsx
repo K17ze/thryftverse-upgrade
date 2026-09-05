@@ -126,7 +126,7 @@ export default function SuccessScreen() {
           <Ionicons name="checkmark" size={64} color={colors.success} style={styles.successIcon} />
 
           <View>
-            <Text style={styles.title}>Payment Successful</Text>
+            <Text style={styles.title} accessibilityRole="header">Payment Successful</Text>
             <Text style={styles.subtitle}>
               Your order has been placed.{ '\n' }
               {isLoading

@@ -973,7 +973,7 @@ export default function HomeScreen() {
 
         <View style={[styles.headerForeground, { paddingTop: insets.top + Space.xxs, paddingBottom: Space.sm }]}>
           <Reanimated.View style={[headerTitleStyle, styles.headerTitleWrap]}>
-            <Text style={styles.brandTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.3}>Thryftverse</Text>
+            <Text style={styles.brandTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.3} accessibilityRole="header">Thryftverse</Text>
             {isGuest ? (
               <Pressable
                 onPress={() => navigation.navigate('AuthLanding')}
@@ -1183,7 +1183,12 @@ export default function HomeScreen() {
 
             {renderNewListingsBanner()}
 
-            {lastError ? (
+            {/* ── Consolidated status surface — one banner at a time ──
+                Priority: offline > sync error > degraded feed.
+                Per 2026 research: never stack multiple banners. */}
+            {isOffline && feedGridData.length > 0 ? (
+              <OfflineBanner onRetry={() => void handleRefresh()} />
+            ) : lastError ? (
               <SyncRetryBanner
                 message="Sync is unavailable. Showing cached items."
                 onRetry={() => void handleRefresh()}
@@ -1191,13 +1196,7 @@ export default function HomeScreen() {
                 telemetryContext="home_feed_sync"
                 containerStyle={styles.feedStatusBanner}
               />
-            ) : null}
-
-            {isOffline && feedGridData.length > 0 ? (
-              <OfflineBanner onRetry={() => void handleRefresh()} />
-            ) : null}
-
-            {forYouIsDegraded ? (
+            ) : forYouIsDegraded ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: Space.xs }}>
                 <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} accessible={false} />
                 <Text style={{ flex: 1, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textSecondary }} maxFontSizeMultiplier={1.5}>

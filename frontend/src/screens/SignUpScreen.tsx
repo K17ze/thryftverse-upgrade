@@ -341,7 +341,7 @@ export default function SignUpScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View>
-          <Text style={styles.title} maxFontSizeMultiplier={1.3}>{stepTitle}</Text>
+          <Text style={styles.title} maxFontSizeMultiplier={1.3} accessibilityRole="header">{stepTitle}</Text>
           <Text style={styles.subtitle} maxFontSizeMultiplier={1.4}>{stepSubtitle}</Text>
 
           {/* Social signup — only on step 0, above the email field.

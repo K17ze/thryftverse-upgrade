@@ -138,7 +138,7 @@ export default function BiometricLoginScreen() {
       <View style={styles.content}>
         <Ionicons name="finger-print-outline" size={56} color={colors.brand} style={styles.biometricIcon} />
 
-        <Text style={styles.title} maxFontSizeMultiplier={1.3}>
+        <Text style={styles.title} maxFontSizeMultiplier={1.3} accessibilityRole="header">
           Welcome back
         </Text>
         <Text style={styles.subtitle} maxFontSizeMultiplier={1.4}>

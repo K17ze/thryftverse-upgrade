@@ -438,7 +438,7 @@ export default function FilterScreen() {
 
           <View style={styles.header}>
             <View style={styles.headerTitleRow}>
-              <Text style={styles.headerTitle}>Filter & Sort</Text>
+              <Text style={styles.headerTitle} accessibilityRole="header">Filter & Sort</Text>
               {activeFilterCount > 0 && (
                 <View style={styles.activeCountBadge}>
                   <Text style={styles.activeCountBadgeText}>{activeFilterCount}</Text>

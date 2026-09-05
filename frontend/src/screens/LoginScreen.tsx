@@ -485,7 +485,7 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
           <View>
-            <Text style={styles.title} maxFontSizeMultiplier={1.3}>Sign in</Text>
+            <Text style={styles.title} maxFontSizeMultiplier={1.3} accessibilityRole="header">Sign in</Text>
             <Text style={styles.subtitle} maxFontSizeMultiplier={1.4}>Enter your details to continue.</Text>
 
             <View style={styles.form}>
