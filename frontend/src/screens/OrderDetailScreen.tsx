@@ -744,7 +744,7 @@ export default function OrderDetailScreen() {
           variant="large"
           onBack={() => navigation.goBack()}
           style={{
-            paddingTop: insets.top,
+            paddingTop: 0,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
             borderBottomColor: colors.border }}
@@ -763,7 +763,7 @@ export default function OrderDetailScreen() {
           variant="large"
           onBack={() => navigation.goBack()}
           style={{
-            paddingTop: insets.top,
+            paddingTop: 0,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
             borderBottomColor: colors.border }}
@@ -794,7 +794,7 @@ export default function OrderDetailScreen() {
           variant="large"
           onBack={() => navigation.goBack()}
           style={{
-            paddingTop: insets.top,
+            paddingTop: 0,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
             borderBottomColor: colors.border }}
@@ -819,7 +819,7 @@ export default function OrderDetailScreen() {
         variant="large"
         onBack={() => navigation.goBack()}
         style={{
-          paddingTop: insets.top,
+          paddingTop: 0,
           paddingBottom: Space.sm,
           borderBottomWidth: StyleSheet.hairlineWidth,
           borderBottomColor: colors.border }}

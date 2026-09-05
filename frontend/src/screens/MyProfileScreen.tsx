@@ -675,25 +675,6 @@ export default function MyProfileScreen() {
     [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation, tt]
   );
 
-  if (!user) {
-    return (
-      <View style={[styles.container, t.container]}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <EmptyState
-          icon="person-outline"
-          title={tt('common:misc.notSignedIn')}
-          subtitle={tt('notSignedIn.subtitle')}
-          ctaLabel={tt('notSignedIn.signIn')}
-          onCtaPress={() => navigation.navigate('Login')}
-        />
-      </View>
-    );
-  }
-
-  const memberSince = user.createdAt
-    ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
-    : undefined;
-
   const GRID_GAP = Space.xs;
   const GRID_COLS = 3;
   const CARD_WIDTH = (SCREEN_WIDTH - Space.md * 2 - GRID_GAP * (GRID_COLS - 1)) / GRID_COLS;
@@ -830,6 +811,25 @@ export default function MyProfileScreen() {
     ],
     [tt, allOwnedListings.length, myLooks.length, myReviewCount]
   );
+
+  if (!user) {
+    return (
+      <View style={[styles.container, t.container]}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <EmptyState
+          icon="person-outline"
+          title={tt('common:misc.notSignedIn')}
+          subtitle={tt('notSignedIn.subtitle')}
+          ctaLabel={tt('notSignedIn.signIn')}
+          onCtaPress={() => navigation.navigate('Login')}
+        />
+      </View>
+    );
+  }
+
+  const memberSince = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+    : undefined;
 
   return (
     <View testID="profile-screen" style={[styles.container, t.container]}>

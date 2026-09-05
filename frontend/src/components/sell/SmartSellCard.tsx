@@ -77,12 +77,6 @@ export function SmartSellCard({
 
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Preview contexts (e.g. the AI listing composer) pass listing context
-  // without a policy — nothing to render until a listing exists.
-  if (!policy || !onPolicyChange || !listingId) return null;
-
-  const isPreview = policy.capability.kind === 'preview';
-
   const handleToggle = useCallback(
     (next: boolean) => {
       haptic.light();
@@ -111,6 +105,12 @@ export function SmartSellCard({
     },
     [listingId, onPolicyChange],
   );
+
+  // Preview contexts (e.g. the AI listing composer) pass listing context
+  // without a policy — nothing to render until a listing exists.
+  if (!policy || !onPolicyChange || !listingId) return null;
+
+  const isPreview = policy.capability.kind === 'preview';
 
   // Summary text for the compact row
   const summary = useMemo(() => {

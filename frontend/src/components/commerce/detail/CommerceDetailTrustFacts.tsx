@@ -108,7 +108,7 @@ export function CommerceDetailTrustFacts({
           <Text
             style={[styles.trustFactText, { color: colors.textSecondary }]}
             numberOfLines={1}
-            maxFontSizeMultiplier={1}
+            maxFontSizeMultiplier={1.4}
           >
             {row.label}
           </Text>

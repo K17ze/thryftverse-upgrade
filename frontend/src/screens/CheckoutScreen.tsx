@@ -1175,7 +1175,7 @@ export default function CheckoutScreen() {
     return (
       <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
+        <View style={[styles.header, t.header, { paddingTop: 0 }]}>
           <Pressable
             style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
             onPress={() => navigation.goBack()}
@@ -1203,7 +1203,7 @@ export default function CheckoutScreen() {
     return (
       <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
+        <View style={[styles.header, t.header, { paddingTop: 0 }]}>
           <Pressable
             style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
             onPress={() => navigation.goBack()}
@@ -1228,7 +1228,7 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Sign in"
           >
-            <Text style={[styles.signedOutBtnText, t.signedOutBtnText]} maxFontSizeMultiplier={1}>Sign in</Text>
+            <Text style={[styles.signedOutBtnText, t.signedOutBtnText]} maxFontSizeMultiplier={1.4}>Sign in</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -1239,7 +1239,7 @@ export default function CheckoutScreen() {
     return (
       <SafeAreaView style={[styles.container, t.container]} edges={['top']}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
+        <View style={[styles.header, t.header, { paddingTop: 0 }]}>
           <Pressable
             style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
             onPress={() => navigation.goBack()}
@@ -1264,7 +1264,7 @@ export default function CheckoutScreen() {
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Text style={[styles.signedOutBtnText, t.signedOutBtnText]} maxFontSizeMultiplier={1}>Go back</Text>
+            <Text style={[styles.signedOutBtnText, t.signedOutBtnText]} maxFontSizeMultiplier={1.4}>Go back</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -1359,7 +1359,7 @@ export default function CheckoutScreen() {
       <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
 
       {/* 1. Compact close header */}
-      <View style={[styles.header, t.header, { paddingTop: insets.top }]}>
+      <View style={[styles.header, t.header, { paddingTop: 0 }]}>
         <Pressable
           style={({ pressed }) => [styles.closeBtn, pressed && styles.closeBtnPressed]}
           onPress={handleClose}
@@ -1382,17 +1382,17 @@ export default function CheckoutScreen() {
       <View style={styles.progressRow} accessibilityRole="progressbar" accessibilityLabel={`Checkout progress: Delivery ${deliveryStepComplete ? 'complete' : 'pending'}, Payment ${paymentStepComplete ? 'complete' : 'pending'}, Review ${reviewStepComplete ? 'ready' : 'pending'}`}>
         <View style={styles.progressStep}>
           <View style={[styles.progressDot, { backgroundColor: deliveryStepComplete ? colors.brand : colors.surfaceAlt, borderColor: deliveryStepComplete ? colors.brand : colors.border }]} />
-          <Text style={[styles.progressLabel, { color: deliveryStepComplete ? colors.textPrimary : colors.textMuted }]} maxFontSizeMultiplier={1}>Delivery</Text>
+          <Text style={[styles.progressLabel, { color: deliveryStepComplete ? colors.textPrimary : colors.textMuted }]} maxFontSizeMultiplier={1.4}>Delivery</Text>
         </View>
         <View style={[styles.progressConnector, { backgroundColor: deliveryStepComplete ? colors.brand : colors.border }]} />
         <View style={styles.progressStep}>
           <View style={[styles.progressDot, { backgroundColor: paymentStepComplete ? colors.brand : colors.surfaceAlt, borderColor: paymentStepComplete ? colors.brand : colors.border }]} />
-          <Text style={[styles.progressLabel, { color: paymentStepComplete ? colors.textPrimary : colors.textMuted }]} maxFontSizeMultiplier={1}>Payment</Text>
+          <Text style={[styles.progressLabel, { color: paymentStepComplete ? colors.textPrimary : colors.textMuted }]} maxFontSizeMultiplier={1.4}>Payment</Text>
         </View>
         <View style={[styles.progressConnector, { backgroundColor: paymentStepComplete ? colors.brand : colors.border }]} />
         <View style={styles.progressStep}>
           <View style={[styles.progressDot, { backgroundColor: reviewStepComplete ? colors.brand : colors.surfaceAlt, borderColor: reviewStepComplete ? colors.brand : colors.border }]} />
-          <Text style={[styles.progressLabel, { color: reviewStepComplete ? colors.textPrimary : colors.textMuted }]} maxFontSizeMultiplier={1}>Review</Text>
+          <Text style={[styles.progressLabel, { color: reviewStepComplete ? colors.textPrimary : colors.textMuted }]} maxFontSizeMultiplier={1.4}>Review</Text>
         </View>
       </View>
 
@@ -1412,7 +1412,7 @@ export default function CheckoutScreen() {
             accessibilityLabel={partialDataPrompt.action.label}
             accessibilityHint="Retry loading the missing checkout details"
           >
-            <Text style={[styles.partialDataActionText, t.partialDataActionText]} maxFontSizeMultiplier={1}>{partialDataPrompt.action.label}</Text>
+            <Text style={[styles.partialDataActionText, t.partialDataActionText]} maxFontSizeMultiplier={1.4}>{partialDataPrompt.action.label}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -1537,10 +1537,10 @@ export default function CheckoutScreen() {
           >
             <Ionicons name="wallet-outline" size={20} color={colors.brand} importantForAccessibility="no" />
             <View style={styles.onezeOptionTextCol}>
-              <Text style={[styles.onezeOptionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1}>
+              <Text style={[styles.onezeOptionTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
                 1ZE Wallet
               </Text>
-              <Text style={[styles.onezeOptionSubtitle, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+              <Text style={[styles.onezeOptionSubtitle, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
                 {onezeBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })} 1ZE Â· {Math.ceil(GROSS_TOTAL).toLocaleString()} 1ZE needed
               </Text>
             </View>
@@ -1555,19 +1555,19 @@ export default function CheckoutScreen() {
         <View style={styles.trustCluster}>
           <View style={styles.trustRow}>
             <Ionicons name="shield-checkmark-outline" size={13} color={colors.success} importantForAccessibility="no" />
-            <Text style={[styles.trustText, { color: colors.success }]} maxFontSizeMultiplier={1}>
+            <Text style={[styles.trustText, { color: colors.success }]} maxFontSizeMultiplier={1.4}>
               Buyer protection included
             </Text>
           </View>
           <View style={styles.trustRow}>
             <Ionicons name="lock-closed" size={13} color={colors.textMuted} importantForAccessibility="no" />
-            <Text style={[styles.trustText, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>
+            <Text style={[styles.trustText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
               Secure payment · encrypted
             </Text>
           </View>
           <View style={styles.trustRow}>
             <Ionicons name="return-down-back-outline" size={13} color={colors.textMuted} importantForAccessibility="no" />
-            <Text style={[styles.trustText, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>
+            <Text style={[styles.trustText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
               14-day returns
             </Text>
           </View>
@@ -1606,8 +1606,8 @@ export default function CheckoutScreen() {
                 <View style={[styles.balanceKnob, t.balanceKnob, useBalance && t.balanceKnobOn]} />
               </View>
               <View style={styles.balanceTextCol}>
-                <Text style={[styles.balanceLabel, t.balanceLabel]} maxFontSizeMultiplier={1}>Use wallet balance</Text>
-                <Text style={[styles.balanceAmount, t.balanceAmount]} numberOfLines={1} maxFontSizeMultiplier={1} accessibilityLabel={`${formatFromFiat(walletBalance, 'GBP')} available`}>
+                <Text style={[styles.balanceLabel, t.balanceLabel]} maxFontSizeMultiplier={1.4}>Use wallet balance</Text>
+                <Text style={[styles.balanceAmount, t.balanceAmount]} numberOfLines={1} maxFontSizeMultiplier={1.4} accessibilityLabel={`${formatFromFiat(walletBalance, 'GBP')} available`}>
                   {formatFromFiat(walletBalance, 'GBP')} available
                 </Text>
               </View>
@@ -1618,7 +1618,7 @@ export default function CheckoutScreen() {
         {useBalance && balanceApplied > 0 && (
           <View style={[styles.savingsBadge, t.savingsBadge]}>
             <Ionicons name="wallet-outline" size={12} color={colors.success} importantForAccessibility="no" />
-            <Text style={[styles.savingsText, t.savingsText]} maxFontSizeMultiplier={1}>
+            <Text style={[styles.savingsText, t.savingsText]} maxFontSizeMultiplier={1.4}>
               Saving {formatFromFiat(balanceApplied, 'GBP')} with wallet balance
             </Text>
           </View>
@@ -1644,7 +1644,7 @@ export default function CheckoutScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Retry payment"
               >
-                <Text style={[styles.retryBtnText, t.capabilityRetryText]} maxFontSizeMultiplier={1}>Retry payment</Text>
+                <Text style={[styles.retryBtnText, t.capabilityRetryText]} maxFontSizeMultiplier={1.4}>Retry payment</Text>
               </Pressable>
             )}
           </View>
@@ -1663,7 +1663,7 @@ export default function CheckoutScreen() {
               accessibilityLabel="Try again"
               accessibilityHint="Retry loading checkout details"
             >
-              <Text style={[styles.capabilityRetryText, t.capabilityRetryText]} maxFontSizeMultiplier={1}>Try again</Text>
+              <Text style={[styles.capabilityRetryText, t.capabilityRetryText]} maxFontSizeMultiplier={1.4}>Try again</Text>
             </Pressable>
           </View>
         ) : null}
@@ -1684,27 +1684,27 @@ export default function CheckoutScreen() {
           accessibilityHint="Open the full cost breakdown and returns policy"
         >
           <View style={styles.compactSummaryRow}>
-            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Item</Text>
+            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1.4}>Item</Text>
             <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(item.price, 'GBP')}</Text>
           </View>
           <View style={styles.compactSummaryRow}>
-            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Delivery</Text>
+            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1.4}>Delivery</Text>
             <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(POSTAGE_FEE, 'GBP')}</Text>
           </View>
           <View style={styles.compactSummaryRow}>
-            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Buyer protection</Text>
+            <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1.4}>Buyer protection</Text>
             <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>{formatFromFiat(PLATFORM_CHARGE, 'GBP')}</Text>
           </View>
           {useBalance && balanceApplied > 0 && (
             <View style={styles.compactSummaryRow}>
-              <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1}>Wallet applied</Text>
+              <Text style={[styles.compactSummaryLabel, t.compactSummaryRow]} maxFontSizeMultiplier={1.4}>Wallet applied</Text>
               <Text style={[styles.compactSummaryVal, t.compactSummaryValue]} maxFontSizeMultiplier={2}>-{formatFromFiat(balanceApplied, 'GBP')}</Text>
             </View>
           )}
           <View style={[styles.compactSummaryDivider, t.compactSummaryDivider]} />
           <View style={styles.compactSummaryTotalRow}>
             <View style={styles.compactSummaryTotalLeft}>
-              <Text style={[styles.compactSummaryTotalLabel, t.compactSummaryTotalLabel]} maxFontSizeMultiplier={1}>Total</Text>
+              <Text style={[styles.compactSummaryTotalLabel, t.compactSummaryTotalLabel]} maxFontSizeMultiplier={1.4}>Total</Text>
               <Text
                 style={[styles.compactSummaryTotalValue, t.compactSummaryTotalValue]}
                 accessibilityLiveRegion="polite"
@@ -1715,7 +1715,7 @@ export default function CheckoutScreen() {
               </Text>
             </View>
             <View style={styles.breakdownChevron}>
-              <Text style={[styles.breakdownChevronText, t.breakdownChevronText]} maxFontSizeMultiplier={1}>View full breakdown</Text>
+              <Text style={[styles.breakdownChevronText, t.breakdownChevronText]} maxFontSizeMultiplier={1.4}>View full breakdown</Text>
               <Ionicons name="chevron-up" size={16} color={colors.textMuted} importantForAccessibility="no" />
             </View>
           </View>
@@ -1746,7 +1746,7 @@ export default function CheckoutScreen() {
               accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
             >
               <Ionicons name="logo-apple" size={22} color={colors.textInverse} importantForAccessibility="no" />
-              <Text style={[styles.walletBtnText, { color: colors.textInverse }]} maxFontSizeMultiplier={1}>Pay with Apple Pay</Text>
+              <Text style={[styles.walletBtnText, { color: colors.textInverse }]} maxFontSizeMultiplier={1.4}>Pay with Apple Pay</Text>
             </Pressable>
           )}
 
@@ -1767,7 +1767,7 @@ export default function CheckoutScreen() {
               accessibilityState={{ disabled: !checkoutEligible || isInteractionLocked }}
             >
               <Ionicons name="logo-google" size={22} color={colors.textInverse} importantForAccessibility="no" />
-              <Text style={[styles.walletBtnText, { color: colors.textInverse }]} maxFontSizeMultiplier={1}>Pay with Google Pay</Text>
+              <Text style={[styles.walletBtnText, { color: colors.textInverse }]} maxFontSizeMultiplier={1.4}>Pay with Google Pay</Text>
             </Pressable>
           )}
 
@@ -1807,7 +1807,7 @@ export default function CheckoutScreen() {
                 styles.payBtnText,
                 walletAvailable ? t.payBtnSecondaryText : t.payBtnText,
               ]}
-              maxFontSizeMultiplier={1}
+              maxFontSizeMultiplier={1.4}
             >
               {payLabel}
             </Text>

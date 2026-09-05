@@ -72,7 +72,7 @@ interface CreateSessionResponse {
   expiresAt: string;
 }
 
-interface SearchSessionResponse extends DiscoveryPage {}
+type SearchSessionResponse = DiscoveryPage;
 
 export async function createDiscoverySession(params: {
   entryPoint: string;

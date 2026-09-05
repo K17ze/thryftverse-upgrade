@@ -90,7 +90,7 @@ export function TrustBadge({ signal, compact = false, iconConcept, style }: Trus
           <Text
             style={[styles.label, { color: accent }]}
             numberOfLines={1}
-            maxFontSizeMultiplier={1}
+            maxFontSizeMultiplier={1.4}
           >
             {signal.label}
           </Text>

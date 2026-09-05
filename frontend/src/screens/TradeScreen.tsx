@@ -697,14 +697,14 @@ export default function TradeScreen() {
         <View>
           <View style={[styles.ticketCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {/* Order type */}
-            <Text style={[styles.inputLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>Order type</Text>
+            <Text style={[styles.inputLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>Order type</Text>
             <AppSegmentControl
               options={ORDER_TYPE_OPTIONS}
               value={ticketOrderType}
               onChange={setTicketOrderType}
               fullWidth
             />
-            <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={2} maxFontSizeMultiplier={1}>
+            <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={2} maxFontSizeMultiplier={1.4}>
               {ticketOrderType === 'protected_instant'
                 ? 'Marketable limit with visible protection price. Never uncapped in an illiquid asset.'
                 : 'Resting order. Queued until matched at your limit price.'}
@@ -715,7 +715,7 @@ export default function TradeScreen() {
             {/* Quantity + availability context */}
             <View style={styles.ticketRow}>
               <View style={styles.ticketFieldWrap}>
-                <Text style={[styles.inputLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>Quantity</Text>
+                <Text style={[styles.inputLabel, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>Quantity</Text>
                 <AppInput
                   value={quantityInput}
                   onChangeText={(v) => setQuantityInput(sanitizeTradeQuantityInput(v))}
@@ -732,7 +732,7 @@ export default function TradeScreen() {
                     scaleValue={0.96}
                     hapticFeedback="light"
                   >
-                    <Text style={[styles.maxLink, { color: colors.textSecondary }]} maxFontSizeMultiplier={1}>Max: {maxUnits}</Text>
+                    <Text style={[styles.maxLink, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>Max: {maxUnits}</Text>
                   </AnimatedPressable>
                 )}
               </View>

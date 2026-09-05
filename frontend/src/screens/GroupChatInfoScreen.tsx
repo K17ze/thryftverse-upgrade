@@ -368,6 +368,23 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     return recentMedia;
   }, [remoteMedia, recentMedia]);
 
+  // Filter members by query — must be before early return (Rules of Hooks)
+  const filteredMembers = useMemo(() => {
+    if (!memberSearchQuery.trim()) return memberProfiles;
+    const q = memberSearchQuery.toLowerCase();
+    return memberProfiles.filter(
+      (m) =>
+        m.username.toLowerCase().includes(q) ||
+        (m.displayName ?? '').toLowerCase().includes(q)
+    );
+  }, [memberProfiles, memberSearchQuery]);
+
+  const visualMediaItems = useMemo(() => {
+    return mediaItems
+      .filter((m): m is typeof m & { mediaUri: string } => Boolean(m.mediaUri) && m.mediaType !== 'document')
+      .slice(0, 8);
+  }, [mediaItems]);
+
   if (!conversation || conversation.type !== 'group') {
     return (
       <FlagshipScreen
@@ -557,26 +574,9 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     }
   };
 
-  // Filter members by query
-  const filteredMembers = useMemo(() => {
-    if (!memberSearchQuery.trim()) return memberProfiles;
-    const q = memberSearchQuery.toLowerCase();
-    return memberProfiles.filter(
-      (m) =>
-        m.username.toLowerCase().includes(q) ||
-        (m.displayName ?? '').toLowerCase().includes(q)
-    );
-  }, [memberProfiles, memberSearchQuery]);
-
   const displayedMembers = isMemberSearchOpen
     ? filteredMembers
     : filteredMembers.slice(0, 5);
-
-  const visualMediaItems = useMemo(() => {
-    return mediaItems
-      .filter((m): m is typeof m & { mediaUri: string } => Boolean(m.mediaUri) && m.mediaType !== 'document')
-      .slice(0, 8);
-  }, [mediaItems]);
 
   const disappearingLabel =
     disappearingDuration === 'off'

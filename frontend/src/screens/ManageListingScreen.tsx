@@ -136,6 +136,22 @@ export default function ManageListingScreen() {
     return item.images?.length ? item.images : (item.imageUrl ? [item.imageUrl] : []);
   }, [item]);
 
+  // ── Performance metrics (moved before early returns for Rules of Hooks) ──
+  const engagement = item?.engagement ?? null;
+  const activeOfferCount = engagement?.activeOfferCount ?? item?.offersCount ?? item?.offers ?? 0;
+  const viewsCount: number | null = engagement?.views ?? item?.views ?? null;
+  const conversionRate = useMemo(() => {
+    if (viewsCount == null || viewsCount === 0) return null;
+    return (activeOfferCount / viewsCount) * 100;
+  }, [viewsCount, activeOfferCount]);
+  const daysOnMarket = useMemo(() => {
+    const created = item?.createdAt;
+    if (!created) return null;
+    const diffMs = Date.now() - new Date(created).getTime();
+    if (diffMs < 0) return null;
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  }, [item?.createdAt]);
+
   const isOwner = currentUser?.id && item?.sellerId === currentUser.id;
 
   if (isLoading) {
@@ -319,34 +335,10 @@ export default function ManageListingScreen() {
   const statusColor = isSold ? colors.brand : isPaused ? colors.warning : colors.success;
 
   // ── Real engagement data (from backend engagement summary) ──
-  // The single-listing API returns engagement as a nested object, NOT as
-  // top-level likes/saves/offersCount. Reads fall back to top-level fields
-  // only for older payloads; views is intentionally omitted (not returned
-  // by the backend engagement query — was fabricated in a prior build).
-  const engagement = item.engagement ?? null;
   const likesCount = engagement?.likes ?? item.likes ?? 0;
   const savesCount = engagement?.saves ?? item.saves ?? 0;
   const questionCount = engagement?.questionCount ?? 0;
   const answeredQuestionCount = engagement?.answeredQuestionCount ?? 0;
-  const activeOfferCount = engagement?.activeOfferCount ?? item.offersCount ?? item.offers ?? 0;
-
-  // ── Performance metrics ──
-  // Views is optional in the engagement summary — show "—" when absent
-  // rather than fabricating a zero. Conversion rate = offers / views, only
-  // meaningful when both views and offers are real. Time on market is
-  // computed from the listing's createdAt timestamp.
-  const viewsCount: number | null = engagement?.views ?? item.views ?? null;
-  const conversionRate = useMemo(() => {
-    if (viewsCount == null || viewsCount === 0) return null;
-    return (activeOfferCount / viewsCount) * 100;
-  }, [viewsCount, activeOfferCount]);
-  const daysOnMarket = useMemo(() => {
-    const created = item.createdAt;
-    if (!created) return null;
-    const diffMs = Date.now() - new Date(created).getTime();
-    if (diffMs < 0) return null;
-    return Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  }, [item.createdAt]);
 
   return (
     <View style={styles.container}>

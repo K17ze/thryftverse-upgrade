@@ -60,7 +60,7 @@ export function AttributeSummaryRow({
               accessibilityRole="button"
             >
               <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
-              <Text style={[styles.conditionChipText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1}>
+              <Text style={[styles.conditionChipText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
                 {item.condition}
               </Text>
               <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
@@ -72,7 +72,7 @@ export function AttributeSummaryRow({
               item.category,
             ].filter(Boolean).join(' · ');
             return remaining ? (
-              <Text style={[styles.attributeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+              <Text style={[styles.attributeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
                 {remaining}
               </Text>
             ) : null;
@@ -81,7 +81,7 @@ export function AttributeSummaryRow({
               views) rendered as a quiet trailing element in the same row.
               Only included when the backend provides positive counts. */}
           {socialProofLine ? (
-            <Text style={[styles.socialProofInline, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+            <Text style={[styles.socialProofInline, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
               · {socialProofLine}
             </Text>
           ) : null}
@@ -94,7 +94,7 @@ export function AttributeSummaryRow({
             accessibilityLabel="View size guide"
             accessibilityRole="button"
           >
-            <Text style={[styles.sizeGuideLink, { color: colors.brand }]} maxFontSizeMultiplier={1}>
+            <Text style={[styles.sizeGuideLink, { color: colors.brand }]} maxFontSizeMultiplier={1.4}>
               Size guide
             </Text>
           </Pressable>
@@ -105,7 +105,7 @@ export function AttributeSummaryRow({
           attribute row. Kept separate because it is a price-adjacent fact,
           not an attribute. */}
       {priceIzeText ? (
-        <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+        <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
           {priceIzeText}
         </Text>
       ) : null}

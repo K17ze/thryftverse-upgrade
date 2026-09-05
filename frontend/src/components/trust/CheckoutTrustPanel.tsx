@@ -113,7 +113,7 @@ export function CheckoutTrustPanel({ seller, commerce }: CheckoutTrustPanelProps
               <Text
                 style={[styles.title, { color: colors.textPrimary }]}
                 numberOfLines={1}
-                maxFontSizeMultiplier={1}
+                maxFontSizeMultiplier={1.4}
               >
                 {row.title}
               </Text>

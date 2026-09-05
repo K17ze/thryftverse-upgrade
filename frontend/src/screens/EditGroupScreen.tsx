@@ -123,6 +123,16 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     setOutcomeUnknown(false);
   };
 
+  const handleMediaSourceSelect = useCallback((source: GroupMediaSource) => {
+    const target = mediaSourceSheet.target;
+    if (target === 'avatar') {
+      void groupMedia.pickAvatar(source);
+    } else {
+      void groupMedia.pickCover(source);
+    }
+    clearPendingSave();
+  }, [mediaSourceSheet.target, groupMedia]);
+
   if (!conversation || conversation.type !== 'group') {
     return (
       <FlagshipScreen
@@ -190,16 +200,6 @@ export default function EditGroupScreen({ navigation, route }: Props) {
     groupMedia.removeCover();
     clearPendingSave();
   };
-
-  const handleMediaSourceSelect = useCallback((source: GroupMediaSource) => {
-    const target = mediaSourceSheet.target;
-    if (target === 'avatar') {
-      void groupMedia.pickAvatar(source);
-    } else {
-      void groupMedia.pickCover(source);
-    }
-    clearPendingSave();
-  }, [mediaSourceSheet.target, groupMedia]);
 
   const handleSave = async () => {
     const trimmedName = name.trim();

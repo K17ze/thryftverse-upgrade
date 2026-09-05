@@ -314,6 +314,44 @@ export function ListingMediaStudio({
     prevStatusMap.current = next;
   }, [items, queueItems, haptic]);
 
+  const coverItem = items[0];
+  const coverDisplayUri = coverItem ? getDisplayUri(coverItem) : '';
+  const coverStatus = coverItem ? getItemStatus(coverItem, queueItems) : 'draft';
+  const isCoverVideo = isVideoUri(coverDisplayUri);
+  const coverCanRemove = coverItem ? (canRemoveItem ? canRemoveItem(coverItem.id) : true) : true;
+  const photoUris = items.map(getDisplayUri);
+  const itemIds = items.map((m) => m.id);
+
+  // ── Transform handler (crop/rotate/flip) ──
+  // Uses the existing mediaTransforms.ts functions. Only applies to local
+  // image URIs (file:// / content://) — remote URLs need download first.
+  const applyTransform = useCallback(async (
+    action: 'rotateLeft' | 'rotateRight' | 'flip',
+  ) => {
+    if (!onTransformItem || transformBusy) return;
+    const uri = coverDisplayUri;
+    if (!uri.startsWith('file://') && !uri.startsWith('content://')) return;
+    if (isVideoUri(uri)) return;
+    setTransformBusy(true);
+    haptic.light();
+    try {
+      let result: MediaTransformResult;
+      if (action === 'rotateLeft') {
+        result = await rotateImage(uri, 270);
+      } else if (action === 'rotateRight') {
+        result = await rotateImage(uri, 90);
+      } else {
+        result = await flipImage(uri, 'horizontal');
+      }
+      onTransformItem(coverItem!.id, result.uri);
+      haptic.success();
+    } catch {
+      haptic.warning();
+    } finally {
+      setTransformBusy(false);
+    }
+  }, [onTransformItem, transformBusy, coverDisplayUri, coverItem?.id, haptic]);
+
   if (items.length === 0) {
     return (
       <View style={styles.container}>
@@ -352,44 +390,6 @@ export function ListingMediaStudio({
       </View>
     );
   }
-
-  const coverItem = items[0];
-  const coverDisplayUri = getDisplayUri(coverItem);
-  const coverStatus = getItemStatus(coverItem, queueItems);
-  const isCoverVideo = isVideoUri(coverDisplayUri);
-  const coverCanRemove = canRemoveItem ? canRemoveItem(coverItem.id) : true;
-  const photoUris = items.map(getDisplayUri);
-  const itemIds = items.map((m) => m.id);
-
-  // ── Transform handler (crop/rotate/flip) ──
-  // Uses the existing mediaTransforms.ts functions. Only applies to local
-  // image URIs (file:// / content://) — remote URLs need download first.
-  const applyTransform = useCallback(async (
-    action: 'rotateLeft' | 'rotateRight' | 'flip',
-  ) => {
-    if (!onTransformItem || transformBusy) return;
-    const uri = coverDisplayUri;
-    if (!uri.startsWith('file://') && !uri.startsWith('content://')) return;
-    if (isVideoUri(uri)) return;
-    setTransformBusy(true);
-    haptic.light();
-    try {
-      let result: MediaTransformResult;
-      if (action === 'rotateLeft') {
-        result = await rotateImage(uri, 270);
-      } else if (action === 'rotateRight') {
-        result = await rotateImage(uri, 90);
-      } else {
-        result = await flipImage(uri, 'horizontal');
-      }
-      onTransformItem(coverItem.id, result.uri);
-      haptic.success();
-    } catch {
-      haptic.warning();
-    } finally {
-      setTransformBusy(false);
-    }
-  }, [onTransformItem, transformBusy, coverDisplayUri, coverItem.id, haptic]);
 
   /* Render each thumbnail inside SortablePhotoStrip */
   const renderThumbItem = (index: number) => {

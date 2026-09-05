@@ -91,7 +91,7 @@ export function TrustFactsSection({ seller, commerce, colors }: TrustFactsSectio
           ) : (
             <Ionicons name={row.icon} size={16} color={colors.textSecondary} />
           )}
-          <Text style={[styles.trustFactText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+          <Text style={[styles.trustFactText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
             {row.label}
           </Text>
         </View>

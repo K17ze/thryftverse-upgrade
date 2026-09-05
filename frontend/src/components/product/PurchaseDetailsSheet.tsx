@@ -58,7 +58,7 @@ export function PurchaseDetailsSheet({
           <Text style={[styles.purchaseSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
             Costs, delivery & protection
           </Text>
-          <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>
+          <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
             Confirmed terms for this listing
           </Text>
         </View>

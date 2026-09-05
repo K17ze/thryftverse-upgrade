@@ -140,7 +140,7 @@ export function SellerTrustCard({ seller, commerce, onViewProfile }: SellerTrust
           <Text
             style={[styles.name, { color: colors.textPrimary }]}
             numberOfLines={1}
-            maxFontSizeMultiplier={1}
+            maxFontSizeMultiplier={1.4}
           >
             {seller.username}
           </Text>
@@ -187,7 +187,7 @@ export function SellerTrustCard({ seller, commerce, onViewProfile }: SellerTrust
               <Text
                 style={[styles.metricValue, { color: colors.textPrimary }]}
                 numberOfLines={1}
-                maxFontSizeMultiplier={1}
+                maxFontSizeMultiplier={1.4}
               >
                 {m.value}
               </Text>

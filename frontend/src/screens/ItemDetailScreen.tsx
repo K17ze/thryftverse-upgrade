@@ -909,7 +909,7 @@ export default function ItemDetailScreen() {
                     accessibilityRole="button"
                   >
                     <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
-                    <Text style={[styles.conditionChipText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1}>
+                    <Text style={[styles.conditionChipText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
                       {item.condition}
                     </Text>
                     <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
@@ -921,7 +921,7 @@ export default function ItemDetailScreen() {
                     item.category,
                   ].filter(Boolean).join(' · ');
                   return remaining ? (
-                    <Text style={[styles.attributeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+                    <Text style={[styles.attributeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
                       {remaining}
                     </Text>
                   ) : null;
@@ -931,7 +931,7 @@ export default function ItemDetailScreen() {
                     in the same row. Only included when the backend
                     provides positive counts — never fabricated. */}
                 {socialProofLine ? (
-                  <Text style={[styles.socialProofInline, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+                  <Text style={[styles.socialProofInline, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
                     · {socialProofLine}
                   </Text>
                 ) : null}
@@ -946,7 +946,7 @@ export default function ItemDetailScreen() {
                   accessibilityLabel="View size guide"
                   accessibilityRole="button"
                 >
-                  <Text style={[styles.sizeGuideLink, { color: colors.brand }]} maxFontSizeMultiplier={1}>
+                  <Text style={[styles.sizeGuideLink, { color: colors.brand }]} maxFontSizeMultiplier={1.4}>
                     Size guide
                   </Text>
                 </AnimatedPressable>
@@ -958,7 +958,7 @@ export default function ItemDetailScreen() {
               below the attribute row. Kept separate because it is a
               price-adjacent fact, not an attribute. */}
           {priceIzeText ? (
-            <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+            <Text style={[styles.izeText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
               {priceIzeText}
             </Text>
           ) : null}
@@ -1073,7 +1073,7 @@ export default function ItemDetailScreen() {
                   ) : (
                     <Ionicons name={row.icon} size={16} color={colors.textSecondary} />
                   )}
-                  <Text style={[styles.trustFactText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+                  <Text style={[styles.trustFactText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
                     {row.label}
                   </Text>
                 </View>
@@ -1134,7 +1134,7 @@ export default function ItemDetailScreen() {
                   accessibilityRole="button"
                   accessibilityState={{ expanded: descriptionExpanded }}
                 >
-                  <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1}>
+                  <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
                     {descriptionExpanded ? 'Show less' : 'Read more'}
                   </Text>
                 </AnimatedPressable>
@@ -1240,7 +1240,7 @@ export default function ItemDetailScreen() {
           })()}
 
           {item.createdAt ? (
-            <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+            <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
               Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
             </Text>
           ) : null}
@@ -1374,7 +1374,7 @@ export default function ItemDetailScreen() {
                         size={18}
                         color={priceAlertEnabled ? colors.brand : colors.textSecondary}
                       />
-                      <Text style={[styles.alertRowLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1}>
+                      <Text style={[styles.alertRowLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
                         Price drop alerts
                       </Text>
                     </View>
@@ -1464,7 +1464,7 @@ export default function ItemDetailScreen() {
                         {simItem.title}
                       </Text>
                       {(simItem.brand || simItem.condition) && (
-                        <Text style={[styles.moreLikeThisMeta, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+                        <Text style={[styles.moreLikeThisMeta, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
                           {[simItem.brand, simItem.condition].filter(Boolean).join(' · ')}
                         </Text>
                       )}
@@ -1534,7 +1534,7 @@ export default function ItemDetailScreen() {
           return (
             <CommerceDetailStateDock
               stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.success }]} maxFontSizeMultiplier={1}>
+                <Text style={[styles.dockStateBadge, { color: colors.success }]} maxFontSizeMultiplier={1.4}>
                   Sold
                 </Text>
               }
@@ -1569,7 +1569,7 @@ export default function ItemDetailScreen() {
           return (
             <CommerceDetailStateDock
               stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]} maxFontSizeMultiplier={1}>
+                <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
                   {unavailableCopy.label}
                 </Text>
               }
@@ -1759,7 +1759,7 @@ export default function ItemDetailScreen() {
             <Text style={[styles.purchaseSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
               Costs, delivery & protection
             </Text>
-            <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>
+            <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
               Confirmed terms for this listing
             </Text>
           </View>
@@ -1966,7 +1966,7 @@ export default function ItemDetailScreen() {
           <View style={styles.conditionSheetBody}>
             <View style={[styles.conditionSheetBadge, { backgroundColor: conditionMeta ? `${conditionMeta.color}14` : colors.surfaceAlt }]}>
               <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
-              <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]} maxFontSizeMultiplier={1}>
+              <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
                 {item.condition}
               </Text>
             </View>
@@ -1990,7 +1990,7 @@ export default function ItemDetailScreen() {
                 accessibilityRole="button"
               >
                 <Ionicons name="images-outline" size={18} color={colors.brand} />
-                <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={1}>
+                <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={1.4}>
                   View condition photos
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.brand} />
