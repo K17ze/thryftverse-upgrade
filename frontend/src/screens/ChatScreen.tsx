@@ -23,6 +23,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { RootStackParamList } from "../navigation/types";
 import { openProfile } from "../navigation/openProfile";
+import { openProductDetail } from "../platform/product/openProductDetail";
 
 import { useAppTheme } from "../theme/ThemeContext";
 
@@ -1643,9 +1644,7 @@ export default function ChatScreen({ navigation, route }: Props) {
               { displayMode: "fiat" },
             )}
             onPress={() =>
-              navigation.navigate("ItemDetail", {
-                itemId: conversation.context!.listing!.id,
-              })
+              openProductDetail(navigation, { referenceKind: 'listing', canonicalId: conversation.context!.listing!.id, sourceSurface: 'ChatContextBar' })
             }
             onPressOrder={
               conversation.context?.order

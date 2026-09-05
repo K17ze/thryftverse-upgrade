@@ -328,9 +328,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   }, [navigation]);
 
   const handleLookPress = useCallback((lookId: string) => {
-    navigation.navigate('MainTabs', {
-      screen: 'Home',
-      params: { screen: 'LookDetail', params: { lookId } } });
+    navigation.navigate('LookDetail', { lookId });
   }, [navigation]);
 
   const handlePosterPress = useCallback((storyId: string) => {

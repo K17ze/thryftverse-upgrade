@@ -711,12 +711,9 @@ export type RootStackRouteName = typeof ROOT_STACK_ROUTES[number];
 
 export type HomeTabParamList = {
   Home: undefined;
-  ExploreCollection: RootStackParamList['ExploreCollection'];
-  LookDetail: RootStackParamList['LookDetail'];
-  GalleriaCollectionDetail: RootStackParamList['GalleriaCollectionDetail'];
-  MoodboardHome: undefined;
-  YourAlgorithm: undefined;
-  StyleQuiz: undefined;
+  // Discovery surfaces (ExploreCollection, GalleriaCollectionDetail,
+  // MoodboardHome, YourAlgorithm, StyleQuiz, LookDetail) are registered
+  // in the root stack only for cross-tab navigation.
 };
 
 export type ExploreTabParamList = {
@@ -727,11 +724,8 @@ export type ExploreTabParamList = {
   Filter: RootStackParamList['Filter'];
   SavedSearches: undefined;
   CollectionDetail: RootStackParamList['CollectionDetail'];
-  LookDetail: RootStackParamList['LookDetail'];
-  // Discovery surfaces — moved from HomeStack during IA convergence (item-26 Phase 3).
-  PulseFeed: undefined;
-  Galleria: undefined;
-  ConversationalSearch: undefined;
+  // Discovery surfaces (PulseFeed, Galleria, ConversationalSearch, LookDetail)
+  // are registered in the root stack only for cross-tab navigation.
 };
 
 export type InboxTabParamList = {
@@ -740,7 +734,7 @@ export type InboxTabParamList = {
 
 export type ProfileTabParamList = {
   Profile: undefined;
-  LookDetail: RootStackParamList['LookDetail'];
+  // LookDetail is registered in the root stack only.
 };
 
 // ── Main Tabs ──

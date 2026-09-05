@@ -414,9 +414,7 @@ export function DiscoverScene({
   // every render, invalidating the memoized renderItem and destabilizing
   // FlashList cell recycling.
   const handleLookPress = useCallback(
-    (lookId: string) => navigation.navigate('MainTabs', {
-      screen: 'Home',
-      params: { screen: 'LookDetail', params: { lookId } } }),
+    (lookId: string) => navigation.navigate('LookDetail', { lookId }),
     [navigation],
   );
   const handlePosterPress = useCallback(

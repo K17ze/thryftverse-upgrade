@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { CachedImage } from '../components/CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -113,7 +114,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
   const handleViewListing = React.useCallback(() => {
     if (listingId) {
-      navigation.push('ItemDetail', { itemId: listingId });
+      openProductDetail(navigation, { referenceKind: 'listing', canonicalId: listingId, sourceSurface: 'ListingSuccess' });
     }
   }, [navigation, listingId]);
 

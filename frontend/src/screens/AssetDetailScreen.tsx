@@ -16,6 +16,7 @@ import Reanimated, {
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { Space, Radius, FontFamily, DockConstants, Control, Numeric, PressScale } from '../theme/designTokens';
@@ -498,8 +499,10 @@ export default function AssetDetailScreen() {
     reasonCode?: string,
     personalised?: boolean,
   ) => {
-    navigation.push('ItemDetail', {
-      itemId: recItem.id,
+    openProductDetail(navigation, {
+      referenceKind: 'listing',
+      canonicalId: recItem.id,
+      sourceSurface: 'AssetDetail',
       sectionKey,
       position,
       reasonCode,

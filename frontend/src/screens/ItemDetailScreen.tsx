@@ -24,6 +24,7 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -598,8 +599,10 @@ export default function ItemDetailScreen() {
     recReasonCode?: string,
     recPersonalised?: boolean,
   ) => {
-    navigation.push('ItemDetail', {
-      itemId: recItem.id,
+    openProductDetail(navigation, {
+      referenceKind: 'listing',
+      canonicalId: recItem.id,
+      sourceSurface: 'ItemDetailRecommendation',
       sectionKey: recSectionKey,
       position: recPosition,
       reasonCode: recReasonCode,

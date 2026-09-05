@@ -14,6 +14,10 @@ export interface User {
   listingCount: number;
   bio?: string;
   website?: string;
+  /** Pronouns for the user (e.g. "she/her", "they/them"). */
+  pronouns?: string;
+  /** Whether this user is an AI-assisted creator. */
+  isAiCreator?: boolean;
   /** Identity/KYC verification — separate from email verification. */
   identityVerified?: boolean;
   /** Seller standards verification — separate from email/identity. */

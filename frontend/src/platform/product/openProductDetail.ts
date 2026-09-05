@@ -20,6 +20,14 @@ export interface ProductReference {
   sourceSurface?: string;
   /** Originating item id, when the reference was surfaced from another item. */
   sourceItemId?: string;
+  /** Source feed section (e.g. 'for_you', 'following', 'browse', 'search'). */
+  sectionKey?: string;
+  /** Position of the item in the source feed (0-indexed). */
+  position?: number;
+  /** Algorithmic reason code for why the item was shown. */
+  reasonCode?: string;
+  /** Whether the item was personalised to the user. */
+  personalised?: boolean;
 }
 
 /**
@@ -31,7 +39,7 @@ export interface ProductReference {
  */
 export function resolveProductDestination(ref: ProductReference): {
   route: keyof RootStackParamList;
-  params: Record<string, string>;
+  params: Record<string, string | number | boolean | undefined>;
 } {
   switch (ref.referenceKind) {
     case 'co_own':
@@ -42,7 +50,16 @@ export function resolveProductDestination(ref: ProductReference): {
     case 'look_tag':
     case 'editorial':
     default:
-      return { route: 'ItemDetail', params: { itemId: ref.canonicalId } };
+      return {
+        route: 'ItemDetail',
+        params: {
+          itemId: ref.canonicalId,
+          sectionKey: ref.sectionKey,
+          position: ref.position,
+          reasonCode: ref.reasonCode,
+          personalised: ref.personalised,
+        },
+      };
   }
 }
 

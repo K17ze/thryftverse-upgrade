@@ -37,12 +37,8 @@ export function ExploreStack() {
       <Stack.Screen name="Filter" getComponent={() => require('../../screens/FilterScreen').default} options={filterScreenOptions} />
       <Stack.Screen name="SavedSearches" getComponent={() => require('../../screens/SavedSearchesScreen').default} />
       <Stack.Screen name="CollectionDetail" getComponent={() => require('../../screens/CollectionDetailScreen').default} />
-      <Stack.Screen name="LookDetail" getComponent={() => require('../../screens/LookDetailScreen').default} />
-      {/* Discovery surfaces — moved from HomeStack during IA convergence (item-26 Phase 3).
-          These are also registered in the root stack for cross-tab navigation. */}
-      <Stack.Screen name="PulseFeed" getComponent={() => require('../../screens/PulseFeedScreen').default} />
-      <Stack.Screen name="Galleria" getComponent={() => require('../../screens/GalleriaScreen').default} />
-      <Stack.Screen name="ConversationalSearch" getComponent={() => require('../../screens/ConversationalSearchScreen').default} />
+      {/* Discovery surfaces (PulseFeed, Galleria, ConversationalSearch) are
+         registered in the root stack only for cross-tab navigation. */}
     </Stack.Navigator>
   );
 }

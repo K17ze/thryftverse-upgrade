@@ -25,19 +25,15 @@ const pushScreenOptions = {
 export function HomeStack() {
   return (
     <Stack.Navigator screenOptions={pushScreenOptions}>
-      <Stack.Screen
-        name="Home"
+      <Stack.Screen name="Home"
         getComponent={withScreenErrorBoundary(
           () => require('../../screens/HomeScreen').default,
           'Home',
         )}
       />
-      <Stack.Screen name="ExploreCollection" getComponent={() => require('../../screens/ExploreCollectionScreen').default} />
-      <Stack.Screen name="LookDetail" getComponent={() => require('../../screens/LookDetailScreen').default} />
-      <Stack.Screen name="GalleriaCollectionDetail" getComponent={() => require('../../screens/GalleriaCollectionDetailScreen').default} />
-      <Stack.Screen name="MoodboardHome" getComponent={() => require('../../screens/MoodboardHomeScreen').default} />
-      <Stack.Screen name="YourAlgorithm" getComponent={() => require('../../screens/YourAlgorithmScreen').default} />
-      <Stack.Screen name="StyleQuiz" getComponent={() => require('../../screens/StyleQuizScreen').default} options={{ presentation: 'modal' as const, gestureEnabled: true }} />
+      {/* Discovery surfaces (ExploreCollection, GalleriaCollectionDetail,
+          MoodboardHome, YourAlgorithm, StyleQuiz) are registered in the
+          root stack only for cross-tab navigation. */}
     </Stack.Navigator>
   );
 }

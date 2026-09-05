@@ -20,7 +20,6 @@ export function ProfileStack() {
   return (
     <Stack.Navigator screenOptions={pushScreenOptions}>
       <Stack.Screen name="Profile" getComponent={() => require('../../screens/MyProfileScreen').default} />
-      <Stack.Screen name="LookDetail" getComponent={() => require('../../screens/LookDetailScreen').default} />
     </Stack.Navigator>
   );
 }

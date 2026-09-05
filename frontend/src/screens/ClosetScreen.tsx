@@ -685,7 +685,7 @@ export default function ClosetScreen() {
                 WISHLIST: wishlistItems.length,
                 COLLECTIONS: collections.length,
                 OUTFITS: outfits.length };
-              const tabLabel = tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Saved' : tab === 'COLLECTIONS' ? 'Closets' : 'Outfits';
+              const tabLabel = tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : tab === 'COLLECTIONS' ? 'Closets' : 'Outfits';
               return (
                 <AnimatedPressable
                   key={tab}

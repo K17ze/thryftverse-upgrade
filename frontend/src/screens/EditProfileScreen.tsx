@@ -50,12 +50,12 @@ export default function EditProfileScreen() {
 
   const [name, setName] = useState(initialName);
   const [username, setUsername] = useState(initialUsername);
-  const [pronouns, setPronouns] = useState((user as any)?.pronouns ?? '');
+  const [pronouns, setPronouns] = useState(user?.pronouns ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
   const [location, setLocation] = useState(user?.location ?? '');
   const [website, setWebsite] = useState(user?.website ?? '');
-  const [gender, setGender] = useState((user as any)?.gender ?? 'Prefer not to say');
-  const [isAiCreator, setIsAiCreator] = useState((user as any)?.isAiCreator ?? false);
+  const [gender, setGender] = useState(user?.gender ?? 'Prefer not to say');
+  const [isAiCreator, setIsAiCreator] = useState(user?.isAiCreator ?? false);
   const [showGenderPicker, setShowGenderPicker] = useState(false);
 
   const { avatar, pickAvatar, hasUnsavedMedia } = useProfileMediaUpload(
@@ -80,12 +80,12 @@ export default function EditProfileScreen() {
   const hasChanges =
     name !== initialName ||
     username !== initialUsername ||
-    pronouns !== ((user as any)?.pronouns ?? '') ||
+    pronouns !== (user?.pronouns ?? '') ||
     bio !== (user?.bio ?? '') ||
     location !== (user?.location ?? '') ||
     website !== (user?.website ?? '') ||
-    gender !== ((user as any)?.gender ?? 'Prefer not to say') ||
-    isAiCreator !== ((user as any)?.isAiCreator ?? false) ||
+    gender !== (user?.gender ?? 'Prefer not to say') ||
+    isAiCreator !== (user?.isAiCreator ?? false) ||
     hasUnsavedMedia;
 
   const validateWebsite = useCallback((value: string) => {
@@ -110,12 +110,12 @@ export default function EditProfileScreen() {
       const updates: Record<string, unknown> = {};
       if (name !== initialName) updates.displayName = name;
       if (username !== initialUsername) updates.username = username;
-      if (pronouns !== ((user as any)?.pronouns ?? '')) updates.pronouns = pronouns;
+      if (pronouns !== (user?.pronouns ?? '')) updates.pronouns = pronouns;
       if (bio !== (user?.bio ?? '')) updates.bio = bio;
       if (location !== (user?.location ?? '')) updates.location = location;
       if (website !== (user?.website ?? '')) updates.website = website;
-      if (gender !== ((user as any)?.gender ?? 'Prefer not to say')) updates.gender = gender;
-      if (isAiCreator !== ((user as any)?.isAiCreator ?? false)) updates.isAiCreator = isAiCreator;
+      if (gender !== (user?.gender ?? 'Prefer not to say')) updates.gender = gender;
+      if (isAiCreator !== (user?.isAiCreator ?? false)) updates.isAiCreator = isAiCreator;
       if (Object.keys(updates).length > 0) {
         const updated = await updateMyProfile(updates);
         updateUserProfile({

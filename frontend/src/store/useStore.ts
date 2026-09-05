@@ -83,6 +83,10 @@ export interface User {
   bio?: string | null;
   location?: string | null;
   gender?: string;
+  /** Pronouns for the user (e.g. "she/her", "they/them"). */
+  pronouns?: string;
+  /** Whether this user is an AI-assisted creator. */
+  isAiCreator?: boolean;
   website?: string | null;
   email?: string | null;
   phone?: string | null;

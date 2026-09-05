@@ -20,6 +20,7 @@ import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-ha
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import {
   fetchPosterStories,
   fetchPosterStoryById,
@@ -1338,8 +1339,7 @@ function handleTagPress(
     ownerId: activeStory.creatorId,
   });
   if (tag.listingId) {
-    (navigation as unknown as { navigate: (route: string, params: Record<string, unknown>) => void })
-      .navigate('ItemDetail', { itemId: tag.listingId });
+    openProductDetail(navigation, { referenceKind: 'listing', canonicalId: tag.listingId, sourceSurface: 'PosterViewer' });
   } else {
     show('This product is no longer available', 'info');
   }

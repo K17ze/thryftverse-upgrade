@@ -15,6 +15,7 @@ import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeIn } from 're
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useToast } from '../context/ToastContext';
 import { useA11yAudit } from '../hooks/useA11yAudit';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -404,8 +405,10 @@ export default function AuctionDetailScreen() {
       reasonCode?: string,
       personalised?: boolean,
     ) => {
-      navigation.push('ItemDetail', {
-        itemId: recItem.id,
+      openProductDetail(navigation, {
+        referenceKind: 'listing',
+        canonicalId: recItem.id,
+        sourceSurface: 'AuctionDetail',
         sectionKey,
         position,
         reasonCode,
