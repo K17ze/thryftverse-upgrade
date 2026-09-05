@@ -19,9 +19,6 @@ import { useHaptic } from '../../hooks/useHaptic';
 import { Space, Radius, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { appStorage } from '../../storage/mmkv';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigation/types';
 
 export interface SocialNote {
   id: string;
@@ -36,44 +33,6 @@ export interface SocialNote {
 
 const STORAGE_KEY_USER_NOTE = 'inbox.social_note.v1';
 
-// Seed notes from community creators and active peers (Instagram / Snapchat standard)
-const DEFAULT_COMMUNITY_NOTES: SocialNote[] = [
-  {
-    id: 'note-curator-1',
-    userId: 'u-vintage-vault',
-    username: 'archive_vault',
-    displayName: 'Archive Vault',
-    avatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
-    text: 'Sourcing 90s Carhartt in Tokyo today 🇯🇵',
-    musicTrack: 'Reflection',
-  },
-  {
-    id: 'note-curator-2',
-    userId: 'u-denim-doc',
-    username: 'selvedge_lab',
-    displayName: 'Selvedge Lab',
-    avatarUri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
-    text: 'Drop tomorrow 6PM BST ⏱️',
-  },
-  {
-    id: 'note-curator-3',
-    userId: 'u-y2k-studio',
-    username: 'y2k_collective',
-    displayName: 'Y2K Studio',
-    avatarUri: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=150&q=80',
-    text: 'Matrix is sending bots to my account 💀',
-  },
-  {
-    id: 'note-curator-4',
-    userId: 'u-minimal-mono',
-    username: 'mono_atelier',
-    displayName: 'Mono Atelier',
-    avatarUri: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=150&q=80',
-    text: 'Clean silhouettes only',
-    musicTrack: 'La petite fille de la mer',
-  },
-];
-
 interface InboxNotesTrayProps {
   onNotePress?: (note: SocialNote) => void;
 }
@@ -81,7 +40,6 @@ interface InboxNotesTrayProps {
 export function InboxNotesTray({ onNotePress }: InboxNotesTrayProps) {
   const { colors } = useAppTheme();
   const haptic = useHaptic();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const currentUser = useStore((state) => state.currentUser);
   const userAvatar = useStore((state) => state.userAvatar);
 
@@ -215,53 +173,32 @@ export function InboxNotesTray({ onNotePress }: InboxNotesTrayProps) {
           </Text>
         </AnimatedPressable>
 
-        {/* Community / Friends' notes */}
-        {DEFAULT_COMMUNITY_NOTES.map((note) => (
-          <AnimatedPressable
-            key={note.id}
-            style={styles.noteItem}
-            onPress={() => {
-              haptic.light();
-              if (onNotePress) {
-                onNotePress(note);
-              } else {
-                // Navigate to conversation or new message with this user
-                navigation.navigate('NewMessage');
-              }
-            }}
-            hapticFeedback="light"
-            scaleValue={0.96}
-            accessibilityRole="button"
-            accessibilityLabel={`${note.displayName}'s note: ${note.text}`}
-          >
-            {/* Floating thought bubble */}
-            <View style={styles.bubbleWrap}>
-              <View style={styles.bubbleContent}>
-                {note.musicTrack ? (
-                  <View style={styles.musicRow}>
-                    <Ionicons name="musical-notes" size={10} color={colors.brand} />
-                    <Text style={styles.musicText} numberOfLines={1}>
-                      {note.musicTrack}
-                    </Text>
-                  </View>
-                ) : null}
-                <Text style={styles.bubbleText} numberOfLines={2}>
-                  {note.text}
-                </Text>
-              </View>
-              <View style={styles.bubbleTail} />
+        {/* Community notes — unavailable until backend support exists */}
+        <View
+          style={styles.emptyNoteItem}
+          accessibilityRole="text"
+          accessibilityLabel="No community notes available"
+        >
+          <View style={[styles.bubbleWrap, styles.bubbleWrapEmpty]}>
+            <View style={[styles.bubbleContent, styles.bubbleContentEmpty]}>
+              <Ionicons name="chatbubble-outline" size={14} color={colors.textMuted} />
+              <Text style={styles.bubbleTextEmpty} numberOfLines={2}>
+                No notes yet
+              </Text>
             </View>
+            <View style={[styles.bubbleTail, styles.bubbleTailEmpty]} />
+          </View>
 
-            {/* Avatar */}
-            <View style={styles.avatarWrap}>
-              <CachedImage uri={note.avatarUri!} style={styles.avatar} contentFit="cover" />
+          <View style={styles.avatarWrap}>
+            <View style={[styles.avatar, styles.fallbackAvatar]}>
+              <Ionicons name="people-outline" size={20} color={colors.textMuted} />
             </View>
+          </View>
 
-            <Text style={styles.authorLabel} numberOfLines={1}>
-              {note.username}
-            </Text>
-          </AnimatedPressable>
-        ))}
+          <Text style={styles.authorLabel} numberOfLines={1}>
+            Notes
+          </Text>
+        </View>
       </ScrollView>
 
       {/* Note Composer Modal */}
@@ -292,7 +229,7 @@ export function InboxNotesTray({ onNotePress }: InboxNotesTrayProps) {
             </View>
 
             <Text style={styles.modalSubtitle}>
-              Notes disappear after 24 hours. Followers you follow back will see your note here.
+              Your note is saved on this device only. It is not shared with other users.
             </Text>
 
             <View style={styles.inputBox}>
@@ -399,6 +336,29 @@ const createStyles = (colors: any) =>
       marginTop: -0.5,
     },
     bubbleTailActive: {
+      borderTopColor: colors.surfaceAlt,
+    },
+    emptyNoteItem: {
+      width: 78,
+      alignItems: 'center',
+      opacity: 0.6,
+    },
+    bubbleWrapEmpty: {},
+    bubbleContentEmpty: {
+      backgroundColor: colors.surfaceAlt,
+      flexDirection: 'row',
+      gap: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bubbleTextEmpty: {
+      fontSize: 10,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textMuted,
+      textAlign: 'center',
+      lineHeight: 12,
+    },
+    bubbleTailEmpty: {
       borderTopColor: colors.surfaceAlt,
     },
     bubbleText: {

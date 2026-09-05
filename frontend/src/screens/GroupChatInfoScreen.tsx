@@ -93,7 +93,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const displayedInviteSummary = inviteLink ?? activeInviteSummary;
   const reconcileGroupMembershipEvent = useStore((state) => state.reconcileGroupMembershipEvent);
 
-  // Parity feature state (WhatsApp benchmark)
+  // Local-only feature state (not synced to server)
   const [isChatLocked, setIsChatLocked] = useState(false);
   const [disappearingDuration, setDisappearingDuration] = useState<'off' | '24h' | '7d' | '90d'>('off');
   const [isDisappearingSheetVisible, setIsDisappearingSheetVisible] = useState(false);
@@ -764,12 +764,12 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           ) : null}
         </View>
 
-        {/* ── 2. WhatsApp 4-Column Quick Action Dock ── */}
+        {/* ── 2. Quick Action Dock ── */}
         <View style={styles.quickActionDock}>
           {/* Call */}
           <AnimatedPressable
             style={styles.quickActionButton}
-            onPress={() => show('Voice & video room joining…', 'info')}
+            onPress={() => show('Voice & video calls are not yet available on ThryftVerse.', 'info')}
             activeOpacity={0.7}
             scaleValue={0.95}
             hapticFeedback="light"
@@ -777,9 +777,9 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             accessibilityLabel="Call group"
           >
             <View style={styles.quickActionIconWrap}>
-              <Ionicons name="call-outline" size={20} color={colors.brand} />
+              <Ionicons name="call-outline" size={20} color={colors.textMuted} />
             </View>
-            <Text style={styles.quickActionLabel}>Call</Text>
+            <Text style={[styles.quickActionLabel, { color: colors.textMuted }]}>Call</Text>
           </AnimatedPressable>
 
           {/* Search In Chat */}
@@ -936,7 +936,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             <GroupedRow
               icon="star-outline"
               label="Starred messages"
-              onPress={() => show('No starred messages in this group', 'info')}
+              onPress={() => show('Starred messages are not yet available.', 'info')}
               isLast
             />
           </View>
@@ -948,15 +948,15 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <View style={styles.groupedCard}>
             <GroupedRow
               icon="color-palette-outline"
-              label="Chat theme"
+              label="Chat theme (this device only)"
               detail={selectedTheme}
               onPress={() => setIsThemeSheetVisible(true)}
             />
             <GroupedRow
               icon="download-outline"
               label="Save to Photos"
-              detail="Default"
-              onPress={() => show('Media auto-saving is set to Default', 'info')}
+              detail="Not available"
+              onPress={() => show('Media auto-saving is not yet available.', 'info')}
             />
             <GroupedRow
               icon="notifications-outline"
@@ -973,7 +973,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <View style={styles.groupedCard}>
             <GroupedRow
               icon="timer-outline"
-              label="Disappearing messages"
+              label="Disappearing messages (this device only)"
               detail={disappearingLabel}
               onPress={() => setIsDisappearingSheetVisible(true)}
             />
@@ -982,15 +982,15 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
                 <Ionicons name="lock-closed-outline" size={20} color={colors.textPrimary} />
               </View>
               <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Lock chat</Text>
-                <Text style={styles.rowSubtitle}>Lock and hide this chat on this device</Text>
+                <Text style={styles.rowLabel}>Lock chat (this device only)</Text>
+                <Text style={styles.rowSubtitle}>Hides this chat on this device. Not synced or server-backed.</Text>
               </View>
               <Switch
                 value={isChatLocked}
                 onValueChange={(val) => {
                   haptic.light();
                   setIsChatLocked(val);
-                  show(val ? 'Chat locked with device security' : 'Chat unlocked', 'info');
+                  show(val ? 'Chat hidden on this device' : 'Chat visible on this device', 'info');
                 }}
                 trackColor={{ false: colors.borderSubtle, true: colors.brand }}
                 thumbColor={colors.surface}
@@ -1000,15 +1000,15 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             <View style={styles.rowDivider} />
             <GroupedRow
               icon="shield-checkmark-outline"
-              label="Encryption"
-              subtitle="Messages and calls are end-to-end encrypted. Learn more"
+              label="Message privacy"
+              subtitle="Messages are stored securely on ThryftVerse servers. Learn more"
               onPress={() => setIsEncryptionSheetVisible(true)}
             />
             <GroupedRow
               icon="shield-outline"
               label="Advanced chat privacy"
-              detail="Off"
-              onPress={() => show('IP address protection and media privacy are enabled', 'info')}
+              detail="Not available"
+              onPress={() => show('Advanced chat privacy is not yet available on ThryftVerse.', 'info')}
               isLast
             />
           </View>
@@ -1263,12 +1263,12 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
             <GroupedRow
               icon={isFavourited ? 'heart' : 'heart-outline'}
               iconColor={isFavourited ? colors.danger : colors.brand}
-              label={isFavourited ? 'Remove from Favourites' : 'Add to Favourites'}
+              label={isFavourited ? 'Remove from Favourites (this device)' : 'Add to Favourites (this device)'}
               labelColor={colors.brand}
               onPress={() => {
                 haptic.selection();
                 setIsFavourited((prev) => !prev);
-                show(isFavourited ? 'Removed from Favourites' : 'Added to Favourites', 'success');
+                show(isFavourited ? 'Removed from Favourites on this device' : 'Added to Favourites on this device', 'success');
               }}
             />
             <GroupedRow
@@ -1344,7 +1344,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         <View style={styles.sheetContent}>
           <Text style={styles.sheetTitle}>Disappearing Messages</Text>
           <Text style={styles.sheetSubtitle}>
-            When turned on, new messages sent in this chat will disappear after the selected duration.
+            This setting is stored on this device only. It does not delete messages on other participants' devices or on the server.
           </Text>
           {(['off', '24h', '7d', '90d'] as const).map((mode) => {
             const isSelected = disappearingDuration === mode;
@@ -1372,7 +1372,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         </View>
       </BottomSheet>
 
-      {/* ── Encryption Transparency Sheet ── */}
+      {/* ── Message Privacy Transparency Sheet ── */}
       <BottomSheet
         visible={isEncryptionSheetVisible}
         onDismiss={() => setIsEncryptionSheetVisible(false)}
@@ -1382,10 +1382,9 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <View style={styles.sheetIconHeader}>
             <Ionicons name="shield-checkmark" size={40} color={colors.brand} />
           </View>
-          <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>Your chats and calls are private</Text>
+          <Text style={[styles.sheetTitle, { textAlign: 'center' }]}>How your messages are stored</Text>
           <Text style={[styles.sheetSubtitle, { textAlign: 'center', marginBottom: Space.lg }]}>
-            End-to-end encryption ensures that only you and the participants can read or listen to what is sent. Not even
-            ThryftVerse or third parties can access your conversations, media, or shared documents.
+            Your messages are transmitted over encrypted connections and stored securely on ThryftVerse servers. ThryftVerse staff do not read your private conversations, but messages are not end-to-end encrypted.
           </Text>
           <AppButton
             title="Understood"
@@ -1403,8 +1402,8 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
       >
         <View style={styles.sheetContent}>
           <Text style={styles.sheetTitle}>Chat Theme</Text>
-          <Text style={styles.sheetSubtitle}>Customize the atmosphere and accent tones of this conversation.</Text>
-          {['Default', 'Emerald (WhatsApp)', 'Midnight', 'Sunset', 'Lavender', 'Cobalt'].map((theme) => {
+          <Text style={styles.sheetSubtitle}>Customize the accent tones of this conversation on this device. Not synced to other devices.</Text>
+          {['Default', 'Emerald', 'Midnight', 'Sunset', 'Lavender', 'Cobalt'].map((theme) => {
             const isSelected = selectedTheme === theme;
             return (
               <Pressable
@@ -1482,7 +1481,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
                 accessibilityLabel={`Message @${selectedMember.username}`}
               >
                 <Ionicons name="chatbubble-outline" size={20} color={colors.textPrimary} />
-                <Text style={styles.sheetActionText}>Message @${selectedMember.username}</Text>
+                <Text style={styles.sheetActionText}>Message @{selectedMember.username}</Text>
               </Pressable>
 
               {isGroupManager && selectedMember.id !== currentUser?.id && (
@@ -1613,7 +1612,7 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 }
 
 // ---------------------------------------------------------------------------
-// GroupedRow Primitive: matching WhatsApp & iOS Grouped Table Anatomy
+// GroupedRow Primitive: iOS grouped table anatomy
 // ---------------------------------------------------------------------------
 function GroupedRow({
   icon,

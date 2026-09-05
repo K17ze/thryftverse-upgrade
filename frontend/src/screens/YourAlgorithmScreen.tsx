@@ -58,7 +58,7 @@ import {
   AlgorithmSignal,
   TopicWeight,
   SignalSource,
-  ALGORITHM_DEMO_MODE,
+  getAlgorithmDemoMode,
   fetchAlgorithmProfile,
   updateTopicWeight,
   removeTopic,
@@ -208,7 +208,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
           signals: [],
           recentInfluences: [],
           lastUpdated: new Date().toISOString(),
-          isDemo: ALGORITHM_DEMO_MODE });
+          isDemo: getAlgorithmDemoMode() });
       }
       setNewTopicLabel('');
       setStatus('populated');
@@ -254,7 +254,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
       }
     >
       {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
-      {ALGORITHM_DEMO_MODE && (
+      {getAlgorithmDemoMode() && (
         <View
           style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
           accessibilityRole="header"
@@ -410,7 +410,7 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
             </Text>
             <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
               {t('addTopic.caption')}
-              {ALGORITHM_DEMO_MODE ? ' ' + t('addTopic.demoSuffix') : ''}
+              {getAlgorithmDemoMode() ? ' ' + t('addTopic.demoSuffix') : ''}
             </Text>
 
             <View style={styles.addTopicRow}>
@@ -620,7 +620,7 @@ function HowItWorks({
           <Text style={[styles.howItWorksBody, { color: colors.textSecondary }]}>
             {t('howItWorks.body2')}
           </Text>
-          {ALGORITHM_DEMO_MODE && (
+          {getAlgorithmDemoMode() && (
             <Text style={[styles.howItWorksDemo, { color: colors.textMuted }]}>
               {t('howItWorks.demoNote')}
             </Text>

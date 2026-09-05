@@ -42,7 +42,7 @@ import {
   FeedExplanationReason,
   SignalSource,
   ConfidenceLabel,
-  ALGORITHM_DEMO_MODE,
+  getAlgorithmDemoMode,
   fetchFeedExplanation,
   removeTopic,
   updateTopicWeight } from '../../services/algorithmTransparencyApi';
@@ -183,7 +183,7 @@ export function FeedExplanationSheet({
         </Text>
 
         {/* ── Demo mode indicator ── */}
-        {ALGORITHM_DEMO_MODE && (
+        {getAlgorithmDemoMode() && (
           <View style={[styles.demoPill, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
             <Text style={styles.demoPillText}>Demo mode — illustrative data</Text>

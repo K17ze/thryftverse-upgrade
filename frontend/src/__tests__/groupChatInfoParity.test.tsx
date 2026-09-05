@@ -7,7 +7,7 @@ function readSrc(filePath: string): string {
   return readFileSync(resolve(__dirname, '..', filePath), 'utf-8');
 }
 
-describe('GROUP-CHAT-INFO — WhatsApp/iOS Group Details Parity & Single-Scroll Architecture', () => {
+describe('GROUP-CHAT-INFO — iOS Group Details Parity & Single-Scroll Architecture', () => {
   const groupInfoSrc = readSrc('screens/GroupChatInfoScreen.tsx');
   const groupChatSrc = readSrc('screens/GroupChatScreen.tsx');
   const createGroupSrc = readSrc('screens/CreateGroupChatScreen.tsx');
@@ -30,7 +30,7 @@ describe('GROUP-CHAT-INFO — WhatsApp/iOS Group Details Parity & Single-Scroll 
     });
   });
 
-  describe('2. Quick Action Dock Parity (WhatsApp 4-column dock)', () => {
+  describe('2. Quick Action Dock Parity (4-column dock)', () => {
     it('renders a 4-column quick action dock with Call, Search, Add, and Mute', () => {
       expect(groupInfoSrc).toContain('quickActionDock');
       expect(groupInfoSrc).toContain('quickActionButton');
@@ -76,7 +76,7 @@ describe('GROUP-CHAT-INFO — WhatsApp/iOS Group Details Parity & Single-Scroll 
     it('contains Chat Theme picker row and sheet', () => {
       expect(groupInfoSrc).toContain('Chat theme');
       expect(groupInfoSrc).toContain('isThemeSheetVisible');
-      expect(groupInfoSrc).toContain('Emerald (WhatsApp)');
+      expect(groupInfoSrc).toContain('Emerald');
     });
 
     it('contains Save to photos row', () => {
@@ -89,7 +89,7 @@ describe('GROUP-CHAT-INFO — WhatsApp/iOS Group Details Parity & Single-Scroll 
     });
   });
 
-  describe('5. Privacy, Security & End-to-End Encryption', () => {
+  describe('5. Privacy, Security & Message Storage Transparency', () => {
     it('contains Disappearing messages picker with standard durations', () => {
       expect(groupInfoSrc).toContain('Disappearing messages');
       expect(groupInfoSrc).toContain('isDisappearingSheetVisible');
@@ -103,10 +103,14 @@ describe('GROUP-CHAT-INFO — WhatsApp/iOS Group Details Parity & Single-Scroll 
       expect(groupInfoSrc).toContain('isChatLocked');
     });
 
-    it('contains End-to-end encryption status row and transparency sheet', () => {
-      expect(groupInfoSrc).toContain('Encryption');
+    it('contains message privacy transparency row and sheet (no false E2EE claim)', () => {
+      expect(groupInfoSrc).toContain('Message privacy');
       expect(groupInfoSrc).toContain('isEncryptionSheetVisible');
-      expect(groupInfoSrc).toContain('end-to-end encrypted');
+      // Must not claim messages ARE end-to-end encrypted (false claim)
+      expect(groupInfoSrc).not.toContain('are end-to-end encrypted');
+      expect(groupInfoSrc).not.toContain('Not even');
+      // Should honestly disclose that messages are NOT end-to-end encrypted
+      expect(groupInfoSrc).toContain('not end-to-end encrypted');
     });
   });
 
@@ -146,7 +150,7 @@ describe('GROUP-CHAT-INFO — WhatsApp/iOS Group Details Parity & Single-Scroll 
 
   describe('7. Group Actions, Danger Zone & Provenance Footnote', () => {
     it('features Add to favourites action', () => {
-      expect(groupInfoSrc).toContain('Add to Favourites');
+      expect(groupInfoSrc).toContain('Favourites');
       expect(groupInfoSrc).toContain('isFavourited');
     });
 
