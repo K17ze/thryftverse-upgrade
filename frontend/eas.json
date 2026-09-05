@@ -73,6 +73,7 @@
       "channel": "production",
       "autoIncrement": true,
       "ios": {
+        "image": "latest-xcode26",
         "resourceClass": "m-medium"
       },
       "android": {
@@ -88,7 +89,8 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "EAS_IOS_ASC_APP_ID"
+        "ascAppId": "EAS_IOS_ASC_APP_ID",
+        "appleId": "EAS_APPLE_ID"
       },
       "android": {
         "serviceAccountKeyPath": "EAS_ANDROID_SERVICE_ACCOUNT_KEY_PATH",

@@ -80,6 +80,9 @@ jobs:
       - name: Install API dependencies
         run: npm ci
         working-directory: backend/api
+      - name: Migration prefix check
+        run: node scripts/check-migration-prefixes.mjs
+        working-directory: backend/api
       - name: TypeScript build
         run: npm run build
         working-directory: backend/api

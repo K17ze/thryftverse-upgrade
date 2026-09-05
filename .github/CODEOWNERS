@@ -1,0 +1,19 @@
+# Default owner
+* @K17ze
+
+# Frontend
+/frontend/ @K17ze
+
+# Backend
+/backend/ @K17ze
+
+# CI/CD
+/.github/ @K17ze
+
+# Design system
+/frontend/src/theme/ @K17ze
+
+# Release configuration
+/frontend/eas.json @K17ze
+/.github/workflows/release-train.yml @K17ze
+/backend/api/Dockerfile @K17ze
