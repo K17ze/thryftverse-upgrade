@@ -40,6 +40,8 @@ import { createStableId } from '../utils/createStableId';
 import { useUnknownOutcomeReconciliation } from '../hooks/useUnknownOutcomeReconciliation';
 import { track } from '../analytics';
 import { t } from '../i18n';
+import { useStore } from '../store/useStore';
+import { createDmConversationOnApi } from '../services/chatApi';
 
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MakeOffer'>;
@@ -52,6 +54,7 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
   const { currencySymbol, formatFromFiat } = useFormattedPrice();
   const { currencyCode, fxRates } = useCurrencyContext();
   const { show } = useToast();
+  const upsertConversation = useStore((state) => state.upsertConversation);
   const { isOffline } = useConnectivity();
   const reducedMotionEnabled = useReducedMotion();
   const [offerPrice, setOfferPrice] = useState('');
@@ -145,6 +148,30 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     setShowReview(true);
   }, [validateOffer, haptics]);
 
+  // Resolve a real DM conversation via the backend before navigating to Chat.
+  // Replaces fabricated IDs like `offer_${sellerId}_${itemId}`.
+  const resolveAndOpenOfferConversation = useCallback(async (
+    sellerId: string,
+    focusQuery: string,
+    offerPayload?: any,
+  ) => {
+    try {
+      const conversation = await createDmConversationOnApi({
+        recipientUserId: sellerId,
+        itemId,
+      });
+      upsertConversation(conversation);
+      navigation.navigate('Chat', {
+        conversationId: conversation.id,
+        focusQuery,
+        partnerUserId: sellerId,
+        offerPayload,
+      });
+    } catch {
+      show('Could not open chat. Try again.', 'error');
+    }
+  }, [itemId, navigation, upsertConversation, show]);
+
   const handleSendOffer = async () => {
     // The review step already validated, but re-check defensively.
     const validationError = validateOffer();
@@ -185,16 +212,17 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         ? t('makeOffer.chat.counterOfferText', { amount: formatFromFiat(numericOfferGbp, 'GBP'), previousAmount: formatFromFiat(previousOffer ?? 0, 'GBP'), hours: expiryHours })
         : t('makeOffer.chat.offerText', { amount: formatFromFiat(numericOfferGbp, 'GBP'), title, hours: expiryHours });
 
-      navigation.navigate('Chat', {
-        conversationId: `offer_${listing.sellerId}_${itemId}`,
-        focusQuery: offerText,
-        partnerUserId: listing.sellerId,
-        offerPayload: {
+      await resolveAndOpenOfferConversation(
+        listing.sellerId,
+        offerText,
+        {
           offerId: offer.id,
           price: numericOfferGbp,
           originalPrice: price,
           expiresAt: offer.expiresAt,
-          counterRound: offer.counterRound } });
+          counterRound: offer.counterRound,
+        },
+      );
       show(t('makeOffer.toast.openingChat'), 'info');
     } catch (err) {
       const isNetworkError = isOffline || (err instanceof Error && /network|fetch|timeout/i.test(err.message));
@@ -207,21 +235,22 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
         const idempotencyKey = idempotencyKeyRef.current;
         const result = await reconcile<ListingOffer>({
           lookup: () => lookupOfferByIdempotencyKey(idempotencyKey),
-          onAcknowledged: (offer) => {
+          onAcknowledged: async (offer) => {
             idempotencyKeyRef.current = null;
             const offerText = isCounterOffer
               ? t('makeOffer.chat.counterOfferText', { amount: formatFromFiat(numericOfferGbp, 'GBP'), previousAmount: formatFromFiat(previousOffer ?? 0, 'GBP'), hours: expiryHours })
               : t('makeOffer.chat.offerText', { amount: formatFromFiat(numericOfferGbp, 'GBP'), title, hours: expiryHours });
-            navigation.navigate('Chat', {
-              conversationId: `offer_${listing.sellerId}_${itemId}`,
-              focusQuery: offerText,
-              partnerUserId: listing.sellerId,
-              offerPayload: {
+            await resolveAndOpenOfferConversation(
+              listing.sellerId,
+              offerText,
+              {
                 offerId: offer.id,
                 price: numericOfferGbp,
                 originalPrice: price,
                 expiresAt: offer.expiresAt,
-                counterRound: offer.counterRound } });
+                counterRound: offer.counterRound,
+              },
+            );
             show(t('makeOffer.toast.openingChat') as string, 'info');
           },
           onSafeToRetry: () => {
@@ -259,14 +288,11 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
 
   const expiryOptions = [24, 48, 72];
 
-  const handleMessageSeller = React.useCallback(() => {
+  const handleMessageSeller = React.useCallback(async () => {
     if (!listing?.sellerId) return;
-    navigation.navigate('Chat', {
-      conversationId: `offer_${listing.sellerId}_${itemId}`,
-      focusQuery: title,
-      partnerUserId: listing.sellerId });
+    await resolveAndOpenOfferConversation(listing.sellerId, title);
     show(t('makeOffer.toast.openingSellerChat'), 'info');
-  }, [itemId, navigation, listing?.sellerId, show, title]);
+  }, [itemId, navigation, listing?.sellerId, show, title, resolveAndOpenOfferConversation]);
 
   // Item image — use listing image if available, fall back to icon
   const itemImageUri = listing?.images?.[0] ?? listing?.imageUrl;

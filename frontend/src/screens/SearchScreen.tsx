@@ -15,6 +15,7 @@ import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { openProductDetail } from '../platform/product/openProductDetail';
 import { useStore } from '../store/useStore';
+import { createDmConversationOnApi } from '../services/chatApi';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
 import { Space, Radius, Control, LetterSpacing, Stroke } from '../theme/designTokens';
@@ -41,6 +42,7 @@ export default function SearchScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
   const isSavedProduct = useStore((state) => state.isSavedProduct);
+  const upsertConversation = useStore((state) => state.upsertConversation);
   const haptic = useHaptic();
   const { categories } = useTaxonomy();
 
@@ -172,11 +174,22 @@ export default function SearchScreen() {
     onPressItem: (item: DiscoveryListingSummary) =>
       openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'SearchScreen' }),
     onPressSeller: (item: DiscoveryListingSummary) => openProfile(navigation, item.sellerId, currentUser?.id),
-    onMessageSeller: (item: DiscoveryListingSummary) => navigation.navigate('Chat', {
-      conversationId: `${item.sellerId}_${item.id}`,
-      focusQuery: '',
-      partnerUserId: item.sellerId,
-      itemId: item.id }),
+    onMessageSeller: async (item: DiscoveryListingSummary) => {
+      try {
+        const conversation = await createDmConversationOnApi({
+          recipientUserId: item.sellerId,
+          itemId: item.id,
+        });
+        upsertConversation(conversation);
+        navigation.navigate('Chat', {
+          conversationId: conversation.id,
+          partnerUserId: item.sellerId,
+          itemId: item.id,
+        });
+      } catch {
+        // Silent fail — user can retry from product detail
+      }
+    },
     onBrowseCategories: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' }),
     // Quick-save: bookmark button on each discovery tile (Pinterest/Depop
     // pattern). The store owns the saved state; the tile reflects it.

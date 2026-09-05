@@ -57,6 +57,7 @@ import { IssueCategorySelector, type IssueCategory } from '../components/orders/
 import { CompletedOrderSummary } from '../components/orders/CompletedOrderSummary';
 import { OrderCounterpartySection, type CounterpartyInfo } from '../components/orders/OrderCounterpartySection';
 import { EscrowBanner } from '../components/orders/EscrowBanner';
+import { createDmConversationOnApi } from '../services/chatApi';
 import { EtaBanner } from '../components/orders/EtaBanner';
 import { ShipmentDetails } from '../components/orders/ShipmentDetails';
 import { TransactionBreakdown } from '../components/orders/TransactionBreakdown';
@@ -103,6 +104,31 @@ export default function OrderDetailScreen() {
 
   const currentUser = useStore((state) => state.currentUser);
   const getSupportTicketsForOrder = useStore((state) => state.getSupportTicketsForOrder);
+  const upsertConversation = useStore((state) => state.upsertConversation);
+
+  // Resolve a real DM conversation via the backend before navigating to Chat.
+  // Replaces fabricated IDs like `${counterparty.id}_${listingId}`.
+  const resolveAndOpenConversation = useCallback(async (
+    recipientUserId: string,
+    itemId: string | undefined,
+    focusQuery?: string,
+  ) => {
+    try {
+      const conversation = await createDmConversationOnApi({
+        recipientUserId,
+        itemId,
+      });
+      upsertConversation(conversation);
+      navigation.navigate('Chat', {
+        conversationId: conversation.id,
+        focusQuery,
+        partnerUserId: recipientUserId,
+        itemId,
+      });
+    } catch {
+      show('Could not start conversation. Try again.', 'error');
+    }
+  }, [navigation, upsertConversation, show]);
 
   const {
     backendOrder,
@@ -586,11 +612,11 @@ export default function OrderDetailScreen() {
             label: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }),
             onPress: () => {
               haptics.tap();
-              navigation.navigate('Chat', {
-                conversationId: `${counterparty.id}_${backendOrder.listingId}`,
-                focusQuery: counterparty.username,
-                partnerUserId: counterparty.id,
-                itemId: backendOrder.listingId });
+              resolveAndOpenConversation(
+                counterparty.id,
+                backendOrder.listingId,
+                counterparty.username,
+              );
             },
             variant: 'secondary',
             accessibilityLabel: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }) };
@@ -664,11 +690,11 @@ export default function OrderDetailScreen() {
         key: 'contact',
         label: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }),
         icon: 'chatbubble-outline',
-        onPress: () => navigation.navigate('Chat', {
-          conversationId: `${counterparty.id}_${backendOrder?.listingId}`,
-          focusQuery: counterparty.username,
-          partnerUserId: counterparty.id,
-          itemId: backendOrder?.listingId }) });
+        onPress: () => resolveAndOpenConversation(
+          counterparty.id,
+          backendOrder?.listingId,
+          counterparty.username,
+        ) });
     }
 
     actions.push({
@@ -903,11 +929,7 @@ export default function OrderDetailScreen() {
             navigation={navigation}
             onMessage={(cp, listingId) => {
               haptics.tap();
-              navigation.navigate('Chat', {
-                conversationId: `${cp.id}_${listingId}`,
-                focusQuery: cp.username,
-                partnerUserId: cp.id,
-                itemId: listingId });
+              resolveAndOpenConversation(cp.id, listingId, cp.username);
             }}
           />
         ) : null}

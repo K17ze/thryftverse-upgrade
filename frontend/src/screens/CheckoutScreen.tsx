@@ -24,6 +24,7 @@ import { EmptyState } from '../components/EmptyState';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
+import { createDmConversationOnApi } from '../services/chatApi';
 import { useNotifications } from '../hooks/useNotifications';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -160,6 +161,7 @@ export default function CheckoutScreen() {
   const savedPaymentMethod = useStore((state) => state.savedPaymentMethod);
   const savePaymentMethod = useStore((state) => state.savePaymentMethod);
   const clearSavedPaymentMethod = useStore((state) => state.clearSavedPaymentMethod);
+  const upsertConversation = useStore((state) => state.upsertConversation);
 
   const [isHydrating, setIsHydrating] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1070,17 +1072,26 @@ export default function CheckoutScreen() {
   }, [handleSettlementNavigation]);
 
   // --- Message seller ---
-  const handleMessageSeller = useCallback(() => {
+  const handleMessageSeller = useCallback(async () => {
     if (!item) return;
     const sellerId = item.sellerId ?? item.seller?.id ?? '';
     if (!sellerId) return;
-    navigation.navigate('Chat', {
-      conversationId: `checkout_${sellerId}_${item.id}`,
-      focusQuery: item.title,
-      partnerUserId: sellerId,
-      itemId: item.id,
-    });
-  }, [item, navigation]);
+    try {
+      const conversation = await createDmConversationOnApi({
+        recipientUserId: sellerId,
+        itemId: item.id,
+      });
+      upsertConversation(conversation);
+      navigation.navigate('Chat', {
+        conversationId: conversation.id,
+        focusQuery: item.title,
+        partnerUserId: sellerId,
+        itemId: item.id,
+      });
+    } catch {
+      showError('Could not start conversation. Try again.');
+    }
+  }, [item, navigation, upsertConversation, showError]);
 
   // --- Self-purchase check ---
   const isSelfPurchase = useMemo(() => {
