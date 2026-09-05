@@ -1,8 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
-  AnimatedPressable
-} from '../components/AnimatedPressable';
-import {
   View,
   StyleSheet,
   StatusBar,
@@ -26,6 +23,7 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { useHaptic } from '../hooks/useHaptic';
 import { DiscoveryModeNav, type DiscoveryMode } from '../components/discovery/DiscoveryModeNav';
 import { DiscoverScene, PulseScene, LooksScene } from '../scenes/discovery';
+import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { SearchAutocomplete } from '../components/search/SearchAutocomplete';
 import { loadRecentSearchStrings, recordRecentSearch, clearRecentSearches } from '../services/searchHistory';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
@@ -131,38 +129,7 @@ export default function SearchScreen() {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.smMd,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.smMd },
-  searchBar: {
-    flex: 1,
-    minHeight: Control.hit,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.smMd,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.hairline,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: Space.md },
-  searchBarFocused: {
-    backgroundColor: colors.surface,
-    borderColor: colors.brand },
-  searchInput: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    color: colors.textPrimary,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: LetterSpacing.wide,
-    padding: 0 },
-  searchPlaceholder: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    color: colors.textMuted,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: LetterSpacing.wide },
+  },
   autocompleteOverlay: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
@@ -171,15 +138,6 @@ export default function SearchScreen() {
   autocompleteDropdown: {
     flex: 1,
     paddingHorizontal: Space.md },
-  visualSearchButton: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.lg,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center' },
 
   syncRetryBanner: {
     marginHorizontal: Space.md,
@@ -248,45 +206,20 @@ export default function SearchScreen() {
         style={styles.searchRow}
         onLayout={(e) => setSearchRowHeight(e.nativeEvent.layout.height)}
       >
-        <Pressable
-          style={[styles.searchBar, isSearchFocused && styles.searchBarFocused]}
-          onPress={() => searchInputRef.current?.focus()}
-          accessibilityRole="button"
-          accessibilityLabel="Search"
-        >
-          <AppIcon name="search" focused size={20} color={colors.textMuted} />
-          <TextInput
-            ref={searchInputRef}
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search items, brands and people"
-            placeholderTextColor={colors.textMuted}
-            onFocus={() => setIsSearchFocused(true)}
-            onSubmitEditing={() => submitSearch(searchQuery)}
-            returnKeyType="search"
-            accessibilityRole="search"
-            accessibilityLabel="Search"
-          />
-          {searchQuery.length > 0 && (
-            <Pressable
-              hitSlop={8}
-              onPress={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-            >
-              <AppIcon name="closeCircle" focused size={20} color={colors.textMuted} />
-            </Pressable>
-          )}
-        </Pressable>
-        <AnimatedPressable
-          style={styles.visualSearchButton}
-          onPress={() => navigation.navigate('VisualSearch')}
-          accessibilityLabel="Visual search"
-          accessibilityRole="button"
-        >
-          <AppIcon name="camera" size={20} color={colors.textPrimary} />
-        </AnimatedPressable>
+        <AppSearchBar
+          ref={searchInputRef}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onClear={() => setSearchQuery('')}
+          placeholder="Search items, brands and people"
+          onCameraPress={() => navigation.navigate('VisualSearch')}
+          inputProps={{
+            onFocus: () => setIsSearchFocused(true),
+            onSubmitEditing: () => submitSearch(searchQuery),
+            returnKeyType: 'search',
+          }}
+          containerStyle={{ flex: 1 }}
+        />
       </View>
 
       {/* Autocomplete overlay — covers scene content while the search is focused. */}

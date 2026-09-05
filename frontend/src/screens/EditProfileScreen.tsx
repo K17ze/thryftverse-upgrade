@@ -4,12 +4,15 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  ActivityIndicator } from 'react-native';
+  ActivityIndicator,
+  Pressable,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { Space, Radius, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
@@ -18,11 +21,16 @@ import { useToast } from '../context/ToastContext';
 import { EmptyState } from '../components/EmptyState';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
+import { BottomSheetPicker } from '../components/BottomSheetPicker';
+import { PremiumToggle } from '../components/PremiumToggle';
 import { updateMyProfile } from '../services/profileApi';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader, FlagshipNavigationRow } from '../components/flagship';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { queryKeys } from '../platform/server/queryKeys';
+import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
+
+const GENDER_OPTIONS = ['Prefer not to say', 'Female', 'Male', 'Non-binary', 'Custom'];
 
 export default function EditProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -42,9 +50,21 @@ export default function EditProfileScreen() {
 
   const [name, setName] = useState(initialName);
   const [username, setUsername] = useState(initialUsername);
+  const [pronouns, setPronouns] = useState((user as any)?.pronouns ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
   const [location, setLocation] = useState(user?.location ?? '');
   const [website, setWebsite] = useState(user?.website ?? '');
+  const [gender, setGender] = useState((user as any)?.gender ?? 'Prefer not to say');
+  const [isAiCreator, setIsAiCreator] = useState((user as any)?.isAiCreator ?? false);
+  const [showGenderPicker, setShowGenderPicker] = useState(false);
+
+  const { avatar, pickAvatar, hasUnsavedMedia } = useProfileMediaUpload(
+    user?.id,
+    userAvatar ?? user?.avatar ?? null,
+    user?.coverPhoto ?? null,
+    (url) => updateUserProfile({ avatar: url }),
+    (url) => updateUserProfile({ coverPhoto: url })
+  );
 
   const [isSaving, setIsSaving] = useState(false);
   const [websiteError, setWebsiteError] = useState('');
@@ -60,9 +80,13 @@ export default function EditProfileScreen() {
   const hasChanges =
     name !== initialName ||
     username !== initialUsername ||
+    pronouns !== ((user as any)?.pronouns ?? '') ||
     bio !== (user?.bio ?? '') ||
     location !== (user?.location ?? '') ||
-    website !== (user?.website ?? '');
+    website !== (user?.website ?? '') ||
+    gender !== ((user as any)?.gender ?? 'Prefer not to say') ||
+    isAiCreator !== ((user as any)?.isAiCreator ?? false) ||
+    hasUnsavedMedia;
 
   const validateWebsite = useCallback((value: string) => {
     if (!value) {
@@ -86,9 +110,12 @@ export default function EditProfileScreen() {
       const updates: Record<string, unknown> = {};
       if (name !== initialName) updates.displayName = name;
       if (username !== initialUsername) updates.username = username;
+      if (pronouns !== ((user as any)?.pronouns ?? '')) updates.pronouns = pronouns;
       if (bio !== (user?.bio ?? '')) updates.bio = bio;
       if (location !== (user?.location ?? '')) updates.location = location;
       if (website !== (user?.website ?? '')) updates.website = website;
+      if (gender !== ((user as any)?.gender ?? 'Prefer not to say')) updates.gender = gender;
+      if (isAiCreator !== ((user as any)?.isAiCreator ?? false)) updates.isAiCreator = isAiCreator;
       if (Object.keys(updates).length > 0) {
         const updated = await updateMyProfile(updates);
         updateUserProfile({
@@ -100,7 +127,8 @@ export default function EditProfileScreen() {
           phone: updated.phone,
           avatar: updated.avatar,
           coverPhoto: updated.coverPhoto,
-          coverVideo: updated.coverVideo });
+          coverVideo: updated.coverVideo,
+        });
       }
 
       await fetchMyProfile();
@@ -191,30 +219,46 @@ export default function EditProfileScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, Space.md) + Space.lg }}
       >
-        {/* ── Profile preview — identity row ── */}
-        <View style={styles.identityRow}>
-          {userAvatar ? (
-            <CachedImage
-              uri={userAvatar}
-              style={styles.identityAvatar}
-              contentFit="cover"
-            />
-          ) : (
-            <View style={[styles.identityAvatar, { backgroundColor: colors.surfaceAlt }]}>
-              <Text style={styles.identityAvatarText}>
-                {(user?.username ?? '?').charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-          <View style={styles.identityText}>
-            <Text style={styles.identityName} numberOfLines={1}>{name || username}</Text>
-            <Text style={styles.identityHandle} numberOfLines={1}>@{username}</Text>
-          </View>
-        </View>
+        {/* ── Centered Avatar & Action — Flagship Standard ── */}
+        <View style={styles.avatarCenteredWrap}>
+          <Pressable
+            style={styles.avatarPressable}
+            onPress={() => void pickAvatar()}
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile picture"
+          >
+            {avatar.pendingLocal || avatar.confirmedRemote || userAvatar ? (
+              <CachedImage
+                uri={avatar.pendingLocal || avatar.confirmedRemote || userAvatar!}
+                style={styles.avatarLarge}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={[styles.avatarLarge, { backgroundColor: colors.surfaceAlt }]}>
+                <Text style={styles.avatarLargeText}>
+                  {(user?.username ?? '?').charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            {avatar.status === 'uploading' && (
+              <View style={styles.avatarLoadingOverlay}>
+                <ActivityIndicator size="small" color={colors.textInverse} />
+              </View>
+            )}
+          </Pressable>
 
-        <Text style={styles.photoHint}>
-          Photo and cover are managed from your profile.
-        </Text>
+          <AnimatedPressable
+            style={styles.editPictureActionBtn}
+            onPress={() => void pickAvatar()}
+            activeOpacity={0.7}
+            scaleValue={0.96}
+            hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile photo"
+          >
+            <Text style={styles.editPictureActionText}>Change profile photo</Text>
+          </AnimatedPressable>
+        </View>
 
         {/* ── Profile fields ── */}
         <View style={styles.sectionGroup}>
@@ -234,6 +278,15 @@ export default function EditProfileScreen() {
             value={username}
             onChangeText={setUsername}
             placeholder="username"
+            autoCapitalize="none"
+            returnKeyType="next"
+          />
+
+          <ProfileEditField
+            label="Pronouns"
+            value={pronouns}
+            onChangeText={setPronouns}
+            placeholder="they/them, she/her, he/him"
             autoCapitalize="none"
             returnKeyType="next"
           />
@@ -271,8 +324,38 @@ export default function EditProfileScreen() {
             autoCapitalize="none"
             keyboardType="url"
             returnKeyType="done"
-            isLast
           />
+
+          <Pressable
+            style={styles.selectableField}
+            onPress={() => setShowGenderPicker(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Gender, currently ${gender}`}
+          >
+            <View style={styles.selectableFieldContent}>
+              <Text style={styles.fieldLabel}>Gender</Text>
+              <Text style={styles.selectableFieldValue}>{gender}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+        </View>
+
+        {/* ── Creator & Disclosure ── */}
+        <View style={styles.sectionGroup}>
+          <Text style={styles.sectionLabel}>Creator & Disclosure</Text>
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleLabelWrap}>
+              <Text style={styles.toggleTitle}>AI-generated content</Text>
+              <Text style={styles.toggleSubtitle}>
+                Label your profile and modeled wardrobe when generated with AI models.
+              </Text>
+            </View>
+            <PremiumToggle
+              value={isAiCreator}
+              onValueChange={setIsAiCreator}
+              accessibilityLabel={`AI-generated content, ${isAiCreator ? 'enabled' : 'disabled'}`}
+            />
+          </View>
         </View>
 
         {/* ── Private details — read-only account info ── */}
@@ -337,6 +420,15 @@ export default function EditProfileScreen() {
         confirmLabel={confirmSheet.confirmLabel ?? 'Confirm'}
         variant={confirmSheet.variant ?? 'default'}
         onConfirm={confirmSheet.onConfirm}
+      />
+
+      <BottomSheetPicker
+        visible={showGenderPicker}
+        onClose={() => setShowGenderPicker(false)}
+        title="Gender"
+        options={GENDER_OPTIONS}
+        selectedValue={gender}
+        onSelect={(val) => setGender(val)}
       />
     </FlagshipScreen>
   );
@@ -462,47 +554,49 @@ function createStyles(colors: ThemeColors) {
     saveBtnTextActive: {
       color: colors.textInverse },
 
-    // ── Identity row — profile preview ──
-    identityRow: {
-      flexDirection: 'row',
+    // ── Centered avatar header ──
+    avatarCenteredWrap: {
       alignItems: 'center',
-      gap: Space.md,
-      paddingHorizontal: Space.md,
-      paddingTop: Space.md + 2,
-      paddingBottom: Space.sm },
-    identityAvatar: {
-      width: 52,
-      height: 52,
-      borderRadius: Radius.full },
-    identityAvatarText: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
+      paddingVertical: Space.lg,
+      gap: Space.xs,
+    },
+    avatarPressable: {
+      position: 'relative',
+    },
+    avatarLarge: {
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      borderWidth: 2,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarLargeText: {
+      fontSize: 30,
+      fontFamily: TypographyV2.itemTitle.fontFamily,
       color: colors.textPrimary,
-      textAlign: 'center',
-      lineHeight: 52 },
-    identityText: {
-      flex: 1,
-      minWidth: 0,
-      gap: Space.xs / 4 },
-    identityName: {
+    },
+    avatarLoadingOverlay: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: colors.overlay,
+      borderRadius: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    editPictureActionBtn: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xs,
+      minHeight: 44,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    editPictureActionText: {
       fontSize: TypographyV2.bodyStrong.size,
       fontFamily: TypographyV2.bodyStrong.fontFamily,
-      color: colors.textPrimary,
-      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-      lineHeight: TypographyV2.bodyStrong.lineHeight },
-    identityHandle: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.textMuted,
-      letterSpacing: TypographyV2.meta.letterSpacing },
-    photoHint: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.textMuted,
-      paddingHorizontal: Space.md,
-      paddingTop: 0,
-      paddingBottom: Space.sm,
-      lineHeight: TypographyV2.meta.lineHeight },
+      color: colors.brand,
+    },
 
     // ── Sections — form groups with horizontal padding ──
     sectionGroup: {
@@ -592,5 +686,52 @@ function createStyles(colors: ThemeColors) {
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.danger,
       marginTop: Space.xs + 2,
-      lineHeight: TypographyV2.meta.lineHeight } });
+      lineHeight: TypographyV2.meta.lineHeight },
+    selectableField: {
+      minHeight: 52,
+      borderRadius: Radius.lg,
+      borderWidth: Stroke.standard,
+      borderColor: colors.border,
+      backgroundColor: colors.input,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: Space.xs,
+    },
+    selectableFieldContent: {
+      flex: 1,
+    },
+    selectableFieldValue: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily,
+      color: colors.textPrimary,
+      lineHeight: TypographyV2.body.lineHeight,
+    },
+    toggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Space.sm,
+      minHeight: Control.hit,
+    },
+    toggleLabelWrap: {
+      flex: 1,
+      marginRight: Space.md,
+    },
+    toggleTitle: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      color: colors.textPrimary,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      marginBottom: 2,
+    },
+    toggleSubtitle: {
+      fontSize: TypographyV2.caption.size,
+      fontFamily: TypographyV2.caption.fontFamily,
+      color: colors.textMuted,
+      lineHeight: TypographyV2.caption.lineHeight,
+    },
+  });
 }

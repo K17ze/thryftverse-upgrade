@@ -27,6 +27,7 @@ import { Caption } from '../components/ui/Text';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { InboxConversationRow } from '../components/chat/InboxConversationRow';
+import { InboxNotesTray } from '../components/chat/InboxNotesTray';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { MessagingSegmentRail, MessagingSegment } from '../components/chat/MessagingSegmentRail';
 import {
@@ -296,6 +297,8 @@ export default function InboxScreen() {
     filterChipSecondaryText: { color: colors.textSecondary },
     filterChipSecondaryTextActive: { color: colors.textInverse },
     filterDot: { backgroundColor: colors.brand },
+    unreadBadgePill: { backgroundColor: colors.brand },
+    unreadBadgeText: { color: colors.textInverse },
   }), [colors]);
   const participantNameLookup = useMemo(() => {
     const map = new Map<string, string>();
@@ -644,28 +647,22 @@ export default function InboxScreen() {
       importantForAccessibility={actionSheet.visible || confirmSheet.visible ? 'no-hide-descendants' : 'auto'}
     >
       <View style={styles.compactHeader}>
-        <Text style={[styles.headerTitle, t.headerTitle]}>Inbox</Text>
+        <AnimatedPressable
+          style={styles.headerLeftWrap}
+          onPress={() => navigation.navigate('ChatSettings')}
+          activeOpacity={0.7}
+          scaleValue={0.98}
+          hapticFeedback="light"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel={`Account ${currentUser?.username || 'Messages'}`}
+          accessibilityRole="button"
+        >
+          <Text style={[styles.headerTitle, t.headerTitle]} numberOfLines={1} accessibilityRole="header">
+            {currentUser?.username || 'Messages'}
+          </Text>
+          <Ionicons name="chevron-down" size={16} color={colors.textPrimary} style={styles.headerChevron} />
+        </AnimatedPressable>
         <View style={styles.headerActions}>
-          <AnimatedPressable
-            style={[styles.iconBtn, t.iconBtn]}
-            onPress={() => {
-              setSearchVisible((v) => !v);
-              if (searchVisible) setSearchQuery('');
-            }}
-            activeOpacity={0.7}
-            scaleValue={0.95}
-            hapticFeedback="light"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="Search messages"
-            accessibilityHint="Opens the search bar to find conversations"
-            accessibilityRole="button"
-          >
-            <Ionicons
-              name={searchVisible ? 'search' : 'search-outline'}
-              size={20}
-              color={searchVisible ? colors.brand : colors.textSecondary}
-            />
-          </AnimatedPressable>
           <AnimatedPressable
             style={[styles.iconBtn, t.iconBtn]}
             onPress={() => setFilterExpanded((v) => !v)}
@@ -679,7 +676,7 @@ export default function InboxScreen() {
           >
             <Ionicons
               name={filterExpanded ? 'options' : 'options-outline'}
-              size={20}
+              size={22}
               color={filterExpanded || ['requests', 'unread', 'archived', 'groups'].includes(segment) ? colors.brand : colors.textSecondary}
             />
             {['requests', 'unread', 'archived', 'groups'].includes(segment) && !filterExpanded ? (
@@ -700,42 +697,84 @@ export default function InboxScreen() {
             <Ionicons name="settings-outline" size={20} color={colors.textSecondary} />
           </AnimatedPressable>
           <AnimatedPressable
-            style={[styles.newMessageBtn, t.newMessageBtn]}
+            style={[styles.iconBtn, t.iconBtn]}
             onPress={() => navigation.navigate('NewMessage')}
             activeOpacity={0.7}
             scaleValue={0.95}
             hapticFeedback="light"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityLabel="New message"
+            accessibilityHint="Opens message composer to start a new chat"
             accessibilityRole="button"
           >
-            <Ionicons name="create-outline" size={18} color={colors.textInverse} />
-            <Text style={[styles.newMessageBtnText, t.newMessageBtnText]}>New</Text>
+            <Ionicons name="create-outline" size={23} color={colors.textPrimary} />
           </AnimatedPressable>
         </View>
       </View>
       <View style={styles.header}>
-        {searchVisible && (
-          <AppSearchBar
-            placeholder="Search messages"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            containerStyle={[styles.searchWrap, t.searchWrap]}
-            inputProps={{
-              autoCapitalize: 'none',
-              autoCorrect: false,
-              accessibilityLabel: 'Search conversations',
-            }}
-          />
-        )}
-        <MessagingSegmentRail
-          active={segment === 'requests' ? 'requests' : 'primary'}
-          onChange={(s) => setSegment(s)}
-          requestCount={messageRequests.length}
+        <AppSearchBar
+          placeholder="Search messages"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onCameraPress={() => navigation.navigate('VisualSearch')}
+          containerStyle={[styles.searchWrap, t.searchWrap]}
+          inputProps={{
+            autoCapitalize: 'none',
+            autoCorrect: false,
+            accessibilityLabel: 'Search conversations',
+          }}
         />
+        <View style={styles.filterChipRail}>
+          {([
+            { key: 'all' as const, label: 'All' },
+            { key: 'buying' as const, label: 'Buying', badge: buyingUnreadCount },
+            { key: 'selling' as const, label: 'Selling', badge: sellingUnreadCount },
+            { key: 'requests' as const, label: 'Requests', badge: messageRequests.length },
+          ]).map((tab) => {
+            const isActive = segment === tab.key;
+            return (
+              <AnimatedPressable
+                key={tab.key}
+                style={[
+                  styles.filterChip,
+                  t.filterChipSecondary,
+                  isActive && t.filterChipSecondaryActive,
+                ]}
+                onPress={() => {
+                  haptic.light();
+                  setSegment(tab.key);
+                }}
+                activeOpacity={0.85}
+                scaleValue={0.96}
+                hapticFeedback="light"
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={`${tab.label} tab${tab.badge ? `, ${tab.badge} pending` : ''}`}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    t.filterChipSecondaryText,
+                    isActive && t.filterChipSecondaryTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {tab.label}
+                </Text>
+                {(tab.badge ?? 0) > 0 ? (
+                  <View style={[styles.unreadBadgePill, t.unreadBadgePill, isActive && { backgroundColor: colors.textInverse }]}>
+                    <Text style={[styles.unreadBadgeText, t.unreadBadgeText, isActive && { color: colors.textPrimary }]}>
+                      {tab.badge! > 99 ? '99+' : tab.badge}
+                    </Text>
+                  </View>
+                ) : null}
+              </AnimatedPressable>
+            );
+          })}
+        </View>
         {filterExpanded && (
           <View style={styles.filterChips}>
             {([
-              { key: 'requests' as const, label: 'Requests', badge: messageRequests.length },
               { key: 'unread' as const, label: 'Unread' },
               { key: 'archived' as const, label: 'Archived' },
               { key: 'groups' as const, label: 'Groups' },
@@ -759,7 +798,7 @@ export default function InboxScreen() {
                   hapticFeedback="light"
                   accessibilityRole="tab"
                   accessibilityState={{ selected: isActive }}
-                  accessibilityLabel={`${chip.label} filter${chip.badge ? `, ${chip.badge} pending` : ''}`}
+                  accessibilityLabel={`${chip.label} filter`}
                 >
                   <Text
                     style={[
@@ -771,13 +810,6 @@ export default function InboxScreen() {
                   >
                     {chip.label}
                   </Text>
-                  {(chip.badge ?? 0) > 1 ? (
-                    <View style={[styles.unreadPill, t.unreadPill, isActive && { backgroundColor: colors.textInverse }]}>
-                      <Text style={[styles.unreadPillText, t.unreadPillText, isActive && { color: colors.textPrimary }]}>
-                        {chip.badge! > 99 ? '99+' : chip.badge}
-                      </Text>
-                    </View>
-                  ) : null}
                 </AnimatedPressable>
               );
             })}
@@ -884,6 +916,9 @@ export default function InboxScreen() {
               keyExtractor={(c: Conversation) => c.id}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.listContent}
+              ListHeaderComponent={
+                <InboxNotesTray onNotePress={() => navigation.navigate('NewMessage')} />
+              }
               renderItem={renderItem}
               onScroll={scrollHandler}
               scrollEventThrottle={16}
@@ -1112,6 +1147,16 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     paddingBottom: Space.xs / 2,
   },
+  headerLeftWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: '70%',
+    minHeight: 44,
+  },
+  headerChevron: {
+    marginTop: 2,
+  },
   header: {
     paddingHorizontal: Space.md,
     paddingTop: Space.xs + 2,
@@ -1128,6 +1173,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
+  },
+  filterChipRail: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    paddingTop: Space.xs,
+    paddingBottom: Space.xs,
+  },
+  unreadBadgePill: {
+    borderRadius: RadiusRoleValue.pillAvatar,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    marginLeft: 6,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unreadBadgeText: {
+    fontSize: 11,
+    fontFamily: FontFamily.bold,
   },
   iconBtn: {
     width: Space.xxl,
