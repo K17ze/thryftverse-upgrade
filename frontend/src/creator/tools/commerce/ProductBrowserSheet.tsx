@@ -459,7 +459,7 @@ export function ProductBrowserSheet({
           >
             <AppIcon name="close" size={IconSize.lg} color="textSecondary" opticalCenter={true} accessible={false} />
           </PressScale>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Tag Product</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>Tag Listing</Text>
           <PressScale
             onPress={handleDone}
             style={styles.doneBtn}

@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, TypeStyles, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Stroke, Control, LetterSpacing, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
@@ -1267,7 +1267,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.sm },
     coverBadgeText: {
       fontSize: TypographyV2.meta.size,
-      fontWeight: '700',
+      fontFamily: FontFamily.bold,
       letterSpacing: LetterSpacing.wide + 0.18 },
     photoRemoveBtn: {
       position: 'absolute',
@@ -1289,7 +1289,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.sm },
     photoEnhanceText: {
       fontSize: TypographyV2.meta.size,
-      fontWeight: '700',
+      fontFamily: FontFamily.bold,
       letterSpacing: LetterSpacing.wide + 0.08 },
     captureRow: {
       flexDirection: 'row',
@@ -1306,13 +1306,11 @@ function createStyles(colors: ThemeColors) {
       minHeight: Control.hit },
     captureBtnText: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     // Form fields
     fieldLabel: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      fontWeight: '500',
+      fontFamily: FontFamily.medium,
       marginBottom: Space.xs,
       marginTop: Space.md },
     fieldInput: {
@@ -1394,8 +1392,7 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard },
     suggestionAcceptText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     // Smart Sell
     smartSellWrap: {
       marginTop: Space.md,
@@ -1416,8 +1413,7 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.hairline },
     tagText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     tagInputWrap: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1437,8 +1433,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs },
     sectionLabel: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      fontWeight: '600',
+      fontFamily: FontFamily.semibold,
       letterSpacing: LetterSpacing.wide + 0.28,
       textTransform: 'uppercase' },
     // Skeleton
@@ -1460,8 +1455,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.md },
     emptyTitle: {
       fontSize: TypographyV2.sectionTitle.size,
-      fontFamily: TypeStyles.title.fontFamily,
-      fontWeight: '700',
+      fontFamily: FontFamily.bold,
       marginBottom: Space.xs },
     emptyDesc: {
       fontSize: TypographyV2.body.size,
@@ -1492,8 +1486,7 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs },
     errorRetryText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     // Footer
     footer: {
       borderTopWidth: StyleSheet.hairlineWidth,
@@ -1522,8 +1515,7 @@ const pickerStyles = StyleSheet.create({
     marginBottom: Space.sm },
   title: {
     fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     marginBottom: Space.sm },
   row: {
     flexDirection: 'row',

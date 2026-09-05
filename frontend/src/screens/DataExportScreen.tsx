@@ -29,9 +29,9 @@ type ExportState = 'idle' | 'loading' | 'success' | 'error';
 const DATA_CATEGORIES: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string; description: string }[] = [
   { icon: 'person-outline', label: 'Profile', description: 'Username, display name, bio, avatar' },
   { icon: 'bag-handle-outline', label: 'Listings', description: 'Items you have listed for sale' },
-  { icon: 'bag-outline', label: 'Orders', description: 'Purchase and sale order history' },
+  { icon: 'bag-outline', label: 'Orders', description: 'Order history' },
   { icon: 'chatbubble-outline', label: 'Messages', description: 'Conversations and message metadata' },
-  { icon: 'wallet-outline', label: 'Wallet transactions', description: 'Payouts, balance and transaction records' },
+  { icon: 'wallet-outline', label: 'Wallet activity', description: 'Payouts, balance and order records' },
   { icon: 'star-outline', label: 'Reviews', description: 'Reviews you have given and received' },
   { icon: 'location-outline', label: 'Addresses', description: 'Saved delivery addresses' },
   { icon: 'card-outline', label: 'Payment methods', description: 'Saved cards and bank accounts' },

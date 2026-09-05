@@ -344,11 +344,7 @@ function createStyles(colors: ThemeColors) {
     ringGradientActive: {
       width: HIGHLIGHT_SIZE + RING_WIDTH * 4,
       height: HIGHLIGHT_SIZE + RING_WIDTH * 4,
-      shadowColor: '#DD2A7B',
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 4 },
+    },
     ringInner: {
       width: HIGHLIGHT_SIZE,
       height: HIGHLIGHT_SIZE,

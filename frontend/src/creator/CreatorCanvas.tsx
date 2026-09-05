@@ -2013,7 +2013,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
     return (
       <View
         style={productImageStyles.imageContainer}
-        accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}`}
+        accessibilityLabel={`Listing layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}`}
         accessibilityRole="link"
       >
         <ExpoImage
@@ -2047,7 +2047,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
     return (
       <View
         style={[o.overlayPill, { borderRadius: Radius.full, paddingHorizontal: Space.smMd, paddingVertical: 6, gap: 6 }]}
-        accessibilityLabel={`Product hotspot, ${payload.hotspotLabel}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}`}
+        accessibilityLabel={`Listing hotspot, ${payload.hotspotLabel}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}`}
         accessibilityRole="link"
       >
         <View style={{ width: 7, height: 7, borderRadius: Radius.full, backgroundColor: colors.textPrimary, borderWidth: Stroke.standard, borderColor: colors.brand }} />
@@ -2066,7 +2066,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
   return (
     <View
       style={o.overlayPill}
-      accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}${isDeleted ? ', unavailable' : ''}`}
+      accessibilityLabel={`Listing layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}${isDeleted ? ', unavailable' : ''}`}
       accessibilityRole="link"
     >
       <View style={o.overlayRow}>
@@ -2135,7 +2135,7 @@ function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vot
       <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
         {payload.options.map((opt) => (
           <View key={opt.id} style={o.overlayOption}>
-            <Text style={[o.overlayLabel, { fontFamily: FontFamily.medium, fontSize: TypographyV2.meta.size + 1 }]} numberOfLines={1}>{opt.label}</Text>
+            <Text style={[o.overlayLabel, { fontFamily: FontFamily.medium, fontSize: TypographyV2.caption.size }]} numberOfLines={1}>{opt.label}</Text>
           </View>
         ))}
       </View>
@@ -2473,7 +2473,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
         </View>
       )}
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: colors.scrimTextPrimary }} numberOfLines={1}>
+        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: colors.scrimTextPrimary }} numberOfLines={1}>
           {payload.trackName}
         </Text>
         {payload.artistName ? (
@@ -2509,7 +2509,7 @@ function LinkLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'lin
       backgroundColor: payload.backgroundColor,
       minWidth: 120 }} accessibilityLabel={`Link, ${payload.ctaText}`} accessibilityRole="link">
       <Ionicons name="link-outline" size={IconGrammar.metadata} color={payload.textColor} aria-hidden={true} />
-      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: payload.textColor }} numberOfLines={1}>
         {payload.ctaText}
       </Text>
     </View>
@@ -2531,7 +2531,7 @@ function LocationLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 
       backgroundColor: colors.mediaOverlayScrim,
       minWidth: 100 }} accessibilityLabel={`Location, ${payload.placeName}`} accessibilityRole="link">
       <Ionicons name="location-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />
-      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: colors.scrimTextPrimary }} numberOfLines={1}>
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: colors.scrimTextPrimary }} numberOfLines={1}>
         {payload.placeName}
       </Text>
     </View>
@@ -2551,7 +2551,7 @@ function HashtagLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor,
       minWidth: 80 }} accessibilityLabel={`Hashtag, ${payload.tag}`} accessibilityRole="link">
-      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: payload.textColor }} numberOfLines={1}>
         #{payload.tag}
       </Text>
     </View>
@@ -2579,7 +2579,7 @@ function TimeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tim
       backgroundColor: payload.backgroundColor ?? colors.mediaOverlayScrim,
       minWidth: 80 }} accessibilityLabel={`Time, ${timeStr}`} accessibilityRole="text">
       <Ionicons name="time-outline" size={IconGrammar.metadata} color={payload.textColor} aria-hidden={true} />
-      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: payload.textColor }} numberOfLines={1}>
         {timeStr}
       </Text>
     </View>
@@ -2602,7 +2602,7 @@ function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       minWidth: 120 }} accessibilityLabel={`Weather, ${payload.temperature}° ${payload.condition}${payload.locationName ? `, ${payload.locationName}` : ''}`} accessibilityRole="text">
       <Text style={{ fontSize: TypographyV2.priceList.size }}>{payload.emoji}</Text>
       <View style={{ gap: 1 }}>
-        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
+        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: payload.textColor }} numberOfLines={1}>
           {payload.temperature}° {payload.condition}
         </Text>
         {payload.locationName ? (
@@ -2972,7 +2972,7 @@ function createOverlayStyles(colors: ThemeColors) {
     overlayOptionText: {
       color: colors.textPrimary,
       fontFamily: TypographyV2.body.fontFamily,
-      fontSize: TypographyV2.meta.size + 1,
+      fontSize: TypographyV2.caption.size,
       flex: 1,
     },
     overlayOptionTextCorrect: {
@@ -3080,7 +3080,7 @@ const countdownStyles = StyleSheet.create({
     marginBottom: 2 },
   label: {
     fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.meta.size - 1,
+    fontSize: TypographyV2.meta.size,
     letterSpacing: 0.3,
     textTransform: 'uppercase' },
   time: {

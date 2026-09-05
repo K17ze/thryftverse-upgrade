@@ -144,7 +144,7 @@ export const accessibilityLabels = {
   more: 'More options',
 
   // Product
-  productImage: 'Product image',
+  productImage: 'Listing image',
   sellerAvatar: 'Seller avatar',
   price: 'Price',
 

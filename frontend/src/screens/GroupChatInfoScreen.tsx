@@ -1876,15 +1876,10 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: Space.sm + 2,
-      borderRadius: Radius.md,
-      backgroundColor: colors.surfaceElevated,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.borderSubtle,
       gap: 4,
     },
     quickActionButtonActive: {
       backgroundColor: colors.brandSubtle,
-      borderColor: colors.brand,
     },
     quickActionIconWrap: {
       width: 28,

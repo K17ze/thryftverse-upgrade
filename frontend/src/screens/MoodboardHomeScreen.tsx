@@ -858,7 +858,6 @@ function useStyles() {
           borderRadius: Radius.lg,
           overflow: 'hidden' },
         userCardImageWrap: {
-          borderRadius: Radius.lg,
           overflow: 'hidden' },
         userCardMeta: {
           paddingHorizontal: Space.sm,
@@ -885,8 +884,7 @@ function useStyles() {
           fontSize: TypographyV2.meta.size,
           fontFamily: TypographyV2.meta.fontFamily,
           color: colors.textMuted },
-        coverPlaceholder: {
-          backgroundColor: colors.surfaceAlt },
+        coverPlaceholder: {},
         // ── Public moodboard card ──
         publicCard: {
           marginBottom: MASONRY_GAP },

@@ -52,7 +52,7 @@ export function ShopRail({ items, onPressItem, onLongPressItem }: ShopRailProps)
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Shop</Text>
+        <Text style={styles.title}>Listings</Text>
       </View>
       <ScrollView
         horizontal

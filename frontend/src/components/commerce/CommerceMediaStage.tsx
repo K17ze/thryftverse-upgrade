@@ -199,7 +199,7 @@ function MediaPage({
         style={[subComponentStyles.page, { width, height }, animStyle]}
         accessible
         accessibilityRole="imagebutton"
-        accessibilityLabel={`${item.altText ?? 'Product image'}. Open fullscreen.`}
+        accessibilityLabel={`${item.altText ?? 'Listing image'}. Open fullscreen.`}
         onAccessibilityTap={onOpenFullscreen}
       >
         {failed || !item.uri ? (

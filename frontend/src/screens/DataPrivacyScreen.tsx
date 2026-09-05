@@ -45,7 +45,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'DataPrivacy'>;
 const DATA_CATEGORIES = [
   { icon: 'profile', label: 'Profile', description: 'Username, display name, bio, avatar' },
   { icon: 'bag-handle-outline', label: 'Listings', description: 'Items you have listed for sale' },
-  { icon: 'cart', label: 'Orders', description: 'Purchase and sale order history' },
+  { icon: 'cart', label: 'Orders', description: 'Order history' },
   { icon: 'chat', label: 'Messages', description: 'Conversations and message metadata' },
   { icon: 'location', label: 'Addresses', description: 'Saved delivery addresses' },
   { icon: 'card', label: 'Payments', description: 'Saved cards and bank accounts' },

@@ -315,7 +315,7 @@ export default function SellerAnalyticsScreen() {
   if (isLoading) {
     return (
       <FlagshipScreen
-        header={<FlagshipHeader title={selectedListingId ? 'Product Analytics' : 'Seller Analytics'} onBack={() => navigation.goBack()} />}
+        header={<FlagshipHeader title={selectedListingId ? 'Listing Analytics' : 'Seller Analytics'} onBack={() => navigation.goBack()} />}
       >
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           <View style={styles.periodRowSkeleton}>
@@ -348,7 +348,7 @@ export default function SellerAnalyticsScreen() {
   if (isError && listings.length === 0) {
     return (
       <FlagshipScreen
-        header={<FlagshipHeader title={selectedListingId ? 'Product Analytics' : 'Seller Analytics'} onBack={() => navigation.goBack()} />}
+        header={<FlagshipHeader title={selectedListingId ? 'Listing Analytics' : 'Seller Analytics'} onBack={() => navigation.goBack()} />}
       >
         <EmptyState
           icon="cloud-offline-outline"
@@ -385,7 +385,7 @@ export default function SellerAnalyticsScreen() {
       ref={a11yRef}
       header={
         <FlagshipHeader
-          title={selectedListingId ? 'Product Analytics' : 'Seller Analytics'}
+          title={selectedListingId ? 'Listing Analytics' : 'Seller Analytics'}
           onBack={() => navigation.goBack()}
           rightAction={selectedListingId ? (
             <Pressable
@@ -451,7 +451,7 @@ export default function SellerAnalyticsScreen() {
         </View>
 
         {/* ========================================================================= */}
-        {/* VIEW A: SPECIFIC PRODUCT ANALYTICS — flat canvas, no card stack */}
+        {/* VIEW A: SPECIFIC Listing Analytics — flat canvas, no card stack */}
         {/* ========================================================================= */}
         {selectedListingId ? (
           <View style={styles.productAnalyticsContainer}>
@@ -530,13 +530,13 @@ export default function SellerAnalyticsScreen() {
             {listingError ? (
               <View style={styles.listingErrorState}>
                 <Text style={[styles.listingErrorText, { color: colors.danger }]}>
-                  Couldn't load product analytics
+                  Couldn't load Listing Analytics
                 </Text>
                 <Pressable
                   style={({ pressed }) => [styles.listingErrorRetry, { borderColor: colors.brand }, pressed && { opacity: 0.6 }]}
                   onPress={() => { if (selectedListingId) void loadListingAnalytics(selectedListingId); }}
                   accessibilityRole="button"
-                  accessibilityLabel="Retry loading product analytics"
+                  accessibilityLabel="Retry loading Listing Analytics"
                 >
                   <Text style={[styles.listingErrorRetryText, { color: colors.brand }]}>Retry</Text>
                 </Pressable>
@@ -1323,7 +1323,7 @@ function createStyles(colors: ThemeColors) {
       fontFamily: TypographyV2.bodyStrong.fontFamily,
     },
 
-    // ── Product Analytics View — flat canvas ──
+    // ── Listing Analytics View — flat canvas ──
     productAnalyticsContainer: {
       paddingTop: Space.md,
     },

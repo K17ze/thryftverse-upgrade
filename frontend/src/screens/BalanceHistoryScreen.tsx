@@ -143,7 +143,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
       header={
         <FlagshipHeader
           title="Payout history"
-          subtitle="Transaction ledger"
+          subtitle="Order ledger"
           onBack={() => navigation.goBack()}
         />
       }
@@ -162,8 +162,8 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
         <FlagshipState
           variant="empty"
           icon="receipt-outline"
-          title="No transactions yet"
-          subtitle="Your transaction history will appear here once you start buying, selling, or withdrawing."
+          title="No orders yet"
+          subtitle="Your order history will appear here once you start buying, selling, or withdrawing."
         />
       ) : (
         <>
@@ -186,7 +186,7 @@ export default function BalanceHistoryScreen({ navigation }: Props) {
 
           {/* ── Flat transaction list — hairline separators, no card ── */}
           <View>
-            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>TRANSACTION LEDGER</Text>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>ORDER LEDGER</Text>
             {transactions.map((tx, idx) => (
               <View key={tx.id}>
                 <View style={styles.txRow}>

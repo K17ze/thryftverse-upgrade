@@ -685,7 +685,7 @@ function getLayerDisplayName(layer: CreatorLayer): string {
     case 'text':
       return layer.payload.text.slice(0, 30) || 'Text';
     case 'product':
-      return layer.payload.snapshotTitle || 'Product';
+      return layer.payload.snapshotTitle || 'Listing';
     case 'mention':
       return `@${layer.payload.username}`;
     case 'look':

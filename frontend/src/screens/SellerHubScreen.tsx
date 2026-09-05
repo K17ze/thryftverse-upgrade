@@ -266,7 +266,7 @@ export default function SellerHubScreen() {
                 )}
               </View>
               <Text style={styles.shopSub}>
-                {sellerTrust?.rating ? `${sellerTrust.rating.toFixed(1)} ★ rating` : 'Active Merchant'}
+                {sellerTrust?.rating ? `${sellerTrust.rating.toFixed(1)} ★ rating` : 'Active Seller'}
                 {sellerTrust?.completedSales ? ` · ${sellerTrust.completedSales} sales` : ''}
               </Text>
             </View>
@@ -793,7 +793,7 @@ export default function SellerHubScreen() {
         />
         <FlagshipNavigationRow
           title="Identity verification"
-          subtitle={isVerified ? 'Verified merchant' : 'KYC required'}
+          subtitle={isVerified ? 'Verified seller' : 'KYC required'}
           icon={isVerified ? 'checkmark-circle' : 'profile'}
           iconColor={isVerified ? colors.success : undefined}
           onPress={() => navigation.navigate('Verification')}
@@ -915,10 +915,6 @@ function createStyles(colors: ThemeColors) {
       gap: 4,
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
     },
     viewShopBtnText: {
       fontSize: TypographyV2.caption.size,

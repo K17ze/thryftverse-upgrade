@@ -333,7 +333,7 @@ export default function OrderReceiptScreen() {
           <View style={[styles.receiptDivider, themed.receiptDivider]} />
 
           <View style={styles.receiptSection}>
-            <Text style={[styles.sectionLabel, themed.sectionLabel]}>Transaction breakdown</Text>
+            <Text style={[styles.sectionLabel, themed.sectionLabel]}>Order breakdown</Text>
             <ReceiptRow label="Item" value={subtotal} />
             {hasBuyerProtection && (
               <ReceiptRow label="Buyer protection" value={formatFromFiat(buyerProtectionFee!, 'GBP', fiatOpts)} />
@@ -370,7 +370,7 @@ export default function OrderReceiptScreen() {
           <View style={styles.immutableNotice}>
             <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
             <Text style={[styles.immutableText, themed.immutableText]}>
-              This receipt is an immutable record of the transaction at the time of the order.
+              This receipt is an immutable record of the order.
             </Text>
           </View>
 

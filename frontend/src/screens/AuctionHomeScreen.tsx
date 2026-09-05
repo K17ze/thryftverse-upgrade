@@ -37,7 +37,7 @@ import { EmptyState } from '../components/EmptyState';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useConnectivity } from '../hooks/useConnectivity';
 import { haptics } from '../utils/haptics';
-import { Space, Radius, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, LetterSpacing, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { toIze, formatIzeAmount, formatFiatAmount } from '../utils/currency';
 import {
@@ -1435,7 +1435,6 @@ function createStyles(colors: ThemeColors) {
       minHeight: 32 },
     filterChipText: {
       fontSize: TypographyV2.meta.size,
-      fontWeight: '500',
       color: colors.textPrimary,
       fontFamily: TypographyV2.meta.fontFamily,
       letterSpacing: 0,
@@ -1447,7 +1446,6 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center' },
     filterChipClearText: {
       fontSize: TypographyV2.meta.size,
-      fontWeight: '600',
       color: colors.brand,
       fontFamily: TypographyV2.meta.fontFamily },
 
@@ -1460,7 +1458,6 @@ function createStyles(colors: ThemeColors) {
     sectionTitle: {
       fontSize: TypographyV2.sectionTitle.size,
       lineHeight: TypographyV2.sectionTitle.lineHeight,
-      fontWeight: '700',
       letterSpacing: TypographyV2.sectionTitle.letterSpacing,
       color: colors.textPrimary,
       fontFamily: TypographyV2.sectionTitle.fontFamily,
@@ -1584,7 +1581,6 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'space-between' },
     searchIdleSectionTitle: {
       fontSize: TypographyV2.meta.size,
-      fontWeight: '600',
       letterSpacing: LetterSpacing.wide + 0.08,
       color: colors.textSecondary,
       fontFamily: TypographyV2.meta.fontFamily },

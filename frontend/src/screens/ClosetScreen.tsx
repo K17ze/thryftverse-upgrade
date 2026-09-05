@@ -467,7 +467,7 @@ export default function ClosetScreen() {
       return (
         <EmptyState
           graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
-          title="Your wishlist is empty"
+          title="Your Saved is empty"
           subtitle="Heart items to track price drops and get notified when they go on sale."
           ctaLabel="Browse"
           onCtaPress={handleBrowse}
@@ -685,7 +685,7 @@ export default function ClosetScreen() {
                 WISHLIST: wishlistItems.length,
                 COLLECTIONS: collections.length,
                 OUTFITS: outfits.length };
-              const tabLabel = tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : tab === 'COLLECTIONS' ? 'Collections' : 'Outfits';
+              const tabLabel = tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Saved' : tab === 'COLLECTIONS' ? 'Closets' : 'Outfits';
               return (
                 <AnimatedPressable
                   key={tab}

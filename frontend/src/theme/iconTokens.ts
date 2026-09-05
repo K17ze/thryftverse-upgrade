@@ -127,11 +127,11 @@ export const SemanticIconMap = {
 
   // Commerce, Cart & Wallet
   cart: { outline: 'bag-handle-outline', filled: 'bag-handle', description: 'Shopping bag / Cart' },
-  pricetag: { outline: 'bag-handle-outline', filled: 'bag-handle', description: 'Listings & products' },
+  pricetag: { outline: 'pricetag-outline', filled: 'pricetag', description: 'Listings & products' },
   wallet: { outline: 'wallet-outline', filled: 'wallet', description: 'Wallet & balance' },
   card: { outline: 'card-outline', filled: 'card', description: 'Payment card' },
   receipt: { outline: 'receipt-outline', filled: 'receipt', description: 'Order receipt' },
-  box: { outline: 'car-outline', filled: 'car', description: 'Package & delivery' },
+  box: { outline: 'cube-outline', filled: 'cube', description: 'Package & delivery' },
   auction: { outline: 'hammer-outline', filled: 'hammer', description: 'Auction' },
   trending: { outline: 'trending-up-outline', filled: 'trending-up', description: 'Market trend' },
 
@@ -160,8 +160,8 @@ export const SemanticIconMap = {
   accessibility: { outline: 'accessibility-outline', filled: 'accessibility', description: 'Accessibility' },
   analytics: { outline: 'stats-chart-outline', filled: 'stats-chart', description: 'Analytics & performance' },
   feed: { outline: 'newspaper-outline', filled: 'newspaper', description: 'Curated feed & algorithm' },
-  compass: { outline: 'search-outline', filled: 'search', description: 'Exploration compass' },
-  shield: { outline: 'lock-closed-outline', filled: 'lock-closed', description: 'Security & privacy' },
+  compass: { outline: 'compass-outline', filled: 'compass', description: 'Exploration compass' },
+  shield: { outline: 'shield-outline', filled: 'shield', description: 'Security & privacy' },
   key: { outline: 'key-outline', filled: 'key', description: 'Password & credentials' },
   link: { outline: 'link-outline', filled: 'link', description: 'Connected accounts' },
   fingerprint: { outline: 'finger-print-outline', filled: 'finger-print', description: 'Biometric authentication' },
@@ -176,7 +176,7 @@ export const SemanticIconMap = {
   ban: { outline: 'ban-outline', filled: 'ban', description: 'Blocked accounts' },
   phone: { outline: 'phone-portrait-outline', filled: 'phone-portrait', description: 'Device & session' },
   desktop: { outline: 'desktop-outline', filled: 'desktop', description: 'Desktop & session' },
-  chip: { outline: 'bulb-outline', filled: 'bulb', description: 'AI agents & assistants' },
+  chip: { outline: 'hardware-chip-outline', filled: 'hardware-chip', description: 'AI agents & assistants' },
   tag: { outline: 'pricetag-outline', filled: 'pricetag', description: 'Listing tag & category' },
   mailUnread: { outline: 'mail-unread-outline', filled: 'mail-unread', description: 'Unread messages' },
   flag: { outline: 'flag-outline', filled: 'flag', description: 'Report / Flag content' },

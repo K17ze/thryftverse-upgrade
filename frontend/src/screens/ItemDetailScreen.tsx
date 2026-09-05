@@ -1894,11 +1894,11 @@ export default function ItemDetailScreen() {
           }}
           accessibilityRole="button"
           accessibilityState={{ selected: isFav }}
-          accessibilityLabel={isFav ? 'Remove from wishlist' : 'Add to wishlist'}
+          accessibilityLabel={isFav ? 'Remove from Saved' : 'Add to Saved'}
         >
           <Ionicons name={isFav ? 'heart' : 'heart-outline'} size={20} color={isFav ? colors.danger : colors.textPrimary} />
           <Text style={[styles.overflowRowText, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
-            {isFav ? 'Remove from wishlist' : 'Add to wishlist'}
+            {isFav ? 'Remove from Saved' : 'Add to Saved'}
           </Text>
         </AnimatedPressable>
         <AnimatedPressable

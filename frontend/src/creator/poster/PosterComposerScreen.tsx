@@ -780,7 +780,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
           label = 'Sticker';
         } else if (layer.type === 'product') {
           overlayType = 'product';
-          label = layer.payload.snapshotTitle ?? 'Product';
+          label = layer.payload.snapshotTitle ?? 'Listing';
         } else if (layer.type === 'music') {
           overlayType = 'music';
           label = layer.payload.trackName ?? 'Music';
@@ -1849,7 +1849,7 @@ function PosterComposerInner({ onEntryTypeChange }: { onEntryTypeChange: (type: 
       : [];
 
     const productOverflow: ToolDefinition[] = [
-      mk('product', 'Product', 'bag-handle-outline', handleAddProduct, 'Add product', 'Opens the product picker', 'product-tag', undefined, 'stickerProduct'),
+      mk('product', 'Listing', 'pricetag-outline', handleAddProduct, 'Add listing', 'Opens the listing picker', 'product-tag', undefined, 'stickerProduct'),
     ];
 
     // ── poster-photo-default: Text, Stickers, Product, Draw ──
@@ -3382,8 +3382,6 @@ function createStyles(colors: ThemeColors) {
     marginLeft: 8,
   },
   recoveryBtn: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.sm,
     paddingHorizontal: 14,
     paddingVertical: 6,
   },
@@ -3408,14 +3406,7 @@ function createStyles(colors: ThemeColors) {
     paddingHorizontal: Space.md,
     paddingVertical: 7,
     borderRadius: RadiusRoleValue.pillAvatar,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
     zIndex: 150,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
   },
   filterHudText: {
     fontFamily: FontFamily.bold,
