@@ -124,9 +124,9 @@ export function CoOwnTradeComposer({
   const fillEstimateLabel = isLiveBook ? 'Live estimate' : 'Estimated fill (illustrative)';
 
   // Reservation line text — from computeReservation() (client-side estimate).
-  // Labelled as an estimate, not an authoritative server reservation, per
-  // spec 10 §1: the actual reservation is confirmed by the backend at order
-  // submission, not by this local calculation.
+  // Labelled as an estimate, not an authoritative server reservation: the
+  // actual reservation is confirmed by the backend at order submission, not
+  // by this local calculation.
   const reservationLine = reservation
     ? isBuy
       ? `Est. ${reservation.totalReserve1ZE.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE required (confirmed at review)`

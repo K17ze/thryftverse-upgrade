@@ -338,7 +338,7 @@ export type RootStackParamList = {
   CreatorDraftList: undefined;
   CoOwnIssue: { assetId?: string };
   OutfitBuilder: undefined;
-  // UI-22R.6B — Experience elevation
+  // Experience elevation
   LookDetail: { lookId: string };
   PulseFeed: undefined;
   ExploreCollection: {
@@ -366,7 +366,7 @@ export type RootStackParamList = {
   ManageQuickReplies: { role: 'seller' | 'buyer' };
 
   // ── Chat & Messaging ── (conversations, messages, media)
-  // VISUAL-15 — UI Architecture + Feature Depth
+  // UI Architecture + Feature Depth
   ConversationInfo: { conversationId: string };
   MessageRequests: undefined;
   NewMessage:
@@ -396,7 +396,7 @@ export type RootStackParamList = {
   ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };
 
   // ── Commerce ── (collection editing)
-  // UI-18 — Reference-perfect product UX
+  // Reference-perfect product UX
   EditCollection: { collectionId: string };
 
   // ── Support & Help ── (tickets, resolution centre, conversations)
@@ -410,7 +410,7 @@ export type RootStackParamList = {
   SupportCaseDetail: { caseId: string };
 
   // ── Seller Tools ── (listing preview)
-  // UI-19 — Sell / Co-own / Chat marketplace UX
+  // Sell / Co-own / Chat marketplace UX
   ListingPreview: {
     preview: {
       title?: string;
@@ -488,7 +488,7 @@ export type RootStackParamList = {
   VerificationResponse: { assetId: string; demandId: number } | undefined;
 
   // ── Live Shopping ──
-  // Live shopping — Whatnot/Tilt-style live commerce
+  // Live shopping — live commerce
   LiveShopping: undefined;
   // Live stream viewer — watch + bid + chat
   LiveStreamViewer: { sessionId: string };

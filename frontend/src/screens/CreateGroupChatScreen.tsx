@@ -409,7 +409,7 @@ export default function CreateGroupChatScreen({ navigation, route }: Props) {
           }
         >
           {/* Cover photo — wide banner, optional. Separate from the circular
-              group avatar. Matches WhatsApp/Telegram group creation pattern. */}
+              group avatar. Standard group creation pattern. */}
           <AnimatedPressable
             onPress={handlePickCoverPhoto}
             disabled={isUploadingCover}

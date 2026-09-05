@@ -348,39 +348,39 @@ export default function AppNavigator() {
 
       {/* ── Wallet & Payments ── */}
       <Stack.Screen name="Wallet" getComponent={withScreenErrorBoundary(() => require('../screens/WalletScreen').default, 'Wallet')} />
-      {/* Wallet V3 — focused money-movement destinations (spec 17) */}
+      {/* Wallet V3 — focused money-movement destinations */}
       <Stack.Screen name="SellerEarnings" getComponent={() => require('../screens/SellerEarningsScreen').default} />
       <Stack.Screen name="WalletConvert" getComponent={() => require('../screens/WalletConvertScreen').default} />
       <Stack.Screen name="WalletHistory" getComponent={() => require('../screens/WalletHistoryScreen').default} />
       <Stack.Screen name="MyOrders" getComponent={() => require('../screens/MyOrdersScreen').default} />
 
       {/* ── Commerce ── (orders, offers, checkout, listings) */}
-      {/* Phase 16 new screens */}
+      {/* new screens */}
       <Stack.Screen name="MakeOffer" getComponent={() => require('../screens/MakeOfferScreen').default} options={formSheetScreenOptions} />
       <Stack.Screen name="Postage" getComponent={() => require('../screens/PostageScreen').default} />
       <Stack.Screen name="InviteFriends" getComponent={() => require('../screens/InviteFriendsScreen').default} />
       <Stack.Screen name="BalanceHistory" getComponent={() => require('../screens/BalanceHistoryScreen').default} />
 
-      {/* Phase 17 new screens */}
+      {/* new screens */}
       <Stack.Screen name="AddBankAccount" getComponent={() => require('../screens/AddBankAccountScreen').default} />
 
-      {/* Phase 18 new screens */}
+      {/* new screens */}
       <Stack.Screen name="OrderDetail" getComponent={withScreenErrorBoundary(() => require('../screens/OrderDetailScreen').default, 'OrderDetail')} />
       <Stack.Screen name="SellerFulfilment" getComponent={() => require('../screens/SellerFulfilmentScreen').default} />
       <Stack.Screen name="OrderReceipt" getComponent={withScreenErrorBoundary(() => require('../screens/OrderReceiptScreen').default, 'OrderReceipt')} />
 
-      {/* Phase 19 new screens */}
+      {/* new screens */}
       <Stack.Screen name="Checkout" getComponent={withScreenErrorBoundary(() => require('../screens/CheckoutScreen').default, 'Checkout')} />
       <Stack.Screen name="AddressForm" getComponent={() => require('../screens/AddressFormScreen').default} />
       <Stack.Screen name="Success" getComponent={() => require('../screens/SuccessScreen').default} />
       <Stack.Screen name="ManageListing" getComponent={() => require('../screens/ManageListingScreen').default} />
       <Stack.Screen name="Withdraw" getComponent={() => require('../screens/WithdrawScreen').default} />
 
-      {/* Phase 25 new screens */}
+      {/* new screens */}
       <Stack.Screen name="ListingSuccess" getComponent={() => require('../screens/ListingSuccessScreen').default} />
       <Stack.Screen name="EditListing" getComponent={() => require('../screens/EditListingScreen').default} options={modalScreenOptions} />
 
-      {/* Phase 28 new screens */}
+      {/* new screens */}
       <Stack.Screen name="WriteReview" getComponent={() => require('../screens/WriteReviewScreen').default} options={formSheetScreenOptions} />
 
       {/* ── Support & Help ── (report) */}
@@ -400,7 +400,7 @@ export default function AppNavigator() {
       <Stack.Screen name="CoOwnIssue" getComponent={() => require('../screens/CoOwnIssueScreen').default} options={modalScreenOptions} />
 
       {/* ── Chat & Messaging ── (conversations, messages, media) */}
-      {/* VISUAL-15 — UI Architecture + Feature Depth */}
+      {/* UI Architecture + Feature Depth */}
       <Stack.Screen name="ConversationInfo" getComponent={() => require('../screens/ConversationInfoScreen').default} />
       <Stack.Screen name="MessageRequests" getComponent={() => require('../screens/MessageRequestsScreen').default} />
       <Stack.Screen name="NewMessage" getComponent={() => require('../screens/NewMessageScreen').default} options={modalScreenOptions} />
@@ -423,7 +423,7 @@ export default function AppNavigator() {
       <Stack.Screen name="ChatMediaPreview" getComponent={() => require('../screens/ChatMediaPreviewScreen').default} options={modalScreenOptions} />
 
       {/* ── Commerce ── (collection editing) */}
-      {/* UI-18 — Reference-perfect product UX */}
+      {/* Reference-perfect product UX */}
       <Stack.Screen name="EditCollection" getComponent={() => require('../screens/EditCollectionScreen').default} options={modalScreenOptions} />
 
       {/* ── Support & Help ── (tickets, resolution centre, conversations) */}
@@ -433,14 +433,14 @@ export default function AppNavigator() {
       <Stack.Screen name="SupportCaseDetail" getComponent={() => require('../screens/SupportCaseDetailScreen').default} />
 
       {/* ── Seller Tools ── (listing preview) */}
-      {/* UI-19 — Sell / Co-own / Chat marketplace UX */}
+      {/* Sell / Co-own / Chat marketplace UX */}
       <Stack.Screen name="ListingPreview" getComponent={() => require('../screens/ListingPreviewScreen').default} options={modalScreenOptions} />
 
       {/* ── Auctions & Trading ── (trade confirm) */}
       <Stack.Screen name="TradeConfirm" getComponent={() => require('../screens/TradeConfirmScreen').default} options={modalScreenOptions} />
 
       {/* ── Live Shopping ── */}
-      {/* Live shopping — Whatnot/Tilt-style live commerce */}
+      {/* Live shopping — live commerce */}
       <Stack.Screen name="LiveShopping" getComponent={() => require('../screens/LiveShoppingHomeScreen').default} />
       <Stack.Screen name="LiveStreamViewer" getComponent={() => require('../screens/LiveStreamViewerScreen').LiveStreamViewerScreen} options={{ headerShown: false }} />
       <Stack.Screen name="LiveStreamSeller" getComponent={() => require('../screens/LiveStreamSellerScreen').LiveStreamSellerScreen} options={{ headerShown: false }} />

@@ -409,7 +409,7 @@ export default function EditGroupScreen({ navigation, route }: Props) {
         contentContainerStyle={[styles.content, { paddingHorizontal: 0 }]}
       >
         {/* Cover photo — full-width banner (3:1 aspect), separate from the
-            circular avatar. Matches WhatsApp/Telegram group edit pattern. */}
+            circular avatar. Standard group edit pattern. */}
         <View style={styles.coverSection}>
           <AnimatedPressable
             onPress={handlePickCoverPhoto}

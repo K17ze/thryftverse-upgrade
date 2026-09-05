@@ -1005,7 +1005,7 @@ export default function MyProfileScreen() {
           ) : null}
 
           {/* ── STORY HIGHLIGHTS RAIL ──
-              Instagram-pattern: highlights sit between the identity hero and
+              Highlights sit between the identity hero and
               the utility rail. Renders only when highlights exist (truthful UI —
               no fabricated placeholder content). Owner sees a "New" tile. */}
           {highlights.length > 0 ? (
@@ -1140,7 +1140,7 @@ export default function MyProfileScreen() {
           </Reanimated.View>
         )}
 
-        {/* LOOKS TAB — 2-column grid (Instagram/Pinterest profile pattern) */}
+        {/* LOOKS TAB — 2-column grid (standard profile pattern) */}
         {activeTab === 'looks' && (
           <Reanimated.View
             key="looks"

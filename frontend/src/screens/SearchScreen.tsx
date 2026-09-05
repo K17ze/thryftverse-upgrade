@@ -191,7 +191,7 @@ export default function SearchScreen() {
       }
     },
     onBrowseCategories: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' }),
-    // Quick-save: bookmark button on each discovery tile (Pinterest/Depop
+    // Quick-save: bookmark button on each discovery tile (quick-save
     // pattern). The store owns the saved state; the tile reflects it.
     onToggleSave: (item: DiscoveryListingSummary) => {
       haptic.light();

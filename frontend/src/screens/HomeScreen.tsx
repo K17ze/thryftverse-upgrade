@@ -121,7 +121,7 @@ const AnimatedFlashList: any = Platform.OS === 'web'
  * markers. The FlashList renders both through the same masonry path.
  * The `type` field discriminates the two variants — VMs do not carry it.
  * Posters rail renders in the ListHeaderComponent (above the grid) so it
- * is visible in the first viewport — aligned with Instagram/Pinterest 2026
+ * is visible in the first viewport — aligned with 2026
  * story-tray placement.
  */
 
@@ -555,7 +555,7 @@ export default function HomeScreen() {
 
   // Phase 5: Home discovery view models carry product identity (brand + title)
   // and price below media so the feed reads as visual commerce, not
-  // "Pinterest with prices". Identity synthesis follows doc 46 precedence.
+  // a passive image board. Identity synthesis follows doc 46 precedence.
   //
   // Asymmetric editorial rhythm (spec 11): 6-12 normal tiles, one larger
   // featured unit, continue feed. We use a deterministic-but-varied pattern
@@ -636,7 +636,7 @@ export default function HomeScreen() {
   // Posters rail injected into the feed after 4 items (2 rows in 2-column
   // grid) so the first viewport shows header + tabs + media — nothing else.
   // Posters rail renders in the ListHeaderComponent (above the grid) so it
-  // is visible in the first viewport — aligned with Instagram/Pinterest 2026
+  // is visible in the first viewport — aligned with 2026
   // story-tray placement. The rail is a compact horizontal scroll that does
   // not displace the first media row significantly.
   // Looks rail injected as a full-span item further down the feed to create

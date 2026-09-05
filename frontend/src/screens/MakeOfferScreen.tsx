@@ -104,8 +104,8 @@ export default function MakeOfferScreen({ navigation, route }: Props) {
     totalGbp: total } = calculateOfferSummaryFromDisplay(numericOffer, currencyCode, fxRates);
 
   // Discount percentage relative to listing price — key trust signal
-  // shown dynamically as the buyer adjusts their offer. Depop/Vinted/
-  // Vestiaire all show this prominently.
+  // shown dynamically as the buyer adjusts their offer. Resale
+  // marketplaces all show this prominently.
   const discountPct = useMemo(() => {
     if (!price || price <= 0) return null;
     const pct = ((price - numericOfferGbp) / price) * 100;

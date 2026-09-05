@@ -19,7 +19,7 @@ export interface LookMasonryTileProps {
   aspectRatio?: number;
   testID?: string;
   /** Visual variant: 'default' shows caption/creator overlay; 'explore' is
-   *  Instagram-style — media-only with small media-type badges, no text. */
+   *  Media-only with small media-type badges, no text. */
   variant?: 'default' | 'explore';
 }
 
@@ -42,7 +42,7 @@ function LookMasonryTileImpl({
 
   const handlePress = useCallback(() => onPress(look.id), [onPress, look.id]);
 
-  // ── Explore variant: Instagram-style — media is the label ──────────────
+  // ── Explore variant: media is the label ──────────────
   // No text overlays. Small media-type badges top-right. Pricetag badge
   // bottom-right. Tighter radius for discovery density.
   if (variant === 'explore') {
@@ -65,7 +65,7 @@ function LookMasonryTileImpl({
 
           {/* Media-type badge — bare glyph top-right with drop-shadow for
               legibility over varying imagery. No chip/pill background —
-              Instagram uses bare glyphs, not contained badges.
+              Use bare glyphs, not contained badges.
               Video → play icon, Carousel → stacked-layers icon,
               Multi-layer collage → layers icon. Single image → no badge. */}
           {(isVideo || isCarousel || isMultiLayer) && (
@@ -186,7 +186,7 @@ const createStyles = (colors: ThemeColors, variant: 'default' | 'explore') => {
 
     // ── Explore variant styles ──
     // Media badge: bare glyph, top-right. No chip/pill background —
-    // Instagram uses bare glyphs with drop-shadow for legibility.
+    // Use bare glyphs with drop-shadow for legibility.
     // textShadow uses colors.mediaOverlayScrim (dark scrim token) for legibility over
     // varying imagery in both themes.
     mediaBadge: {

@@ -378,7 +378,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   soldContainer: {
     opacity: 0.7 },
 
-  // Image - Pinterest/Depop tight editorial feel. No shadow, minimal radius.
+  // Image - tight editorial feel. No shadow, minimal radius.
   // Art direction (AGENTS.md §15 — media storytelling):
   //  - Media is the primary visual anchor; chrome recedes.
   //  - No decorative border or shadow on the media itself.
@@ -585,7 +585,7 @@ interface ProductDiscoveryTileProps {
   /** Whether this item is currently saved. Drives the bookmark glyph state. */
   isSaved?: boolean;
   /** Toggle the saved state. When provided, a bookmark button renders over
-   *  the media (top-right) — the Pinterest/Depop quick-save pattern that
+   *  the media (top-right) — the quick-save pattern that
    *  turns passive browsing into engagement. */
   onSaveToggle?: () => void;
 }
@@ -742,7 +742,7 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     paddingHorizontal: Space.xxs,
     gap: 0 },
   // Title — 1 line, caption size, muted. The image is the dominant object;
-  // the title is a quiet label, not a competing headline. Pinterest pattern:
+  // the title is a quiet label, not a competing headline. Editorial pattern:
   // media dominates, text recedes.
   title: {
     fontSize: TypographyV2.meta.size,

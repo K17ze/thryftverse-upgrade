@@ -332,7 +332,7 @@ const makeLedgerEntry = (
 // Anti-sniping (pop-bidding) constants — when a bid is placed within the
 // extension window of the auction end, the end time is extended to give
 // other bidders a fair chance to respond. This is standard practice on
-// eBay, Catawiki, and other flagship auction platforms.
+// flagship auction platforms.
 const ANTI_SNIPE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes before end
 const ANTI_SNIPE_EXTENSION_MS = 5 * 60 * 1000; // extend by 5 minutes
 
@@ -379,7 +379,7 @@ async function persistLocalAuthSnapshot(
   }
 }
 
-// Collection for organizing saved items (like Pinterest boards)
+// Collection for organizing saved items (like boards)
 export interface Collection {
   id: string;
   name: string;

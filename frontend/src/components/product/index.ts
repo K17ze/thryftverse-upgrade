@@ -7,7 +7,6 @@ export * from './ProductDescription';
 export * from './ProductCommerceSummary';
 export * from './BuyerProtectionStrip';
 export * from './ProductPolicySheet';
-export * from './SellerTrustCard';
 export * from './RecommendationRail';
 export * from './SeenInLooksRail';
 export * from './DiscoveryGrid';

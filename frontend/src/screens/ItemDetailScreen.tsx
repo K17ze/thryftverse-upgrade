@@ -855,7 +855,7 @@ export default function ItemDetailScreen() {
         {/* ── Image pagination ──
             Thumbnail strip is rendered inside CommerceMediaStage
             (showThumbnailStrip=true). No external dots/counter needed —
-            the thumbnail rail is the premium 2026 pattern (eBay/Depop). */}
+            the thumbnail rail is the premium 2026 pattern. */}
 
         <CommerceDetailOfflineBanner isOffline={isOffline} />
 
