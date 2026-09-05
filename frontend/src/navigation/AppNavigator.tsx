@@ -469,7 +469,6 @@ export default function AppNavigator() {
       <Stack.Screen name="MoodboardHome" getComponent={() => require('../screens/MoodboardHomeScreen').default} />
       <Stack.Screen name="PulseFeed" getComponent={() => require('../screens/PulseFeedScreen').default} />
       <Stack.Screen name="ExploreCollection" getComponent={() => require('../screens/ExploreCollectionScreen').default} />
-      <Stack.Screen name="StyleQuiz" getComponent={() => require('../screens/StyleQuizScreen').default} options={{ presentation: 'modal' as const, gestureEnabled: true }} />
       <Stack.Screen name="SavedSearches" getComponent={() => require('../screens/SavedSearchesScreen').default} />
 
       {/* Diagnostic — dev only */}

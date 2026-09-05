@@ -352,7 +352,6 @@ export type RootStackParamList = {
       | { type: 'closet_affinity' }
       | { type: 'auction' };
   };
-  StyleQuiz: undefined;
 
   // ── Settings & Account ── (chat settings, sessions, privacy, about)
   // Phase 13 — Settings integrity
@@ -630,7 +629,6 @@ export const ROOT_STACK_ROUTES = [
   'LookDetail',
   'PulseFeed',
   'ExploreCollection',
-  'StyleQuiz',
   'ChatSettings',
   'ActiveSessions',
   'BlockedUsers',
@@ -712,7 +710,7 @@ export type RootStackRouteName = typeof ROOT_STACK_ROUTES[number];
 export type HomeTabParamList = {
   Home: undefined;
   // Discovery surfaces (ExploreCollection, GalleriaCollectionDetail,
-  // MoodboardHome, YourAlgorithm, StyleQuiz, LookDetail) are registered
+  // MoodboardHome, YourAlgorithm, LookDetail) are registered
   // in the root stack only for cross-tab navigation.
 };
 

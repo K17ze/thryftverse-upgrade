@@ -93,7 +93,6 @@ export const linking: LinkingOptions<RootStackParamList> = {
               GalleriaCollectionDetail: 'galleria/collections/:collectionId',
               MoodboardHome: 'moodboards',
               YourAlgorithm: 'algorithm',
-              StyleQuiz: 'style-quiz',
             },
           },
           Explore: {

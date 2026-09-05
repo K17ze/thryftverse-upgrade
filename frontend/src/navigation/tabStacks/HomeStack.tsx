@@ -32,7 +32,7 @@ export function HomeStack() {
         )}
       />
       {/* Discovery surfaces (ExploreCollection, GalleriaCollectionDetail,
-          MoodboardHome, YourAlgorithm, StyleQuiz) are registered in the
+          MoodboardHome, YourAlgorithm) are registered in the
           root stack only for cross-tab navigation. */}
     </Stack.Navigator>
   );

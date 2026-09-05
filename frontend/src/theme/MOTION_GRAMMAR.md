@@ -232,7 +232,6 @@ follow-up migration to the grammar. Grouped by defect type.
 | `screens/MyProfileScreen.tsx` | 876, 937, 984, 1090 | `200` | `tabSwitch` |
 | `screens/ClosetScreen.tsx` | 866, 871, 876, 881 | `200` | `tabSwitch` |
 | `screens/CreateSyndicateScreen.tsx` | 425, 477, 671, 737 | `250` | `stateTransition` |
-| `screens/StyleQuizScreen.tsx` | 120, 140, 163, 183 | `250` | `modalPush` (step enter) |
 | `screens/CategoryDetailScreen.tsx` | 413 | `220` | `listReveal` |
 | `screens/MoodboardHomeScreen.tsx` | 518 | `250` | `listReveal` |
 | `screens/GalleriaScreen.tsx` | 583 | `250` | `listReveal` |

@@ -146,7 +146,7 @@ export function CreatorTemplateBrowser({
   }, [templates, searchQuery]);
 
   // ── Style-preference-aware sorting ────────────────────────────────
-  // Templates whose styleTags overlap with the user's StyleQuiz
+  // Templates whose styleTags overlap with the user's style
   // preferences (stored in personalisationPreferences.categoriesAndSizesPref
   // as a comma-separated string) are sorted to the top so the creator
   // surface reflects the user's taste. Templates without styleTags or
