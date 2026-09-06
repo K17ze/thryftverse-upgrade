@@ -7,7 +7,6 @@ import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, FontFamily, DockConstants, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RootStackParamList, ROOT_STACK_ROUTES, type RootStackRouteName } from '../navigation/types';
-import { openProfile } from '../navigation/openProfile';
 
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { FlagshipScreen, FlagshipHeader, FlagshipState, SellerHubSkeleton } from '../components/flagship';
@@ -15,7 +14,6 @@ import { AppIcon } from '../components/common/AppIcon';
 import { IconSize } from '../theme/iconTokens';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useStore } from '../store/useStore';
-import { useSellerTrust } from '../platform/product';
 import { useBackendData } from '../context/BackendDataContext';
 import {
   listUserOrders,
@@ -54,7 +52,6 @@ export default function SellerHubScreen() {
   const savedProducts = useStore((s) => s.savedProducts);
   const wishlist = useStore((s) => s.wishlist);
   const savedItemsCount = (savedProducts?.length ?? 0) + (wishlist?.length ?? 0);
-  const { data: sellerTrust, isLoading: trustLoading } = useSellerTrust(currentUser?.id);
   const { listings } = useBackendData();
 
   const [overview, setOverview] = useState<SellerHubOverview | null>(null);
@@ -123,8 +120,6 @@ export default function SellerHubScreen() {
     setIsRefreshing(false);
   };
 
-  const isVerified = trustLoading ? true : sellerTrust?.verified === true;
-
   const handleNavigateToTask = (task: SellerHubTask) => {
     const route = task.actionRoute as string;
     if (!ROOT_STACK_ROUTES.includes(route as RootStackRouteName)) {
@@ -145,10 +140,6 @@ export default function SellerHubScreen() {
     }
     haptics.tap();
     (navigation.navigate as (screen: RootStackRouteName) => void)(typedRoute);
-  };
-
-  const handleOpenStorefront = () => {
-    if (currentUser?.id) openProfile(navigation, currentUser.id, currentUser.id);
   };
 
   const handleOpenWallet = () => { haptics.tap(); navigation.navigate('Wallet'); };
@@ -236,30 +227,6 @@ export default function SellerHubScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
       >
-        {/* KYC banner, money-critical: gates payouts. */}
-        {!isVerified && (
-          <AnimatedPressable
-            style={styles.verificationBanner}
-            onPress={() => {
-              haptics.tap();
-              navigation.navigate('KYCVerification');
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Get verified to build buyer trust"
-          >
-            <AppIcon concept="verified" size={IconSize.sm} color="warning" opticalCenter accessible={false} />
-            <View style={styles.verificationBannerText}>
-              <Text style={[styles.verificationBannerTitle, { color: colors.textPrimary }]}>
-                Identity & Seller Verification
-              </Text>
-              <Text style={[styles.verificationBannerSub, { color: colors.textSecondary }]}>
-                Verify your identity to enable payouts
-              </Text>
-            </View>
-            <AppIcon concept="forward" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-          </AnimatedPressable>
-        )}
-
         {/* Partial-state notice when import status failed. */}
         {importError && (
           <View style={styles.importErrorBanner}>
@@ -270,13 +237,10 @@ export default function SellerHubScreen() {
           </View>
         )}
 
-        {/* Pillar 1 - Wallet: identity + liquidity posture. */}
+        {/* Pillar 1 - Wallet: liquidity posture. */}
         <SellerExecutiveHero
-          currentUser={currentUser}
-          sellerTrust={sellerTrust ?? null}
           money={money}
           formatMoney={formatGbp}
-          onOpenStorefront={handleOpenStorefront}
           onOpenWallet={handleOpenWallet}
         />
 
@@ -351,19 +315,6 @@ function createStyles(colors: ThemeColors) {
     scrollContent: {
       paddingBottom: Space.xxl + 72,
     },
-    verificationBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      marginHorizontal: Space.md,
-      marginTop: Space.sm,
-      paddingVertical: Space.sm,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    verificationBannerText: { flex: 1, gap: 2 },
-    verificationBannerTitle: { fontSize: TypographyV2.bodyStrong.size, fontFamily: FontFamily.bold },
-    verificationBannerSub: { fontSize: TypographyV2.caption.size, fontFamily: FontFamily.regular },
     importErrorBanner: {
       flexDirection: 'row',
       alignItems: 'center',

@@ -20,8 +20,10 @@ describe('Seller Hub and Analytics Upgrade Verification', () => {
     expect(content).not.toContain('healthInsightCard');
     expect(content).not.toContain('newSellerCard');
 
-    // Professional merchant terms must be present
-    expect(content).toContain('Identity & Seller Verification');
+    // The KYC banner and identity row are purged from the hub — the surface
+    // opens directly on the money panel; identity lives on the Profile tab.
+    expect(content).not.toContain('Identity & Seller Verification');
+    expect(content).not.toContain('KYCVerification');
 
     // Architecture: Screen must be a lean orchestrator (< 400 lines) composing modular components
     const lines = content.split('\n').length;

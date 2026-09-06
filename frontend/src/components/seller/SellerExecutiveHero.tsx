@@ -4,27 +4,14 @@ import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { AnimatedPressable } from '../AnimatedPressable';
-import { CachedImage } from '../CachedImage';
 import { AppIcon } from '../common/AppIcon';
 import { AnimatedNumber } from '../common/AnimatedNumber';
 import { IconSize } from '../../theme/iconTokens';
 import type { SellerHubOverview } from '../../services/sellerHubApi';
 
 export interface SellerExecutiveHeroProps {
-  currentUser: {
-    id?: string;
-    displayName?: string | null;
-    username?: string | null;
-    avatar?: string | null;
-  } | null;
-  sellerTrust?: {
-    rating?: number | null;
-    completedSales?: number | null;
-    verified?: boolean | null;
-  } | null;
   money?: SellerHubOverview['money'] | null;
   formatMoney: (value: number | null | undefined) => string;
-  onOpenStorefront: () => void;
   onOpenWallet: () => void;
 }
 
@@ -39,74 +26,21 @@ function formatPayoutDate(iso: string): string | null {
 }
 
 export const SellerExecutiveHero: React.FC<SellerExecutiveHeroProps> = ({
-  currentUser,
-  sellerTrust,
   money,
   formatMoney,
-  onOpenStorefront,
   onOpenWallet,
 }) => {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
 
-  const isVerified = sellerTrust?.verified === true;
   const availableGbp = money?.availableGbp ?? null;
   const processingGbp = money?.processingGbp ?? null;
   const heldGbp = money?.heldGbp ?? 0;
   const nextPayoutLabel = money?.nextPayoutAt ? formatPayoutDate(money.nextPayoutAt) : null;
 
-  const ratingLabel = sellerTrust?.rating ? `${sellerTrust.rating.toFixed(1)} ★` : null;
-  const salesLabel = sellerTrust?.completedSales ? `${sellerTrust.completedSales} sales` : null;
-  const shopMeta = [ratingLabel, salesLabel].filter(Boolean).join(' · ') || null;
-
   return (
     <View style={styles.container}>
-      {/* ── Shop identity — the row itself opens the storefront ── */}
-      <AnimatedPressable
-        style={styles.identityBar}
-        onPress={onOpenStorefront}
-        activeOpacity={0.7}
-        scaleValue={0.99}
-        hapticFeedback="light"
-        accessibilityRole="button"
-        accessibilityLabel={
-          shopMeta
-            ? `Open your storefront, ${shopMeta}`
-            : 'Open your storefront'
-        }
-      >
-        <View style={[styles.avatarWrap, { borderColor: colors.border }]}>
-          {currentUser?.avatar ? (
-            <CachedImage uri={currentUser.avatar} style={styles.avatar} contentFit="cover" />
-          ) : (
-            <View style={[styles.avatarFallback, { backgroundColor: colors.surfaceAlt }]}>
-              <Text style={[styles.avatarInitials, { color: colors.textPrimary }]}>
-                {(currentUser?.displayName || currentUser?.username || 'S').slice(0, 2).toUpperCase()}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.identityInfo}>
-          <View style={styles.nameRow}>
-            <Text style={[styles.shopName, { color: colors.textPrimary }]} numberOfLines={1}>
-              {currentUser?.displayName || currentUser?.username || 'My Store'}
-            </Text>
-            {isVerified && (
-              <AppIcon concept="verified" size={IconSize.xs} color="brand" opticalCenter accessible={false} />
-            )}
-          </View>
-          {shopMeta && (
-            <Text style={[styles.shopMeta, { color: colors.textSecondary }]}>
-              {shopMeta}
-            </Text>
-          )}
-        </View>
-
-        <AppIcon concept="forward" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-      </AnimatedPressable>
-
-      {/* ── Liquidity panel — the one dominant surface above the fold ── */}
+      {/* Liquidity panel — the one dominant surface above the fold */}
       <View style={[styles.moneyPanel, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
         <View style={styles.availableSection}>
           <View style={styles.availableHeaderRow}>
@@ -195,62 +129,12 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       paddingHorizontal: Space.md,
-      paddingTop: Space.xs,
+      paddingTop: Space.md,
     },
-    identityBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-      paddingVertical: Space.sm,
-      minHeight: 56,
-    },
-    avatarWrap: {
-      width: 46,
-      height: 46,
-      borderRadius: Radius.full,
-      overflow: 'hidden',
-      borderWidth: 1,
-    },
-    avatar: {
-      width: '100%',
-      height: '100%',
-    },
-    avatarFallback: {
-      width: '100%',
-      height: '100%',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    avatarInitials: {
-      fontSize: TypographyV2.bodyStrong.size,
-      fontFamily: FontFamily.bold,
-      letterSpacing: 0.5,
-    },
-    identityInfo: {
-      flex: 1,
-      gap: 2,
-    },
-    nameRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-    },
-    shopName: {
-      fontSize: TypographyV2.itemTitle.size,
-      fontFamily: FontFamily.bold,
-      letterSpacing: -0.2,
-    },
-    shopMeta: {
-      fontSize: TypographyV2.caption.size,
-      fontFamily: FontFamily.regular,
-    },
-
-    // ── Liquidity panel — the one dominant surface above the fold ──
     moneyPanel: {
       borderRadius: Radius.xl,
       borderWidth: StyleSheet.hairlineWidth,
       padding: Space.md,
-      marginTop: Space.xs,
     },
     availableSection: {
       gap: 4,
@@ -297,12 +181,10 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: TypographyV2.priceHero.letterSpacing,
       fontVariant: ['tabular-nums'],
     },
-
     cardDivider: {
       height: StyleSheet.hairlineWidth,
       marginVertical: Space.md,
     },
-
     splitRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -335,7 +217,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.regular,
     },
-
     safeguardFooter: {
       flexDirection: 'row',
       alignItems: 'center',
