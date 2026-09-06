@@ -56,7 +56,7 @@ function trendLabel(pct: number | null | undefined): { text: string; direction: 
   if (pct == null || !Number.isFinite(pct)) return null;
   if (Math.abs(pct) < 0.5) return { text: 'Flat', direction: 'flat' };
   return {
-    text: `${pct > 0 ? '▲' : '▼'} ${Math.abs(Math.round(pct))}%`,
+    text: `${pct > 0 ? '+' : '-'}${Math.abs(Math.round(pct))}%`,
     direction: pct > 0 ? 'up' : 'down',
   };
 }
@@ -135,7 +135,7 @@ export const SellerAnalyticsModule: React.FC<SellerAnalyticsModuleProps> = ({
       {isSparklineLoading ? (
         <LineChart
           data={[]}
-          height={48}
+          height={96}
           variant="flat"
           loading={true}
           showGrid={false}
@@ -144,7 +144,7 @@ export const SellerAnalyticsModule: React.FC<SellerAnalyticsModuleProps> = ({
       ) : sparklineSeries ? (
         <LineChart
           data={sparklineSeries}
-          height={48}
+          height={96}
           variant="flat"
           showGrid={false}
           showFrame={false}
@@ -156,7 +156,11 @@ export const SellerAnalyticsModule: React.FC<SellerAnalyticsModuleProps> = ({
           xAxisFormat={() => ''}
           accessibilitySummary={`Daily store views across ${sparklineSeries[0].data.length} days`}
         />
-      ) : null}
+      ) : (
+        <Text style={[styles.noTraffic, { color: colors.textMuted }]}>
+          Not enough views yet for a chart
+        </Text>
+      )}
     </AnimatedPressable>
   );
 };
@@ -175,10 +179,10 @@ function createStyles(colors: ThemeColors) {
     },
     title: {
       flex: 1,
-      fontSize: TypographyV2.bodyStrong.size,
-      lineHeight: TypographyV2.bodyStrong.lineHeight,
-      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-      fontFamily: FontFamily.semibold,
+      fontSize: TypographyV2.sectionTitle.size,
+      lineHeight: TypographyV2.sectionTitle.lineHeight,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
+      fontFamily: FontFamily.bold,
     },
     metricsRow: {
       flexDirection: 'row',
@@ -210,6 +214,13 @@ function createStyles(colors: ThemeColors) {
       letterSpacing: TypographyV2.meta.letterSpacing,
       fontFamily: FontFamily.bold,
       fontVariant: ['tabular-nums'],
+    },
+    noTraffic: {
+      marginTop: Space.sm,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      letterSpacing: TypographyV2.meta.letterSpacing,
+      fontFamily: FontFamily.regular,
     },
   });
 }

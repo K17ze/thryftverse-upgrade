@@ -8,10 +8,8 @@ import { AppIcon } from '../common/AppIcon';
 import { SellerThumbRail, type SellerThumbRailItem } from './SellerThumbRail';
 import { IconSize } from '../../theme/iconTokens';
 
-export interface SellerListingsModuleProps {
-  activeCount: number;
-  /** Preformatted listed value, e.g. "£4,373.00 listed". Null → not rendered. */
-  listedValueLabel: string | null;
+export interface SellerClosetModuleProps {
+  savedCount: number;
   items: SellerThumbRailItem[];
   onViewAll: () => void;
   onItemPress: (id: string) => void;
@@ -19,13 +17,12 @@ export interface SellerListingsModuleProps {
 }
 
 /**
- * SellerListingsModule — active-listings rail on the Seller Hub overview.
+ * SellerClosetModule — saved-pieces rail on the Seller Hub overview.
  * Shares the exact header grammar, View all control and honest empty-row
- * treatment with SellerClosetModule — one system, two sections.
+ * treatment with SellerListingsModule — one system, two sections.
  */
-export const SellerListingsModule: React.FC<SellerListingsModuleProps> = ({
-  activeCount,
-  listedValueLabel,
+export const SellerClosetModule: React.FC<SellerClosetModuleProps> = ({
+  savedCount,
   items,
   onViewAll,
   onItemPress,
@@ -34,7 +31,6 @@ export const SellerListingsModule: React.FC<SellerListingsModuleProps> = ({
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
   const hasItems = items.length > 0;
-  const showListedValue = listedValueLabel != null && hasItems;
   const showSkeleton = isLoading && !hasItems;
 
   return (
@@ -42,33 +38,26 @@ export const SellerListingsModule: React.FC<SellerListingsModuleProps> = ({
       <View style={styles.headerRow}>
         <View style={styles.titleWrap}>
           <AppIcon
-            concept="tag"
+            concept="bookmark"
             size={IconSize.xs}
             color="textSecondary"
             opticalCenter
             accessible={false}
           />
-          <Text style={styles.sectionTitle}>Listings</Text>
-          <Text style={styles.countCaption}>{activeCount} active</Text>
+          <Text style={styles.sectionTitle}>Closet</Text>
+          <Text style={styles.countCaption}>{savedCount} saved</Text>
         </View>
-        <View style={styles.headerActions}>
-          {showListedValue ? (
-            <Text style={styles.listedValue} numberOfLines={1}>
-              {listedValueLabel}
-            </Text>
-          ) : null}
-          <AnimatedPressable
-            onPress={onViewAll}
-            activeOpacity={0.7}
-            scaleValue={0.97}
-            hapticFeedback="light"
-            accessibilityRole="button"
-            accessibilityLabel="View all listings"
-            style={styles.viewAllHit}
-          >
-            <Text style={styles.viewAllText}>View all</Text>
-          </AnimatedPressable>
-        </View>
+        <AnimatedPressable
+          onPress={onViewAll}
+          activeOpacity={0.7}
+          scaleValue={0.97}
+          hapticFeedback="light"
+          accessibilityRole="button"
+          accessibilityLabel="View all saved items"
+          style={styles.viewAllHit}
+        >
+          <Text style={styles.viewAllText}>View all</Text>
+        </AnimatedPressable>
       </View>
 
       {hasItems ? (
@@ -86,13 +75,13 @@ export const SellerListingsModule: React.FC<SellerListingsModuleProps> = ({
       ) : (
         <View style={styles.emptyRow}>
           <AppIcon
-            concept="tag"
+            concept="bookmark"
             size={IconSize.sm}
             color="textMuted"
             opticalCenter
             accessible={false}
           />
-          <Text style={styles.emptyText}>Nothing listed yet</Text>
+          <Text style={styles.emptyText}>Save pieces you love</Text>
         </View>
       )}
     </View>
@@ -126,18 +115,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.caption.size,
       fontFamily: FontFamily.regular,
       color: colors.textMuted,
-    },
-    headerActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm,
-    },
-    listedValue: {
-      fontSize: TypographyV2.meta.size,
-      lineHeight: TypographyV2.meta.lineHeight,
-      fontFamily: FontFamily.semibold,
-      fontVariant: ['tabular-nums'],
-      color: colors.textSecondary,
     },
     viewAllHit: {
       minHeight: Control.hit,

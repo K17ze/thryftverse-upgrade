@@ -3,7 +3,7 @@
  *
  * Composition (flat canvas, no card chrome — the thumbnail image IS the surface):
  *   1. Section header — semantic glyph + "Orders" + pending-to-ship count + "View all".
- *   2. Media rail — horizontal rail of real selling orders (64dp thumbnails,
+ *   2. Media rail — horizontal rail of real selling orders (96dp thumbnails,
  *      price, status) with SLA chips computed from shipByDate.
  *   3. Flat task rows — hairline-separated non-order tasks (offers, listing
  *      issues, catalogue, payout holds) with SLA due labels.
@@ -134,7 +134,8 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
       : nonShipTasks;
   const visibleTasks = orderedTasks.slice(0, 4);
 
-  const showClearRow = !isOrdersLoading && orders.length === 0 && visibleTasks.length === 0;
+  const ordersEmpty = !isOrdersLoading && orders.length === 0;
+  const showClearRow = !ordersEmpty && visibleTasks.length === 0;
 
   return (
     <View style={styles.container}>
@@ -151,7 +152,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
           onPress={onViewAllOrders}
           activeOpacity={0.7}
           scaleValue={0.97}
-          hapticFeedback="none"
+          hapticFeedback="light"
           accessibilityRole="button"
           accessibilityLabel={`View all orders, ${orders30dCount} in the last 30 days`}
           style={styles.viewAllHit}
@@ -190,13 +191,18 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
                 onPress={() => onOpenOrder(order.id)}
                 activeOpacity={0.7}
                 scaleValue={0.97}
-                hapticFeedback="none"
+                hapticFeedback="light"
                 accessibilityRole="button"
                 accessibilityLabel={`Order ${order.title}, ${formatMoney(order.totalGbp)}${order.status ? `, ${order.status}` : ''}`}
               >
                 <View style={styles.thumbWrap}>
                   {order.imageUri ? (
-                    <CachedImage uri={order.imageUri} style={styles.thumb} contentFit="cover" />
+                    <CachedImage
+                      uri={order.imageUri}
+                      style={styles.thumb}
+                      contentFit="cover"
+                      downscaleWidth={176}
+                    />
                   ) : (
                     <View style={[styles.thumb, styles.thumbEmpty]}>
                       <AppIcon concept="package" size={IconSize.sm} color="textMuted" accessible={false} />
@@ -235,6 +241,18 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
         </ScrollView>
       ) : null}
 
+      {/* ── Orders-only empty state ── */}
+      {!isOrdersLoading && orders.length === 0 ? (
+        <View style={styles.clearRow}>
+          <View style={[styles.taskIconWrap, { backgroundColor: colors.surfaceAlt }]}>
+            <AppIcon concept="package" size={IconSize.xs} color="textMuted" accessible={false} />
+          </View>
+          <View style={styles.taskInfo}>
+            <Text style={styles.clearTitle}>No orders yet</Text>
+          </View>
+        </View>
+      ) : null}
+
       {/* ── Flat task rows ── */}
       {visibleTasks.length > 0 ? (
         <View style={styles.taskList}>
@@ -253,7 +271,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
                 onPress={() => onNavigateToTask(task)}
                 activeOpacity={0.7}
                 scaleValue={0.99}
-                hapticFeedback="none"
+                hapticFeedback="light"
                 accessibilityRole="button"
                 accessibilityLabel={`${taskTitle(task)}${dueLabel ? `, ${dueLabel}` : ''}`}
               >
@@ -326,7 +344,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: TypographyV2.sectionTitle.size,
       lineHeight: TypographyV2.sectionTitle.lineHeight,
       fontFamily: FontFamily.bold,
-      letterSpacing: -0.2,
+      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
       color: colors.textPrimary,
     },
     pendingCount: {
@@ -355,15 +373,15 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xxs,
     },
     orderCard: {
-      width: 104,
+      width: 96,
     },
     thumbWrap: {
-      width: 72,
-      height: 72,
+      width: 96,
+      height: 96,
     },
     thumb: {
-      width: 72,
-      height: 72,
+      width: 96,
+      height: 96,
       borderRadius: Radius.md,
     },
     thumbEmpty: {
@@ -380,11 +398,11 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xxs,
     },
     slaChipText: {
-      fontSize: 10,
-      lineHeight: 12,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.semibold,
       fontVariant: ['tabular-nums'],
-      letterSpacing: 0.1,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     orderTitle: {
       marginTop: Space.xs,
@@ -404,7 +422,7 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
     },
     orderStatus: {
-      marginTop: 1,
+      marginTop: Space.xxs,
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
       fontFamily: FontFamily.regular,
@@ -481,18 +499,18 @@ function createStyles(colors: ThemeColors) {
 
     // ── Skeletons — media-shaped, no spinners ──
     skeletonCard: {
-      width: 104,
+      width: 96,
     },
     skeletonThumb: {
-      width: 72,
-      height: 72,
+      width: 96,
+      height: 96,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
     },
     skeletonLine: {
       height: 10,
       marginTop: Space.xs,
-      borderRadius: Radius.full,
+      borderRadius: Radius.sm,
       backgroundColor: colors.surfaceAlt,
     },
   });

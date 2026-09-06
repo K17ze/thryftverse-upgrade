@@ -3,9 +3,12 @@ import { View, Text, StyleSheet, RefreshControl, ScrollView } from 'react-native
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 import { Space, Radius, FontFamily, DockConstants, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { Motion } from '../theme/motionTokens';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { RootStackParamList, ROOT_STACK_ROUTES, type RootStackRouteName } from '../navigation/types';
 
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -14,6 +17,7 @@ import { AppIcon } from '../components/common/AppIcon';
 import { IconSize } from '../theme/iconTokens';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useStore } from '../store/useStore';
+import { useBackendData } from '../context/BackendDataContext';
 import {
   listUserOrders,
   fetchDailyBreakdown,
@@ -25,17 +29,19 @@ import { fetchSellerHubOverview, type SellerHubOverview, type SellerHubTask } fr
 import { fetchImportBatches, type BatchSummaryDTO } from '../services/catalogImportApi';
 import { track } from '../analytics';
 
-// Domain modules: money panel (dominant object) + operational radar + rails.
-// No pillar-tile row: quick navigation lives at its destination (Wallet hero,
-// Orders "View all", Analytics module, Closet tab) — one panel above the fold.
+// Domain modules, one per pillar.
+import { SellerPillarTiles } from '../components/seller/SellerPillarTiles';
 import { SellerExecutiveHero } from '../components/seller/SellerExecutiveHero';
+import { SellerTrustStrip } from '../components/seller/SellerTrustStrip';
 import { SellerOrdersModule } from '../components/seller/SellerOrdersModule';
 import { SellerAnalyticsModule, type SellerSparklinePoint } from '../components/seller/SellerAnalyticsModule';
+import { SellerClosetModule } from '../components/seller/SellerClosetModule';
 import { SellerListingsModule } from '../components/seller/SellerListingsModule';
 import {
   formatGbp,
   toOrderPreviews,
   splitTasks,
+  toSavedRailItems,
   toOwnListingRailItems,
 } from '../components/seller/hubViewModels';
 
@@ -46,7 +52,12 @@ export default function SellerHubScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
   const currentUser = useStore((s) => s.currentUser);
+  const savedProducts = useStore((s) => s.savedProducts);
+  const wishlist = useStore((s) => s.wishlist);
+  const savedItemsCount = (savedProducts?.length ?? 0) + (wishlist?.length ?? 0);
+  const { listings } = useBackendData();
 
   const [overview, setOverview] = useState<SellerHubOverview | null>(null);
   const [importBatches, setImportBatches] = useState<BatchSummaryDTO[]>([]);
@@ -114,6 +125,14 @@ export default function SellerHubScreen() {
     setIsRefreshing(false);
   };
 
+  // Single-dialect entrance: one FadeIn cascade down the hub (tiles → money
+  // → radar → analytics → closet → listings) at the stagger.normal cadence.
+  // Reduced motion collapses to instant. Total choreography ≈ 480ms.
+  const sectionEntering = (order: number) =>
+    reducedMotion
+      ? FadeIn.duration(0)
+      : FadeIn.duration(Motion.transitions.crossfade.duration).delay(order * Motion.stagger.normal);
+
   const handleNavigateToTask = (task: SellerHubTask) => {
     const route = task.actionRoute as string;
     if (!ROOT_STACK_ROUTES.includes(route as RootStackRouteName)) {
@@ -146,6 +165,7 @@ export default function SellerHubScreen() {
     navigation.navigate('ItemDetail', { itemId });
   }, [navigation]);
   const handleNavigateToListings = () => { navigation.navigate('MyListings'); };
+  const handleNavigateToCloset = () => { navigation.navigate('Closet'); };
   const handleNavigateToAnalytics = () => { navigation.navigate('SellerAnalytics'); };
 
   if (isLoading) {
@@ -188,7 +208,7 @@ export default function SellerHubScreen() {
     );
   }
 
-  const { topTask, tasks, money, inventory, businessPulse, freshness } = overview;
+  const { topTask, tasks, money, inventory, businessPulse, freshness, trust } = overview;
   const pendingOrdersCount = tasks
     .filter((t) => t.type === 'ship_order')
     .reduce((sum, t) => sum + t.count, 0);
@@ -197,8 +217,9 @@ export default function SellerHubScreen() {
   );
 
   const orderPreviews = sellingOrders ? toOrderPreviews(sellingOrders) : [];
-  const { tasks: radarTasks, topTask: radarTopTask } = splitTasks(overview, orderPreviews.length > 0);
+  const { tasks: pillarTasks, topTask: pillarTopTask } = splitTasks(overview, orderPreviews.length > 0);
 
+  const savedRailItems = toSavedRailItems(savedProducts ?? [], wishlist ?? [], listings, formatGbp);
   const listingRailItems = ownListings ? toOwnListingRailItems(ownListings, formatGbp) : [];
 
   const sparkline: SellerSparklinePoint[] | null =
@@ -228,49 +249,85 @@ export default function SellerHubScreen() {
           </View>
         )}
 
-        {/* Money panel — the one dominant object above the fold. Wallet entry
-            lives here (Transfer) so no tile row is needed. */}
-        <SellerExecutiveHero
-          money={money}
-          formatMoney={formatGbp}
-          onOpenWallet={handleOpenWallet}
-        />
+        {/* Quick-access pillar tiles — Wallet / Orders / Analytics / Closet. */}
+        <Reanimated.View entering={sectionEntering(0)}>
+          <SellerPillarTiles
+            pendingOrdersCount={pendingOrdersCount}
+            onOpenWallet={handleOpenWallet}
+            onOpenOrders={handleViewAllOrders}
+            onOpenAnalytics={handleNavigateToAnalytics}
+            onOpenCloset={handleNavigateToCloset}
+          />
+        </Reanimated.View>
 
-        {/* Operational radar — dispatch queue + SLA to-dos, flat rows. */}
-        <SellerOrdersModule
-          orders={orderPreviews}
-          tasks={radarTasks}
-          topTask={radarTopTask}
-          pendingOrdersCount={pendingOrdersCount}
-          orders30dCount={businessPulse?.orders ?? 0}
-          tasksStale={tasksStale}
-          formatMoney={formatGbp}
-          onOpenOrder={handleOpenOrder}
-          onNavigateToTask={handleNavigateToTask}
-          onViewAllOrders={handleViewAllOrders}
-        />
+        {/* Pillar 1 - Wallet: liquidity posture. */}
+        <Reanimated.View entering={sectionEntering(1)}>
+          <SellerExecutiveHero
+            money={money}
+            formatMoney={formatGbp}
+            onOpenWallet={handleOpenWallet}
+          />
+        </Reanimated.View>
 
-        {/* Performance pulse: net sales, trend, sparkline. */}
-        <SellerAnalyticsModule
-          netSalesGbp={businessPulse?.netSalesGbp ?? null}
-          trendPct={businessPulse?.netSalesPrevPeriodPct ?? null}
-          orders30d={businessPulse?.orders ?? null}
-          completeness={businessPulse?.completeness ?? null}
-          sparkline={sparkline}
-          isSparklineLoading={isSparklineLoading}
-          formatMoney={formatGbp}
-          onPress={handleNavigateToAnalytics}
-        />
+        {/* Evidenced reputation — renders only when the backend owns a
+            trust row; silent otherwise. No badge without a tier. */}
+        <Reanimated.View entering={sectionEntering(2)}>
+          <SellerTrustStrip trust={trust ?? null} />
+        </Reanimated.View>
 
-        {/* Catalog: the seller's live listings rail. Saved pieces live on the
-            Closet tab — buyer curation does not belong on this surface. */}
-        <SellerListingsModule
-          activeCount={inventory.active}
-          listedValueLabel={inventory.listedValueGbp > 0 ? `${formatGbp(inventory.listedValueGbp)} listed` : null}
-          items={listingRailItems}
-          onViewAll={handleNavigateToListings}
-          onItemPress={handleOpenItem}
-        />
+        {/* Pillar 2 - Orders: media rail + task queue. */}
+        <Reanimated.View entering={sectionEntering(3)}>
+          <SellerOrdersModule
+            orders={orderPreviews}
+            isOrdersLoading={sellingOrders === null}
+            tasks={pillarTasks}
+            topTask={pillarTopTask}
+            pendingOrdersCount={pendingOrdersCount}
+            orders30dCount={businessPulse?.orders ?? 0}
+            tasksStale={tasksStale}
+            formatMoney={formatGbp}
+            onOpenOrder={handleOpenOrder}
+            onNavigateToTask={handleNavigateToTask}
+            onViewAllOrders={handleViewAllOrders}
+          />
+        </Reanimated.View>
+
+        {/* Pillar 3 - Analytics: net sales, trend, sparkline. */}
+        <Reanimated.View entering={sectionEntering(4)}>
+          <SellerAnalyticsModule
+            netSalesGbp={businessPulse?.netSalesGbp ?? null}
+            trendPct={businessPulse?.netSalesPrevPeriodPct ?? null}
+            orders30d={businessPulse?.orders ?? null}
+            completeness={businessPulse?.completeness ?? null}
+            sparkline={sparkline}
+            isSparklineLoading={isSparklineLoading}
+            formatMoney={formatGbp}
+            onPress={handleNavigateToAnalytics}
+          />
+        </Reanimated.View>
+
+        {/* Pillar 4 - Closet: saved pieces rail. */}
+        <Reanimated.View entering={sectionEntering(5)}>
+          <SellerClosetModule
+            savedCount={savedItemsCount}
+            items={savedRailItems}
+            onViewAll={handleNavigateToCloset}
+            onItemPress={handleOpenItem}
+            isLoading={false}
+          />
+        </Reanimated.View>
+
+        {/* Catalog: the seller's live listings rail. */}
+        <Reanimated.View entering={sectionEntering(6)}>
+          <SellerListingsModule
+            activeCount={inventory.active}
+            listedValueLabel={inventory.listedValueGbp > 0 ? `${formatGbp(inventory.listedValueGbp)} listed` : null}
+            items={listingRailItems}
+            onViewAll={handleNavigateToListings}
+            onItemPress={handleOpenItem}
+            isLoading={ownListings === null}
+          />
+        </Reanimated.View>
       </ScrollView>
 
       {/* Sticky bottom dock: primary action pinned outside the scroll. */}
@@ -298,7 +355,7 @@ export default function SellerHubScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     scrollContent: {
-      paddingBottom: Space.xxl + 72,
+      paddingBottom: Space.xxl + DockConstants.singleActionHeight,
     },
     importErrorBanner: {
       flexDirection: 'row',
@@ -328,6 +385,11 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
       ...Elevation.card,
     },
-    primaryActionText: { fontSize: TypographyV2.bodyStrong.size, fontFamily: FontFamily.bold },
+    primaryActionText: {
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
+      fontFamily: FontFamily.bold,
+    },
   });
 }

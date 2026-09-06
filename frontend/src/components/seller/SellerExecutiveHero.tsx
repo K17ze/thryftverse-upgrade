@@ -47,7 +47,7 @@ export const SellerExecutiveHero: React.FC<SellerExecutiveHeroProps> = ({
             <View style={styles.availableLabelWrap}>
               <View style={[styles.statusDot, { backgroundColor: colors.success }]} />
               <Text style={[styles.availableLabel, { color: colors.textSecondary }]}>
-                Available Payout
+                Available payout
               </Text>
             </View>
             <AnimatedPressable
@@ -82,13 +82,10 @@ export const SellerExecutiveHero: React.FC<SellerExecutiveHeroProps> = ({
           <View style={styles.splitCol}>
             <View style={styles.metricLabelRow}>
               <AppIcon concept="shield" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
-              <Text style={[styles.splitLabel, { color: colors.textSecondary }]}>In Escrow</Text>
+              <Text style={[styles.splitLabel, { color: colors.textSecondary }]}>In escrow</Text>
             </View>
             <Text style={[styles.splitValue, { color: colors.textPrimary }]}>
               {processingGbp != null ? formatMoney(processingGbp) : '—'}
-            </Text>
-            <Text style={[styles.splitSub, { color: colors.textMuted }]}>
-              Clears on delivery
             </Text>
           </View>
 
@@ -103,9 +100,6 @@ export const SellerExecutiveHero: React.FC<SellerExecutiveHeroProps> = ({
                 <Text style={[styles.splitValue, { color: colors.textPrimary }]}>
                   {nextPayoutLabel}
                 </Text>
-                <Text style={[styles.splitSub, { color: colors.textMuted }]}>
-                  Automatic
-                </Text>
               </View>
             </>
           )}
@@ -116,7 +110,7 @@ export const SellerExecutiveHero: React.FC<SellerExecutiveHeroProps> = ({
           <View style={[styles.safeguardFooter, { borderTopColor: colors.borderSubtle }]}>
             <AppIcon concept="lock" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
             <Text style={[styles.safeguardText, { color: colors.textMuted }]}>
-              Reserved: {formatMoney(heldGbp)} held in rolling reserve
+              {formatMoney(heldGbp)} in rolling reserve
             </Text>
           </View>
         )}
@@ -137,7 +131,7 @@ function createStyles(colors: ThemeColors) {
       padding: Space.md,
     },
     availableSection: {
-      gap: 4,
+      gap: Space.xs,
     },
     availableHeaderRow: {
       flexDirection: 'row',
@@ -147,7 +141,7 @@ function createStyles(colors: ThemeColors) {
     availableLabelWrap: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: Space.sm,
     },
     statusDot: {
       width: 7,
@@ -155,24 +149,23 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.full,
     },
     availableLabel: {
-      fontSize: TypographyV2.caption.size,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     transferBtn: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: Space.xs,
       paddingHorizontal: Space.md,
-      paddingVertical: Space.xs,
+      paddingVertical: Space.sm,
       borderRadius: Radius.full,
       minHeight: Control.hit,
     },
     transferBtnText: {
-      fontSize: TypographyV2.meta.size,
+      fontSize: TypographyV2.caption.size,
       fontFamily: FontFamily.bold,
-      letterSpacing: 0.2,
+      letterSpacing: TypographyV2.meta.letterSpacing,
     },
     availableHeroValue: {
       fontSize: TypographyV2.priceHero.size,
@@ -191,7 +184,7 @@ function createStyles(colors: ThemeColors) {
     },
     splitCol: {
       flex: 1,
-      gap: 3,
+      gap: Space.xxs,
     },
     verticalDivider: {
       width: StyleSheet.hairlineWidth,
@@ -201,26 +194,23 @@ function createStyles(colors: ThemeColors) {
     metricLabelRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: Space.xs,
     },
     splitLabel: {
       fontSize: TypographyV2.caption.size,
       fontFamily: FontFamily.medium,
     },
     splitValue: {
-      fontSize: TypographyV2.sectionTitle.size,
-      fontFamily: FontFamily.bold,
+      fontSize: TypographyV2.numericMeta.size,
+      lineHeight: TypographyV2.numericMeta.lineHeight,
+      fontFamily: FontFamily.semibold,
       fontVariant: ['tabular-nums'],
-      marginTop: 2,
-    },
-    splitSub: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: FontFamily.regular,
+      marginTop: Space.xxs,
     },
     safeguardFooter: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: Space.sm,
       paddingTop: Space.sm,
       marginTop: Space.sm,
       borderTopWidth: StyleSheet.hairlineWidth,
