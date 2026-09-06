@@ -14,6 +14,7 @@ import React from 'react';
 import { type SharedValue, useDerivedValue } from 'react-native-reanimated';
 import { RoundedRect, Text as SkiaText, type SkFont } from '@shopify/react-native-skia';
 import { type ChartBounds } from 'victory-native';
+import { Radius } from '../../theme/designTokens';
 import { type ChartTheme } from './types';
 
 // ============================================================================
@@ -125,7 +126,7 @@ export function ChartTooltip({
         y={tooltipY}
         width={ESTIMATED_WIDTH}
         height={TOOLTIP_HEIGHT}
-        r={6}
+        r={Radius.sm}
         color={theme.surface}
         opacity={opacity}
       />

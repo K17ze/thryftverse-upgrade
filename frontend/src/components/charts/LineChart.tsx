@@ -20,16 +20,20 @@
 
 import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
-import { useFont, Line as SkiaLine, vec } from '@shopify/react-native-skia';
-import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
+import { useFont, Line as SkiaLine, Circle, LinearGradient, vec } from '@shopify/react-native-skia';
+import { useDerivedValue, useReducedMotion, type SharedValue } from 'react-native-reanimated';
 import {
   CartesianChart,
   Line,
+  Area,
   useChartPressState,
   type ChartBounds } from 'victory-native';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius } from '../../theme/designTokens';
+import { Space, Radius, Stroke } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { FontFamily } from '../../theme/fontFamily';
+import { IconSize } from '../../theme/iconTokens';
+import { AppIcon } from '../common/AppIcon';
 import {
   type ChartSeries,
   type ChartPadding,
@@ -45,12 +49,18 @@ export interface LineChartProps {
   data: ChartSeries[];
   /** Chart height in canvas pixels. */
   height: number;
+  /** Visual container treatment. 'card' (default) draws the bordered card surface; 'flat' renders directly on the parent canvas with no border, padding or background. */
+  variant?: 'card' | 'flat';
   /** Padding around the plotting area. Defaults to a sensible chart padding. */
   padding?: ChartPadding;
   /** Show subtle grid lines. Defaults to true. */
   showGrid?: boolean;
   /** Show interactive crosshair with tooltip on touch. Defaults to true. */
   showCrosshair?: boolean;
+  /** Fill the area under the first series with a vertical fade of the series colour. Defaults to false. */
+  showAreaFill?: boolean;
+  /** Render small point markers on the first series. Defaults to false. */
+  showPoints?: boolean;
   /** Override the theme colours. Defaults to the app theme. */
   theme?: ChartTheme;
   /** Y-axis label formatter. */
@@ -152,6 +162,19 @@ function defaultXAxisFormat(value: number | string): string {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
 
+/**
+ * Append an alpha channel to a 6-digit hex colour (Skia accepts #RRGGBBAA).
+ * Non-hex inputs are returned unchanged so the gradient degrades to a solid fill.
+ */
+function withAlpha(hex: string, alpha: number): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return hex;
+  const alphaHex = Math.round(Math.min(Math.max(alpha, 0), 1) * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `${hex.trim()}${alphaHex}`;
+}
+
 // ============================================================================
 // CROSSHAIR INDICATOR (Skia-rendered vertical line)
 // ============================================================================
@@ -192,9 +215,12 @@ function CrosshairLine({
 export function LineChart({
   data,
   height,
+  variant = 'card',
   padding = DEFAULT_PADDING,
   showGrid = true,
   showCrosshair = true,
+  showAreaFill = false,
+  showPoints = false,
   theme: themeOverride,
   yAxisFormat = defaultYAxisFormat,
   xAxisFormat = defaultXAxisFormat,
@@ -208,6 +234,7 @@ export function LineChart({
     [appTheme, themeOverride],
   );
   const { colors } = useAppTheme();
+  const reducedMotion = useReducedMotion();
 
   // Responsive sizing via onLayout (width only; height is fixed via prop).
   const [layoutWidth, setLayoutWidth] = useState(MIN_WIDTH);
@@ -218,8 +245,8 @@ export function LineChart({
   }, []);
 
   // Skia font for axis labels and tooltip text.
-  // useFont(null, size) uses the system default font.
-  const font = useFont(null, FONT_SIZE);
+  // Inter is loaded globally via @expo-google-fonts/inter in App.tsx.
+  const font = useFont(FontFamily.regular, FONT_SIZE);
 
   // Flatten all series into a single data row shape for CartesianChart.
   // Each series becomes a yKey (y0, y1, ... up to MAX_SERIES). We build
@@ -320,13 +347,16 @@ export function LineChart({
   const axisColor = theme.axisLine;
   const labelColor = theme.textSecondary;
 
+  // Container treatment: 'card' draws the bordered card surface (default);
+  // 'flat' renders directly on the parent canvas — no border, padding or fill.
+  const containerStyle = variant === 'flat'
+    ? styles.containerFlat
+    : [styles.container, { backgroundColor: colors.surface, borderColor: colors.border }];
+
   // ── Loading state ──
   if (loading) {
     return (
-      <View
-        style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onLayout={onLayout}
-      >
+      <View style={containerStyle} onLayout={onLayout}>
         <View style={[styles.placeholder, { height }]}>
           <View style={[styles.skeletonBar, { backgroundColor: colors.borderSubtle }]} />
           <View style={[styles.skeletonBar, { backgroundColor: colors.borderSubtle, width: '50%' }]} />
@@ -338,10 +368,7 @@ export function LineChart({
   // ── Error state ──
   if (error) {
     return (
-      <View
-        style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onLayout={onLayout}
-      >
+      <View style={containerStyle} onLayout={onLayout}>
         <View style={[styles.placeholder, { height }]}>
           <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
         </View>
@@ -352,12 +379,15 @@ export function LineChart({
   // ── Empty state ──
   if (chartData.length === 0) {
     return (
-      <View
-        style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onLayout={onLayout}
-      >
+      <View style={containerStyle} onLayout={onLayout}>
         <View style={[styles.placeholder, { height }]}>
-          <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>
+          <AppIcon
+            concept="analytics"
+            size={IconSize.lg}
+            color="textMuted"
+            accessible={false}
+          />
+          <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>
             {emptyMessage}
           </Text>
         </View>
@@ -367,10 +397,7 @@ export function LineChart({
 
   // ── Ready state ──
   return (
-    <View
-      style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      onLayout={onLayout}
-    >
+    <View style={containerStyle} onLayout={onLayout}>
       {/* Off-screen text for screen readers — the Skia canvas is invisible
           to VoiceOver/TalkBack, so we expose a textual summary (WCAG 1.1.1). */}
       <Text
@@ -429,19 +456,49 @@ export function LineChart({
           ) : null
         : undefined}
       >
-        {({ points }) => (
+        {({ points, chartBounds }) => (
           <>
+            {/* Area fill — first series only, rendered BEHIND the lines. */}
+            {showAreaFill && yKeys.length > 0 ? (
+              <Area
+                points={points[yKeys[0]]}
+                y0={chartBounds.bottom}
+                curveType="monotoneX"
+                connectMissingData={false}
+                color={seriesColors[0]}
+                animate={{ type: 'timing', duration: reducedMotion ? 0 : 400 }}
+              >
+                <LinearGradient
+                  start={vec(0, chartBounds.top)}
+                  end={vec(0, chartBounds.bottom)}
+                  colors={[withAlpha(seriesColors[0], 0.16), withAlpha(seriesColors[0], 0)]}
+                />
+              </Area>
+            ) : null}
             {yKeys.map((yk, si) => (
               <Line
                 key={`line-${yk}`}
                 points={points[yk]}
                 curveType="monotoneX"
                 color={seriesColors[si]}
-                strokeWidth={2}
+                strokeWidth={Stroke.emphasis}
                 connectMissingData={false}
-                animate={{ type: 'timing', duration: 400 }}
+                animate={{ type: 'timing', duration: reducedMotion ? 0 : 400 }}
               />
             ))}
+            {showPoints && points[yKeys[0]]
+              ? points[yKeys[0]].map((pt, i) =>
+                  pt.y == null ? null : (
+                    <Circle
+                      key={`dot-${i}`}
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={3}
+                      color={seriesColors[0]}
+                    />
+                  ),
+                )
+              : null}
           </>
         )}
       </CartesianChart>
@@ -459,6 +516,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.sm,
     overflow: 'hidden' },
+  containerFlat: {
+    borderRadius: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 0 },
   placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -472,8 +535,8 @@ const styles = StyleSheet.create({
     fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'center' },
   emptyTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontSize: TypographyV2.caption.size,
+    fontFamily: TypographyV2.caption.fontFamily,
     textAlign: 'center' } });
 
 export default LineChart;

@@ -27,6 +27,7 @@ export type {
 export { CandleChart, type CandleChartProps } from './CandleChart';
 export { LineChart, type LineChartProps } from './LineChart';
 export { BarChart, type BarChartProps } from './BarChart';
+export { Sparkline, type SparklineProps } from './Sparkline';
 
 // ── Tooltip ──
 export {
