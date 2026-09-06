@@ -544,11 +544,19 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       readDb.query<{
         items_sold: string | number;
         revenue_gbp_minor: string | number;
+        repeat_orders: string | number;
       }>(
         `
           SELECT
             COUNT(*) AS items_sold,
-            COALESCE(SUM(subtotal_gbp) * 100, 0)::bigint AS revenue_gbp_minor
+            COALESCE(SUM(subtotal_gbp) * 100, 0)::bigint AS revenue_gbp_minor,
+            COUNT(*) FILTER (
+              WHERE buyer_id IN (
+                SELECT o2.buyer_id FROM orders o2
+                WHERE o2.seller_id = $1 AND o2.status IN ('paid', 'shipped', 'delivered')
+                GROUP BY o2.buyer_id HAVING COUNT(*) > 1
+              )
+            ) AS repeat_orders
           FROM orders
           WHERE seller_id = $1
             AND status IN ('paid', 'shipped', 'delivered')
@@ -853,6 +861,8 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         refundsGbpMinor,
         feesGbpMinor,
         netSalesGbpMinor,
+        aovGbpMinor: Number(orders.items_sold ?? 0) > 0 ? Math.round(revenueGbpMinor / Number(orders.items_sold)) : null,
+        repeatBuyerPct: Number(orders.items_sold ?? 0) > 0 ? Math.min(100, Math.round((Number(orders.repeat_orders ?? 0) / Number(orders.items_sold)) * 100)) : 0,
         completeness,
         avgRating: reviews.avg_rating ? Number(reviews.avg_rating) : null,
         reviewCount: Number(reviews.review_count ?? 0),
@@ -942,6 +952,91 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
           engagementScore: views + likes * 3 + saves * 5,
         };
       }),
+    };
+  });
+
+  // GET /sellers/:sellerId/analytics/daily — real zero-filled daily breakdown (views, likes, saves, sales)
+  app.get('/sellers/:sellerId/analytics/daily', async (request, reply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const { sellerId } = sellerIdParamsSchema.parse(request.params);
+    if (request.authUser.userId !== sellerId) {
+      reply.code(403);
+      return { ok: false, error: 'You can only view your own analytics' };
+    }
+
+    const querySchema = z.object({
+      period: z.enum(['7d', '30d', '90d']).default('30d'),
+    });
+    const { period } = querySchema.parse(request.query);
+    const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+    const intervalStr = `${periodDays} days`;
+
+    // Zero-filled generate_series joined with interactions and orders
+    const result = await readDb.query<{
+      date: string;
+      views: string | number;
+      likes: string | number;
+      saves: string | number;
+      sales: string | number;
+    }>(
+      `
+        WITH date_range AS (
+          SELECT generate_series(
+            (NOW() - $2::interval)::date,
+            NOW()::date,
+            '1 day'::interval
+          )::date AS d
+        ),
+        daily_interactions AS (
+          SELECT
+            date_trunc('day', i.created_at)::date AS day,
+            COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views,
+            COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS likes,
+            COUNT(i.id) FILTER (WHERE i.action = 'save') AS saves
+          FROM interactions i
+          JOIN listings l ON l.id = i.listing_id
+          WHERE l.seller_id = $1
+            AND i.created_at >= NOW() - $2::interval
+          GROUP BY day
+        ),
+        daily_orders AS (
+          SELECT
+            date_trunc('day', o.paid_at)::date AS day,
+            COUNT(o.id) AS sales
+          FROM orders o
+          WHERE o.seller_id = $1
+            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.paid_at IS NOT NULL
+            AND o.paid_at >= NOW() - $2::interval
+          GROUP BY day
+        )
+        SELECT
+          dr.d::text AS date,
+          COALESCE(di.views, 0)::bigint AS views,
+          COALESCE(di.likes, 0)::bigint AS likes,
+          COALESCE(di.saves, 0)::bigint AS saves,
+          COALESCE(dord.sales, 0)::bigint AS sales
+        FROM date_range dr
+        LEFT JOIN daily_interactions di ON di.day = dr.d
+        LEFT JOIN daily_orders dord ON dord.day = dr.d
+        ORDER BY dr.d ASC
+      `,
+      [sellerId, intervalStr]
+    );
+
+    return {
+      ok: true,
+      days: result.rows.map((r) => ({
+        date: r.date,
+        views: Number(r.views ?? 0),
+        likes: Number(r.likes ?? 0),
+        saves: Number(r.saves ?? 0),
+        sales: Number(r.sales ?? 0),
+      })),
     };
   });
 
@@ -1154,6 +1249,21 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
       Math.floor((endDate.getTime() - new Date(listing.created_at).getTime()) / 86400000),
     );
 
+    // Save rate — Purchase Intent Index (Depop / Grailed resale benchmark: saves / views * 100)
+    const saveRate = views > 0 ? Number(((saves / views) * 100).toFixed(1)) : null;
+
+    // Intent signal classification based on circular fashion conversion models
+    let intentSignal: 'high_intent_price_friction' | 'low_affinity_photo_needed' | 'healthy_velocity' | 'stale_reach' | null = null;
+    if (views >= 10 && saveRate != null && saveRate >= 5.0 && (conversionRate == null || conversionRate < 1.5)) {
+      intentSignal = 'high_intent_price_friction';
+    } else if (views >= 20 && saveRate != null && saveRate < 2.0) {
+      intentSignal = 'low_affinity_photo_needed';
+    } else if (conversionRate != null && conversionRate >= 3.0) {
+      intentSignal = 'healthy_velocity';
+    } else if (views < 10 && timeOnMarketDays > 14) {
+      intentSignal = 'stale_reach';
+    }
+
     const comparables = await comparablesResult;
 
     return {
@@ -1177,6 +1287,8 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         likes,
         purchases,
         conversionRate,
+        saveRate,
+        intentSignal,
         timeOnMarketDays,
         priceHistory: priceHistoryResult.rows.map((r) => ({
           previousPrice: Number(r.previous_price_gbp),
@@ -1395,5 +1507,80 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
 
     reply.code(201);
     return { ok: true, appealId };
+  });
+
+  // POST /sellers/:sellerId/listings/:listingId/price-adjust — 1-tap fast smart repricing
+  app.post('/sellers/:sellerId/listings/:listingId/price-adjust', async (request, reply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const paramsSchema = z.object({
+      sellerId: z.string().min(2),
+      listingId: z.string().min(2),
+    });
+    const { sellerId, listingId } = paramsSchema.parse(request.params);
+
+    if (request.authUser.userId !== sellerId) {
+      reply.code(403);
+      return { ok: false, error: 'You can only adjust prices for your own listings' };
+    }
+
+    const bodySchema = z.object({
+      newPriceGbp: z.number().positive().max(1_000_000),
+    });
+    const parsed = bodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { ok: false, error: 'Invalid price adjustment payload', details: parsed.error.flatten() };
+    }
+
+    const roundedNewPrice = Math.round(parsed.data.newPriceGbp * 100) / 100;
+
+    // Verify listing ownership and current price
+    const listingResult = await db.query<{ id: string; price_gbp: number | string; status: string }>(
+      `SELECT id, price_gbp, status FROM listings WHERE id = $1 AND seller_id = $2 LIMIT 1`,
+      [listingId, sellerId]
+    );
+    const listing = listingResult.rows[0];
+    if (!listing) {
+      reply.code(404);
+      return { ok: false, error: 'Listing not found' };
+    }
+
+    const previousPrice = Number(listing.price_gbp);
+    if (Math.abs(previousPrice - roundedNewPrice) < 0.01) {
+      reply.code(400);
+      return { ok: false, error: 'New price must differ from current price' };
+    }
+
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE listings SET price_gbp = $1, updated_at = NOW() WHERE id = $2`,
+        [roundedNewPrice, listingId]
+      );
+      await client.query(
+        `INSERT INTO listing_price_events (listing_id, previous_price_gbp, new_price_gbp, changed_at)
+         VALUES ($1, $2, $3, NOW())`,
+        [listingId, previousPrice, roundedNewPrice]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    return {
+      ok: true,
+      listingId,
+      previousPriceGbp: previousPrice,
+      newPriceGbp: roundedNewPrice,
+      changedAt: new Date().toISOString(),
+    };
   });
 };
