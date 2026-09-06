@@ -28,6 +28,7 @@ import { haptics } from '../utils/haptics';
 import { track } from '../analytics';
 
 // Domain modules, one per pillar.
+import { SellerPillarTiles } from '../components/seller/SellerPillarTiles';
 import { SellerExecutiveHero } from '../components/seller/SellerExecutiveHero';
 import { SellerOrdersModule } from '../components/seller/SellerOrdersModule';
 import { SellerAnalyticsModule, type SellerSparklinePoint } from '../components/seller/SellerAnalyticsModule';
@@ -236,6 +237,15 @@ export default function SellerHubScreen() {
             </Text>
           </View>
         )}
+
+        {/* Quick-access pillar tiles — Wallet / Orders / Analytics / Closet. */}
+        <SellerPillarTiles
+          pendingOrdersCount={pendingOrdersCount}
+          onOpenWallet={handleOpenWallet}
+          onOpenOrders={handleViewAllOrders}
+          onOpenAnalytics={handleNavigateToAnalytics}
+          onOpenCloset={handleNavigateToCloset}
+        />
 
         {/* Pillar 1 - Wallet: liquidity posture. */}
         <SellerExecutiveHero

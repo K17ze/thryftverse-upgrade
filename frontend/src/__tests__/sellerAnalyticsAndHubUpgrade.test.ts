@@ -30,6 +30,7 @@ describe('Seller Hub and Analytics Upgrade Verification', () => {
     expect(lines).toBeLessThan(400);
 
     // Verifies modular domain component imports — the 4-pillar module composition
+    expect(content).toContain('SellerPillarTiles');
     expect(content).toContain('SellerExecutiveHero');
     expect(content).toContain('SellerOrdersModule');
     expect(content).toContain('SellerAnalyticsModule');
@@ -46,12 +47,20 @@ describe('Seller Hub and Analytics Upgrade Verification', () => {
 
   it('verifies all seller domain components exist with human engineering depth', () => {
     const sellerDir = path.resolve(__dirname, '../components/seller');
+    const tilesFile = fs.readFileSync(path.join(sellerDir, 'SellerPillarTiles.tsx'), 'utf8');
     const heroFile = fs.readFileSync(path.join(sellerDir, 'SellerExecutiveHero.tsx'), 'utf8');
     const ordersFile = fs.readFileSync(path.join(sellerDir, 'SellerOrdersModule.tsx'), 'utf8');
     const analyticsFile = fs.readFileSync(path.join(sellerDir, 'SellerAnalyticsModule.tsx'), 'utf8');
     const closetFile = fs.readFileSync(path.join(sellerDir, 'SellerClosetModule.tsx'), 'utf8');
     const listingsFile = fs.readFileSync(path.join(sellerDir, 'SellerListingsModule.tsx'), 'utf8');
     const railFile = fs.readFileSync(path.join(sellerDir, 'SellerThumbRail.tsx'), 'utf8');
+
+    // SellerPillarTiles: eBay-style quick-access row with attention badge
+    expect(tilesFile).toContain('Wallet');
+    expect(tilesFile).toContain('Orders');
+    expect(tilesFile).toContain('Analytics');
+    expect(tilesFile).toContain('Closet');
+    expect(tilesFile).toContain('badge');
 
     // SellerExecutiveHero: identity row + liquidity-only money panel (Stripe balances model)
     expect(heroFile).toContain('Available Payout');

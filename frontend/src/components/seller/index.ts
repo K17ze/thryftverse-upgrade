@@ -1,3 +1,4 @@
+export { SellerPillarTiles, type SellerPillarTilesProps } from './SellerPillarTiles';
 export { SellerExecutiveHero, type SellerExecutiveHeroProps } from './SellerExecutiveHero';
 export { SellerOrdersModule, type SellerOrdersModuleProps, type SellerOrderPreview } from './SellerOrdersModule';
 export { SellerAnalyticsModule, type SellerAnalyticsModuleProps, type SellerSparklinePoint } from './SellerAnalyticsModule';
