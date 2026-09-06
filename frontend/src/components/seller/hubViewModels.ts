@@ -13,15 +13,6 @@ import type { SellerThumbRailItem } from './SellerThumbRail';
 
 type MoneyFormatter = (value: number | null | undefined) => string;
 
-interface ListingLike {
-  id: string;
-  title: string | null;
-  price: number | null;
-  images: string[];
-  sellerId: string | null;
-  isSold?: boolean | null;
-}
-
 /** GBP formatter with compact notation for large values — em dash for unknown. */
 export function formatGbp(amount: number | null | undefined): string {
   if (amount == null || !Number.isFinite(amount)) return '—';
@@ -70,26 +61,6 @@ export function splitTasks(
       ? overview.topTask
       : null;
   return { tasks, topTask };
-}
-
-function toRailItem(listing: ListingLike, formatMoney: MoneyFormatter): SellerThumbRailItem {
-  return {
-    id: listing.id,
-    imageUri: listing.images?.[0] ?? null,
-    label: listing.title || 'Saved piece',
-    meta: listing.price != null ? formatMoney(listing.price) : undefined,
-  };
-}
-
-/** Saved + wishlisted pieces resolved against the listings cache. */
-export function toSavedRailItems(
-  savedIds: string[],
-  wishlistIds: string[],
-  listings: ListingLike[],
-  formatMoney: MoneyFormatter
-): SellerThumbRailItem[] {
-  const ids = new Set([...savedIds, ...wishlistIds]);
-  return listings.filter((l) => ids.has(l.id)).slice(0, 6).map((l) => toRailItem(l, formatMoney));
 }
 
 /** The seller's own live catalog, from the dedicated own-listings endpoint. */

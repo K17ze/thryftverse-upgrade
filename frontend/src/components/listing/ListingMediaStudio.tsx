@@ -3,10 +3,8 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
   useWindowDimensions,
   Pressable } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,45 +14,29 @@ import Reanimated, {
   withSpring,
   cancelAnimation,
   Easing } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
+import { AppIcon } from '../common/AppIcon';
+import { Image as ExpoImage } from 'expo-image';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useAppTheme } from '../../theme/ThemeContext';
 import type { ThemeColors } from '../../theme/ThemeContext';
-import { Space, Typography, Radius, AspectRatio, Stroke} from '../../theme/designTokens';
+import { Space, Radius, AspectRatio, Stroke, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useHaptic } from '../../hooks/useHaptic';
 import { useMotionConfig } from '../../hooks/useMotionConfig';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
 import { SortablePhotoStrip } from '../SortablePhotoStrip';
+import { FocalImage } from '../media/FocalImage';
+import { CreatorCropSheet } from '../../creator/CreatorCropSheet';
 import { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
-import { UploadQueueItem, UploadQueueItemState } from '../../services/mediaUploadQueue';
+import { UploadQueueItem } from '../../services/mediaUploadQueue';
 import { isVideoUri } from '../../utils/media';
+import { useVideoPoster } from '../../platform/media/videoPoster';
 import { Video, ResizeMode } from '../compat/Video';
-import {
-  rotateImage,
-  flipImage,
-  cropImage,
-  type MediaTransformResult,
-} from '../../platform/media/mediaTransforms';
 
 const THUMB_SIZE = 80;
 
 type ItemStatus = 'draft' | 'pending' | 'preparing' | 'uploading' | 'uploaded' | 'failed' | 'cancelled';
-
-const ACTIVE_STATUSES: ItemStatus[] = ['pending', 'preparing', 'uploading'];
-
-function isActiveStatus(status: ItemStatus): boolean {
-  return ACTIVE_STATUSES.includes(status);
-}
-
-const STATUS_PROGRESS: Record<ItemStatus, number> = {
-  draft: 0,
-  pending: 0.1,
-  preparing: 0.3,
-  uploading: 0.65,
-  uploaded: 1,
-  failed: 0,
-  cancelled: 0 };
 
 interface ListingMediaStudioProps {
   items: ListingMediaDraftItem[];
@@ -66,8 +48,6 @@ interface ListingMediaStudioProps {
   onReorder: (newOrderedIds: string[]) => void;
   onRemoveItem: (itemId: string) => void;
   onRetryItem: (itemId: string) => void;
-  /** Per audit 04 P0: explicit "Set as cover" affordance. Moves item to position 0. */
-  onSetCover?: (itemId: string) => void;
   /** Edit-Listing: label for the remove action (default: 'Remove') */
   removeLabel?: string;
   /** Edit-Listing: returns true if the item can be removed (default: true for all) */
@@ -78,9 +58,11 @@ interface ListingMediaStudioProps {
   lockedNote?: string;
   /**
    * Called when the user applies a crop/rotate/flip transform to an item.
-   * The host replaces the item's URI with the transformed result.
+   * The host replaces the item's URI with the transformed result. A
+   * focal-point change passes the item's current URI so hosts can store
+   * the point without re-queueing the upload.
    */
-  onTransformItem?: (itemId: string, transformedUri: string) => void;
+  onTransformItem?: (itemId: string, transformedUri: string, focalPoint?: { x: number; y: number }) => void;
 }
 
 function getItemStatus(
@@ -94,114 +76,119 @@ function getItemStatus(
   return item.status as ItemStatus;
 }
 
+/** Real byte progress (0-1) for an item's active upload attempt. */
+function getItemProgress(
+  item: ListingMediaDraftItem,
+  queueItems: UploadQueueItem[]
+): number {
+  return queueItems.find((q) => q.id === item.id)?.progress ?? 0;
+}
+
 function getDisplayUri(item: ListingMediaDraftItem): string {
   return item.publicUrl || item.uri;
 }
 
-function StatusLabel({ status, color }: { status: ItemStatus; color: string }) {
-  switch (status) {
-    case 'pending':
-      return <Text style={[statusLabelStyles.statusLabelText, { color }]}>Queued</Text>;
-    case 'preparing':
-      return <Text style={[statusLabelStyles.statusLabelText, { color }]}>Preparing…</Text>;
-    case 'uploading':
-      return <Text style={[statusLabelStyles.statusLabelText, { color }]}>Uploading…</Text>;
-    case 'uploaded':
-      return null;
-    case 'failed':
-      return <Text style={[statusLabelStyles.statusLabelText, { color }]}>Failed</Text>;
-    case 'cancelled':
-      return <Text style={[statusLabelStyles.statusLabelText, { color }]}>Cancelled</Text>;
-    default:
-      return null;
+/** Schemes expo-image-manipulator reads directly. */
+const MANIPULABLE_URI = /^(file|content):\/\//i;
+/** Local library URIs (iOS photos) that need a temp file copy first. */
+const LIBRARY_URI = /^(ph|assets-library):\/\//i;
+
+// iOS library-backed assets (ph:// / assets-library://) must land on disk
+// before the crop sheet's manipulator can read them.
+async function resolveCropSourceUri(uri: string): Promise<string> {
+  if (!LIBRARY_URI.test(uri)) return uri;
+  const cacheDir = FileSystem.cacheDirectory;
+  if (!cacheDir) return uri;
+  try {
+    const dest = `${cacheDir}crop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    await FileSystem.copyAsync({ from: uri, to: dest });
+    return dest;
+  } catch {
+    return uri;
   }
 }
 
-const statusLabelStyles = StyleSheet.create({
-  statusLabelText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily } });
-
+/**
+ * Bottom-edge upload status: a 2pt determinate bar chasing real byte
+ * progress, plus a small status label on the cover. 'preparing' sweeps the
+ * bar instead of fabricating a percentage; 'pending' renders nothing (the
+ * media dims instead). The media itself stays visible — no full-surface
+ * overlay, no pulse.
+ */
 function UploadProgressOverlay({
   status,
+  progress: byteProgress,
   trackWidth,
-  variant,
+  showStatus,
   reducedMotion,
-  colors,
   styles }: {
   status: ItemStatus;
+  /** Real transmitted-byte progress (0-1) from the upload queue. */
+  progress: number;
   trackWidth: number;
-  variant: 'thumb' | 'cover';
+  /** Cover carries the status label; thumbs stay bar-only. */
+  showStatus: boolean;
   reducedMotion: boolean;
-  colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
-  const progress = useSharedValue(STATUS_PROGRESS[status]);
-  const overlayOpacity = useSharedValue(isActiveStatus(status) ? 1 : 0);
-  const barOpacity = useSharedValue(isActiveStatus(status) ? 1 : 0);
+  const progress = useSharedValue(byteProgress);
+  // 'preparing' has no bytes on the wire yet — the bar sweeps instead of
+  // showing a fabricated percentage.
+  const isPreparing = status === 'preparing';
+  const sweep = useSharedValue(0);
 
+  // Determinate bar chases real byte progress as ticks arrive.
   useEffect(() => {
-    const active = isActiveStatus(status);
-    const target = STATUS_PROGRESS[status];
-    progress.value = withTiming(target, {
-      duration: reducedMotion ? 0 : Motion.duration.slow,
+    progress.value = withTiming(byteProgress, {
+      duration: reducedMotion ? 0 : Motion.duration.fast,
       easing: Easing.out(Easing.cubic) });
-    if (active) {
-      barOpacity.value = withTiming(1, { duration: reducedMotion ? 0 : Motion.duration.fast });
-      if (reducedMotion) {
-        overlayOpacity.value = 1;
-      } else {
-        overlayOpacity.value = 1;
-        overlayOpacity.value = withRepeat(
-          withTiming(0.7, { duration: Motion.duration.normal }),
-          -1,
-          true
-        );
-      }
+  }, [byteProgress, reducedMotion, progress]);
+
+  // Indeterminate sweep while preparing. Reduced motion: static bar —
+  // the label alone carries the state.
+  useEffect(() => {
+    if (isPreparing && !reducedMotion) {
+      sweep.value = withRepeat(
+        withSequence(
+          withTiming(0.3, { duration: Motion.duration.slow, easing: Easing.inOut(Easing.quad) }),
+          withTiming(0.65, { duration: Motion.duration.slow, easing: Easing.inOut(Easing.quad) })
+        ),
+        -1,
+        true
+      );
     } else {
-      cancelAnimation(overlayOpacity);
-      overlayOpacity.value = withTiming(0, { duration: reducedMotion ? 0 : Motion.duration.fast });
-      barOpacity.value = withTiming(0, { duration: reducedMotion ? 0 : Motion.duration.fast });
+      cancelAnimation(sweep);
+      sweep.value = 0;
     }
-  }, [status, reducedMotion, progress, overlayOpacity, barOpacity]);
+  }, [isPreparing, reducedMotion, sweep]);
 
-  const overlayStyle = useAnimatedStyle(() => ({ opacity: overlayOpacity.value }));
   const fillStyle = useAnimatedStyle(() => ({
-    width: trackWidth * progress.value,
-    opacity: barOpacity.value }));
+    width: trackWidth * (isPreparing ? sweep.value : progress.value) }));
 
-  if (!isActiveStatus(status)) return null;
+  if (status !== 'preparing' && status !== 'uploading') return null;
 
-  const pct = Math.round((STATUS_PROGRESS[status] ?? 0) * 100);
+  const pct = Math.round(byteProgress * 100);
 
   return (
-    <Reanimated.View
-      style={[variant === 'thumb' ? styles.thumbStatusOverlay : styles.coverStatusOverlay, overlayStyle]}
-      pointerEvents="none"
-    >
-      <View style={variant === 'thumb' ? styles.thumbStatusLabel : styles.coverStatusLabel}>
-        <StatusLabel status={status} color={colors.scrimTextPrimary} />
-        {variant === 'cover' && (
-          <Text style={styles.coverProgressPct}>{pct}%</Text>
-        )}
+    <View style={styles.progressOverlay} pointerEvents="none">
+      {showStatus && (
+        <Text style={styles.progressText}>
+          {isPreparing ? 'Preparing…' : `Uploading · ${pct}%`}
+        </Text>
+      )}
+      <View style={styles.progressTrack}>
+        <Reanimated.View style={[styles.progressFill, fillStyle]} />
       </View>
-      <View style={variant === 'thumb' ? styles.thumbProgressBarTrack : styles.coverProgressBarTrack}>
-        <Reanimated.View style={[styles.progressBarFill, fillStyle]} />
-      </View>
-    </Reanimated.View>
+    </View>
   );
 }
 
 function UploadedCheckBadge({
-  variant,
   reducedMotion,
   spring,
-  colors,
   styles }: {
-  variant: 'thumb' | 'cover';
   reducedMotion: boolean;
   spring: ReturnType<typeof useMotionConfig>['spring'];
-  colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
   const scale = useSharedValue(0);
@@ -219,19 +206,57 @@ function UploadedCheckBadge({
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   return (
-    <Reanimated.View
-      style={[variant === 'thumb' ? styles.thumbUploadedBadge : styles.coverUploadedBadge, style]}
-      pointerEvents="none"
-    >
-      <Ionicons
+    <Reanimated.View style={[styles.uploadedCheck, style]} pointerEvents="none">
+      <AppIcon
         name="checkmark-circle"
-        size={variant === 'thumb' ? 16 : 22}
-        color={colors.success}
-        aria-hidden={true}
+        size={16}
+        color="success"
+        accessible={false}
+        style={styles.mediaGlyph}
       />
     </Reanimated.View>
   );
 }
+
+/**
+ * Video thumbnail backed by a real poster frame.
+ *
+ * The frame is decoded once per video by expo-video's native thumbnail
+ * generator (platform/media/videoPoster) and rendered as a plain image with
+ * a compact play glyph — no live player per thumbnail. Until the frame
+ * resolves, and permanently on web (no native decoder), it falls back to
+ * the videocam tile below.
+ */
+const VideoPosterThumb = React.memo(function VideoPosterThumb({
+  uri,
+  styles,
+  dimmed }: {
+  uri: string;
+  styles: ReturnType<typeof createStyles>;
+  dimmed?: boolean;
+}) {
+  const poster = useVideoPoster(uri);
+
+  return (
+    <View style={[styles.thumbVideoTile, dimmed && styles.mediaDimmed]}>
+      {poster ? (
+        <>
+          <ExpoImage
+            source={poster}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={150}
+          />
+          <View style={styles.thumbPlayBadge} pointerEvents="none">
+            <AppIcon name="play" variant="filled" size={11} color="scrimTextPrimary" accessible={false} />
+          </View>
+        </>
+      ) : (
+        <AppIcon name="videocam" variant="filled" size={22} color="textMuted" accessible={false} />
+      )}
+    </View>
+  );
+});
 
 export function ListingMediaStudio({
   items,
@@ -243,7 +268,6 @@ export function ListingMediaStudio({
   onReorder,
   onRemoveItem,
   onRetryItem,
-  onSetCover,
   removeLabel = 'Remove',
   canRemoveItem,
   reorderEnabled = true,
@@ -285,16 +309,12 @@ export function ListingMediaStudio({
     onRetryItem(itemId);
   }, [haptic, onRetryItem]);
 
-  const handleSetCover = useCallback((itemId: string) => {
-    haptic.medium();
-    onSetCover?.(itemId);
-  }, [haptic, onSetCover]);
-
-  // ── Crop / Rotate / Flip transform toolbar ──
-  // Appears as an overlay on the cover when the user taps "Edit".
-  // Uses the existing mediaTransforms.ts functions (expo-image-manipulator).
-  const [transformOpen, setTransformOpen] = useState(false);
-  const [transformBusy, setTransformBusy] = useState(false);
+  // ── Cover crop sheet ──
+  // The cover "Edit" button opens the full gesture crop sheet
+  // (CreatorCropSheet), which supersedes the old inline rotate/flip bar.
+  // Holds the URI the sheet edits — the display URI, or a temp file copy
+  // for library-backed URIs. Null = closed.
+  const [cropSheetUri, setCropSheetUri] = useState<string | null>(null);
 
   const prevStatusMap = useRef<Record<string, ItemStatus>>({});
   useEffect(() => {
@@ -322,66 +342,69 @@ export function ListingMediaStudio({
   const photoUris = items.map(getDisplayUri);
   const itemIds = items.map((m) => m.id);
 
-  // ── Transform handler (crop/rotate/flip) ──
-  // Uses the existing mediaTransforms.ts functions. Only applies to local
-  // image URIs (file:// / content://) — remote URLs need download first.
-  const applyTransform = useCallback(async (
-    action: 'rotateLeft' | 'rotateRight' | 'flip',
-  ) => {
-    if (!onTransformItem || transformBusy) return;
-    const uri = coverDisplayUri;
-    if (!uri.startsWith('file://') && !uri.startsWith('content://')) return;
-    if (isVideoUri(uri)) return;
-    setTransformBusy(true);
+  // ── Edit entry guard ──
+  // Local image URIs can go through expo-image-manipulator: file:// and
+  // content:// directly, iOS library URIs (ph:// / assets-library://) via a
+  // temp file copy. Videos and remote http(s) items stay locked.
+  const canEditCover = Boolean(
+    onTransformItem &&
+    coverItem &&
+    !isCoverVideo &&
+    coverItem.kind !== 'video' &&
+    coverStatus !== 'failed' &&
+    coverStatus !== 'cancelled' &&
+    (MANIPULABLE_URI.test(coverDisplayUri) || LIBRARY_URI.test(coverDisplayUri))
+  );
+
+  // Crop-sheet completion → existing host contract: the host replaces the
+  // item's URI with the transformed result. The final focal point is already
+  // persisted — the sheet emits onFocalPointChange before onCropComplete —
+  // and a render-time capture here would be staler than that emission.
+  const handleCropComplete = useCallback((newUri: string) => {
+    if (!onTransformItem || !coverItem) return;
+    onTransformItem(coverItem.id, newUri);
+    haptic.success();
+  }, [onTransformItem, coverItem, haptic]);
+
+  // Focal taps persist through the same host contract; passing the item's
+  // current URI keeps the transform a no-op so upload state is untouched.
+  const handleFocalChange = useCallback((point: { x: number; y: number }) => {
+    if (!onTransformItem || !coverItem) return;
+    onTransformItem(coverItem.id, coverItem.uri, point);
+  }, [onTransformItem, coverItem]);
+
+  // Resolve the crop source before opening the sheet — a no-op for file://
+  // and content://, a temp-file copy for library URIs.
+  const handleEditCover = useCallback(async () => {
+    if (!coverItem) return;
     haptic.light();
-    try {
-      let result: MediaTransformResult;
-      if (action === 'rotateLeft') {
-        result = await rotateImage(uri, 270);
-      } else if (action === 'rotateRight') {
-        result = await rotateImage(uri, 90);
-      } else {
-        result = await flipImage(uri, 'horizontal');
-      }
-      onTransformItem(coverItem!.id, result.uri);
-      haptic.success();
-    } catch {
-      haptic.warning();
-    } finally {
-      setTransformBusy(false);
-    }
-  }, [onTransformItem, transformBusy, coverDisplayUri, coverItem?.id, haptic]);
+    setCropSheetUri(await resolveCropSourceUri(coverDisplayUri));
+  }, [coverItem, coverDisplayUri, haptic]);
 
   if (items.length === 0) {
     return (
       <View style={styles.container}>
         <Pressable
-          style={styles.emptyCanvas}
+          style={styles.emptySurface}
           onPress={handlePickLibrary}
           accessibilityRole="button"
           accessibilityLabel="Add photos from library"
         >
-          <View style={styles.emptyDashed}>
-            <View style={styles.emptyIconWrap}>
-              <Ionicons name="camera-outline" size={28} color={colors.brand} aria-hidden={true} />
-            </View>
-            <Text style={styles.emptyTitle}>Start with a photo</Text>
-            <Text style={styles.emptySub}>Tap to upload from your library</Text>
-            <Text style={styles.emptyHint}>Well-lit photos from multiple angles sell faster</Text>
-          </View>
+          <AppIcon name="camera" size={24} color="textMuted" accessible={false} style={styles.emptyGlyph} />
+          <Text style={styles.emptyTitle}>Add your first photo</Text>
+          <Text style={styles.emptyMeta}>Up to {maxCount} photos</Text>
         </Pressable>
 
         <View style={styles.emptyActions}>
           <Pressable
-            style={styles.emptySecondaryBtn}
+            style={styles.emptyCameraBtn}
             onPress={handlePickCamera}
             accessibilityRole="button"
             accessibilityLabel="Take photo with camera"
           >
-            <Ionicons name="camera" size={18} color={colors.textPrimary} aria-hidden={true} style={{ marginRight: Space.sm }} />
-            <Text style={styles.emptySecondaryText}>Take photo</Text>
+            <AppIcon name="camera" size={16} color="textMuted" accessible={false} />
+            <Text style={styles.emptyCameraText}>Take photo</Text>
           </Pressable>
-          <Text style={styles.emptyCount}>0 / {maxCount}</Text>
         </View>
 
         {errorText ? (
@@ -404,74 +427,48 @@ export function ListingMediaStudio({
     return (
       <View style={[styles.thumbContent, isFailed && styles.thumbContentFailed]}>
         {isVideo ? (
-          <View style={styles.thumbVideoTile}>
-            <Ionicons name="videocam" size={22} color={colors.textMuted} aria-hidden={true} />
-          </View>
+          <VideoPosterThumb uri={displayUri} styles={styles} dimmed={status === 'pending'} />
         ) : (
-          <ExpoImage
-            source={{ uri: displayUri }}
-            style={styles.thumbImage}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            recyclingKey={displayUri}
+          <FocalImage
+            uri={displayUri}
+            focalPoint={item.focalPoint}
+            style={[styles.thumbImage, status === 'pending' && styles.mediaDimmed]}
           />
         )}
 
-        {isVideo && (
-          <View style={styles.thumbVideoBadge}>
-            <Ionicons name="videocam" size={12} color={colors.scrimTextPrimary} aria-hidden={true} />
-          </View>
-        )}
-
-        {item.id === coverItem.id && (
-          <View style={styles.thumbCoverBadge}>
-            <Text style={styles.thumbCoverText}>COVER</Text>
-          </View>
-        )}
-
-        <View style={styles.thumbNumberBadge}>
-          <Text style={styles.thumbNumberText}>{index + 1}</Text>
-        </View>
-
         <UploadProgressOverlay
           status={status}
+          progress={getItemProgress(item, queueItems)}
           trackWidth={THUMB_SIZE}
-          variant="thumb"
+          showStatus={false}
           reducedMotion={reducedMotion}
-          colors={colors}
           styles={styles}
         />
 
         {status === 'uploaded' && (
           <UploadedCheckBadge
-            variant="thumb"
             reducedMotion={reducedMotion}
             spring={spring}
-            colors={colors}
             styles={styles}
           />
         )}
 
         {isFailed && (
           <Pressable
-            style={styles.thumbFailedOverlay}
+            style={styles.failedOverlay}
             onPress={() => handleRetry(item.id)}
             accessibilityRole="button"
             accessibilityLabel={`Retry upload for ${isVideo ? 'video' : 'photo'} ${index + 1}`}
           >
-            <Ionicons name="warning" size={14} color={colors.scrimTextPrimary} aria-hidden={true} />
-            <Text style={styles.thumbRetryText}>Tap to retry</Text>
-            <View style={styles.thumbRetryBtn}>
-              <Ionicons name="refresh" size={12} color={colors.textInverse} aria-hidden={true} />
-              <Text style={styles.thumbRetryBtnText}>Retry</Text>
-            </View>
+            <AppIcon name="warning" variant="filled" size={14} color="scrimTextPrimary" accessible={false} />
+            <Text style={styles.overlayStateText}>Retry</Text>
           </Pressable>
         )}
 
         {status === 'cancelled' && (
-          <View style={styles.thumbCancelledOverlay}>
-            <Ionicons name="ban" size={14} color={colors.scrimTextPrimary} aria-hidden={true} />
-            <Text style={styles.thumbCancelledText}>Cancelled</Text>
+          <View style={styles.cancelledOverlay} pointerEvents="none">
+            <AppIcon name="ban" variant="filled" size={14} color="scrimTextPrimary" accessible={false} />
+            <Text style={styles.overlayStateText}>Cancelled</Text>
           </View>
         )}
 
@@ -479,30 +476,10 @@ export function ListingMediaStudio({
           <Pressable
             style={styles.thumbRemoveBtn}
             onPress={() => handleRemove(item.id)}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel={`${removeLabel} ${isVideo ? 'video' : 'photo'} ${index + 1}`}
           >
-            <Ionicons name="close" size={12} color={colors.textInverse} aria-hidden={true} />
-          </Pressable>
-        )}
-
-        {/* ── Set as cover ──
-            Per audit 04 P0: "Add cover-photo semantics and explicit reorder
-            affordance." A compact "Set cover" button on non-cover thumbnails.
-            Only shown when onSetCover is provided and the item is not already
-            the cover. Positioned at bottom-left to avoid collision with the
-            remove button (top-right) and number badge (top-left). */}
-        {onSetCover && item.id !== coverItem.id && status !== 'failed' && status !== 'cancelled' && (
-          <Pressable
-            style={styles.thumbSetCoverBtn}
-            onPress={() => handleSetCover(item.id)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel={`Set ${isVideo ? 'video' : 'photo'} ${index + 1} as cover`}
-          >
-            <Ionicons name="star-outline" size={12} color={colors.scrimTextPrimary} aria-hidden={true} />
-            <Text style={styles.thumbSetCoverText}>Cover</Text>
+            <AppIcon name="close" size={16} color="scrimTextPrimary" accessible={false} style={styles.mediaGlyph} />
           </Pressable>
         )}
       </View>
@@ -511,12 +488,12 @@ export function ListingMediaStudio({
 
   return (
     <View style={styles.container}>
-      {/* ── Large cover preview ── */}
+      {/* ── Cover — the media is the interface ── */}
       <View style={styles.coverWrap}>
         {isCoverVideo ? (
           <Video
             source={{ uri: coverDisplayUri }}
-            style={styles.coverImage}
+            style={[styles.coverImage, coverStatus === 'pending' && styles.mediaDimmed]}
             resizeMode={ResizeMode.COVER}
             shouldPlay={false}
             isMuted
@@ -527,155 +504,79 @@ export function ListingMediaStudio({
             }}
           />
         ) : (
-          <ExpoImage
-            source={{ uri: coverDisplayUri }}
-            style={styles.coverImage}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-            recyclingKey={coverDisplayUri}
+          <FocalImage
+            uri={coverDisplayUri}
+            focalPoint={coverItem.focalPoint}
+            style={[styles.coverImage, coverStatus === 'pending' && styles.mediaDimmed]}
             transition={200}
+            recyclingKey={coverDisplayUri}
           />
         )}
 
-        {/* Cover badge */}
-        <View style={styles.coverBadge}>
-          <Text style={styles.coverBadgeText}>COVER</Text>
-        </View>
-
-        {/* Video indicator */}
-        {isCoverVideo && (
-          <View style={styles.videoIndicator}>
-            <Ionicons name="videocam" size={14} color={colors.scrimTextPrimary} aria-hidden={true} />
-            <Text style={styles.videoText}>VIDEO</Text>
-          </View>
-        )}
-
-        {/* Media count */}
-        <View style={styles.countBadge}>
-          <Text style={styles.countText}>{items.length} / {maxCount}</Text>
-        </View>
-
-        {/* Remove cover — only for removable items.
-            Visible chrome stays a 32pt circle; hitSlop extends the target
-            to the 44pt minimum (AGENTS.md §13). */}
-        {coverCanRemove && (
-          <Pressable
-            style={styles.coverRemoveBtn}
-            onPress={() => handleRemove(coverItem.id)}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            accessibilityRole="button"
-            accessibilityLabel={`${removeLabel} cover ${isCoverVideo ? 'video' : 'photo'}`}
-          >
-            <Ionicons name="close-circle" size={22} color={colors.scrimTextPrimary} aria-hidden={true} />
-          </Pressable>
-        )}
-
-        {/* Cover upload progress overlay */}
+        {/* Upload status — 2pt bar + label, no full-surface overlay */}
         <UploadProgressOverlay
           status={coverStatus}
+          progress={getItemProgress(coverItem, queueItems)}
           trackWidth={screenWidth}
-          variant="cover"
+          showStatus
           reducedMotion={reducedMotion}
-          colors={colors}
           styles={styles}
         />
 
         {coverStatus === 'uploaded' && (
           <UploadedCheckBadge
-            variant="cover"
             reducedMotion={reducedMotion}
             spring={spring}
-            colors={colors}
             styles={styles}
           />
         )}
 
-        {/* Cover failed overlay with Retry + Remove */}
         {coverStatus === 'failed' && (
-          <View style={styles.coverFailedOverlay}>
-            <Ionicons name="warning" size={16} color={colors.textInverse} aria-hidden={true} />
-            <Text style={styles.coverFailedText}>Upload failed</Text>
-            <Pressable
-              style={styles.coverRetryBtn}
-              onPress={() => handleRetry(coverItem.id)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel={`Retry upload for cover ${isCoverVideo ? 'video' : 'photo'}`}
-            >
-              <Ionicons name="refresh" size={14} color={colors.textInverse} aria-hidden={true} />
-              <Text style={styles.coverRetryText}>Retry</Text>
-            </Pressable>
-          </View>
+          <Pressable
+            style={styles.failedOverlay}
+            onPress={() => handleRetry(coverItem.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`Retry upload for cover ${isCoverVideo ? 'video' : 'photo'}`}
+          >
+            <AppIcon name="warning" variant="filled" size={16} color="scrimTextPrimary" accessible={false} />
+            <Text style={styles.overlayStateText}>Retry</Text>
+          </Pressable>
         )}
 
-        {/* Cover cancelled overlay */}
         {coverStatus === 'cancelled' && (
-          <View style={styles.coverCancelledOverlay}>
-            <Ionicons name="ban" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
-            <Text style={styles.coverCancelledText}>Cancelled</Text>
+          <View style={styles.cancelledOverlay} pointerEvents="none">
+            <AppIcon name="ban" variant="filled" size={16} color="scrimTextPrimary" accessible={false} />
+            <Text style={styles.overlayStateText}>Cancelled</Text>
           </View>
         )}
 
-        {/* ── Edit / transform toolbar ──
-            Crop, rotate, and flip for the cover image. Only shown for
-            local image URIs (not videos or remote-only items). */}
-        {onTransformItem && !isCoverVideo && coverStatus !== 'failed' && coverStatus !== 'cancelled' && (
-          <>
-            <Pressable
-              style={styles.coverEditBtn}
-              onPress={() => { haptic.light(); setTransformOpen((v) => !v); }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel={transformOpen ? 'Close edit tools' : 'Edit photo'}
-            >
-              <Ionicons name={transformOpen ? 'close' : 'create-outline'} size={18} color={colors.scrimTextPrimary} aria-hidden={true} />
-            </Pressable>
+        {coverCanRemove && (
+          <Pressable
+            style={styles.coverRemoveBtn}
+            onPress={() => handleRemove(coverItem.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`${removeLabel} cover ${isCoverVideo ? 'video' : 'photo'}`}
+          >
+            <AppIcon name="close" size={20} color="scrimTextPrimary" accessible={false} style={styles.mediaGlyph} />
+          </Pressable>
+        )}
 
-            {transformOpen && (
-              <View style={styles.transformBar}>
-                {transformBusy ? (
-                  <ActivityIndicator size="small" color={colors.scrimTextPrimary} />
-                ) : (
-                  <>
-                    <Pressable
-                      style={styles.transformBtn}
-                      onPress={() => void applyTransform('rotateLeft')}
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Rotate left"
-                    >
-                      <Ionicons name="return-down-back-outline" size={20} color={colors.scrimTextPrimary} aria-hidden={true} />
-                      <Text style={styles.transformBtnText}>Rotate ↺</Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.transformBtn}
-                      onPress={() => void applyTransform('rotateRight')}
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Rotate right"
-                    >
-                      <Ionicons name="return-down-forward-outline" size={20} color={colors.scrimTextPrimary} aria-hidden={true} />
-                      <Text style={styles.transformBtnText}>Rotate ↻</Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.transformBtn}
-                      onPress={() => void applyTransform('flip')}
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Flip horizontally"
-                    >
-                      <Ionicons name="swap-horizontal" size={20} color={colors.scrimTextPrimary} aria-hidden={true} />
-                      <Text style={styles.transformBtnText}>Flip</Text>
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            )}
-          </>
+        {/* ── Edit cover — opens the gesture crop sheet ──
+            Local images open directly; iOS library URIs are copied to a
+            temp file first. Videos and remote-only items never get here. */}
+        {canEditCover && (
+          <Pressable
+            style={styles.coverEditBtn}
+            onPress={() => { void handleEditCover(); }}
+            accessibilityRole="button"
+            accessibilityLabel="Edit cover photo"
+          >
+            <AppIcon name="edit" size={20} color="scrimTextPrimary" accessible={false} style={styles.mediaGlyph} />
+          </Pressable>
         )}
       </View>
 
-      {/* ── Sortable thumbnail rail ── */}
+      {/* ── Thumbnail rail ── */}
       <SortablePhotoStrip
         photos={photoUris}
         itemIds={itemIds}
@@ -690,7 +591,7 @@ export function ListingMediaStudio({
         <Text style={styles.lockedNote}>{lockedNote}</Text>
       )}
 
-      {/* ── Add more + Camera actions ── */}
+      {/* ── Quiet action row — count lives in the Add-more label ── */}
       <View style={styles.studioActions}>
         {items.length < maxCount && (
           <Pressable
@@ -700,8 +601,11 @@ export function ListingMediaStudio({
             accessibilityRole="button"
             accessibilityLabel="Add more photos from library"
           >
-            <Ionicons name="images-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
-            <Text style={styles.studioActionText}>Add more</Text>
+            <AppIcon name="images" size={16} color="textMuted" accessible={false} />
+            <Text style={styles.studioActionText}>
+              Add more
+              <Text style={styles.studioActionCount}> · {items.length}/{maxCount}</Text>
+            </Text>
           </Pressable>
         )}
         <Pressable
@@ -711,8 +615,8 @@ export function ListingMediaStudio({
           accessibilityRole="button"
           accessibilityLabel="Take photo with camera"
         >
-          <Ionicons name="camera-outline" size={16} color={colors.textSecondary} aria-hidden={true} />
-          <Text style={styles.studioActionText}>Camera</Text>
+          <AppIcon name="camera" size={16} color="textMuted" accessible={false} />
+          <Text style={styles.studioActionText}>Take photo</Text>
         </Pressable>
       </View>
 
@@ -720,6 +624,18 @@ export function ListingMediaStudio({
       {errorText ? (
         <Text style={styles.errorText}>{errorText}</Text>
       ) : null}
+
+      {/* ── Cover crop sheet ── */}
+      {cropSheetUri && (
+        <CreatorCropSheet
+          visible
+          imageUri={cropSheetUri}
+          focalPoint={coverItem.focalPoint}
+          onFocalPointChange={handleFocalChange}
+          onClose={() => setCropSheetUri(null)}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </View>
   );
 }
@@ -728,69 +644,42 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   return StyleSheet.create({
   container: {
     width: screenWidth },
-  emptyCanvas: {
+  /* ── empty state ── */
+  emptySurface: {
     width: screenWidth,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.lg,
-    alignItems: 'center' },
-  emptyDashed: {
-    width: '100%',
     height: coverHeight,
-    borderWidth: Stroke.standard,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-    borderRadius: Radius.xxl,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center' },
-  emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.full,
-    backgroundColor: colors.brandSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Space.md },
+  emptyGlyph: {
+    marginBottom: Space.sm },
   emptyTitle: {
     fontSize: TypographyV2.bodyStrong.size,
     lineHeight: TypographyV2.bodyStrong.lineHeight,
     fontFamily: TypographyV2.bodyStrong.fontFamily,
     color: colors.textPrimary,
-    marginBottom: Space.xs },
-  emptySub: {
+    marginBottom: Space.xxs },
+  emptyMeta: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted },
-  emptyHint: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    marginTop: Space.sm,
-    opacity: 0.7 },
   emptyActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: screenWidth - Space.md * 2,
-    marginTop: Space.md },
-  emptySecondaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: Space.md,
-    paddingVertical: 12,
-    borderRadius: Radius.xxl,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border },
-  emptySecondaryText: {
+    marginTop: Space.xs },
+  emptyCameraBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    minHeight: Control.hit,
+    paddingHorizontal: Space.xs },
+  emptyCameraText: {
     fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
     fontFamily: TypographyV2.body.fontFamily,
-    color: colors.textPrimary },
-  emptyCount: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted },
+    color: colors.textSecondary },
+  /* ── cover ── */
   coverWrap: {
     width: screenWidth,
     height: coverHeight,
@@ -800,245 +689,62 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
   coverImage: {
     width: screenWidth,
     height: coverHeight },
-  coverBadge: {
-    position: 'absolute',
-    top: Space.sm,
-    left: Space.sm,
-    backgroundColor: colors.overlay,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.sm },
-  coverBadgeText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: Typography.family.bold,
-    color: colors.scrimTextPrimary,
-    letterSpacing: 0.5 },
-  videoIndicator: {
-    position: 'absolute',
-    top: Space.sm,
-    right: Space.sm + 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.overlay,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.sm },
-  videoText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: Typography.family.bold,
-    color: colors.scrimTextPrimary },
-  countBadge: {
-    position: 'absolute',
-    bottom: Space.sm,
-    left: Space.sm,
-    backgroundColor: colors.overlay,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.sm },
-  countText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.scrimTextPrimary },
+  mediaDimmed: {
+    opacity: 0.4 },
+  /* Transparent 44pt targets — glyph-only, legible via text shadow
+     (same grammar as MediaStage controlIcon). No circles, no pills. */
   coverRemoveBtn: {
     position: 'absolute',
-    top: Space.sm,
-    right: Space.sm,
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: colors.overlay,
+    top: 0,
+    right: 0,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center' },
   coverEditBtn: {
     position: 'absolute',
-    top: Space.sm,
-    right: Space.sm + 40,
-    width: 32,
-    height: 32,
-    borderRadius: Radius.full,
-    backgroundColor: colors.overlay,
+    bottom: 0,
+    right: 0,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center' },
-  transformBar: {
-    position: 'absolute',
-    bottom: Space.sm,
-    left: Space.sm,
-    right: Space.sm,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Space.md,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.overlay },
-  transformBtn: {
-    alignItems: 'center',
-    gap: 2 },
-  transformBtnText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.scrimTextPrimary },
-  coverStatusOverlay: {
+  mediaGlyph: {
+    textShadowColor: colors.mediaOverlayShadow,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4 },
+  progressOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  coverStatusLabel: {
+    bottom: 0 },
+  progressText: {
     position: 'absolute',
-    bottom: Space.lg,
-    alignItems: 'center',
-    gap: 2 },
-  coverProgressPct: {
+    left: Space.md,
+    bottom: Space.sm,
     fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.scrimTextPrimary },
-  coverProgressBarTrack: {
+    color: colors.scrimTextPrimary,
+    textShadowColor: colors.mediaOverlayShadow,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3 },
+  progressTrack: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 4,
+    height: 2,
     backgroundColor: colors.scrimTextTertiary },
-  coverUploadedBadge: {
-    position: 'absolute',
-    bottom: Space.sm,
-    right: Space.sm },
-  coverFailedOverlay: {
-    position: 'absolute',
-    bottom: Space.sm,
-    right: Space.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.danger,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Radius.md },
-  coverFailedText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textInverse },
-  coverRetryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.scrimTextTertiary },
-  coverRetryText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textInverse },
-  coverCancelledOverlay: {
-    position: 'absolute',
-    bottom: Space.sm,
-    right: Space.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.overlay,
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.sm },
-  coverCancelledText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.scrimTextPrimary },
-  /* ── thumbnail content (inside SortablePhotoStrip) ── */
-  thumbContent: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: Radius.md,
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border },
-  thumbContentFailed: {
-    borderColor: colors.danger,
-    borderWidth: 2 },
-  thumbImage: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: Radius.md },
-  thumbVideoTile: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: Radius.md,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  thumbVideoBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 18,
-    height: 18,
-    borderRadius: Radius.full,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  thumbCoverBadge: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    backgroundColor: colors.brand,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.sm },
-  thumbCoverText: {
-    color: colors.background,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    letterSpacing: 0.3 },
-  thumbNumberBadge: {
-    position: 'absolute',
-    bottom: 4,
-    left: 4,
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    backgroundColor: colors.brand,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  thumbNumberText: {
-    color: colors.background,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: Typography.family.bold },
-  thumbStatusOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  thumbStatusLabel: {
-    position: 'absolute',
-    bottom: 8,
-    alignItems: 'center' },
-  thumbProgressBarTrack: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: colors.scrimTextTertiary },
-  progressBarFill: {
-    height: 3,
+  progressFill: {
+    height: 2,
     backgroundColor: colors.brand },
-  thumbUploadedBadge: {
+  uploadedCheck: {
     position: 'absolute',
-    bottom: 4,
-    right: 4 },
-  thumbFailedOverlay: {
+    top: Space.sm,
+    left: Space.sm },
+  failedOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -1047,24 +753,8 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: colors.mediaOverlayScrim,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4 },
-  thumbRetryText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.scrimTextPrimary },
-  thumbRetryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.danger },
-  thumbRetryBtnText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: Typography.family.bold,
-    color: colors.textInverse },
-  thumbCancelledOverlay: {
+    gap: Space.xs },
+  cancelledOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -1073,59 +763,74 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2 },
-  thumbCancelledText: {
+    gap: Space.xs },
+  overlayStateText: {
     fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.scrimTextPrimary },
-  thumbRemoveBtn: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    backgroundColor: colors.danger,
+  /* ── thumbnails (inside SortablePhotoStrip) ── */
+  thumbContent: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: Stroke.standard,
+    borderColor: colors.border },
+  thumbContentFailed: {
+    borderColor: colors.danger,
+    borderWidth: Stroke.emphasis },
+  thumbImage: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: Radius.lg },
+  thumbVideoTile: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center' },
-  /* ── Set as cover button ──
-     Per audit 04 P0: explicit cover-photo semantics.
-     Compact pill at bottom-left — distinct from remove (top-right)
-     and number badge (top-left). Semi-transparent dark for legibility
-     over any image. */
-  thumbSetCoverBtn: {
-    position: 'absolute',
-    bottom: 4,
-    left: 4,
-    flexDirection: 'row',
+  /* Play glyph over a real poster frame — scrim circle is the sanctioned
+     circular exception (decorative; aria-hidden). */
+  thumbPlayBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: Radius.full,
+    backgroundColor: colors.overlay,
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-    backgroundColor: colors.mediaOverlayScrim },
-  thumbSetCoverText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.scrimTextPrimary,
-    letterSpacing: 0.3 },
-  /* ── studio actions ── */
+    justifyContent: 'center' },
+  thumbRemoveBtn: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: Control.hit,
+    height: Control.hit,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  /* ── quiet action row ── */
   studioActions: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
-    paddingVertical: 6,
     gap: Space.md },
   studioActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.xs,
-    minHeight: 44 },
+    gap: Space.sm,
+    minHeight: Control.hit,
+    paddingHorizontal: Space.xs },
   studioActionText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary },
+  studioActionCount: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    color: colors.textMuted },
   errorText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
@@ -1137,6 +842,6 @@ function createStyles(colors: ThemeColors, screenWidth: number, coverHeight: num
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
     paddingHorizontal: Space.md,
-    paddingTop: 6,
+    paddingTop: Space.xs,
     textAlign: 'center' } });
 }

@@ -1769,5 +1769,6 @@
       "ownershipPercent": "귀하의 지분",
       "distributions": "분배금"
     }
-  }
+  },
+  "stateCopy": {}
 }

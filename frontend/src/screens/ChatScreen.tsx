@@ -26,6 +26,8 @@ import { openProfile } from "../navigation/openProfile";
 import { openProductDetail } from "../platform/product/openProductDetail";
 
 import { useAppTheme } from "../theme/ThemeContext";
+import { useChatPreferences } from '../hooks/useChatPreferences';
+import { chatThemeBackground } from '../services/chatPreferencesApi';
 
 import { useFormattedPrice } from "../hooks/useFormattedPrice";
 
@@ -381,6 +383,8 @@ export default function ChatScreen({ navigation, route }: Props) {
       ) } }), [colors]);
 
   const { conversationId, itemId: routeItemId, offerPayload: routeOfferPayload } = route.params;
+  const chatPreferences = useChatPreferences(conversationId);
+  const chatBackground = chatThemeBackground(chatPreferences.query.data?.theme, isDark, colors.background);
 
   const currentUser = useStore((state) => state.currentUser);
 
@@ -1731,6 +1735,7 @@ export default function ChatScreen({ navigation, route }: Props) {
             />
           ) : messages.length ? (
             <FlashList
+              style={{ backgroundColor: chatBackground }}
               ref={listRef}
               data={messages}
               renderItem={renderMessageItem}

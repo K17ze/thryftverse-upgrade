@@ -42,7 +42,11 @@ type LedgerAccountCode =
   | 'revenue_fx';
 
 type CoOwnOrderStatus = 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
-type CoOwnOrderType = 'market' | 'limit';
+// Protected market orders are executable market instructions with a
+// caller-supplied worst-price guard. Preserve that type through persistence
+// and history responses so the client does not relabel a protected order as
+// an uncapped market order.
+type CoOwnOrderType = 'market' | 'limit' | 'protected_market';
 
 interface CoOwnHoldingRow {
   user_id: string;
@@ -1446,6 +1450,63 @@ app.get('/co-own/assets', async (request) => {
   };
 });
 
+// POST /co-own/assets/:assetId/issues — persist an authenticated user report.
+// Reports are private support records; this response intentionally returns
+// only the reporter-safe acknowledgement fields.
+app.post('/co-own/assets/:assetId/issues', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
+  const bodySchema = z.object({
+    category: z.enum(['dispute', 'technical', 'fraud', 'other']),
+    description: z.string().trim().min(10).max(4000),
+  });
+  const { assetId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body);
+
+  const assetResult = await db.query<{ id: string }>(
+    'SELECT id FROM coOwn_assets WHERE id = $1 LIMIT 1',
+    [assetId]
+  );
+  if (!assetResult.rows[0]) {
+    reply.code(404);
+    return { ok: false, error: 'Co-Own asset not found', code: 'COOWN_ASSET_NOT_FOUND' };
+  }
+
+  await ensureUserExists(actorUserId);
+  const issueId = createRuntimeId('coown_issue');
+  const createdAt = new Date().toISOString();
+  await db.query(
+    `
+      INSERT INTO coown_asset_issues (
+        id, asset_id, reporter_id, category, description, status, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, 'open', $6, $6)
+    `,
+    [issueId, assetId, actorUserId, payload.category, payload.description, createdAt]
+  );
+
+  await appendComplianceAuditSafe(request, {
+    eventType: 'coown.asset_issue.created',
+    actorUserId,
+    subjectUserId: actorUserId,
+    payload: {
+      issueId,
+      assetId,
+      category: payload.category,
+    },
+  });
+
+  reply.code(201);
+  return {
+    ok: true,
+    issue: {
+      id: issueId,
+      status: 'open' as const,
+      createdAt,
+    },
+  };
+});
+
 app.post('/co-own/assets', async (request, reply) => {
   const bodySchema = z.object({
     id: z.string().min(4).max(64).optional(),
@@ -1480,6 +1541,18 @@ app.post('/co-own/assets', async (request, reply) => {
   });
 
   const payload = bodySchema.parse(request.body);
+
+  // Issuers may submit an authentication method, but cannot self-attest a
+  // verified status. Verification is an evidence-review outcome owned by the
+  // platform and must be awarded through the review workflow.
+  if (payload.authenticityStatus === 'verified') {
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'Authenticity must be reviewed before it can be marked verified',
+      code: 'AUTHENTICITY_REVIEW_REQUIRED',
+    };
+  }
 
   // Truthfulness invariant: if custody is insured, the insurer must be named.
   if (payload.custodyInsured && !payload.custodyInsurer) {
@@ -2254,16 +2327,21 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
         remainingUnits: Math.max(0, remainingUnits),
         avgFillPrice,
         avgFillPriceStr: formatGbp(avgFillPrice),
+        avgFillPriceGbpStr: formatGbp(avgFillPrice),
         worstPrice,
         worstPriceStr: formatGbp(worstPrice),
+        worstPriceGbpStr: formatGbp(worstPrice),
         grossNotional,
         grossNotionalStr: formatGbp(grossNotional),
+        grossNotionalGbpStr: formatGbp(grossNotional),
         slippageBeyondDepth,
       },
       fee,
       feeStr: formatGbp(fee),
+      feeGbpStr: formatGbp(fee),
       total,
       totalStr: formatGbp(total),
+      totalGbpStr: formatGbp(total),
       feeRate: CO_OWN_TRADE_FEE_RATE,
       availableUnits: asset.available_units,
       totalUnits: asset.total_units,

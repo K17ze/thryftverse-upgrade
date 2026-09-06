@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, Keyboard, AppState, AppStateStatus } from 'react-native';
+import { View, Text, StyleSheet, Keyboard } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -27,11 +27,9 @@ import { parseApiError } from '../lib/apiClient';
 import {
   fetchCoOwnAssetById,
   fetchCoOwnHoldings,
-  fetchCoOwnOrderBook,
   fetchCoOwnEligibility,
   previewCoOwnOrder,
   reserveCoOwnOrder,
-  type CoOwnOrderBookSnapshot,
   type CoOwnEligibilityResult,
   type MarketCoOwnAsset } from '../services/marketApi';
 import { AppButton } from '../components/ui/AppButton';
@@ -68,6 +66,7 @@ import { useScreenCaptureProtection } from '../platform/screenCapture';
 import { useCoOwnFeatureFlags } from '../hooks/useCoOwnFeatureFlags';
 import { track } from '../analytics/track';
 import { t } from '../i18n';
+import { useCoOwnOrderBookStream } from '../hooks/useCoOwnOrderBookStream';
 
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -125,14 +124,17 @@ export default function TradeScreen() {
 
   const [asset, setAsset] = React.useState<MarketCoOwnAsset | null>(null);
   const [yourUnits, setYourUnits] = React.useState(0);
-  const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isError, setIsError] = React.useState(false);
-  const [isForegroundStale, setIsForegroundStale] = React.useState(false);
-  const [hasSequenceGap, setHasSequenceGap] = React.useState(false);
-  const lastSequenceRef = useRef<number | null>(null);
 
   const tradeAssetId = route.params?.assetId;
+  const {
+    orderBook,
+    isStreaming: orderBookStreaming,
+    hasGap: hasSequenceGap,
+    hasError: orderBookError,
+    refetch: refetchOrderBook,
+  } = useCoOwnOrderBookStream(tradeAssetId ?? null);
 
   React.useEffect(() => {
     if (!tradeAssetId) { setIsLoading(false); setIsError(true); return; }
@@ -142,13 +144,11 @@ export default function TradeScreen() {
 
     Promise.all([
       fetchCoOwnAssetById(tradeAssetId),
-      currentUser?.id ? fetchCoOwnHoldings(currentUser.id).catch(() => []) : Promise.resolve([]),
-      fetchCoOwnOrderBook(tradeAssetId, { limit: 40 }),
+      currentUser?.id ? fetchCoOwnHoldings(currentUser.id) : Promise.resolve([]),
     ])
-      .then(([fetchedAsset, holdings, fetchedOrderBook]) => {
+      .then(([fetchedAsset, holdings]) => {
         if (cancelled) return;
         setAsset(fetchedAsset);
-        setOrderBook(fetchedOrderBook);
         const holding = holdings.find((h) => h.assetId === tradeAssetId);
         setYourUnits(holding?.unitsOwned ?? 0);
       })
@@ -202,60 +202,6 @@ export default function TradeScreen() {
       if (refreshTimer) clearTimeout(refreshTimer);
     };
   }, [tradeAssetId]);
-
-  // Poll the order book every 10s so traders see fresh depth without
-  // manual refresh. Stops when the asset id changes or the screen unmounts.
-  React.useEffect(() => {
-    if (!tradeAssetId) return;
-    let cancelled = false;
-    const intervalId = setInterval(() => {
-      if (cancelled) return;
-      fetchCoOwnOrderBook(tradeAssetId, { limit: 40 })
-        .then((book) => { if (!cancelled) setOrderBook(book); })
-        .catch(() => undefined);
-    }, 10_000);
-    return () => { cancelled = true; clearInterval(intervalId); };
-  }, [tradeAssetId]);
-
-  // Foreground revalidation: when the app returns to active, mark the book
-  // stale until a fresh fetch completes, and trigger an immediate re-fetch.
-  React.useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
-      if (nextState === 'active') {
-        setIsForegroundStale(true);
-        if (tradeAssetId) {
-          fetchCoOwnOrderBook(tradeAssetId, { limit: 40 })
-            .then((book) => setOrderBook(book))
-            .catch(() => undefined);
-        }
-      }
-    });
-    return () => subscription?.remove();
-  }, [tradeAssetId]);
-
-  // Clear foreground staleness once a fresh book arrives.
-  React.useEffect(() => {
-    if (orderBook?.serverTimestamp && isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)) {
-      setIsForegroundStale(false);
-    }
-  }, [orderBook?.serverTimestamp, orderBook?.stalenessThresholdSeconds]);
-
-  // Sequence gap detection: snapshots should advance contiguously. A gap or
-  // regression indicates data loss and forces revalidation.
-  React.useEffect(() => {
-    if (orderBook?.snapshotSequence != null) {
-      const seq = orderBook.snapshotSequence;
-      if (lastSequenceRef.current != null) {
-        if (seq > lastSequenceRef.current + 1) {
-          setHasSequenceGap(true);
-        } else if (seq <= lastSequenceRef.current) {
-          return;
-        }
-      }
-      lastSequenceRef.current = seq;
-      setHasSequenceGap(false);
-    }
-  }, [orderBook?.snapshotSequence]);
 
   const marketPrice = asset ? asset.unitPriceGbp : 0;
   // P0.1: protected_instant is now a distinct order type — NOT mapped to 'market'.
@@ -353,8 +299,8 @@ export default function TradeScreen() {
   const marketIsAuthoritative = orderBook?.source === 'live'
     && orderBook.reconciliationState === 'reconciled'
     && isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)
-    && !isForegroundStale
-    && !hasSequenceGap;
+    && !hasSequenceGap
+    && !orderBookError;
   const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote })
     && !hasIncompleteRights
     && marketIsAuthoritative
@@ -367,13 +313,13 @@ export default function TradeScreen() {
       return `Maximum ${featureFlags.maxOrderSize} units per order`;
     }
     if (isOffline) return t('trade.error.reconnectToReview');
-    if (isForegroundStale) return 'Reconnecting to live market…';
+    if (orderBookError) return 'Live market unavailable — refreshing…';
     if (hasSequenceGap) return 'Market data interrupted — refreshing…';
     if (orderBook?.source !== 'live') return t('trade.error.liveDataUnavailable');
     if (orderBook.reconciliationState !== 'reconciled') return t('trade.error.reconciliationInProgress');
     if (!isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)) return t('trade.error.timestampUnavailable');
     return null;
-  }, [asset, eligibility, hasIncompleteRights, isOffline, orderBook, quote, isForegroundStale, hasSequenceGap, featureFlags.canPlaceOrders, featureFlags.maxOrderSize]);
+  }, [asset, eligibility, hasIncompleteRights, isOffline, orderBook, quote, orderBookError, hasSequenceGap, featureFlags.canPlaceOrders, featureFlags.maxOrderSize]);
 
   // Thin market: no opposite side → substitute "Review order" with "Request quote"
   const isThinMarket = (side === 'buy' && visibleBook.asks.length === 0)
@@ -480,7 +426,8 @@ export default function TradeScreen() {
   }, [navigation, tradeAssetId]);
 
   // ── Loading state ──
-  if (isLoading) {
+  const isMarketLoading = Boolean(tradeAssetId && !orderBook && !orderBookError);
+  if (isLoading || isMarketLoading) {
     return (
       <FlagshipScreen
         scrollEnabled={false}
@@ -641,13 +588,25 @@ export default function TradeScreen() {
           />
           <Text style={[styles.illustrativeBannerText, { color: colors.textSecondary }]} numberOfLines={3} maxFontSizeMultiplier={2}>
             {marketIsAuthoritative
-              ? `Live · updated ${bookAgeSeconds}s ago`
-              : isForegroundStale
-                ? 'Updating market…'
-                : hasSequenceGap
-                  ? 'Market data interrupted — refreshing…'
-                  : 'Trading paused. Displayed depth is not an executable quote.'}
+              ? `${orderBookStreaming ? 'Live depth' : 'Live snapshot'} · updated ${bookAgeSeconds}s ago`
+              : orderBookError
+                ? 'Live market unavailable — refreshing…'
+                  : hasSequenceGap
+                    ? 'Market data interrupted — refreshing…'
+                    : 'Trading paused. Displayed depth is not an executable quote.'}
           </Text>
+          {orderBookError ? (
+            <AnimatedPressable
+              onPress={() => { void refetchOrderBook(); }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Retry live market data"
+              style={styles.marketRetry}
+              activeOpacity={0.65}
+            >
+              <Text style={[styles.marketRetryText, { color: colors.textPrimary }]}>Retry</Text>
+            </AnimatedPressable>
+          ) : null}
         </View>
 
         {/* Trade composer — product identity, availability, quote, reservation, expandable details */}
@@ -686,7 +645,7 @@ export default function TradeScreen() {
             postTradePreview={postTradePreview}
             rightsVersion={asset.rights?.version ? `v${asset.rights.version}` : undefined}
             // P0.3: Pass the book source so the composer shows truth language
-            bookSource={orderBook?.source ?? 'development-fallback'}
+            bookSource={orderBookError ? 'development-fallback' : (orderBook?.source ?? 'development-fallback')}
           />
         </View>
 
@@ -974,6 +933,15 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing },
+  marketRetry: {
+    minHeight: 32,
+    justifyContent: 'center',
+    paddingHorizontal: Space.xs },
+  marketRetryText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
     letterSpacing: TypographyV2.meta.letterSpacing },
   // ── Unified order ticket — the one dominant panel ──
   // Per AGENTS.md §4: one dominant non-media panel above the fold.

@@ -8,7 +8,6 @@ import {
   Pressable,
   Share,
   Linking,
-  Switch,
   TextInput,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -49,6 +48,8 @@ import { useChatGroupMembershipEvent } from '../services/realtimeClient';
 import { GroupMediaSourceSheet, type GroupMediaSource } from '../components/chat/GroupMediaSourceSheet';
 import { useGroupMediaUpload } from '../hooks/useGroupMediaUpload';
 import { getAestheticPresets } from '../constants/groupAesthetics';
+import { useChatPreferences } from '../hooks/useChatPreferences';
+import { CHAT_THEMES, chatThemeBackground, type ChatTheme } from '../services/chatPreferencesApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GroupChatInfo'>;
 
@@ -69,7 +70,7 @@ function formatCreationDate(iso?: string | null): string {
 
 export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const { conversationId } = route.params ?? {};
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
@@ -81,6 +82,13 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const upsertConversation = useStore((state) => state.upsertConversation);
   const mutedIds = useStore((state) => state.mutedConversationIds);
   const toggleMuted = useStore((state) => state.toggleMutedConversation);
+  const togglePinned = useStore((state) => state.toggleConversationPinned);
+  const preferences = useChatPreferences(conversationId);
+  const [themeSaveError, setThemeSaveError] = useState<string | null>(null);
+  const [isTogglingPin, setIsTogglingPin] = useState(false);
+  const mutePending = useRef(false);
+  const pinPending = useRef(false);
+  const themePending = useRef(false);
 
   // Core Actions state
   const [isLeaving, setIsLeaving] = useState(false);
@@ -93,17 +101,12 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const displayedInviteSummary = inviteLink ?? activeInviteSummary;
   const reconcileGroupMembershipEvent = useStore((state) => state.reconcileGroupMembershipEvent);
 
-  // Local-only feature state (not synced to server)
-  const [isChatLocked, setIsChatLocked] = useState(false);
-  const [disappearingDuration, setDisappearingDuration] = useState<'off' | '24h' | '7d' | '90d'>('off');
-  const [isDisappearingSheetVisible, setIsDisappearingSheetVisible] = useState(false);
   const [isEncryptionSheetVisible, setIsEncryptionSheetVisible] = useState(false);
   const [isThemeSheetVisible, setIsThemeSheetVisible] = useState(false);
-  const [selectedTheme, setSelectedTheme] = useState('Default');
+  const [selectedTheme, setSelectedTheme] = useState<string>('Default');
   const [isMemberSearchOpen, setIsMemberSearchOpen] = useState(false);
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [isMemberSearchFocused, setIsMemberSearchFocused] = useState(false);
-  const [isFavourited, setIsFavourited] = useState(false);
   const [isMemberChangesSheetVisible, setIsMemberChangesSheetVisible] = useState(false);
   const [selectedMember, setSelectedMember] = useState<{
     id: string;
@@ -484,6 +487,8 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   };
 
   const toggleMute = async () => {
+    if (mutePending.current) return;
+    mutePending.current = true;
     haptic.light();
     setIsTogglingMute(true);
     try {
@@ -492,7 +497,38 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
     } catch (err) {
       show(parseApiError(err, 'Could not update mute status. Try again.').message, 'error');
     } finally {
+      mutePending.current = false;
       setIsTogglingMute(false);
+    }
+  };
+
+  const togglePin = async () => {
+    if (pinPending.current) return;
+    pinPending.current = true;
+    setIsTogglingPin(true);
+    try {
+      await togglePinned(conversationId);
+      show(conversation.isPinned ? 'Group unpinned' : 'Group pinned to your inbox', 'success');
+    } catch (error) {
+      show(parseApiError(error, 'Could not confirm pin status. Check your inbox and retry.').message, 'error');
+    } finally {
+      pinPending.current = false;
+      setIsTogglingPin(false);
+    }
+  };
+
+  const selectTheme = async (theme: ChatTheme) => {
+    if (themePending.current) return;
+    themePending.current = true;
+    setThemeSaveError(null);
+    try {
+      await preferences.mutation.mutateAsync(theme);
+      setIsThemeSheetVisible(false);
+      show('Chat theme saved', 'success');
+    } catch {
+      setThemeSaveError('Could not confirm the change. Check the saved theme or select it again to retry.');
+    } finally {
+      themePending.current = false;
     }
   };
 
@@ -577,15 +613,6 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
   const displayedMembers = isMemberSearchOpen
     ? filteredMembers
     : filteredMembers.slice(0, 5);
-
-  const disappearingLabel =
-    disappearingDuration === 'off'
-      ? 'Off'
-      : disappearingDuration === '24h'
-      ? '24 hours'
-      : disappearingDuration === '7d'
-      ? '7 days'
-      : '90 days';
 
   const roleLabel = (role?: 'owner' | 'admin' | 'member'): string | null => {
     if (role === 'owner') return 'Owner';
@@ -706,20 +733,6 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
                 </AnimatedPressable>
               )}
             </View>
-            {canEditGroupInfo && (
-              <AnimatedPressable
-                style={styles.addCoverPill}
-                onPress={() => setMediaSheet({ visible: true, target: 'cover' })}
-                activeOpacity={0.7}
-                scaleValue={0.97}
-                hapticFeedback="light"
-                accessibilityRole="button"
-                accessibilityLabel="Add cover banner"
-              >
-                <Ionicons name="image-outline" size={14} color={colors.brand} />
-                <Text style={styles.addCoverPillText}>Add cover banner</Text>
-              </AnimatedPressable>
-            )}
           </View>
         )}
 
@@ -766,20 +779,20 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 
         {/* ── 2. Quick Action Dock ── */}
         <View style={styles.quickActionDock}>
-          {/* Call */}
+          {/* Theme */}
           <AnimatedPressable
             style={styles.quickActionButton}
-            onPress={() => show('Voice & video calls are not yet available on ThryftVerse.', 'info')}
+            onPress={() => setIsThemeSheetVisible(true)}
             activeOpacity={0.7}
             scaleValue={0.95}
             hapticFeedback="light"
             accessibilityRole="button"
-            accessibilityLabel="Call group"
+            accessibilityLabel="Customize chat theme"
           >
             <View style={styles.quickActionIconWrap}>
-              <Ionicons name="call-outline" size={20} color={colors.textMuted} />
+              <Ionicons name="color-palette-outline" size={20} color={colors.textPrimary} />
             </View>
-            <Text style={[styles.quickActionLabel, { color: colors.textMuted }]}>Call</Text>
+            <Text style={styles.quickActionLabel}>Theme</Text>
           </AnimatedPressable>
 
           {/* Search In Chat */}
@@ -834,6 +847,8 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <AnimatedPressable
             style={[styles.quickActionButton, isMuted && styles.quickActionButtonActive]}
             onPress={toggleMute}
+            disabled={isTogglingMute}
+            accessibilityState={{ disabled: isTogglingMute, busy: isTogglingMute, selected: isMuted }}
             activeOpacity={0.7}
             scaleValue={0.95}
             hapticFeedback="light"
@@ -932,13 +947,6 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
                 </ScrollView>
               </View>
             ) : null}
-
-            <GroupedRow
-              icon="star-outline"
-              label="Starred messages"
-              onPress={() => show('Starred messages are not yet available.', 'info')}
-              isLast
-            />
           </View>
         </View>
 
@@ -948,21 +956,17 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
           <View style={styles.groupedCard}>
             <GroupedRow
               icon="color-palette-outline"
-              label="Chat theme (this device only)"
-              detail={selectedTheme}
+              label="Chat theme"
+              detail={preferences.query.isFetching ? 'Loading…' : preferences.query.isError ? 'Check saved theme' : preferences.query.data?.theme}
               onPress={() => setIsThemeSheetVisible(true)}
-            />
-            <GroupedRow
-              icon="download-outline"
-              label="Save to Photos"
-              detail="Not available"
-              onPress={() => show('Media auto-saving is not yet available.', 'info')}
             />
             <GroupedRow
               icon="notifications-outline"
               label="Notifications"
               detail={isMuted ? 'Muted' : 'All'}
               onPress={toggleMute}
+              disabled={isTogglingMute}
+              busy={isTogglingMute}
               isLast
             />
           </View>
@@ -970,45 +974,13 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
 
         {/* ── 5. Grouped Card: Privacy & Security ── */}
         <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeaderLabel}>Privacy & Transparency</Text>
           <View style={styles.groupedCard}>
             <GroupedRow
-              icon="timer-outline"
-              label="Disappearing messages (this device only)"
-              detail={disappearingLabel}
-              onPress={() => setIsDisappearingSheetVisible(true)}
-            />
-            <View style={styles.groupedRowContainer}>
-              <View style={styles.rowIconWrap}>
-                <Ionicons name="lock-closed-outline" size={20} color={colors.textPrimary} />
-              </View>
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Lock chat (this device only)</Text>
-                <Text style={styles.rowSubtitle}>Hides this chat on this device. Not synced or server-backed.</Text>
-              </View>
-              <Switch
-                value={isChatLocked}
-                onValueChange={(val) => {
-                  haptic.light();
-                  setIsChatLocked(val);
-                  show(val ? 'Chat hidden on this device' : 'Chat visible on this device', 'info');
-                }}
-                trackColor={{ false: colors.borderSubtle, true: colors.brand }}
-                thumbColor={colors.surface}
-                accessibilityLabel="Lock chat"
-              />
-            </View>
-            <View style={styles.rowDivider} />
-            <GroupedRow
               icon="shield-checkmark-outline"
-              label="Message privacy"
-              subtitle="Messages are stored securely on ThryftVerse servers. Learn more"
+              label="Message storage & security"
+              subtitle="Transmitted securely over encrypted channels"
               onPress={() => setIsEncryptionSheetVisible(true)}
-            />
-            <GroupedRow
-              icon="shield-outline"
-              label="Advanced chat privacy"
-              detail="Not available"
-              onPress={() => show('Advanced chat privacy is not yet available on ThryftVerse.', 'info')}
               isLast
             />
           </View>
@@ -1261,15 +1233,13 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         <View style={styles.sectionContainer}>
           <View style={styles.groupedCard}>
             <GroupedRow
-              icon={isFavourited ? 'heart' : 'heart-outline'}
-              iconColor={isFavourited ? colors.danger : colors.brand}
-              label={isFavourited ? 'Remove from Favourites (this device)' : 'Add to Favourites (this device)'}
+              icon={conversation.isPinned ? 'pin' : 'pin-outline'}
+              iconColor={colors.brand}
+              label={conversation.isPinned ? 'Unpin from inbox' : 'Pin to inbox'}
               labelColor={colors.brand}
-              onPress={() => {
-                haptic.selection();
-                setIsFavourited((prev) => !prev);
-                show(isFavourited ? 'Removed from Favourites on this device' : 'Added to Favourites on this device', 'success');
-              }}
+              onPress={togglePin}
+              disabled={isTogglingPin}
+              busy={isTogglingPin}
             />
             <GroupedRow
               icon="trash-outline"
@@ -1334,43 +1304,6 @@ export default function GroupChatInfoScreen({ navigation, route }: Props) {
         canRemove={Boolean(mediaSheet.target === 'avatar' ? displayAvatar : displayCoverPhoto)}
         onRemove={handleRemoveMedia}
       />
-
-      {/* ── Disappearing Messages Sheet ── */}
-      <BottomSheet
-        visible={isDisappearingSheetVisible}
-        onDismiss={() => setIsDisappearingSheetVisible(false)}
-        variant="system"
-      >
-        <View style={styles.sheetContent}>
-          <Text style={styles.sheetTitle}>Disappearing Messages</Text>
-          <Text style={styles.sheetSubtitle}>
-            This setting is stored on this device only. It does not delete messages on other participants' devices or on the server.
-          </Text>
-          {(['off', '24h', '7d', '90d'] as const).map((mode) => {
-            const isSelected = disappearingDuration === mode;
-            const label = mode === 'off' ? 'Off' : mode === '24h' ? '24 hours' : mode === '7d' ? '7 days' : '90 days';
-            return (
-              <Pressable
-                key={mode}
-                onPress={() => {
-                  haptic.selection();
-                  setDisappearingDuration(mode);
-                  setIsDisappearingSheetVisible(false);
-                  show(`Disappearing messages set to ${label}`, 'info');
-                }}
-                style={styles.sheetOptionRow}
-                accessibilityRole="button"
-                accessibilityLabel={`Disappearing messages ${label}`}
-              >
-                <Text style={[styles.sheetOptionLabel, isSelected && { color: colors.brand, fontFamily: FontFamily.bold }]}>
-                  {label}
-                </Text>
-                {isSelected && <Ionicons name="checkmark" size={20} color={colors.brand} />}
-              </Pressable>
-            );
-          })}
-        </View>
-      </BottomSheet>
 
       {/* ── Message Privacy Transparency Sheet ── */}
       <BottomSheet
@@ -1625,6 +1558,8 @@ function GroupedRow({
   isLast = false,
   onPress,
   trailing,
+  disabled = false,
+  busy = false,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   iconColor?: string;
@@ -1636,6 +1571,8 @@ function GroupedRow({
   isLast?: boolean;
   onPress?: () => void;
   trailing?: React.ReactNode;
+  disabled?: boolean;
+  busy?: boolean;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createRowStyles(colors), [colors]);
@@ -1666,7 +1603,7 @@ function GroupedRow({
 
   return (
     <>
-      {onPress ? (
+      {onPress && !disabled ? (
         <AnimatedPressable
           onPress={onPress}
           activeOpacity={0.68}
@@ -1674,11 +1611,14 @@ function GroupedRow({
           hapticFeedback="light"
           accessibilityRole="button"
           accessibilityLabel={label}
+          disabled={busy}
         >
           {content}
         </AnimatedPressable>
       ) : (
-        content
+        <View style={disabled && { opacity: 0.55 }}>
+          {content}
+        </View>
       )}
       {!isLast && <View style={styles.divider} />}
     </>
@@ -1845,22 +1785,6 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.medium,
       fontSize: TypographyV2.meta.size,
     },
-    addCoverPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.xs + 2,
-      borderRadius: Radius.full,
-      backgroundColor: colors.brandSubtle,
-      marginTop: Space.sm,
-    },
-    addCoverPillText: {
-      color: colors.brand,
-      fontFamily: FontFamily.semibold,
-      fontSize: TypographyV2.meta.size,
-    },
-
     // ── Quick Action Dock ──
     quickActionDock: {
       flexDirection: 'row',

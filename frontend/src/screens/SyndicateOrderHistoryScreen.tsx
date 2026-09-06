@@ -38,10 +38,11 @@ type DateFilter = 'all' | '24h' | '7d' | '30d';
 
 interface HistoryEntry {
   id: string;
+  orderId: number | null;
   assetId: string;
   assetTitle: string;
   side: 'buy' | 'sell';
-  type: 'market' | 'limit';
+  type: 'market' | 'limit' | 'protected';
   quantity: number;
   pricePerShare: number;
   totalAmount: number;
@@ -98,10 +99,15 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
           : 'open';
       return {
         id: item.id,
+        orderId: item.orderId ?? null,
         assetId: item.referenceId,
         assetTitle: item.note ?? 'Co-Own asset',
         side: item.action === 'buy-units' ? 'buy' : 'sell',
-        type: item.orderType === 'limit' ? 'limit' : 'market',
+        type: item.orderType === 'limit'
+          ? 'limit'
+          : item.orderType === 'protected_market'
+            ? 'protected'
+            : 'market',
         quantity,
         pricePerShare,
         totalAmount: item.amountGbp,
@@ -127,6 +133,7 @@ export default function CoOwnOrderHistoryScreen() {
   const [isPeriodPickerVisible, setIsPeriodPickerVisible] = React.useState(false);
   const [remoteEntries, setRemoteEntries] = React.useState<HistoryEntry[]>([]);
   const [isSyncingRemote, setIsSyncingRemote] = React.useState(false);
+  const [hasRemoteError, setHasRemoteError] = React.useState(false);
   const [isRemoteAvailable, setIsRemoteAvailable] = React.useState(false);
   const [hasMoreRemote, setHasMoreRemote] = React.useState(false);
   const [nextCursor, setNextCursor] = React.useState<MarketHistoryCursor | null>(null);
@@ -146,6 +153,7 @@ export default function CoOwnOrderHistoryScreen() {
   const syncRemoteHistory = React.useCallback(async () => {
     if (!viewerId) {
       setIsSyncingRemote(false);
+      setHasRemoteError(false);
       return;
     }
     setIsSyncingRemote(true);
@@ -153,9 +161,11 @@ export default function CoOwnOrderHistoryScreen() {
       const page = await listUserMarketHistory(viewerId, { channel: 'co-own', limit: PAGE_SIZE });
       setRemoteEntries(mapRemoteHistoryToEntries(page.items));
       setIsRemoteAvailable(true);
+      setHasRemoteError(false);
       setHasMoreRemote(page.pageInfo.hasMore);
       setNextCursor(page.pageInfo.nextCursor ?? null);
     } catch {
+      setHasRemoteError(true);
       setIsRemoteAvailable(false);
       setRemoteEntries([]);
       setHasMoreRemote(false);
@@ -195,7 +205,7 @@ export default function CoOwnOrderHistoryScreen() {
 
   const requestCancelOrder = React.useCallback((item: HistoryEntry) => {
     if (!viewerId || item.source !== 'backend') return;
-    const orderId = Number(item.id.replace(/^coOwn_order_/, ''));
+    const orderId = item.orderId ?? Number(item.id.replace(/^coOwn_order_/, ''));
     if (!Number.isInteger(orderId) || orderId <= 0) return;
     setConfirmSheet({
       visible: true,
@@ -358,6 +368,15 @@ export default function CoOwnOrderHistoryScreen() {
                 </View>
               ))}
             </View>
+          ) : hasRemoteError ? (
+            <CoOwnStateCanvas
+              variant="error"
+              title="Activity unavailable"
+              subtitle="We could not verify your order history. Try again when your connection is stable."
+              actionLabel="Retry"
+              onAction={() => { void syncRemoteHistory(); }}
+              emptyGraphicVariant="box"
+            />
           ) : (
             <CoOwnStateCanvas
               variant="empty"

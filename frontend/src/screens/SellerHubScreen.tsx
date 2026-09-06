@@ -14,7 +14,6 @@ import { AppIcon } from '../components/common/AppIcon';
 import { IconSize } from '../theme/iconTokens';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { useStore } from '../store/useStore';
-import { useBackendData } from '../context/BackendDataContext';
 import {
   listUserOrders,
   fetchDailyBreakdown,
@@ -24,21 +23,19 @@ import {
 import { fetchUserListingsFromApi, type ListingApiItem } from '../services/listingsApi';
 import { fetchSellerHubOverview, type SellerHubOverview, type SellerHubTask } from '../services/sellerHubApi';
 import { fetchImportBatches, type BatchSummaryDTO } from '../services/catalogImportApi';
-import { haptics } from '../utils/haptics';
 import { track } from '../analytics';
 
-// Domain modules, one per pillar.
-import { SellerPillarTiles } from '../components/seller/SellerPillarTiles';
+// Domain modules: money panel (dominant object) + operational radar + rails.
+// No pillar-tile row: quick navigation lives at its destination (Wallet hero,
+// Orders "View all", Analytics module, Closet tab) — one panel above the fold.
 import { SellerExecutiveHero } from '../components/seller/SellerExecutiveHero';
 import { SellerOrdersModule } from '../components/seller/SellerOrdersModule';
 import { SellerAnalyticsModule, type SellerSparklinePoint } from '../components/seller/SellerAnalyticsModule';
-import { SellerClosetModule } from '../components/seller/SellerClosetModule';
 import { SellerListingsModule } from '../components/seller/SellerListingsModule';
 import {
   formatGbp,
   toOrderPreviews,
   splitTasks,
-  toSavedRailItems,
   toOwnListingRailItems,
 } from '../components/seller/hubViewModels';
 
@@ -50,10 +47,6 @@ export default function SellerHubScreen() {
   const navigation = useNavigation<NavT>();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((s) => s.currentUser);
-  const savedProducts = useStore((s) => s.savedProducts);
-  const wishlist = useStore((s) => s.wishlist);
-  const savedItemsCount = (savedProducts?.length ?? 0) + (wishlist?.length ?? 0);
-  const { listings } = useBackendData();
 
   const [overview, setOverview] = useState<SellerHubOverview | null>(null);
   const [importBatches, setImportBatches] = useState<BatchSummaryDTO[]>([]);
@@ -135,27 +128,25 @@ export default function SellerHubScreen() {
         // nothing truthful to open. Pull-to-refresh recovers the batch list.
         return;
       }
-      haptics.tap();
       navigation.navigate(typedRoute, { batchId: activeBatch.id });
       return;
     }
-    haptics.tap();
     (navigation.navigate as (screen: RootStackRouteName) => void)(typedRoute);
   };
 
-  const handleOpenWallet = () => { haptics.tap(); navigation.navigate('Wallet'); };
-  const handleViewAllOrders = () => { haptics.tap(); navigation.navigate('MyOrders'); };
+  // S0 haptic grammar: pure navigation pushes are silent — the pushed screen
+  // is the confirmation. Haptics live on the pressables that need them
+  // (Transfer light, List-new-piece medium), not in these handlers.
+  const handleOpenWallet = () => { navigation.navigate('Wallet'); };
+  const handleViewAllOrders = () => { navigation.navigate('MyOrders'); };
   const handleOpenOrder = useCallback((orderId: string) => {
-    haptics.tap();
     navigation.navigate('OrderDetail', { orderId });
   }, [navigation]);
   const handleOpenItem = useCallback((itemId: string) => {
-    haptics.tap();
     navigation.navigate('ItemDetail', { itemId });
   }, [navigation]);
-  const handleNavigateToListings = () => { haptics.tap(); navigation.navigate('MyListings'); };
-  const handleNavigateToCloset = () => { haptics.tap(); navigation.navigate('Closet'); };
-  const handleNavigateToAnalytics = () => { haptics.tap(); navigation.navigate('SellerAnalytics'); };
+  const handleNavigateToListings = () => { navigation.navigate('MyListings'); };
+  const handleNavigateToAnalytics = () => { navigation.navigate('SellerAnalytics'); };
 
   if (isLoading) {
     return (
@@ -206,9 +197,8 @@ export default function SellerHubScreen() {
   );
 
   const orderPreviews = sellingOrders ? toOrderPreviews(sellingOrders) : [];
-  const { tasks: pillarTasks, topTask: pillarTopTask } = splitTasks(overview, orderPreviews.length > 0);
+  const { tasks: radarTasks, topTask: radarTopTask } = splitTasks(overview, orderPreviews.length > 0);
 
-  const savedRailItems = toSavedRailItems(savedProducts ?? [], wishlist ?? [], listings, formatGbp);
   const listingRailItems = ownListings ? toOwnListingRailItems(ownListings, formatGbp) : [];
 
   const sparkline: SellerSparklinePoint[] | null =
@@ -238,27 +228,19 @@ export default function SellerHubScreen() {
           </View>
         )}
 
-        {/* Quick-access pillar tiles — Wallet / Orders / Analytics / Closet. */}
-        <SellerPillarTiles
-          pendingOrdersCount={pendingOrdersCount}
-          onOpenWallet={handleOpenWallet}
-          onOpenOrders={handleViewAllOrders}
-          onOpenAnalytics={handleNavigateToAnalytics}
-          onOpenCloset={handleNavigateToCloset}
-        />
-
-        {/* Pillar 1 - Wallet: liquidity posture. */}
+        {/* Money panel — the one dominant object above the fold. Wallet entry
+            lives here (Transfer) so no tile row is needed. */}
         <SellerExecutiveHero
           money={money}
           formatMoney={formatGbp}
           onOpenWallet={handleOpenWallet}
         />
 
-        {/* Pillar 2 - Orders: media rail + task queue. */}
+        {/* Operational radar — dispatch queue + SLA to-dos, flat rows. */}
         <SellerOrdersModule
           orders={orderPreviews}
-          tasks={pillarTasks}
-          topTask={pillarTopTask}
+          tasks={radarTasks}
+          topTask={radarTopTask}
           pendingOrdersCount={pendingOrdersCount}
           orders30dCount={businessPulse?.orders ?? 0}
           tasksStale={tasksStale}
@@ -268,7 +250,7 @@ export default function SellerHubScreen() {
           onViewAllOrders={handleViewAllOrders}
         />
 
-        {/* Pillar 3 - Analytics: net sales, trend, sparkline. */}
+        {/* Performance pulse: net sales, trend, sparkline. */}
         <SellerAnalyticsModule
           netSalesGbp={businessPulse?.netSalesGbp ?? null}
           trendPct={businessPulse?.netSalesPrevPeriodPct ?? null}
@@ -280,15 +262,8 @@ export default function SellerHubScreen() {
           onPress={handleNavigateToAnalytics}
         />
 
-        {/* Pillar 4 - Closet: saved pieces rail. */}
-        <SellerClosetModule
-          savedCount={savedItemsCount}
-          items={savedRailItems}
-          onViewAll={handleNavigateToCloset}
-          onItemPress={handleOpenItem}
-        />
-
-        {/* Catalog: the seller's live listings rail. */}
+        {/* Catalog: the seller's live listings rail. Saved pieces live on the
+            Closet tab — buyer curation does not belong on this surface. */}
         <SellerListingsModule
           activeCount={inventory.active}
           listedValueLabel={inventory.listedValueGbp > 0 ? `${formatGbp(inventory.listedValueGbp)} listed` : null}

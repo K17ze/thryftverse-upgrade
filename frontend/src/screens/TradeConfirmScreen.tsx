@@ -171,19 +171,34 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         await releaseReservation();
         return;
       }
-      if (remoteOrder.order.status === 'open' || remoteOrder.order.status === 'partially_filled') {
+      if (remoteOrder.order.status === 'open') {
         show('Offer placed on the server order book.', 'info');
+      } else if (remoteOrder.order.status === 'partially_filled') {
+        show('Order partially filled. Remaining units are on the order book.', 'info');
       } else {
         show('Order executed on CO-OWN engine.', 'success');
       }
       if (remoteOrder.aml?.alertId) show('Trade is flagged for AML review.', 'info');
-      track('coown_order_filled', {
-        asset_id: assetId,
-        order_id: String(remoteOrder.order.id),
-        units: quantity,
-        price_gbp: remoteOrder.order.unitPriceGbp,
-      });
-      navigation.navigate('CoOwnHub');
+      // Keep telemetry aligned with the server outcome. An open or partially
+      // filled order is a placement, not an execution.
+      if (remoteOrder.order.status === 'filled') {
+        track('coown_order_filled', {
+          asset_id: assetId,
+          order_id: String(remoteOrder.order.id),
+          units: quantity,
+          price_gbp: remoteOrder.order.unitPriceGbp,
+        });
+      } else {
+        track('coown_order_placed', {
+          asset_id: assetId,
+          side,
+          units: quantity,
+          price_gbp: remoteOrder.order.unitPriceGbp,
+        });
+      }
+      // The order ledger is the source of truth for open, partial and filled
+      // states. Land there so the user can see the server-confirmed outcome.
+      navigation.navigate('CoOwnOrderHistory');
     } catch (error) {
       const parsedError = parseApiError(error, 'Unable to submit order');
       if (!parsedError.isNetworkError) {
@@ -201,14 +216,24 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             idempotencyKeyRef.current!,
           );
           if (lookup.status === 'acknowledged') {
-            // The order was actually placed — navigate to the hub.
-            show('Order placed.', 'success');
-            navigation.navigate('CoOwnHub');
+            // The idempotency lookup returned the server's actual order
+            // status. Mirror that status instead of treating acknowledgement
+            // as execution.
+            if (lookup.order.status === 'rejected') {
+              show('Order rejected by matching engine.', 'error');
+            } else if (lookup.order.status === 'partially_filled') {
+              show('Order partially filled. Remaining units are on the order book.', 'info');
+            } else if (lookup.order.status === 'filled') {
+              show('Order executed on CO-OWN engine.', 'success');
+            } else {
+              show('Offer placed on the server order book.', 'info');
+            }
+            navigation.navigate('CoOwnOrderHistory');
             return;
           }
           if (lookup.status === 'processing') {
-            show('Result not confirmed. Check order before trying again.', 'info');
-            navigation.navigate('CoOwnHub');
+            show('Result not confirmed. Check order history before trying again.', 'info');
+            navigation.navigate('CoOwnOrderHistory');
             return;
           }
           // safe_to_retry — no record found, keep the key for safe retry

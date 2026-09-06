@@ -216,7 +216,9 @@ export default function CreateCoOwnScreen() {
         custodyInsured: custodyInsured || undefined,
         custodyInsurer: custodyInsured ? custodyInsurer.trim() || undefined : undefined,
         authenticityMethod: authenticityMethod.trim() || undefined,
-        authenticityStatus: authenticityMethod.trim() ? 'verified' : 'unverified',
+        // Entered methodology is evidence metadata only. Verification must be
+        // awarded by the server-side review flow, never asserted by the issuer.
+        authenticityStatus: authenticityMethod.trim() ? 'pending' : 'unverified',
       });
       // Store the created asset ID for the recourse signing step
       const assetId = result.assetId;

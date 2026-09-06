@@ -1769,5 +1769,6 @@
       "ownershipPercent": "Ваша доля",
       "distributions": "Распределения"
     }
-  }
+  },
+  "stateCopy": {}
 }

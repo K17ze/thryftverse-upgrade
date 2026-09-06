@@ -29,13 +29,16 @@ describe('Seller Hub and Analytics Upgrade Verification', () => {
     const lines = content.split('\n').length;
     expect(lines).toBeLessThan(400);
 
-    // Verifies modular domain component imports — the 4-pillar module composition
-    expect(content).toContain('SellerPillarTiles');
+    // Loop 1 surface contract (.devin/surfaces/seller-hub.md): one dominant
+    // money panel + operational radar. The pillar-tile row and the
+    // buyer-domain closet rail are purged from the Hub — Wallet entry lives
+    // on the money panel, Closet lives on its tab.
     expect(content).toContain('SellerExecutiveHero');
     expect(content).toContain('SellerOrdersModule');
     expect(content).toContain('SellerAnalyticsModule');
-    expect(content).toContain('SellerClosetModule');
     expect(content).toContain('SellerListingsModule');
+    expect(content).not.toContain('SellerPillarTiles');
+    expect(content).not.toContain('SellerClosetModule');
 
     // Bloat rails are purged from the hub composition
     expect(content).not.toContain('SellerFulfillmentRadar');
@@ -47,20 +50,11 @@ describe('Seller Hub and Analytics Upgrade Verification', () => {
 
   it('verifies all seller domain components exist with human engineering depth', () => {
     const sellerDir = path.resolve(__dirname, '../components/seller');
-    const tilesFile = fs.readFileSync(path.join(sellerDir, 'SellerPillarTiles.tsx'), 'utf8');
     const heroFile = fs.readFileSync(path.join(sellerDir, 'SellerExecutiveHero.tsx'), 'utf8');
     const ordersFile = fs.readFileSync(path.join(sellerDir, 'SellerOrdersModule.tsx'), 'utf8');
     const analyticsFile = fs.readFileSync(path.join(sellerDir, 'SellerAnalyticsModule.tsx'), 'utf8');
-    const closetFile = fs.readFileSync(path.join(sellerDir, 'SellerClosetModule.tsx'), 'utf8');
     const listingsFile = fs.readFileSync(path.join(sellerDir, 'SellerListingsModule.tsx'), 'utf8');
     const railFile = fs.readFileSync(path.join(sellerDir, 'SellerThumbRail.tsx'), 'utf8');
-
-    // SellerPillarTiles: eBay-style quick-access row with attention badge
-    expect(tilesFile).toContain('Wallet');
-    expect(tilesFile).toContain('Orders');
-    expect(tilesFile).toContain('Analytics');
-    expect(tilesFile).toContain('Closet');
-    expect(tilesFile).toContain('badge');
 
     // SellerExecutiveHero: identity row + liquidity-only money panel (Stripe balances model)
     expect(heroFile).toContain('Available Payout');
@@ -82,13 +76,14 @@ describe('Seller Hub and Analytics Upgrade Verification', () => {
     expect(analyticsFile).toContain('LineChart');
     expect(analyticsFile).toContain('Flat');
 
-    // Closet + Listings modules: thumbnail rails with honest empty states
-    expect(closetFile).toContain('Closet');
-    expect(closetFile).toContain('SellerThumbRail');
-    expect(closetFile).toContain('Save pieces you love');
+    // Listings module: thumbnail rail with honest empty state
     expect(listingsFile).toContain('Listings');
     expect(listingsFile).toContain('Nothing listed yet');
     expect(railFile).toContain('CachedImage');
+
+    // Radar haptic grammar (S0/S1): pure navigation presses are silent —
+    // the pushed screen is the confirmation. Only money/creation CTAs buzz.
+    expect(ordersFile).not.toContain('hapticFeedback="light"');
   });
 
   it('verifies hub bloat components are deleted from the codebase', () => {
@@ -104,6 +99,9 @@ describe('Seller Hub and Analytics Upgrade Verification', () => {
       'SoldCompsChart.tsx',
       'SellerOrdersQueue.tsx',
       'SellerStoreRows.tsx',
+      // Loop 1: tile farm + buyer-domain closet rail removed from the Hub.
+      'SellerPillarTiles.tsx',
+      'SellerClosetModule.tsx',
     ];
     for (const file of purgedFiles) {
       expect(fs.existsSync(path.join(sellerDir, file))).toBe(false);

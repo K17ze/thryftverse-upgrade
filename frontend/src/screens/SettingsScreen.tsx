@@ -189,8 +189,6 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'BalanceHistory', label: 'Payout history', searchTerms: 'balance', section: 'Buying & selling' },
   { key: 'Postage', label: 'Shipping preferences', searchTerms: 'postage carrier', section: 'Buying & selling' },
   { key: 'CoOwnPriceAlerts', label: 'Price alerts', searchTerms: 'notifications co-own', section: 'Buying & selling' },
-  { key: 'CoOwnRecurringOrders', label: 'Auto-invest plans', searchTerms: 'recurring orders co-own', section: 'Buying & selling' },
-  { key: 'CoOwnTaxDocuments', label: 'Tax documents', searchTerms: 'statements cgt co-own', section: 'Buying & selling' },
   { key: 'ResolutionCentre', label: 'Resolution Centre', searchTerms: 'dispute resolution', section: 'Buying & selling' },
   // ΓöÇΓöÇ Notifications ΓöÇΓöÇ
   { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push alerts', section: 'Notifications', showSection: true },
@@ -769,18 +767,6 @@ export default function SettingsScreen({ navigation }: Props) {
               title={ts('rows.priceAlerts')}
               subtitle={ts('rows.priceAlertsSubtitle')}
               onPress={() => navigation.navigate('CoOwnPriceAlerts')}
-            />
-            <SettingsRow
-              icon="repeat"
-              title={ts('rows.autoInvestPlans')}
-              subtitle={ts('rows.autoInvestPlansSubtitle')}
-              onPress={() => navigation.navigate('CoOwnRecurringOrders')}
-            />
-            <SettingsRow
-              icon="document"
-              title={ts('rows.taxDocuments')}
-              subtitle={ts('rows.taxDocumentsSubtitle')}
-              onPress={() => navigation.navigate('CoOwnTaxDocuments')}
             />
             <SettingsRow
               icon="folder"

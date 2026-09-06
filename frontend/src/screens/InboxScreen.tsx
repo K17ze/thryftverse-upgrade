@@ -27,7 +27,6 @@ import { Caption } from '../components/ui/Text';
 import { AvatarRing } from '../components/chat/AvatarRing';
 import { SkeletonLoader } from '../components/SkeletonLoader';
 import { InboxConversationRow } from '../components/chat/InboxConversationRow';
-import { InboxNotesTray } from '../components/chat/InboxNotesTray';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { MessagingSegmentRail, MessagingSegment } from '../components/chat/MessagingSegmentRail';
 import {
@@ -916,9 +915,6 @@ export default function InboxScreen() {
               keyExtractor={(c: Conversation) => c.id}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.listContent}
-              ListHeaderComponent={
-                <InboxNotesTray onNotePress={() => navigation.navigate('NewMessage')} />
-              }
               renderItem={renderItem}
               onScroll={scrollHandler}
               scrollEventThrottle={16}

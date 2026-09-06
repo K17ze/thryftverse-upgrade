@@ -86,7 +86,6 @@ export const SCREEN_ROLE_MATRIX: ScreenRoleEntry[] = [
   { screen: 'OrderReceiptScreen', role: 'evidence', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'OrderDetailScreen', role: 'evidence', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'AssetDueDiligenceScreen', role: 'evidence', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
-  { screen: 'CoOwnTaxDocumentsScreen', role: 'evidence', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'PortfolioScreen', role: 'evidence', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
 
   // ── Live market ──

@@ -21,8 +21,6 @@ import { haptics } from '../utils/haptics';
 import { ImageViewer } from '../components/ImageViewer';
 import { ListingIdentityBlock } from '../components/listing/ListingIdentityBlock';
 import { ListingPreviewFooter } from '../components/listing/ListingPreviewFooter';
-import { ListingQualityMeter } from '../components/listing/ListingQualityMeter';
-import { calculateListingQuality } from '../utils/listingQuality';
 import { CachedImage } from '../components/CachedImage';
 import { t } from '../i18n';
 
@@ -119,27 +117,6 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
           <View style={styles.previewBadge}>
             <Text style={styles.previewBadgeText}>PREVIEW</Text>
           </View>
-        </View>
-
-        {/* Listing quality meter — seller guidance */}
-        <View>
-          <ListingQualityMeter
-            result={useMemo(() => calculateListingQuality({
-              photos: preview?.photos ?? [],
-              title: preview?.title ?? '',
-              brand: preview?.brand ?? '',
-              category: preview?.category ?? '',
-              size: preview?.size ?? '',
-              condition: preview?.condition ?? '',
-              description: preview?.description ?? '',
-              price: preview?.price != null ? String(preview.price) : '',
-              originalPrice: preview?.originalPrice != null ? String(preview.originalPrice) : '',
-              tags: [],
-              shippingMethod: preview?.shippingMethod === 'standard' ? 'standard' : preview?.shippingMethod === 'express' ? 'express' : null,
-              shippingPayer: preview?.shippingPayer === 'buyer' ? 'buyer' : preview?.shippingPayer === 'seller' ? 'seller' : null,
-              listingMode: preview?.listingMode ?? 'sell_now' }), [preview])}
-            compact
-          />
         </View>
 
         {/* ── 2. PRODUCT IDENTITY ── */}

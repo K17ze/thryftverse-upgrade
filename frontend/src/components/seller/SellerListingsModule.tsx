@@ -20,7 +20,7 @@ export interface SellerListingsModuleProps {
 /**
  * SellerListingsModule — active-listings rail on the Seller Hub overview.
  * Shares the exact header grammar, View all control and honest empty-row
- * treatment with SellerClosetModule — one system, two sections.
+ * treatment with the orders radar — one system, two sections.
  */
 export const SellerListingsModule: React.FC<SellerListingsModuleProps> = ({
   activeCount,

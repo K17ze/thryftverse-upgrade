@@ -1,28 +1,18 @@
 /**
- * YourAlgorithmScreen — Algorithm transparency dashboard
+ * YourAlgorithmScreen — the user's feed topics, tunable.
  *
- * A flagship trust surface showing exactly which topics and signals shape the
- * user's feed. Users can adjust topic weights, remove topics, add new
- * interests, and see recent behavioural signals.
+ * Direct composition: an inline add field leads the viewport. Suggested
+ * topics sit below as quick-pick chips. Active topics render as weight-
+ * visible chips — brand-tinted for "More", neutral for "Usual", faded
+ * for "Less". Locked topics (from immutable history) show a lock glyph
+ * and are tunable but not removable. Tapping any chip opens a compact
+ * sheet to adjust or remove.
  *
- * Per AGENTS.md §11 (Truthful UI): the service is mock, so a "Demo mode"
- * indicator is always shown. We never claim that changes affect the feed in
- * demo mode — weight/remove/add operations update the session profile but the
- * indicator makes clear the data is illustrative.
+ * Per AGENTS.md §11 (Truthful UI): the service reports demo mode and
+ * every entity carries isDemo; a single line states it plainly.
  *
- * Design (per AGENTS.md §4):
- * - Flat composition, hairline separators, no card-on-card
- * - One dominant panel (the topic list)
- * - Max two non-avatar radius sizes (Radius.md for chips, Radius.lg for inputs)
- * - Max three type sizes per viewport (title, body, caption)
- * - All colors via useAppTheme(), all geometry via design tokens
- *
- * State coverage (per AGENTS.md §14):
- * - Loading: skeleton placeholders matching final geometry
- * - Populated: full profile
- * - Empty: "No topics yet — your feed is based on general popularity"
- * - Error: error state with retry
- * - Offline: offline banner
+ * Per AGENTS.md §4: flat canvas, hairline separators, one radius
+ * grammar, three type sizes per viewport.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -31,111 +21,85 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
-  ScrollView } from 'react-native';
+  ScrollView,
+  Modal,
+  ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import Reanimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSpring,
-  interpolate,
-  Extrapolation } from 'react-native-reanimated';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useHaptic } from '../hooks/useHaptic';
-import { useMotionConfig } from '../hooks/useMotionConfig';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { AppInput } from '../components/ui/AppInput';
-import { CachedImage } from '../components/CachedImage';
 
 import {
-  AlgorithmTransparencyProfile,
   AlgorithmTopic,
-  AlgorithmSignal,
   TopicWeight,
-  SignalSource,
   getAlgorithmDemoMode,
   fetchAlgorithmProfile,
   updateTopicWeight,
   removeTopic,
   addTopic } from '../services/algorithmTransparencyApi';
 
-import { Space, Radius, Typography, Control, Stroke } from '../theme/designTokens';
+import { Space, Radius, Typography, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { useAppTranslation } from '../i18n/useAppTranslation';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'YourAlgorithm'>;
 
-// ─── Category options for the add-topic picker ───────────────────────────────
-const TOPIC_CATEGORIES = [
-  'Brand affinity',
-  'Category preference',
-  'Price sensitivity',
-  'Style preferences',
-  'Sustainability interest',
-  'Location-based',
-  'Social signals',
+type ScreenStatus = 'loading' | 'populated' | 'empty' | 'error' | 'offline';
+
+/** Curated starter topics — the fast path to a tuned feed. */
+const SUGGESTED_TOPICS = [
+  'Vintage denim',
+  'Sneakers',
+  'Streetwear',
+  'Minimalist style',
+  'Tailored outerwear',
+  'Vintage watches',
+  'Workwear',
+  'Leather goods',
+  'Knitwear',
+  'Archive fashion',
+  'Knit vests',
+  'Sustainability',
 ] as const;
 
-// ─── Weight metadata ─────────────────────────────────────────────────────────
-const WEIGHT_META: Record<TopicWeight, { dotCount: number }> = {
-  low: { dotCount: 1 },
-  medium: { dotCount: 2 },
-  high: { dotCount: 3 } };
+const DEFAULT_CATEGORY = 'Category preference';
 
-const WEIGHT_ORDER: TopicWeight[] = ['low', 'medium', 'high'];
-
-const WEIGHT_LABEL_FN: Record<TopicWeight, (t: (key: string) => string) => string> = {
-  low: (t) => t('weight.low'),
-  medium: (t) => t('weight.medium'),
-  high: (t) => t('weight.high'),
-};
-
-const SOURCE_LABEL_FN: Record<SignalSource, (t: (key: string) => string) => string> = {
-  explicit: (t) => t('source.explicit'),
-  implicit: (t) => t('source.implicit'),
-  inferred: (t) => t('source.inferred'),
-};
-
-// ─── Screen status ───────────────────────────────────────────────────────────
-type ScreenStatus = 'loading' | 'populated' | 'empty' | 'error' | 'offline';
+/** Backend intent rows can carry raw ids ("topic-denim") — humanize for display. */
+function prettifyTopicLabel(label: string): string {
+  if (!/^topic-[a-z0-9-]+$/i.test(label)) return label;
+  return label
+    .replace(/^topic-(user-)?/i, '')
+    .split('-')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
 
 export default function YourAlgorithmScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
-  const reducedMotion = useReducedMotion();
   const haptic = useHaptic();
-  const { spring } = useMotionConfig();
   const { t } = useAppTranslation('algorithm');
 
-  const [profile, setProfile] = useState<AlgorithmTransparencyProfile | null>(null);
+  const [profile, setProfile] = useState<AlgorithmTopic[] | null>(null);
   const [status, setStatus] = useState<ScreenStatus>('loading');
-  const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
-  const [howItWorksExpanded, setHowItWorksExpanded] = useState(false);
-  const [updatingTopicId, setUpdatingTopicId] = useState<string | null>(null);
-  const [removingTopicId, setRemovingTopicId] = useState<string | null>(null);
-  const [newTopicLabel, setNewTopicLabel] = useState('');
-  const [newTopicCategory, setNewTopicCategory] = useState<string>(TOPIC_CATEGORIES[0]);
-  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const [isAdding, setIsAdding] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
+  const [pendingTopicId, setPendingTopicId] = useState<string | null>(null);
+  const [sheetTopicId, setSheetTopicId] = useState<string | null>(null);
 
-  // ── Load profile ──
   const loadProfile = useCallback(async () => {
     setStatus('loading');
     try {
       const data = await fetchAlgorithmProfile();
-      setProfile(data);
-      setIsOffline(false);
+      setProfile(data.topics);
       setStatus(data.topics.length === 0 ? 'empty' : 'populated');
     } catch (e) {
-      // Distinguish offline from generic errors via a simple heuristic.
       const msg = e instanceof Error ? e.message : '';
       if (/network|offline|fetch/i.test(msg)) {
-        setIsOffline(true);
         setStatus('offline');
       } else {
         setStatus('error');
@@ -147,102 +111,112 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
     loadProfile();
   }, [loadProfile]);
 
-  // ── Handlers ──
-  const handleToggleExpand = useCallback(
-    (topicId: string) => {
-      haptic.selection();
-      setExpandedTopicId((prev) => (prev === topicId ? null : topicId));
-    },
-    [haptic],
-  );
+  const topics = profile ?? [];
+  const sheetTopic = topics.find((tp) => tp.id === sheetTopicId) ?? null;
 
-  const handleWeightChange = useCallback(
-    async (topicId: string, weight: TopicWeight) => {
-      haptic.light();
-      setUpdatingTopicId(topicId);
-      try {
-        const updated = await updateTopicWeight(topicId, weight);
-        if (updated && profile) {
-          setProfile({
-            ...profile,
-            topics: profile.topics.map((t) => (t.id === topicId ? updated : t)) });
-        }
-      } finally {
-        setUpdatingTopicId(null);
-      }
-    },
-    [haptic, profile],
-  );
-
-  const handleRemoveTopic = useCallback(
-    async (topicId: string) => {
-      haptic.medium();
-      setRemovingTopicId(topicId);
-      try {
-        const ok = await removeTopic(topicId);
-        if (ok && profile) {
-          const nextTopics = profile.topics.filter((t) => t.id !== topicId);
-          setProfile({ ...profile, topics: nextTopics });
-          setExpandedTopicId(null);
-          if (nextTopics.length === 0) setStatus('empty');
-        }
-      } finally {
-        setRemovingTopicId(null);
-      }
-    },
-    [haptic, profile],
-  );
-
-  const handleAddTopic = useCallback(async () => {
-    const trimmed = newTopicLabel.trim();
-    if (!trimmed) return;
+  const addTopicByName = useCallback(async (rawLabel: string) => {
+    const label = rawLabel.trim();
+    if (!label || isAdding) return;
+    if (topics.some((tp) => tp.label.toLowerCase() === label.toLowerCase())) {
+      setQuery('');
+      return;
+    }
     haptic.light();
     setIsAdding(true);
     try {
-      const created = await addTopic(trimmed, newTopicCategory);
-      if (profile) {
-        setProfile({ ...profile, topics: [created, ...profile.topics] });
-      } else {
-        setProfile({
-          topics: [created],
-          signals: [],
-          recentInfluences: [],
-          lastUpdated: new Date().toISOString(),
-          isDemo: getAlgorithmDemoMode() });
-      }
-      setNewTopicLabel('');
-      setStatus('populated');
+      const created = await addTopic(label, DEFAULT_CATEGORY);
+      setProfile((prev) => [created, ...(prev ?? [])]);
+      setStatus((prev) => (prev === 'empty' ? 'populated' : prev));
+      setQuery('');
     } finally {
       setIsAdding(false);
     }
-  }, [newTopicLabel, newTopicCategory, haptic, profile]);
+  }, [isAdding, topics, haptic]);
+
+  const handleWeightChange = useCallback(async (topicId: string, weight: TopicWeight) => {
+    haptic.light();
+    setPendingTopicId(topicId);
+    const previous = profile;
+    setProfile((prev) => prev
+      ? prev.map((tp) => (tp.id === topicId ? { ...tp, weight } : tp))
+      : prev);
+    try {
+      const updated = await updateTopicWeight(topicId, weight);
+      if (updated) {
+        setProfile((prev) => prev
+          ? prev.map((tp) => (tp.id === topicId ? updated : tp))
+          : prev);
+      } else if (previous) {
+        setProfile(previous);
+      }
+    } finally {
+      setPendingTopicId(null);
+    }
+  }, [profile, haptic]);
+
+  const handleRemoveTopic = useCallback(async (topicId: string) => {
+    haptic.medium();
+    setPendingTopicId(topicId);
+    try {
+      const ok = await removeTopic(topicId);
+      if (ok) {
+        setProfile((prev) => {
+          if (!prev) return prev;
+          const next = prev.filter((tp) => tp.id !== topicId);
+          if (next.length === 0) setStatus('empty');
+          return next;
+        });
+        setSheetTopicId(null);
+      }
+    } finally {
+      setPendingTopicId(null);
+    }
+  }, [haptic]);
 
   const handleRetry = useCallback(() => {
     loadProfile();
   }, [loadProfile]);
 
-  // ── Derived ──
-  const topicCount = profile?.topics.length ?? 0;
-  const signalCount = profile?.signals.length ?? 0;
-  const lastUpdatedLabel = useMemo(() => {
-    if (!profile?.lastUpdated) return '—';
-    try {
-      const d = new Date(profile.lastUpdated);
-      const now = new Date();
-      const diffMs = now.getTime() - d.getTime();
-      const diffH = Math.floor(diffMs / 3_600_000);
-      if (diffH < 1) return t('time.justNow');
-      if (diffH < 24) return t('time.hoursAgo', { count: diffH });
-      const diffD = Math.floor(diffH / 24);
-      return t('time.daysAgo', { count: diffD });
-    } catch {
-      return '—';
-    }
-  }, [profile?.lastUpdated, t]);
+  const removableTopics = topics.filter((tp) => tp.removable);
+  const lockedTopics = topics.filter((tp) => !tp.removable);
+
+  const suggestions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const existing = new Set(topics.map((tp) => tp.label.toLowerCase()));
+    return SUGGESTED_TOPICS
+      .filter((s) => !existing.has(s.toLowerCase()))
+      .filter((s) => (q ? s.toLowerCase().includes(q) : true))
+      .slice(0, 8);
+  }, [query, topics]);
+
+  const queryHasExactMatch = topics.some(
+    (tp) => tp.label.toLowerCase() === query.trim().toLowerCase());
+  const canAddQuery = query.trim().length > 0 && !queryHasExactMatch;
 
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  // ── Render ──
+  const addBtn = (
+    <Pressable
+      onPress={() => void addTopicByName(query)}
+      disabled={isAdding || !canAddQuery}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={t('addTopic.addBtn')}
+      accessibilityState={{ disabled: !canAddQuery || isAdding }}
+    >
+      {isAdding
+        ? <ActivityIndicator size="small" color={colors.brand} />
+        : (
+          <Ionicons
+            name={canAddQuery ? 'add-circle' : 'add-circle-outline'}
+            size={26}
+            color={canAddQuery ? colors.brand : colors.textMuted}
+            accessible={false}
+          />
+        )}
+    </Pressable>
+  );
+
   return (
     <FlagshipScreen
       header={
@@ -253,629 +227,259 @@ export default function YourAlgorithmScreen({ navigation }: Props) {
         />
       }
     >
-      {/* ── Demo mode indicator (truthful UI per AGENTS.md §11) ── */}
-      {getAlgorithmDemoMode() && (
-        <View
-          style={[styles.demoBanner, { backgroundColor: colors.surfaceAlt }]}
-          accessibilityRole="header"
-          accessibilityLabel="Demo mode"
-        >
-          <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.demoBannerText}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── Inline add ── */}
+        <View style={styles.addRow}>
+          <AppInput
+            placeholder={t('addTopic.placeholder')}
+            value={query}
+            onChangeText={setQuery}
+            accessibilityLabel={t('addTopic.placeholder')}
+            accessibilityHint="Adds a topic that shapes what you discover"
+            returnKeyType="done"
+            onSubmitEditing={() => void addTopicByName(query)}
+            inputContainerStyle={styles.topicInput}
+            rightAction={addBtn}
+          />
+        </View>
+
+        {/* ── Suggested quick picks ── */}
+        {suggestions.length > 0 && (
+          <View style={styles.chipCloud}>
+            {suggestions.map((s) => (
+              <Chip
+                key={s}
+                label={s}
+                variant="suggested"
+                onPress={() => void addTopicByName(s)}
+                colors={colors}
+                styles={styles}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* ── Demo line ── */}
+        {getAlgorithmDemoMode() && status !== 'loading' && status !== 'error' && (
+          <Text style={[styles.demoLine, { color: colors.textMuted }]}>
             {t('demo.banner')}
           </Text>
-        </View>
-      )}
+        )}
 
-      {/* ── Offline banner ── */}
-      {isOffline && status !== 'loading' && (
-        <View
-          style={[styles.offlineBanner, { backgroundColor: colors.surfaceAlt }]}
-          accessibilityRole="header"
-          accessibilityLabel="Offline"
-        >
-          <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} />
-          <Text style={styles.offlineBannerText}>
-            {t('offline.banner')}
-          </Text>
-        </View>
-      )}
+        {/* ── States ── */}
+        {status === 'loading' && <LoadingSkeleton styles={styles} colors={colors} />}
 
-      {/* ── Loading state: skeleton ── */}
-      {status === 'loading' && <LoadingSkeleton styles={styles} colors={colors} />}
+        {status === 'error' && (
+          <ErrorState styles={styles} colors={colors} onRetry={handleRetry} t={t} />
+        )}
 
-      {/* ── Error state ── */}
-      {status === 'error' && (
-        <ErrorState styles={styles} colors={colors} onRetry={handleRetry} t={t} />
-      )}
-
-      {/* ── Populated / Empty / Offline-with-data ── */}
-      {(status === 'populated' || status === 'empty' || (status === 'offline' && profile !== null)) && profile && (
-        <View>
-          {/* ── Summary strip (flat, hairline-separated) ── */}
-          <View style={styles.summaryStrip}>
-            <SummaryStat
-              value={String(topicCount)}
-              label={t('summary.activeTopics')}
-              colors={colors}
-              styles={styles}
-            />
-            <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-            <SummaryStat
-              value={String(signalCount)}
-              label={t('summary.signals')}
-              colors={colors}
-              styles={styles}
-            />
-            <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
-            <SummaryStat
-              value={lastUpdatedLabel}
-              label={t('summary.lastUpdated')}
-              colors={colors}
-              styles={styles}
-            />
+        {status === 'offline' && (
+          <View style={styles.offlineWrap}>
+            <Ionicons name="cloud-offline-outline" size={24} color={colors.textMuted} accessible={false} />
+            <Text style={[styles.offlineText, { color: colors.textSecondary }]}>
+              {t('offline.banner')}
+            </Text>
           </View>
+        )}
 
-          {/* ── How this works (expandable, collapsed by default) ── */}
-          <HowItWorks
-            expanded={howItWorksExpanded}
-            onToggle={() => {
-              haptic.selection();
-              setHowItWorksExpanded((p) => !p);
-            }}
-            colors={colors}
-            styles={styles}
-            reducedMotion={reducedMotion}
-            spring={spring}
-            t={t}
-          />
+        {status === 'empty' && (
+          <View style={styles.emptyWrap}>
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+              {t('empty.title')}
+            </Text>
+            <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+              {t('empty.subtitle')}
+            </Text>
+          </View>
+        )}
 
-          {/* ── Empty state ── */}
-          {status === 'empty' && (
-            <View style={styles.emptyStateWrap}>
-              <View style={[styles.emptyIconCircle, { backgroundColor: colors.surfaceAlt }]}>
-                <Ionicons name="git-network-outline" size={28} color={colors.textMuted} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-                {t('empty.title')}
-              </Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                {t('empty.subtitle')}
-              </Text>
-            </View>
-          )}
-
-          {/* ── Topics section (the dominant panel) ── */}
-          {status !== 'empty' && profile.topics.length > 0 && (
-            <View style={styles.sectionWrap}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                {t('topics.title')}
-              </Text>
-              <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-                {t('topics.caption')}
-              </Text>
-
-              <View style={styles.topicList}>
-                {profile.topics.map((topic, index) => (
-                  <TopicRow
-                    key={topic.id}
-                    topic={topic}
-                    isExpanded={expandedTopicId === topic.id}
-                    onToggle={() => handleToggleExpand(topic.id)}
-                    onWeightChange={(w) => handleWeightChange(topic.id, w)}
-                    onRemove={() => handleRemoveTopic(topic.id)}
-                    isUpdating={updatingTopicId === topic.id}
-                    isRemoving={removingTopicId === topic.id}
-                    isLast={index === profile.topics.length - 1}
-                    colors={colors}
-                    styles={styles}
-                    reducedMotion={reducedMotion}
-                    spring={spring}
-                    haptic={haptic}
-                    t={t}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* ── Recent signals section ── */}
-          {profile.recentInfluences.length > 0 && (
-            <View style={styles.sectionWrap}>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                {t('signals.title')}
-              </Text>
-              <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-                {t('signals.caption')}
-              </Text>
-              <View style={styles.signalList}>
-                {profile.recentInfluences.map((signal, index) => (
-                  <SignalRow
-                    key={signal.id}
-                    signal={signal}
-                    isLast={index === profile.recentInfluences.length - 1}
-                    colors={colors}
-                    styles={styles}
-                    t={t}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* ── Add a topic section ── */}
+        {/* ── Active topics (weight-visible) ── */}
+        {removableTopics.length > 0 && (
           <View style={styles.sectionWrap}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-              {t('addTopic.title')}
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
+              {t('topics.title')}
             </Text>
-            <Text style={[styles.sectionCaption, { color: colors.textMuted }]}>
-              {t('addTopic.caption')}
-              {getAlgorithmDemoMode() ? ' ' + t('addTopic.demoSuffix') : ''}
-            </Text>
-
-            <View style={styles.addTopicRow}>
-              <AppInput
-                placeholder={t('addTopic.placeholder')}
-                value={newTopicLabel}
-                onChangeText={setNewTopicLabel}
-                accessibilityLabel="Topic label input"
-                accessibilityHint="Enter the name of a topic to add to your algorithm profile"
-                returnKeyType="done"
-                onSubmitEditing={handleAddTopic}
-                inputContainerStyle={styles.topicInput}
-              />
+            <View style={styles.chipCloud}>
+              {removableTopics.map((tp) => (
+                <Chip
+                  key={tp.id}
+                  label={prettifyTopicLabel(tp.label)}
+                  variant="active"
+                  weight={tp.weight}
+                  onPress={() => { haptic.selection(); setSheetTopicId(tp.id); }}
+                  colors={colors}
+                  styles={styles}
+                />
+              ))}
             </View>
+          </View>
+        )}
 
-            {/* Category picker — flat, not a separate card */}
-            <Pressable
-              style={[styles.categoryPicker, { borderColor: colors.border, backgroundColor: colors.input }]}
-              onPress={() => {
-                haptic.selection();
-                setCategoryPickerOpen((p) => !p);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Category: ${newTopicCategory}`}
-              accessibilityHint="Opens the category picker for the new topic"
-            >
-              <Text style={[styles.categoryPickerLabel, { color: colors.inputText }]} numberOfLines={1}>
-                {newTopicCategory}
-              </Text>
-              <Ionicons
-                name={categoryPickerOpen ? 'chevron-up' : 'chevron-down'}
-                size={18}
-                color={colors.textMuted}
-              />
-            </Pressable>
+        {/* ── Locked topics (history-derived, tunable not removable) ── */}
+        {lockedTopics.length > 0 && (
+          <View style={styles.sectionWrap}>
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
+              {t('topics.locked')}
+            </Text>
+            <View style={styles.chipCloud}>
+              {lockedTopics.map((tp) => (
+                <Chip
+                  key={tp.id}
+                  label={prettifyTopicLabel(tp.label)}
+                  variant="locked"
+                  weight={tp.weight}
+                  onPress={() => { haptic.selection(); setSheetTopicId(tp.id); }}
+                  colors={colors}
+                  styles={styles}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+      </ScrollView>
 
-            {categoryPickerOpen && (
-              <ScrollView
-                style={[styles.categoryList, { borderColor: colors.border }]}
-                nestedScrollEnabled
-                accessibilityRole="list"
-                accessibilityLabel="Category options"
-              >
-                {TOPIC_CATEGORIES.map((cat, i) => {
-                  const selected = cat === newTopicCategory;
+      {/* ── Topic tuning sheet ── */}
+      <Modal
+        visible={sheetTopic !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSheetTopicId(null)}
+      >
+        <Pressable style={styles.sheetScrim} onPress={() => setSheetTopicId(null)}>
+          <Pressable style={[styles.sheet, { backgroundColor: colors.surface }]} onPress={() => {}}>
+            {sheetTopic && (
+              <>
+                <Text style={[styles.sheetTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {prettifyTopicLabel(sheetTopic.label)}
+                </Text>
+
+                {([
+                  ['high', t('topics.moreOfThis')],
+                  ['medium', t('topics.weightUsual')],
+                  ['low', t('topics.lessOfThis')],
+                ] as const).map(([weight, label]) => {
+                  const selected = sheetTopic.weight === weight;
                   return (
                     <Pressable
-                      key={cat}
-                      style={[
-                        styles.categoryOption,
-                        i < TOPIC_CATEGORIES.length - 1 && {
-                          borderBottomColor: colors.borderSubtle,
-                          borderBottomWidth: StyleSheet.hairlineWidth },
-                      ]}
-                      onPress={() => {
-                        haptic.selection();
-                        setNewTopicCategory(cat);
-                        setCategoryPickerOpen(false);
-                      }}
+                      key={weight}
+                      style={[styles.sheetRow, selected && { backgroundColor: colors.surfaceAlt }]}
+                      onPress={() => void handleWeightChange(sheetTopic.id, weight)}
+                      disabled={pendingTopicId === sheetTopic.id}
                       accessibilityRole="button"
-                      accessibilityLabel={`Select category ${cat}`}
-                      accessibilityState={{ selected }}
+                      accessibilityLabel={label}
+                      accessibilityState={{ selected, disabled: pendingTopicId === sheetTopic.id }}
                     >
-                      <Text
-                        style={[
-                          styles.categoryOptionText,
-                          { color: selected ? colors.textPrimary : colors.textSecondary },
-                          selected && { fontFamily: Typography.family.semibold },
-                        ]}
-                      >
-                        {cat}
+                      <Text style={[styles.sheetRowText, { color: colors.textPrimary }]}>
+                        {label}
                       </Text>
                       {selected && (
-                        <Ionicons name="checkmark" size={18} color={colors.textPrimary} />
+                        <Ionicons name="checkmark" size={18} color={colors.brand} accessible={false} />
                       )}
                     </Pressable>
                   );
                 })}
-              </ScrollView>
-            )}
 
-            <AnimatedPressable
-              onPress={handleAddTopic}
-              disabled={!newTopicLabel.trim() || isAdding}
-              scaleValue={0.97}
-              hapticFeedback="light"
-              style={[
-                styles.addBtn,
-                {
-                  backgroundColor: !newTopicLabel.trim() || isAdding ? colors.surfaceAlt : colors.brand },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Add topic"
-              accessibilityHint="Adds the entered topic to your algorithm profile"
-              accessibilityState={{ disabled: !newTopicLabel.trim() || isAdding }}
-            >
-              {isAdding ? (
-                <ActivityIndicator size="small" color={colors.textInverse} />
-              ) : (
-                <Text
-                  style={[
-                    styles.addBtnText,
-                    { color: !newTopicLabel.trim() ? colors.textMuted : colors.textInverse },
-                  ]}
-                >
-                  {t('addTopic.addBtn')}
-                </Text>
-              )}
-            </AnimatedPressable>
-          </View>
-        </View>
-      )}
+                {sheetTopic.removable ? (
+                  <Pressable
+                    style={styles.sheetRow}
+                    onPress={() => void handleRemoveTopic(sheetTopic.id)}
+                    disabled={pendingTopicId === sheetTopic.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('topics.removeTopic')} ${prettifyTopicLabel(sheetTopic.label)}`}
+                    accessibilityState={{ disabled: pendingTopicId === sheetTopic.id }}
+                  >
+                    {pendingTopicId === sheetTopic.id
+                      ? <ActivityIndicator size="small" color={colors.danger} />
+                      : (
+                        <>
+                          <Ionicons name="trash-outline" size={16} color={colors.danger} accessible={false} />
+                          <Text style={[styles.sheetRowDanger, { color: colors.danger }]}>
+                            {t('topics.removeTopic')}
+                          </Text>
+                        </>
+                      )}
+                  </Pressable>
+                ) : (
+                  <Text style={[styles.sheetLockHint, { color: colors.textMuted }]}>
+                    {t('topics.lockHint')}
+                  </Text>
+                )}
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </FlagshipScreen>
   );
 }
 
-// ─── Summary stat (flat, no card) ────────────────────────────────────────────
-function SummaryStat({
-  value,
+// ─── Chip ────────────────────────────────────────────────────────────────────
+function Chip({
   label,
+  variant,
+  weight,
+  onPress,
   colors,
   styles }: {
-  value: string;
   label: string;
+  variant: 'suggested' | 'active' | 'locked';
+  weight?: TopicWeight;
+  onPress: () => void;
   colors: ReturnType<typeof useAppTheme>['colors'];
   styles: ReturnType<typeof createStyles>;
 }) {
+  // Weight-visible backgrounds for active/locked chips
+  const weightBg = weight === 'high'
+    ? colors.brandSubtle
+    : weight === 'low'
+      ? colors.surfaceAlt
+      : colors.surface;
+
+  const chipBg = variant === 'suggested'
+    ? 'transparent'
+    : variant === 'locked'
+      ? colors.surfaceAlt
+      : weightBg;
+
+  const chipBorder = variant === 'suggested'
+    ? { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }
+    : weight === 'medium' && variant === 'active'
+      ? { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border }
+      : { borderWidth: 0 };
+
+  const textColor = variant === 'suggested'
+    ? colors.textSecondary
+    : variant === 'locked'
+      ? colors.textMuted
+      : weight === 'high'
+        ? colors.textPrimary
+        : weight === 'low'
+          ? colors.textMuted
+          : colors.textPrimary;
+
   return (
-    <View style={styles.summaryStat} accessibilityRole="text">
-      <Text style={[styles.summaryValue, { color: colors.textPrimary }]} numberOfLines={1}>
-        {value}
-      </Text>
-      <Text style={[styles.summaryLabel, { color: colors.textMuted }]} numberOfLines={1}>
+    <AnimatedPressable
+      onPress={onPress}
+      scaleValue={0.96}
+      hapticFeedback="light"
+      style={[styles.chip, { backgroundColor: chipBg }, chipBorder]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      {variant === 'locked' && (
+        <Ionicons name="lock-closed" size={11} color={colors.textMuted} accessible={false} />
+      )}
+      <Text
+        style={[styles.chipText, { color: textColor }]}
+        numberOfLines={1}
+      >
         {label}
       </Text>
-    </View>
-  );
-}
-
-// ─── How it works (expandable) ───────────────────────────────────────────────
-function HowItWorks({
-  expanded,
-  onToggle,
-  colors,
-  styles,
-  reducedMotion,
-  spring,
-  t }: {
-  expanded: boolean;
-  onToggle: () => void;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  styles: ReturnType<typeof createStyles>;
-  reducedMotion: boolean;
-  spring: ReturnType<typeof useMotionConfig>['spring'];
-  t: (key: string, options?: Record<string, unknown>) => string;
-}) {
-  const contentHeight = useSharedValue(0);
-  const animatedHeight = useSharedValue(0);
-  const rotate = useSharedValue(0);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      animatedHeight.value = expanded ? contentHeight.value : 0;
-      rotate.value = expanded ? 1 : 0;
-    } else {
-      animatedHeight.value = withSpring(expanded ? contentHeight.value : 0, spring.entrance);
-      rotate.value = withSpring(expanded ? 1 : 0, spring.press);
-    }
-  }, [expanded, reducedMotion, spring, animatedHeight, rotate, contentHeight]);
-
-  const heightStyle = useAnimatedStyle(() => ({
-    height: animatedHeight.value,
-    opacity: interpolate(animatedHeight.value, [0, 10], [0, 1], Extrapolation.CLAMP) }));
-
-  const chevronStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${interpolate(rotate.value, [0, 1], [0, 180])}deg` }] }));
-
-  return (
-    <View style={styles.howItWorksWrap}>
-      <Pressable
-        style={styles.howItWorksHeader}
-        onPress={onToggle}
-        accessibilityRole="button"
-        accessibilityLabel="How this works"
-        accessibilityHint={expanded ? 'Collapses the explanation' : 'Expands the explanation'}
-        accessibilityState={{ expanded }}
-      >
-        <Text style={[styles.howItWorksTitle, { color: colors.textPrimary }]}>
-          {t('howItWorks.title')}
-        </Text>
-        <Reanimated.View style={chevronStyle}>
-          <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
-        </Reanimated.View>
-      </Pressable>
-
-      <Reanimated.View style={heightStyle} pointerEvents={expanded ? 'auto' : 'none'}>
-        <View
-          onLayout={(e) => {
-            contentHeight.value = e.nativeEvent.layout.height;
-            if (expanded) animatedHeight.value = e.nativeEvent.layout.height;
-          }}
-          style={styles.howItWorksContent}
-        >
-          <Text style={[styles.howItWorksBody, { color: colors.textSecondary }]}>
-            {t('howItWorks.body1')}
-          </Text>
-          <Text style={[styles.howItWorksBody, { color: colors.textSecondary }]}>
-            {t('howItWorks.body2')}
-          </Text>
-          {getAlgorithmDemoMode() && (
-            <Text style={[styles.howItWorksDemo, { color: colors.textMuted }]}>
-              {t('howItWorks.demoNote')}
-            </Text>
-          )}
-        </View>
-      </Reanimated.View>
-    </View>
-  );
-}
-
-// ─── Topic row (expandable) ──────────────────────────────────────────────────
-function TopicRow({
-  topic,
-  isExpanded,
-  onToggle,
-  onWeightChange,
-  onRemove,
-  isUpdating,
-  isRemoving,
-  isLast,
-  colors,
-  styles,
-  reducedMotion,
-  spring,
-  haptic,
-  t }: {
-  topic: AlgorithmTopic;
-  isExpanded: boolean;
-  onToggle: () => void;
-  onWeightChange: (w: TopicWeight) => void;
-  onRemove: () => void;
-  isUpdating: boolean;
-  isRemoving: boolean;
-  isLast: boolean;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  styles: ReturnType<typeof createStyles>;
-  reducedMotion: boolean;
-  spring: ReturnType<typeof useMotionConfig>['spring'];
-  haptic: ReturnType<typeof useHaptic>;
-  t: (key: string, options?: Record<string, unknown>) => string;
-}) {
-  const contentHeight = useSharedValue(0);
-  const animatedHeight = useSharedValue(0);
-  const rotate = useSharedValue(0);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      animatedHeight.value = isExpanded ? contentHeight.value : 0;
-      rotate.value = isExpanded ? 1 : 0;
-    } else {
-      animatedHeight.value = withSpring(isExpanded ? contentHeight.value : 0, spring.entrance);
-      rotate.value = withSpring(isExpanded ? 1 : 0, spring.press);
-    }
-  }, [isExpanded, reducedMotion, spring, animatedHeight, rotate, contentHeight]);
-
-  const heightStyle = useAnimatedStyle(() => ({
-    height: animatedHeight.value,
-    opacity: interpolate(animatedHeight.value, [0, 10], [0, 1], Extrapolation.CLAMP) }));
-
-  const chevronStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${interpolate(rotate.value, [0, 1], [0, 180])}deg` }] }));
-
-  const weightMeta = WEIGHT_META[topic.weight];
-  const weightLabel = WEIGHT_LABEL_FN[topic.weight](t);
-  const sourceLabel = SOURCE_LABEL_FN[topic.source](t);
-
-  return (
-    <View>
-      <Pressable
-        style={[styles.topicRow, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-        onPress={onToggle}
-        accessibilityRole="button"
-        accessibilityLabel={`${topic.label}, ${topic.category}, ${t('topics.influenceWeight')} ${weightLabel}, ${sourceLabel}`}
-        accessibilityHint={isExpanded ? 'Collapses topic controls' : 'Expands to show weight and remove controls'}
-        accessibilityState={{ expanded: isExpanded }}
-      >
-        <View style={styles.topicMain}>
-          <Text style={[styles.topicLabel, { color: colors.textPrimary }]} numberOfLines={1}>
-            {topic.label}
-          </Text>
-          <View style={styles.topicMetaRow}>
-            <Text style={[styles.topicCategory, { color: colors.textMuted }]} numberOfLines={1}>
-              {topic.category}
-            </Text>
-            <View style={styles.topicMetaGap} />
-            {/* Weight indicator — dots, not colour alone */}
-            <View style={styles.weightDots}>
-              {[1, 2, 3].map((n) => (
-                <View
-                  key={n}
-                  style={[
-                    styles.weightDot,
-                    {
-                      backgroundColor: n <= weightMeta.dotCount ? colors.textPrimary : colors.border },
-                  ]}
-                />
-              ))}
-            </View>
-            <Text style={[styles.topicSource, { color: colors.textMuted }]}>
-              {SOURCE_LABEL_FN[topic.source](t)}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.topicRight}>
-          {!topic.removable && (
-            <Ionicons
-              name="lock-closed"
-              size={16}
-              color={colors.textMuted}
-              accessibilityLabel="Kept for trust, influence can be paused"
-            />
-          )}
-          <Reanimated.View style={chevronStyle}>
-            <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
-          </Reanimated.View>
-        </View>
-      </Pressable>
-
-      <Reanimated.View style={heightStyle} pointerEvents={isExpanded ? 'auto' : 'none'}>
-        <View
-          onLayout={(e) => {
-            contentHeight.value = e.nativeEvent.layout.height;
-            if (isExpanded) animatedHeight.value = e.nativeEvent.layout.height;
-          }}
-          style={styles.topicExpandedContent}
-        >
-          {/* Weight selector */}
-          <Text style={[styles.controlLabel, { color: colors.textMuted }]}>
-            Influence weight
-          </Text>
-          <View
-            style={styles.weightSelector}
-            accessibilityRole="radiogroup"
-            accessibilityLabel="Influence weight"
-          >
-            {WEIGHT_ORDER.map((w) => {
-              const selected = topic.weight === w;
-              return (
-                <Pressable
-                  key={w}
-                  style={[
-                    styles.weightOption,
-                    {
-                      backgroundColor: selected ? colors.brand : 'transparent',
-                      borderColor: selected ? colors.brand : colors.border },
-                  ]}
-                  onPress={() => onWeightChange(w)}
-                  disabled={isUpdating}
-                  accessibilityRole="radio"
-                  accessibilityLabel={`${WEIGHT_LABEL_FN[w](t)} weight`}
-                  accessibilityState={{ selected, disabled: isUpdating }}
-                >
-                  <Text
-                    style={[
-                      styles.weightOptionText,
-                      { color: selected ? colors.textInverse : colors.textPrimary },
-                    ]}
-                  >
-                    {WEIGHT_LABEL_FN[w](t)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-            {isUpdating && <ActivityIndicator size="small" color={colors.textMuted} style={styles.weightUpdating} />}
-          </View>
-
-          {/* Remove / lock hint */}
-          {topic.removable ? (
-            <Pressable
-              style={styles.removeBtn}
-              onPress={onRemove}
-              disabled={isRemoving}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove ${topic.label}`}
-              accessibilityHint="Removes this topic from your algorithm profile"
-              accessibilityState={{ disabled: isRemoving }}
-            >
-              {isRemoving ? (
-                <ActivityIndicator size="small" color={colors.danger} />
-              ) : (
-                <>
-                  <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                  <Text style={[styles.removeBtnText, { color: colors.danger }]}>
-                    Remove topic
-                  </Text>
-                </>
-              )}
-            </Pressable>
-          ) : (
-            <View style={styles.lockHint}>
-              <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
-              <Text style={[styles.lockHintText, { color: colors.textMuted }]}>
-                Kept for trust and accounting. You can pause its influence on your feed.
-              </Text>
-            </View>
-          )}
-        </View>
-      </Reanimated.View>
-    </View>
-  );
-}
-
-// ─── Signal row (compact) ────────────────────────────────────────────────────
-function SignalRow({
-  signal,
-  isLast,
-  colors,
-  styles,
-  t }: {
-  signal: AlgorithmSignal;
-  isLast: boolean;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  styles: ReturnType<typeof createStyles>;
-  t: (key: string) => string;
-}) {
-  const timeLabel = useMemo(() => {
-    try {
-      const d = new Date(signal.lastSeen);
-      const now = new Date();
-      const diffMs = now.getTime() - d.getTime();
-      const diffH = Math.floor(diffMs / 3_600_000);
-      if (diffH < 1) return 'Just now';
-      if (diffH < 24) return `${diffH}h ago`;
-      const diffD = Math.floor(diffH / 24);
-      return `${diffD}d ago`;
-    } catch {
-      return '';
-    }
-  }, [signal.lastSeen]);
-
-  return (
-    <View
-      style={[styles.signalRow, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-      accessibilityRole="text"
-      accessibilityLabel={`${signal.label}, ${SOURCE_LABEL_FN[signal.type](t)}, ${timeLabel}`}
-    >
-      <View style={styles.signalMain}>
-        <Text style={[styles.signalLabel, { color: colors.textPrimary }]} numberOfLines={2}>
-          {signal.label}
-        </Text>
-        <Text style={[styles.signalMeta, { color: colors.textMuted }]}>
-          {SOURCE_LABEL_FN[signal.type](t)} · {timeLabel}
-        </Text>
-      </View>
-      {/* Weight bar — relative influence, not a percentage */}
-      <View style={styles.signalWeightBar}>
-        <View
-          style={[
-            styles.signalWeightFill,
-            { width: `${Math.round(signal.weight * 100)}%`, backgroundColor: colors.textPrimary },
-          ]}
-        />
-      </View>
-    </View>
+    </AnimatedPressable>
   );
 }
 
@@ -887,41 +491,12 @@ function LoadingSkeleton({
   colors: ReturnType<typeof useAppTheme>['colors'];
 }) {
   return (
-    <View>
-      {/* Summary skeleton */}
-      <View style={styles.summaryStrip}>
-        {[0, 1, 2].map((i) => (
-          <View key={i} style={styles.skeletonSummaryItem}>
-            <View style={[styles.skeletonLine, styles.skeletonValue, { backgroundColor: colors.surfaceAlt }]} />
-            <View style={[styles.skeletonLine, styles.skeletonLabel, { backgroundColor: colors.surfaceAlt }]} />
-          </View>
-        ))}
-      </View>
-
-      {/* How it works skeleton */}
-      <View style={[styles.howItWorksWrap, { borderBottomColor: colors.border }]}>
-        <View style={styles.howItWorksHeader}>
-          <View style={[styles.skeletonLine, { width: 120, height: 16, backgroundColor: colors.surfaceAlt }]} />
-        </View>
-      </View>
-
-      {/* Topic list skeleton */}
-      <View style={styles.sectionWrap}>
-        <View style={[styles.skeletonLine, { width: 200, height: 18, backgroundColor: colors.surfaceAlt }]} />
-        <View style={styles.topicList}>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <View
-              key={i}
-              style={[styles.topicRow, i < 4 && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-            >
-              <View style={styles.topicMain}>
-                <View style={[styles.skeletonLine, { width: 140, height: 16, backgroundColor: colors.surfaceAlt }]} />
-                <View style={[styles.skeletonLine, { width: 90, height: 12, marginTop: Space.xs, backgroundColor: colors.surfaceAlt }]} />
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
+    <View style={styles.skeletonWrap}>
+      <View style={[styles.skeletonChip, { width: 88, backgroundColor: colors.surfaceAlt }]} />
+      <View style={[styles.skeletonChip, { width: 64, backgroundColor: colors.surfaceAlt }]} />
+      <View style={[styles.skeletonChip, { width: 96, backgroundColor: colors.surfaceAlt }]} />
+      <View style={[styles.skeletonChip, { width: 72, backgroundColor: colors.surfaceAlt }]} />
+      <View style={[styles.skeletonChip, { width: 80, backgroundColor: colors.surfaceAlt }]} />
     </View>
   );
 }
@@ -939,25 +514,22 @@ function ErrorState({
 }) {
   return (
     <View style={styles.errorWrap}>
-      <View style={[styles.errorIconCircle, { backgroundColor: colors.surfaceAlt }]}>
-        <Ionicons name="alert-circle-outline" size={28} color={colors.textMuted} />
-      </View>
+      <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} accessible={false} />
       <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>
-        Couldn't load your algorithm
+        {t('error.title')}
       </Text>
       <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>
-        We couldn't fetch your algorithm profile. Check your connection and try again.
+        {t('error.subtitle')}
       </Text>
       <AnimatedPressable
         onPress={onRetry}
-        scaleValue={0.96}
+        scaleValue={0.97}
         hapticFeedback="light"
-        style={[styles.retryBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+        style={[styles.retryBtn, { borderColor: colors.border }]}
         accessibilityRole="button"
-        accessibilityLabel="Retry"
-        accessibilityHint="Tries loading your algorithm profile again"
+        accessibilityLabel={t('error.retry')}
       >
-        <Text style={[styles.retryBtnText, { color: colors.textPrimary }]}>Retry</Text>
+        <Text style={[styles.retryText, { color: colors.textPrimary }]}>{t('error.retry')}</Text>
       </AnimatedPressable>
     </View>
   );
@@ -966,370 +538,139 @@ function ErrorState({
 // ─── Styles ──────────────────────────────────────────────────────────────────
 function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
-    // Demo banner
-    demoBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.md,
-      marginBottom: Space.md },
-    demoBannerText: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight,
-      color: colors.textSecondary,
+    scroll: {
       flex: 1 },
-
-    // Offline banner
-    offlineBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
+    scrollContent: {
+      paddingBottom: Space.xxl },
+    addRow: {
       paddingHorizontal: Space.md,
-      paddingVertical: Space.sm,
-      borderRadius: Radius.md,
-      marginBottom: Space.md },
-    offlineBannerText: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight,
-      color: colors.textSecondary,
-      flex: 1 },
-
-    // Summary strip — flat, hairline-separated
-    summaryStrip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: Space.md,
-      marginBottom: Space.sm },
-    summaryStat: {
-      flex: 1,
-      alignItems: 'center' },
-    summaryValue: {
-      fontSize: TypographyV2.sectionTitle.size,
-      fontFamily: TypographyV2.sectionTitle.fontFamily,
-      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-      lineHeight: TypographyV2.sectionTitle.lineHeight },
-    summaryLabel: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight,
-      marginTop: Space.xs / 2 },
-    summaryDivider: {
-      width: StyleSheet.hairlineWidth,
-      height: Space.xl },
-
-    // How it works
-    howItWorksWrap: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-      marginBottom: Space.lg },
-    howItWorksHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: Space.md,
-      minHeight: Control.hit },
-    howItWorksTitle: {
-      fontSize: TypographyV2.bodyStrong.size,
-      fontFamily: TypographyV2.bodyStrong.fontFamily,
-      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-      lineHeight: TypographyV2.bodyStrong.lineHeight },
-    howItWorksContent: {
-      paddingBottom: Space.md,
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      top: 0 },
-    howItWorksBody: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      letterSpacing: TypographyV2.body.letterSpacing,
-      lineHeight: TypographyV2.body.lineHeight,
-      marginBottom: Space.sm },
-    howItWorksDemo: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight,
-      marginTop: Space.xs },
-
-    // Sections
-    sectionWrap: {
-      marginBottom: Space.lg },
-    sectionTitle: {
-      fontSize: TypographyV2.bodyStrong.size,
-      fontFamily: TypographyV2.bodyStrong.fontFamily,
-      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-      lineHeight: TypographyV2.bodyStrong.lineHeight,
-      marginBottom: Space.xs },
-    sectionCaption: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight,
-      marginBottom: Space.md },
-
-    // Topic list — the dominant panel (flat with hairlines)
-    topicList: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border },
-    topicRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: Space.md,
-      minHeight: Control.hit + Space.sm,
-      gap: Space.sm },
-    topicMain: {
-      flex: 1,
-      minWidth: 0 },
-    topicLabel: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      letterSpacing: TypographyV2.body.letterSpacing,
-      lineHeight: TypographyV2.body.lineHeight },
-    topicMetaRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginTop: Space.xs },
-    topicCategory: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight },
-    topicMetaGap: {
-      width: Space.sm },
-    weightDots: {
-      flexDirection: 'row',
-      gap: Space.xs },
-    weightDot: {
-      width: Space.xs + 2,
-      height: Space.xs + 2,
-      borderRadius: Radius.sm },
-    topicSource: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight,
-      marginLeft: Space.sm },
-    topicRight: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.sm },
-    topicExpandedContent: {
-      paddingBottom: Space.md,
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      top: 0 },
-    controlLabel: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight,
-      textTransform: 'uppercase',
-      marginBottom: Space.sm },
-    weightSelector: {
-      flexDirection: 'row',
-      gap: Space.sm,
-      marginBottom: Space.md },
-    weightOption: {
-      paddingVertical: Space.sm,
-      paddingHorizontal: Space.md,
-      borderRadius: Radius.md,
-      borderWidth: Stroke.standard,
-      minHeight: Control.hit - Space.sm,
-      alignItems: 'center',
-      justifyContent: 'center' },
-    weightOptionText: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      letterSpacing: TypographyV2.body.letterSpacing },
-    weightUpdating: {
-      marginLeft: Space.xs },
-    removeBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingVertical: Space.sm,
-      minHeight: Control.hit },
-    removeBtnText: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      letterSpacing: TypographyV2.body.letterSpacing },
-    lockHint: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Space.xs,
-      paddingVertical: Space.sm },
-    lockHintText: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight,
-      color: colors.textMuted,
-      flex: 1 },
-
-    // Signal list
-    signalList: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.border },
-    signalRow: {
-      paddingVertical: Space.md,
-      minHeight: Control.hit },
-    signalMain: {
-      marginBottom: Space.xs },
-    signalLabel: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      letterSpacing: TypographyV2.body.letterSpacing,
-      lineHeight: TypographyV2.body.lineHeight },
-    signalMeta: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily,
-      letterSpacing: TypographyV2.meta.letterSpacing,
-      lineHeight: TypographyV2.meta.lineHeight,
-      marginTop: Space.xs / 2 },
-    signalWeightBar: {
-      height: Space.xs - 1,
-      borderRadius: Radius.sm,
-      backgroundColor: colors.border,
-      overflow: 'hidden' },
-    signalWeightFill: {
-      height: '100%',
-      borderRadius: Radius.sm },
-
-    // Add topic
-    addTopicRow: {
-      flexDirection: 'row',
-      gap: Space.sm,
-      marginBottom: Space.sm },
+      paddingTop: Space.sm },
     topicInput: {
-      flex: 1,
-      height: Control.hit + Space.sm,
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
+      borderRadius: Radius.lg },
+    chipCloud: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Space.sm,
       paddingHorizontal: Space.md,
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      letterSpacing: TypographyV2.body.letterSpacing },
-    categoryPicker: {
+      paddingTop: Space.sm },
+    chip: {
+      minHeight: Control.hit - 8,
+      borderRadius: Radius.md,
+      paddingHorizontal: Space.md,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      height: Control.hit + Space.sm,
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-      paddingHorizontal: Space.md,
-      marginBottom: Space.sm },
-    categoryPickerLabel: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      letterSpacing: TypographyV2.body.letterSpacing,
-      flex: 1 },
-    categoryList: {
-      borderRadius: Radius.lg,
-      borderWidth: Stroke.standard,
-      maxHeight: 240,
-      marginBottom: Space.sm,
-      overflow: 'hidden' },
-    categoryOption: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: Space.md,
-      paddingHorizontal: Space.md,
-      minHeight: Control.hit },
-    categoryOptionText: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      letterSpacing: TypographyV2.body.letterSpacing },
-    addBtn: {
-      height: Control.hit + Space.sm,
-      borderRadius: Radius.full,
-      alignItems: 'center',
+      gap: 6,
       justifyContent: 'center' },
-    addBtnText: {
-      fontSize: TypographyV2.bodyStrong.size,
-      fontFamily: TypographyV2.bodyStrong.fontFamily,
-      letterSpacing: TypographyV2.bodyStrong.letterSpacing },
-
-    // Empty state
-    emptyStateWrap: {
-      alignItems: 'center',
-      paddingVertical: Space.xl,
+    chipText: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: Typography.family.medium },
+    demoLine: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: Typography.family.regular,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.md },
+    sectionWrap: {
+      marginTop: Space.lg,
       paddingHorizontal: Space.md },
-    emptyIconCircle: {
-      width: Space.xl * 2,
-      height: Space.xl * 2,
-      borderRadius: Radius.full,
+    sectionLabel: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: Typography.family.semibold,
+      marginBottom: Space.sm },
+    emptyWrap: {
       alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: Space.md },
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xl },
     emptyTitle: {
-      fontSize: TypographyV2.sectionTitle.size,
-      fontFamily: TypographyV2.sectionTitle.fontFamily,
-      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-      lineHeight: TypographyV2.sectionTitle.lineHeight,
-      marginBottom: Space.xs },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: Typography.family.semibold },
     emptySubtitle: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      letterSpacing: TypographyV2.body.letterSpacing,
       lineHeight: TypographyV2.body.lineHeight,
-      textAlign: 'center' },
-
-    // Error state
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginTop: Space.xs },
+    offlineWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.md },
+    offlineText: {
+      flex: 1,
+      fontSize: TypographyV2.body.size,
+      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: Typography.family.regular },
+    skeletonWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Space.sm,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.lg },
+    skeletonChip: {
+      height: Control.hit - 8,
+      borderRadius: Radius.md },
     errorWrap: {
       alignItems: 'center',
-      paddingVertical: Space.xl,
-      paddingHorizontal: Space.md },
-    errorIconCircle: {
-      width: Space.xl * 2,
-      height: Space.xl * 2,
-      borderRadius: Radius.full,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: Space.md },
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.xl },
     errorTitle: {
-      fontSize: TypographyV2.sectionTitle.size,
-      fontFamily: TypographyV2.sectionTitle.fontFamily,
-      letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-      lineHeight: TypographyV2.sectionTitle.lineHeight,
-      marginBottom: Space.xs },
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: Typography.family.semibold,
+      marginTop: Space.md },
     errorSubtitle: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      letterSpacing: TypographyV2.body.letterSpacing,
-      lineHeight: TypographyV2.body.lineHeight,
+      fontFamily: Typography.family.regular,
+      color: colors.textSecondary,
       textAlign: 'center',
-      marginBottom: Space.lg },
+      marginTop: Space.xs },
     retryBtn: {
+      marginTop: Space.md,
+      minHeight: Control.hit,
       paddingHorizontal: Space.lg,
-      paddingVertical: Space.smMd,
-      borderRadius: Radius.full,
-      borderWidth: Stroke.standard },
-    retryBtnText: {
+      borderRadius: Radius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      alignItems: 'center',
+      justifyContent: 'center' },
+    retryText: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-      letterSpacing: TypographyV2.body.letterSpacing },
-
-    // Skeleton
-    skeletonLine: {
-      borderRadius: Radius.sm },
-    skeletonSummaryItem: {
+      fontFamily: Typography.family.medium },
+    sheetScrim: {
       flex: 1,
-      alignItems: 'center' },
-    skeletonValue: {
-      width: Space.xxl,
-      height: Space.md + Space.xs },
-    skeletonLabel: {
-      width: Space.xl * 2,
-      height: Space.md - Space.xs,
-      marginTop: Space.xs } });
+      backgroundColor: 'rgba(0,0,0,0.4)',
+      justifyContent: 'flex-end' },
+    sheet: {
+      borderTopLeftRadius: Radius.lg,
+      borderTopRightRadius: Radius.lg,
+      paddingHorizontal: Space.md,
+      paddingTop: Space.lg,
+      paddingBottom: Space.xl },
+    sheetTitle: {
+      fontSize: TypographyV2.bodyStrong.size,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      fontFamily: Typography.family.semibold,
+      marginBottom: Space.md },
+    sheetRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      minHeight: Control.hit + 4,
+      borderRadius: Radius.md,
+      paddingHorizontal: Space.md },
+    sheetRowText: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: Typography.family.medium },
+    sheetRowDanger: {
+      fontSize: TypographyV2.body.size,
+      fontFamily: Typography.family.medium,
+      color: colors.danger },
+    sheetLockHint: {
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: Typography.family.regular,
+      color: colors.textMuted,
+      marginTop: Space.sm },
+  });
 }

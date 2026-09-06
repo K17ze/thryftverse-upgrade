@@ -40,7 +40,7 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-type SortOption = 'progress' | 'closing' | 'roi';
+type SortOption = 'progress' | 'listed' | 'roi';
 type HubSegment = 'active' | 'new_issues' | 'watchlist';
 type FundingFilter = 'all' | 'funding' | 'funded' | 'matured';
 
@@ -75,7 +75,7 @@ type HubRow =
   | { kind: 'remaining'; key: 'remaining' };
 
 const SEGMENTS: HubSegment[] = ['active', 'new_issues', 'watchlist'];
-const SORT_OPTIONS: SortOption[] = ['progress', 'closing', 'roi'];
+const SORT_OPTIONS: SortOption[] = ['progress', 'listed', 'roi'];
 const FUNDING_FILTERS: FundingFilter[] = ['all', 'funding', 'funded', 'matured'];
 const POSITION_CARD_WIDTH = COOWN_POSITION_CARD_WIDTH;
 const POSITION_CARD_GAP = 12;
@@ -87,7 +87,7 @@ const SEGMENT_LABELS: Record<HubSegment, string> = {
 };
 const SORT_LABELS: Record<SortOption, string> = {
   progress: 'Progress',
-  closing: 'Closing date',
+  listed: 'Recently listed',
   roi: 'ROI',
 };
 const FUNDING_FILTER_LABELS: Record<FundingFilter, string> = {
@@ -330,19 +330,20 @@ export default function CoOwnHubScreen() {
           (asset.issuerJurisdiction ?? '').toLowerCase().includes(normalized)
         )
       : fundingFiltered;
-    // Sort — by progress, closing date, or ROI
+    // Sort — by allocation progress, listing time, or held-position return
     return [...searched].sort((a, b) => {
       if (sortBy === 'progress') {
         const aProgress = a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0;
         const bProgress = b.totalUnits > 0 ? (b.totalUnits - b.availableUnits) / b.totalUnits : 0;
         return bProgress - aProgress;
       }
-      if (sortBy === 'closing') {
-        // Closing date proxy: oldest first (longest-running syndicates
-        // are likely closest to closing). Falls back to newest when equal.
+      if (sortBy === 'listed') {
+        // There is no authoritative offering close date in this contract.
+        // Sort by the real timestamp rather than presenting creation time as
+        // a deadline or settlement estimate.
         const aDate = new Date(a.createdAt).getTime();
         const bDate = new Date(b.createdAt).getTime();
-        return aDate - bDate;
+        return bDate - aDate;
       }
       if (sortBy === 'roi') {
         // ROI: sort by unrealized P&L percentage for held positions.

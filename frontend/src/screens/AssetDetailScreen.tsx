@@ -23,9 +23,7 @@ import { Space, Radius, FontFamily, DockConstants, Control, Numeric, PressScale 
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import {
-  fetchCoOwnOrderBook,
   fetchCoOwnDistributions,
-  type CoOwnOrderBookSnapshot,
   type CoOwnDistribution,
   type MarketCoOwnAsset,
   type MarketCoOwnHolding,
@@ -95,6 +93,7 @@ import { useAssetDetailSheets } from '../hooks/useAssetDetailSheets';
 import { usePriceAlertForm } from '../hooks/usePriceAlertForm';
 import { useFeatureFlag } from '../analytics';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { useCoOwnOrderBookStream } from '../hooks/useCoOwnOrderBookStream';
 
 type RouteT = RouteProp<RootStackParamList, 'AssetDetail'>;
 type NavT = NativeStackNavigationProp<RootStackParamList>;
@@ -143,8 +142,6 @@ export default function AssetDetailScreen() {
   const yourUnits = currentUser?.id ? (yourHolding?.unitsOwned ?? null) : 0;
   const holdingsError = currentUser?.id ? holdingsQuery.isError : false;
 
-  const [orderBook, setOrderBook] = React.useState<CoOwnOrderBookSnapshot | null>(null);
-  const [orderBookError, setOrderBookError] = React.useState(false);
   const [lastDistribution, setLastDistribution] = React.useState<CoOwnDistribution | null>(null);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
@@ -186,6 +183,17 @@ export default function AssetDetailScreen() {
   const [dataLoadedAt, setDataLoadedAt] = React.useState<number | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
 
+  // The order book is a snapshot-plus-delta stream. The hook resynchronises
+  // after sequence gaps, reconnects, and foreground returns; the detail page
+  // consumes one authoritative stream instead of maintaining a second poller.
+  const {
+    orderBook,
+    isStreaming: orderBookStreaming,
+    hasGap: orderBookHasGap,
+    hasError: orderBookError,
+    refetch: refetchOrderBook,
+  } = useCoOwnOrderBookStream(assetId ?? null);
+
   const coOwnCompliance = useStore((s) => s.coOwnCompliance);
   const updateCoOwnCompliance = useStore((s) => s.updateCoOwnCompliance);
 
@@ -200,32 +208,6 @@ export default function AssetDetailScreen() {
       scrollY.value = event.contentOffset.y;
     }
   });
-
-  // ── Order book fetch (asset + holdings come from shared cache) ──
-  React.useEffect(() => {
-    if (!assetId) return;
-    let cancelled = false;
-    setOrderBookError(false);
-    setOrderBook(null);
-    void fetchCoOwnOrderBook(assetId, { limit: 40 })
-      .then((book) => { if (!cancelled) setOrderBook(book); })
-      .catch(() => { if (!cancelled) setOrderBookError(true); });
-    return () => { cancelled = true; };
-  }, [assetId]);
-
-  // Poll the order book every 15s so the depth chart and best bid/ask
-  // stay fresh without manual refresh.
-  React.useEffect(() => {
-    if (!assetId) return;
-    let cancelled = false;
-    const intervalId = setInterval(() => {
-      if (cancelled) return;
-      fetchCoOwnOrderBook(assetId, { limit: 40 })
-        .then((book) => { if (!cancelled) setOrderBook(book); })
-        .catch(() => undefined);
-    }, 15_000);
-    return () => { cancelled = true; clearInterval(intervalId); };
-  }, [assetId]);
 
   // ── Last distribution fetch — most recent settled distribution for this asset ──
   React.useEffect(() => {
@@ -257,12 +239,8 @@ export default function AssetDetailScreen() {
   }, [assetQuery.error, show]);
 
   const retryOrderBook = React.useCallback(() => {
-    if (!assetId) return;
-    setOrderBookError(false);
-    void fetchCoOwnOrderBook(assetId, { limit: 40 })
-      .then(setOrderBook)
-      .catch(() => setOrderBookError(true));
-  }, [assetId]);
+    void refetchOrderBook();
+  }, [refetchOrderBook]);
 
   const retryHoldings = React.useCallback(() => {
     if (!currentUser?.id) return;
@@ -276,18 +254,12 @@ export default function AssetDetailScreen() {
     setRefreshing(true);
     void Promise.allSettled([
       assetQuery.refetch(),
-      fetchCoOwnOrderBook(assetId, { limit: 40 }),
+      refetchOrderBook(),
       currentUser?.id ? holdingsQuery.refetch() : Promise.resolve(),
-    ]).then(([_, bookResult]) => {
-      if (bookResult.status === 'fulfilled') {
-        setOrderBook(bookResult.value as CoOwnOrderBookSnapshot);
-        setOrderBookError(false);
-      } else {
-        setOrderBookError(true);
-      }
+    ]).then(() => {
       setRefreshing(false);
     });
-  }, [assetId, assetQuery, holdingsQuery, currentUser?.id]);
+  }, [assetId, assetQuery, holdingsQuery, currentUser?.id, refetchOrderBook]);
 
   // ── Hooks must run before conditional returns (Rules of Hooks) ──
 
@@ -459,6 +431,13 @@ export default function AssetDetailScreen() {
   const spreadGbp = bestBid?.unitPriceGbp != null && bestAsk?.unitPriceGbp != null
     ? Math.max(0, bestAsk.unitPriceGbp - bestBid.unitPriceGbp)
     : null;
+  const depthStatusLabel = orderBookHasGap
+    ? 'Resyncing depth'
+    : orderBookStreaming
+      ? 'Live depth'
+      : orderBook
+        ? 'Snapshot depth'
+        : 'Depth unavailable';
   const reconciliationActive =
     orderBook != null && orderBook.reconciliationState !== 'reconciled';
   const marketSnapshot = asset.marketSnapshot ?? null;
@@ -997,7 +976,7 @@ export default function AssetDetailScreen() {
                 <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
                   {orderBookError
                     ? 'Depth unavailable'
-                    : `Spread ${spreadGbp != null ? formatCoOwnIze(spreadGbp) : 'Not available'}`}
+                    : `${depthStatusLabel} \u00b7 spread ${spreadGbp != null ? formatCoOwnIze(spreadGbp) : 'not available'}`}
                 </Text>
               </View>
             }

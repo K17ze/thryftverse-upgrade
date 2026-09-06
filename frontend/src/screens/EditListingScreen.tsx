@@ -19,7 +19,6 @@ import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { CURRENCIES } from '../constants/currencies';
-import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
 import { convertPickerAsset, convertCaptureUri, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import type { MediaUploadAsset } from '../utils/mediaUploadAsset';
@@ -38,10 +37,8 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useBackendData } from '../context/BackendDataContext';
 import { useTaxonomy } from '../context/TaxonomyContext';
-import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '../platform/server/queryKeys';
+import { useQueryClient } from '@tanstack/react-query';import { queryKeys } from '../platform/server/queryKeys';
 import { useSoldComps } from '../hooks/useSoldComps';
-import { calculateListingQuality } from '../utils/listingQuality';
 import {
 
   evaluateListingCompleteness,
@@ -87,10 +84,6 @@ export default function EditListingScreen() {
     descInput: { color: colors.textPrimary },
     charCount: { color: colors.textMuted },
     inlineErrorText: { color: colors.danger },
-    photoGuideCard: { backgroundColor: colors.surface, borderColor: colors.border },
-    photoGuideTitle: { color: colors.textSecondary },
-    photoGuideTip: { color: colors.textMuted },
-    photoGuideMin: { color: colors.textMuted },
     priceSuggestion: { color: colors.brand },
     priceMarketHigh: { color: colors.warning },
     priceMarketLow: { color: colors.textMuted },
@@ -99,13 +92,6 @@ export default function EditListingScreen() {
     fieldValid: { color: colors.success },
     fieldRequiredHint: { color: colors.textMuted },
     charCountWarn: { color: colors.warning },
-    qualityBar: { backgroundColor: colors.surface, borderTopColor: colors.border },
-    qualityBarLabel: { color: colors.textPrimary },
-    qualityBarScore: { color: colors.textPrimary },
-    qualityBarTier: { color: colors.textSecondary },
-    qualityTipsRow: { backgroundColor: colors.surfaceAlt },
-    qualityTipsText: { color: colors.textSecondary },
-    qualityTipsLabel: { color: colors.brand },
     soldCompsText: { color: colors.textMuted },
     soldCompsAction: { color: colors.brand } }), [colors]);
   const navigation = useNavigation<any>();
@@ -145,8 +131,6 @@ export default function EditListingScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [saveStage, setSaveStage] = useState<SaveStage>('idle');
-  const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(false);
-  const [qualityTipsExpanded, setQualityTipsExpanded] = useState(false);
 
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
@@ -180,7 +164,12 @@ export default function EditListingScreen() {
   const [queueState, setQueueState] = useState(uploadQueueRef.current.getState());
   useEffect(() => {
     const unsub = uploadQueueRef.current.subscribe((s) => setQueueState(s));
-    return () => { unsub(); };
+    return () => {
+      unsub();
+      // The snapshot dies with the screen — reset so a later edit of the
+      // same listing starts from a clean queue.
+      uploadQueueRef.current.reset();
+    };
   }, []);
 
   /* ── focus scroll (ManageListing deep-links: price / shipping / format) ── */
@@ -427,27 +416,19 @@ export default function EditListingScreen() {
     return !!item;
   }, [mediaItems]);
 
-  const handleSetCover = useCallback((itemId: string) => {
-    setMediaItems((prev) => {
-      const idx = prev.findIndex((m) => m.id === itemId);
-      if (idx <= 0) return prev;
-      const next = [...prev];
-      const [moved] = next.splice(idx, 1);
-      next.unshift(moved);
-      setRemoteMediaOrder(next.filter((m) => m.source === 'remote').map((m) => m.mediaId ?? m.id));
-      return next;
-    });
-    haptics.tap();
-  }, []);
-
   // ── Transform item (crop/rotate/flip) ──
-  const handleTransformItem = useCallback((itemId: string, transformedUri: string) => {
+  // A same-URI call is a focal-only update: store the point without
+  // resetting upload state. Only a real URI replacement re-queues the item.
+  const handleTransformItem = useCallback((itemId: string, transformedUri: string, focalPoint?: { x: number; y: number }) => {
     setMediaItems((prev) =>
-      prev.map((m) =>
-        m.id === itemId
-          ? { ...m, uri: transformedUri, publicUrl: undefined, status: 'draft' as const }
-          : m
-      )
+      prev.map((m) => {
+        if (m.id !== itemId) return m;
+        const uriChanged = transformedUri !== m.uri;
+        return {
+          ...m,
+          ...(uriChanged ? { uri: transformedUri, publicUrl: undefined, status: 'draft' as const } : {}),
+          ...(focalPoint ? { focalPoint } : {}) };
+      })
     );
   }, []);
 
@@ -559,7 +540,7 @@ export default function EditListingScreen() {
           width: m.width,
           height: m.height,
           durationMs: m.durationMs }));
-        queue.addAssets(assets);
+        await queue.addAssets(assets);
         await queue.run();
         const queueItems = queue.getItems();
         setMediaItems((prev) =>
@@ -639,7 +620,18 @@ export default function EditListingScreen() {
 
       // 4. Patch listing metadata (text fields + attachment manifest + cover)
       setSaveStage('updating_listing');
-      const coverUri = mediaItems[0]?.publicUrl || mediaItems[0]?.uri;
+      // The queue result is fresher than state — the setMediaItems above has
+      // not re-rendered into this closure, so read the cover's uploaded URL
+      // from the queue items first. A local file:// URI is useless to the
+      // API: with no canonical remote URL the save fails through the
+      // existing error path instead of sending one.
+      const coverUri = coverItem
+        ? (uploadedItems.find((q) => q.id === coverItem.id)?.publicUrl
+          || coverItem.publicUrl)
+        : undefined;
+      if (coverItem && !coverUri) {
+        throw new Error(t('listing.edit.mediaFailedRetry'));
+      }
       await patchListingOnApi(itemId, {
         title: title.trim(),
         description: description.trim(),
@@ -656,6 +648,10 @@ export default function EditListingScreen() {
         attachmentOrder,
         removedAttachmentIds: removedRemoteIds.length > 0 ? removedRemoteIds : undefined,
         coverMediaId: coverMediaId ?? null });
+
+      // Results are synced into state and attachments are created — drop
+      // the queue snapshot so nothing leaks into a future save.
+      uploadQueueRef.current.reset();
 
       setSaveStage('completed');
       haptics.success();
@@ -767,25 +763,6 @@ export default function EditListingScreen() {
     if (soldComps.maxPrice != null && numericPrice > soldComps.maxPrice * 1.2) return 'above' as const;
     return 'in_range' as const;
   }, [soldComps, hasValidPrice, numericPrice]);
-
-  /* ── listing quality ── */
-  // The listings API does not expose a sales-format field (auctions are
-  // separate rows joined by listing id), so the meter scores the editable
-  // fixed-price record fields — always listingMode 'sell_now'.
-  const qualityResult = useMemo(() => calculateListingQuality({
-    photos: mediaItems.map((m) => m.publicUrl || m.uri),
-    title,
-    brand,
-    category,
-    size,
-    condition,
-    description,
-    price,
-    originalPrice,
-    tags: [],
-    shippingMethod,
-    shippingPayer,
-    listingMode: 'sell_now' }), [mediaItems, title, brand, category, size, condition, description, price, originalPrice, shippingMethod, shippingPayer]);
 
   /* ── listing status label ── */
   const listingStatusLabel = useMemo(() => {
@@ -914,7 +891,6 @@ export default function EditListingScreen() {
               onReorder={handleReorder}
               onRemoveItem={handleRemoveItem}
               onRetryItem={handleRetryItem}
-              onSetCover={handleSetCover}
               onTransformItem={handleTransformItem}
               canRemoveItem={canRemoveItem}
               reorderEnabled={true}
@@ -936,41 +912,6 @@ export default function EditListingScreen() {
               lockedNote={t('listing.edit.noPermission')}
             />
           )}
-
-          {/* ── 2a. PHOTO UPLOAD GUIDANCE ── */}
-          <View style={[styles.photoGuideCard, themed.photoGuideCard]}>
-            <Pressable
-              style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.85 }]}
-              onPress={() => setPhotoGuideCollapsed((v) => !v)}
-              accessibilityRole="button"
-              accessibilityLabel={photoGuideCollapsed ? t('listing.edit.expandPhotoTips') : t('listing.edit.collapsePhotoTips')}
-            >
-              <AppIcon name="camera-outline" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
-              <Text style={[styles.photoGuideTitle, themed.photoGuideTitle]}>{t('listing.create.photoTips')}</Text>
-              <Text style={[styles.photoGuideMin, themed.photoGuideMin]}>{t('listing.create.photoTipsMin')}</Text>
-              <AppIcon name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
-            {!photoGuideCollapsed && (
-              <Reanimated.View
-                entering={reducedMotion ? undefined : FadeIn.duration(200)}
-                exiting={reducedMotion ? undefined : FadeOut.duration(200)}
-                style={styles.photoGuideTips}
-              >
-                <View style={styles.photoGuideTipRow}>
-                  <AppIcon name="sunny-outline" size={12} color="textMuted" opticalCenter accessible={false} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipLighting')}</Text>
-                </View>
-                <View style={styles.photoGuideTipRow}>
-                  <AppIcon name="camera-reverse-outline" size={12} color="textMuted" opticalCenter accessible={false} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipAngles')}</Text>
-                </View>
-                <View style={styles.photoGuideTipRow}>
-                  <AppIcon name="leaf-outline" size={12} color="textMuted" opticalCenter accessible={false} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipBackground')}</Text>
-                </View>
-              </Reanimated.View>
-            )}
-          </View>
 
           {/* ── 3. LISTING STATUS/CONTEXT ── */}
           {listingStatusLabel && (
@@ -1327,69 +1268,6 @@ export default function EditListingScreen() {
           <View style={{ height: DockConstants.singleActionHeight }} />
         </KeyboardAwareScrollView>
 
-      {/* ── 8b. COMPACT LISTING QUALITY METER (fixed above save footer) ── */}
-      {isOwner && (
-        <View style={[styles.qualityBar, themed.qualityBar]}>
-          <View style={styles.qualityBarRow}>
-            <View style={styles.qualityBarLeft}>
-              <AppIcon
-                name={qualityResult.tier === 'excellent' ? 'star' : qualityResult.tier === 'good' ? 'star-half-outline' : 'ellipse-outline'}
-                size={IconSize.sm}
-                color="textSecondary"
-                opticalCenter
-                accessible={false}
-              />
-              <Text style={[styles.qualityBarLabel, themed.qualityBarLabel]}>{t('listing.edit.listingQuality')}</Text>
-            </View>
-            <View style={styles.qualityBarRight}>
-              <Text style={[styles.qualityBarScore, themed.qualityBarScore]}>{qualityResult.score}%</Text>
-              <Text style={[styles.qualityBarTier, themed.qualityBarTier]}>{qualityResult.tierLabel}</Text>
-              <Pressable
-                hitSlop={8}
-                onPress={() => setQualityTipsExpanded((v) => !v)}
-                style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.85 }]}
-                accessibilityRole="button"
-                accessibilityLabel={qualityTipsExpanded ? t('listing.edit.hideTips') : t('listing.edit.showTips')}
-              >
-                <Text style={[styles.qualityTipsLabel, themed.qualityTipsLabel]}>{t('listing.edit.tipsToImprove')}</Text>
-                <AppIcon name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color="brand" opticalCenter accessible={false} />
-              </Pressable>
-            </View>
-          </View>
-          <View style={styles.qualityBarTrack}>
-            <View style={[styles.qualityBarFill, { width: `${qualityResult.score}%`, backgroundColor: colors.brand }]} />
-          </View>
-          {qualityTipsExpanded && qualityResult.missingItems.length > 0 && (
-            <Reanimated.View
-              entering={reducedMotion ? undefined : FadeIn.duration(200)}
-              exiting={reducedMotion ? undefined : FadeOut.duration(200)}
-              style={[styles.qualityTipsRow, themed.qualityTipsRow]}
-            >
-              {qualityResult.missingItems.slice(0, 6).map((item) => (
-                <View key={item.key} style={styles.qualityTipChip}>
-                  <AppIcon name={item.icon} size={12} color="textMuted" opticalCenter accessible={false} />
-                  <Text style={[styles.qualityTipsText, themed.qualityTipsText]}>{item.label}</Text>
-                </View>
-              ))}
-            </Reanimated.View>
-          )}
-          {qualityTipsExpanded && qualityResult.tips.length > 0 && (
-            <Reanimated.View
-              entering={reducedMotion ? undefined : FadeIn.duration(200)}
-              exiting={reducedMotion ? undefined : FadeOut.duration(200)}
-              style={styles.qualityTipsList}
-            >
-              {qualityResult.tips.slice(0, 4).map((tip, i) => (
-                <View key={i} style={styles.qualityTipBulletRow}>
-                  <Text style={[styles.qualityTipBullet, themed.qualityTipsText]}>•</Text>
-                  <Text style={[styles.qualityTipsText, themed.qualityTipsText]}>{tip}</Text>
-                </View>
-              ))}
-            </Reanimated.View>
-          )}
-        </View>
-      )}
-
       {/* ── 9. STICKY PREVIEW/SAVE FOOTER ── */}
       {isOwner && (
         <EditListingFooter
@@ -1564,38 +1442,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily },
 
-  /* -- photo guidance card -- */
-  photoGuideCard: {
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth },
-  photoGuideHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2 },
-  photoGuideTitle: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  photoGuideMin: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  photoGuideTips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm + 2,
-    marginTop: Space.sm },
-  photoGuideTipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs },
-  photoGuideTip: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-
   /* -- price suggestion block -- */
   priceSuggestionBlock: {
     marginTop: Space.xs,
@@ -1639,75 +1485,4 @@ const styles = StyleSheet.create({
     fontFamily: TypographyV2.meta.fontFamily },
   completenessHint: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-
-  /* -- compact quality bar (fixed above footer) -- */
-  qualityBar: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-    gap: Space.xs },
-  qualityBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between' },
-  qualityBarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2 },
-  qualityBarLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  qualityBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2 },
-  qualityBarScore: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily },
-  qualityBarTier: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  qualityTipsToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2 },
-  qualityTipsLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  qualityBarTrack: {
-    height: Stroke.emphasis,
-    borderRadius: Radius.sm,
-    backgroundColor: 'transparent',
-    overflow: 'hidden' },
-  qualityBarFill: {
-    height: '100%',
-    borderRadius: Radius.sm },
-  qualityTipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs + 1,
-    paddingVertical: Space.xs,
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.sm,
-    marginTop: Space.xs },
-  qualityTipChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2 + 1 },
-  qualityTipsList: {
-    gap: Space.xs - 1,
-    marginTop: Space.xs },
-  qualityTipBulletRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.xs + 2 },
-  qualityTipBullet: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  qualityTipsText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    lineHeight: TypographyV2.meta.lineHeight - 1 } });
+    fontFamily: TypographyV2.meta.fontFamily } });

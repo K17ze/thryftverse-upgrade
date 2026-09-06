@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useStore } from '../../store/useStore';
 import { haptics } from '../../utils/haptics';
 import { sanitizeDecimalInput } from '../../utils/currencyAuthoringFlows';
@@ -6,6 +7,7 @@ import { buildPublishErrors } from '../../utils/sellScreenLogic';
 import { buildCreateCoOwnPrefillFromSell } from '../../utils/syndicatePrefill';
 import type { ListingMediaDraftItem } from '../../utils/mediaUploadAsset';
 import type { MediaUploadQueue } from '../../services/mediaUploadQueue';
+import type { RootStackParamList } from '../../navigation/types';
 import {
   executePublication,
   type PublicationContext,
@@ -14,6 +16,13 @@ import {
 import type { ListingMode } from '../../components/listing/ListingModeSelector';
 import type { ListingCompletenessResult } from '../../contracts/listingCategoryPolicy';
 import { track, trackFunnelStep } from '../../analytics';
+
+/** Performance marks are unavailable on some Hermes runtimes — never throw. */
+const safeMark = (name: string) => {
+  if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+    performance.mark(name);
+  }
+};
 
 interface ListingPublishPipelineParams {
   listingMode: ListingMode;
@@ -37,7 +46,7 @@ interface ListingPublishPipelineParams {
   completeness: ListingCompletenessResult;
   isOffline: boolean;
   currentUser: { id: string } | null;
-  navigation: any;
+  navigation: NativeStackNavigationProp<RootStackParamList>;
   uploadQueueRef: React.MutableRefObject<MediaUploadQueue>;
   setMediaDraftItems: React.Dispatch<React.SetStateAction<ListingMediaDraftItem[]>>;
   setPhotos: React.Dispatch<React.SetStateAction<string[]>>;
@@ -70,7 +79,6 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
     authPhotos,
     shippingMethod,
     shippingPayer,
-    photos,
     mediaDraftItems,
     completeness,
     isOffline,
@@ -137,7 +145,7 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
     trackFunnelStep('listing_creation', 'listing_submitted', { mode: listingMode });
 
     // Performance mark: listing creation flow start (validation passed).
-    performance.mark('listing:create:start');
+    safeMark('listing:create:start');
 
     if (listingMode === 'co_own') {
       const prefillResult = buildCreateCoOwnPrefillFromSell({
@@ -204,7 +212,7 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
       queue.reset();
       haptics.success();
       // Performance mark: listing creation complete.
-      performance.mark('listing:create:complete');
+      safeMark('listing:create:complete');
       track('listing_published', { listing_id: result.listingId });
       if (result.context.mode === 'sell_now') {
         track('listing_created', { category, price_range: numericPrice <= 20 ? 'low' : numericPrice <= 50 ? 'mid' : numericPrice <= 100 ? 'high' : 'premium' });
@@ -237,7 +245,7 @@ export function useListingPublishPipeline(params: ListingPublishPipelineParams) 
 
     isPublishingRef.current = false;
     setIsPublishing(false);
-  }, [isPublishing, listingMode, photos, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline, completeness, uploadQueueRef, setMediaDraftItems, setPhotos, setErrors, setErrorMsg, syncMediaFromQueue]);
+  }, [isPublishing, listingMode, mediaDraftItems, title, desc, price, startingBid, category, size, condition, shareCountInput, sharePriceInput, offeringWindowHours, authPhotos, clearSellDraft, navigation, currentUser, brand, originalPrice, shippingMethod, shippingPayer, isOffline, completeness, uploadQueueRef, setMediaDraftItems, setPhotos, setErrors, setErrorMsg, syncMediaFromQueue]);
 
   return {
     isPublishing,

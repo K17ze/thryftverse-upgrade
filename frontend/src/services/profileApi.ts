@@ -6,6 +6,9 @@ export interface ProfileUser {
   email: string | null;
   displayName: string | null;
   bio: string | null;
+  pronouns?: string | null;
+  gender?: string | null;
+  isAiCreator?: boolean | null;
   location: string | null;
   website: string | null;
   phone: string | null;
@@ -36,9 +39,9 @@ export interface PublicProfileUser {
   role: string;
   emailVerified: boolean;
   /** Pronouns for the user (e.g. "she/her", "they/them"). */
-  pronouns?: string;
+  pronouns?: string | null;
   /** Whether this user is an AI-assisted creator. */
-  isAiCreator?: boolean;
+  isAiCreator?: boolean | null;
   /** Identity/KYC verification — separate from email verification. */
   identityVerified?: boolean;
   /** Seller standards verification — separate from email/identity. */
@@ -130,6 +133,9 @@ export async function fetchMyProfile(): Promise<ProfileUser> {
 }
 
 export interface UpdateProfileInput {
+  pronouns?: string;
+  gender?: string;
+  isAiCreator?: boolean;
   displayName?: string;
   username?: string;
   bio?: string;

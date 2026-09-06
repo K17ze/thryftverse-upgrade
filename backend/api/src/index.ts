@@ -12387,6 +12387,9 @@ type ProfileUserRow = {
   avatar: string | null;
   cover_photo: string | null;
   cover_video: string | null;
+  pronouns?: string | null;
+  gender?: string | null;
+  is_ai_creator?: boolean | null;
   role: string;
   email_verified_at: string | null;
   two_factor_enabled: boolean;
@@ -12422,6 +12425,9 @@ function toProfilePayload(row: ProfileUserRow) {
     username: row.username,
     email: row.email,
     displayName: row.display_name,
+    pronouns: row.pronouns ?? null,
+    gender: row.gender ?? null,
+    isAiCreator: row.is_ai_creator ?? false,
     bio: row.bio,
     location: row.location,
     website: row.website,
@@ -12445,6 +12451,8 @@ function toPublicProfilePayload(row: ProfileUserRow & {
     id: row.id,
     username: row.username,
     displayName: row.display_name,
+    pronouns: row.pronouns ?? null,
+    isAiCreator: row.is_ai_creator ?? false,
     bio: row.bio,
     location: row.location,
     website: row.website,
@@ -31478,6 +31486,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
 
   const result = await db.query<{
     entry_id: string;
+    order_id: number | null;
     channel: 'auction' | 'co-own';
     action: 'bid' | 'buy-units' | 'sell-units';
     reference_id: string;
@@ -31488,13 +31497,14 @@ app.get('/users/:userId/market-history', async (request, reply) => {
     unit_price_gbp: number | string | null;
     fee_gbp: number | string | null;
     status: 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected' | null;
-    order_type: 'market' | 'limit' | null;
+    order_type: 'market' | 'limit' | 'protected_market' | null;
     note: string | null;
     timestamp: string;
   }>(
     `
       SELECT
         history.entry_id,
+        history.order_id,
         history.channel,
         history.action,
         history.reference_id,
@@ -31511,6 +31521,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
       FROM (
         SELECT
           ('auction_bid_' || ab.id::text) AS entry_id,
+          NULL::INTEGER AS order_id,
           'auction'::text AS channel,
           'bid'::text AS action,
           ab.auction_id AS reference_id,
@@ -31537,6 +31548,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
 
         SELECT
           ('coOwn_order_' || so.id::text) AS entry_id,
+          so.id AS order_id,
           'co-own'::text AS channel,
           CASE WHEN so.side = 'buy' THEN 'buy-units' ELSE 'sell-units' END AS action,
           so.asset_id AS reference_id,
@@ -31577,6 +31589,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
     ok: true,
     items: pageRows.map((row) => ({
       id: row.entry_id,
+      orderId: row.order_id,
       channel: row.channel,
       action: row.action,
       referenceId: row.reference_id,
@@ -31587,7 +31600,7 @@ app.get('/users/:userId/market-history', async (request, reply) => {
       unitPriceGbp: row.unit_price_gbp === null ? null : Number(row.unit_price_gbp),
       feeGbp: row.fee_gbp === null ? null : Number(row.fee_gbp),
       status: row.status,
-      orderType: row.order_type as 'market' | 'limit' | null,
+      orderType: row.order_type as 'market' | 'limit' | 'protected_market' | null,
       note: row.note,
       timestamp: row.timestamp,
     })),

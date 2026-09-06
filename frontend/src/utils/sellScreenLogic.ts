@@ -2,7 +2,6 @@ import { sanitizeDecimalInput, sanitizeIntegerInput } from './currencyAuthoringF
 import type { ListingFieldKey } from '../contracts/listingCategoryPolicy';
 import type { ListingMode } from '../components/listing/ListingModeSelector';
 import { getListingModeOptions } from '../components/listing/ListingModeSelector';
-import { LUXURY_BRAND_NAMES } from '../contracts/taxonomy';
 
 export type PickerMode = 'Brand' | 'Size' | 'Condition' | 'Category' | 'Format' | null;
 
@@ -131,41 +130,6 @@ export function buildPublishErrors(input: PublishErrorInput): Record<string, str
   }
 
   return nextErrors;
-}
-
-export interface ContextualPhotoPrompt {
-  icon: string;
-  text: string;
-}
-
-export function buildContextualPhotoPrompts(
-  brand: string,
-  condition: string,
-  photoCount: number,
-  category: string,
-): ContextualPhotoPrompt[] {
-  const isLuxury = LUXURY_BRAND_NAMES.some((b) => brand.toLowerCase() === b.toLowerCase());
-  const hasFlaws = condition === 'Good' || condition === 'Satisfactory';
-
-  const prompts: ContextualPhotoPrompt[] = [];
-
-  if (photoCount === 1) {
-    prompts.push({ icon: 'camera-outline', text: 'Add a photo of the back' });
-  }
-  if (photoCount === 2) {
-    prompts.push({ icon: 'camera-outline', text: 'Add a side or detail shot' });
-  }
-  if (category && photoCount > 0 && photoCount < 5) {
-    prompts.push({ icon: 'bag-handle-outline', text: 'Show the size label' });
-  }
-  if (isLuxury && photoCount > 0) {
-    prompts.push({ icon: 'checkmark-circle-outline', text: 'Add serial, stitching, or receipt evidence' });
-  }
-  if (hasFlaws && photoCount > 0) {
-    prompts.push({ icon: 'warning-outline', text: 'Add a close-up of any flaws' });
-  }
-
-  return prompts.slice(0, 2);
 }
 
 export function formatShippingSummary(

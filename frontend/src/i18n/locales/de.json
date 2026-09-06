@@ -1769,5 +1769,6 @@
       "ownershipPercent": "Dein Eigentumsanteil",
       "distributions": "Ausschüttungen"
     }
-  }
+  },
+  "stateCopy": {}
 }

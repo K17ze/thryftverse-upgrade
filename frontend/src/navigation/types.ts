@@ -386,10 +386,8 @@ export type RootStackParamList = {
   EmailNotifications: undefined;
   AccessibilitySettings: undefined;
 
-  // ── Co-Own / Syndicate ── (price alerts, tax, recurring orders)
+  // ── Co-Own / Syndicate ── (price alerts)
   CoOwnPriceAlerts: undefined;
-  CoOwnTaxDocuments: undefined;
-  CoOwnRecurringOrders: undefined;
 
   // ── Chat & Messaging ── (media preview)
   ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };
@@ -649,8 +647,6 @@ export const ROOT_STACK_ROUTES = [
   'EmailNotifications',
   'AccessibilitySettings',
   'CoOwnPriceAlerts',
-  'CoOwnTaxDocuments',
-  'CoOwnRecurringOrders',
   'ChatMediaPreview',
   'EditCollection',
   'SupportTicketDetail',

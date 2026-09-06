@@ -36,7 +36,6 @@ import {
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { consumeEnhancementResult } from '../services/enhancementResultHandoff';
 import { SmartSellCard } from '../components/sell/SmartSellCard';
-import { ListingQualityMeter } from '../components/sell/ListingQualityMeter';
 import { ListingPreviewCard } from '../components/sell/ListingPreviewCard';
 import { SustainabilityTags } from '../components/sell/SustainabilityTags';
 import {
@@ -45,9 +44,6 @@ import {
 import {
   type FieldSuggestion,
   type ListingField } from '../services/aiListingApi';
-import {
-  scoreListing,
-  type ListingQualityScore } from '../services/listingQualityApi';
 import { useTaxonomy } from '../context/TaxonomyContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useAppTranslation } from '../i18n/useAppTranslation';
@@ -426,22 +422,6 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     }
   }, [currentUser, isOffline, photos, title, price, description, category, brand, condition, materialComposition, weightKg, navigation, smartSellPolicy, showInfo, t]);
 
-  // -- Listing quality score (heuristic, updates live as the form fills) -----
-  const qualityScore: ListingQualityScore = useMemo(() => {
-    const numericPrice = Number(sanitizeDecimalInput(price)) || 0;
-    return scoreListing({
-      images: photoUris,
-      title,
-      description,
-      price: numericPrice,
-      category: category || undefined,
-      condition: (condition || undefined) as
-        | import('../services/listingsApi').ListingCondition
-        | undefined,
-      brand: brand || undefined,
-      shippingMethod: 'standard' });
-  }, [photoUris, title, description, price, category, condition, brand]);
-
   const numericPriceForPreview = Number(sanitizeDecimalInput(price)) || 0;
   const previewCoverUri = photoUris[0] ?? null;
   const sellerName = currentUser?.username ?? currentUser?.handle ?? null;
@@ -800,14 +780,6 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                 sellerName={sellerName}
                 sellerAvatar={sellerAvatar}
               />
-
-              {/* Listing quality meter */}
-              <View style={styles.sectionLabelWrap}>
-                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                  {t('preview.completeness')}
-                </Text>
-              </View>
-              <ListingQualityMeter score={qualityScore} />
             </View>
           )}
         </ScrollView>

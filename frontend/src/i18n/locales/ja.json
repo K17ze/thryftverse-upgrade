@@ -1769,5 +1769,6 @@
       "ownershipPercent": "あなたの持分",
       "distributions": "分配金"
     }
-  }
+  },
+  "stateCopy": {}
 }

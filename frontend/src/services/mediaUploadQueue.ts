@@ -1,6 +1,10 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { MediaUploadAsset } from '../utils/mediaUploadAsset';
 import { finalizeUpload, presignUpload, uploadToPresignedUrl } from './mediaUpload';
 import { resizeForUpload } from '../platform/media/mediaTransforms';
+import { isAbortError } from '../platform/media/xhrUploadTransport';
 
 export type UploadQueueItemState =
   | 'pending'
@@ -15,6 +19,8 @@ export interface UploadQueueItem {
   asset: MediaUploadAsset;
   order: number;
   state: UploadQueueItemState;
+  /** Real byte progress (0-1) for the current upload attempt. */
+  progress: number;
   attemptCount: number;
   publicUrl: string | null;
   finalizationId: string | null;
@@ -43,6 +49,69 @@ export type UploadQueueListener = (state: UploadQueueState) => void;
 
 const MAX_CONCURRENCY = 2;
 const MAX_RETRIES = 3;
+const STORAGE_KEY_PREFIX = 'thryftverse.mediaUploadQueue.v1';
+/** Per-instance snapshot isolation — parallel queues must not clobber each other. */
+let queueInstanceCounter = 0;
+/** Progress emits are throttled to ~10/s per item to avoid render storms. */
+const PROGRESS_EMIT_INTERVAL_MS = 100;
+/** Snapshot writes are debounced so byte-tick emits never storm AsyncStorage. */
+const PERSIST_DEBOUNCE_MS = 250;
+
+export interface MediaUploadQueueConfig {
+  /** Durable snapshot key. Omit for an isolated per-instance key. */
+  storageKey?: string;
+}
+
+/** Minimal durable metadata — never the media payload or byte offsets. */
+type UploadQueueSnapshot = Pick<
+  UploadQueueItem,
+  'id' | 'asset' | 'order' | 'state' | 'attemptCount' | 'publicUrl' | 'finalizationId' | 'error' | 'retryable'
+>;
+
+const ITEM_STATES: readonly UploadQueueItemState[] = [
+  'pending',
+  'preparing',
+  'uploading',
+  'uploaded',
+  'failed',
+  'cancelled',
+];
+
+function reviveSnapshotEntry(entry: unknown): UploadQueueItem | null {
+  if (typeof entry !== 'object' || entry === null) return null;
+  const raw = entry as Record<string, unknown>;
+  const asset = raw.asset as MediaUploadAsset | null;
+  if (
+    typeof raw.id !== 'string' ||
+    !asset ||
+    typeof asset.uri !== 'string' ||
+    typeof asset.fileName !== 'string' ||
+    typeof asset.mimeType !== 'string' ||
+    (asset.kind !== 'image' && asset.kind !== 'video')
+  ) {
+    return null;
+  }
+  const state = raw.state as UploadQueueItemState;
+  if (!ITEM_STATES.includes(state)) return null;
+  // A process kill cannot leave the JS XHR attached — transient work re-enters
+  // as pending (re-upload is safe; presign creates a fresh object key). The
+  // interrupted attempt already consumed its retry budget, so give it back.
+  const wasInFlight = state === 'preparing' || state === 'uploading';
+  const restoredState = wasInFlight ? 'pending' : state;
+  const rawAttemptCount = typeof raw.attemptCount === 'number' ? raw.attemptCount : 0;
+  return {
+    id: raw.id,
+    asset,
+    order: typeof raw.order === 'number' ? raw.order : 0,
+    state: restoredState,
+    progress: restoredState === 'uploaded' ? 1 : 0,
+    attemptCount: wasInFlight ? Math.max(0, rawAttemptCount - 1) : rawAttemptCount,
+    publicUrl: typeof raw.publicUrl === 'string' ? raw.publicUrl : null,
+    finalizationId: typeof raw.finalizationId === 'string' ? raw.finalizationId : null,
+    error: typeof raw.error === 'string' ? raw.error : null,
+    retryable: raw.retryable === true,
+  };
+}
 
 export class MediaUploadQueue {
   private items: UploadQueueItem[] = [];
@@ -51,10 +120,29 @@ export class MediaUploadQueue {
   private activeCount = 0;
   private completionResolver: ((state: UploadQueueState) => void) | null = null;
   private runPromise: Promise<UploadQueueState> | null = null;
+  private abortControllers = new Map<string, AbortController>();
+  private lastProgressEmitMs = new Map<string, number>();
+  private slotResolvers: Array<() => void> = [];
+  /** null = unknown (treat as reachable); only `false` gates the queue. */
+  private internetReachable: boolean | null = null;
+  private unsubscribeNetInfo: (() => void) | null = null;
+  /** Bumped on every teardown so in-flight NetInfo setup is discarded. */
+  private connectivityGeneration = 0;
+  /** Hydration gate: snapshot restored + connectivity attached. start()/run()
+   *  await it so work never begins against an un-hydrated queue. */
+  private ready: Promise<void>;
+  private persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private storageKey: string;
+
+  constructor(config?: MediaUploadQueueConfig) {
+    this.storageKey = config?.storageKey ?? `${STORAGE_KEY_PREFIX}.${++queueInstanceCounter}`;
+    this.ready = this.initialize();
+  }
 
   /* ── public API ── */
 
-  addAssets(assets: MediaUploadAsset[]): UploadQueueItem[] {
+  async addAssets(assets: MediaUploadAsset[]): Promise<UploadQueueItem[]> {
+    await this.ready;
     const added: UploadQueueItem[] = [];
     for (const asset of assets) {
       const existing = this.items.find((i) => i.id === asset.id);
@@ -90,6 +178,7 @@ export class MediaUploadQueue {
         asset,
         order: this.items.length,
         state: 'pending',
+        progress: 0,
         attemptCount: 0,
         publicUrl: null,
         finalizationId: null,
@@ -109,6 +198,7 @@ export class MediaUploadQueue {
       if (item.state === 'failed' && item.retryable && item.attemptCount < MAX_RETRIES) {
         item.state = 'pending';
         item.error = null;
+        item.progress = 0;
       }
     }
     this.emit();
@@ -118,10 +208,24 @@ export class MediaUploadQueue {
   retryItem(itemId: string): boolean {
     const item = this.items.find((i) => i.id === itemId);
     if (!item) return false;
-    if (item.state === 'uploaded' || item.state === 'cancelled') return false;
+    if (item.state === 'uploaded') return false;
+    // Cancelled is terminal for addAssets (re-adding is ambiguous), but an
+    // explicit user retry restores it with a fresh attempt budget.
+    if (item.state === 'cancelled') {
+      item.state = 'pending';
+      item.attemptCount = 0;
+      item.error = null;
+      item.progress = 0;
+      item.retryable = true;
+      delete item._cancelRequested;
+      this.emit();
+      this.start();
+      return true;
+    }
     if (item.attemptCount >= MAX_RETRIES) return false;
     item.state = 'pending';
     item.error = null;
+    item.progress = 0;
     item.retryable = true;
     this.emit();
     this.start();
@@ -133,7 +237,7 @@ export class MediaUploadQueue {
    * For in-flight items, mark as 'finishing' (processItem will transition to cancelled
    * after the network request completes, without mutating uploaded state).
    */
-  cancelItem(itemId: string): boolean {
+  async cancelItem(itemId: string): Promise<boolean> {
     const item = this.items.find((i) => i.id === itemId);
     if (!item) return false;
     if (item.state === 'uploaded') return false;
@@ -142,10 +246,13 @@ export class MediaUploadQueue {
       item.error = null;
       item.retryable = false;
       this.emit();
+      await this.flushSnapshot();
       return true;
     }
-    // In-flight (preparing/uploading): mark with special state so processItem can handle it
+    // In-flight (preparing/uploading): request cancellation and abort the
+    // transport so the in-flight XHR rejects immediately.
     item._cancelRequested = true;
+    this.abortControllers.get(item.id)?.abort();
     this.emit();
     return true;
   }
@@ -153,6 +260,8 @@ export class MediaUploadQueue {
   removeItem(itemId: string): boolean {
     const idx = this.items.findIndex((i) => i.id === itemId);
     if (idx === -1) return false;
+    // Kill any in-flight work; the settle path no-ops safely on a removed item.
+    this.abortControllers.get(itemId)?.abort();
     this.items.splice(idx, 1);
     this.renumber();
     this.emit();
@@ -201,13 +310,33 @@ export class MediaUploadQueue {
     return this.items.length > 0 && this.items.every((i) => i.state === 'uploaded');
   }
 
-  reset(): void {
+  async reset(): Promise<void> {
+    this.connectivityGeneration++;
+    if (this.unsubscribeNetInfo) {
+      this.unsubscribeNetInfo();
+      this.unsubscribeNetInfo = null;
+    }
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    for (const resolve of this.slotResolvers) resolve();
+    this.slotResolvers = [];
+    this.abortControllers.clear();
+    this.lastProgressEmitMs.clear();
     this.items = [];
     this.running = false;
     this.activeCount = 0;
     this.completionResolver = null;
     this.runPromise = null;
+    // Unknown until the next NetInfo event — a stale `false` would block a
+    // reset queue with no listener attached to observe the recovery.
+    this.internetReachable = null;
+    // Re-arm the hydration gate (connectivity re-watch only — the snapshot
+    // was just cleared, re-restoring it would resurrect stale items).
+    this.ready = this.watchConnectivity();
     this.emit();
+    await this.flushSnapshot();
   }
 
   subscribe(listener: UploadQueueListener): () => void {
@@ -219,7 +348,8 @@ export class MediaUploadQueue {
   }
 
   /** Start processing and return a promise that resolves exactly once when the queue finishes. */
-  run(): Promise<UploadQueueState> {
+  async run(): Promise<UploadQueueState> {
+    await this.ready;
     if (this.runPromise) {
       return this.runPromise;
     }
@@ -245,6 +375,11 @@ export class MediaUploadQueue {
   }
 
   start(): void {
+    void this.startWhenReady();
+  }
+
+  private async startWhenReady(): Promise<void> {
+    await this.ready;
     if (this.running) return;
     this.running = true;
     this.emit();
@@ -268,6 +403,119 @@ export class MediaUploadQueue {
         // swallow listener errors
       }
     }
+    this.persistSnapshot();
+  }
+
+  /** Restore durable metadata and attach connectivity awareness. */
+  private async initialize(): Promise<void> {
+    await Promise.all([this.restoreSnapshot(), this.watchConnectivity()]);
+  }
+
+  /** Subscribe once per queue instance; `false` pauses, recovery resumes. */
+  private async watchConnectivity(): Promise<void> {
+    if (this.unsubscribeNetInfo) return;
+    const generation = this.connectivityGeneration;
+    try {
+      const NetInfo = (await import('@react-native-community/netinfo')).default;
+      // A reset() during the in-flight import must not attach a stale
+      // subscription alongside the one the new gate is setting up.
+      if (generation !== this.connectivityGeneration || this.unsubscribeNetInfo) return;
+      this.unsubscribeNetInfo = NetInfo.addEventListener((state) => {
+        if (state.isInternetReachable === false) {
+          this.internetReachable = false;
+          return;
+        }
+        if (state.isInternetReachable === true && this.internetReachable === false) {
+          this.internetReachable = true;
+          this.resumeAfterOffline();
+        }
+      });
+    } catch {
+      // NetInfo is unavailable on web/test runtimes — the queue runs un-gated.
+    }
+  }
+
+  /**
+   * retryFailed() semantics on connectivity recovery. start() alone is not
+   * enough — a queue paused mid-run is still `running`, so the loop is
+   * kicked directly. Gated on hydration so restored items are visible.
+   */
+  private resumeAfterOffline(): void {
+    void this.ready.then(() => {
+      for (const item of this.items) {
+        if (item.state === 'failed' && item.retryable && item.attemptCount < MAX_RETRIES) {
+          item.state = 'pending';
+          item.error = null;
+          item.progress = 0;
+        }
+      }
+      this.emit();
+      this.start();
+      void this.processQueue();
+    });
+  }
+
+  private async restoreSnapshot(): Promise<void> {
+    try {
+      const raw = await AsyncStorage.getItem(this.storageKey);
+      if (!raw) return;
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      for (const entry of parsed) {
+        const item = reviveSnapshotEntry(entry);
+        if (!item) continue;
+        if (this.items.some((existing) => existing.id === item.id)) continue;
+        this.items.push(item);
+      }
+      this.renumber();
+      this.emit();
+    } catch {
+      // Corrupt snapshot — start fresh rather than blocking the sell flow.
+    }
+  }
+
+  private persistSnapshot(): void {
+    if (this.persistTimer) return;
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      void this.writeSnapshot();
+    }, PERSIST_DEBOUNCE_MS);
+  }
+
+  /** Terminal states must survive a process kill — bypass the debounce and
+   *  await the write. Callers at terminal transitions must await this. */
+  private async flushSnapshot(): Promise<void> {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    await this.writeSnapshot();
+  }
+
+  private writeSnapshot(): Promise<void> {
+    const snapshot: UploadQueueSnapshot[] = this.items.map((item) => ({
+      id: item.id,
+      asset: item.asset,
+      order: item.order,
+      state: item.state,
+      attemptCount: item.attemptCount,
+      publicUrl: item.publicUrl,
+      finalizationId: item.finalizationId,
+      error: item.error,
+      retryable: item.retryable,
+    }));
+    return AsyncStorage.setItem(this.storageKey, JSON.stringify(snapshot)).catch(() => {
+      // Storage failures must not break the upload flow — metadata is best-effort.
+    });
+  }
+
+  private updateProgress(item: UploadQueueItem, loadedBytes: number, totalBytes: number): void {
+    const total = totalBytes > 0 ? totalBytes : item.asset.fileSize ?? 0;
+    item.progress = total > 0 ? Math.min(1, loadedBytes / total) : 0;
+    const now = Date.now();
+    if (now - (this.lastProgressEmitMs.get(item.id) ?? 0) < PROGRESS_EMIT_INTERVAL_MS) return;
+    this.lastProgressEmitMs.set(item.id, now);
+    this.emit();
   }
 
   private checkDone(): void {
@@ -291,6 +539,9 @@ export class MediaUploadQueue {
         (i) => i.state === 'pending' && i.attemptCount < MAX_RETRIES
       );
       if (pending.length === 0) break;
+      // Offline: stop starting new items. In-flight work fails naturally and
+      // resumeAfterOffline() restarts the loop when connectivity returns.
+      if (this.internetReachable === false) break;
       if (this.activeCount >= MAX_CONCURRENCY) {
         await this.waitForSlot();
         continue;
@@ -299,6 +550,7 @@ export class MediaUploadQueue {
       this.activeCount++;
       this.processItem(item).finally(() => {
         this.activeCount--;
+        this.notifySlots();
         this.checkDone();
         this.processQueue();
       });
@@ -308,23 +560,28 @@ export class MediaUploadQueue {
 
   private waitForSlot(): Promise<void> {
     return new Promise((resolve) => {
-      const check = () => {
-        if (this.activeCount < MAX_CONCURRENCY) {
-          resolve();
-        } else {
-          setTimeout(check, 100);
-        }
-      };
-      check();
+      this.slotResolvers.push(resolve);
     });
+  }
+
+  private notifySlots(): void {
+    while (this.slotResolvers.length > 0 && this.activeCount < MAX_CONCURRENCY) {
+      const resolve = this.slotResolvers.shift();
+      resolve?.();
+    }
   }
 
   private async processItem(item: UploadQueueItem): Promise<void> {
     if (item.state === 'uploaded' || item.state === 'cancelled') return;
 
+    const controller = new AbortController();
+    this.abortControllers.set(item.id, controller);
+    const { signal } = controller;
+
     item.state = 'preparing';
     item.attemptCount++;
     item.error = null;
+    item.progress = 0;
     this.emit();
 
     try {
@@ -360,13 +617,38 @@ export class MediaUploadQueue {
         }
       }
 
-      const blob = await fetch(uploadUri).then((response) => response.blob());
-      const sizeBytes = blob.size || asset.fileSize || 0;
+      // Resolve the upload size without loading the file into JS memory.
+      // Native uploads stream from disk via the XHR transport, so only the
+      // byte count is needed for presign; web must read a Blob to send one.
+      let sizeProbeBlob: Blob | undefined;
+      let sizeBytes = 0;
+      if (Platform.OS === 'web') {
+        const blob = await fetch(uploadUri, { signal }).then((response) => response.blob());
+        sizeProbeBlob = blob;
+        sizeBytes = blob.size || asset.fileSize || 0;
+      } else {
+        try {
+          const info = await FileSystem.getInfoAsync(uploadUri);
+          if (info.exists && typeof info.size === 'number' && info.size > 0) {
+            sizeBytes = info.size;
+          }
+        } catch {
+          // getInfoAsync may not support ph:// or content:// URIs.
+        }
+        if (!sizeBytes) sizeBytes = asset.fileSize || 0;
+        if (!sizeBytes) {
+          // Last resort: read the file as a Blob to obtain its size.
+          const blob = await fetch(uploadUri, { signal }).then((response) => response.blob());
+          sizeProbeBlob = blob;
+          sizeBytes = blob.size;
+        }
+      }
       const presign = await presignUpload(
         uploadFileName,
         uploadMimeType,
         'listings',
-        sizeBytes
+        sizeBytes,
+        signal
       );
 
       // If cancellation was requested while presigning, transition to cancelled and abort
@@ -376,13 +658,19 @@ export class MediaUploadQueue {
         item.retryable = false;
         delete item._cancelRequested;
         this.emit();
+        await this.flushSnapshot();
         return;
       }
 
       item.state = 'uploading';
       this.emit();
 
-      await uploadToPresignedUrl(presign.url, uploadUri, uploadMimeType, blob);
+      await uploadToPresignedUrl(presign.url, uploadUri, uploadMimeType, sizeProbeBlob, {
+        signal,
+        // RN can report a zero event.total for send({ uri }) streams — fall
+        // back to the size resolved for presign so progress never freezes.
+        onProgress: (loadedBytes, totalBytes) => this.updateProgress(item, loadedBytes, totalBytes || sizeBytes),
+      });
 
       // If cancellation was requested while uploading, transition to cancelled and ignore result
       if (item._cancelRequested) {
@@ -391,6 +679,7 @@ export class MediaUploadQueue {
         item.retryable = false;
         delete item._cancelRequested;
         this.emit();
+        await this.flushSnapshot();
         return;
       }
 
@@ -404,29 +693,36 @@ export class MediaUploadQueue {
         folder: 'listings',
         scope: 'listing_media',
         verifyObject: true,
+        signal,
       });
 
       item.state = 'uploaded';
+      item.progress = 1;
       item.publicUrl = finalization.publicUrl;
       item.finalizationId = finalization.id;
       item.error = null;
       item.retryable = false;
     } catch (err: unknown) {
-      // If cancellation was requested during upload, transition to cancelled, not failed
-      if (item._cancelRequested) {
+      // Cancellation (flag or aborted transport) transitions to cancelled, not failed
+      if (item._cancelRequested || isAbortError(err)) {
         item.state = 'cancelled';
         item.error = null;
         item.retryable = false;
         delete item._cancelRequested;
         this.emit();
+        await this.flushSnapshot();
         return;
       }
       const message = err instanceof Error ? err.message : 'Upload failed';
       item.state = 'failed';
       item.error = message;
       item.retryable = item.attemptCount < MAX_RETRIES;
+    } finally {
+      this.abortControllers.delete(item.id);
+      this.lastProgressEmitMs.delete(item.id);
     }
 
     this.emit();
+    await this.flushSnapshot();
   }
 }

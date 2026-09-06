@@ -81,14 +81,6 @@ export interface SellScreenDataResult {
   autofillDismissed: boolean;
   setAutofillDismissed: React.Dispatch<React.SetStateAction<boolean>>;
 
-  /** Photo guide collapse state. */
-  photoGuideCollapsed: boolean;
-  setPhotoGuideCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
-
-  /** Seller tips dismiss state. */
-  sellerTipsDismissed: boolean;
-  setSellerTipsDismissed: React.Dispatch<React.SetStateAction<boolean>>;
-
   /** Transient "Saved" indicator visibility (from draft persistence). */
   draftSavedVisible: boolean;
 
@@ -105,7 +97,6 @@ export interface SellScreenDataResult {
 
   /** Seller trust data + new-seller flag. */
   sellerTrust: ReturnType<typeof useSellerTrust>['data'];
-  isNewSeller: boolean;
 
   /** Sold comparables for pricing guidance. */
   soldComps: ReturnType<typeof useSoldComps>;
@@ -256,17 +247,10 @@ export function useSellScreenData(
   // AI autofill suggestions from first photo filename
   const autofillSuggestion = useListingAutofill(mediaDraftItems);
   const [autofillDismissed, setAutofillDismissed] = useState(false);
-  const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(true);
-  const [sellerTipsDismissed, setSellerTipsDismissed] = useState(false);
 
   // Feature flag — gates the enhanced AI listing assist banner. Defaults to
   // false (current autofill-only behaviour) when PostHog is not loaded.
   const aiListingAssistEnabled = useFeatureFlag('ai_listing_assist');
-
-  // ── New seller detection ──
-  // Per research: new seller tips/guidance if first-time seller.
-  // Uses real backend data (completedSales) — no fabricated thresholds.
-  const isNewSeller = !sellerTrust?.completedSales || sellerTrust.completedSales === 0;
 
   // ── Draft content detection ──
   // Shows a "draft in progress" hint when the user has meaningful draft
@@ -344,10 +328,6 @@ export function useSellScreenData(
     autofillSuggestion,
     autofillDismissed,
     setAutofillDismissed,
-    photoGuideCollapsed,
-    setPhotoGuideCollapsed,
-    sellerTipsDismissed,
-    setSellerTipsDismissed,
     draftSavedVisible,
     currency,
     currencySymbol,
@@ -355,7 +335,6 @@ export function useSellScreenData(
     isConnected,
     showToast,
     sellerTrust,
-    isNewSeller,
     soldComps,
     pickerTaxonomy,
     aiListingAssistEnabled,

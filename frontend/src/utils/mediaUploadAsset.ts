@@ -250,6 +250,8 @@ export interface ListingMediaDraftItem {
   height?: number;
   durationMs?: number;
   publicUrl?: string;
+  /** Normalized (0-1) cover-fit anchor set via the crop sheet's focal mode. */
+  focalPoint?: { x: number; y: number };
   status:
     | 'draft'
     | 'pending'

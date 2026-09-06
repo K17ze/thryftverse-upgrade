@@ -1769,5 +1769,6 @@
       "ownershipPercent": "Votre part de propriété",
       "distributions": "Distributions"
     }
-  }
+  },
+  "stateCopy": {}
 }

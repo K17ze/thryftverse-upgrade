@@ -344,7 +344,7 @@ function SellerSummary({
     ? formatAuctionIze(toIze(stats.highestBid, currencyCode, fxRates))
     : null;
   const highestBidLocal = hasBidContext
-    ? formatFromFiat(stats.highestBid, 'GBP')
+    ? formatFromFiat(stats.highestBid, 'GBP', { displayMode: 'fiat' })
     : null;
 
   return (
@@ -468,13 +468,11 @@ export default function SellerAuctionCentreScreen() {
   // SectionList's ListEmptyComponent behaviour (which FlashList cannot trigger
   // because the header keeps `data` non-empty).
   const flatData = useMemo<FlatListItem[]>(() => {
-    const header: SectionHeaderItem = { type: 'header', sectionTitle: activeTab };
     if (filteredItems.length === 0) {
-      return [header, { type: 'empty' }];
+      return [{ type: 'empty' }];
     }
-    const rows: SectionRowItem[] = filteredItems.map((i) => ({ type: 'item', ...i }));
-    return [header, ...rows];
-  }, [activeTab, filteredItems]);
+    return filteredItems.map((i) => ({ type: 'item', ...i }));
+  }, [filteredItems]);
 
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -670,12 +668,10 @@ export default function SellerAuctionCentreScreen() {
   }, []);
 
   const renderItem: ListRenderItem<FlatListItem> = useCallback(({ item }) => {
-    if (item.type === 'header') {
-      return renderSectionHeader();
-    }
     if (item.type === 'empty') {
       return renderEmpty();
     }
+    if (item.type !== 'item') return null;
     return (
       <SellerAuctionRow
         item={item}
@@ -686,18 +682,14 @@ export default function SellerAuctionCentreScreen() {
         currencyCode={currencyCode}
       />
     );
-  }, [renderSectionHeader, renderEmpty, secondClock, navigateToDetail, formatFromFiat, fxRates, currencyCode]);
+  }, [renderEmpty, secondClock, navigateToDetail, formatFromFiat, fxRates, currencyCode]);
 
-  // Row separator — only between two row items. FlashList inserts separators
-  // between every adjacent pair in the flattened array, so suppress the divider
-  // when either neighbour is the header (preserves SectionList behaviour where
-  // no separator sat between the section header and the first row).
   const renderSeparator = useCallback(
     ({ leadingItem, trailingItem }: { leadingItem: FlatListItem; trailingItem: FlatListItem }) => {
       if (leadingItem.type !== 'item' || trailingItem.type !== 'item') return null;
       return <View style={styles.rowSeparator} />;
     },
-    [],
+    [styles.rowSeparator],
   );
 
   // Summary — scrolls away as ListHeaderComponent
@@ -782,18 +774,16 @@ export default function SellerAuctionCentreScreen() {
       {/* Offline banner */}
       <OfflineBanner onRetry={() => void fetchAuctions(false)} />
 
-      {/* Single authoritative virtualised list (FlashList):
-          - ListHeaderComponent: summary (scrolls away)
-          - data[0] ('header' item): tab rail, kept sticky via stickyHeaderIndices
-          - data[1..] ('item' items): inventory rows
-          - 'empty' item: loading / error / empty-state content when no rows */}
+      {/* Single authoritative tab selector */}
+      {renderSectionHeader()}
+
+      {/* Authoritative virtualised list (FlashList) */}
       <FlashList
         ref={listRef}
         data={flatData}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         getItemType={getItemType}
-        stickyHeaderIndices={[0]}
         ListHeaderComponent={listHeader}
         ListFooterComponent={listFooter}
         ItemSeparatorComponent={renderSeparator}

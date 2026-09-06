@@ -81,6 +81,7 @@ import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
 import { ShopRail, type ShopRailItem } from '../components/profile/ShopRail';
+import { SharePassportModal } from '../components/profile/SharePassportModal';
 import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { track } from '../analytics';
@@ -170,6 +171,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [shopSegment, setShopSegment] = useState<ShopSegment>('forsale');
   const [connectionsSheet, setConnectionsSheet] = useState<{ visible: boolean; segment: 'followers' | 'following' }>({ visible: false, segment: 'followers' });
   const [moreSheetVisible, setMoreSheetVisible] = useState(false);
+  const [showPassportModal, setShowPassportModal] = useState(false);
   const [reportSheetVisible, setReportSheetVisible] = useState(false);
   const [blockConfirmVisible, setBlockConfirmVisible] = useState(false);
   const [collapsedVisible, setCollapsedVisible] = useState(false);
@@ -445,12 +447,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   });
 
   // Handlers
-  const handleShare = useCallback(async () => {
+  const handleShare = useCallback(() => {
     haptic.light();
-    try {
-      await Share.share({ message: `${displayUsername} on Thryftverse - ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
-    } catch { /* ignore */ }
-  }, [displayUsername, profileDeepLink, haptic]);
+    setShowPassportModal(true);
+  }, [haptic]);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -1170,6 +1170,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onSubmitted={() => showToast('Report submitted', 'success')}
         onError={(message) => showToast(message, 'error')}
       />
+
+      {targetProfile ? (
+        <SharePassportModal
+          visible={showPassportModal}
+          onClose={() => setShowPassportModal(false)}
+          username={targetProfile.username}
+          displayName={targetProfile.displayName || targetProfile.username}
+          avatarUri={displayAvatar}
+          ratingAverage={sellerTrust?.rating ?? null}
+          completedSales={sellerTrust?.completedSales ?? 0}
+          verificationTier={sellerTrust?.verificationTier ?? (sellerTrust?.verified ? 'seller' : null)}
+          memberSince={memberSince}
+          bio={targetProfile.bio ?? null}
+        />
+      ) : null}
     </View>
   );
 }

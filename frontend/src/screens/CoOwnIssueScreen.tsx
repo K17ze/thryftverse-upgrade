@@ -16,6 +16,7 @@ import { fetchCoOwnAssetById, createCoOwnAssetIssue } from '../services/marketAp
 import { haptics } from '../utils/haptics';
 import { CoOwnStickyActionDock } from '../components/coown';
 import { useScreenCaptureProtection } from '../platform/screenCapture';
+import { parseApiError } from '../lib/apiClient';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CoOwnIssue'>;
 
@@ -35,6 +36,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
   const [category, setCategory] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [assetTitle, setAssetTitle] = useState<string | null>(null);
+  const [isAssetTitleLoading, setIsAssetTitleLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const assetId = route.params?.assetId;
@@ -43,12 +45,19 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
   React.useEffect(() => {
     if (!assetId) return;
     let cancelled = false;
+    setIsAssetTitleLoading(true);
     fetchCoOwnAssetById(assetId)
       .then((asset) => {
-        if (!cancelled) setAssetTitle(asset.title);
+        if (!cancelled) {
+          setAssetTitle(asset.title);
+          setIsAssetTitleLoading(false);
+        }
       })
       .catch(() => {
-        if (!cancelled) setAssetTitle(null);
+        if (!cancelled) {
+          setAssetTitle(null);
+          setIsAssetTitleLoading(false);
+        }
       });
     return () => { cancelled = true; };
   }, [assetId]);
@@ -58,8 +67,8 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       show('Select an issue category', 'error');
       return;
     }
-    if (!description.trim()) {
-      show('Describe the issue', 'error');
+    if (description.trim().length < 10) {
+      show('Add at least 10 characters so the team can investigate.', 'error');
       return;
     }
     if (!assetId) {
@@ -76,13 +85,11 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
       });
       haptics.success();
       show('Issue reported. Our team will review it shortly.', 'success');
-      navigation.navigate('HelpSupport');
-    } catch {
+      navigation.goBack();
+    } catch (error) {
       haptics.error();
-      // Backend endpoint may not be deployed yet — fall back to support chat
-      // so the user can still get help.
-      show('Could not submit report. Please describe this issue in the support chat.', 'info');
-      navigation.navigate('HelpSupport');
+      const parsed = parseApiError(error, 'Could not submit this report. Your text is still here; please retry.');
+      show(parsed.message, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -107,7 +114,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
             <Ionicons name="bag-handle-outline" size={16} color={colors.textMuted} />
             <Text style={[styles.assetContextLabel, { color: colors.textMuted }]}>Item:</Text>
             <Text style={[styles.assetContextText, { color: colors.textPrimary }]} numberOfLines={1}>
-              {assetTitle ?? 'Loading...'}
+              {assetTitle ?? (isAssetTitleLoading ? 'Loading…' : 'Item unavailable')}
             </Text>
           </View>
         )}
@@ -152,6 +159,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
             placeholder="Describe what happened and what you need..."
             value={description}
             onChangeText={setDescription}
+            maxLength={4000}
             multiline
             numberOfLines={5}
             textAlignVertical="top"
@@ -185,7 +193,7 @@ export default function CoOwnIssueScreen({ navigation, route }: Props) {
           variant="primary"
           size="lg"
           loading={isSubmitting}
-          disabled={isSubmitting || !category || !description.trim()}
+          disabled={isSubmitting || !category || description.trim().length < 10}
           hapticFeedback="medium"
           accessibilityLabel="Submit issue report"
           style={{ flex: 1 }}

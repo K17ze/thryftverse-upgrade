@@ -48,7 +48,6 @@ export interface SellScreenActionsResult {
   removeItem: (itemId: string) => void;
   handleRetryItem: (itemId: string) => void;
   handleReorderIds: (newOrderedIds: string[]) => void;
-  handleSetCover: (itemId: string) => void;
   handleTransformItem: (itemId: string, transformedUri: string) => void;
 
   // Price handlers
@@ -289,34 +288,20 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
     haptics.tap();
   }, [setMediaDraftItems, setPhotos]);
 
-  // ── Set as cover ──
-  // Per audit 04 P0: "Add cover-photo semantics and explicit reorder affordance."
-  // Moves the selected item to position 0 (cover) and shifts the previous
-  // cover and intervening items down. This is an explicit, discoverable
-  // action — not only achievable via drag reorder.
-  const handleSetCover = useCallback((itemId: string) => {
-    setMediaDraftItems((prev) => {
-      const idx = prev.findIndex((m) => m.id === itemId);
-      if (idx <= 0) return prev; // already cover or not found
-      const next = [...prev];
-      const [item] = next.splice(idx, 1);
-      next.unshift(item);
-      setPhotos(next.map((m) => m.publicUrl || m.uri));
-      return next;
-    });
-    haptics.press();
-  }, [setMediaDraftItems, setPhotos]);
-
   // ── Transform item (crop/rotate/flip) ──
   // Replaces the item's URI with the transformed result and syncs the
-  // photos array. The upload pipeline picks up the new URI on publish.
+  // photos array. A same-URI call is a focal-only update: it must keep the
+  // item's uploaded state — only a real URI replacement clears publicUrl
+  // and re-queues the item (mirrors EditListingScreen).
   const handleTransformItem = useCallback((itemId: string, transformedUri: string) => {
     setMediaDraftItems((prev) => {
-      const next = prev.map((m) =>
-        m.id === itemId
-          ? { ...m, uri: transformedUri, publicUrl: undefined, status: 'draft' as const }
-          : m
-      );
+      const next = prev.map((m) => {
+        if (m.id !== itemId) return m;
+        const uriChanged = transformedUri !== m.uri;
+        return {
+          ...m,
+          ...(uriChanged ? { uri: transformedUri, publicUrl: undefined, status: 'draft' as const } : {}) };
+      });
       setPhotos(next.map((m) => m.publicUrl || m.uri));
       return next;
     });
@@ -429,7 +414,6 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
     removeItem,
     handleRetryItem,
     handleReorderIds,
-    handleSetCover,
     handleTransformItem,
     handlePriceChange,
     handleShareCountChange,

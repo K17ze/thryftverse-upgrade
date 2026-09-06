@@ -69,7 +69,10 @@ export async function fetchCoOwnPortfolioPositions(
 ): Promise<CoOwnPortfolioResult> {
   const [assets, holdings] = await Promise.all([
     listCoOwnAssets({ limit: 200 }),
-    fetchCoOwnHoldings(userId).catch(() => [] as MarketCoOwnHolding[]),
+    // A holdings failure is materially different from an empty portfolio.
+    // Let the caller render a recoverable error instead of implying that the
+    // user owns nothing.
+    fetchCoOwnHoldings(userId),
   ]);
 
   const holdingMap = new Map<string, MarketCoOwnHolding>();

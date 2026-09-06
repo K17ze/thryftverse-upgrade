@@ -1769,5 +1769,6 @@
       "ownershipPercent": "Sahiplik payınız",
       "distributions": "Dağıtımlar"
     }
-  }
+  },
+  "stateCopy": {}
 }

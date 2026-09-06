@@ -25,6 +25,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
+import { useChatPreferences } from '../hooks/useChatPreferences';
+import { chatThemeBackground } from '../services/chatPreferencesApi';
 import { useStore } from '../store/useStore';
 import { track } from '../analytics';
 import { useHaptic } from '../hooks/useHaptic';
@@ -84,7 +86,9 @@ function toEmojiReactions(
 
 export default function GroupChatScreen({ navigation, route }: Props) {
   const { groupId, groupName, initialSearch } = route.params ?? {};
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+  const chatPreferences = useChatPreferences(groupId);
+  const chatBackground = chatThemeBackground(chatPreferences.query.data?.theme, isDark, colors.background);
   const styles = useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
@@ -561,6 +565,7 @@ export default function GroupChatScreen({ navigation, route }: Props) {
               </View>
             ) : null}
             <FlashList
+              style={{ backgroundColor: chatBackground }}
               ref={listRef}
               data={displayMessages}
               keyExtractor={keyExtractor}

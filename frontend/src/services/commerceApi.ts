@@ -823,7 +823,10 @@ export interface SellerAnalytics {
   shipWithinDays: number | null;
   totalSales: number | null;
   positiveRatingPct: number | null;
-  period: string;
+  /** Average Order Value in GBP minor units */
+  aovGbpMinor?: number | null;
+  /** Percentage of orders from repeat buyers (>= 2 completed orders) */
+  repeatBuyerPct?: number | null;
   /** Previous equal-period comparison — always complete (entirely in the past). */
   comparison: SellerAnalyticsComparison;
   /** Daily trend series for current + previous period. */
@@ -952,6 +955,8 @@ export interface ListingAnalyticsData {
   likes: number;
   purchases: number;
   conversionRate: number | null;
+  saveRate: number | null;
+  intentSignal: 'high_intent_price_friction' | 'low_affinity_photo_needed' | 'healthy_velocity' | 'stale_reach' | null;
   timeOnMarketDays: number;
   priceHistory: ListingPriceHistoryEvent[];
   comparables: ListingAnalyticsComparables | null;
@@ -967,4 +972,26 @@ export async function fetchListingAnalytics(
     `/sellers/${encodeURIComponent(sellerId)}/analytics/listing/${encodeURIComponent(listingId)}?period=${period}`
   );
   return payload.analytics;
+}
+
+export interface PriceAdjustResult {
+  ok: boolean;
+  listingId: string;
+  previousPriceGbp: number;
+  newPriceGbp: number;
+  changedAt: string;
+}
+
+export async function adjustListingPrice(
+  sellerId: string,
+  listingId: string,
+  newPriceGbp: number
+): Promise<PriceAdjustResult> {
+  return await fetchJson<PriceAdjustResult>(
+    `/sellers/${encodeURIComponent(sellerId)}/listings/${encodeURIComponent(listingId)}/price-adjust`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ newPriceGbp }),
+    }
+  );
 }

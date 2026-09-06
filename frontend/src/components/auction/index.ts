@@ -22,5 +22,6 @@ export { AuctionTerminalResult } from './AuctionTerminalResult';
 export { AuctionOverflowSheet } from './AuctionOverflowSheet';
 export { AuctionBidHistorySheet } from './AuctionBidHistorySheet';
 export { AuctionRulesSheet } from './AuctionRulesSheet';
+export { AuctionBidLadderPreview } from './AuctionBidLadderPreview';
 export type { Segment } from './AuctionSegmentRail';
 export type { AuctionHeaderAction, AuctionHeaderActionKey } from './AuctionMarketHeader';

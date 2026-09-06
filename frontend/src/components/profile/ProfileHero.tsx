@@ -284,23 +284,6 @@ export function ProfileHero({
             <BioText bio={targetProfile.bio} style={styles.bio} linkStyle={styles.bioLink} seeMoreStyle={styles.bioSeeMore} />
           ) : null}
 
-          {/* Context line — no icons */}
-          {targetProfile?.location ? (
-            <Text style={styles.contextLine} numberOfLines={1}>{targetProfile.location}</Text>
-          ) : null}
-
-          {/* Website — separate intentional link */}
-          {targetProfile?.website ? (
-            <Pressable
-              style={({ pressed }) => [styles.websiteLink, pressed && { opacity: 0.6 }]}
-              onPress={() => openWebsite(targetProfile.website!)}
-              accessibilityRole="link"
-              accessibilityLabel={`Open website ${targetProfile.website}`}
-            >
-              <Text style={styles.websiteText} numberOfLines={1}>{targetProfile.website}</Text>
-            </Pressable>
-          ) : null}
-
           {/* Seller trust header — rating row + joined caption on separate lines.
               The rating is part of the identity block, not a lonely chip: star +
               score + review count give the 5.0 context. Joined date is a less
@@ -344,6 +327,23 @@ export function ProfileHero({
               {/* Joined — less prominent caption on its own line, no dot separator */}
               {memberSince ? <Text style={styles.trustJoined}>Joined {memberSince}</Text> : null}
             </View>
+          ) : null}
+
+          {/* Context line — no icons */}
+          {targetProfile?.location ? (
+            <Text style={styles.contextLine} numberOfLines={1}>{targetProfile.location}</Text>
+          ) : null}
+
+          {/* Website — separate intentional link */}
+          {targetProfile?.website ? (
+            <Pressable
+              style={({ pressed }) => [styles.websiteLink, pressed && { opacity: 0.6 }]}
+              onPress={() => openWebsite(targetProfile.website!)}
+              accessibilityRole="link"
+              accessibilityLabel={`Open website ${targetProfile.website}`}
+            >
+              <Text style={styles.websiteText} numberOfLines={1}>{targetProfile.website}</Text>
+            </Pressable>
           ) : null}
 
           {/* Trust line is the sole trust surface above the tab rail.

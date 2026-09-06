@@ -1,8 +1,10 @@
 import {
   CURRENCIES,
   DEFAULT_CURRENCY_CODE,
-  SupportedCurrencyCode,
+  type SupportedCurrencyCode,
 } from '../constants/currencies';
+
+export type { SupportedCurrencyCode };
 
 export type CurrencyDisplayMode = 'ize' | 'fiat' | 'both';
 
@@ -132,7 +134,7 @@ export function formatPrice({
   currencyCode,
   fxRates,
   fiatFractionDigits = 2,
-  izeFractionDigits = IZE_DECIMALS,
+  izeFractionDigits = 2,
 }: FormatPriceParams): string {
   if (displayMode === 'ize') {
     return formatIzeAmount(izeAmount, izeFractionDigits);

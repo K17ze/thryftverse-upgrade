@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -23,7 +23,6 @@ import { useA11yAudit } from '../hooks/useA11yAudit';
 import { DebouncedTextInput } from '../components/ui/DebouncedTextInput';
 import { sanitizeDecimalInput, calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
 import {
-  buildContextualPhotoPrompts,
   formatShippingSummary,
   formatReviewSummary } from '../utils/sellScreenLogic';
 import { haptics } from '../utils/haptics';
@@ -32,9 +31,6 @@ import { ListingCameraSheet } from '../components/listing/ListingCameraSheet';
 import { EmptyState } from '../components/EmptyState';
 import { ListingModeSelector } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
-import { ListingQualityMeter } from '../components/sell/ListingQualityMeter';
-import { scoreListing } from '../services/listingQualityApi';
-import type { ListingCondition } from '../contracts/taxonomy';
 import { KeyboardAwareScrollView } from '../platform/keyboard/KeyboardProvider';
 import { t } from '../i18n';
 import { useSellScreenData, useSellScreenForm, useSellScreenActions } from '../hooks/sell';
@@ -43,7 +39,7 @@ import ShippingPickerSheet from '../components/sell/ShippingPickerSheet';
 import TagInputWithSuggestions from '../components/sell/TagInputWithSuggestions';
 
 export default function SellScreen() {
-  const a11yRef = useRef<any>(null);
+  const a11yRef = useRef<View>(null);
   useA11yAudit(a11yRef, 'SellScreen');
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
@@ -70,6 +66,7 @@ export default function SellScreen() {
     setters,
     photos,
     mediaDraftItems,
+    setMediaDraftItems,
     queueState,
     errors,
     setErrors,
@@ -79,8 +76,6 @@ export default function SellScreen() {
     autofillSuggestion,
     autofillDismissed,
     setAutofillDismissed,
-    photoGuideCollapsed,
-    setPhotoGuideCollapsed,
     draftSavedVisible,
     currency,
     currencySymbol,
@@ -123,24 +118,6 @@ export default function SellScreen() {
     discountPercent,
   } = form;
 
-  // G9: Photo quality gating — compute a listing quality score from the
-  // current draft so sellers get actionable feedback before publishing.
-  // Only shown when there's enough content to score (at least a title or
-  // one photo). The meter renders inline above the publish footer.
-  const qualityScore = useMemo(() => {
-    if (!title.trim() && photos.length === 0) return null;
-    return scoreListing({
-      title,
-      description: desc,
-      price: numericPrice,
-      images: photos,
-      category,
-      brand,
-      size,
-      condition: (condition || null) as ListingCondition | null,
-    });
-  }, [title, desc, numericPrice, photos, category, brand, size, condition]);
-
   const {
     handleTagSubmit,
     removeTag,
@@ -154,7 +131,6 @@ export default function SellScreen() {
     removeItem,
     handleRetryItem,
     handleReorderIds,
-    handleSetCover,
     handleTransformItem,
     handlePriceChange,
     handleShareCountChange,
@@ -167,6 +143,21 @@ export default function SellScreen() {
     handlePublish,
     publishDisabled,
   } = actions;
+
+  // Focal-point storage: the actions hook's transform handler is two-arg,
+  // so the screen captures the third argument here and stores it on the
+  // draft item. Same-URI calls (focal-only) keep upload state intact.
+  const handleTransformItemWithFocal = useCallback(
+    (itemId: string, transformedUri: string, focalPoint?: { x: number; y: number }) => {
+      handleTransformItem(itemId, transformedUri);
+      if (focalPoint) {
+        setMediaDraftItems((prev) =>
+          prev.map((m) => (m.id === itemId ? { ...m, focalPoint } : m))
+        );
+      }
+    },
+    [handleTransformItem, setMediaDraftItems]
+  );
 
   // Theme-aware color overrides for the static styles. The static
   // StyleSheet contains only non-color properties; colors are applied
@@ -287,85 +278,10 @@ export default function SellScreen() {
               onReorder={handleReorderIds}
               onRemoveItem={removeItem}
               onRetryItem={handleRetryItem}
-              onSetCover={handleSetCover}
-              onTransformItem={handleTransformItem}
+              onTransformItem={handleTransformItemWithFocal}
             />
           )}
 
-          {/* -- 2a. CONTEXTUAL PHOTO ASSISTANT (consolidated) -- */}
-          {/* One system, not three. Shows only the most relevant guidance
-              for the current media state: an expandable tips affordance
-              before any photos, a count nudge + contextual prompts once
-              photos exist. No redundant labels or stacked hint rows. */}
-          {(() => {
-            const count = mediaDraftItems.length;
-            const prompts = buildContextualPhotoPrompts(brand, condition, count, category);
-            const needsMore = count > 0 && count < 3;
-
-            if (count === 0) {
-              // EmptyState dominates; tips remain accessible via a single
-              // subtle expandable affordance — no stacked hint rows.
-              return (
-                <AnimatedPressable
-                  style={styles.photoAssistantToggle}
-                  scaleValue={0.98}
-                  hapticFeedback="light"
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  onPress={() => setPhotoGuideCollapsed((v) => !v)}
-                  accessibilityRole="button"
-                  accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
-                  accessibilityHint="Tips for taking great listing photos"
-                >
-                  <AppIcon name="camera" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
-                  <Text style={[styles.photoAssistantToggleText, { color: colors.textSecondary }]}>
-                    {t('listing.create.photoTips')}
-                  </Text>
-                  <AppIcon name={photoGuideCollapsed ? 'chevronDown' : 'chevronUp'} size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
-                </AnimatedPressable>
-              );
-            }
-
-            if (prompts.length === 0 && !needsMore) return null;
-
-            return (
-              <View style={styles.contextualPrompts}>
-                {needsMore && (
-                  <View style={styles.contextualPromptRow}>
-                    <AppIcon name="camera" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
-                    <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
-                      {t('listing.create.addMorePhotos', { count: 3 - count, plural: 3 - count > 1 ? 's' : '' })}
-                    </Text>
-                  </View>
-                )}
-                {prompts.map((prompt, i) => (
-                  <View key={i} style={styles.contextualPromptRow}>
-                    <AppIcon name={prompt.icon as any} size={IconSize.sm} color="brand" opticalCenter accessible={false} />
-                    <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
-                      {prompt.text}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            );
-          })()}
-
-          {/* Photo tips detail — expandable, only before the first photo */}
-          {mediaDraftItems.length === 0 && !photoGuideCollapsed && (
-            <View style={styles.photoAssistantTips}>
-              <View style={styles.contextualPromptRow}>
-                <AppIcon name="bulb-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
-                <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipLighting')}</Text>
-              </View>
-              <View style={styles.contextualPromptRow}>
-                <AppIcon name="camera" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
-                <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipAngles')}</Text>
-              </View>
-              <View style={styles.contextualPromptRow}>
-                <AppIcon name="image-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
-                <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipBackground')}</Text>
-              </View>
-            </View>
-          )}
           {/* -- 2b. QUICK ACTIONS ROW -- */}
           {/* Per research: quick actions for related seller tasks.
               Transparent 44pt targets with 20-24pt glyphs (AGENTS.md §4).
@@ -1097,16 +1013,6 @@ export default function SellScreen() {
           <View style={{ height: DockConstants.singleActionHeight }} />
         </KeyboardAwareScrollView>
 
-      {/* G9: Listing quality meter — photo/quality gating before publish.
-          Shows actionable suggestions so sellers can improve their listing
-          before it goes live. Only renders when there's enough content to
-          score. Flat placement above the publish footer — no card chrome. */}
-      {qualityScore && qualityScore.overall < 80 && (
-        <View style={styles.qualityMeterWrap}>
-          <ListingQualityMeter score={qualityScore} />
-        </View>
-      )}
-
       {/* -- 9. RECOVERABLE PUBLICATION FEEDBACK + 10. STICKY PREVIEW / PUBLISH FOOTER -- */}
       {/* No quality score or dashboard — the footer shows readiness state
           and primary CTA only. Contextual guidance lives next to each field. */}
@@ -1433,60 +1339,11 @@ const styles = StyleSheet.create({
     gap: Space.xs + 1,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm },
-  /* G9: Quality meter wrapper — sits above the publish footer */
-  qualityMeterWrap: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm },
   reviewSummaryText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-
-  /* -- contextual authenticity prompts -- */
-  /* Per audit 04 P1: contextual prompts by category/value.
-     Flat inline — no card chrome (§4 surface budget). */
-  contextualPrompts: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-    gap: Space.xs },
-  contextualPromptRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 1 },
-  contextualPromptText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-
-  /* -- contextual photo assistant (consolidated) -- */
-  /* One system replacing the former contextualHintRow, PhotoGuideCollapse,
-     and contextualPrompts. Flat inline — no card chrome (§4 surface budget). */
-  photoAssistantToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    minHeight: Control.hit },
-  photoAssistantToggleText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  photoAssistantTips: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    gap: Space.xs },
-  photoAssistantTip: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* -- price suggestion block -- */

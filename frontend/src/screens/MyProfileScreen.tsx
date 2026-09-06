@@ -44,6 +44,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipProfileMedia } from '../components/flagship';
 import { LookPreviewCard, ProfileLooksGrid } from '../components/profile';
 import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHero';
+import { SharePassportModal } from '../components/profile/SharePassportModal';
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
 import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
 import { useSellerTrust, VERIFICATION_TIERS } from '../platform/product';
@@ -259,6 +260,7 @@ export default function MyProfileScreen() {
   const updateUserCover = useStore((state) => state.updateUserCover);
   const user = currentUser;
   const [myLooks, setMyLooks] = React.useState<LookApiItem[]>([]);
+  const [showPassportModal, setShowPassportModal] = React.useState(false);
   const [looksLoading, setLooksLoading] = React.useState(false);
   const [looksError, setLooksError] = React.useState(false);
 
@@ -613,15 +615,10 @@ export default function MyProfileScreen() {
     return { opacity };
   });
 
-  const handleShare = async () => {
+  const handleShare = () => {
     if (!user) return;
     haptic.light();
-    try {
-      await Share.share({
-        message: tt('share.message', { username: user.username }),
-        url: `https://thryftverse.com/@${user.username}`,
-        title: tt('share.title', { name: user.displayName || user.username }) });
-    } catch { /* user cancelled or share unavailable */ }
+    setShowPassportModal(true);
   };
 
   const wishlistCount = useStore((state) => state.wishlist.length);
@@ -635,26 +632,12 @@ export default function MyProfileScreen() {
   const utilityItems = React.useMemo(
     () => [
       {
-        icon: 'bag-handle-outline' as const,
-        label: tt('utility.orders'),
-        onPress: () => { haptic.light(); navigation.navigate('MyOrders'); },
-        accessibilityLabel: tt('accessibility.orders') },
-      {
-        icon: 'stats-chart-outline' as const,
-        label: tt('utility.analytics'),
-        onPress: () => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); },
-        accessibilityLabel: tt('accessibility.creatorAnalytics') },
-      {
-        icon: 'bookmark-outline' as const,
-        label: tt('utility.closet'),
-        value: tt('utility.itemsCount', { count: savedCount + wishlistCount }),
-        onPress: () => { haptic.light(); navigation.navigate('Closet'); },
-        accessibilityLabel: tt('accessibility.closet') },
-      {
-        icon: 'wallet-outline' as const,
-        label: tt('utility.wallet'),
-        onPress: () => { haptic.light(); navigation.navigate('Wallet'); },
-        accessibilityLabel: tt('accessibility.wallet') },
+        icon: 'storefront-outline' as const,
+        label: tt('utility.sellerHub'),
+        value: 'Commerce & Ops',
+        onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
+        accessibilityLabel: tt('accessibility.sellerHub'),
+        accessibilityHint: 'Open Seller Hub for Orders, Wallet, Analytics, and Closet' },
       {
         icon: 'timer-outline' as const,
         label: tt('utility.auctions'),
@@ -666,13 +649,8 @@ export default function MyProfileScreen() {
         value: coOwnHoldings.length > 0 ? tt('utility.assetsCount', { count: coOwnHoldings.length }) : undefined,
         onPress: () => { haptic.light(); navigation.navigate('CoOwnHub'); },
         accessibilityLabel: tt('accessibility.browseCoOwnMarket') },
-      {
-        icon: 'storefront-outline' as const,
-        label: tt('utility.sellerHub'),
-        onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
-        accessibilityLabel: tt('accessibility.sellerHub') },
     ],
-    [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation, tt]
+    [coOwnHoldings.length, haptic, navigation, tt]
   );
 
   const GRID_GAP = Space.xs;
@@ -979,7 +957,6 @@ export default function MyProfileScreen() {
             onEditAvatar={pickAvatar}
             onEditProfile={() => navigation.navigate('EditProfile', {})}
             onShare={handleShare}
-            onPressSellerAnalytics={() => { haptic.light(); navigation.navigate('SellerAnalytics'); }}
             onPressSold={() => { haptic.light(); navigation.navigate('MyOrders'); }}
             onPressFollowers={() => { haptic.light(); navigation.navigate('ConnectionList', { userId: currentUser!.id, mode: 'followers' }); }}
             onPressFollowing={() => { haptic.light(); navigation.navigate('ConnectionList', { userId: currentUser!.id, mode: 'following' }); }}
@@ -1435,6 +1412,21 @@ export default function MyProfileScreen() {
           </View>
         ) : null}
       </Reanimated.ScrollView>
+
+      {user ? (
+        <SharePassportModal
+          visible={showPassportModal}
+          onClose={() => setShowPassportModal(false)}
+          username={user.username}
+          displayName={user.displayName || user.username}
+          avatarUri={displayAvatar}
+          ratingAverage={sellerTrust?.rating ?? null}
+          completedSales={sellerTrust?.completedSales ?? 0}
+          verificationTier={sellerTrust?.verificationTier ?? (sellerTrust?.verified ? 'seller' : null)}
+          memberSince={memberSince}
+          bio={user.bio ?? null}
+        />
+      ) : null}
     </View>
   );
 }

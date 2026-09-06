@@ -265,10 +265,6 @@
       "shippingPreferences": "Shipping preferences",
       "priceAlerts": "Price alerts",
       "priceAlertsSubtitle": "Notify on price thresholds",
-      "autoInvestPlans": "Auto-invest plans",
-      "autoInvestPlansSubtitle": "Recurring buy schedules",
-      "taxDocuments": "Tax documents",
-      "taxDocumentsSubtitle": "Annual statements & P&L",
       "resolutionCentre": "Resolution Centre",
       "resolutionCentreSubtitle": "Disputes and resolutions",
       "enableNotifications": "Enable notifications",
@@ -1448,47 +1444,35 @@
   },
   "algorithm": {
     "header": {
-      "title": "Your Algorithm",
-      "subtitle": "The signals that shape your feed"
+      "title": "Your topics",
+      "subtitle": "Shape what you see"
     },
     "demo": {
-      "banner": "Algorithm data is illustrative in demo mode."
+      "banner": "Demo mode — data is illustrative."
     },
     "offline": {
       "banner": "You are offline. Showing the last saved profile."
     },
-    "summary": {
-      "activeTopics": "Active topics",
-      "signals": "Signals",
-      "lastUpdated": "Last updated"
-    },
-    "howItWorks": {
-      "title": "How this works"
-    },
     "empty": {
       "title": "No topics yet",
-      "subtitle": "Your feed is based on general popularity. Add a topic below to start shaping your recommendations."
+      "subtitle": "Your feed is based on general popularity. Add a topic to start shaping it."
     },
     "topics": {
-      "title": "Topics that influence your feed",
-      "caption": "Tap a topic to adjust its weight or remove it.",
-      "influenceWeight": "Influence weight",
+      "title": "Your topics",
+      "locked": "From your history",
+      "moreOfThis": "More of this",
+      "lessOfThis": "Less of this",
+      "weightUsual": "Usual",
       "removeTopic": "Remove topic",
-      "lockHint": "Kept for trust and accounting. You can pause its influence on your feed."
-    },
-    "signals": {
-      "title": "Recent signals",
-      "caption": "The latest actions that shaped your feed."
+      "lockHint": "Kept for trust. You can pause its influence on your feed."
     },
     "addTopic": {
-      "title": "Add a topic",
-      "caption": "Tell us what you're interested in.",
-      "placeholder": "e.g. Vintage watches",
-      "addBtn": "Add topic"
+      "placeholder": "Add a topic",
+      "addBtn": "Add"
     },
     "error": {
-      "title": "Couldn't load your algorithm",
-      "subtitle": "We couldn't fetch your algorithm profile. Check your connection and try again.",
+      "title": "Couldn't load your topics",
+      "subtitle": "Check your connection and try again.",
       "retry": "Retry"
     }
   },

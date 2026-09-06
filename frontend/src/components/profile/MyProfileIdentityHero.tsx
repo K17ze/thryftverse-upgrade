@@ -11,7 +11,6 @@ import { IconSize } from '../../theme/iconTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { CachedImage } from '../CachedImage';
 import { formatCompactCount, formatFullCount } from '../../utils/numberFormat';
-import { appStorage } from '../../storage/mmkv';
 
 // ── Bio linkification + truncation ──
 // Parses URLs, @mentions and #hashtags in the bio and renders them as
@@ -111,7 +110,6 @@ interface MyProfileIdentityHeroProps {
   responseTimeLabel?: string | null;
   /** Distinguishes loading/error from a real zero count (M2 — truthful UI). */
   followCountsStatus?: 'loading' | 'error' | 'loaded';
-  onPressSellerAnalytics?: () => void;
   onEditAvatar: () => void;
   onEditProfile: () => void;
   onShare: () => void;
@@ -141,23 +139,9 @@ export function MyProfileIdentityHero({
   onShare,
   onPressSold,
   onPressFollowers,
-  onPressFollowing,
-  onPressSellerAnalytics }: MyProfileIdentityHeroProps) {
+  onPressFollowing }: MyProfileIdentityHeroProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
-
-  const activeNote = React.useMemo(() => {
-    try {
-      const raw = appStorage.getString('inbox.social_note.v1');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.text) return parsed.text as string;
-      }
-    } catch {
-      // Best-effort MMKV read
-    }
-    return "Can't decide...";
-  }, []);
 
   // Verification tier — only from seller trust (authoritative backend source).
   // Email verification is never used as a proxy for seller/identity verification.
@@ -183,19 +167,6 @@ export function MyProfileIdentityHero({
     <View style={styles.heroRoot}>
       {/* ── Seam row: avatar (left, overlapping cover) + 3 stats (right) ── */}
       <View style={styles.avatarAbsolute}>
-        {/* Floating status thought bubble — Instagram standard (00.52.55 (3).jpeg) */}
-        <Pressable
-          style={styles.avatarThoughtBubble}
-          onPress={onEditAvatar}
-          accessibilityRole="button"
-          accessibilityLabel={`Active status note: ${activeNote}. Tap to edit.`}
-        >
-          <Text style={styles.avatarThoughtText} numberOfLines={1}>
-            {activeNote}
-          </Text>
-          <View style={styles.avatarThoughtTail} />
-        </Pressable>
-
         {avatarUri ? (
           <CachedImage
             uri={avatarUri}
@@ -282,26 +253,6 @@ export function MyProfileIdentityHero({
 
         {bio ? <BioText bio={bio} style={styles.bio} linkStyle={styles.bioLink} seeMoreStyle={styles.bioSeeMore} /> : null}
 
-        {location ? (
-          <Text style={styles.contextLine} numberOfLines={1}>{location}</Text>
-        ) : null}
-
-        {/* Website — tappable link, matches ProfileHero */}
-        {website ? (
-          <Pressable
-            style={({ pressed }) => [styles.websiteLink, pressed && { opacity: 0.6 }]}
-            onPress={() => {
-              let normalized = website.trim();
-              if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
-              Linking.openURL(normalized).catch(() => {});
-            }}
-            accessibilityRole="link"
-            accessibilityLabel={`Open website ${website}`}
-          >
-            <Text style={styles.websiteText} numberOfLines={1}>{website}</Text>
-          </Pressable>
-        ) : null}
-
         {/* Trust header — rating row + joined caption on separate lines.
             The rating is part of the identity block, not a lonely chip: star +
             score + review count give the 5.0 context. Joined date is a less
@@ -336,47 +287,53 @@ export function MyProfileIdentityHero({
             {memberSince ? <Text style={styles.trustJoined}>Joined {memberSince}</Text> : null}
           </View>
         ) : null}
+
+        {location ? (
+          <Text style={styles.contextLine} numberOfLines={1}>{location}</Text>
+        ) : null}
+
+        {/* Website — tappable link, matches ProfileHero */}
+        {website ? (
+          <Pressable
+            style={({ pressed }) => [styles.websiteLink, pressed && { opacity: 0.6 }]}
+            onPress={() => {
+              let normalized = website.trim();
+              if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
+              Linking.openURL(normalized).catch(() => {});
+            }}
+            accessibilityRole="link"
+            accessibilityLabel={`Open website ${website}`}
+          >
+            <Text style={styles.websiteText} numberOfLines={1}>{website}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
-      {/* Professional dashboard card — Instagram seller standard (00.52.55 (3).jpeg) */}
-      <AnimatedPressable
-        style={styles.proDashboardCard}
-        onPress={onPressSellerAnalytics}
-        activeOpacity={0.88}
-        hapticFeedback="light"
-        accessibilityRole="button"
-        accessibilityLabel="Professional dashboard, 5.8K views in the last 30 days"
-      >
-        <View style={styles.proDashboardCopy}>
-          <Text style={styles.proDashboardTitle}>Professional dashboard</Text>
-          <Text style={styles.proDashboardSubtitle}>5.8K views in the last 30 days</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-      </AnimatedPressable>
-
-      {/* Actions — flat, single row, clear primary/secondary hierarchy */}
+      {/* Actions — authored, luxury curator & collector identity controls */}
       <View style={styles.actionRow}>
         <AnimatedPressable
           style={[styles.action, styles.editAction]}
           onPress={onEditProfile}
           activeOpacity={0.88}
+          scaleValue={0.98}
           hapticFeedback="light"
-          accessibilityLabel="Edit profile"
+          accessibilityLabel="Edit profile and curator studio"
           accessibilityRole="button"
         >
           <Ionicons name="create-outline" size={15} color={colors.textPrimary} />
-          <Text style={styles.editActionText}>Edit profile</Text>
+          <Text style={styles.editActionText}>Edit Profile</Text>
         </AnimatedPressable>
         <AnimatedPressable
           style={[styles.action, styles.shareAction]}
           onPress={onShare}
           activeOpacity={0.88}
+          scaleValue={0.98}
           hapticFeedback="light"
-          accessibilityLabel="Share profile"
+          accessibilityLabel="Share your profile"
           accessibilityRole="button"
         >
-          <Ionicons name="share-outline" size={17} color={colors.textPrimary} />
-          <Text style={styles.shareActionText}>Share profile</Text>
+          <Ionicons name="share-outline" size={16} color={colors.brand} />
+          <Text style={styles.shareActionText}>Share</Text>
         </AnimatedPressable>
       </View>
     </View>
@@ -611,67 +568,5 @@ function createStyles(colors: ThemeColors) {
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.bodyStrong.size },
 
-  // Thought bubble
-  avatarThoughtBubble: {
-    position: 'absolute',
-    top: -14,
-    left: 4,
-    zIndex: 15,
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    maxWidth: 105,
-    alignItems: 'center',
-  },
-  avatarThoughtText: {
-    fontSize: 10,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textPrimary,
-  },
-  avatarThoughtTail: {
-    position: 'absolute',
-    bottom: -4,
-    left: 14,
-    width: 6,
-    height: 6,
-    backgroundColor: colors.surface,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    transform: [{ rotate: '45deg' }],
-  },
-
-  // Professional dashboard card
-  proDashboardCard: {
-    marginHorizontal: Space.md,
-    marginTop: Space.xs,
-    marginBottom: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  proDashboardCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  proDashboardTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    color: colors.textPrimary,
-  },
-  proDashboardSubtitle: {
-    fontSize: TypographyV2.caption.size,
-    fontFamily: TypographyV2.caption.fontFamily,
-    color: colors.textMuted,
-  },
 });
 }

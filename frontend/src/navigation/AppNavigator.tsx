@@ -414,10 +414,8 @@ export default function AppNavigator() {
       <Stack.Screen name="OrderSupport" getComponent={() => require('../screens/OrderSupportScreen').default} />
       <Stack.Screen name="BuyerProtection" getComponent={() => require('../screens/BuyerProtectionScreen').default} />
 
-      {/* ── Co-Own / Syndicate ── (price alerts, tax, recurring orders) */}
+      {/* ── Co-Own / Syndicate ── (price alerts) */}
       <Stack.Screen name="CoOwnPriceAlerts" getComponent={() => require('../screens/CoOwnPriceAlertsScreen').default} />
-      <Stack.Screen name="CoOwnTaxDocuments" getComponent={() => require('../screens/CoOwnTaxDocumentsScreen').default} />
-      <Stack.Screen name="CoOwnRecurringOrders" getComponent={() => require('../screens/CoOwnRecurringOrdersScreen').default} />
 
       {/* ── Chat & Messaging ── (media preview) */}
       <Stack.Screen name="ChatMediaPreview" getComponent={() => require('../screens/ChatMediaPreviewScreen').default} options={modalScreenOptions} />

@@ -1769,5 +1769,6 @@
       "ownershipPercent": "حصتك الملكية",
       "distributions": "التوزيعات"
     }
-  }
+  },
+  "stateCopy": {}
 }

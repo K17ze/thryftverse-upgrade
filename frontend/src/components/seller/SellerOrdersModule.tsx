@@ -151,7 +151,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
           onPress={onViewAllOrders}
           activeOpacity={0.7}
           scaleValue={0.97}
-          hapticFeedback="light"
+          hapticFeedback="none"
           accessibilityRole="button"
           accessibilityLabel={`View all orders, ${orders30dCount} in the last 30 days`}
           style={styles.viewAllHit}
@@ -190,7 +190,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
                 onPress={() => onOpenOrder(order.id)}
                 activeOpacity={0.7}
                 scaleValue={0.97}
-                hapticFeedback="light"
+                hapticFeedback="none"
                 accessibilityRole="button"
                 accessibilityLabel={`Order ${order.title}, ${formatMoney(order.totalGbp)}${order.status ? `, ${order.status}` : ''}`}
               >
@@ -253,7 +253,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
                 onPress={() => onNavigateToTask(task)}
                 activeOpacity={0.7}
                 scaleValue={0.99}
-                hapticFeedback="light"
+                hapticFeedback="none"
                 accessibilityRole="button"
                 accessibilityLabel={`${taskTitle(task)}${dueLabel ? `, ${dueLabel}` : ''}`}
               >
