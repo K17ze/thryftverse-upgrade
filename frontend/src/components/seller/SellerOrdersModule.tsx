@@ -355,15 +355,15 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xxs,
     },
     orderCard: {
-      width: 96,
+      width: 104,
     },
     thumbWrap: {
-      width: 64,
-      height: 64,
+      width: 72,
+      height: 72,
     },
     thumb: {
-      width: 64,
-      height: 64,
+      width: 72,
+      height: 72,
       borderRadius: Radius.md,
     },
     thumbEmpty: {
@@ -390,7 +390,7 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs,
       fontSize: TypographyV2.caption.size,
       lineHeight: TypographyV2.caption.lineHeight,
-      fontFamily: FontFamily.regular,
+      fontFamily: FontFamily.medium,
       letterSpacing: TypographyV2.caption.letterSpacing,
       color: colors.textPrimary,
     },
@@ -481,11 +481,11 @@ function createStyles(colors: ThemeColors) {
 
     // ── Skeletons — media-shaped, no spinners ──
     skeletonCard: {
-      width: 96,
+      width: 104,
     },
     skeletonThumb: {
-      width: 64,
-      height: 64,
+      width: 72,
+      height: 72,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
     },

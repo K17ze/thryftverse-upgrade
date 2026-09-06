@@ -55,6 +55,8 @@ export interface LineChartProps {
   padding?: ChartPadding;
   /** Show subtle grid lines. Defaults to true. */
   showGrid?: boolean;
+  /** Draw the chart frame box and axis lines. Defaults to true. Set false for sparkline reads — pure line + area, no chrome. */
+  showFrame?: boolean;
   /** Show interactive crosshair with tooltip on touch. Defaults to true. */
   showCrosshair?: boolean;
   /** Fill the area under the first series with a vertical fade of the series colour. Defaults to false. */
@@ -218,6 +220,7 @@ export function LineChart({
   variant = 'card',
   padding = DEFAULT_PADDING,
   showGrid = true,
+  showFrame = true,
   showCrosshair = true,
   showAreaFill = false,
   showPoints = false,
@@ -342,10 +345,11 @@ export function LineChart({
     return buildSingleTooltipLines(seriesLabels[0] ?? '', val, seriesColors[0]);
   });
 
-  // Axis colours.
+  // Axis colours. showFrame=false kills the frame box and axis lines too —
+  // a sparkline read is pure line + area.
   const gridColor = showGrid ? theme.gridLine : 'transparent';
-  const axisColor = theme.axisLine;
-  const labelColor = theme.textSecondary;
+  const axisColor = showFrame ? theme.axisLine : 'transparent';
+  const labelColor = showFrame ? theme.textSecondary : 'transparent';
 
   // Container treatment: 'card' draws the bordered card surface (default);
   // 'flat' renders directly on the parent canvas — no border, padding or fill.

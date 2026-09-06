@@ -147,6 +147,7 @@ export const SellerAnalyticsModule: React.FC<SellerAnalyticsModuleProps> = ({
           height={48}
           variant="flat"
           showGrid={false}
+          showFrame={false}
           showCrosshair={false}
           showAreaFill={true}
           showPoints={false}
@@ -166,9 +167,6 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.lg,
       marginHorizontal: Space.md,
       minHeight: Control.hit,
-      paddingBottom: Space.md,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderSubtle,
     },
     headerRow: {
       flexDirection: 'row',
