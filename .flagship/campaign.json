@@ -1,0 +1,22 @@
+{
+  "campaignId": "flagship-seller-suite-2026-06",
+  "startDate": "2026-06-09",
+  "branch": "feat/product-detail-contract-media-device-closure",
+  "head": "03153b23c2ac4fffcd579b25940d946a1f5fad8e",
+  "phase": "SPEC-APPROVAL-GATE",
+  "surfaces": ["Analytics", "SellerHub", "EditProfile", "UploadListing", "SharedUI"],
+  "audits": {
+    "analytics": { "agentId": "8603f704", "status": "complete", "findings": "P0: fabricated daily data, hardcoded '0 offers', fake status fallbacks. P1: 2x2 executive grid silhouette, rainbow funnel, radius budget blowout, touch targets <44pt, system font on charts." },
+    "sellerHub": { "agentId": "88882242", "status": "complete", "findings": "P0: fabricated status labels, formatMoney lossy, import errors swallowed. P1: dashboard silhouette not task-queue, equal-weight KPI grid, raw Ionicons, touch targets <44pt, verbose AI copy." },
+    "editProfile": { "agentId": "df5eef15", "status": "complete", "findings": "P0: ARCHIVAL_SPECIALTIES fabricated+not persisted, upload commits before Save, revert doesn't cancel in-flight, fake QR in SharePassportModal. P1: decorative passport chrome, hardcoded colors/sizes, touch targets <44pt, dead route param." }
+  },
+  "gates": {
+    "specApproved": false,
+    "implementationStarted": false,
+    "typecheckPass": false,
+    "lintPass": false,
+    "testsPass": false,
+    "visualVerified": false,
+    "adversarialReauditPass": false
+  }
+}
