@@ -344,6 +344,8 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           timestamp={`Quote ${secondsRemaining}s · market ${new Date(marketDataTimestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
           maxReservedLabel={maxReservedLabel}
           marketWarning={marketWarning}
+          localFiatLabel={`Reference: £${netValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GBP`}
+          localFiatSource="Settlement in 1ZE"
         />
 
         {/* Remainder behavior — plain-language summary of what happens to

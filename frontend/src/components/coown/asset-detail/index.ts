@@ -1,3 +1,18 @@
+export { CoOwnAssetHeader } from './CoOwnAssetHeader';
+export type { CoOwnAssetHeaderProps } from './CoOwnAssetHeader';
+
+export { CoOwnAssetMediaStage } from './CoOwnAssetMediaStage';
+export type { CoOwnAssetMediaStageProps } from './CoOwnAssetMediaStage';
+
+export { CoOwnAssetIdentity } from './CoOwnAssetIdentity';
+export type { CoOwnAssetIdentityProps } from './CoOwnAssetIdentity';
+
+export { CoOwnSegmentNav } from './CoOwnSegmentNav';
+export type { CoOwnSegmentNavProps, CoOwnDetailTab } from './CoOwnSegmentNav';
+
+export { CoOwnActionDock } from './CoOwnActionDock';
+export type { CoOwnActionDockProps } from './CoOwnActionDock';
+
 export { AssetOverviewSection } from './AssetOverviewSection';
 export type { AssetOverviewSectionProps } from './AssetOverviewSection';
 

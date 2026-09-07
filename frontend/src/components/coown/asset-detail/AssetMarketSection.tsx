@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Space, FontFamily, Radius, PressScale } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
-import { RadiusRoleValue } from '../../../theme/surfaceRadiusRules';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { formatCoOwnIze } from '../../../utils/currency';
 import type {
@@ -12,63 +11,43 @@ import type {
   CoOwnOrderBookEntry,
 } from '../../../services/marketApi';
 import {
-  CommerceDetailDisclosureRow,
   CommerceDetailSection,
   CommerceDetailTransactionSurface,
   CommerceDetailUnavailableInline,
-  CommerceDetailOfflineBanner,
-  CommerceDetailFreshnessBanner,
 } from '../../commerce/detail';
-import { MarketBookRow } from '../../trade';
 import { CoOwnOrderBook } from '../';
 import type { AssetLifecycleState } from './types';
 
-/**
- * Asset market section — bid/ask depth, executed trades, spread,
- * quantity available, and price alert entry.
- *
- * The dominant price lives in the orchestrator's identity header;
- * this section shows executable market depth and recent trade context.
- */
 export interface AssetMarketSectionProps {
   asset: MarketCoOwnAsset;
-  // Order book
   orderBook: CoOwnOrderBookSnapshot | null;
   orderBookStreaming: boolean;
   orderBookHasGap: boolean;
   orderBookError: boolean;
   onRetryOrderBook: () => void;
-  // Market data
   bestBid: CoOwnOrderBookEntry | null;
   bestAsk: CoOwnOrderBookEntry | null;
   spreadGbp: number | null;
   depthStatusLabel: string;
   reconciliationActive: boolean;
-  marketSnapshotLabel: string | undefined;
-  // Connectivity / freshness
+  marketSnapshotLabel?: string;
   isOffline: boolean;
   refreshing: boolean;
   dataStale: boolean;
-  dataStaleAgeLabel: string | undefined;
+  dataStaleAgeLabel?: string;
   onRefresh: () => void;
-  // Expansion state
-  marketSectionExpanded: boolean;
-  onToggleMarketSection: () => void;
-  orderBookExpanded: boolean;
-  onToggleOrderBook: () => void;
-  // Supply / allocation
+  marketSectionExpanded?: boolean;
+  onToggleMarketSection?: () => void;
+  orderBookExpanded?: boolean;
+  onToggleOrderBook?: () => void;
   allocatedPct: number;
   availableUnits: number;
   totalUnits: number;
   onOpenSupply: () => void;
-  // Price alert
   onOpenPriceAlert: () => void;
-  // Trade interaction
   onSelectOrderBookLevel: (side: 'bid' | 'ask', price: number) => void;
-  // Holdings error
   holdingsError: boolean;
   onRetryHoldings: () => void;
-  // Lifecycle
   lifecycleState: AssetLifecycleState;
 }
 
@@ -84,287 +63,391 @@ export function AssetMarketSection({
   spreadGbp,
   depthStatusLabel,
   reconciliationActive,
-  marketSnapshotLabel,
   isOffline,
-  refreshing,
-  dataStale,
-  dataStaleAgeLabel,
-  onRefresh,
-  marketSectionExpanded,
-  onToggleMarketSection,
-  orderBookExpanded,
-  onToggleOrderBook,
-  allocatedPct,
-  availableUnits,
-  onOpenSupply,
   onOpenPriceAlert,
   onSelectOrderBookLevel,
-  holdingsError,
-  onRetryHoldings,
   lifecycleState,
 }: AssetMarketSectionProps) {
-  const { colors } = useAppTheme();
-  const marketSnapshot = asset.marketSnapshot ?? null;
-  const hasTrades = marketSnapshot?.lastExecutionPriceGbp != null;
+  const { colors, isDark } = useAppTheme();
 
-  // Lifecycle-aware summary for the disclosure row.
-  const sectionSummary = (() => {
-    if (lifecycleState === 'initialOffering') {
-      return `${availableUnits} units available · ${allocatedPct}% allocated`;
-    }
-    if (hasTrades) {
-      return `Last ${formatCoOwnIze(marketSnapshot!.lastExecutionPriceGbp!)}${spreadGbp != null ? ` · Spread ${formatCoOwnIze(spreadGbp)}` : ''}`;
-    }
-    return 'Price · depth';
-  })();
+  const isMarketOpen = asset.isOpen && !reconciliationActive && !isOffline;
+  const hasBidsOrAsks =
+    (orderBook?.bids && orderBook.bids.length > 0) ||
+    (orderBook?.asks && orderBook.asks.length > 0);
+
+  const mappedBids = React.useMemo(() => (
+    orderBook?.bids.map((b) => ({
+      price: b.unitPriceGbp,
+      size: b.units,
+      orderCount: b.orderCount,
+    })) ?? []
+  ), [orderBook?.bids]);
+
+  const mappedAsks = React.useMemo(() => (
+    orderBook?.asks.map((a) => ({
+      price: a.unitPriceGbp,
+      size: a.units,
+      orderCount: a.orderCount,
+    })) ?? []
+  ), [orderBook?.asks]);
+
+  // Reference vs execution price semantics (spec 03_COOWN §2)
+  const hasSettledTrade = asset.marketSnapshot?.lastExecutionPriceGbp != null;
+  const transactionPrimaryLabel =
+    lifecycleState === 'initialOffering'
+      ? 'Offering price'
+      : hasSettledTrade
+        ? 'Last trade'
+        : 'Reference price';
+  const transactionPrimaryValue = hasSettledTrade && lifecycleState !== 'initialOffering'
+    ? formatCoOwnIze(asset.marketSnapshot!.lastExecutionPriceGbp!)
+    : formatCoOwnIze(asset.unitPriceGbp);
+  const transactionSecondaryLabel = hasSettledTrade
+    ? `Reference unit price: ${formatCoOwnIze(asset.unitPriceGbp)}`
+    : bestBid && bestAsk
+      ? `Bid ${formatCoOwnIze(bestBid.unitPriceGbp)} · Ask ${formatCoOwnIze(bestAsk.unitPriceGbp)}`
+      : bestBid
+        ? `Bid ${formatCoOwnIze(bestBid.unitPriceGbp)} · Ask —`
+        : bestAsk
+          ? `Bid — · Ask ${formatCoOwnIze(bestAsk.unitPriceGbp)}`
+          : 'Spread unavailable';
 
   return (
-    <>
-      <CommerceDetailDisclosureRow
-        label={marketSectionExpanded ? 'Hide market details' : 'Market details'}
-        summary={sectionSummary}
-        onPress={onToggleMarketSection}
-        leadingIcon="trending-up-outline"
-        accessibilityLabel="Toggle market details"
+    <View style={styles.container}>
+      {/* ── 1. Transaction Surface with family="co_own" ── */}
+      <CommerceDetailTransactionSurface
+        family="co_own"
+        primaryLabel={transactionPrimaryLabel}
+        primaryValue={transactionPrimaryValue}
+        secondaryLabel={transactionSecondaryLabel}
+        headlineAside={
+          <View
+            style={[
+              styles.marketStatePill,
+              {
+                backgroundColor: reconciliationActive
+                  ? colors.warningSubtle
+                  : isMarketOpen
+                    ? colors.coownUpSubtle
+                    : colors.surfaceAlt,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.marketStateText,
+                {
+                  color: reconciliationActive
+                    ? colors.warning
+                    : isMarketOpen
+                      ? colors.coownUp
+                      : colors.textMuted,
+                },
+              ]}
+            >
+              {reconciliationActive
+                ? 'Orders paused'
+                : isMarketOpen
+                  ? 'Market open'
+                  : 'Market closed'}
+            </Text>
+          </View>
+        }
       />
-      {marketSectionExpanded ? (
-        <CommerceDetailSection label="Market details" variant="continuation">
-          {/* Connectivity + freshness notices */}
-          <CommerceDetailOfflineBanner isOffline={isOffline} />
-          <CommerceDetailFreshnessBanner
-            isRefreshing={refreshing}
-            isStale={dataStale && !refreshing}
-            onRetry={onRefresh}
-          />
 
-          {/* Executed trade / reference context */}
-          <CommerceDetailTransactionSurface
-            family="co_own"
-            flush
-            surfaceColor="transparent"
-            primaryLabel={hasTrades ? 'Last trade' : 'Reference price'}
-            primaryValue={formatCoOwnIze(marketSnapshot?.lastExecutionPriceGbp ?? asset.unitPriceGbp)}
-            secondaryLabel={hasTrades && marketSnapshot?.lastExecutionAt ? 'Executed' : undefined}
-            secondaryValue={
-              hasTrades && marketSnapshot?.lastExecutionAt
-                ? new Date(marketSnapshot.lastExecutionAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-                : undefined
-            }
-            statusRow={
-              <View style={styles.marketStatusRow}>
-                <View style={styles.marketStatusCluster}>
-                  <View
-                    style={[
-                      styles.marketStatusDot,
-                      {
-                        backgroundColor: reconciliationActive
-                          ? colors.warning
-                          : asset.isOpen
-                            ? colors.success
-                            : colors.textMuted,
-                      },
-                    ]}
-                  />
-                  <Text style={[styles.marketStatusText, { color: colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
-                    {reconciliationActive ? 'Trading paused · settling' : asset.isOpen ? 'Market open' : 'Market closed'}
-                  </Text>
-                  {dataStale && dataStaleAgeLabel && (
-                    <Text style={[styles.marketStatusStale, { color: colors.warning }]}>Stale {dataStaleAgeLabel}</Text>
-                  )}
-                </View>
-                <Text style={[styles.marketStatusRights, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-                  {orderBookError
-                    ? 'Depth unavailable'
-                    : `${depthStatusLabel} \u00b7 spread ${spreadGbp != null ? formatCoOwnIze(spreadGbp) : 'n/a'}`}
+      {/* ── 2. Live Order Book Ladder ── */}
+      <CommerceDetailSection label="Market depth">
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.depthStatusRow}>
+            <View
+              style={[
+                styles.liveIndicatorDot,
+                { backgroundColor: orderBookStreaming ? colors.success : colors.textMuted },
+              ]}
+            />
+            <Text style={[styles.depthStatusText, { color: colors.textSecondary }]}>
+              {depthStatusLabel}
+            </Text>
+            {spreadGbp != null && spreadGbp > 0 ? (
+              <Text style={[styles.spreadText, { color: colors.textMuted }]}>
+                · Spread: {formatCoOwnIze(spreadGbp)}
+              </Text>
+            ) : null}
+          </View>
+
+          {/* Price alert action */}
+          <Pressable
+            onPress={onOpenPriceAlert}
+            style={styles.alertActionBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Set price alert"
+          >
+            <Ionicons name="notifications-outline" size={14} color={colors.brand} />
+            <Text style={[styles.alertActionText, { color: colors.brand }]}>Alert</Text>
+          </Pressable>
+        </View>
+
+        {orderBookError ? (
+          <View style={[styles.errorBox, { backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name="cloud-offline-outline" size={24} color={colors.warning} />
+            <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>Order book unavailable</Text>
+            <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>
+              Could not synchronize live market depth.
+            </Text>
+            <Pressable
+              onPress={onRetryOrderBook}
+              style={[styles.retryBtn, { backgroundColor: colors.surface }]}
+              accessibilityRole="button"
+              accessibilityLabel="Retry order book"
+            >
+              <Text style={[styles.retryBtnText, { color: colors.brand }]}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : isMarketOpen && hasBidsOrAsks ? (
+          <View style={styles.orderBookWrapper}>
+            <CoOwnOrderBook
+              bids={mappedBids}
+              asks={mappedAsks}
+              mode={lifecycleState === 'secondaryTrading' ? 'continuous' : 'call_auction'}
+              onSelectLevel={onSelectOrderBookLevel}
+            />
+          </View>
+        ) : (
+          <View style={[styles.emptyDepthNotice, { backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)' }]}>
+            <Ionicons name="layers-outline" size={26} color={colors.textMuted} />
+            <Text style={[styles.emptyDepthTitle, { color: colors.textPrimary }]}>
+              {lifecycleState === 'initialOffering' ? 'Primary Offering Mode' : 'Sparse Order Book'}
+            </Text>
+            <Text style={[styles.emptyDepthBody, { color: colors.textSecondary }]}>
+              {lifecycleState === 'initialOffering'
+                ? `Initial allocation underway at ${formatCoOwnIze(asset.unitPriceGbp)} per unit. Secondary bids and asks activate once initial distribution closes.`
+                : 'No resting bids or asks currently on the book. You can place the first limit order or buy available float directly.'}
+            </Text>
+          </View>
+        )}
+      </CommerceDetailSection>
+
+      {/* ── 3. Recent Market Executions ── */}
+      <CommerceDetailSection label="Recent executions">
+        {asset.marketSnapshot?.lastExecutionPriceGbp != null ? (
+          <View style={styles.tradeExecutionRow}>
+            <View style={styles.tradeExecutionLeft}>
+              <Ionicons name="swap-horizontal" size={16} color={colors.brand} />
+              <View>
+                <Text style={[styles.tradeExecutionPrice, { color: colors.textPrimary }]}>
+                  {formatCoOwnIze(asset.marketSnapshot.lastExecutionPriceGbp)}
+                </Text>
+                <Text style={[styles.tradeExecutionMeta, { color: colors.textMuted }]}>
+                  {asset.marketSnapshot.lastExecutionAt
+                    ? new Date(asset.marketSnapshot.lastExecutionAt).toLocaleString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'Recent trade'}
                 </Text>
               </View>
-            }
-          >
-            {/* Allocation indicator — supply quantity available */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.allocationIndicatorRow,
-                { borderTopColor: colors.border },
-                pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] },
-              ]}
-              onPress={onOpenSupply}
-              accessibilityRole="button"
-              accessibilityLabel={`Supply details · ${allocatedPct}% allocated, ${availableUnits} units available`}
-            >
-              <View style={[styles.allocationBar, { backgroundColor: colors.surfaceAlt, flex: 1 }]}>
-                <View
-                  style={[
-                    styles.allocationFill,
-                    { backgroundColor: colors.brand, width: `${Math.min(100, allocatedPct)}%` },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.allocationIndicatorText, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
-                {allocatedPct}% allocated · {availableUnits} units available
+            </View>
+            <View style={styles.tradeExecutionRight}>
+              <Text style={[styles.tradeVolumeText, { color: colors.textSecondary }]}>
+                Settled · ONEZE
               </Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-            </Pressable>
-          </CommerceDetailTransactionSurface>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.noTradesBox}>
+            <Text style={[styles.noTradesText, { color: colors.textMuted }]}>
+              No trades yet. Initial issuance is currently offered at {formatCoOwnIze(asset.unitPriceGbp)}.
+            </Text>
+          </View>
+        )}
+      </CommerceDetailSection>
 
-          {/* Holdings error — position unavailable */}
-          {holdingsError ? (
-            <CommerceDetailUnavailableInline
-              title="Position unavailable"
-              body="We could not verify your settled units. Trading is disabled until this refreshes."
-              onRetry={onRetryHoldings}
-            />
-          ) : null}
+      {/* ── 4. Trading Rules & Circuit Breakers ── */}
+      <CommerceDetailSection label="Trading parameters">
+        <View style={styles.rulesList}>
+          <View style={styles.ruleItem}>
+            <Ionicons name="shield-outline" size={16} color={colors.brand} />
+            <View style={styles.ruleTextCol}>
+              <Text style={[styles.ruleTitle, { color: colors.textPrimary }]}>Price Protection (Circuit Breaker)</Text>
+              <Text style={[styles.ruleDesc, { color: colors.textSecondary }]}>
+                Marketable orders automatically reject if execution deviates by more than 10% from prevailing quote.
+              </Text>
+            </View>
+          </View>
 
-          {/* Best bid / best ask — with available quantity */}
-          {orderBookError ? (
-            <CommerceDetailUnavailableInline
-              title="Live market unavailable"
-              body="Bid and ask depth could not be loaded."
-              onRetry={onRetryOrderBook}
-            />
-          ) : (
-            <MarketBookRow bestBid={bestBid} bestAsk={bestAsk} />
-          )}
+          <View style={styles.ruleItem}>
+            <Ionicons name="time-outline" size={16} color={colors.brand} />
+            <View style={styles.ruleTextCol}>
+              <Text style={[styles.ruleTitle, { color: colors.textPrimary }]}>Remainder Handling</Text>
+              <Text style={[styles.ruleDesc, { color: colors.textSecondary }]}>
+                Instant orders cancel unfilled remainders immediately. Limit orders rest on the central limit order book.
+              </Text>
+            </View>
+          </View>
 
-          {/* Bids & asks — order book depth disclosure */}
-          {!orderBookError && orderBook ? (
-            <>
-              <CommerceDetailDisclosureRow
-                label={orderBookExpanded ? 'Hide bids & asks' : 'Bids & asks'}
-                summary={`${orderBook.bids.length + orderBook.asks.length} offers`}
-                onPress={onToggleOrderBook}
-                leadingIcon="bar-chart-outline"
-              />
-              {orderBookExpanded ? (
-                <>
-                  <View style={styles.marketLegendRow}>
-                    <View style={styles.marketLegendItem}>
-                      <View style={[styles.marketLegendDot, { backgroundColor: colors.coownUp }]} />
-                      <Text style={[styles.marketLegendText, { color: colors.textMuted }]}>Bid (buy)</Text>
-                    </View>
-                    <View style={styles.marketLegendItem}>
-                      <View style={[styles.marketLegendDot, { backgroundColor: colors.coownDown }]} />
-                      <Text style={[styles.marketLegendText, { color: colors.textMuted }]}>Ask (sell)</Text>
-                    </View>
-                  </View>
-                  <CoOwnOrderBook
-                    embedded
-                    bids={orderBook.bids.map((level) => ({
-                      price: level.unitPriceGbp,
-                      size: level.units,
-                      orderCount: level.orderCount,
-                    }))}
-                    asks={orderBook.asks.map((level) => ({
-                      price: level.unitPriceGbp,
-                      size: level.units,
-                      orderCount: level.orderCount,
-                    }))}
-                    visibleLevels={5}
-                    lastPrice={marketSnapshot?.lastExecutionPriceGbp ?? undefined}
-                    lastAgeSeconds={undefined}
-                    mode={asset.isOpen ? 'continuous' : 'closed'}
-                    onSelectLevel={onSelectOrderBookLevel}
-                  />
-                </>
-              ) : null}
-            </>
-          ) : null}
-
-          {/* Price alert */}
-          <CommerceDetailDisclosureRow
-            label="Price alert"
-            summary="Get notified at a target price"
-            onPress={onOpenPriceAlert}
-            leadingIcon="notifications-outline"
-            accessibilityLabel="Create price alert"
-          />
-        </CommerceDetailSection>
-      ) : null}
-    </>
+          <View style={styles.ruleItem}>
+            <Ionicons name="wallet-outline" size={16} color={colors.brand} />
+            <View style={styles.ruleTextCol}>
+              <Text style={[styles.ruleTitle, { color: colors.textPrimary }]}>Settlement Currency</Text>
+              <Text style={[styles.ruleDesc, { color: colors.textSecondary }]}>
+                All fills and distributions clear through 1ZE balance at exact 1:1 GBP backing.
+              </Text>
+            </View>
+          </View>
+        </View>
+      </CommerceDetailSection>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  marketStatusRow: {
+  container: {
+    paddingHorizontal: Space.md,
+    gap: Space.lg,
+  },
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: Space.xs,
+    marginBottom: Space.sm,
   },
-  marketStatusCluster: {
+  depthStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
   },
-  marketStatusDot: {
-    width: Space.sm,
-    height: Space.sm,
-    borderRadius: RadiusRoleValue.compactControl,
+  liveIndicatorDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  marketStatusText: {
+  depthStatusText: {
     fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+  },
+  spreadText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+  },
+  alertActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xxs,
+  },
+  alertActionText: {
+    fontSize: TypographyV2.caption.size,
+    fontFamily: FontFamily.medium,
+  },
+  orderBookWrapper: {
+    marginTop: Space.xs,
+  },
+  errorBox: {
+    alignItems: 'center',
+    padding: Space.md,
+    borderRadius: Radius.sm,
+    gap: Space.xs,
+  },
+  errorTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing,
   },
-  marketStatusStale: {
+  errorSubtitle: {
     fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'center',
   },
-  marketStatusRights: {
+  retryBtn: {
+    marginTop: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.sm,
+  },
+  retryBtnText: {
+    fontSize: TypographyV2.captionElevated.size,
+    fontFamily: FontFamily.semibold,
+  },
+  emptyDepthNotice: {
+    alignItems: 'center',
+    padding: Space.md,
+    borderRadius: Radius.sm,
+    gap: Space.xs,
+  },
+  emptyDepthTitle: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.semibold,
+  },
+  emptyDepthBody: {
     fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
+    textAlign: 'center',
+    lineHeight: 18,
   },
-  allocationIndicatorRow: {
+  tradeExecutionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.xs,
+  },
+  tradeExecutionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: Space.lg,
-    paddingTop: Space.lg,
   },
-  allocationIndicatorText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
+  tradeExecutionPrice: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  tradeExecutionMeta: {
+    fontSize: 11,
+    fontFamily: FontFamily.regular,
+  },
+  tradeExecutionRight: {
+    alignItems: 'flex-end',
+  },
+  tradeVolumeText: {
+    fontSize: TypographyV2.caption.size,
     fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-    flexShrink: 1,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
   },
-  allocationBar: {
-    height: Space.sm,
-    borderRadius: RadiusRoleValue.pillAvatar,
-    overflow: 'hidden',
+  noTradesBox: {
+    paddingVertical: Space.sm,
   },
-  allocationFill: {
-    height: '100%',
-    borderRadius: RadiusRoleValue.pillAvatar,
+  noTradesText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+    lineHeight: 18,
   },
-  marketLegendRow: {
+  rulesList: {
+    gap: Space.sm,
+    marginTop: Space.xs,
+  },
+  ruleItem: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    paddingVertical: Space.xs,
+    gap: Space.sm,
+    alignItems: 'flex-start',
   },
-  marketLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
+  ruleTextCol: {
+    flex: 1,
   },
-  marketLegendDot: {
-    width: 8,
-    height: 8,
+  ruleTitle: {
+    fontSize: TypographyV2.captionElevated.size,
+    fontFamily: FontFamily.semibold,
+    marginBottom: 2,
+  },
+  ruleDesc: {
+    fontSize: 12,
+    fontFamily: FontFamily.regular,
+    lineHeight: 16,
+  },
+  marketStatePill: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: Space.xxs,
     borderRadius: Radius.full,
   },
-  marketLegendText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
+  marketStateText: {
+    fontSize: TypographyV2.caption.size,
+    fontFamily: FontFamily.medium,
   },
 });

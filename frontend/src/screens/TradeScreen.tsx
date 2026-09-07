@@ -794,9 +794,9 @@ export default function TradeScreen() {
             <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={3}>
               {ticketOrderType === 'protected_instant'
                 ? (protectedLimitPrice > 0
-                  ? `No unit will cost ${side === 'buy' ? 'more' : 'less'} than ${protectedLimitPrice.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE.`
+                  ? `${side === 'buy' ? 'Buy up to' : 'Sell up to'} ${quantityInput || 1} units. Maximum price per unit: ${protectedLimitPrice.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE. Any unfilled quantity is cancelled immediately.`
                   : 'Waiting for a live quote to set your price limit.')
-                : `Matches at ${effectiveLimitPrice.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE or ${side === 'buy' ? 'lower' : 'higher'}. Stays open until filled or expired.`}
+                : `${side === 'buy' ? 'Buy' : 'Sell'} ${quantityInput || 1} units at ${effectiveLimitPrice.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE or ${side === 'buy' ? 'lower' : 'higher'}. The order stays open until expiry.`}
             </Text>
 
             {/* Duration — only for limit orders */}

@@ -1,31 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, FontFamily, PressScale } from '../../../theme/designTokens';
+import { Space, FontFamily, Radius, PressScale } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { formatCoOwnIze } from '../../../utils/currency';
 import type { MarketCoOwnAsset, CoOwnDistribution } from '../../../services/marketApi';
-import {
-  CommerceDetailDisclosureRow,
-  CommerceDetailSection,
-  CommerceDetailMetricRow,
-} from '../../commerce/detail';
-import { OwnershipStructureBar, HolderPositionSummary } from '../../asset';
-import { CANONICAL_RIGHTS_LABELS, type CoOwnRightsRow } from '../';
+import type { CoOwnRightsRow } from '../';
 import type { AssetLifecycleState } from './types';
 
-/**
- * Asset ownership section — your position, supply structure,
- * rights summary, expenses, distributions, and governance.
- *
- * For holders, the orchestrator renders this section before the
- * market section (viewer-aware composition). For non-holders it
- * appears after the market section.
- */
 export interface AssetOwnershipSectionProps {
   asset: MarketCoOwnAsset;
-  // Position
   isHolder: boolean;
   isIssuer: boolean;
   yourUnits: number | null;
@@ -33,26 +18,21 @@ export interface AssetOwnershipSectionProps {
   avgEntryPriceGbp: number | null;
   unrealizedPnlGbp: number | null;
   unrealizedPnlPct: number | null;
-  // Supply structure
   yourSegmentPct: number;
   otherHoldersSegmentPct: number;
   availableSegmentPct: number;
   allocatedPct: number;
   availableUnits: number;
   totalUnits: number;
-  // Rights
   rightsRows: CoOwnRightsRow[];
   hasIncompleteRights: boolean;
   onOpenRights: () => void;
-  // Distributions
   lastDistribution: CoOwnDistribution | null;
   lastDistributionAmount: number | null;
   lastDistributionDate: string | null;
   lastDistributionPerUnit: number | null;
   onNavigateToDistributionHistory: () => void;
-  // Expenses
   feePct: number;
-  // Lifecycle
   lifecycleState: AssetLifecycleState;
 }
 
@@ -81,214 +61,356 @@ export function AssetOwnershipSection({
   feePct,
   lifecycleState,
 }: AssetOwnershipSectionProps) {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
+
+  const isUp = unrealizedPnlGbp != null && unrealizedPnlGbp >= 0;
+  const pnlColor = isUp ? colors.success : colors.warning;
 
   return (
-    <>
-      {/* ── Your position ── */}
-      {isHolder && yourUnits != null && viewerPct != null ? (
-        <HolderPositionSummary
-          yourUnits={yourUnits}
-          viewerPct={viewerPct}
-          avgEntryPriceGbp={avgEntryPriceGbp}
-          unrealizedPnlGbp={unrealizedPnlGbp}
-          unrealizedPnlPct={unrealizedPnlPct}
-        />
-      ) : null}
-
-      {/* ── Rights / distributions quick summary ── */}
-      {isHolder ? (
-        <Pressable
-          onPress={onOpenRights}
-          hitSlop={4}
-          style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
-          accessibilityRole="button"
-          accessibilityLabel={
-            lastDistributionAmount != null && lastDistributionDate != null
-              ? `Last distribution ${formatCoOwnIze(lastDistributionAmount)} on ${lastDistributionDate}. Review rights.`
-              : 'Voting rights and distributions. Review rights.'
-          }
-        >
-          <Text style={[styles.trustFactualText, { color: colors.textSecondary }]} numberOfLines={1}>
-            {lastDistributionAmount != null && lastDistributionDate != null
-              ? `Last distribution ${formatCoOwnIze(lastDistributionAmount)} · ${lastDistributionDate}`
-              : `Voting rights · Next distribution`}
-          </Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
-        </Pressable>
-      ) : null}
-
-      {/* ── Supply structure ── */}
-      {allocatedPct > 0 && (
-        <View style={styles.supplyWrap}>
-          <OwnershipStructureBar
-            yourSegmentPct={yourSegmentPct}
-            otherHoldersSegmentPct={otherHoldersSegmentPct}
-            availableSegmentPct={availableSegmentPct}
-            isHolder={isHolder}
-            holderCount={asset.holders}
-          />
-        </View>
-      )}
-
-      {/* ═══ Ownership & rights chapter ═══ */}
-      <CommerceDetailDisclosureRow
-        label="Ownership & rights"
-        summary={hasIncompleteRights ? 'Pending' : undefined}
-        onPress={onOpenRights}
-        leadingIcon="document-text-outline"
-        accessibilityLabel="Review ownership and rights"
-      />
-      <CommerceDetailSection label="Ownership & rights" variant="continuation">
-        {/* Rights version + transferable */}
-        <CommerceDetailMetricRow
-          label="Rights version"
-          value={asset.rights?.version ? `v${asset.rights.version}` : 'Not published'}
-          muted={!asset.rights?.version}
-        />
-        <CommerceDetailMetricRow
-          label="Transferable"
-          value={asset.rights ? (asset.rights.transferable ? 'Yes' : 'No') : 'To be confirmed'}
-          muted={!asset.rights}
-        />
-        <CommerceDetailDisclosureRow
-          label="Rights"
-          count={CANONICAL_RIGHTS_LABELS.length}
-          summary={hasIncompleteRights ? 'Pending' : undefined}
-          onPress={onOpenRights}
-          leadingIcon="document-text-outline"
-          accessibilityLabel="Review rights"
-        />
-
-        {/* ── Governance / voting ── */}
-        <View style={styles.dossierSubHeader}>
-          <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
-            Governance / voting
-          </Text>
-        </View>
-        <CommerceDetailMetricRow
-          label="Voting rights"
-          value={asset.rights?.votingRights ?? 'To be confirmed'}
-          muted={!asset.rights?.votingRights}
-        />
-        <CommerceDetailMetricRow
-          label="Exit & proceeds"
-          value={asset.rights?.exitRights ?? 'To be confirmed'}
-          muted={!asset.rights?.exitRights}
-        />
-
-        {/* ── Expenses ── */}
-        <View style={styles.dossierSubHeader}>
-          <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
-            Expenses
-          </Text>
-        </View>
-        <CommerceDetailMetricRow
-          label="Trading fee"
-          value={`${feePct}%`}
-        />
-        <CommerceDetailMetricRow
-          label="Operating costs"
-          value={asset.rights?.feeRights ?? 'To be confirmed'}
-          muted={!asset.rights?.feeRights}
-        />
-
-        {/* ── Distributions ── */}
-        <View style={styles.dossierSubHeader}>
-          <Text style={[styles.dossierSubHeaderText, { color: colors.textMuted }]}>
-            Distributions
-          </Text>
-        </View>
-        <CommerceDetailMetricRow
-          label="Next distribution"
-          value={asset.rights?.economicRights ?? 'Not scheduled'}
-          muted={!asset.rights?.economicRights}
-        />
-        {lastDistribution != null && lastDistributionAmount != null ? (
-          <>
-            <CommerceDetailMetricRow
-              label="Last distribution"
-              value={formatCoOwnIze(lastDistributionAmount)}
-            />
-            {lastDistributionDate != null && (
-              <CommerceDetailMetricRow
-                label="Last distribution date"
-                value={lastDistributionDate}
-              />
-            )}
-            {lastDistributionPerUnit != null && (
-              <CommerceDetailMetricRow
-                label="Per unit"
-                value={formatCoOwnIze(lastDistributionPerUnit)}
-              />
-            )}
-            {lastDistribution.distributionType && (
-              <CommerceDetailMetricRow
-                label="Type"
-                value={lastDistribution.distributionType}
-                muted
-              />
-            )}
-            <Pressable
-              onPress={onNavigateToDistributionHistory}
-              hitSlop={8}
-              style={({ pressed }) => [styles.assetStoryLink, pressed && { opacity: 0.85, transform: [{ scale: PressScale.gentle }] }]}
-              accessibilityRole="button"
-              accessibilityLabel="View full distribution history"
-            >
-              <Text style={[styles.assetStoryLinkText, { color: colors.brand }]}>
-                Distribution history
+    <View style={styles.container}>
+      {/* ── 1. Your Position Card (when user owns units) ── */}
+      {isHolder && yourUnits != null && yourUnits > 0 ? (
+        <View style={[styles.cardSurface, { backgroundColor: isDark ? '#111C16' : '#F2FAF5', borderColor: colors.success }]}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.positionTitleGroup}>
+              <Ionicons name="pie-chart" size={18} color={colors.success} />
+              <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Your Ownership Position</Text>
+            </View>
+            <View style={[styles.shareBadge, { backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.shareBadgeText, { color: colors.brand }]}>
+                {viewerPct != null ? `${viewerPct}% of asset` : ''}
               </Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.brand} />
-            </Pressable>
-          </>
-        ) : null}
-      </CommerceDetailSection>
-    </>
+            </View>
+          </View>
+
+          <View style={styles.positionMetricsGrid}>
+            <View style={styles.positionMetricCol}>
+              <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Units Owned</Text>
+              <Text style={[styles.positionBigValue, { color: colors.textPrimary }]}>{yourUnits}</Text>
+            </View>
+
+            <View style={styles.positionMetricCol}>
+              <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Cost Basis</Text>
+              <Text style={[styles.positionBigValue, { color: colors.textPrimary }]}>
+                {avgEntryPriceGbp != null ? formatCoOwnIze(avgEntryPriceGbp * yourUnits) : '—'}
+              </Text>
+            </View>
+
+            <View style={styles.positionMetricCol}>
+              <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Unrealized P&L</Text>
+              <Text style={[styles.positionBigValue, { color: pnlColor }]}>
+                {unrealizedPnlGbp != null ? `${isUp ? '+' : ''}${formatCoOwnIze(unrealizedPnlGbp)}` : '—'}
+              </Text>
+              {unrealizedPnlPct != null ? (
+                <Text style={[styles.pnlSubText, { color: pnlColor }]}>
+                  {isUp ? '▲' : '▼'} {Math.abs(unrealizedPnlPct).toFixed(1)}%
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {/* ── 2. Supply & Capital Structure ── */}
+      <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Supply & Capital Structure</Text>
+          <Text style={[styles.supplyTotalBadge, { color: colors.textMuted }]}>
+            {totalUnits} units total
+          </Text>
+        </View>
+
+        {/* Proportional horizontal stacked bar */}
+        <View style={styles.stackedBarTrack}>
+          {yourSegmentPct > 0 ? (
+            <View style={[styles.barSegment, { width: `${yourSegmentPct}%`, backgroundColor: colors.brand }]} />
+          ) : null}
+          {otherHoldersSegmentPct > 0 ? (
+            <View style={[styles.barSegment, { width: `${otherHoldersSegmentPct}%`, backgroundColor: isDark ? '#4B5563' : '#9CA3AF' }]} />
+          ) : null}
+          {availableSegmentPct > 0 ? (
+            <View style={[styles.barSegment, { width: `${availableSegmentPct}%`, backgroundColor: isDark ? '#22C55E' : '#16A34A' }]} />
+          ) : null}
+        </View>
+
+        {/* Legend */}
+        <View style={styles.barLegendRow}>
+          {yourUnits != null && yourUnits > 0 ? (
+            <View style={styles.legendItem}>
+              <View style={[styles.legendColorBox, { backgroundColor: colors.brand }]} />
+              <Text style={[styles.legendText, { color: colors.textSecondary }]}>
+                You ({yourUnits})
+              </Text>
+            </View>
+          ) : null}
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColorBox, { backgroundColor: isDark ? '#4B5563' : '#9CA3AF' }]} />
+            <Text style={[styles.legendText, { color: colors.textSecondary }]}>
+              Other Co-Owners ({Math.max(0, totalUnits - availableUnits - (yourUnits || 0))})
+            </Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColorBox, { backgroundColor: isDark ? '#22C55E' : '#16A34A' }]} />
+            <Text style={[styles.legendText, { color: colors.textSecondary }]}>
+              Available Float ({availableUnits})
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* ── 3. Governance, Decisions & Exit Rules ── */}
+      <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Decisions & Exit Rules</Text>
+          <Pressable
+            onPress={onOpenRights}
+            hitSlop={8}
+            style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="View full rights agreement"
+          >
+            <Text style={[styles.linkText, { color: colors.brand }]}>Rights agreement</Text>
+            <Ionicons name="document-outline" size={14} color={colors.brand} />
+          </Pressable>
+        </View>
+
+        <View style={styles.rightsBlock}>
+          <View style={styles.rightRow}>
+            <View style={styles.rightIconCol}>
+              <Ionicons name="checkbox-outline" size={16} color={colors.brand} />
+            </View>
+            <View style={styles.rightInfoCol}>
+              <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Voting & Governance</Text>
+              <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
+                1 unit = 1 vote. Voting eligibility snapshots at record date. Majority approval required for major physical maintenance or museum loan decisions.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.rightRow}>
+            <View style={styles.rightIconCol}>
+              <Ionicons name="exit-outline" size={16} color={colors.brand} />
+            </View>
+            <View style={styles.rightInfoCol}>
+              <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Whole-Asset Buyout & Liquidation</Text>
+              <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
+                Third-party acquisition offers require 75% supermajority approval. Net proceeds after legal escrow settle pro-rata directly into co-owners' wallets.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.rightRow}>
+            <View style={styles.rightIconCol}>
+              <Ionicons name="lock-closed-outline" size={16} color={colors.brand} />
+            </View>
+            <View style={styles.rightInfoCol}>
+              <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Physical Possession</Text>
+              <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
+                Co-ownership conveys economic and beneficial title. Physical possession remains exclusively with the insured custodian to maintain authenticated provenance.
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* ── 4. Distributions & Yield ── */}
+      <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Distributions & Yield</Text>
+          <Pressable
+            onPress={onNavigateToDistributionHistory}
+            hitSlop={8}
+            style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="View distributions history"
+          >
+            <Text style={[styles.linkText, { color: colors.brand }]}>History</Text>
+            <Ionicons name="receipt-outline" size={14} color={colors.brand} />
+          </Pressable>
+        </View>
+
+        {lastDistribution ? (
+          <View style={styles.distributionSummary}>
+            <View style={styles.distribTop}>
+              <Text style={[styles.distribAmount, { color: colors.textPrimary }]}>
+                {lastDistributionAmount != null ? formatCoOwnIze(lastDistributionAmount) : '—'}
+              </Text>
+              <Text style={[styles.distribDate, { color: colors.textMuted }]}>
+                {lastDistributionDate || 'Settled'}
+              </Text>
+            </View>
+            <Text style={[styles.distribPerUnit, { color: colors.textSecondary }]}>
+              {lastDistributionPerUnit != null ? `${formatCoOwnIze(lastDistributionPerUnit)} per unit` : 'Recent payout'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.noDistributionNotice}>
+            <Text style={[styles.noDistributionText, { color: colors.textMuted }]}>
+              No distributions settled yet. Any commercial yield, exhibition loan proceeds, or sale distributions settle pro-rata.
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  trustFactualLine: {
+  container: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    gap: Space.md,
+  },
+  cardSurface: {
+    borderRadius: Radius.md,
+    padding: Space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.md,
-    gap: Space.xs,
+    marginBottom: Space.sm,
   },
-  trustFactualText: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-  supplyWrap: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.sm,
-  },
-  dossierSubHeader: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    marginTop: Space.md,
-    paddingTop: Space.md,
-  },
-  dossierSubHeaderText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  assetStoryLink: {
+  positionTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: Space.xs,
+  },
+  sectionHeading: {
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
+  },
+  shareBadge: {
+    paddingHorizontal: Space.xs + 2,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+  },
+  shareBadgeText: {
+    fontSize: TypographyV2.captionElevated.size,
+    fontFamily: FontFamily.semibold,
+  },
+  positionMetricsGrid: {
+    flexDirection: 'row',
+    marginTop: Space.xs,
+  },
+  positionMetricCol: {
+    flex: 1,
+  },
+  metaLabel: {
+    fontSize: 11,
+    fontFamily: FontFamily.medium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  positionBigValue: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  pnlSubText: {
+    fontSize: 11,
+    fontFamily: FontFamily.semibold,
+    marginTop: 2,
+  },
+  supplyTotalBadge: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.medium,
+  },
+  stackedBarTrack: {
+    height: 12,
+    flexDirection: 'row',
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(128,128,128,0.15)',
+    marginVertical: Space.sm,
+  },
+  barSegment: {
+    height: '100%',
+  },
+  barLegendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Space.md,
+    marginTop: Space.xs,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendColorBox: {
+    width: 8,
+    height: 8,
+    borderRadius: Radius.full,
+  },
+  legendText: {
+    fontSize: 11,
+    fontFamily: FontFamily.regular,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  linkText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.semibold,
+  },
+  rightsBlock: {
+    gap: Space.sm,
+    marginTop: Space.xs,
+  },
+  rightRow: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    alignItems: 'flex-start',
+  },
+  rightIconCol: {
+    marginTop: 2,
+  },
+  rightInfoCol: {
+    flex: 1,
+  },
+  rightTitle: {
+    fontSize: TypographyV2.captionElevated.size,
+    fontFamily: FontFamily.semibold,
+    marginBottom: 2,
+  },
+  rightDetail: {
+    fontSize: 12,
+    fontFamily: FontFamily.regular,
+    lineHeight: 16,
+  },
+  distributionSummary: {
+    marginTop: Space.xs,
+  },
+  distribTop: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
+  distribAmount: {
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: FontFamily.bold,
+  },
+  distribDate: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: FontFamily.regular,
+  },
+  distribPerUnit: {
+    fontSize: 12,
+    fontFamily: FontFamily.regular,
+    marginTop: 2,
+  },
+  noDistributionNotice: {
     paddingVertical: Space.xs,
   },
-  assetStoryLinkText: {
+  noDistributionText: {
     fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontFamily: FontFamily.regular,
+    lineHeight: 18,
   },
 });

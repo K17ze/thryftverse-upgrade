@@ -72,6 +72,8 @@ import {
   AssetOverviewSection,
   AssetMarketSection,
   AssetOwnershipSection,
+  CoOwnSegmentNav,
+  type CoOwnDetailTab,
 } from '../components/coown/asset-detail';
 import {
   deriveLifecycleState,
@@ -133,6 +135,7 @@ export default function AssetDetailScreen() {
   const [pendingTradeSide, setPendingTradeSide] = React.useState<'buy' | 'sell' | null>(null);
   const [candleRange, setCandleRange] = React.useState<CoOwnCandleRange>('1W');
   const [showVolume, setShowVolume] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState<CoOwnDetailTab>('overview');
 
   // ── Sheet/expansion state (discriminated union for modal sheets) ──
   const { sheets, open: openSheet, close: closeSheet, toggle: toggleExpansion, setExpansion } = useAssetDetailSheets();
@@ -869,172 +872,105 @@ export default function AssetDetailScreen() {
             Each section is a self-contained presentational component;
             the orchestrator manages state, data, and ordering.
             ════════════════════════════════════════════════════════════ */}
-        {isHolder ? (
-          <>
-            <AssetOwnershipSection
-              asset={asset}
-              isHolder={isHolder}
-              isIssuer={isIssuer}
-              yourUnits={yourUnits}
-              viewerPct={viewerPct}
-              avgEntryPriceGbp={avgEntryPriceGbp}
-              unrealizedPnlGbp={unrealizedPnlGbp}
-              unrealizedPnlPct={unrealizedPnlPct}
-              yourSegmentPct={yourSegmentPct}
-              otherHoldersSegmentPct={otherHoldersSegmentPct}
-              availableSegmentPct={availableSegmentPct}
-              allocatedPct={allocatedPct}
-              availableUnits={availableUnits}
-              totalUnits={totalUnits}
-              rightsRows={rightsRows}
-              hasIncompleteRights={hasIncompleteRights}
-              onOpenRights={() => openSheet('rights')}
-              lastDistribution={lastDistribution}
-              lastDistributionAmount={lastDistributionAmount}
-              lastDistributionDate={lastDistributionDate}
-              lastDistributionPerUnit={lastDistributionPerUnit}
-              onNavigateToDistributionHistory={() => navigation.navigate('DistributionHistory', { assetId: asset.id })}
-              feePct={feePct}
-              lifecycleState={lifecycleState}
-            />
-            <AssetMarketSection
-              asset={asset}
-              orderBook={orderBook}
-              orderBookStreaming={orderBookStreaming}
-              orderBookHasGap={orderBookHasGap}
-              orderBookError={orderBookError}
-              onRetryOrderBook={retryOrderBook}
-              bestBid={bestBid}
-              bestAsk={bestAsk}
-              spreadGbp={spreadGbp}
-              depthStatusLabel={depthStatusLabel}
-              reconciliationActive={reconciliationActive}
-              marketSnapshotLabel={marketSnapshotLabel}
-              isOffline={isOffline}
-              refreshing={refreshing}
-              dataStale={dataStale}
-              dataStaleAgeLabel={dataStaleAgeLabel}
-              onRefresh={handleRefresh}
-              marketSectionExpanded={marketSectionExpanded}
-              onToggleMarketSection={() => toggleExpansion('marketSection')}
-              orderBookExpanded={orderBookExpanded}
-              onToggleOrderBook={() => toggleExpansion('orderBook')}
-              allocatedPct={allocatedPct}
-              availableUnits={availableUnits}
-              totalUnits={totalUnits}
-              onOpenSupply={() => openSheet('supply')}
-              onOpenPriceAlert={openPriceAlert}
-              onSelectOrderBookLevel={handleSelectOrderBookLevel}
-              holdingsError={holdingsError}
-              onRetryHoldings={retryHoldings}
-              lifecycleState={lifecycleState}
-            />
-            <AssetOverviewSection
-              asset={asset}
-              candleData={candleData}
-              hasCandleData={hasCandleData}
-              candleRange={candleRange}
-              onCandleRangeChange={setCandleRange}
-              showVolume={showVolume}
-              lastExecutionPriceGbp={marketSnapshot?.lastExecutionPriceGbp ?? null}
-              appraisedValuePerUnitGbp={appraisedValuePerUnitGbp}
-              referenceVsAppraisalPct={referenceVsAppraisalPct}
-              fundamentalsExpanded={fundamentalsExpanded}
-              onToggleFundamentals={() => toggleExpansion('fundamentals')}
-              dossierSummary={dossierSummary}
-              dossierDocuments={dossierDocuments}
-              hasDocuments={hasDocuments}
-              diligenceSectionExpanded={diligenceSectionExpanded}
-              onToggleDiligence={() => toggleExpansion('diligenceSection')}
-              onOpenDiligence={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
-              onOpenRiskDisclosure={() => openSheet('riskDisclosure')}
-              onNavigateToIssue={() => navigation.navigate('CoOwnIssue', { assetId: asset.id })}
-              lifecycleState={lifecycleState}
-            />
-          </>
-        ) : (
-          <>
-            <AssetOverviewSection
-              asset={asset}
-              candleData={candleData}
-              hasCandleData={hasCandleData}
-              candleRange={candleRange}
-              onCandleRangeChange={setCandleRange}
-              showVolume={showVolume}
-              lastExecutionPriceGbp={marketSnapshot?.lastExecutionPriceGbp ?? null}
-              appraisedValuePerUnitGbp={appraisedValuePerUnitGbp}
-              referenceVsAppraisalPct={referenceVsAppraisalPct}
-              fundamentalsExpanded={fundamentalsExpanded}
-              onToggleFundamentals={() => toggleExpansion('fundamentals')}
-              dossierSummary={dossierSummary}
-              dossierDocuments={dossierDocuments}
-              hasDocuments={hasDocuments}
-              diligenceSectionExpanded={diligenceSectionExpanded}
-              onToggleDiligence={() => toggleExpansion('diligenceSection')}
-              onOpenDiligence={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
-              onOpenRiskDisclosure={() => openSheet('riskDisclosure')}
-              onNavigateToIssue={() => navigation.navigate('CoOwnIssue', { assetId: asset.id })}
-              lifecycleState={lifecycleState}
-            />
-            <AssetMarketSection
-              asset={asset}
-              orderBook={orderBook}
-              orderBookStreaming={orderBookStreaming}
-              orderBookHasGap={orderBookHasGap}
-              orderBookError={orderBookError}
-              onRetryOrderBook={retryOrderBook}
-              bestBid={bestBid}
-              bestAsk={bestAsk}
-              spreadGbp={spreadGbp}
-              depthStatusLabel={depthStatusLabel}
-              reconciliationActive={reconciliationActive}
-              marketSnapshotLabel={marketSnapshotLabel}
-              isOffline={isOffline}
-              refreshing={refreshing}
-              dataStale={dataStale}
-              dataStaleAgeLabel={dataStaleAgeLabel}
-              onRefresh={handleRefresh}
-              marketSectionExpanded={marketSectionExpanded}
-              onToggleMarketSection={() => toggleExpansion('marketSection')}
-              orderBookExpanded={orderBookExpanded}
-              onToggleOrderBook={() => toggleExpansion('orderBook')}
-              allocatedPct={allocatedPct}
-              availableUnits={availableUnits}
-              totalUnits={totalUnits}
-              onOpenSupply={() => openSheet('supply')}
-              onOpenPriceAlert={openPriceAlert}
-              onSelectOrderBookLevel={handleSelectOrderBookLevel}
-              holdingsError={holdingsError}
-              onRetryHoldings={retryHoldings}
-              lifecycleState={lifecycleState}
-            />
-            <AssetOwnershipSection
-              asset={asset}
-              isHolder={isHolder}
-              isIssuer={isIssuer}
-              yourUnits={yourUnits}
-              viewerPct={viewerPct}
-              avgEntryPriceGbp={avgEntryPriceGbp}
-              unrealizedPnlGbp={unrealizedPnlGbp}
-              unrealizedPnlPct={unrealizedPnlPct}
-              yourSegmentPct={yourSegmentPct}
-              otherHoldersSegmentPct={otherHoldersSegmentPct}
-              availableSegmentPct={availableSegmentPct}
-              allocatedPct={allocatedPct}
-              availableUnits={availableUnits}
-              totalUnits={totalUnits}
-              rightsRows={rightsRows}
-              hasIncompleteRights={hasIncompleteRights}
-              onOpenRights={() => openSheet('rights')}
-              lastDistribution={lastDistribution}
-              lastDistributionAmount={lastDistributionAmount}
-              lastDistributionDate={lastDistributionDate}
-              lastDistributionPerUnit={lastDistributionPerUnit}
-              onNavigateToDistributionHistory={() => navigation.navigate('DistributionHistory', { assetId: asset.id })}
-              feePct={feePct}
-              lifecycleState={lifecycleState}
-            />
-          </>
+        {/* ════════════════════════════════════════════════════════════
+            Local Section Navigation: Overview · Market · Ownership
+            Spec 03_COOWN: Replaces stacked disclosure accordions with
+            an authored segmented control for instant scannability.
+            ════════════════════════════════════════════════════════════ */}
+        <CoOwnSegmentNav
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          hasActiveOrders={false}
+          hasUnclaimedDistributions={lastDistribution != null}
+        />
+
+        {activeTab === 'overview' && (
+          <AssetOverviewSection
+            asset={asset}
+            candleData={candleData}
+            hasCandleData={hasCandleData}
+            candleRange={candleRange}
+            onCandleRangeChange={setCandleRange}
+            showVolume={showVolume}
+            lastExecutionPriceGbp={marketSnapshot?.lastExecutionPriceGbp ?? null}
+            appraisedValuePerUnitGbp={appraisedValuePerUnitGbp}
+            referenceVsAppraisalPct={referenceVsAppraisalPct}
+            fundamentalsExpanded={fundamentalsExpanded}
+            onToggleFundamentals={() => toggleExpansion('fundamentals')}
+            dossierSummary={dossierSummary}
+            dossierDocuments={dossierDocuments}
+            hasDocuments={hasDocuments}
+            diligenceSectionExpanded={diligenceSectionExpanded}
+            onToggleDiligence={() => toggleExpansion('diligenceSection')}
+            onOpenDiligence={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
+            onOpenRiskDisclosure={() => openSheet('riskDisclosure')}
+            onNavigateToIssue={() => navigation.navigate('CoOwnIssue', { assetId: asset.id })}
+            lifecycleState={lifecycleState}
+          />
+        )}
+
+        {activeTab === 'market' && (
+          <AssetMarketSection
+            asset={asset}
+            orderBook={orderBook}
+            orderBookStreaming={orderBookStreaming}
+            orderBookHasGap={orderBookHasGap}
+            orderBookError={orderBookError}
+            onRetryOrderBook={retryOrderBook}
+            bestBid={bestBid}
+            bestAsk={bestAsk}
+            spreadGbp={spreadGbp}
+            depthStatusLabel={depthStatusLabel}
+            reconciliationActive={reconciliationActive}
+            marketSnapshotLabel={marketSnapshotLabel}
+            isOffline={isOffline}
+            refreshing={refreshing}
+            dataStale={dataStale}
+            dataStaleAgeLabel={dataStaleAgeLabel}
+            onRefresh={handleRefresh}
+            marketSectionExpanded={marketSectionExpanded}
+            onToggleMarketSection={() => toggleExpansion('marketSection')}
+            orderBookExpanded={orderBookExpanded}
+            onToggleOrderBook={() => toggleExpansion('orderBook')}
+            allocatedPct={allocatedPct}
+            availableUnits={availableUnits}
+            totalUnits={totalUnits}
+            onOpenSupply={() => openSheet('supply')}
+            onOpenPriceAlert={openPriceAlert}
+            onSelectOrderBookLevel={handleSelectOrderBookLevel}
+            holdingsError={holdingsError}
+            onRetryHoldings={retryHoldings}
+            lifecycleState={lifecycleState}
+          />
+        )}
+
+        {activeTab === 'ownership' && (
+          <AssetOwnershipSection
+            asset={asset}
+            isHolder={isHolder}
+            isIssuer={isIssuer}
+            yourUnits={yourUnits}
+            viewerPct={viewerPct}
+            avgEntryPriceGbp={avgEntryPriceGbp}
+            unrealizedPnlGbp={unrealizedPnlGbp}
+            unrealizedPnlPct={unrealizedPnlPct}
+            yourSegmentPct={yourSegmentPct}
+            otherHoldersSegmentPct={otherHoldersSegmentPct}
+            availableSegmentPct={availableSegmentPct}
+            allocatedPct={allocatedPct}
+            availableUnits={availableUnits}
+            totalUnits={totalUnits}
+            rightsRows={rightsRows}
+            hasIncompleteRights={hasIncompleteRights}
+            onOpenRights={() => openSheet('rights')}
+            lastDistribution={lastDistribution}
+            lastDistributionAmount={lastDistributionAmount}
+            lastDistributionDate={lastDistributionDate}
+            lastDistributionPerUnit={lastDistributionPerUnit}
+            onNavigateToDistributionHistory={() => navigation.navigate('DistributionHistory', { assetId: asset.id })}
+            feePct={feePct}
+            lifecycleState={lifecycleState}
+          />
         )}
 
         {seenInLooksSection && seenInLooksSection.items.length > 0 && (
