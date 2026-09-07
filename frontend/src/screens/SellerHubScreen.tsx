@@ -69,7 +69,7 @@ export default function SellerHubScreen() {
   const load = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
-      const [hubOverview, ordersResult, ownListingsResult, daily] = await Promise.all([
+      const [hubOverview, ordersResult, ownListingsResult, daily, importResult] = await Promise.all([
         fetchSellerHubOverview(),
         listUserOrders(currentUser.id, { role: 'seller', limit: 6 }).catch((err: unknown) => {
           console.warn('[SellerHub] orders fetch failed:', err instanceof Error ? err.message : err);
@@ -92,7 +92,12 @@ export default function SellerHubScreen() {
       setOwnListings(ownListingsResult ? ownListingsResult.items : null);
       setDailyPoints(daily);
       setSparklineLoading(false);
-      setImportError(false);
+      // P1 fix: propagate import batch data and error flag into state.
+      // Previously the 5th promise result was dropped, leaving importBatches
+      // empty and importError hardcoded false — the catalog import task
+      // was unreachable and failures were invisible.
+      setImportBatches(importResult.batches);
+      setImportError(importResult.error);
       setLoadError(false);
     } catch {
       setLoadError(true);

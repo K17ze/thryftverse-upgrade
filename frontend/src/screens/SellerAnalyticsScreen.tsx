@@ -150,7 +150,7 @@ export default function SellerAnalyticsScreen() {
       {partialError ? (
         <View style={[styles.partialBanner, { borderBottomColor: colors.border }]}>
           <Text style={[styles.partialBannerText, { color: colors.textMuted }]}>
-            Showing cached analytics · pull down to refresh
+            Some analytics could not be loaded · pull down to retry
           </Text>
         </View>
       ) : null}

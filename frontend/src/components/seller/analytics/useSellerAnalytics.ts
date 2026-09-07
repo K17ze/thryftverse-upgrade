@@ -76,22 +76,29 @@ export function useSellerAnalytics() {
     if (!currentUser?.id) return;
     try {
       setPartialError(false);
+      // Track which sources failed so we can distinguish a genuine empty
+      // result from a fetch failure. Previously, .catch(() => []) made
+      // failed top-performers / attention / daily queries look identical
+      // to "no data" — the UI would silently backfill from local listings
+      // instead of showing an error state.
+      let hadPartialFailure = false;
       const [listingsRes, analyticsData, topData, attentionData, dailyData] = await Promise.all([
         fetchUserListingsFromApi(currentUser.id, { limit: 100 }),
-        fetchSellerAnalytics(currentUser.id, period).catch(() => null),
-        fetchTopPerformers(currentUser.id, 10, period).catch(() => []),
-        fetchNeedsAttention(currentUser.id, 5, period).catch(() => []),
-        fetchDailyBreakdown(currentUser.id, period).catch(() => []),
+        fetchSellerAnalytics(currentUser.id, period).catch(() => { hadPartialFailure = true; return null; }),
+        fetchTopPerformers(currentUser.id, 10, period).catch(() => { hadPartialFailure = true; return []; }),
+        fetchNeedsAttention(currentUser.id, 5, period).catch(() => { hadPartialFailure = true; return []; }),
+        fetchDailyBreakdown(currentUser.id, period).catch(() => { hadPartialFailure = true; return []; }),
       ]);
       setListings(listingsRes.items);
       if (analyticsData) {
         setAnalytics(analyticsData);
       } else {
-        setPartialError(true);
+        hadPartialFailure = true;
       }
       setTopPerformersData(topData);
       setNeedsAttentionData(attentionData);
       setDailyBreakdown(dailyData);
+      setPartialError(hadPartialFailure);
       setIsError(false);
     } catch {
       setIsError(true);

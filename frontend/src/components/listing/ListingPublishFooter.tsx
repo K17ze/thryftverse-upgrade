@@ -24,12 +24,6 @@ interface ListingPublishFooterProps {
   onPreview: () => void;
   onPublish: () => void;
   bottomInset: number;
-  /** Listing quality score (0-100) for compact readiness indicator. */
-  qualityScore?: number;
-  /** Quality tier label (e.g. "Excellent", "Good", "Basic"). */
-  qualityTierLabel?: string;
-  /** Quality color — communicates tier through color, not chrome. */
-  qualityColor?: string;
 }
 
 function getPublishLabel(mode: string, isPublishing: boolean): string {
@@ -43,20 +37,18 @@ function getPublishLabel(mode: string, isPublishing: boolean): string {
   return 'Publish';
 }
 
-// Per audit 04 publication states: expose only meaningful states.
-//   Uploading photos… → Publishing… → Almost done… → recoverable failure.
 function getStageText(stage: PublicationStage): string | null {
   switch (stage) {
     case 'uploading_media':
-      return 'Uploading photos…';
+      return 'Publishing…';
     case 'creating_listing':
       return 'Publishing…';
     case 'attaching_media':
-      return 'Almost done…';
+      return 'Finishing…';
     case 'completed':
-      return 'Listing created. Resuming media attachment.';
+      return 'Published';
     case 'failed_recoverable':
-      return 'Some media failed. Retry Publish.';
+      return "Couldn't publish — Retry";
     default:
       return null;
   }
@@ -70,26 +62,18 @@ export function ListingPublishFooter({
   errorMsg,
   onPreview,
   onPublish,
-  bottomInset,
-  qualityScore,
-  qualityTierLabel,
-  qualityColor }: ListingPublishFooterProps) {
+  bottomInset }: ListingPublishFooterProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const stageText = getStageText(publicationStage);
   const showFeedback = stageText !== null || (errorMsg !== null && publicationStage !== 'idle');
-  // Quality indicator only shows when no active publication feedback.
-  // Per audit 04 P1: "Sticky publish footer shows readiness + primary CTA,
-  // not a second dashboard." The quality score is a compact inline indicator,
-  // not a duplicate dashboard.
-  const showQuality = qualityScore != null && qualityTierLabel != null && qualityColor != null && !showFeedback;
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(bottomInset, Space.sm) }]}>
-      {/* Publication feedback — replaces quality indicator when active */}
+      {/* Publication feedback */}
       {showFeedback && (
         <View style={styles.feedbackRow}>
-          {publicationStage !== 'failed_recoverable' && publicationStage !== 'idle' && (
+          {publicationStage !== 'failed_recoverable' && publicationStage !== 'idle' && publicationStage !== 'completed' && (
             <ActivityIndicator size="small" color={colors.brand} />
           )}
           {publicationStage === 'failed_recoverable' && (
@@ -102,21 +86,10 @@ export function ListingPublishFooter({
             ]}
             numberOfLines={2}
             accessibilityLiveRegion="polite"
+            accessibilityLabel={errorMsg && publicationStage === 'failed_recoverable' ? errorMsg : undefined}
           >
-            {errorMsg && publicationStage === 'failed_recoverable' ? errorMsg : stageText}
+            {stageText}
           </Text>
-        </View>
-      )}
-
-      {/* Compact quality readiness indicator — flat inline, no panel chrome.
-          Per audit 04 P1 + AGENTS.md §4 surface budget. Color communicates
-          tier, not a card or badge cluster. */}
-      {showQuality && (
-        <View style={styles.qualityRow}>
-          <View style={[styles.qualityDot, { backgroundColor: qualityColor }]} />
-          <Text style={styles.qualityLabel}>Listing quality</Text>
-          <Text style={[styles.qualityScore, { color: qualityColor }]}>{qualityScore}%</Text>
-          <Text style={styles.qualityTier}>{qualityTierLabel}</Text>
         </View>
       )}
 
@@ -145,7 +118,15 @@ export function ListingPublishFooter({
           accessibilityState={{ disabled: publishDisabled }}
         >
           {isPublishing ? (
-            <ActivityIndicator size="small" color={colors.textInverse} />
+            <>
+              <ActivityIndicator size="small" color={colors.textInverse} />
+              <Text
+                style={[styles.publishText, { marginLeft: Space.xs }]}
+                accessibilityLiveRegion="polite"
+              >
+                {getPublishLabel(mode, true)}
+              </Text>
+            </>
           ) : (
             <>
               {!publishDisabled && (
@@ -188,29 +169,6 @@ function createStyles(colors: ThemeColors) {
   feedbackTextError: {
     color: colors.danger,
     fontFamily: Typography.family.semibold },
-  /* Compact quality indicator — flat, no surface, no border.
-     Per AGENTS.md §4: flat canvas, no card containers. */
-  qualityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingBottom: Space.sm },
-  qualityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: Radius.full },
-  qualityLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textPrimary },
-  qualityScore: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
-    fontVariant: ['tabular-nums'] },
-  qualityTier: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textSecondary },
   actionRow: {
     flexDirection: 'row',
     gap: Space.sm,
