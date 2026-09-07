@@ -430,7 +430,13 @@ export default function TradeScreen() {
         reservationExpiresAt: reserved.expiresAt,
         previewValidUntil: preview.validUntil,
         maxReserved1ze: reserved.reserved1zeUnits / 1000,
-        marketDataTimestamp: orderBook.serverTimestamp });
+        marketDataTimestamp: orderBook.serverTimestamp,
+        // Phase 2.5: duration (GFD / GTC90) for resting limit orders. The
+        // shared RootStackParamList is owned by another team and does not yet
+        // declare this field; the cast preserves type-safety for the known
+        // params while forwarding the duration to the confirm screen.
+        ticketDuration,
+      } as RootStackParamList['TradeConfirm']);
       idempotencyKeyRef.current = null;
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to prepare this order');

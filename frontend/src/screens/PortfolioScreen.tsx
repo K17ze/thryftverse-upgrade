@@ -366,6 +366,45 @@ export default function PortfolioScreen() {
     );
   }
 
+  // ── Partial-failure state ──
+  // Holdings were fetched but every asset-detail fetch failed. The user
+  // owns something, but we can't value or display it. This is materially
+  // different from owning nothing — show a retry, not an empty state.
+  if (isPartial && positions.length === 0) {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Portfolio"
+            onBack={handleBack}
+            rightAction={
+              <AnimatedPressable
+                onPress={() => navigation.navigate('CoOwnOrderHistory')}
+                scaleValue={0.9}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Activity"
+                accessibilityHint="View order history"
+              >
+                <Ionicons name="receipt-outline" size={22} color={colors.textPrimary} />
+              </AnimatedPressable>
+            }
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
+        <CoOwnStateCanvas
+          variant="error"
+          title="Portfolio unavailable"
+          subtitle="We fetched your holdings but couldn't load the asset details. Tap below to try again."
+          actionLabel="Try again"
+          onAction={() => loadPortfolio()}
+        />
+      </FlagshipScreen>
+    );
+  }
+
   // ── Empty state ──
   if (positions.length === 0) {
     return (

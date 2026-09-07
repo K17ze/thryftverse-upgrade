@@ -1113,10 +1113,10 @@ app.post('/co-own/corporate-actions/:actionId/vote', async (request, reply) => {
 
   // Bug C: record-date eligibility. When a record date is set and is in the
   // future, voting is not yet open. When the record date is in the past,
-  // eligibility should ideally be based on a holdings snapshot at that date;
-  // however we do not maintain a historical holdings ledger, so current
-  // holdings are used as a proxy (limitation noted here). When record_date is
-  // null, current holdings apply directly.
+  // eligibility is based on a holdings snapshot reconstructed at that date by
+  // replaying the coown_trades ledger (buyer_id gains units, seller_id loses
+  // units) up to and including the record date. When record_date is null,
+  // current holdings apply directly.
   if (action.record_date != null) {
     const recordDateMs = new Date(action.record_date).getTime();
     if (Number.isFinite(recordDateMs) && recordDateMs > Date.now()) {
@@ -1125,18 +1125,57 @@ app.post('/co-own/corporate-actions/:actionId/vote', async (request, reply) => {
     }
   }
 
-  // Verify the user holds units of this asset. The coown_holdings table uses
-  // `user_id` (not `holder_user_id`, which belongs to coown_buyout_responses)
-  // and `units_owned` (not `units`).
-  const holdingsResult = await db.query<{ units: string | number }>(
-    `SELECT COALESCE(SUM(units_owned), 0)::bigint AS units
-     FROM coown_holdings
-     WHERE asset_id = $1 AND user_id = $2`,
-    [assetId, request.authUser.userId]
-  );
+  // Verify the user holds units of this asset and compute voting power.
+  // The coown_holdings table uses `user_id` (not `holder_user_id`, which
+  // belongs to coown_buyout_responses) and `units_owned` (not `units`).
+  // The coown_trades table uses `buyer_id`/`seller_id` and `created_at`.
+  let votingPower: number;
+  if (action.record_date != null) {
+    const recordDateMs = new Date(action.record_date).getTime();
+    if (Number.isFinite(recordDateMs) && recordDateMs <= Date.now()) {
+      // Reconstruct holdings at the record date from the trade ledger.
+      // Sum buys (positive) and sells (negative) executed up to and including
+      // the record date. This is more accurate than current holdings because
+      // it excludes trades that occurred after the record date.
+      const historicalResult = await db.query<{ units: string | number }>(
+        `SELECT COALESCE(
+          SUM(CASE
+            WHEN buyer_id = $2 THEN units
+            WHEN seller_id = $2 THEN -units
+            ELSE 0
+          END), 0
+        )::bigint AS units
+         FROM coown_trades
+         WHERE asset_id = $1
+           AND (buyer_id = $2 OR seller_id = $2)
+           AND created_at <= $3`,
+        [assetId, request.authUser.userId, action.record_date]
+      );
+      votingPower = Number(historicalResult.rows[0]?.units ?? 0);
+    } else {
+      // Record date is in the future — voting not yet open (already handled
+      // above). This branch shouldn't be reached, but use current holdings as
+      // a safe fallback.
+      const holdingsResult = await db.query<{ units: string | number }>(
+        `SELECT COALESCE(SUM(units_owned), 0)::bigint AS units
+         FROM coown_holdings
+         WHERE asset_id = $1 AND user_id = $2`,
+        [assetId, request.authUser.userId]
+      );
+      votingPower = Number(holdingsResult.rows[0]?.units ?? 0);
+    }
+  } else {
+    // No record date — use current holdings.
+    const holdingsResult = await db.query<{ units: string | number }>(
+      `SELECT COALESCE(SUM(units_owned), 0)::bigint AS units
+       FROM coown_holdings
+       WHERE asset_id = $1 AND user_id = $2`,
+      [assetId, request.authUser.userId]
+    );
+    votingPower = Number(holdingsResult.rows[0]?.units ?? 0);
+  }
 
-  const votingPower = Number(holdingsResult.rows[0]?.units ?? 0);
-  if (votingPower === 0) {
+  if (votingPower <= 0) {
     reply.code(403);
     return { ok: false, error: 'You must hold units of this asset to vote' };
   }
@@ -2830,6 +2869,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     minPriceGbp: z.number().positive().optional(),
     reservationId: z.string().min(8).max(160),
     idempotencyKey: z.string().min(8).max(140).optional(),
+    timeInForce: z.enum(['GFD', 'GTC90']).optional().default('GFD'),
   }).superRefine((value, ctx) => {
     if (value.orderType === 'limit' && !value.limitPriceGbp) {
       ctx.addIssue({
@@ -3272,6 +3312,22 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     );
 
     const incomingOrderId = orderResult.rows[0].id;
+
+    // ── Time-in-force / expiry ──
+    // The coOwn_orders table does not yet have an `expires_at` column, so the
+    // computed expiry is accepted and surfaced in the response (and audit
+    // trail) for now. Once the column is added, this value should be persisted
+    // and a sweeper should cancel orders past their expiry.
+    const orderExpiryDate = payload.timeInForce === 'GTC90'
+      ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+      : (() => {
+          // GFD: end of the current trading day (UTC midnight of the next day).
+          const endOfDay = new Date();
+          endOfDay.setUTCHours(24, 0, 0, 0);
+          return endOfDay;
+        })();
+    const orderExpiresAt = orderExpiryDate.toISOString();
+
     await client.query(
       `
         UPDATE coown_order_reservations
@@ -3715,6 +3771,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         totalGbp: orderTotalGbp,
         totalGbpStr: formatGbp(orderTotalGbp),
         status: incomingOrder.rows[0].status,
+        timeInForce: payload.timeInForce,
+        expiresAt: orderExpiresAt,
         createdAt: incomingOrder.rows[0].created_at,
         updatedAt: incomingOrder.rows[0].updated_at,
       },
@@ -3850,6 +3908,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         filledUnits: incomingOrder.rows[0].filled_units,
         remainingUnits: incomingOrder.rows[0].remaining_units,
         status: incomingOrder.rows[0].status,
+        timeInForce: payload.timeInForce,
+        expiresAt: orderExpiresAt,
         amlAlertId: amlAlert?.alertId ?? null,
       },
     });

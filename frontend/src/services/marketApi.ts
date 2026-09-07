@@ -718,6 +718,8 @@ interface PlaceCoOwnOrderInput {
   reservationId: string;
   /** Client-supplied idempotency key per spec 10 §1. Prevents duplicate orders on retry. */
   idempotencyKey?: string;
+  /** Time-in-force / duration for resting limit orders. GFD = Good For Day, GTC90 = Good Till Cancelled (90 days). */
+  timeInForce?: 'GFD' | 'GTC90';
 }
 
 interface CreateCoOwnBuyoutOfferInput {

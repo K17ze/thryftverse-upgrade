@@ -69,6 +69,8 @@ export interface CoOwnPortfolioResult {
   partial?: boolean;
   /** Asset IDs that failed to fetch when `partial` is true. */
   failedAssetIds?: string[];
+  /** Number of holdings fetched from the backend (may differ from positions.length if asset details failed). */
+  holdingsCount?: number;
 }
 
 // ── Service adapter ──
@@ -97,7 +99,7 @@ export async function fetchCoOwnPortfolioPositions(
   // This is the "zero holdings" case, distinct from a failed (unavailable)
   // holdings fetch which throws above.
   if (holdings.length === 0) {
-    return { positions: [], summary: { ...EMPTY_SUMMARY } };
+    return { positions: [], summary: { ...EMPTY_SUMMARY }, holdingsCount: 0 };
   }
 
   const holdingMap = new Map<string, MarketCoOwnHolding>();
@@ -197,5 +199,5 @@ export async function fetchCoOwnPortfolioPositions(
   };
 
   const partial = failedAssetIds.length > 0;
-  return { positions, summary, ...(partial ? { partial, failedAssetIds } : {}) };
+  return { positions, summary, holdingsCount: holdings.length, ...(partial ? { partial, failedAssetIds } : {}) };
 }

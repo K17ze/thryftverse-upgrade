@@ -44,6 +44,14 @@ type LocalStackParamList = Omit<RootStackParamList, 'CoOwnOrderHistory'> & {
   CoOwnOrderHistory: OrderHistoryHighlightParams | undefined;
 };
 
+// Phase 2.5: the shared RootStackParamList ('TradeConfirm') is owned by
+// another team and does not yet declare `ticketDuration`. Widen the route
+// params locally so the duration forwarded from TradeScreen can be read
+// type-safely without editing the shared navigation types.
+type TradeConfirmRouteParams = RootStackParamList['TradeConfirm'] & {
+  ticketDuration?: 'GFD' | 'GTC90';
+};
+
 export default function TradeConfirmScreen({ navigation, route }: Props) {
   useScreenCaptureProtection();
   const {
@@ -70,7 +78,9 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     previewValidUntil,
     maxReserved1ze,
     marketDataTimestamp,
-  } = route.params ?? {};
+    // Phase 2.5: duration (GFD / GTC90) forwarded from TradeScreen
+    ticketDuration,
+  } = (route.params as TradeConfirmRouteParams) ?? {};
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { isVeryCompact: isCompactDock } = useBreakpoint();
@@ -187,6 +197,9 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           : { limitPriceGbp }),
         reservationId,
         idempotencyKey: idempotencyKeyRef.current!,
+        // Phase 2.5: forward the duration selector so the backend can set
+        // the order's lifetime (GFD = end of day, GTC90 = 90 days).
+        timeInForce: ticketDuration,
       });
 
       reservationPlacedRef.current = true;

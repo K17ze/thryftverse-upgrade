@@ -1,8 +1,8 @@
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, RefreshControl } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+import { View, Text, StyleSheet, RefreshControl, Animated } from 'react-native';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
@@ -32,6 +32,17 @@ import { t } from '../i18n';
 
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
+
+// CoOwnOrderHistory is typed as `undefined` in the shared RootStackParamList
+// (navigation/types.ts — owned by another team). TradeConfirmScreen navigates
+// here with orderId / assetId / idempotencyKey so the just-submitted order can
+// be highlighted. Widen the route locally to read those params type-safely
+// without editing the shared types (same pattern as TradeConfirmScreen).
+type LocalRouteParams = { orderId?: string; assetId?: string; idempotencyKey?: string };
+type LocalStackParamList = Omit<RootStackParamList, 'CoOwnOrderHistory'> & {
+  CoOwnOrderHistory: LocalRouteParams | undefined;
+};
+type CoOwnOrderHistoryRoute = RouteProp<RootStackParamList, 'CoOwnOrderHistory'>;
 
 type SideFilter = 'all' | 'buy' | 'sell';
 type DateFilter = 'all' | '24h' | '7d' | '30d';
@@ -121,12 +132,78 @@ function mapRemoteHistoryToEntries(history: MarketHistoryItem[]): HistoryEntry[]
     .sort(sortHistoryEntriesDesc);
 }
 
+// Subtle, temporary highlight wrapper for the just-submitted order. Renders a
+// brand-colored left accent and a faint background tint that fades out over a
+// few seconds so the highlight is non-permanent. OrderHistoryRow does not
+// accept an isHighlighted prop, so the wrapper is the visual vehicle.
+function HighlightRowWrapper({
+  children,
+  isHighlighted,
+  brandColor,
+}: {
+  children: React.ReactNode;
+  isHighlighted: boolean;
+  brandColor: string;
+}) {
+  const fade = React.useRef(new Animated.Value(isHighlighted ? 1 : 0)).current;
+  React.useEffect(() => {
+    if (isHighlighted) {
+      fade.setValue(1);
+      const anim = Animated.timing(fade, {
+        toValue: 0,
+        duration: 3000,
+        useNativeDriver: false,
+      });
+      anim.start();
+      return () => anim.stop();
+    }
+    fade.setValue(0);
+  }, [isHighlighted, fade]);
+
+  const backgroundColor = fade.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(0,0,0,0)', `${brandColor}14`],
+  });
+  const borderLeftColor = fade.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(0,0,0,0)', brandColor],
+  });
+
+  return (
+    <Animated.View
+      style={{
+        backgroundColor,
+        borderLeftColor,
+        // A persistent 3pt left border keeps row geometry identical across
+        // highlighted and non-highlighted rows; only the color animates.
+        borderLeftWidth: 3,
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 export default function CoOwnOrderHistoryScreen() {
   const navigation = useNavigation<NavT>();
+  const route = useRoute<CoOwnOrderHistoryRoute>();
   const { colors } = useAppTheme();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
+
+  // Highlight params are passed by TradeConfirmScreen after a successful order
+  // submission (orderId) or a network error (idempotencyKey). Cast through the
+  // local widening type since the shared RootStackParamList types this route
+  // as `undefined`.
+  const routeParams = route.params as unknown as LocalRouteParams | undefined;
+  const highlightOrderId = routeParams?.orderId;
+  const highlightAssetId = routeParams?.assetId;
+  const highlightIdempotencyKey = routeParams?.idempotencyKey;
+
+  const listRef = React.useRef<FlashListRef<HistoryEntry>>(null);
+  const [highlightedEntryId, setHighlightedEntryId] = React.useState<string | null>(null);
+  const highlightConsumedRef = React.useRef(false);
 
   const [sideFilter, setSideFilter] = React.useState<SideFilter>('all');
   const [dateFilter, setDateFilter] = React.useState<DateFilter>('all');
@@ -234,6 +311,48 @@ export default function CoOwnOrderHistoryScreen() {
 
   React.useEffect(() => { void syncRemoteHistory(); }, [syncRemoteHistory]);
 
+  // Consume highlight params (orderId / idempotencyKey) once the remote history
+  // has loaded. Match by orderId first; if only an idempotencyKey is present
+  // (e.g. a network-error path where no orderId was returned), fall back to the
+  // most recent entry since the user just submitted it. After consuming, clear
+  // the params from navigation so a later refresh does not re-highlight.
+  React.useEffect(() => {
+    if (highlightConsumedRef.current) return;
+    if (isSyncingRemote) return;
+    if (!highlightOrderId && !highlightIdempotencyKey) return;
+    if (remoteEntries.length === 0) return;
+
+    let matchId: string | null = null;
+    if (highlightOrderId) {
+      const targetOrderId = Number(highlightOrderId);
+      if (Number.isFinite(targetOrderId)) {
+        const byOrder = remoteEntries.find((e) => e.orderId === targetOrderId);
+        if (byOrder) matchId = byOrder.id;
+      }
+    }
+    if (!matchId && highlightIdempotencyKey) {
+      // Entries don't carry idempotency keys; the just-submitted order is the
+      // most recent one (remoteEntries are sorted descending by createdAt).
+      // If an assetId was also passed, prefer the most recent entry for that
+      // asset to avoid highlighting an unrelated recent order.
+      const pool = highlightAssetId
+        ? remoteEntries.filter((e) => e.assetId === highlightAssetId)
+        : remoteEntries;
+      matchId = pool[0]?.id ?? null;
+    }
+
+    if (matchId) {
+      highlightConsumedRef.current = true;
+      setHighlightedEntryId(matchId);
+      // Clear the consumed params so a subsequent refresh won't re-highlight.
+      (navigation as unknown as NativeStackNavigationProp<LocalStackParamList, 'CoOwnOrderHistory'>).setParams({
+        orderId: undefined,
+        assetId: undefined,
+        idempotencyKey: undefined,
+      });
+    }
+  }, [remoteEntries, isSyncingRemote, highlightOrderId, highlightIdempotencyKey, highlightAssetId, navigation]);
+
   const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
     await syncRemoteHistory();
@@ -258,33 +377,64 @@ export default function CoOwnOrderHistoryScreen() {
     });
   }, [remoteEntries, sideFilter, dateFilter]);
 
+  // Auto-scroll to the highlighted row once it is present in the filtered list.
+  React.useEffect(() => {
+    if (!highlightedEntryId) return;
+    const index = entries.findIndex((e) => e.id === highlightedEntryId);
+    if (index < 0) return;
+    // Defer until the list has laid out the target row.
+    const timer = setTimeout(() => {
+      try {
+        listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.4 });
+      } catch {
+        // scrollToIndex may throw if the row hasn't been laid out yet; the
+        // highlight alone is sufficient fallback.
+      }
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [highlightedEntryId, entries]);
+
+  // Clear the highlight after a few seconds so it is temporary.
+  React.useEffect(() => {
+    if (!highlightedEntryId) return;
+    const timer = setTimeout(() => setHighlightedEntryId(null), 4000);
+    return () => clearTimeout(timer);
+  }, [highlightedEntryId]);
+
   // FlashList v2 performance: memoized renderItem prevents full re-render of
   // all visible order history rows on every parent state change.
   // (Audit §FlashList v2 / LIST_RENDERING_POLICY.md §3.1)
   const renderOrderItem = useCallback(({ item }: { item: HistoryEntry }) => (
-    <OrderHistoryRow
-      id={item.id}
-      side={item.side}
-      type={item.type}
-      assetTitle={item.assetTitle}
-      quantity={item.quantity}
-      filledQuantity={item.filledQuantity}
-      pricePerShare={formatCoOwnIze(item.pricePerShare)}
-      totalAmount={formatCoOwnIze(item.totalAmount)}
-      status={item.status}
-      timestamp={item.createdAt}
-      onCancel={item.source === 'backend' && (item.status === 'open' || item.status === 'partially_filled')
-        ? () => requestCancelOrder(item)
-        : undefined}
-      isCancelling={cancellingOrderId === item.id}
-      onPress={() => { haptics.tap(); navigation.navigate('AssetDetail', { assetId: item.assetId }); }}
-    />
+    <HighlightRowWrapper
+      isHighlighted={highlightedEntryId === item.id}
+      brandColor={colors.brand}
+    >
+      <OrderHistoryRow
+        id={item.id}
+        side={item.side}
+        type={item.type}
+        assetTitle={item.assetTitle}
+        quantity={item.quantity}
+        filledQuantity={item.filledQuantity}
+        pricePerShare={formatCoOwnIze(item.pricePerShare)}
+        totalAmount={formatCoOwnIze(item.totalAmount)}
+        status={item.status}
+        timestamp={item.createdAt}
+        onCancel={item.source === 'backend' && (item.status === 'open' || item.status === 'partially_filled')
+          ? () => requestCancelOrder(item)
+          : undefined}
+        isCancelling={cancellingOrderId === item.id}
+        onPress={() => { haptics.tap(); navigation.navigate('AssetDetail', { assetId: item.assetId }); }}
+      />
+    </HighlightRowWrapper>
   ), [
     formatCoOwnIze,
     requestCancelOrder,
     cancellingOrderId,
     haptics,
     navigation,
+    highlightedEntryId,
+    colors.brand,
   ]);
 
   return (
@@ -348,6 +498,7 @@ export default function CoOwnOrderHistoryScreen() {
       </View>
 
       <FlashList
+        ref={listRef as unknown as React.Ref<FlashListRef<HistoryEntry>>}
         data={entries}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
