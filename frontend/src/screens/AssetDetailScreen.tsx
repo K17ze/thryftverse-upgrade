@@ -564,7 +564,7 @@ export default function AssetDetailScreen() {
     social.toggleLike();
   }, [requireAuth, social]);
 
-  const { data: recommendationsData, isLoading: recsLoading } = useRecommendations(
+  const { data: recommendationsData } = useRecommendations(
     asset?.listingId
   );
 
@@ -730,12 +730,7 @@ export default function AssetDetailScreen() {
   const images = asset.imageUrl ? [asset.imageUrl] : [];
 
   const recommendationSections = recommendationsData?.sections ?? [];
-  const railSections = recommendationSections.filter(
-    (section) => section.key !== 'seen_in_looks' && section.key !== 'continue_exploring',
-  );
   const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
-  void recsLoading;
-  void railSections;
 
   const handlePressRecommendation = (
     recItem: RecommendationItem,
@@ -965,7 +960,7 @@ export default function AssetDetailScreen() {
           <CommerceDetailIdentity
             family="co_own"
             density={isVeryCompact ? 'compact' : 'standard'}
-            eyebrow={asset.legalVehicleName ?? 'FRACTIONAL COLLECTIBLE'}
+            eyebrow={asset.legalVehicleName ?? 'Fractional collectible'}
             title={asset.title}
             interestSignal={asset.holders != null && asset.holders > 0 ? `${asset.holders} holders` : undefined}
           />

@@ -63,12 +63,11 @@ export function CoOwnOrderBook({
     },
   ];
 
-  // RFQ mode — show CTA instead of book
+  // RFQ mode — flat inline notice instead of centered icon box
   if (mode === 'rfq') {
     return (
       <View style={containerStyle}>
-        <View style={styles.rfqWrap}>
-          <Ionicons name="chatbubbles-outline" size={28} color={colors.brand} />
+        <View style={styles.rfqBlock}>
           <Text style={[styles.rfqTitle, { color: colors.textPrimary }]}>Request for quote</Text>
           <Text style={[styles.rfqSubtitle, { color: colors.textSecondary }]}>
             This instrument trades by RFQ. Request a quote from the market maker.
@@ -87,16 +86,15 @@ export function CoOwnOrderBook({
     );
   }
 
-  // Halted / closed — frozen with overlay
+  // Halted / closed — flat inline notice + frozen levels
   if (mode === 'halted' || mode === 'closed') {
     const label = mode === 'halted' ? 'Trading halted' : 'Market closed';
     return (
       <View style={containerStyle}>
-        <View style={styles.haltedWrap}>
-          <Ionicons name="pause-circle-outline" size={28} color={colors.textMuted} />
+        <View style={styles.haltedBlock}>
           <Text style={[styles.haltedTitle, { color: colors.textSecondary }]}>{label}</Text>
           <Text style={[styles.haltedSubtitle, { color: colors.textMuted }]}>
-            The order book is frozen. No new orders accepted.
+            Order book frozen. No new orders accepted.
           </Text>
         </View>
         {/* Show frozen book levels with reduced opacity */}
@@ -136,16 +134,25 @@ export function CoOwnOrderBook({
 
   return (
     <View style={containerStyle}>
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order book</Text>
-        {isCallAuction && (
+      {/* Header — hidden when embedded (parent section provides the title) */}
+      {!embedded ? (
+        <View style={styles.headerRow}>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Order book</Text>
+          {isCallAuction && (
+            <View style={[styles.auctionBadge, { backgroundColor: colors.warningSubtle }]}>
+              <Ionicons name="time-outline" size={11} color={colors.warning} />
+              <Text style={[styles.auctionBadgeText, { color: colors.warning }]}>Call auction</Text>
+            </View>
+          )}
+        </View>
+      ) : isCallAuction ? (
+        <View style={styles.headerRow}>
           <View style={[styles.auctionBadge, { backgroundColor: colors.warningSubtle }]}>
             <Ionicons name="time-outline" size={11} color={colors.warning} />
             <Text style={[styles.auctionBadgeText, { color: colors.warning }]}>Call auction</Text>
           </View>
-        )}
-      </View>
+        </View>
+      ) : null}
 
       {/* Column headers */}
       <View style={[styles.colHeaderRow, { borderColor: colors.border }]}>
@@ -182,10 +189,9 @@ export function CoOwnOrderBook({
         onSelectLevel={onSelectLevel}
       />
 
-      {/* Empty state — no open orders, with honest next step */}
+      {/* Empty state — flat inline notice, no centered icon box */}
       {bids.length === 0 && asks.length === 0 && (
-        <View style={styles.emptyWrap}>
-          <Ionicons name="document-text-outline" size={20} color={colors.textMuted} />
+        <View style={styles.emptyBlock}>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>No open orders</Text>
           <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
             Place a limit order or request a quote to start trading.
@@ -502,29 +508,24 @@ const styles = StyleSheet.create({
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
   },
-  emptyWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  emptyBlock: {
     paddingVertical: Space.md,
-    gap: Space.xs,
+    gap: 4,
   },
   emptyText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
+    fontSize: TypographyV2.bodyStrong.size,
+    fontFamily: TypographyV2.bodyStrong.fontFamily,
   },
   emptyHint: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textAlign: 'center',
-    paddingHorizontal: Space.md,
+    lineHeight: 18,
   },
-  // RFQ state
-  rfqWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Space.lg,
-    gap: Space.sm,
+  // RFQ state — flat block
+  rfqBlock: {
+    paddingVertical: Space.md,
+    gap: Space.xs,
   },
   rfqTitle: {
     fontSize: TypographyV2.bodyStrong.size,
@@ -535,8 +536,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textAlign: 'center',
-    paddingHorizontal: Space.md,
+    lineHeight: 18,
   },
   rfqBtn: {
     paddingHorizontal: Space.lg,
@@ -551,12 +551,10 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily,
   },
-  // Halted / closed state
-  haltedWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Halted / closed state — flat block
+  haltedBlock: {
     paddingVertical: Space.md,
-    gap: Space.xs,
+    gap: 4,
   },
   haltedTitle: {
     fontSize: TypographyV2.bodyStrong.size,
@@ -567,8 +565,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textAlign: 'center',
-    paddingHorizontal: Space.md,
+    lineHeight: 18,
   },
   bookWrap: {
     gap: 0,

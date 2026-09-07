@@ -428,8 +428,8 @@ describe('AssetMarketSection — open orders panel', () => {
       ],
     });
     await act(async () => {});
-    expect(hasText(renderer, 'BUY')).toBe(true);
-    expect(hasText(renderer, 'SELL')).toBe(true);
+    expect(hasText(renderer, 'Buy')).toBe(true);
+    expect(hasText(renderer, 'Sell')).toBe(true);
     expect(hasText(renderer, '7/10')).toBe(true);
     expect(hasText(renderer, '3/3')).toBe(true);
   });

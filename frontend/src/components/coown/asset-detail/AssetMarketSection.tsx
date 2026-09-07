@@ -293,9 +293,12 @@ export function AssetMarketSection({
             <View>
               {yourOpenOrders.map((order, idx) => {
                 const isBuy = order.action === 'buy-units';
-                // P1 #4 fix: guard against orderId null — both must be non-null
                 const isCancelling = cancellingOrderId != null && order.orderId != null && cancellingOrderId === order.orderId;
                 const canCancel = onCancelOrder != null && order.orderId != null && !isCancelling;
+                const sideColor = isBuy ? colors.coownUp : colors.coownDown;
+                const typeLabel = order.orderType
+                  ? order.orderType === 'protected_market' ? 'protected' : order.orderType
+                  : 'limit';
                 return (
                   <View
                     key={order.id}
@@ -304,49 +307,33 @@ export function AssetMarketSection({
                       idx > 0 && { borderTopColor: colors.borderSubtle },
                     ]}
                   >
-                    <View style={styles.openOrderSideCol}>
-                      <View style={[
-                        styles.sideBadge,
-                        { backgroundColor: isBuy ? colors.coownUpSubtle : colors.coownDownSubtle },
-                      ]}>
-                        <Text style={[
-                          styles.sideBadgeText,
-                          { color: isBuy ? colors.coownUp : colors.coownDown },
-                        ]}>
-                          {isBuy ? 'BUY' : 'SELL'}
-                        </Text>
-                      </View>
-                      {order.orderType ? (
-                        <Text style={[styles.openOrderType, { color: colors.textMuted }]}>
-                          {order.orderType === 'protected_market' ? 'protected' : order.orderType}
-                        </Text>
-                      ) : null}
+                    {/* Compact leading token: colored dot + side · type */}
+                    <View style={styles.openOrderLeading}>
+                      <View style={[styles.sideDot, { backgroundColor: sideColor }]} />
+                      <Text style={[styles.openOrderSideType, { color: colors.textPrimary }]}>
+                        {isBuy ? 'Buy' : 'Sell'} · {typeLabel}
+                      </Text>
                     </View>
 
-                    <View style={styles.openOrderDetailCol}>
-                      <Text style={[styles.openOrderPrice, { color: colors.textPrimary }]}>
-                        {order.unitPriceGbp != null ? formatCoOwnIze(order.unitPriceGbp) : '—'}
-                      </Text>
-                      <Text style={[styles.openOrderUnits, { color: colors.textSecondary }]}>
-                        {order.remainingUnits != null
-                          ? `${order.remainingUnits}/${order.units ?? order.remainingUnits} units`
-                          : `${order.units ?? '—'} units`}
-                      </Text>
-                    </View>
+                    {/* Price and units inline */}
+                    <Text style={[styles.openOrderPrice, { color: colors.textPrimary }]}>
+                      {order.unitPriceGbp != null ? formatCoOwnIze(order.unitPriceGbp) : '—'}
+                    </Text>
+                    <Text style={[styles.openOrderUnits, { color: colors.textSecondary }]}>
+                      {order.remainingUnits != null
+                        ? `${order.remainingUnits}/${order.units ?? order.remainingUnits}u`
+                        : `${order.units ?? '—'}u`}
+                    </Text>
 
                     {canCancel ? (
                       <Pressable
                         onPress={() => onCancelOrder!(order.orderId!)}
                         hitSlop={8}
-                        style={({ pressed }) => [
-                          styles.cancelBtn,
-                          { borderColor: colors.warning },
-                          pressed && { opacity: 0.6 },
-                        ]}
+                        style={({ pressed }) => [styles.cancelLink, pressed && { opacity: 0.6 }]}
                         accessibilityRole="button"
                         accessibilityLabel={`Cancel ${isBuy ? 'buy' : 'sell'} order ${order.orderId}`}
                       >
-                        <Text style={[styles.cancelBtnText, { color: colors.warning }]}>
+                        <Text style={[styles.cancelLinkText, { color: colors.warning }]}>
                           Cancel
                         </Text>
                       </Pressable>
@@ -399,37 +386,37 @@ export function AssetMarketSection({
         </View>
 
         {orderBookError || (orderBook != null && !orderBookIsLive) ? (
-          <View style={[styles.errorBox, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="cloud-offline-outline" size={24} color={colors.warning} />
-            <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>Live market unavailable</Text>
-            <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>
+          <View style={styles.depthNoticeBlock}>
+            <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>Live market unavailable</Text>
+            <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
               {orderBookError ? 'Could not synchronize live market depth.' : 'This view is not backed by a live market snapshot.'}
             </Text>
             <Pressable
               onPress={onRetryOrderBook}
-              style={[styles.retryBtn, { backgroundColor: colors.surface }]}
+              hitSlop={8}
+              style={({ pressed }) => [styles.retryLink, pressed && { opacity: 0.7 }]}
               accessibilityRole="button"
               accessibilityLabel="Retry order book"
             >
-              <Text style={[styles.retryBtnText, { color: colors.brand }]}>Retry</Text>
+              <Text style={[styles.retryLinkText, { color: colors.brand }]}>Retry</Text>
             </Pressable>
           </View>
         ) : isSecondaryMarket && marketDataStale ? (
-          <View style={[styles.emptyDepthNotice, { backgroundColor: colors.warningSubtle }]}>
-            <Ionicons name="time-outline" size={26} color={colors.warning} />
-            <Text style={[styles.emptyDepthTitle, { color: colors.textPrimary }]}>Market data is stale</Text>
-            <Text style={[styles.emptyDepthBody, { color: colors.textSecondary }]}>
+          <View style={styles.depthNoticeBlock}>
+            <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>Market data is stale</Text>
+            <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
               {marketDataAgeLabel
-                ? `Last verified market source: ${marketDataAgeLabel}. Trading stays paused until a fresh snapshot arrives.`
-                : 'Trading stays paused until a fresh market snapshot arrives.'}
+                ? `Last verified source: ${marketDataAgeLabel}. Trading paused until a fresh snapshot arrives.`
+                : 'Trading paused until a fresh market snapshot arrives.'}
             </Text>
             <Pressable
               onPress={onRetryOrderBook}
-              style={[styles.retryBtn, { backgroundColor: colors.surface }]}
+              hitSlop={8}
+              style={({ pressed }) => [styles.retryLink, pressed && { opacity: 0.7 }]}
               accessibilityRole="button"
               accessibilityLabel="Refresh market data"
             >
-              <Text style={[styles.retryBtnText, { color: colors.brand }]}>Refresh</Text>
+              <Text style={[styles.retryLinkText, { color: colors.brand }]}>Refresh</Text>
             </Pressable>
           </View>
         ) : isMarketOpen && hasBidsOrAsks ? (
@@ -439,18 +426,18 @@ export function AssetMarketSection({
               asks={mappedAsks}
               mode={lifecycleState === 'secondaryTrading' ? 'continuous' : 'call_auction'}
               onSelectLevel={onSelectOrderBookLevel}
+              embedded
             />
           </View>
         ) : (
-          <View style={[styles.emptyDepthNotice, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name="layers-outline" size={26} color={colors.textMuted} />
-            <Text style={[styles.emptyDepthTitle, { color: colors.textPrimary }]}>
-              {lifecycleState === 'initialOffering' ? 'Primary Offering Mode' : 'Sparse Order Book'}
+          <View style={styles.depthNoticeBlock}>
+            <Text style={[styles.depthNoticeTitle, { color: colors.textPrimary }]}>
+              {lifecycleState === 'initialOffering' ? 'Primary offering' : 'No bids or asks'}
             </Text>
-            <Text style={[styles.emptyDepthBody, { color: colors.textSecondary }]}>
+            <Text style={[styles.depthNoticeBody, { color: colors.textSecondary }]}>
               {lifecycleState === 'initialOffering'
-                ? `Initial allocation underway at ${formatCoOwnIze(asset.unitPriceGbp)} per unit. Secondary bids and asks activate once initial distribution closes.`
-                : 'No resting bids or asks currently on the book. You can place the first limit order or buy available float directly.'}
+                ? `Initial allocation at ${formatCoOwnIze(asset.unitPriceGbp)} per unit. Secondary trading activates once distribution closes.`
+                : 'No bids or asks on the book. Place the first limit order or buy available float directly.'}
             </Text>
           </View>
         )}
@@ -561,46 +548,27 @@ const styles = StyleSheet.create({
   orderBookWrapper: {
     marginTop: Space.xs,
   },
-  errorBox: {
-    alignItems: 'center',
-    padding: Space.md,
-    borderRadius: Radius.sm,
-    gap: Space.xs,
+  // ── Flat depth notice — left-aligned text, no centered icon box ──
+  depthNoticeBlock: {
+    paddingVertical: Space.md,
+    gap: 4,
   },
-  errorTitle: {
+  depthNoticeTitle: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.semibold,
   },
-  errorSubtitle: {
+  depthNoticeBody: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    textAlign: 'center',
+    lineHeight: 18,
   },
-  retryBtn: {
+  retryLink: {
     marginTop: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
+    alignSelf: 'flex-start',
   },
-  retryBtnText: {
+  retryLinkText: {
     fontSize: TypographyV2.captionElevated.size,
     fontFamily: FontFamily.semibold,
-  },
-  emptyDepthNotice: {
-    alignItems: 'center',
-    padding: Space.md,
-    borderRadius: Radius.sm,
-    gap: Space.xs,
-  },
-  emptyDepthTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: FontFamily.semibold,
-  },
-  emptyDepthBody: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-    textAlign: 'center',
-    lineHeight: 18,
   },
   statsStrip: {
     flexDirection: 'row',
@@ -700,7 +668,7 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.caption.size,
     fontFamily: FontFamily.medium,
   },
-  // ── Open Orders panel ──
+  // ── Compact open orders — one-line rows, colored dot + inline text ──
   openOrderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -709,32 +677,21 @@ const styles = StyleSheet.create({
     borderTopColor: 'transparent',
     paddingVertical: Space.sm,
   },
-  openOrderSideCol: {
-    flexDirection: 'column',
-    gap: 3,
-    minWidth: 64,
-  },
-  sideBadge: {
-    paddingHorizontal: Space.xs,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-    alignSelf: 'flex-start',
-  },
-  sideBadgeText: {
-    fontSize: 10,
-    fontFamily: FontFamily.bold,
-    letterSpacing: 0.4,
-  },
-  openOrderType: {
-    fontSize: 10,
-    fontFamily: FontFamily.regular,
-    textTransform: 'capitalize',
-  },
-  openOrderDetailCol: {
-    flex: 1,
+  openOrderLeading: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: Space.sm,
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 90,
+  },
+  sideDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  openOrderSideType: {
+    fontSize: TypographyV2.captionElevated.size,
+    fontFamily: FontFamily.medium,
+    textTransform: 'capitalize',
   },
   openOrderPrice: {
     fontSize: TypographyV2.captionElevated.size,
@@ -745,14 +702,13 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     fontVariant: ['tabular-nums'],
+    flex: 1,
   },
-  cancelBtn: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
+  cancelLink: {
+    paddingHorizontal: Space.xs,
+    paddingVertical: 2,
   },
-  cancelBtnText: {
+  cancelLinkText: {
     fontSize: TypographyV2.caption.size,
     fontFamily: FontFamily.semibold,
   },

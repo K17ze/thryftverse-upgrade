@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, FontFamily, Radius, PressScale } from '../../../theme/designTokens';
+import { Space, FontFamily, PressScale } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { formatCoOwnIze } from '../../../utils/currency';
@@ -266,21 +266,20 @@ export function AssetOverviewSection({
             />
           </View>
         ) : (
-          <View style={[styles.sparseChartNotice, { backgroundColor: colors.surface }]}>
-            <Ionicons name="analytics-outline" size={24} color={colors.textMuted} />
+          <View style={styles.sparseChartBlock}>
             <Text style={[styles.sparseChartTitle, { color: colors.textPrimary }]}>
               {historyLoading
                 ? 'Loading price history…'
                 : historyFailed
                 ? 'Price history unavailable'
                 : lifecycleState === 'initialOffering'
-                  ? 'Primary Offering Benchmark'
+                  ? 'Primary offering — no trade history'
                   : 'No execution history yet'}
             </Text>
             <Text style={[styles.sparseChartBody, { color: colors.textSecondary }]}>
               {appraisedValuePerUnitGbp != null
-                ? `Offering unit price of ${formatCoOwnIze(asset.unitPriceGbp)} is benchmarked against the recorded appraisal of ${formatCoOwnIze(appraisedValuePerUnitGbp)}.`
-                : `No settled trades are recorded for this range. The offering reference price is ${formatCoOwnIze(asset.unitPriceGbp)}.`}
+                ? `Offering price ${formatCoOwnIze(asset.unitPriceGbp)} benchmarked against appraisal of ${formatCoOwnIze(appraisedValuePerUnitGbp)}.`
+                : `Reference price ${formatCoOwnIze(asset.unitPriceGbp)}. No settled trades for this range.`}
             </Text>
           </View>
         )}
@@ -317,27 +316,6 @@ export function AssetOverviewSection({
           expenses section. Compact tappable rows link to the full dossier
           and risk sheet; fees are flat metric rows. */}
       <CommerceDetailSection label="Due diligence & fees">
-        {/* Flat trust-facts line — same data as the old 4-pillar grid, but
-            as a single tappable row instead of four equal-weight cards */}
-        {trustFacts.length > 0 ? (
-          <Pressable
-            onPress={onOpenDiligence}
-            hitSlop={4}
-            style={({ pressed }) => [styles.trustFactualLine, { borderTopColor: colors.border }, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel={`Trust summary: ${trustFacts.join(', ')}. Tap to view due diligence.`}
-          >
-            <Text
-              style={[styles.trustFactualText, { color: colors.textSecondary }]}
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {trustFacts.join(' · ')}
-            </Text>
-            <Ionicons name="chevron-forward" size={12} color={colors.textMuted} />
-          </Pressable>
-        ) : null}
-
         {/* Document chips — only when documents exist */}
         {hasDocuments && (
           <View style={[styles.documentsStrip, { borderTopColor: colors.border }]}>
@@ -478,12 +456,9 @@ const styles = StyleSheet.create({
   chartWrapper: {
     marginVertical: Space.xs,
   },
-  sparseChartNotice: {
-    alignItems: 'center',
-    padding: Space.md,
-    borderRadius: Radius.sm,
-    marginVertical: Space.xs,
-    gap: Space.xs,
+  sparseChartBlock: {
+    paddingVertical: Space.md,
+    gap: 4,
   },
   sparseChartTitle: {
     fontSize: TypographyV2.bodyStrong.size,
@@ -492,7 +467,6 @@ const styles = StyleSheet.create({
   sparseChartBody: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
-    textAlign: 'center',
     lineHeight: 18,
   },
   valuationDetailRow: {
