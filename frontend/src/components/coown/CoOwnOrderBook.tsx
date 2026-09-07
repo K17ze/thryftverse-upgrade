@@ -18,7 +18,6 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius, ExchangeLayout } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { DEPTH_COLORS } from '../../constants/colors';
-import { CoOwnNumericText } from '../ui/CoOwnNumericText';
 
 export type CoOwnBookMode = 'continuous' | 'call_auction' | 'rfq' | 'halted' | 'closed';
 
