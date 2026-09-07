@@ -248,7 +248,9 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
 
     it('fully allocated state has a real primary action', () => {
       // Per acceptance matrix: "Fully allocated state has a real action"
-      const fullyAllocatedMatch = assetScreen.match(/availableUnits === 0 && !isHolder[\s\S]*?Browse secondary/);
+      // Dock logic was extracted to AssetDetailDock.tsx
+      const dockSrc = readComponent('coown/asset-detail/AssetDetailDock.tsx');
+      const fullyAllocatedMatch = dockSrc.match(/availableUnits === 0 && !isHolder[\s\S]*?Browse secondary/);
       expect(fullyAllocatedMatch).toBeTruthy();
       expect(fullyAllocatedMatch![0]).toContain('primaryAction');
       expect(fullyAllocatedMatch![0]).toContain('Browse secondary');

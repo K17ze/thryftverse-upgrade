@@ -14,7 +14,6 @@ import Reanimated, {
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
-import { openProductDetail } from '../platform/product/openProductDetail';
 import { useStore } from '../store/useStore';
 import { Space, Radius, FontFamily, DockConstants, Control, PressScale } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -46,21 +45,16 @@ import {
   CommerceDetailHeader,
   CommerceDetailIdentity,
   CommerceDetailSellerRow,
-  CommerceDetailStateDock,
   CommerceDetailMediaRail,
 } from '../components/commerce/detail';
-import { RecommendationRail } from '../components/product';
 import { CachedImage } from '../components/CachedImage';
 import { resolveCoOwnConversation } from '../utils/coOwnMessaging';
 import {
   buildCoOwnViewModel,
   useProductSocialState,
-  useRecommendations,
   useSellerTrust,
   useSellerFollow,
-  isRecommendationLook,
 } from '../platform/product';
-import type { RecommendationLook } from '../platform/product';
 import {
   CoOwnStateCanvas,
   CANONICAL_RIGHTS_LABELS,
@@ -72,6 +66,7 @@ import {
   AssetOverviewSection,
   AssetMarketSection,
   AssetOwnershipSection,
+  AssetDetailDock,
   CoOwnSegmentNav,
   type CoOwnDetailTab,
 } from '../components/coown/asset-detail';
@@ -95,10 +90,6 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 // The recommendation rail returns items that have an `id` field; we only need
 // that to navigate to ItemDetail. We do not import the full Listing type from
 // mockData because this screen must not depend on mock data types.
-interface RecommendationItem {
-  id: string;
-  [key: string]: unknown;
-}
 
 // ── Corporate action row helpers ──
 // The detail route takes display labels; build them from the action record
@@ -564,10 +555,6 @@ export default function AssetDetailScreen() {
     social.toggleLike();
   }, [requireAuth, social]);
 
-  const { data: recommendationsData } = useRecommendations(
-    asset?.listingId
-  );
-
   const { data: issuerTrust } = useSellerTrust(asset?.issuerId);
   const issuerFollowMutation = useSellerFollow(asset?.issuerId);
 
@@ -728,30 +715,6 @@ export default function AssetDetailScreen() {
   }));
 
   const images = asset.imageUrl ? [asset.imageUrl] : [];
-
-  const recommendationSections = recommendationsData?.sections ?? [];
-  const seenInLooksSection = recommendationSections.find((s) => s.key === 'seen_in_looks');
-
-  const handlePressRecommendation = (
-    recItem: RecommendationItem,
-    sectionKey?: string,
-    position?: number,
-    reasonCode?: string,
-    personalised?: boolean,
-  ) => {
-    openProductDetail(navigation, {
-      referenceKind: 'listing',
-      canonicalId: recItem.id,
-      sourceSurface: 'AssetDetail',
-      sectionKey,
-      position,
-      reasonCode,
-      personalised,
-    });
-  };
-  const handlePressLook = (lookItem: RecommendationLook) => {
-    navigation.navigate('LookDetail', { lookId: lookItem.id });
-  };
 
   // Compute scroll bottom padding from dock geometry + safe area.
   const isDualActionDock =
@@ -1281,158 +1244,31 @@ export default function AssetDetailScreen() {
           </View>
         )}
 
-        {seenInLooksSection && seenInLooksSection.items.length > 0 && (
-          <View style={styles.recommendationSection}>
-            <RecommendationRail
-              section={seenInLooksSection}
-              listingId={asset.listingId}
-              onPressItem={(recItem, sectionKey, position, reasonCode, personalised) => {
-                if (isRecommendationLook(recItem)) {
-                  handlePressLook(recItem);
-                } else {
-                  handlePressRecommendation({ id: recItem.id }, sectionKey, position, reasonCode, personalised);
-                }
-              }}
-            />
-          </View>
-        )}
       </Reanimated.ScrollView>
 
       {/* ── Zone G — Sticky action dock ──
-          Spec 03 §11: four state variants — tradable non-holder, tradable
-          holder, rights incomplete, paused/closed. Blocked state includes
-          a valid next step. No large passive warning card. */}
-      {(() => {
-        if (!isIssuer && (holdingsError || yourUnits == null)) {
-          return (
-            <CommerceDetailStateDock
-              stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.textPrimary }]}>
-                  Position unavailable
-                </Text>
-              }
-              subtitle="Trading is disabled until your holdings are verified"
-              primaryAction={{
-                label: 'Retry position',
-                onPress: retryHoldings,
-              }}
-            />
-          );
-        }
-
-        if (!isIssuer && (orderBookError || reconciliationActive)) {
-          return (
-            <CommerceDetailStateDock
-              stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.textPrimary }]}>
-                  {reconciliationActive ? 'Market updating' : 'Market unavailable'}
-                </Text>
-              }
-              subtitle={reconciliationActive ? 'Orders are paused while balances settle' : 'Live orders could not be verified'}
-              primaryAction={{
-                label: reconciliationActive ? 'Check status' : 'Try again',
-                onPress: retryOrderBook,
-                primary: false,
-              }}
-            />
-          );
-        }
-
-        if (hasIncompleteRights && !isIssuer && asset.isOpen) {
-          // Rights incomplete — open the rights sheet, not a passive warning.
-          return (
-            <CommerceDetailStateDock
-              stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.textPrimary }]}>
-                  Trading unavailable
-                </Text>
-              }
-              subtitle="Rights review required"
-              primaryAction={{
-                label: 'Review rights',
-                onPress: () => openSheet('rights'),
-              }}
-            />
-          );
-        }
-
-        if (isIssuer) {
-          return (
-            <CommerceDetailStateDock
-              stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.textPrimary }]}>
-                  Issuer view
-                </Text>
-              }
-              subtitle={`${availableUnits} units available`}
-              primaryAction={{
-                label: 'View orders',
-                onPress: () => navigation.navigate('CoOwnOrderHistory'),
-                accessibilityLabel: 'View co-own order history',
-              }}
-            />
-          );
-        }
-
-        if (!asset.isOpen) {
-          return (
-            <CommerceDetailStateDock
-              stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]}>
-                  Trading paused
-                </Text>
-              }
-              subtitle="Temporarily unavailable"
-              primaryAction={{
-                label: 'View orders',
-                onPress: () => navigation.navigate('CoOwnOrderHistory'),
-              }}
-            />
-          );
-        }
-
-        if (availableUnits === 0 && !isHolder) {
-          return (
-            <CommerceDetailStateDock
-              stateBadge={
-                <Text style={[styles.dockStateBadge, { color: colors.textSecondary }]}>
-                  Fully allocated
-                </Text>
-              }
-              subtitle="Check the secondary market"
-              primaryAction={{
-                label: 'Browse secondary',
-                onPress: () => handleTradePress('buy'),
-              }}
-            />
-          );
-        }
-
-         return (
-           <CommerceDetailStateDock
-             showProtectionStrip={Boolean(asset.buyerProtection && asset.buyerProtectionTermsUrl)}
-             primaryAction={
-               isHolder && !isInitialOffering
-                 ? {
-                     label: 'Sell',
-                     onPress: () => handleTradePress('sell'),
-                   }
-                 : {
-                     label: 'Buy units',
-                     onPress: () => handleTradePress('buy'),
-                   }
-             }
-             secondaryAction={
-               isHolder && !isInitialOffering
-                 ? {
-                     label: 'Buy more',
-                     onPress: () => handleTradePress('buy'),
-                   }
-                : undefined
-            }
-          />
-        );
-      })()}
+          Extracted into AssetDetailDock — 7 state variants with the
+          dominant price passed into the default state. */}
+      <AssetDetailDock
+        isIssuer={isIssuer}
+        isHolder={isHolder}
+        isInitialOffering={isInitialOffering}
+        assetIsOpen={asset.isOpen}
+        holdingsError={holdingsError}
+        yourUnits={yourUnits}
+        orderBookError={orderBookError}
+        reconciliationActive={reconciliationActive}
+        hasIncompleteRights={hasIncompleteRights}
+        availableUnits={availableUnits}
+        priceLabel={dominantPriceLabel}
+        priceValue={formatCoOwnIze(dominantPriceValue)}
+        showProtectionStrip={Boolean(asset.buyerProtection && asset.buyerProtectionTermsUrl)}
+        onRetryHoldings={retryHoldings}
+        onRetryOrderBook={retryOrderBook}
+        onOpenSheet={openSheet}
+        onNavigateOrderHistory={() => navigation.navigate('CoOwnOrderHistory')}
+        onTradePress={handleTradePress}
+      />
 
       {/* Domain-isolated modals and bottom sheets */}
       <AssetDetailModals
@@ -1591,17 +1427,6 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
     letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  // ── Dock state badge ──
-  dockStateBadge: {
-    fontSize: TypographyV2.bodyStrong.size,
-    lineHeight: TypographyV2.bodyStrong.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.bodyStrong.letterSpacing,
-  },
-  // ── Discovery ──
-  recommendationSection: {
-    marginTop: Space.lg,
   },
   // ── Related Assets rail ──
   relatedAssetsSection: {

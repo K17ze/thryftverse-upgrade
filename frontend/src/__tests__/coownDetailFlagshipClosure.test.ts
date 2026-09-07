@@ -147,17 +147,19 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
 
   // ── §7 Holder action priority ──
   describe('holder action priority', () => {
+    const dockSrc = readComponent('coown/asset-detail/AssetDetailDock.tsx');
+
     it('holder primary action is "Sell"', () => {
       // The holder branch should have label: 'Sell' as primary
-      expect(src).toMatch(/isHolder[\s\S]*?label: 'Sell'[\s\S]*?handleTradePress\('sell'\)/);
+      expect(dockSrc).toMatch(/isSellPrimary[\s\S]*?label: 'Sell'[\s\S]*?onTradePress\('sell'\)/);
     });
 
     it('holder secondary action is "Buy more"', () => {
-      expect(src).toContain("'Buy more'");
+      expect(dockSrc).toContain("'Buy more'");
     });
 
     it('non-holder primary action is "Buy units"', () => {
-      expect(src).toContain("'Buy units'");
+      expect(dockSrc).toContain("'Buy units'");
     });
   });
 
@@ -193,8 +195,16 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
       expect(src).not.toContain('railSections.map');
     });
 
-    it('retains one Seen in Looks rail', () => {
-      expect(src).toContain('seenInLooksSection');
+    it('does not render generic product RecommendationRail (Co-Own mismatch)', () => {
+      // The generic RecommendationRail renders portrait listing cards
+      // and reason pills inconsistent with Co-Own assets. The Co-Own
+      // asset detail screen uses the hand-built "More from {issuer}"
+      // rail instead.
+      expect(src).not.toContain('RecommendationRail');
+    });
+
+    it('retains the Co-Own-specific related assets rail', () => {
+      expect(src).toContain('relatedAssets');
     });
   });
 
@@ -230,24 +240,25 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
 
   // ── §12 Dock cleanup (spec 09 upgrade) ──
   describe('dock cleanup', () => {
+    const dockSrc = readComponent('coown/asset-detail/AssetDetailDock.tsx');
+
     it('does not show thumbnail in dock (avoids ecommerce cart look)', () => {
       // Per spec 09: avoid putting a thumbnail into dock if it makes the
       // dock look like an ecommerce cart when the asset hero is already clear.
       // The thumbnailUri prop should not be passed in the tradable dock.
-      // Match the actual JSX usage (starts with <CommerceDetailStateDock),
-      // not the import or type reference.
-      const dockMatch = src.match(/<CommerceDetailStateDock[\s\S]*?label: 'Sell'/);
+      const dockMatch = dockSrc.match(/<CommerceDetailStateDock[\s\S]*?label: 'Sell'/);
       expect(dockMatch).toBeTruthy();
       expect(dockMatch![0]).not.toContain('thumbnailUri');
     });
 
-    it('does not show redundant price in dock when price is above', () => {
-      // Per spec 09: do not show redundant value if same price is
-      // immediately above. The tradable dock should not pass value=.
-      const dockMatch = src.match(/<CommerceDetailStateDock[\s\S]*?label: 'Sell'/);
+    it('passes current price into the default dock variant', () => {
+      // The dock stays visible while scrolling — the hero price scrolls
+      // away. The dock should show the dominant price so the user always
+      // sees the actionable value next to the Buy/Sell buttons.
+      const dockMatch = dockSrc.match(/<CommerceDetailStateDock[\s\S]*?label: 'Sell'/);
       expect(dockMatch).toBeTruthy();
-      expect(dockMatch![0]).not.toContain('value={');
-      expect(dockMatch![0]).not.toContain('valueLabel=');
+      expect(dockMatch![0]).toContain('value={');
+      expect(dockMatch![0]).toContain('valueLabel=');
     });
   });
 });

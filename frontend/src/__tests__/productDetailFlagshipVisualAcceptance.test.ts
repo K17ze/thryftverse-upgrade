@@ -52,7 +52,14 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
       });
 
       it(`${screen} imports CommerceDetailStateDock`, () => {
-        expect(readScreen(screen)).toContain('CommerceDetailStateDock');
+        // AssetDetailScreen was refactored: the dock now lives in
+        // AssetDetailDock.tsx, which imports CommerceDetailStateDock.
+        if (screen === 'AssetDetailScreen.tsx') {
+          const dock = read(resolve(COMPONENTS, 'coown/asset-detail/AssetDetailDock.tsx'));
+          expect(dock).toContain('CommerceDetailStateDock');
+        } else {
+          expect(readScreen(screen)).toContain('CommerceDetailStateDock');
+        }
       });
 
       it(`${screen} imports CommerceDetailSection`, () => {

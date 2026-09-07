@@ -10,6 +10,9 @@ export type { AssetMarketSectionProps } from './AssetMarketSection';
 export { AssetOwnershipSection } from './AssetOwnershipSection';
 export type { AssetOwnershipSectionProps } from './AssetOwnershipSection';
 
+export { AssetDetailDock } from './AssetDetailDock';
+export type { AssetDetailDockProps } from './AssetDetailDock';
+
 export {
   deriveLifecycleState,
   type AssetLifecycleState,
