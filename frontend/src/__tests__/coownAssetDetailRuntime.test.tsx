@@ -323,7 +323,6 @@ function renderMarket(asset: MarketCoOwnAsset, extraProps: Record<string, unknow
     depthStatusLabel: 'Live depth',
     reconciliationActive: false,
     isOffline: false,
-    onOpenSupply: noop,
     onOpenPriceAlert: noop,
     onSelectOrderBookLevel: noop,
     lifecycleState: 'secondaryTrading',

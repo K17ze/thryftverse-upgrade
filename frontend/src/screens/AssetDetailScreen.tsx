@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { haptics } from '../utils/haptics';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Reanimated, {
   useSharedValue,
@@ -22,7 +22,6 @@ import {
   fetchCoOwnDistributions,
   fetchCoOwnAssetCorporateActions,
   fetchMyCoOwnAssetOrders,
-  listUserMarketHistory,
   cancelCoOwnOrder,
   listCoOwnAssets,
   type CoOwnDistribution,
@@ -202,6 +201,17 @@ export default function AssetDetailScreen() {
   const [dataLoadedAt, setDataLoadedAt] = React.useState<number | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
 
+  // Refresh open orders when the screen regains focus (e.g. returning from
+  // TradeConfirm → CoOwnOrderHistory → back). Without this, the local
+  // yourOpenOrders state can be stale after a trade because it is not
+  // backed by React Query and the effect dependencies don't change on
+  // navigation focus.
+  useFocusEffect(
+    React.useCallback(() => {
+      setRefreshKey((k) => k + 1);
+    }, [])
+  );
+
   // The order book is a snapshot-plus-delta stream. The hook resynchronises
   // after sequence gaps, reconnects, and foreground returns; the detail page
   // consumes one authoritative stream instead of maintaining a second poller.
@@ -344,7 +354,10 @@ export default function AssetDetailScreen() {
           channel: 'co-own',
           action: o.side === 'buy' ? 'buy-units' : 'sell-units',
           referenceId: assetId,
-          amountGbp: o.totalGbp,
+          // Gross notional — unitPriceGbp * units. totalGbp is side-dependent
+          // (cost for buys, net proceeds for sells) and is 0 for new open
+          // orders, so it must not be used as the uniform amount field.
+          amountGbp: o.unitPriceGbp * o.units,
           units: o.units,
           filledUnits: o.filledUnits ?? null,
           remainingUnits: o.remainingUnits ?? null,
@@ -439,8 +452,11 @@ export default function AssetDetailScreen() {
           return next;
         });
         // Invalidate cached order book / holdings so returning views show
-        // the updated state after the cancellation.
+        // the updated state after the cancellation. Also explicitly refetch
+        // the streaming order book — the stream manages its own snapshot
+        // state and does not observe React Query invalidations.
         invalidateCoOwnAsset(assetId, currentUser.id);
+        void refetchOrderBook();
         // Refresh the badge state
         setRefreshKey((k) => k + 1);
       })
@@ -456,7 +472,7 @@ export default function AssetDetailScreen() {
         // Re-fetch to restore the removed order
         setRefreshKey((k) => k + 1);
       });
-  }, [assetId, currentUser?.id, show, yourOpenOrders, orderBook, invalidateCoOwnAsset]);
+  }, [assetId, currentUser?.id, show, yourOpenOrders, orderBook, invalidateCoOwnAsset, refetchOrderBook]);
 
   // Pull-to-refresh — reloads asset, order book, and holdings in parallel.
   // Bumping refreshKey also re-runs the distributions, corporate-actions,
@@ -1143,7 +1159,6 @@ export default function AssetDetailScreen() {
             marketDataStale={dataStale}
             marketDataAgeLabel={dataStaleAgeLabel}
             isOffline={isOffline}
-            onOpenSupply={() => openSheet('supply')}
             onOpenPriceAlert={openPriceAlert}
             onSelectOrderBookLevel={handleSelectOrderBookLevel}
             lifecycleState={lifecycleState}

@@ -144,6 +144,14 @@ export function CommerceDetailTransactionSurface({
           {primaryContent}
           {headlineAside ? <View style={styles.auctionHeadlineAside}>{headlineAside}</View> : secondaryContent}
         </View>
+      ) : family === 'co_own' && headlineAside ? (
+        <>
+          <View style={styles.coOwnHeadline}>
+            {primaryContent}
+            <View style={styles.coOwnHeadlineAside}>{headlineAside}</View>
+          </View>
+          {secondaryContent}
+        </>
       ) : (
         <>
           {primaryContent}
@@ -230,6 +238,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'flex-end',
     paddingBottom: Space.xs },
+  // Co-Own headline: price on the left, market-state pill on the right.
+  coOwnHeadline: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Space.sm },
+  coOwnHeadlineAside: {
+    flexShrink: 0,
+    alignItems: 'flex-end' },
   secondaryRow: {
     flexDirection: 'row',
     alignItems: 'baseline',

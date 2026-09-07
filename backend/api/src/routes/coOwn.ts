@@ -2384,6 +2384,7 @@ app.get('/co-own/assets/:assetId/my-orders', async (request, reply) => {
     side: 'buy' | 'sell';
     order_type: CoOwnOrderType;
     limit_price_gbp: number | string | null;
+    protection_price_gbp: number | string | null;
     units: number;
     remaining_units: number;
     filled_units: number;
@@ -2400,6 +2401,7 @@ app.get('/co-own/assets/:assetId/my-orders', async (request, reply) => {
         side,
         order_type,
         limit_price_gbp,
+        protection_price_gbp,
         units,
         remaining_units,
         filled_units,
@@ -2407,13 +2409,13 @@ app.get('/co-own/assets/:assetId/my-orders', async (request, reply) => {
         fee_gbp,
         total_gbp,
         status,
-        created_at,
-        updated_at
+        created_at::text,
+        updated_at::text
       FROM coOwn_orders
       WHERE asset_id = $1
         AND user_id = $2
         AND status IN ('open', 'partially_filled')
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
       LIMIT $3
     `,
     [assetId, userId, limit]
@@ -2427,6 +2429,7 @@ app.get('/co-own/assets/:assetId/my-orders', async (request, reply) => {
       side: row.side,
       orderType: row.order_type,
       limitPriceGbp: row.limit_price_gbp === null ? null : Number(row.limit_price_gbp),
+      protectionPriceGbp: row.protection_price_gbp === null ? null : Number(row.protection_price_gbp),
       units: row.units,
       remainingUnits: row.remaining_units,
       filledUnits: row.filled_units,
@@ -4332,8 +4335,12 @@ app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply
   });
   const bodySchema = z.object({ userId: z.string().min(2) });
   const { assetId, orderId } = paramsSchema.parse(request.params);
-  const { userId } = bodySchema.parse(request.body);
-  resolveAuthenticatedUserId(request, userId);
+  const bodyUserId = bodySchema.parse(request.body).userId;
+  // Use the authenticated user's ID as the source of truth for ownership.
+  // The body userId is only used to validate the request matches the
+  // authenticated identity (resolveAuthenticatedUserId throws on mismatch).
+  resolveAuthenticatedUserId(request, bodyUserId);
+  const userId = request.authUser?.userId ?? bodyUserId;
 
   const client = await db.connect();
   try {
@@ -4388,6 +4395,22 @@ app.post('/co-own/assets/:assetId/orders/:orderId/cancel', async (request, reply
       [orderId]
     );
     await client.query('COMMIT');
+
+    // Publish a book-updated event so realtime subscribers refetch the
+    // order book snapshot. Without this, the ladder stays stale after a
+    // cancel until the next snapshot poll or reconnect.
+    publishRealtimeEvent({
+      topic: `co-own.asset:${assetId}`,
+      type: 'co-own.book-updated',
+      payload: {
+        assetId,
+        orderId,
+        reason: 'cancelled',
+      },
+      seq: true,
+      version: 1,
+    });
+
     return {
       ok: true,
       order: { id: orderId, status: 'cancelled', filledUnits: order.filled_units, remainingUnits: 0 },

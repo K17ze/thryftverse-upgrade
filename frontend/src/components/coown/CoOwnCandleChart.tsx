@@ -15,8 +15,8 @@
  * See docs/coown/flagship-exchange-upgrade/04 §A5.
  */
 
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ViewStyle, useWindowDimensions, PanResponder } from 'react-native';
+import React, { useState, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, ViewStyle, useWindowDimensions, PanResponder, Pressable } from 'react-native';
 import { Canvas, Rect, Line } from '@shopify/react-native-skia';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
@@ -52,7 +52,6 @@ const CHART_HEIGHT = 140;
 const VOLUME_HEIGHT = 30;
 const CHART_PADDING = 8;
 const PRICE_AXIS_WIDTH = 52;
-const DATE_AXIS_HEIGHT = 18;
 
 export function CoOwnCandleChart({
   candles,
@@ -70,7 +69,6 @@ export function CoOwnCandleChart({
   const [crosshairIndex, setCrosshairIndex] = useState<number | null>(null);
 
   // Compute price range across all candles
-  // Compute price range across all candles
   const { minPrice, maxPrice, maxVolume } = useMemo(() => {
     if (candles.length === 0) {
       return { minPrice: 0, maxPrice: 1, maxVolume: 1 };
@@ -86,7 +84,9 @@ export function CoOwnCandleChart({
   }, [candles]);
 
   const priceRange = maxPrice - minPrice || 1;
-  const chartH = showVolume ? CHART_HEIGHT - VOLUME_HEIGHT : CHART_HEIGHT;
+  // chartH is the candle area height — always reserve the volume band
+  // so the price scale is stable whether or not volume is rendered.
+  const chartH = CHART_HEIGHT - VOLUME_HEIGHT;
   const chartW = CHART_WIDTH - PRICE_AXIS_WIDTH - CHART_PADDING * 2;
   // Keep every requested range visible inside the viewport. The previous
   // fixed 8pt slot clipped 3M histories (90 candles) after the first 52.
@@ -99,21 +99,32 @@ export function CoOwnCandleChart({
     return CHART_PADDING + i * candleSlot;
   };
 
-  // Drag/pan inspection: track finger movement across the chart to scrub
-  // through candles. This replaces the static tap-only inspection with a
-  // continuous crosshair that follows the touch point.
+  // Refs for PanResponder callbacks to avoid stale closures when candles
+  // change identity but not length/slot (e.g. range switch with same count).
+  const candlesRef = useRef(candles);
+  candlesRef.current = candles;
+  const candleSlotRef = useRef(candleSlot);
+  candleSlotRef.current = candleSlot;
+
   const updateCrosshairFromTouch = (locationX: number) => {
-    if (candles.length === 0) return;
+    const currentCandles = candlesRef.current;
+    if (currentCandles.length === 0) return;
     const x = locationX - CHART_PADDING;
-    const index = Math.max(0, Math.min(candles.length - 1, Math.round(x / candleSlot)));
+    const index = Math.max(0, Math.min(currentCandles.length - 1, Math.round(x / candleSlotRef.current)));
     setCrosshairIndex(index);
   };
 
+  // Drag/pan inspection: only claim the responder for horizontal drags so
+  // the parent ScrollView retains vertical scroll. Tap-to-inspect is handled
+  // by a Pressable on the overlay.
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => candles.length > 0,
-        onMoveShouldSetPanResponder: () => candles.length > 0,
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_evt, gestureState) =>
+          candlesRef.current.length > 0 &&
+          Math.abs(gestureState.dx) > 6 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
         onPanResponderGrant: (evt) => {
           updateCrosshairFromTouch(evt.nativeEvent.locationX);
           haptics.selection();
@@ -127,7 +138,7 @@ export function CoOwnCandleChart({
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [candles.length, candleSlot]
+    []
   );
 
   // Price axis labels — show 3 price levels (max, mid, min) as compact text.
@@ -153,9 +164,10 @@ export function CoOwnCandleChart({
     };
   }, [candles, range]);
 
-  // Y position for a price
+  // Y position for a price — maps [minPrice, maxPrice] to [chartH - PAD, PAD]
   const yForPrice = (price: number) => {
-    return CHART_PADDING + chartH - ((price - minPrice) / priceRange) * (chartH - CHART_PADDING * 2);
+    const usableH = chartH - CHART_PADDING * 2;
+    return CHART_PADDING + usableH * (1 - (price - minPrice) / priceRange);
   };
 
   // Textual summary for screen readers
@@ -229,8 +241,7 @@ export function CoOwnCandleChart({
       <View style={styles.chartWrap}>
         {/* Price axis labels (left side) */}
         {priceAxisLabels && (
-          <View style={styles.priceAxis} pointerEvents="none">
-            <Text style={[styles.priceAxisLabel, { color: colors.textMuted }]}>{priceAxisLabels.top}</Text>
+          <View style={[styles.priceAxis, { height: chartH }]} pointerEvents="none">            <Text style={[styles.priceAxisLabel, { color: colors.textMuted }]}>{priceAxisLabels.top}</Text>
             <Text style={[styles.priceAxisLabel, { color: colors.textMuted }]}>{priceAxisLabels.mid}</Text>
             <Text style={[styles.priceAxisLabel, { color: colors.textMuted }]}>{priceAxisLabels.bottom}</Text>
           </View>
@@ -238,7 +249,7 @@ export function CoOwnCandleChart({
 
         {/* Chart canvas + interaction layer */}
         <View style={styles.canvasContainer}>
-          <Canvas style={{ width: CHART_WIDTH - PRICE_AXIS_WIDTH, height: showVolume ? CHART_HEIGHT : CHART_HEIGHT - VOLUME_HEIGHT }}>
+          <Canvas style={{ width: CHART_WIDTH - PRICE_AXIS_WIDTH, height: showVolume ? CHART_HEIGHT : chartH }}>
             {/* Candles */}
             {candles.map((candle, i) => {
               const x = xForIndex(i);
@@ -297,7 +308,7 @@ export function CoOwnCandleChart({
             {crosshairIndex != null && candles[crosshairIndex] && (
               <Line
                 p1={{ x: xForIndex(crosshairIndex) + candleWidth / 2, y: 0 }}
-                p2={{ x: xForIndex(crosshairIndex) + candleWidth / 2, y: CHART_HEIGHT }}
+                p2={{ x: xForIndex(crosshairIndex) + candleWidth / 2, y: showVolume ? CHART_HEIGHT : chartH }}
                 color={colors.textMuted}
                 strokeWidth={0.5}
               />
@@ -305,13 +316,22 @@ export function CoOwnCandleChart({
           </Canvas>
           {/* Transparent interaction layer with drag/pan support.
               The pan responder lets users scrub through candles by dragging
-              their finger across the chart. */}
-          <View
+              their finger horizontally. Tap inspects the nearest candle.
+              Vertical gestures pass through to the parent ScrollView. */}
+          <Pressable
             style={StyleSheet.absoluteFill}
+            onPress={(evt) => {
+              updateCrosshairFromTouch(evt.nativeEvent.locationX);
+              haptics.selection();
+            }}
+            onLongPress={(evt) => {
+              updateCrosshairFromTouch(evt.nativeEvent.locationX);
+              haptics.selection();
+            }}
             {...panResponder.panHandlers}
             accessibilityRole="adjustable"
-            accessibilityLabel="Price chart. Drag to inspect candle values."
-            accessibilityHint="Drag your finger across the chart to see open, high, low, close and volume for each candle."
+            accessibilityLabel="Price chart. Tap or drag to inspect candle values."
+            accessibilityHint="Tap or drag your finger across the chart to see open, high, low, close and volume for each candle."
           />
         </View>
       </View>

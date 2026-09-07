@@ -37,7 +37,6 @@ export interface AssetMarketSectionProps {
   marketDataStale?: boolean;
   marketDataAgeLabel?: string;
   isOffline: boolean;
-  onOpenSupply: () => void;
   onOpenPriceAlert: () => void;
   onSelectOrderBookLevel: (side: 'bid' | 'ask', price: number) => void;
   lifecycleState: AssetLifecycleState;
@@ -269,7 +268,7 @@ export function AssetMarketSection({
           a regulated securities exchange. */}
       <View style={styles.venueMetadataRow}>
         <Text style={[styles.venueMetadataText, { color: colors.textMuted }]}>
-          Issuer-run fractional market · No public exchange session
+          Issuer-run fractional market · Not a public exchange
         </Text>
       </View>
 
