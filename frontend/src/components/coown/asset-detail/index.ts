@@ -16,6 +16,9 @@ export type { AssetDetailDockProps } from './AssetDetailDock';
 export { RelatedAssetsRail } from './RelatedAssetsRail';
 export type { RelatedAssetsRailProps } from './RelatedAssetsRail';
 
+export { AssetDetailIdentity } from './AssetDetailIdentity';
+export type { AssetDetailIdentityProps } from './AssetDetailIdentity';
+
 export {
   deriveLifecycleState,
   type AssetLifecycleState,

@@ -61,7 +61,9 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   // ── §3 Family-aware identity and transaction surface ──
   describe('family-aware components', () => {
     it('identity uses family="co_own"', () => {
-      const identityMatch = src.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
+      // Identity was extracted to AssetDetailIdentity.tsx
+      const identitySrc = readComponent('coown/asset-detail/AssetDetailIdentity.tsx');
+      const identityMatch = identitySrc.match(/<CommerceDetailIdentity[\s\S]*?\/>/);
       expect(identityMatch).toBeTruthy();
       expect(identityMatch![0]).toContain('family="co_own"');
     });

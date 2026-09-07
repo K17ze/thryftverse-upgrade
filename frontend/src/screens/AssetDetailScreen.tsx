@@ -1,8 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, RefreshControl } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { haptics } from '../utils/haptics';
 import { RouteProp, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,8 +14,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
-import { Space, Radius, FontFamily, DockConstants, Control, PressScale } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
+import { Space, DockConstants, Control, PressScale } from '../theme/designTokens';
 import {
   fetchCoOwnDistributions,
   fetchCoOwnAssetCorporateActions,
@@ -43,8 +41,6 @@ import {
 } from '../components/commerce';
 import {
   CommerceDetailHeader,
-  CommerceDetailIdentity,
-  CommerceDetailSellerRow,
   CommerceDetailMediaRail,
 } from '../components/commerce/detail';
 import { resolveCoOwnConversation } from '../utils/coOwnMessaging';
@@ -66,6 +62,7 @@ import {
   AssetMarketSection,
   AssetOwnershipSection,
   AssetDetailDock,
+  AssetDetailIdentity,
   RelatedAssetsRail,
   CoOwnSegmentNav,
   type CoOwnDetailTab,
@@ -919,146 +916,27 @@ export default function AssetDetailScreen() {
             family="co_own" for structural consistency across all
             commerce detail surfaces.
             ════════════════════════════════════════════════════════════ */}
-        <View style={[styles.collectibleIdentity, { borderBottomColor: colors.borderSubtle }]}>
-          <CommerceDetailIdentity
-            family="co_own"
-            density={isVeryCompact ? 'compact' : 'standard'}
-            eyebrow={asset.legalVehicleName ?? 'Fractional collectible'}
-            title={asset.title}
-            interestSignal={asset.holders != null && asset.holders > 0 ? `${asset.holders} holders` : undefined}
-          />
-
-          {/* Dominant price block — bold tabular numeral with 24h delta */}
-          <View style={styles.collectiblePriceRow}>
-            <Text
-              style={[styles.collectiblePriceValue, { color: colors.textPrimary }]}
-              accessibilityRole="text"
-              adjustsFontSizeToFit
-              minimumFontScale={0.82}
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {formatCoOwnIze(dominantPriceValue)}
-            </Text>
-            <Text style={[styles.collectiblePriceUnit, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-              {dominantPriceLabel === 'Last trade' && dominantPriceTimestamp
-                ? `${dominantPriceLabel} · ${dominantPriceTimestamp}`
-                : dominantPriceLabel}
-            </Text>
-            {movePct24h != null && !isInitialOffering && (
-              <View style={[
-                styles.movePill,
-                { backgroundColor: movePct24h >= 0 ? colors.coownUpSubtle : colors.coownDownSubtle },
-              ]}>
-                <Ionicons
-                  name={movePct24h >= 0 ? 'trending-up' : 'trending-down'}
-                  size={12}
-                  color={movePct24h >= 0 ? colors.coownUp : colors.coownDown}
-                />
-                <Text style={[
-                  styles.movePillText,
-                  { color: movePct24h >= 0 ? colors.coownUp : colors.coownDown },
-                ]}>
-                  {`${movePct24h >= 0 ? '+' : ''}${movePct24h.toFixed(1)}%`}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Initial offering allocation progress OR secondary market depth status */}
-          {isInitialOffering ? (
-            <View style={styles.offeringProgressBlock}>
-              <View style={[styles.progressBarTrack, { backgroundColor: colors.surfaceAlt }]}>
-                <View
-                  style={[
-                    styles.progressBarFill,
-                    {
-                      width: `${Math.min(100, Math.max(0, allocatedPct))}%`,
-                      backgroundColor: colors.brand,
-                    },
-                  ]}
-                />
-              </View>
-              <View style={styles.offeringMetaRow}>
-                <Text style={[styles.offeringMetaText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-                  {allocatedPct}% allocated · {availableUnits} units left
-                </Text>
-                {asset.safeguarded && asset.safeguardingEvidenceUrl ? (
-                  <View style={styles.protectedBadge}>
-                    <Ionicons name="shield-checkmark" size={13} color={colors.success} />
-                    <Text style={[styles.protectedBadgeText, { color: colors.success }]}>Safeguarded</Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          ) : (
-            <View style={styles.collectibleAvailabilityRow}>
-              <View style={[styles.collectibleAvailabilityDot, {
-                backgroundColor: reconciliationActive
-                  ? colors.warning
-                  : dataStale && lifecycleState === 'secondaryTrading'
-                    ? colors.warning
-                  : asset.isOpen
-                    ? colors.success
-                    : colors.textMuted,
-              }]} />
-              <Text style={[styles.collectibleAvailabilityText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
-                {reconciliationActive
-                  ? 'Orders paused'
-                  : dataStale && lifecycleState === 'secondaryTrading'
-                    ? 'Market data stale'
-                    : asset.isOpen
-                      ? 'Market open'
-                      : 'Market closed'}
-              </Text>
-              {bestBidGbp != null && bestAskGbp != null ? (
-                <Text style={[styles.collectibleSpreadText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
-                  · {formatCoOwnIze(bestBidGbp)} Bid / {formatCoOwnIze(bestAskGbp)} Ask
-                </Text>
-              ) : (
-                <Text style={[styles.collectibleSpreadText, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
-                  · {availableUnits} units available
-                </Text>
-              )}
-              {dataStale && dataStaleAgeLabel ? (
-                <Text style={[styles.collectibleStaleText, { color: colors.warning }]}>
-                  · stale {dataStaleAgeLabel}
-                </Text>
-              ) : null}
-            </View>
-          )}
-
-          {/* Issuer Trust Row — clean compact presentation */}
-          <View style={styles.collectibleIssuerWrap}>
-            <CommerceDetailSellerRow
-              roleLabel="Issuer"
-              institutional
-              variant="compact"
-              avatarUri={asset.issuer?.avatar ?? undefined}
-              name={issuerUsername}
-              verified={asset.issuerVerification?.tier === 'id' || asset.issuerVerification?.tier === 'seller'}
-              ratingLine={
-                asset.issuerVerification?.tier === 'seller'
-                  ? 'Trusted Seller'
-                  : asset.issuerVerification?.tier === 'id'
-                    ? 'ID Verified'
-                    : asset.issuerVerification?.tier === 'email'
-                      ? 'Email verified'
-                      : undefined
-              }
-              locationLine={issuerTrust?.location ?? asset.issuer?.location ?? undefined}
-              statsLine={
-                issuerTrust
-                  ? [
-                      issuerTrust.completedSales != null ? `${issuerTrust.completedSales} sales` : null,
-                      issuerTrust.rating != null ? `${issuerTrust.rating.toFixed(1)}★` : null,
-                    ].filter(Boolean).join(' · ') || undefined
-                  : undefined
-              }
-              onPress={() => openProfile(navigation, asset.issuerId, currentUser?.id)}
-            />
-          </View>
-        </View>
+        <AssetDetailIdentity
+          asset={asset}
+          isVeryCompact={isVeryCompact}
+          dominantPriceValue={dominantPriceValue}
+          dominantPriceLabel={dominantPriceLabel}
+          dominantPriceTimestamp={dominantPriceTimestamp}
+          movePct24h={movePct24h}
+          isInitialOffering={isInitialOffering}
+          allocatedPct={allocatedPct}
+          availableUnits={availableUnits}
+          reconciliationActive={reconciliationActive}
+          dataStale={dataStale}
+          dataStaleAgeLabel={dataStaleAgeLabel}
+          lifecycleState={lifecycleState}
+          bestBidGbp={bestBidGbp}
+          bestAskGbp={bestAskGbp}
+          issuerUsername={issuerUsername}
+          issuerTrust={issuerTrust}
+          currentUserId={currentUser?.id}
+          onPressIssuer={() => openProfile(navigation, asset.issuerId, currentUser?.id)}
+        />
 
         {/* ════════════════════════════════════════════════════════════
             Viewer-aware composition (spec P1-B §5)
@@ -1258,115 +1136,5 @@ export default function AssetDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  // ── Collectible-first identity ──
-  // No card surface — clean canvas with a hairline separator below.
-  collectibleIdentity: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.lg,
-    paddingBottom: Space.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  collectibleIssuerWrap: {
-    marginTop: Space.md,
-  },
-  collectiblePriceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    marginTop: Space.md,
-    flexWrap: 'wrap',
-  },
-  collectiblePriceValue: {
-    fontSize: TypographyV2.priceHero.size,
-    lineHeight: TypographyV2.priceHero.lineHeight,
-    fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.priceHero.letterSpacing,
-    fontVariant: ['tabular-nums'] as ['tabular-nums'],
-  },
-  collectiblePriceUnit: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  movePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    marginLeft: Space.xs,
-  },
-  movePillText: {
-    fontSize: TypographyV2.caption.size,
-    fontFamily: FontFamily.bold,
-    letterSpacing: TypographyV2.caption.letterSpacing,
-  },
-  offeringProgressBlock: {
-    marginTop: Space.sm,
-    gap: Space.xs,
-  },
-  progressBarTrack: {
-    height: 4,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: Radius.full,
-  },
-  offeringMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 2,
-  },
-  offeringMetaText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  protectedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  protectedBadgeText: {
-    fontSize: TypographyV2.caption.size,
-    fontFamily: FontFamily.semibold,
-  },
-  collectibleAvailabilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    flexWrap: 'wrap',
-    marginTop: Space.xs,
-  },
-  collectibleAvailabilityText: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: FontFamily.regular,
-    letterSpacing: TypographyV2.body.letterSpacing,
-  },
-  collectibleSpreadText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  collectibleAvailabilityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: Radius.full,
-  },
-  collectibleStaleText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing,
   },
 });

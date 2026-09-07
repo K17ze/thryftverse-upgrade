@@ -90,7 +90,14 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
         // SellerInfoCard is the enriched canonical seller surface for
         // ItemDetailScreen; CommerceDetailSellerRow remains the slim row
         // for Auction/Asset detail. Either is acceptable.
-        expect(src).toMatch(/CommerceDetailSellerRow|SellerInfoCard/);
+        // AssetDetailScreen was refactored: CommerceDetailSellerRow now
+        // lives in AssetDetailIdentity.tsx.
+        if (screen === 'AssetDetailScreen.tsx') {
+          const identity = read(resolve(COMPONENTS, 'coown/asset-detail/AssetDetailIdentity.tsx'));
+          expect(identity).toMatch(/CommerceDetailSellerRow|SellerInfoCard/);
+        } else {
+          expect(src).toMatch(/CommerceDetailSellerRow|SellerInfoCard/);
+        }
       });
     }
 

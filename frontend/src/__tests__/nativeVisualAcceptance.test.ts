@@ -92,7 +92,10 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
     });
 
     it('asset screen uses Ionicons consistently', () => {
-      expect(assetScreen).toContain('Ionicons');
+      // Ionicons usage was moved to extracted components (AssetDetailIdentity,
+      // AssetDetailDock, etc.). Check the component tree, not just the screen.
+      const identitySrc = readComponent('coown/asset-detail/AssetDetailIdentity.tsx');
+      expect(identitySrc).toContain('Ionicons');
       expect(assetScreen).not.toContain('MaterialIcons');
       expect(assetScreen).not.toContain('FontAwesome');
     });
