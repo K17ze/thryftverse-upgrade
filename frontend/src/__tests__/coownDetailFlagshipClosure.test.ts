@@ -19,6 +19,7 @@ function readSection(name: string): string {
 
 describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   const src = readScreen('AssetDetailScreen.tsx');
+  const modalsSrc = readComponent('coown/asset-detail/AssetDetailModals.tsx');
   const ownershipPanel = readComponent('coown/CoOwnOwnershipPanel.tsx');
 
   // ── §1 Replace three-column fundamentals with stacked layout ──
@@ -81,14 +82,14 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
 
     it('does not pass empty candles array to CoOwnCandleChart', () => {
       // The old code passed candles={[]}. The new code gates on
-      // hasChartCandles (ranged history with embedded-candle fallback).
+      // hasChartCandles (ranged history, with embedded data valid only for 1W).
       expect(src).not.toContain('candles={[]}');
     });
 
     it('chart renders only when ranged/embedded candles exist', () => {
       const overviewSection = readSection('AssetOverviewSection.tsx');
       expect(overviewSection).toMatch(/hasChartCandles \? \(/);
-      expect(overviewSection).toContain('historyCandles ?? candleData');
+      expect(overviewSection).toContain("candleRange === '1W' ? candleData : []");
     });
   });
 
@@ -117,14 +118,14 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
     it('does not infer treasury from available units', () => {
       // The old code set treasury: availableUnits. The new code passes
       // null for inferred values.
-      expect(src).not.toContain('treasury: availableUnits');
-      expect(src).toContain('treasury: null');
+      expect(modalsSrc).not.toContain('treasury: availableUnits');
+      expect(modalsSrc).toContain('treasury: null');
     });
 
     it('does not infer authorised, issued, publicFloat', () => {
-      expect(src).toContain('authorised: null');
-      expect(src).toContain('issued: null');
-      expect(src).toContain('publicFloat: null');
+      expect(modalsSrc).toContain('authorised: null');
+      expect(modalsSrc).toContain('issued: null');
+      expect(modalsSrc).toContain('publicFloat: null');
     });
 
     it('supply summary uses "Available · allocated · holders" in due diligence', () => {
@@ -173,16 +174,16 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
       expect(overviewSection).not.toContain('label="View risk disclosure"');
     });
 
-    it('does not render CoOwnRiskDisclosure inline in the Asset dossier section', () => {
+    it('does not render CoOwnRiskDisclosure inline in the Due diligence & fees section', () => {
       const overviewSection = readSection('AssetOverviewSection.tsx');
-      const ddSection = overviewSection.match(/<CommerceDetailSection[\s\S]*?label="Asset dossier"[\s\S]*?<\/CommerceDetailSection>/);
+      const ddSection = overviewSection.match(/<CommerceDetailSection[\s\S]*?label="Due diligence & fees"[\s\S]*?<\/CommerceDetailSection>/);
       expect(ddSection).toBeTruthy();
       expect(ddSection![0]).not.toContain('<CoOwnRiskDisclosure');
     });
 
     it('risk disclosure opens in a BottomSheet', () => {
-      expect(src).toContain('riskDisclosureSheetHeader');
-      expect(src).toContain('BottomSheet');
+      expect(modalsSrc).toContain('riskDisclosureSheetHeader');
+      expect(modalsSrc).toContain('BottomSheet');
     });
   });
 

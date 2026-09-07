@@ -139,10 +139,6 @@ export function AssetOverviewSection({
   if (asset.rights?.version) trustFacts.push(`Rights v${asset.rights.version}`);
   if (asset.appraisalValueGbp != null) trustFacts.push('Appraised');
   const hasProvenanceMeta = Boolean(asset.conditionGrade || asset.custodianName || asset.custodianLocation);
-  const legalVehicleLabel = asset.legalVehicleName
-    ?? (asset.legalVehicleType && asset.legalVehicleType !== 'none'
-      ? asset.legalVehicleType.replace('_', ' ').toUpperCase()
-      : null);
 
   return (
     <View style={styles.container}>
@@ -224,18 +220,20 @@ export function AssetOverviewSection({
         ) : null}
       </CommerceDetailSection>
 
-      {/* ── 2. Valuation Benchmark & Price Chart ── */}
-      <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Valuation Benchmark</Text>
-            <Text style={[styles.subHeading, { color: colors.textSecondary }]}>
+      {/* ── 2. Valuation & Price Chart — flat on canvas, no card wrapper ──
+          Stock-broker pattern: chart sits directly on the surface with
+          hairline-separated metric rows below. No filled card container. */}
+      <View style={styles.chartBlock}>
+        <View style={styles.chartHeaderRow}>
+          <View style={styles.chartHeaderLeft}>
+            <Text style={[styles.chartHeading, { color: colors.textPrimary }]}>Price history</Text>
+            <Text style={[styles.chartSubHeading, { color: colors.textSecondary }]} numberOfLines={1}>
               {referenceVsAppraisalPct != null
-                ? `Reference vs appraisal · ${Math.abs(referenceVsAppraisalPct).toFixed(1)}% ${referenceVsAppraisalPct >= 0 ? 'premium' : 'discount'}${historyLoading ? ' · loading…' : ''}`
+                ? `${Math.abs(referenceVsAppraisalPct).toFixed(1)}% ${referenceVsAppraisalPct >= 0 ? 'premium' : 'discount'} to appraisal${historyLoading ? ' · loading…' : ''}`
               : historyLoading
                   ? 'Loading price history…'
-                  : 'Reference vs appraisal benchmark'}
-              {marketDataStale ? ` · market data stale${marketDataAgeLabel ? ` · ${marketDataAgeLabel}` : ''}` : ''}
+                  : 'Reference vs appraisal'}
+              {marketDataStale ? ` · stale${marketDataAgeLabel ? ` · ${marketDataAgeLabel}` : ''}` : ''}
             </Text>
           </View>
           {hasChartCandles && volumeAvailable && onToggleVolume ? (
@@ -287,15 +285,16 @@ export function AssetOverviewSection({
           </View>
         )}
 
+        {/* Flat appraisal metrics — hairline-separated, no card fill */}
         <View style={[styles.valuationDetailRow, { borderTopColor: colors.borderSubtle }]}>
           <View style={styles.valuationCell}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Appraised Per Unit</Text>
+            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Appraised / unit</Text>
             <Text style={[styles.valuationBigNum, { color: colors.textPrimary }]}>
               {appraisedValuePerUnitGbp != null ? formatCoOwnIze(appraisedValuePerUnitGbp) : '—'}
             </Text>
           </View>
           <View style={styles.valuationCell}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Independent Valuer</Text>
+            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Valuer</Text>
             {asset.appraisalValuer ? (
               <Text style={[styles.metaVal, { color: colors.textPrimary }]} numberOfLines={1}>
                 {asset.appraisalValuer}
@@ -305,7 +304,7 @@ export function AssetOverviewSection({
             )}
           </View>
           <View style={styles.valuationCell}>
-            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Valuation Date</Text>
+            <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Valuation date</Text>
             <Text style={[styles.metaVal, { color: appraisalDateLabel ? colors.textPrimary : colors.textMuted }]}>
               {appraisalDateLabel ?? 'Not published'}
             </Text>
@@ -313,70 +312,33 @@ export function AssetOverviewSection({
         </View>
       </View>
 
-      {/* ── 3. Four-Pillar Evidence Summary (Asset Dossier) ── */}
-      <CommerceDetailSection label="Asset dossier">
-        <View style={styles.evidenceGrid}>
-          {/* Pillar 1: Authenticity — icon carries verification state */}
-          {asset.authenticityStatus ? (
-            <View style={styles.evidenceItem}>
-              <View style={styles.evidenceTop}>
-                <Ionicons
-                  name={asset.authenticityStatus === 'verified' ? 'checkmark-circle' : 'time-outline'}
-                  size={18}
-                  color={asset.authenticityStatus === 'verified' ? colors.success : colors.warning}
-                />
-                <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>Authenticity</Text>
-              </View>
-              <Text style={[styles.evidenceSub, { color: colors.textSecondary }]} numberOfLines={2}>
-                {asset.authenticityStatus === 'verified'
-                  ? (asset.authenticityMethod ?? 'Verified')
-                  : asset.authenticityStatus === 'pending' ? 'Verification pending' : 'Not verified'}
-              </Text>
-            </View>
-          ) : null}
+      {/* ── 3. Due Diligence & Fees — grouped section ──
+          Replaces the 4-pillar evidence grid and the separate operating
+          expenses section. Compact tappable rows link to the full dossier
+          and risk sheet; fees are flat metric rows. */}
+      <CommerceDetailSection label="Due diligence & fees">
+        {/* Flat trust-facts line — same data as the old 4-pillar grid, but
+            as a single tappable row instead of four equal-weight cards */}
+        {trustFacts.length > 0 ? (
+          <Pressable
+            onPress={onOpenDiligence}
+            hitSlop={4}
+            style={({ pressed }) => [styles.trustFactualLine, { borderTopColor: colors.border }, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel={`Trust summary: ${trustFacts.join(', ')}. Tap to view due diligence.`}
+          >
+            <Text
+              style={[styles.trustFactualText, { color: colors.textSecondary }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
+            >
+              {trustFacts.join(' · ')}
+            </Text>
+            <Ionicons name="chevron-forward" size={12} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
 
-          {/* Pillar 2: Custody & Vault */}
-          {(asset.custodianName || asset.custodianLocation) ? (
-            <View style={styles.evidenceItem}>
-              <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>Custody</Text>
-              <Text style={[styles.evidenceSub, { color: colors.textSecondary }]} numberOfLines={2}>
-                {[asset.custodianName, asset.custodianLocation].filter(Boolean).join(' · ')}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Pillar 3: Insurance — icon carries coverage state */}
-          {asset.custodyInsured != null ? (
-            <View style={styles.evidenceItem}>
-              <View style={styles.evidenceTop}>
-                <Ionicons
-                  name={asset.custodyInsured ? 'lock-closed' : 'alert-circle-outline'}
-                  size={18}
-                  color={asset.custodyInsured ? colors.success : colors.warning}
-                />
-                <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>Insurance</Text>
-              </View>
-              <Text style={[styles.evidenceSub, { color: colors.textSecondary }]} numberOfLines={2}>
-                {asset.custodyInsured
-                  ? (asset.custodyInsurer ? `Insured · ${asset.custodyInsurer}` : 'Insured custody')
-                  : 'No insured custody on record'}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Pillar 4: Legal Structure */}
-          {(legalVehicleLabel || asset.rights?.version != null) ? (
-            <View style={styles.evidenceItem}>
-              <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>Legal structure</Text>
-              <Text style={[styles.evidenceSub, { color: colors.textSecondary }]} numberOfLines={2}>
-                {[legalVehicleLabel, asset.rights?.version != null ? `Rights v${asset.rights.version}` : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
+        {/* Document chips — only when documents exist */}
         {hasDocuments && (
           <View style={[styles.documentsStrip, { borderTopColor: colors.border }]}>
             {dossierDocuments.map((doc, idx) => (
@@ -394,10 +356,8 @@ export function AssetOverviewSection({
             ))}
           </View>
         )}
-      </CommerceDetailSection>
 
-      {/* ── 4. Operating Expenses & Risk Disclosures ── */}
-      <CommerceDetailSection label="Operating expenses">
+        {/* Fee rows — flat, no separate section */}
         <View style={styles.feeBreakdown}>
           {asset.tradingFeeRate != null ? (
             <CommerceDetailMetricRow
@@ -430,22 +390,25 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
     gap: Space.lg,
   },
-  cardSurface: {
-    borderRadius: Radius.md,
-    padding: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
+  chartBlock: {
+    // Flat on canvas — no card fill, no border, no radius.
+    // Hairline separators define structure, not containers.
   },
-  sectionHeaderRow: {
+  chartHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: Space.xs,
   },
-  sectionHeading: {
+  chartHeaderLeft: {
+    flex: 1,
+    marginRight: Space.sm,
+  },
+  chartHeading: {
     fontSize: TypographyV2.sectionTitle.size,
     fontFamily: FontFamily.bold,
   },
-  subHeading: {
+  chartSubHeading: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     marginTop: 2,
@@ -545,31 +508,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.bold,
     fontVariant: ['tabular-nums'],
-  },
-  evidenceGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm,
-  },
-  // Transparent pillar cells — no per-pillar card fill. The 2x2 grid reads
-  // through typography and spacing; icons appear only for state.
-  evidenceItem: {
-    width: '48.5%',
-    gap: 4,
-  },
-  evidenceTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  evidenceLabel: {
-    fontSize: TypographyV2.captionElevated.size,
-    fontFamily: FontFamily.semibold,
-  },
-  evidenceSub: {
-    fontSize: 11,
-    fontFamily: FontFamily.regular,
-    lineHeight: 14,
   },
   documentsStrip: {
     flexDirection: 'row',

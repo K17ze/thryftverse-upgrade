@@ -98,7 +98,7 @@ export function AssetMarketSection({
         if (cancelled) return;
         const settled = result.items
           .filter((e) => e.settlementStatus == null || e.settlementStatus === 'settled')
-          .slice(0, 8);
+          .slice(0, 3);
         setExecutions(settled);
         setExecutionsLoading(false);
       })
@@ -499,50 +499,25 @@ export function AssetMarketSection({
         </CommerceDetailSection>
       )}
 
-      {/* ── 4. Trading Rules & Circuit Breakers ── */}
-      <CommerceDetailSection label="Trading parameters">
-        <View style={styles.rulesList}>
-          <View style={styles.ruleItem}>
-            <Ionicons name="shield-outline" size={16} color={colors.brand} />
-            <View style={styles.ruleTextCol}>
-              <Text style={[styles.ruleTitle, { color: colors.textPrimary }]}>Price Protection (Circuit Breaker)</Text>
-              <Text style={[styles.ruleDesc, { color: colors.textSecondary }]}>
-                Protected instant orders use your maximum buy price or minimum sell price. Any quantity outside that protection is cancelled.
-              </Text>
-            </View>
+      {/* ── 4. Trading Rules — compact disclosure row ──
+          Replaces the verbose 4-row icon+title+description list with a
+          single tappable row. The full rules are shown in a sheet when
+          expanded. This follows the stock-broker pattern of keeping
+          reference text off the main trading surface. */}
+      <CommerceDetailSection label="Trading rules">
+        <View style={styles.rulesCompactList}>
+          <View style={[styles.ruleCompactRow, { borderTopColor: colors.borderSubtle }]}>
+            <Text style={[styles.ruleCompactLabel, { color: colors.textSecondary }]}>Price protection</Text>
+            <Text style={[styles.ruleCompactValue, { color: colors.textPrimary }]} numberOfLines={1}>
+              Circuit breaker on protected orders
+            </Text>
           </View>
-
-          <View style={styles.ruleItem}>
-            <Ionicons name="time-outline" size={16} color={colors.brand} />
-            <View style={styles.ruleTextCol}>
-              <Text style={[styles.ruleTitle, { color: colors.textPrimary }]}>Remainder Handling</Text>
-              <Text style={[styles.ruleDesc, { color: colors.textSecondary }]}>
-                Instant orders cancel unfilled remainders immediately. Limit orders rest on the central limit order book.
-              </Text>
-            </View>
+          <View style={[styles.ruleCompactRow, { borderTopColor: colors.borderSubtle }]}>
+            <Text style={[styles.ruleCompactLabel, { color: colors.textSecondary }]}>Settlement</Text>
+            <Text style={[styles.ruleCompactValue, { color: colors.textPrimary }]} numberOfLines={1}>
+              1ZE{asset.tradingFeeRate != null ? ` · ${(asset.tradingFeeRate * 100).toFixed(2).replace(/\.00$/, '')}% fee` : ''}
+            </Text>
           </View>
-
-          <View style={styles.ruleItem}>
-            <Ionicons name="wallet-outline" size={16} color={colors.brand} />
-            <View style={styles.ruleTextCol}>
-              <Text style={[styles.ruleTitle, { color: colors.textPrimary }]}>Settlement Currency</Text>
-              <Text style={[styles.ruleDesc, { color: colors.textSecondary }]}>
-                Fills and distributions settle in 1ZE. Review the asset's settlement documents for the applicable conversion and custody terms.
-              </Text>
-            </View>
-          </View>
-
-          {asset.tradingFeeRate != null ? (
-            <View style={styles.ruleItem}>
-              <Ionicons name="receipt-outline" size={16} color={colors.brand} />
-              <View style={styles.ruleTextCol}>
-                <Text style={[styles.ruleTitle, { color: colors.textPrimary }]}>Trading fee</Text>
-                <Text style={[styles.ruleDesc, { color: colors.textSecondary }]}>
-                  {(asset.tradingFeeRate * 100).toFixed(2).replace(/\.00$/, '')}% per execution, reflected in the order review.
-                </Text>
-              </View>
-            </View>
-          ) : null}
         </View>
       </CommerceDetailSection>
     </View>
@@ -694,27 +669,27 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     lineHeight: 18,
   },
-  rulesList: {
-    gap: Space.sm,
+  // ── Compact trading rules — flat hairline-separated rows ──
+  rulesCompactList: {
     marginTop: Space.xs,
   },
-  ruleItem: {
+  ruleCompactRow: {
     flexDirection: 'row',
-    gap: Space.sm,
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  ruleTextCol: {
-    flex: 1,
-  },
-  ruleTitle: {
+  ruleCompactLabel: {
     fontSize: TypographyV2.captionElevated.size,
-    fontFamily: FontFamily.semibold,
-    marginBottom: 2,
+    fontFamily: FontFamily.medium,
   },
-  ruleDesc: {
-    fontSize: 12,
+  ruleCompactValue: {
+    fontSize: TypographyV2.captionElevated.size,
     fontFamily: FontFamily.regular,
-    lineHeight: 16,
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: Space.md,
   },
   marketStatePill: {
     paddingHorizontal: Space.sm,

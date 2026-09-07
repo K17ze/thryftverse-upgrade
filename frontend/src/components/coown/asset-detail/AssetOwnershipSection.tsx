@@ -118,32 +118,32 @@ export function AssetOwnershipSection({
 
   return (
     <View style={styles.container}>
-      {/* ── 1. Your Position Card (when user owns units) ── */}
+      {/* ── 1. Your Position — flat metric row, no tinted card ──
+          Stock-broker pattern: position metrics sit directly on canvas
+          with hairline separators, like Robinhood's "Your position" row. */}
       {isHolder && yourUnits != null && yourUnits > 0 ? (
-        <View style={[styles.cardSurface, { backgroundColor: colors.successSubtle, borderColor: colors.success }]}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Your Ownership Position</Text>
-            <View style={[styles.shareBadge, { backgroundColor: colors.surfaceAlt }]}>
-              <Text style={[styles.shareBadgeText, { color: colors.brand }]}>
-                {viewerPct != null ? `${viewerPct}% of asset` : ''}
+        <View style={[styles.positionBlock, { borderTopColor: colors.border }]}>
+          <View style={styles.positionHeaderRow}>
+            <Text style={[styles.positionHeading, { color: colors.textPrimary }]}>Your position</Text>
+            {viewerPct != null ? (
+              <Text style={[styles.positionPct, { color: colors.textSecondary }]}>
+                {viewerPct}% of asset
               </Text>
-            </View>
+            ) : null}
           </View>
 
-          <View style={styles.positionMetricsGrid}>
+          <View style={styles.positionMetricsRow}>
             <View style={styles.positionMetricCol}>
-              <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Units Owned</Text>
+              <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Units</Text>
               <Text style={[styles.positionBigValue, { color: colors.textPrimary }]}>{yourUnits}</Text>
             </View>
-
-            <View style={styles.positionMetricCol}>
-              <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Cost Basis</Text>
+            <View style={[styles.positionMetricCol, { borderLeftColor: colors.borderSubtle }]}>
+              <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Cost basis</Text>
               <Text style={[styles.positionBigValue, { color: colors.textPrimary }]}>
                 {avgEntryPriceGbp != null ? formatCoOwnIze(avgEntryPriceGbp * yourUnits) : '—'}
               </Text>
             </View>
-
-            <View style={styles.positionMetricCol}>
+            <View style={[styles.positionMetricCol, { borderLeftColor: colors.borderSubtle }]}>
               <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Unrealized P&L</Text>
               <Text style={[styles.positionBigValue, { color: pnlColor }]}>
                 {unrealizedPnlGbp != null ? `${isUp ? '+' : ''}${formatCoOwnIze(unrealizedPnlGbp)}` : '—'}
@@ -158,12 +158,14 @@ export function AssetOwnershipSection({
         </View>
       ) : null}
 
-      {/* ── 2. Supply & Capital Structure ── */}
-      <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Supply & Capital Structure</Text>
+      {/* ── 2. Supply & Capital Structure — flat strip, no filled card ──
+          Thin progress bar + legend directly on canvas. Hairline-separated
+          from the position block above. */}
+      <View style={[styles.supplyBlock, { borderTopColor: colors.border }]}>
+        <View style={styles.supplyHeaderRow}>
+          <Text style={[styles.supplyHeading, { color: colors.textPrimary }]}>Capital structure</Text>
           <Text style={[styles.supplyTotalBadge, { color: colors.textMuted }]}>
-            {totalUnits} units total
+            {totalUnits} units
           </Text>
         </View>
 
@@ -193,23 +195,18 @@ export function AssetOwnershipSection({
           <View style={styles.legendItem}>
             <View style={[styles.legendColorBox, { backgroundColor: colors.textMuted }]} />
             <Text style={[styles.legendText, { color: colors.textSecondary }]}>
-              Other Co-Owners ({Math.max(0, totalUnits - availableUnits - (yourUnits || 0))})
+              Other co-owners ({Math.max(0, totalUnits - availableUnits - (yourUnits || 0))})
             </Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendColorBox, { backgroundColor: colors.success }]} />
             <Text style={[styles.legendText, { color: colors.textSecondary }]}>
-              Available units ({availableUnits})
+              Available ({availableUnits})
             </Text>
           </View>
         </View>
 
-        {/* Holder count context — factual transparency line.
-            Polymarket shows "Top holders" and distribution; for
-            ThryftVerse the holder count and allocation concentration
-            are the ownership transparency signal. No fabricated
-            top-holder list — just the verified count. Zero holders
-            is a valid state (brand-new offering) and is shown. */}
+        {/* Holder count context — factual transparency line */}
         {holderCount != null ? (
           <Text style={[styles.holderCountLine, { color: colors.textMuted }]}>
             {holderCount} {holderCount === 1 ? 'co-owner' : 'co-owners'} · {Math.round((1 - availableSegmentPct / 100) * 100)}% allocated
@@ -344,37 +341,32 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
     gap: Space.lg,
   },
-  cardSurface: {
-    borderRadius: Radius.md,
-    padding: Space.md,
-    borderWidth: StyleSheet.hairlineWidth,
+  // ── Flat position block — no card fill, hairline top border ──
+  positionBlock: {
+    paddingTop: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  sectionHeaderRow: {
+  positionHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
     marginBottom: Space.sm,
   },
-  sectionHeading: {
+  positionHeading: {
     fontSize: TypographyV2.sectionTitle.size,
     lineHeight: TypographyV2.sectionTitle.lineHeight,
     fontFamily: FontFamily.bold,
   },
-  shareBadge: {
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-  },
-  shareBadgeText: {
+  positionPct: {
     fontSize: TypographyV2.captionElevated.size,
-    fontFamily: FontFamily.semibold,
+    fontFamily: FontFamily.medium,
   },
-  positionMetricsGrid: {
+  positionMetricsRow: {
     flexDirection: 'row',
-    marginTop: Space.xs,
   },
   positionMetricCol: {
     flex: 1,
+    paddingLeft: Space.sm,
   },
   metaLabel: {
     fontSize: 11,
@@ -392,6 +384,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: FontFamily.semibold,
     marginTop: 2,
+  },
+  // ── Flat supply block — no card fill, hairline top border ──
+  supplyBlock: {
+    paddingTop: Space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  supplyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: Space.xs,
+  },
+  supplyHeading: {
+    fontSize: TypographyV2.sectionTitle.size,
+    lineHeight: TypographyV2.sectionTitle.lineHeight,
+    fontFamily: FontFamily.bold,
   },
   supplyTotalBadge: {
     fontSize: TypographyV2.meta.size,
