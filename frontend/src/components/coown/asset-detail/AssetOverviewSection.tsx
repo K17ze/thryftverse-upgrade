@@ -26,7 +26,6 @@ export interface AssetOverviewSectionProps {
   lastExecutionPriceGbp: number | null;
   appraisedValuePerUnitGbp: number | null;
   referenceVsAppraisalPct: number | null;
-  dossierSummary: string;
   dossierDocuments: DossierDocument[];
   hasDocuments: boolean;
   onOpenDiligence: () => void;
@@ -67,14 +66,13 @@ export function AssetOverviewSection({
   lastExecutionPriceGbp,
   appraisedValuePerUnitGbp,
   referenceVsAppraisalPct,
-  dossierSummary,
   dossierDocuments,
   hasDocuments,
   onOpenDiligence,
   onOpenRiskDisclosure,
   lifecycleState,
 }: AssetOverviewSectionProps) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
 
   // ── Ranged price history ──
   // The chart's range chips drive a real fetch. Previous candles stay
@@ -126,10 +124,10 @@ export function AssetOverviewSection({
 
   return (
     <View style={styles.container}>
-      {/* ── 1. Physical Asset Story & Editorial Provenance ── */}
-      <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Physical Asset & Provenance</Text>
+      {/* ── 1. Physical Asset Story & Editorial Provenance — flat section ── */}
+      <CommerceDetailSection
+        label="Physical Asset & Provenance"
+        trailing={
           <Pressable
             onPress={onOpenDiligence}
             hitSlop={8}
@@ -140,8 +138,8 @@ export function AssetOverviewSection({
             <Text style={[styles.linkText, { color: colors.brand }]}>Full dossier</Text>
             <Ionicons name="chevron-forward" size={14} color={colors.brand} />
           </Pressable>
-        </View>
-
+        }
+      >
         <View style={styles.assetStoryWrap}>
           <Text
             style={[styles.assetStoryText, { color: colors.textSecondary }]}
@@ -169,11 +167,10 @@ export function AssetOverviewSection({
           <Pressable
             onPress={onOpenDiligence}
             hitSlop={4}
-            style={({ pressed }) => [styles.trustFactualLine, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.trustFactualLine, { borderTopColor: colors.border }, pressed && { opacity: 0.85 }]}
             accessibilityRole="button"
             accessibilityLabel={`Trust summary: ${trustFacts.join(', ')}. Tap to view due diligence.`}
           >
-            <Ionicons name="shield-checkmark" size={14} color={colors.brand} style={styles.trustFactIcon} />
             <Text
               style={[styles.trustFactualText, { color: colors.textSecondary }]}
               numberOfLines={1}
@@ -185,7 +182,7 @@ export function AssetOverviewSection({
           </Pressable>
         ) : null}
 
-        <View style={styles.provenanceMetaGrid}>
+        <View style={[styles.provenanceMetaGrid, { borderTopColor: colors.border }]}>
           <View style={styles.provenanceMetaItem}>
             <Text style={[styles.metaLabel, { color: colors.textMuted }]}>Condition</Text>
             <Text style={[styles.metaVal, { color: colors.textPrimary }]}>
@@ -199,7 +196,7 @@ export function AssetOverviewSection({
             </Text>
           </View>
         </View>
-      </View>
+      </CommerceDetailSection>
 
       {/* ── 2. Valuation Benchmark & Price Chart ── */}
       <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
@@ -223,11 +220,6 @@ export function AssetOverviewSection({
               accessibilityLabel={showVolume ? 'Hide volume bars' : 'Show volume bars'}
               accessibilityState={{ selected: showVolume }}
             >
-              <Ionicons
-                name="bar-chart-outline"
-                size={14}
-                color={showVolume ? colors.brand : colors.textMuted}
-              />
               <Text style={[styles.linkText, { color: showVolume ? colors.brand : colors.textMuted }]}>
                 Volume
               </Text>
@@ -248,7 +240,7 @@ export function AssetOverviewSection({
             />
           </View>
         ) : (
-          <View style={[styles.sparseChartNotice, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}>
+          <View style={[styles.sparseChartNotice, { backgroundColor: colors.surface }]}>
             <Ionicons name="analytics-outline" size={24} color={colors.textMuted} />
             <Text style={[styles.sparseChartTitle, { color: colors.textPrimary }]}>
               {historyFailed
@@ -288,8 +280,8 @@ export function AssetOverviewSection({
       {/* ── 3. Four-Pillar Evidence Summary (Asset Dossier) ── */}
       <CommerceDetailSection label="Asset dossier">
         <View style={styles.evidenceGrid}>
-          {/* Pillar 1: Authenticity */}
-          <View style={[styles.evidenceItem, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)' }]}>
+          {/* Pillar 1: Authenticity — icon carries verification state */}
+          <View style={styles.evidenceItem}>
             <View style={styles.evidenceTop}>
               <Ionicons
                 name={asset.authenticityStatus === 'verified' ? 'checkmark-circle' : 'time-outline'}
@@ -306,18 +298,15 @@ export function AssetOverviewSection({
           </View>
 
           {/* Pillar 2: Custody & Vault */}
-          <View style={[styles.evidenceItem, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)' }]}>
-            <View style={styles.evidenceTop}>
-              <Ionicons name="shield-checkmark" size={18} color={colors.brand} />
-              <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>Custody</Text>
-            </View>
+          <View style={styles.evidenceItem}>
+            <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>Custody</Text>
             <Text style={[styles.evidenceSub, { color: colors.textSecondary }]} numberOfLines={2}>
               {asset.custodianName || 'Bonded Vault'} · Segregated storage
             </Text>
           </View>
 
-          {/* Pillar 3: Insurance */}
-          <View style={[styles.evidenceItem, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)' }]}>
+          {/* Pillar 3: Insurance — icon carries coverage state */}
+          <View style={styles.evidenceItem}>
             <View style={styles.evidenceTop}>
               <Ionicons
                 name={asset.custodyInsured ? 'lock-closed' : 'alert-circle-outline'}
@@ -334,11 +323,8 @@ export function AssetOverviewSection({
           </View>
 
           {/* Pillar 4: Legal Structure */}
-          <View style={[styles.evidenceItem, { backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.7)' }]}>
-            <View style={styles.evidenceTop}>
-              <Ionicons name="document-attach-outline" size={18} color={colors.brand} />
-              <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>SPV Legal Title</Text>
-            </View>
+          <View style={styles.evidenceItem}>
+            <Text style={[styles.evidenceLabel, { color: colors.textPrimary }]}>SPV Legal Title</Text>
             <Text style={[styles.evidenceSub, { color: colors.textSecondary }]} numberOfLines={2}>
               {asset.legalVehicleName || 'Series LLC Entity'} · Rights v{asset.rights?.version || '1'}
             </Text>
@@ -346,7 +332,7 @@ export function AssetOverviewSection({
         </View>
 
         {hasDocuments && (
-          <View style={[styles.documentsStrip, { borderTopColor: colors.borderSubtle }]}>
+          <View style={[styles.documentsStrip, { borderTopColor: colors.border }]}>
             {dossierDocuments.map((doc, idx) => (
               <Pressable
                 key={idx}
@@ -355,8 +341,7 @@ export function AssetOverviewSection({
                 accessibilityRole="link"
                 accessibilityLabel={doc.accessibilityLabel}
               >
-                <Ionicons name="link-outline" size={12} color={colors.brand} />
-                <Text style={[styles.docChipText, { color: colors.textPrimary }]} numberOfLines={1}>
+                <Text style={[styles.docChipText, { color: colors.brand }]} numberOfLines={1}>
                   {doc.label}
                 </Text>
               </Pressable>
@@ -389,7 +374,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    gap: Space.md,
+    gap: Space.lg,
   },
   cardSurface: {
     borderRadius: Radius.md,
@@ -406,18 +391,10 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.sectionTitle.size,
     fontFamily: FontFamily.bold,
   },
-  sectionTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: FontFamily.bold,
-  },
   subHeading: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.regular,
     marginTop: 2,
-  },
-  headerActionText: {
-    fontSize: TypographyV2.caption.size,
-    fontFamily: FontFamily.semibold,
   },
   linkRow: {
     flexDirection: 'row',
@@ -437,11 +414,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: -0.2,
   },
-  assetStoryParagraph: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: 20,
-    fontFamily: FontFamily.regular,
-  },
   assetStoryLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -459,10 +431,6 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
     marginTop: Space.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(128,128,128,0.15)',
-  },
-  trustFactIcon: {
-    marginRight: 2,
   },
   trustFactualText: {
     fontSize: TypographyV2.caption.size,
@@ -474,6 +442,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
     marginTop: Space.sm,
     paddingTop: Space.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   provenanceMetaItem: {
     flex: 1,
@@ -526,13 +495,12 @@ const styles = StyleSheet.create({
   evidenceGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.xs,
-    marginTop: Space.xs,
+    gap: Space.sm,
   },
+  // Transparent pillar cells — no per-pillar card fill. The 2x2 grid reads
+  // through typography and spacing; icons appear only for state.
   evidenceItem: {
     width: '48.5%',
-    padding: Space.sm,
-    borderRadius: Radius.sm,
     gap: 4,
   },
   evidenceTop: {
@@ -560,10 +528,6 @@ const styles = StyleSheet.create({
   docChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: Space.xs + 2,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
   },
   docChipText: {
     fontSize: 11,

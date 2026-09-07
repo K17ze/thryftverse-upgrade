@@ -102,6 +102,33 @@ Research: live web research on Kalshi market screen + Polymarket event page (see
 ### Tests
 - Updated 2 stale source-analysis tests: candle gating (now `hasChartCandles` with ranged history) and buyout navigation (Buyout is now a real screen — assertion inverted from prohibition to requirement).
 
+## Wave 5 — P2/P3 debt closure (pagination, state coverage, anti-AI density, runtime tests)
+
+### Backend
+- Fixed distributions cursor off-by-one: fetches limit+1 rows, `hasMore = rows.length > limit` — no more empty final page when exactly `limit` rows remain.
+- Anonymous distributions path now validates an explicit `assetId` exists (404 for unknown assets instead of a silent empty aggregate).
+
+### Frontend — fail-visible states (was fail-silent)
+- `AssetOwnershipSection` gained `distributionsFailed` / `corporateActionsFailed` props; failed fetches render quiet "Distribution history unavailable" / "Events unavailable" lines instead of looking identical to a genuine empty state. Screen tracks and resets the flags per fetch/refresh.
+- Genuinely-empty corporate actions still omit the block entirely (no placeholder chrome).
+
+### Frontend — code quality
+- All 10 dead props removed from `AssetMarketSection` (+ `dossierSummary` from overview, dead `dossierVerified`/`dossierMissing` computations from the screen).
+- `!` non-null assertions eliminated (safe optional chains with identical behavior); `as unknown as RecommendationItem` cast replaced with a type-safe minimal object.
+- Tabular numerals added to distribution amount/per-unit values.
+
+### Anti-AI design pass (overview + ownership sections)
+- Card-sprawl reduced: provenance, decisions & exit rules, corporate actions, and distributions blocks flattened from `cardSurface` rectangles to flat `CommerceDetailSection` + hairline-separated rows. Position card and valuation benchmark (dominant panels) kept.
+- All hard-coded rgba/hex fills replaced with theme tokens (`colors.border`, `colors.surface`, `colors.surfaceAlt`, `colors.successSubtle`).
+- Label-everything noise stripped: decorative per-row glyphs removed (icons kept only where they carry state); document chips became flat brand-colored links; a11y labels preserved verbatim.
+
+### Runtime behavioral tests (new `coownAssetDetailRuntime.test.tsx`, 15 tests)
+- Ranged history: range→interval mapping verified (1W→4h/42, 1M→1d/30, 1D→1h/48); previous-range candles never render under a new range while loading; error/empty falls back to embedded candles; minor-unit→GBP conversion verified.
+- Execution tape: settled-only filtering verified; inline error on failure.
+- 24h stats strip: null segments omitted; no strip when all fields null.
+- Ownership fail-visible states: "Events unavailable" / "Distribution history unavailable" render only on failure, never on genuine emptiness.
+- Test-infrastructure mocks documented: expo-video, FlashList, BottomSheet (node-unparseable native builds), coown barrel (Skia).
+
 ## Current status
 
-TypeScript (frontend + backend) passes. 82/83 test files pass; the only failing file is the pre-existing group-chat parity suite (6 tests, unrelated to co-own). Native visual capture and accessibility traversal remain pending because no configured native device is available.
+TypeScript (frontend + backend) passes. 83/84 test files pass (new runtime suite green); the only failing file remains the pre-existing group-chat parity suite (6 tests, unrelated to co-own).

@@ -152,6 +152,8 @@ export default function AssetDetailScreen() {
 
   const [lastDistribution, setLastDistribution] = React.useState<CoOwnDistribution | null>(null);
   const [corporateActions, setCorporateActions] = React.useState<CoOwnCorporateAction[] | null>(null);
+  const [distributionsFailed, setDistributionsFailed] = React.useState(false);
+  const [corporateActionsFailed, setCorporateActionsFailed] = React.useState(false);
   const [hasActiveOrders, setHasActiveOrders] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
@@ -223,14 +225,17 @@ export default function AssetDetailScreen() {
   React.useEffect(() => {
     if (!assetId) return;
     let cancelled = false;
+    setDistributionsFailed(false);
     void fetchCoOwnDistributions({ assetId, limit: 1 })
       .then((result) => {
         if (cancelled) return;
         setLastDistribution(result.items[0] ?? null);
+        setDistributionsFailed(false);
       })
       .catch(() => {
         if (cancelled) return;
         setLastDistribution(null);
+        setDistributionsFailed(true);
       });
     return () => { cancelled = true; };
   }, [assetId, refreshKey]);
@@ -239,14 +244,17 @@ export default function AssetDetailScreen() {
   React.useEffect(() => {
     if (!assetId) return;
     let cancelled = false;
+    setCorporateActionsFailed(false);
     void fetchCoOwnAssetCorporateActions(assetId, { limit: 3 })
       .then((items) => {
         if (cancelled) return;
         setCorporateActions(items);
+        setCorporateActionsFailed(false);
       })
       .catch(() => {
         if (cancelled) return;
         setCorporateActions(null);
+        setCorporateActionsFailed(true);
       });
     return () => { cancelled = true; };
   }, [assetId, refreshKey]);
@@ -499,7 +507,8 @@ export default function AssetDetailScreen() {
   const reconciliationActive =
     orderBook != null && orderBook.reconciliationState !== 'reconciled';
   const marketSnapshot = asset.marketSnapshot ?? null;
-  const hasTrades = marketSnapshot?.lastExecutionPriceGbp != null;
+  const lastExecutionPriceGbp = marketSnapshot?.lastExecutionPriceGbp ?? null;
+  const hasTrades = lastExecutionPriceGbp != null;
   // ── Dominant price ──
   // ONE price display in the header. During initial offering the
   // offering price dominates. Once secondary trades exist, the last
@@ -510,22 +519,12 @@ export default function AssetDetailScreen() {
     : hasTrades
       ? 'Last trade'
       : 'Offering price';
-  const dominantPriceValue = isInitialOffering
+  const dominantPriceValue = isInitialOffering || lastExecutionPriceGbp == null
     ? asset.unitPriceGbp
-    : hasTrades
-      ? marketSnapshot!.lastExecutionPriceGbp!
-      : asset.unitPriceGbp;
+    : lastExecutionPriceGbp;
   const dominantPriceTimestamp = hasTrades && !isInitialOffering && marketSnapshot?.lastExecutionAt
     ? new Date(marketSnapshot.lastExecutionAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
     : null;
-  const marketSnapshotLabel = marketSnapshot?.asOf
-    ? `Snapshot v${marketSnapshot.version} · ${new Date(marketSnapshot.asOf).toLocaleTimeString('en-GB', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })}${dataStale && dataStaleAgeLabel ? ` · stale ${dataStaleAgeLabel}` : ''}`
-    : dataStale && dataStaleAgeLabel
-      ? `Last update ${dataStaleAgeLabel}`
-      : undefined;
 
   const apiCandles = asset.candles ?? [];
   const candleData = apiCandles.map((c) => ({
@@ -654,23 +653,6 @@ export default function AssetDetailScreen() {
     };
   });
   const hasIncompleteRights = rightsRows.some((r) => r.isTbc);
-
-  // ── Asset dossier summary (spec P1-B §2) ──
-  // The chapter summary shows only verified facts and missing critical
-  // evidence, so the user can judge completeness at a glance.
-  const dossierVerified: string[] = [];
-  if (asset.authenticityStatus === 'verified') dossierVerified.push('Authenticated');
-  if (asset.custodyInsured) dossierVerified.push('Insured custody');
-  if (asset.rights?.version) dossierVerified.push(`Rights v${asset.rights.version}`);
-  if (asset.appraisalValueGbp != null) dossierVerified.push('Appraised');
-  const dossierMissing: string[] = [];
-  if (asset.authenticityStatus !== 'verified') dossierMissing.push('authentication');
-  if (hasIncompleteRights) dossierMissing.push('rights');
-  if (asset.appraisalValueGbp == null) dossierMissing.push('valuation');
-  if (!asset.custodyInsured) dossierMissing.push('insurance');
-  const dossierSummary = dossierMissing.length > 0
-    ? `${dossierVerified.join(' · ')}${dossierVerified.length > 0 ? ' · ' : ''}${dossierMissing.length} pending`
-    : dossierVerified.join(' · ');
 
   // Document references available on the asset (spec P1-B §2 Documents
   // subsection). Only render the subsection when at least one document
@@ -953,10 +935,9 @@ export default function AssetDetailScreen() {
             onCandleRangeChange={setCandleRange}
             showVolume={showVolume}
             onToggleVolume={() => setShowVolume((v) => !v)}
-            lastExecutionPriceGbp={marketSnapshot?.lastExecutionPriceGbp ?? null}
+            lastExecutionPriceGbp={lastExecutionPriceGbp}
             appraisedValuePerUnitGbp={appraisedValuePerUnitGbp}
             referenceVsAppraisalPct={referenceVsAppraisalPct}
-            dossierSummary={dossierSummary}
             dossierDocuments={dossierDocuments}
             hasDocuments={hasDocuments}
             onOpenDiligence={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
@@ -978,20 +959,10 @@ export default function AssetDetailScreen() {
             spreadGbp={spreadGbp}
             depthStatusLabel={depthStatusLabel}
             reconciliationActive={reconciliationActive}
-            marketSnapshotLabel={marketSnapshotLabel}
             isOffline={isOffline}
-            refreshing={refreshing}
-            dataStale={dataStale}
-            dataStaleAgeLabel={dataStaleAgeLabel}
-            onRefresh={handleRefresh}
-            allocatedPct={allocatedPct}
-            availableUnits={availableUnits}
-            totalUnits={totalUnits}
             onOpenSupply={() => openSheet('supply')}
             onOpenPriceAlert={openPriceAlert}
             onSelectOrderBookLevel={handleSelectOrderBookLevel}
-            holdingsError={holdingsError}
-            onRetryHoldings={retryHoldings}
             lifecycleState={lifecycleState}
           />
         )}
@@ -1015,7 +986,9 @@ export default function AssetDetailScreen() {
             lastDistributionDate={lastDistributionDate}
             lastDistributionPerUnit={lastDistributionPerUnit}
             onNavigateToDistributionHistory={() => navigation.navigate('DistributionHistory', { assetId: asset.id })}
+            distributionsFailed={distributionsFailed}
             corporateActions={corporateActions}
+            corporateActionsFailed={corporateActionsFailed}
             onNavigateToCorporateAction={(action) => navigation.navigate('CorporateActionDetail', {
               assetId: asset.id,
               actionType: action.actionType,
@@ -1040,7 +1013,7 @@ export default function AssetDetailScreen() {
                 if (isRecommendationLook(recItem)) {
                   handlePressLook(recItem);
                 } else {
-                  handlePressRecommendation(recItem as unknown as RecommendationItem, sectionKey, position, reasonCode, personalised);
+                  handlePressRecommendation({ id: recItem.id }, sectionKey, position, reasonCode, personalised);
                 }
               }}
             />

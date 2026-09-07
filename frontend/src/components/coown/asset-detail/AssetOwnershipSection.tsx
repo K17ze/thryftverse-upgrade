@@ -7,7 +7,7 @@ import { useAppTheme } from '../../../theme/ThemeContext';
 import { formatCoOwnIze } from '../../../utils/currency';
 import type { CoOwnCorporateAction, CoOwnDistribution } from '../../../services/marketApi';
 import { CoOwnCorporateActionRow, type CoOwnCorporateActionStatus, type CoOwnCorporateActionType } from '../';
-import { CommerceDetailDisclosureRow } from '../../commerce/detail';
+import { CommerceDetailDisclosureRow, CommerceDetailSection } from '../../commerce/detail';
 
 export interface AssetOwnershipSectionProps {
   isHolder: boolean;
@@ -27,8 +27,12 @@ export interface AssetOwnershipSectionProps {
   lastDistributionDate: string | null;
   lastDistributionPerUnit: number | null;
   onNavigateToDistributionHistory: () => void;
-  /** Latest corporate actions, already limited (null = not loaded / failed → section omitted). */
+  /** True when the distributions fetch failed — quiet inline line instead of rows. */
+  distributionsFailed?: boolean;
+  /** Latest corporate actions, already limited (null = not loaded / failed). */
   corporateActions: CoOwnCorporateAction[] | null;
+  /** True when the corporate actions fetch failed — events block shows a quiet unavailable line. */
+  corporateActionsFailed?: boolean;
   onNavigateToCorporateAction: (action: CoOwnCorporateAction) => void;
   onOpenBuyout: () => void;
 }
@@ -87,7 +91,9 @@ export function AssetOwnershipSection({
   lastDistributionDate,
   lastDistributionPerUnit,
   onNavigateToDistributionHistory,
+  distributionsFailed,
   corporateActions,
+  corporateActionsFailed,
   onNavigateToCorporateAction,
   onOpenBuyout,
 }: AssetOwnershipSectionProps) {
@@ -104,10 +110,7 @@ export function AssetOwnershipSection({
       {isHolder && yourUnits != null && yourUnits > 0 ? (
         <View style={[styles.cardSurface, { backgroundColor: colors.successSubtle, borderColor: colors.success }]}>
           <View style={styles.sectionHeaderRow}>
-            <View style={styles.positionTitleGroup}>
-              <Ionicons name="pie-chart" size={18} color={colors.success} />
-              <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Your Ownership Position</Text>
-            </View>
+            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Your Ownership Position</Text>
             <View style={[styles.shareBadge, { backgroundColor: colors.surfaceAlt }]}>
               <Text style={[styles.shareBadgeText, { color: colors.brand }]}>
                 {viewerPct != null ? `${viewerPct}% of asset` : ''}
@@ -153,7 +156,7 @@ export function AssetOwnershipSection({
         </View>
 
         {/* Proportional horizontal stacked bar */}
-        <View style={styles.stackedBarTrack}>
+        <View style={[styles.stackedBarTrack, { backgroundColor: colors.border }]}>
           {yourSegmentPct > 0 ? (
             <View style={[styles.barSegment, { width: `${yourSegmentPct}%`, backgroundColor: colors.brand }]} />
           ) : null}
@@ -190,10 +193,10 @@ export function AssetOwnershipSection({
         </View>
       </View>
 
-      {/* ── 3. Governance, Decisions & Exit Rules ── */}
-      <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Decisions & Exit Rules</Text>
+      {/* ── 3. Governance, Decisions & Exit Rules — flat section ── */}
+      <CommerceDetailSection
+        label="Decisions & Exit Rules"
+        trailing={
           <Pressable
             onPress={onOpenRights}
             hitSlop={8}
@@ -202,46 +205,29 @@ export function AssetOwnershipSection({
             accessibilityLabel="View full rights agreement"
           >
             <Text style={[styles.linkText, { color: colors.brand }]}>Rights agreement</Text>
-            <Ionicons name="document-outline" size={14} color={colors.brand} />
+            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
           </Pressable>
+        }
+      >
+        <View style={styles.rightRow}>
+          <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Voting & Governance</Text>
+          <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
+            1 unit = 1 vote. Voting eligibility snapshots at record date. Majority approval required for major physical maintenance or museum loan decisions.
+          </Text>
         </View>
 
-        <View style={styles.rightsBlock}>
-          <View style={styles.rightRow}>
-            <View style={styles.rightIconCol}>
-              <Ionicons name="checkbox-outline" size={16} color={colors.brand} />
-            </View>
-            <View style={styles.rightInfoCol}>
-              <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Voting & Governance</Text>
-              <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
-                1 unit = 1 vote. Voting eligibility snapshots at record date. Majority approval required for major physical maintenance or museum loan decisions.
-              </Text>
-            </View>
-          </View>
+        <View style={[styles.rightRow, styles.rightRowSeparated, { borderTopColor: colors.border }]}>
+          <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Whole-Asset Buyout & Liquidation</Text>
+          <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
+            Third-party acquisition offers require 75% supermajority approval. Net proceeds after legal escrow settle pro-rata directly into co-owners' wallets.
+          </Text>
+        </View>
 
-          <View style={styles.rightRow}>
-            <View style={styles.rightIconCol}>
-              <Ionicons name="exit-outline" size={16} color={colors.brand} />
-            </View>
-            <View style={styles.rightInfoCol}>
-              <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Whole-Asset Buyout & Liquidation</Text>
-              <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
-                Third-party acquisition offers require 75% supermajority approval. Net proceeds after legal escrow settle pro-rata directly into co-owners' wallets.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.rightRow}>
-            <View style={styles.rightIconCol}>
-              <Ionicons name="lock-closed-outline" size={16} color={colors.brand} />
-            </View>
-            <View style={styles.rightInfoCol}>
-              <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Physical Possession</Text>
-              <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
-                Co-ownership conveys economic and beneficial title. Physical possession remains exclusively with the insured custodian to maintain authenticated provenance.
-              </Text>
-            </View>
-          </View>
+        <View style={[styles.rightRow, styles.rightRowSeparated, { borderTopColor: colors.border }]}>
+          <Text style={[styles.rightTitle, { color: colors.textPrimary }]}>Physical Possession</Text>
+          <Text style={[styles.rightDetail, { color: colors.textSecondary }]}>
+            Co-ownership conveys economic and beneficial title. Physical possession remains exclusively with the insured custodian to maintain authenticated provenance.
+          </Text>
         </View>
 
         <CommerceDetailDisclosureRow
@@ -250,43 +236,45 @@ export function AssetOwnershipSection({
           onPress={onOpenBuyout}
           accessibilityLabel="View buyout offers for this asset"
         />
-      </View>
+      </CommerceDetailSection>
 
       {/* ── 4. Corporate actions & events ──
-          Latest lifecycle events as timeline rows. Omitted entirely when
-          nothing has been published — no placeholder. */}
-      {corporateActions && corporateActions.length > 0 ? (
-        <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Corporate actions & events</Text>
-          </View>
-          <View style={styles.actionList}>
-            {corporateActions.map((action) => {
-              const rowType = ACTION_TYPE_MAP[action.actionType];
-              if (!rowType) return null;
-              const dateSource = action.payableDate ?? action.recordDate ?? action.exDate ?? action.createdAt;
-              return (
-                <CoOwnCorporateActionRow
-                  key={action.id}
-                  type={rowType}
-                  status={ACTION_STATUS_MAP[action.status] ?? 'pending'}
-                  dateLabel={new Date(dateSource).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  effectLabel={action.description ?? action.title}
-                  amountLabel={corporateActionAmountLabel(action)}
-                  recordDateLabel={action.recordDate ? `Record date: ${formatDayMonth(action.recordDate)}` : undefined}
-                  paymentDateLabel={action.payableDate ? `Payment: ${formatDayMonth(action.payableDate)}` : undefined}
-                  onPress={() => onNavigateToCorporateAction(action)}
-                />
-              );
-            })}
-          </View>
-        </View>
+          Latest lifecycle events as timeline rows. Omitted when nothing
+          has been published; a failed fetch keeps the block with a
+          quiet unavailable line. */}
+      {(corporateActions?.length || corporateActionsFailed) ? (
+        <CommerceDetailSection label="Corporate actions & events">
+          {corporateActions && corporateActions.length > 0 ? (
+            <View style={styles.actionList}>
+              {corporateActions.map((action) => {
+                const rowType = ACTION_TYPE_MAP[action.actionType];
+                if (!rowType) return null;
+                const dateSource = action.payableDate ?? action.recordDate ?? action.exDate ?? action.createdAt;
+                return (
+                  <CoOwnCorporateActionRow
+                    key={action.id}
+                    type={rowType}
+                    status={ACTION_STATUS_MAP[action.status] ?? 'pending'}
+                    dateLabel={new Date(dateSource).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    effectLabel={action.description ?? action.title}
+                    amountLabel={corporateActionAmountLabel(action)}
+                    recordDateLabel={action.recordDate ? `Record date: ${formatDayMonth(action.recordDate)}` : undefined}
+                    paymentDateLabel={action.payableDate ? `Payment: ${formatDayMonth(action.payableDate)}` : undefined}
+                    onPress={() => onNavigateToCorporateAction(action)}
+                  />
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={[styles.noDistributionText, { color: colors.textMuted }]}>Events unavailable</Text>
+          )}
+        </CommerceDetailSection>
       ) : null}
 
-      {/* ── 5. Distributions & Yield ── */}
-      <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Distributions & Yield</Text>
+      {/* ── 5. Distributions & Yield — flat section ── */}
+      <CommerceDetailSection
+        label="Distributions & Yield"
+        trailing={
           <Pressable
             onPress={onNavigateToDistributionHistory}
             hitSlop={8}
@@ -295,10 +283,10 @@ export function AssetOwnershipSection({
             accessibilityLabel="View distributions history"
           >
             <Text style={[styles.linkText, { color: colors.brand }]}>History</Text>
-            <Ionicons name="receipt-outline" size={14} color={colors.brand} />
+            <Ionicons name="chevron-forward" size={14} color={colors.brand} />
           </Pressable>
-        </View>
-
+        }
+      >
         {lastDistribution ? (
           <View style={styles.distributionSummary}>
             <View style={styles.distribTop}>
@@ -313,6 +301,12 @@ export function AssetOwnershipSection({
               {lastDistributionPerUnit != null ? `${formatCoOwnIze(lastDistributionPerUnit)} per unit` : 'Recent payout'}
             </Text>
           </View>
+        ) : distributionsFailed ? (
+          <View style={styles.noDistributionNotice}>
+            <Text style={[styles.noDistributionText, { color: colors.textMuted }]}>
+              Distribution history unavailable
+            </Text>
+          </View>
         ) : (
           <View style={styles.noDistributionNotice}>
             <Text style={[styles.noDistributionText, { color: colors.textMuted }]}>
@@ -320,7 +314,7 @@ export function AssetOwnershipSection({
             </Text>
           </View>
         )}
-      </View>
+      </CommerceDetailSection>
     </View>
   );
 }
@@ -329,7 +323,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
-    gap: Space.md,
+    gap: Space.lg,
   },
   cardSurface: {
     borderRadius: Radius.md,
@@ -341,11 +335,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: Space.sm,
-  },
-  positionTitleGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
   },
   sectionHeading: {
     fontSize: TypographyV2.sectionTitle.size,
@@ -394,7 +383,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: Radius.full,
     overflow: 'hidden',
-    backgroundColor: 'rgba(128,128,128,0.15)',
     marginVertical: Space.sm,
   },
   barSegment: {
@@ -429,23 +417,15 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
   },
-  rightsBlock: {
-    gap: Space.sm,
-    marginTop: Space.xs,
-  },
   actionList: {
     gap: Space.xs,
   },
+  // Flat rule rows — hairline-separated directly on the canvas, no icons.
   rightRow: {
-    flexDirection: 'row',
-    gap: Space.sm,
-    alignItems: 'flex-start',
+    paddingVertical: Space.sm,
   },
-  rightIconCol: {
-    marginTop: 2,
-  },
-  rightInfoCol: {
-    flex: 1,
+  rightRowSeparated: {
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   rightTitle: {
     fontSize: TypographyV2.captionElevated.size,
@@ -468,6 +448,7 @@ const styles = StyleSheet.create({
   distribAmount: {
     fontSize: TypographyV2.bodyStrong.size,
     fontFamily: FontFamily.bold,
+    fontVariant: ['tabular-nums'],
   },
   distribDate: {
     fontSize: TypographyV2.meta.size,
@@ -477,6 +458,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FontFamily.regular,
     marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
   noDistributionNotice: {
     paddingVertical: Space.xs,

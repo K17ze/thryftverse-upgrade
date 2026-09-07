@@ -32,20 +32,10 @@ export interface AssetMarketSectionProps {
   spreadGbp: number | null;
   depthStatusLabel: string;
   reconciliationActive: boolean;
-  marketSnapshotLabel?: string;
   isOffline: boolean;
-  refreshing: boolean;
-  dataStale: boolean;
-  dataStaleAgeLabel?: string;
-  onRefresh: () => void;
-  allocatedPct: number;
-  availableUnits: number;
-  totalUnits: number;
   onOpenSupply: () => void;
   onOpenPriceAlert: () => void;
   onSelectOrderBookLevel: (side: 'bid' | 'ask', price: number) => void;
-  holdingsError: boolean;
-  onRetryHoldings: () => void;
   lifecycleState: AssetLifecycleState;
 }
 
@@ -140,15 +130,16 @@ export function AssetMarketSection({
   ), [orderBook?.asks]);
 
   // Reference vs execution price semantics (spec 03_COOWN §2)
-  const hasSettledTrade = asset.marketSnapshot?.lastExecutionPriceGbp != null;
+  const lastExecutionPriceGbp = asset.marketSnapshot?.lastExecutionPriceGbp ?? null;
+  const hasSettledTrade = lastExecutionPriceGbp != null;
   const transactionPrimaryLabel =
     lifecycleState === 'initialOffering'
       ? 'Offering price'
       : hasSettledTrade
         ? 'Last trade'
         : 'Reference price';
-  const transactionPrimaryValue = hasSettledTrade && lifecycleState !== 'initialOffering'
-    ? formatCoOwnIze(asset.marketSnapshot!.lastExecutionPriceGbp!)
+  const transactionPrimaryValue = lifecycleState !== 'initialOffering' && lastExecutionPriceGbp != null
+    ? formatCoOwnIze(lastExecutionPriceGbp)
     : formatCoOwnIze(asset.unitPriceGbp);
   const transactionSecondaryLabel = hasSettledTrade
     ? `Reference unit price: ${formatCoOwnIze(asset.unitPriceGbp)}`

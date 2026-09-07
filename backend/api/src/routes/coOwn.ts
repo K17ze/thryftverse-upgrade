@@ -919,7 +919,7 @@ app.patch('/co-own/price-alerts/:id', async (request, reply) => {
 //     distributed, distribution count, latest per-unit rate, latest
 //     distribution date). recipient_user_id and individual amounts are never
 //     exposed on the public path.
-app.get('/co-own/distributions', async (request) => {
+app.get('/co-own/distributions', async (request, reply) => {
   const querySchema = z.object({
     assetId: z.string().min(2).max(128).optional(),
     limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -970,15 +970,19 @@ app.get('/co-own/distributions', async (request) => {
          AND ($3::timestamptz IS NULL OR (created_at, id) < ($3::timestamptz, $4::text))
        ORDER BY created_at DESC, id DESC
        LIMIT $5`,
-      [authUserId, query.assetId ?? null, cursorCreatedAt, cursorId, query.limit]
+      [authUserId, query.assetId ?? null, cursorCreatedAt, cursorId, query.limit + 1]
     );
 
-    const lastRow = result.rows[result.rows.length - 1];
+    // Fetch one extra row so "exactly limit rows remain" is distinguishable
+    // from "limit rows and more remain" — no empty final page.
+    const hasMore = result.rows.length > query.limit;
+    const pageRows = hasMore ? result.rows.slice(0, query.limit) : result.rows;
+    const lastRow = pageRows[pageRows.length - 1];
 
     return {
       ok: true,
       scope: 'user',
-      items: result.rows.map((row) => ({
+      items: pageRows.map((row) => ({
         id: row.id,
         assetId: row.asset_id,
         amountGbpMinor: Number(row.amount_gbp_minor),
@@ -990,13 +994,26 @@ app.get('/co-own/distributions', async (request) => {
         createdAt: row.created_at,
         settledAt: row.settled_at,
       })),
-      nextCursor: result.rows.length === query.limit
+      nextCursor: hasMore && lastRow
         ? Buffer.from(`${lastRow.created_at_text}|${lastRow.id}`).toString('base64')
         : null,
     };
   }
 
   // Anonymous callers get per-asset aggregates only — never per-recipient rows.
+  // An explicit assetId must reference a real asset; unknown IDs are a 404,
+  // not a silent empty aggregate.
+  if (query.assetId) {
+    const assetExists = await db.query<{ exists: number }>(
+      `SELECT 1 FROM coOwn_assets WHERE id = $1 LIMIT 1`,
+      [query.assetId]
+    );
+    if (assetExists.rows.length === 0) {
+      reply.code(404);
+      return { ok: false, error: 'Co-Own asset not found' };
+    }
+  }
+
   const aggregateResult = await db.query<{
     asset_id: string;
     total_distributed_gbp_minor: string | number;
