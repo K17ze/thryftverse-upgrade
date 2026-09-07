@@ -254,9 +254,23 @@ export interface MarketCoOwnAsset {
   marketMovePct24h: number | null;
   holders: number;
   volume24hGbp: number | null;
+  /** Current top-of-book and executable depth; null price means no orders. */
+  bestBidGbp?: number | null;
+  bestAskGbp?: number | null;
+  bidDepthUnits?: number;
+  askDepthUnits?: number;
   isOpen: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Backend lifecycle: offering stage. Optional for backward
+   * compatibility — older projections may omit this. */
+  offeringStatus?: 'offering' | 'allocated' | 'failed' | 'closed';
+  /** Backend lifecycle: secondary-market trading stage. Optional
+   * for backward compatibility. */
+  marketStatus?: 'pre_market' | 'trading' | 'paused' | 'closed';
+  /** Last settled trade price in GBP. Null when no trades have
+   * occurred. Optional for backward compatibility. */
+  lastTradePriceGbp?: number | null;
   /** Per spec 03_COOWN §2: backend-backed market snapshot. Null
    * until the backend exposes lastExecutionPriceGbp. The frontend
    * must not label reference price as "Last trade" without this. */
@@ -442,7 +456,8 @@ export type CoOwnOrderSide = 'buy' | 'sell';
 export interface MarketCoOwnOrder {
   id: number;
   assetId: string;
-  userId: string;
+  /** Omitted from public market responses; present only in owner-scoped views. */
+  userId?: string;
   side: CoOwnOrderSide;
   orderType?: 'market' | 'limit' | 'protected_market';
   limitPriceGbp?: number | null;
@@ -2190,6 +2205,15 @@ export interface MarketCoOwnHolding {
   unitsOwned: number;
   avgEntryPriceGbp: number;
   realizedPnlGbp: number;
+  /** Units committed to active or placed sell orders. */
+  reservedUnits?: number;
+  /** Highest currently executable bid, when the book has depth. */
+  bestBidGbp?: number | null;
+  /** Number of units covered by the current bid depth. */
+  saleDepthUnits?: number;
+  /** Bid-depth proceeds for this position size; null means no current bids. */
+  estimatedSaleProceedsGbp?: number | null;
+  saleProceedsAsOf?: string;
   updatedAt: string;
 }
 

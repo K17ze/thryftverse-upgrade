@@ -65,6 +65,7 @@ export default function PortfolioScreen() {
   const [actionSheetAsset, setActionSheetAsset] = React.useState<CoOwnPositionVM | null>(null);
   const [allocationExpanded, setAllocationExpanded] = React.useState(false);
   const [activePortfolioTab, setActivePortfolioTab] = React.useState<'positions' | 'insights'>('positions');
+  const [isPartial, setIsPartial] = React.useState(false);
 
   const loadPortfolio = React.useCallback((mode: 'initial' | 'refresh' = 'initial') => {
     if (!currentUser?.id) {
@@ -82,12 +83,14 @@ export default function PortfolioScreen() {
         if (cancelled) return;
         setPositions(result.positions);
         setSummary(result.summary);
+        setIsPartial(result.partial ?? false);
       })
       .catch((err) => {
         if (cancelled) return;
         const parsed = parseApiError(err, 'Unable to load portfolio');
         show(parsed.message, 'error');
         setIsError(true);
+        setIsPartial(false);
       })
       .finally(() => {
         if (!cancelled) {
@@ -268,6 +271,12 @@ export default function PortfolioScreen() {
         totalUnits={item.totalUnits}
         ownershipPct={item.ownershipPct}
         currentValueLabel={formatFromFiat(item.currentValueGbp, 'GBP')}
+        estimatedSaleProceedsLabel={item.estimatedSaleProceedsGbp === null
+          ? 'No current bids'
+          : formatFromFiat(item.estimatedSaleProceedsGbp, 'GBP')}
+        saleDepthLabel={item.estimatedSaleProceedsGbp === null
+          ? undefined
+          : `Bid depth: ${item.saleDepthUnits} units`}
         avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, 'GBP')}
         unrealizedLabel={item.unrealizedPnlGbp >= 0
           ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
@@ -348,6 +357,8 @@ export default function PortfolioScreen() {
       >
         <CoOwnStateCanvas
           variant="error"
+          title="Portfolio unavailable"
+          subtitle="We couldn't load your holdings. Tap below to try again."
           actionLabel="Try again"
           onAction={() => loadPortfolio()}
         />
@@ -418,6 +429,15 @@ export default function PortfolioScreen() {
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
 
+      {isPartial && (
+        <View style={[styles.partialBanner, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
+          <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
+          <Text style={[styles.partialBannerText, { color: colors.textSecondary }]} numberOfLines={2}>
+            Some positions are unavailable. Totals may be incomplete.
+          </Text>
+        </View>
+      )}
+
       <FlashList
         data={activePortfolioTab === 'positions' ? positions : []}
         keyExtractor={(item) => item.assetId}
@@ -434,7 +454,7 @@ export default function PortfolioScreen() {
           <View>
             {/* Portfolio summary — ownership surface, not a finance dashboard */}
             <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Portfolio value</Text>
+              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Marked portfolio value</Text>
               <CoOwnNumericText
                 value={summary.totalValueGbp}
                 unit="1ZE"
@@ -476,6 +496,17 @@ export default function PortfolioScreen() {
                   Per anti-AI design: remove the generic dashboard silhouette.
                   Each metric is a flat row with a hairline divider. */}
               <View style={styles.pnlRows}>
+                <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Cost basis</Text>
+                  <CoOwnNumericText
+                    value={totalCostBasisGbp}
+                    unit="1ZE"
+                    size="price"
+                    showUnit={false}
+                    showGlyph={false}
+                    color={colors.textPrimary}
+                  />
+                </View>
                 <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Total return</Text>
                   <CoOwnNumericText
@@ -536,14 +567,15 @@ export default function PortfolioScreen() {
               )}
             </View>
 
-            {/* Portfolio performance chart — flat canvas, no card chrome.
-                Shows cost-basis accumulation over time and current mark value.
-                Only rendered when there are positions with cost basis. */}
-            {totalCostBasisGbp > 0 && (
+            {/* Cost vs value comparison — flat canvas, no card chrome.
+                Shows total cost basis against current marked value with
+                unrealised and realised P&L. No fabricated historical line. */}
+            {positions.length > 0 && (
               <CoOwnPortfolioPerformanceChart
                 positions={positions}
                 totalValueGbp={summary.totalValueGbp}
                 totalCostBasisGbp={totalCostBasisGbp}
+                totalRealizedGbp={summary.totalRealizedGbp}
               />
             )}
 
@@ -867,6 +899,24 @@ export default function PortfolioScreen() {
 const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: Space.md,
+  },
+  // ── Partial-failure warning banner ──
+  // Inline warning when some asset fetches failed. Does not replace the
+  // positions list — sits above it as an additional advisory.
+  partialBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  partialBannerText: {
+    flex: 1,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   // ── Portfolio summary — the one dominant panel above the fold ──
   // Per AGENTS.md §4 surface budget: one dominant non-media panel is allowed.

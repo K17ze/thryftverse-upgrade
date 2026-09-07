@@ -133,8 +133,14 @@ export default function TradeScreen() {
     isStreaming: orderBookStreaming,
     hasGap: hasSequenceGap,
     hasError: orderBookError,
+    lastSequence,
+    isForegroundStale,
     refetch: refetchOrderBook,
   } = useCoOwnOrderBookStream(tradeAssetId ?? null);
+
+  // AppState foreground revalidation, sequence tracking, and the
+  // setIsForegroundStale(false) transition are owned by the shared hook so
+  // Asset Detail and Trade never open competing realtime subscriptions.
 
   React.useEffect(() => {
     if (!tradeAssetId) { setIsLoading(false); setIsError(true); return; }
@@ -243,30 +249,42 @@ export default function TradeScreen() {
     return rightsRows.some((r) => r.isTbc);
   }, [asset]);
 
+  const visibleBook = React.useMemo(() => ({
+    bids: (orderBook?.bids ?? []).map((level) => ({ price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0, size: level.units })),
+    asks: (orderBook?.asks ?? []).map((level) => ({ price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0, size: level.units })) }), [orderBook]);
+
+  // Compute the fill estimate before the quote so that protected_instant
+  // orders can use the order-book walk's average fill price as the headline
+  // price instead of the static reference price. The quantity is derived
+  // directly from the input (same parse as buildTradeQuote's internal logic).
+  const fillEstimate = React.useMemo(
+    () => estimateFill(side, Math.floor(Number(quantityInput)) || 0, visibleBook),
+    [side, quantityInput, visibleBook]
+  );
+
+  // For protected_instant, the headline quote should reflect the expected
+  // fill from the live order book, not the static reference price. When the
+  // book has executable depth, use the fill estimate's average price. Fall
+  // back to the reference price when the book is empty or no units fill.
+  const headlineMarketPrice = ticketOrderType === 'protected_instant' && fillEstimate.unitsFilled > 0
+    ? fillEstimate.avgFillPrice
+    : marketPrice;
+
   const quote = React.useMemo(
     () => buildTradeQuote({
       orderMode,
       side,
       quantityInput,
       limitPriceInput: effectiveLimitPrice > 0 ? String(effectiveLimitPrice) : '',
-      marketPrice }),
-    [effectiveLimitPrice, marketPrice, quantityInput, side]
+      marketPrice: headlineMarketPrice }),
+    [effectiveLimitPrice, headlineMarketPrice, quantityInput, side]
   );
-
-  const visibleBook = React.useMemo(() => ({
-    bids: (orderBook?.bids ?? []).map((level) => ({ price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0, size: level.units })),
-    asks: (orderBook?.asks ?? []).map((level) => ({ price: exactGbp(level.unitPriceGbpStr, level.unitPriceGbp) ?? 0, size: level.units })) }), [orderBook]);
 
   const protectionPrice = quote.hasLimitPrice ? quote.limitPrice : 0;
 
   const reservation = React.useMemo(
     () => computeReservation(side, quote.quantity, protectionPrice, DEFAULT_FEE_SCHEDULE, 0),
     [side, quote.quantity, protectionPrice]
-  );
-
-  const fillEstimate = React.useMemo(
-    () => estimateFill(side, quote.quantity, visibleBook),
-    [side, quote.quantity, visibleBook]
   );
 
   const depthContext = React.useMemo(() => {
@@ -299,7 +317,9 @@ export default function TradeScreen() {
   const marketIsAuthoritative = orderBook?.source === 'live'
     && orderBook.reconciliationState === 'reconciled'
     && isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)
+    && !isForegroundStale
     && !hasSequenceGap
+    && lastSequence !== null
     && !orderBookError;
   const canSubmit = isTradeSubmitEnabled({ assetFound: !!asset, eligibility, quote })
     && !hasIncompleteRights
@@ -319,7 +339,7 @@ export default function TradeScreen() {
     if (orderBook.reconciliationState !== 'reconciled') return t('trade.error.reconciliationInProgress');
     if (!isBookFresh(orderBook, Date.now(), orderBook?.stalenessThresholdSeconds)) return t('trade.error.timestampUnavailable');
     return null;
-  }, [asset, eligibility, hasIncompleteRights, isOffline, orderBook, quote, orderBookError, hasSequenceGap, featureFlags.canPlaceOrders, featureFlags.maxOrderSize]);
+  }, [asset, eligibility, hasIncompleteRights, isForegroundStale, isOffline, lastSequence, orderBook, quote, orderBookError, hasSequenceGap, featureFlags.canPlaceOrders, featureFlags.maxOrderSize]);
 
   // Thin market: no opposite side → substitute "Review order" with "Request quote"
   const isThinMarket = (side === 'buy' && visibleBook.asks.length === 0)
@@ -492,17 +512,40 @@ export default function TradeScreen() {
         isActive={Boolean(orderBook && orderBook.reconciliationState !== 'reconciled')}
       />
 
-      {/* Compact value strip — spec 03 §3.2: last/bid/ask/spread one line */}
-      <CoOwnValueStrip
-        last={{ price: asset.unitPriceGbp, ageSeconds: null }}
-        nav={asset.appraisalValueGbp && asset.totalUnits > 0 ? {
-          pricePerUnit: asset.appraisalValueGbp / asset.totalUnits,
-          valuedAt: asset.appraisalValuedAt ?? '—',
-          method: asset.appraisalValuer ?? '—' } : undefined}
-        premiumPct={asset.appraisalValueGbp && asset.totalUnits > 0
-          ? ((asset.unitPriceGbp - (asset.appraisalValueGbp / asset.totalUnits)) / (asset.appraisalValueGbp / asset.totalUnits)) * 100
-          : null}
-      />
+      {/* Compact value strip — spec 03 §3.2: last/bid/ask/spread one line.
+          The "Last" cell shows the last settled trade price from the
+          backend snapshot (or the legacy lastTradePriceGbp field). When
+          no trade has settled yet, the cell is omitted so the strip shows
+          "No trades yet" rather than mislabelling the reference price. */}
+      {(() => {
+        const lastTradePrice = asset.marketSnapshot?.lastExecutionPriceGbp ?? asset.lastTradePriceGbp ?? null;
+        const lastTradeAt = asset.marketSnapshot?.lastExecutionAt ?? null;
+        const lastAgeSeconds = lastTradeAt
+          ? Math.max(0, Math.floor((Date.now() - new Date(lastTradeAt).getTime()) / 1000))
+          : null;
+        return lastTradePrice != null ? (
+          <CoOwnValueStrip
+            last={{ price: lastTradePrice, ageSeconds: lastAgeSeconds }}
+            nav={asset.appraisalValueGbp && asset.totalUnits > 0 ? {
+              pricePerUnit: asset.appraisalValueGbp / asset.totalUnits,
+              valuedAt: asset.appraisalValuedAt ?? '—',
+              method: asset.appraisalValuer ?? '—' } : undefined}
+            premiumPct={asset.appraisalValueGbp && asset.totalUnits > 0
+              ? ((asset.unitPriceGbp - (asset.appraisalValueGbp / asset.totalUnits)) / (asset.appraisalValueGbp / asset.totalUnits)) * 100
+              : null}
+          />
+        ) : (
+          <CoOwnValueStrip
+            nav={asset.appraisalValueGbp && asset.totalUnits > 0 ? {
+              pricePerUnit: asset.appraisalValueGbp / asset.totalUnits,
+              valuedAt: asset.appraisalValuedAt ?? '—',
+              method: asset.appraisalValuer ?? '—' } : undefined}
+            premiumPct={asset.appraisalValueGbp && asset.totalUnits > 0
+              ? ((asset.unitPriceGbp - (asset.appraisalValueGbp / asset.totalUnits)) / (asset.appraisalValueGbp / asset.totalUnits)) * 100
+              : null}
+          />
+        );
+      })()}
 
       <KeyboardAwareScrollView
         style={{ flex: 1 }}
@@ -617,7 +660,7 @@ export default function TradeScreen() {
             side={side}
             mode={orderMode}
             units={quote.quantity}
-            unitPriceLabel={formatCoOwnIze(marketPrice)}
+            unitPriceLabel={formatCoOwnIze(headlineMarketPrice)}
             grossLabel={<CoOwnNumericText value={quote.grossValue} unit="1ZE" size="priceList" align="right" showUnit={false} />}
             feeLabel={<CoOwnNumericText value={quote.fee} unit="1ZE" size="priceList" align="right" showUnit={false} />}
             totalLabel={<CoOwnNumericText value={quote.netValue} unit="1ZE" size="priceLarge" align="right" showUnit={false} />}
@@ -663,10 +706,10 @@ export default function TradeScreen() {
               onChange={setTicketOrderType}
               fullWidth
             />
-            <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={2} maxFontSizeMultiplier={1.4}>
+            <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={3} maxFontSizeMultiplier={1.4}>
               {ticketOrderType === 'protected_instant'
-                ? 'Marketable limit with visible protection price. Never uncapped in an illiquid asset.'
-                : 'Resting order. Queued until matched at your limit price.'}
+                ? `${side === 'buy' ? 'Buy' : 'Sell'} available units within your price limit. Any unfilled amount is canceled.`
+                : `${side === 'buy' ? 'Buy' : 'Sell'} at your limit or ${side === 'buy' ? 'lower' : 'higher'}. The order stays open until filled or expired.`}
             </Text>
 
             <View style={[styles.ticketDivider, { backgroundColor: colors.border }]} />
@@ -720,7 +763,9 @@ export default function TradeScreen() {
             {/* Every order is capped: protected instant is a marketable limit. */}
             <View style={styles.limitRow}>
               <Text style={[styles.inputLabel, { color: colors.textMuted }]} numberOfLines={1}>
-                {ticketOrderType === 'protected_instant' ? 'Protection price' : 'Limit price'}
+                {ticketOrderType === 'protected_instant'
+                  ? (side === 'buy' ? 'Maximum price per unit' : 'Minimum price per unit')
+                  : 'Limit price'}
               </Text>
               <View style={[styles.modePill, { backgroundColor: colors.brand }]}>
                 <Text style={[styles.modePillText, { color: colors.background }]} numberOfLines={1}>
@@ -736,14 +781,16 @@ export default function TradeScreen() {
               keyboardType="decimal-pad"
               placeholder={ticketOrderType === 'protected_instant' ? 'Waiting for live ask or bid' : 'Enter limit price'}
               editable={ticketOrderType === 'limit'}
-              accessibilityLabel={ticketOrderType === 'protected_instant' ? 'Protected maximum price' : 'Limit price'}
+              accessibilityLabel={ticketOrderType === 'protected_instant'
+                ? (side === 'buy' ? 'Maximum price per unit' : 'Minimum price per unit')
+                : 'Limit price'}
             />
-            <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={2}>
+            <Text style={[styles.marketHint, { color: colors.textMuted }]} numberOfLines={3}>
               {ticketOrderType === 'protected_instant'
                 ? (protectedLimitPrice > 0
-                  ? `Never executes beyond ${protectedLimitPrice.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE per unit.`
-                  : 'A protected order needs a live opposite-side quote.')
-                : `Rests until matched at ${effectiveLimitPrice.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE or better.`}
+                  ? `No unit will cost ${side === 'buy' ? 'more' : 'less'} than ${protectedLimitPrice.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE.`
+                  : 'Waiting for a live quote to set your price limit.')
+                : `Matches at ${effectiveLimitPrice.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 1ZE or ${side === 'buy' ? 'lower' : 'higher'}. Stays open until filled or expired.`}
             </Text>
 
             {/* Duration — only for limit orders */}

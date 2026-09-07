@@ -34,8 +34,11 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
     });
 
     it('AssetDetailScreen does not wrap every row in separate surfaces', () => {
+      // AssetDetailScreen was refactored: the identity lives in the
+      // screen while the transaction surface moved to AssetMarketSection.
       expect(assetScreen).toContain('CommerceDetailIdentity');
-      expect(assetScreen).toContain('CommerceDetailTransactionSurface');
+      const marketSection = readComponent('coown/asset-detail/AssetMarketSection.tsx');
+      expect(marketSection).toContain('CommerceDetailTransactionSurface');
     });
 
     it('ItemDetailScreen does not wrap every row in separate surfaces', () => {
