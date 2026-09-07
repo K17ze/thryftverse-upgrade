@@ -44,18 +44,18 @@ describe('pricing display-mode snapshots', () => {
           "promoteCta": "Promote for £1.99",
         },
         {
-          "checkoutTotal": "1.297473 1ze",
-          "itemPrice": "1.190160 1ze",
+          "checkoutTotal": "123.51 1ze",
+          "itemPrice": "113.29 1ze",
           "mode": "ize",
-          "platformChargeLine": "incl. 0.068883 1ze Platform charge",
-          "promoteCta": "Promote for 0.026463 1ze",
+          "platformChargeLine": "incl. 6.56 1ze Platform charge",
+          "promoteCta": "Promote for 2.52 1ze",
         },
         {
-          "checkoutTotal": "1.297473 1ze · £97.57",
-          "itemPrice": "1.190160 1ze · £89.50",
+          "checkoutTotal": "123.51 1ze · £97.57",
+          "itemPrice": "113.29 1ze · £89.50",
           "mode": "both",
-          "platformChargeLine": "incl. 0.068883 1ze · £5.18 Platform charge",
-          "promoteCta": "Promote for 0.026463 1ze · £1.99",
+          "platformChargeLine": "incl. 6.56 1ze · £5.18 Platform charge",
+          "promoteCta": "Promote for 2.52 1ze · £1.99",
         },
       ]
     `);

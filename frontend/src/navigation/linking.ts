@@ -93,7 +93,6 @@ export const linking: LinkingOptions<RootStackParamList> = {
               GalleriaCollectionDetail: 'galleria/collections/:collectionId',
               MoodboardHome: 'moodboards',
               YourAlgorithm: 'algorithm',
-              StyleQuiz: 'style-quiz',
             },
           },
           Explore: {
@@ -122,9 +121,10 @@ export const linking: LinkingOptions<RootStackParamList> = {
       // Marketplace / product surfaces (root stack — cross-tab)
       ItemDetail: 'product/:itemId',
       Checkout: 'checkout/:itemId',
+      Browse: 'browse/:categoryId',
 
       // Discovery (root stack — cross-tab)
-      GlobalSearch: 'search',
+      UnifiedDiscovery: 'search',
 
       // Settings & account (root stack — cross-tab)
       EditProfile: 'me/edit',

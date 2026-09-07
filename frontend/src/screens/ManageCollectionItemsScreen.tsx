@@ -22,6 +22,7 @@ import { CachedImage } from '../components/CachedImage';
 import { EmptyState } from '../components/EmptyState';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { BodyEmphasis, Caption } from '../components/ui/Text';
+import { openProductDetail } from '../platform/product/openProductDetail';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ManageCollectionItems'>;
 
@@ -30,7 +31,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
   const { collectionId } = route.params ?? {};
   const haptic = useHaptic();
   const { show } = useToast();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   const collections = useStore((state) => state.collections);
   const removeFromCollectionOnApi = useStore((state) => state.removeFromCollectionOnApi);
@@ -149,10 +150,10 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
     return (
       <AnimatedPressable
         style={[styles.row, isRemoving && styles.rowRemoving]}
-        onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
+        onPress={() => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'ManageCollectionItems' })}
         activeOpacity={0.85}
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}`}
+        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}`}
       >
         {item.images?.[0] ? (
           <CachedImage uri={item.images[0]} style={styles.thumb} contentFit="cover" />
@@ -166,7 +167,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           <Caption color={colors.textMuted}>{item.brand}</Caption>
         </View>
         <Text style={styles.rowPrice} numberOfLines={1}>
-          {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
+          {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
         </Text>
         <AnimatedPressable
           style={styles.removeBtn}
@@ -189,9 +190,9 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
       <View style={styles.row}>
         <Pressable
           style={styles.availableInfo}
-          onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
+          onPress={() => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'ManageCollectionAdd' })}
           accessibilityRole="button"
-          accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}`}
+          accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}`}
         >
           {item.images?.[0] ? (
             <CachedImage uri={item.images[0]} style={styles.thumb} contentFit="cover" />
@@ -206,7 +207,7 @@ export default function ManageCollectionItemsScreen({ navigation, route }: Props
           </View>
         </Pressable>
         <Text style={styles.rowPrice} numberOfLines={1}>
-          {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
+          {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
         </Text>
         <AnimatedPressable
           style={[styles.addBtn, isAdding && styles.addBtnLoading]}

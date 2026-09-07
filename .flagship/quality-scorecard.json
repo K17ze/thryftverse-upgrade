@@ -1,0 +1,50 @@
+{
+  "scorecard": {
+    "Analytics": {
+      "currentScore": 4.5,
+      "targetScore": 8.5,
+      "criteria": {
+        "dataTruthfulness": { "current": 3, "target": 9, "blockers": ["G-ANALYTICS-01","G-ANALYTICS-02","G-ANALYTICS-03"] },
+        "silhouetteAndHierarchy": { "current": 4, "target": 9, "blockers": ["G-ANALYTICS-04"] },
+        "tokenCompliance": { "current": 5, "target": 9, "blockers": ["G-ANALYTICS-05","G-ANALYTICS-06"] },
+        "stateCoverage": { "current": 7, "target": 9, "blockers": [] },
+        "accessibility": { "current": 5, "target": 9, "blockers": ["G-ANALYTICS-06"] },
+        "motionAndPerformance": { "current": 6, "target": 9, "blockers": ["G-ANALYTICS-07"] }
+      }
+    },
+    "SellerHub": {
+      "currentScore": 4.0,
+      "targetScore": 8.5,
+      "criteria": {
+        "dataTruthfulness": { "current": 3, "target": 9, "blockers": ["G-SELLERHUB-01","G-SELLERHUB-02","G-SELLERHUB-03"] },
+        "silhouetteAndHierarchy": { "current": 4, "target": 9, "blockers": ["G-SELLERHUB-04","G-SELLERHUB-05"] },
+        "tokenCompliance": { "current": 4, "target": 9, "blockers": ["G-SELLERHUB-06"] },
+        "stateCoverage": { "current": 6, "target": 9, "blockers": ["G-SELLERHUB-03"] },
+        "accessibility": { "current": 5, "target": 9, "blockers": ["G-SELLERHUB-07"] },
+        "copyQuality": { "current": 3, "target": 9, "blockers": [] }
+      }
+    },
+    "EditProfile": {
+      "currentScore": 4.0,
+      "targetScore": 8.5,
+      "criteria": {
+        "dataTruthfulness": { "current": 2, "target": 9, "blockers": ["G-EDITPROFILE-01","G-EDITPROFILE-04"] },
+        "uploadCorrectness": { "current": 3, "target": 9, "blockers": ["G-EDITPROFILE-02","G-EDITPROFILE-03","G-EDITPROFILE-06"] },
+        "silhouetteAndHierarchy": { "current": 5, "target": 9, "blockers": ["G-EDITPROFILE-05"] },
+        "tokenCompliance": { "current": 4, "target": 9, "blockers": ["G-EDITPROFILE-07"] },
+        "accessibility": { "current": 6, "target": 9, "blockers": ["G-EDITPROFILE-07"] },
+        "deadCode": { "current": 4, "target": 9, "blockers": ["G-EDITPROFILE-08"] }
+      }
+    },
+    "SharedUI": {
+      "currentScore": 6.0,
+      "targetScore": 8.5,
+      "criteria": {
+        "chartFontFamily": { "current": 4, "target": 9, "blockers": ["G-SHARED-01"] },
+        "chartMotion": { "current": 5, "target": 9, "blockers": ["G-SHARED-02"] },
+        "chartElevation": { "current": 6, "target": 9, "blockers": ["G-SHARED-03"] }
+      }
+    }
+  },
+  "overall": { "current": 4.4, "target": 8.5 }
+}

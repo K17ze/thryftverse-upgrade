@@ -2,21 +2,20 @@
  * Algorithm Transparency API — "Your Algorithm" dashboard service
  *
  * This service provides the data contract and mock implementation for the
- * ThryftVerse algorithm transparency surface — a 2026 trust differentiator
- * inspired by Instagram's "Your Algorithm" dashboard. Users can see exactly
+ * ThryftVerse algorithm transparency surface. Users can see exactly
  * which topics and signals shape their recommendations, adjust topic weights,
  * add new interests, and remove topics they no longer want influencing their
  * feed.
  *
  * Per AGENTS.md §11 (Truthful UI): the mock data is flagged via
- * `ALGORITHM_DEMO_MODE` and every entity carries `isDemo: true` so the UI can
+ * `getAlgorithmDemoMode()` and every entity carries `isDemo: true` so the UI can
  * show an honest "Demo mode" indicator. We never fabricate that a topic or
  * signal is backed by a real backend.
  *
  * The service is mock-ready — the function signatures mirror what a real
  * personalization ML model / feature store would expose. When a real backend
- * is wired, set `ALGORITHM_DEMO_MODE = false` and replace the mock branches
- * with real fetch calls. The UI layer does not need to change.
+ * is wired, `setAlgorithmDemoMode(false)` will be called automatically on
+ * successful backend fetches. The UI layer does not need to change.
  */
 
 import { fetchJson } from '../lib/apiClient';
@@ -79,6 +78,8 @@ export interface AlgorithmSignal {
 export interface FeedExplanationReason {
   /** Topic label that matched the item. */
   topic: string;
+  /** G1: Real topic ID from the backend, for "See more / Show less / Remove" actions. */
+  topicId?: string;
   /** Where the topic influence originated. */
   source: SignalSource;
   /** Relative weight contribution (0–1). */
@@ -126,6 +127,8 @@ export interface AlgorithmTransparencyProfile {
 let _algorithmDemoMode = true;
 export function getAlgorithmDemoMode(): boolean { return _algorithmDemoMode; }
 export function setAlgorithmDemoMode(value: boolean): void { _algorithmDemoMode = value; }
+// Deprecated: use getAlgorithmDemoMode() for runtime-accurate demo state.
+// This const captures __DEV__ at import time and does NOT reflect runtime fallback.
 export const ALGORITHM_DEMO_MODE = __DEV__;
 
 // ---------------------------------------------------------------------------
@@ -355,10 +358,6 @@ let sessionTopics: AlgorithmTopic[] = MOCK_TOPICS.map((t) => ({ ...t }));
 // Helpers
 // ---------------------------------------------------------------------------
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function weightToValue(w: TopicWeight): number {
   return w === 'high' ? 0.85 : w === 'medium' ? 0.55 : 0.25;
 }
@@ -439,18 +438,6 @@ function backendProfileToTransparencyProfile(
  */
 export async function fetchAlgorithmProfile(): Promise<AlgorithmTransparencyProfile> {
   const userId = getCurrentUserId();
-  if (userId && !getAlgorithmDemoMode()) {
-    try {
-      const backend = await fetchJson<BackendIntentProfile>(
-        `/recommendations/intent/${encodeURIComponent(userId)}/profile`
-      );
-      setAlgorithmDemoMode(false);
-      return backendProfileToTransparencyProfile(backend);
-    } catch {
-      // fall through to mock
-    }
-  }
-  // Try real backend first even in demo mode to detect availability
   if (userId) {
     try {
       const backend = await fetchJson<BackendIntentProfile>(
@@ -462,7 +449,7 @@ export async function fetchAlgorithmProfile(): Promise<AlgorithmTransparencyProf
       // fall through to mock
     }
   }
-  await delay(420);
+  setAlgorithmDemoMode(true);
   const recentInfluences = [...MOCK_SIGNALS]
     .sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime())
     .slice(0, 5);
@@ -471,7 +458,7 @@ export async function fetchAlgorithmProfile(): Promise<AlgorithmTransparencyProf
     signals: [...MOCK_SIGNALS],
     recentInfluences,
     lastUpdated: isoHoursAgo(1),
-    isDemo: getAlgorithmDemoMode(),
+    isDemo: true,
   };
 }
 
@@ -503,7 +490,6 @@ export async function updateTopicWeight(topicId: string, weight: TopicWeight): P
       // fall through to mock
     }
   }
-  await delay(180);
   let updated: AlgorithmTopic | null = null;
   sessionTopics = sessionTopics.map((t) => {
     if (t.id === topicId) {
@@ -545,7 +531,6 @@ export async function removeTopic(topicId: string): Promise<boolean> {
       // fall through to mock
     }
   }
-  await delay(220);
   const target = sessionTopics.find((t) => t.id === topicId);
   if (!target || !target.removable) return false;
   sessionTopics = sessionTopics.filter((t) => t.id !== topicId);
@@ -590,7 +575,6 @@ export async function addTopic(label: string, category: string): Promise<Algorit
       // fall through to mock
     }
   }
-  await delay(260);
   const topic: AlgorithmTopic = {
     id: `topic-user-${Date.now()}`,
     label: label.trim(),
@@ -609,7 +593,21 @@ export async function addTopic(label: string, category: string): Promise<Algorit
  * Fetch recent signals that shaped the feed (compact list).
  */
 export async function fetchRecentInfluences(): Promise<AlgorithmSignal[]> {
-  await delay(300);
+  const userId = getCurrentUserId();
+  if (userId) {
+    try {
+      const backend = await fetchJson<BackendIntentProfile>(
+        `/recommendations/intent/${encodeURIComponent(userId)}/profile`
+      );
+      const profile = backendProfileToTransparencyProfile(backend);
+      if (profile.recentInfluences.length > 0) {
+        return profile.recentInfluences;
+      }
+    } catch {
+      // fall through to mock
+    }
+  }
+  setAlgorithmDemoMode(true);
   return [...MOCK_SIGNALS]
     .sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime())
     .slice(0, 5);
@@ -617,13 +615,13 @@ export async function fetchRecentInfluences(): Promise<AlgorithmSignal[]> {
 
 /**
  * Explain why a specific item appeared in the feed.
- * Returns null if the item ID is not found.
+ * Returns null if the item ID is not found or no topics are available.
+ *
+ * Note: itemTitle and itemThumbnail are left empty when the backend does not
+ * provide them. The UI should fetch real item metadata separately rather than
+ * relying on fabricated data here.
  */
 export async function fetchFeedExplanation(itemId: string): Promise<AlgorithmFeedExplanation | null> {
-  await delay(340);
-  // Build a deterministic explanation from the session topics so the reasons
-  // reflect the user's actual profile. We pick the top contributing topics
-  // by weight and derive a descriptive confidence label.
   const ranked = [...sessionTopics]
     .sort((a, b) => weightToValue(b.weight) - weightToValue(a.weight))
     .slice(0, 3);
@@ -632,38 +630,19 @@ export async function fetchFeedExplanation(itemId: string): Promise<AlgorithmFee
 
   const reasons: FeedExplanationReason[] = ranked.map((t) => ({
     topic: t.label,
+    topicId: t.id,
     source: t.source,
     weight: weightToValue(t.weight),
   }));
 
   const score = reasons.reduce((sum, r) => sum + r.weight, 0) / reasons.length;
 
-  // Deterministic mock item metadata keyed off the itemId so the sheet always
-  // shows a consistent thumbnail/title for the same item.
-  const titles = [
-    'Acne Studios Vintage Denim Jacket',
-    'Maison Margiela Replica Sneakers',
-    'Tailored Wool Overcoat',
-    'Minimalist Leather Tote',
-  ];
-  const title = titles[Math.abs(hashCode(itemId)) % titles.length];
-  const thumbnail = `https://images.unsplash.com/photo-1551028719-16edfa3acc6b?w=400&sig=${encodeURIComponent(itemId)}`;
-
   return {
     itemId,
-    itemTitle: title,
-    itemThumbnail: thumbnail,
+    itemTitle: '',
+    itemThumbnail: '',
     reasons,
     confidenceLabel: confidenceFromScore(score),
     isDemo: getAlgorithmDemoMode(),
   };
-}
-
-// Small deterministic hash so mock metadata is stable per itemId.
-function hashCode(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  }
-  return h;
 }

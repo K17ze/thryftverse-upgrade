@@ -552,7 +552,7 @@ async function seed() {
             $1, $2, $3, $4,
             (SELECT image_url FROM listings WHERE id = $2),
             $5, $5, $6, $6,
-            'GBP', true, 0, 0, 0,
+            'ONEZE', true, 0, 0, 0,
             $7, $8, $9,
             $10, $11, $12, $13,
             $14, $15,
@@ -1508,6 +1508,303 @@ async function seed() {
       );
     }
     console.log(`[seed] ${seedReviews.length} order reviews upserted`);
+
+    // ── Seller trust projections ───────────────────────────────────────────
+    // Schema: seller_trust(user_id PK, response_rate, ship_within_days,
+    //   total_sales, positive_rating_pct, calculated_at, source_watermark)
+    const seedSellerTrust = [
+      { userId: 'seed_u1', responseRate: 98.5, shipWithinDays: 1, totalSales: 42, positiveRatingPct: 96.0 },
+      { userId: 'seed_u2', responseRate: 92.0, shipWithinDays: 2, totalSales: 18, positiveRatingPct: 88.0 },
+      { userId: 'seed_u3', responseRate: 95.0, shipWithinDays: 1, totalSales: 31, positiveRatingPct: 94.0 },
+      { userId: 'seed_u4', responseRate: 88.0, shipWithinDays: 3, totalSales: 7, positiveRatingPct: 85.0 },
+    ];
+    for (const trust of seedSellerTrust) {
+      await client.query(
+        `INSERT INTO seller_trust (user_id, response_rate, ship_within_days, total_sales, positive_rating_pct, calculated_at, source_watermark)
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+         ON CONFLICT (user_id) DO UPDATE SET
+           response_rate = EXCLUDED.response_rate,
+           ship_within_days = EXCLUDED.ship_within_days,
+           total_sales = EXCLUDED.total_sales,
+           positive_rating_pct = EXCLUDED.positive_rating_pct,
+           calculated_at = NOW()`,
+        [trust.userId, trust.responseRate, trust.shipWithinDays, trust.totalSales, trust.positiveRatingPct]
+      );
+    }
+    console.log(`[seed] ${seedSellerTrust.length} seller trust projections upserted`);
+
+    // ── Listing interactions (views, saves, wishlists) ─────────────────────
+    // Schema: interactions(id BIGSERIAL, user_id, listing_id, action, strength, created_at)
+    // Actions: view, qualified_detail_view, wishlist, save, share, purchase, etc.
+    // Spread across the last 30 days so analytics period queries return data.
+    const seedInteractions: Array<{ userId: string; listingId: string; action: string; daysAgo: number }> = [];
+    // Generate views for all listings from multiple users
+    for (const listing of LISTINGS) {
+      // 15-40 views per listing from random users
+      const viewCount = 15 + Math.floor(Math.random() * 25);
+      for (let i = 0; i < viewCount; i++) {
+        const viewer = USERS[Math.floor(Math.random() * USERS.length)];
+        if (viewer.id === listing.sellerId) continue; // don't count self-views
+        seedInteractions.push({
+          userId: viewer.id,
+          listingId: listing.id,
+          action: Math.random() > 0.3 ? 'view' : 'qualified_detail_view',
+          daysAgo: Math.floor(Math.random() * 28),
+        });
+      }
+      // 3-8 saves per listing
+      const saveCount = 3 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < saveCount; i++) {
+        const saver = USERS[Math.floor(Math.random() * USERS.length)];
+        if (saver.id === listing.sellerId) continue;
+        seedInteractions.push({
+          userId: saver.id,
+          listingId: listing.id,
+          action: 'save',
+          daysAgo: Math.floor(Math.random() * 28),
+        });
+      }
+      // 2-5 wishlists per listing
+      const wishlistCount = 2 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < wishlistCount; i++) {
+        const wisher = USERS[Math.floor(Math.random() * USERS.length)];
+        if (wisher.id === listing.sellerId) continue;
+        seedInteractions.push({
+          userId: wisher.id,
+          listingId: listing.id,
+          action: 'wishlist',
+          daysAgo: Math.floor(Math.random() * 28),
+        });
+      }
+    }
+    for (const interaction of seedInteractions) {
+      await client.query(
+        `INSERT INTO interactions (user_id, listing_id, action, strength, created_at)
+         VALUES ($1, $2, $3, 1, NOW() - ($4 || ' days')::INTERVAL)
+         ON CONFLICT DO NOTHING`,
+        [interaction.userId, interaction.listingId, interaction.action, String(interaction.daysAgo)]
+      );
+    }
+    console.log(`[seed] ${seedInteractions.length} listing interactions upserted`);
+
+    // ── Listing offers ─────────────────────────────────────────────────────
+    // Schema: listing_offers(id PK, listing_id, buyer_id, seller_id, offer_price_gbp,
+    //   original_price_gbp, counter_round, status, expires_at, created_at)
+    const seedOffers = [
+      { id: 'seed_offer_1', listingId: 'seed_l1', buyerId: 'seed_u2', sellerId: 'seed_u1', offerPrice: 170, originalPrice: 200, status: 'pending', daysAgo: 1 },
+      { id: 'seed_offer_2', listingId: 'seed_l6', buyerId: 'seed_u4', sellerId: 'seed_u3', offerPrice: 60, originalPrice: 75, status: 'pending', daysAgo: 2 },
+      { id: 'seed_offer_3', listingId: 'seed_l11', buyerId: 'seed_u3', sellerId: 'seed_u2', offerPrice: 3800, originalPrice: 4200, status: 'declined', daysAgo: 10 },
+      { id: 'seed_offer_4', listingId: 'seed_l15', buyerId: 'seed_u1', sellerId: 'seed_u2', offerPrice: 6000, originalPrice: 6800, status: 'countered', daysAgo: 5 },
+      { id: 'seed_offer_5', listingId: 'seed_l9', buyerId: 'seed_u4', sellerId: 'seed_u2', offerPrice: 100, originalPrice: 120, status: 'accepted', daysAgo: 8 },
+    ];
+    for (const offer of seedOffers) {
+      await client.query(
+        `INSERT INTO listing_offers (id, listing_id, buyer_id, seller_id, offer_price_gbp, original_price_gbp, counter_round, status, expires_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 0, $7, NOW() + '3 days'::INTERVAL, NOW() - ($8 || ' days')::INTERVAL, NOW() - ($8 || ' days')::INTERVAL)
+         ON CONFLICT (id) DO UPDATE SET
+           status = EXCLUDED.status,
+           offer_price_gbp = EXCLUDED.offer_price_gbp`,
+        [offer.id, offer.listingId, offer.buyerId, offer.sellerId, offer.offerPrice, offer.originalPrice, offer.status, String(offer.daysAgo)]
+      );
+    }
+    console.log(`[seed] ${seedOffers.length} listing offers upserted`);
+
+    // ── Ledger accounts (seller_payable per seller) ────────────────────────
+    // Schema: ledger_accounts(id BIGSERIAL, owner_type, owner_id, account_code, currency)
+    // The migration seeds platform accounts but NOT per-user seller_payable accounts.
+    const seedLedgerAccounts = [
+      { ownerId: 'seed_u1' },
+      { ownerId: 'seed_u2' },
+      { ownerId: 'seed_u3' },
+      { ownerId: 'seed_u4' },
+    ];
+    for (const account of seedLedgerAccounts) {
+      await client.query(
+        `INSERT INTO ledger_accounts (owner_type, owner_id, account_code, currency)
+         VALUES ('user', $1, 'seller_payable', 'GBP')
+         ON CONFLICT (owner_type, owner_id, account_code, currency) DO NOTHING`,
+        [account.ownerId]
+      );
+    }
+    console.log(`[seed] ${seedLedgerAccounts.length} seller payable ledger accounts upserted`);
+
+    // ── Ledger entries (platform fees + seller_payable credits) ────────────
+    // Schema (canonical money, migrations 007 + 079):
+    //   ledger_entries(id, account_id, counterparty_account_id, direction,
+    //     amount_gbp (legacy, nullable), amount NUMERIC(18,6) NOT NULL,
+    //     amount_base_units BIGINT, asset_code TEXT, asset_scale SMALLINT,
+    //     asset_registry_version TEXT, amount_quarantined BOOLEAN,
+    //     currency, source_type, source_id, line_type, metadata, created_at)
+    // Check constraint requires either valid canonical money or quarantined rows.
+    // For each seeded order, create:
+    //   1. A seller_payable credit (order_payment) — the seller receives the subtotal
+    //   2. A platform_fee debit (order_payment) — the platform takes a fee
+    const platformRevenueAccount = await client.query<{ id: string }>(
+      `SELECT id FROM ledger_accounts WHERE owner_type = 'platform' AND account_code = 'platform_revenue' LIMIT 1`
+    );
+    const platformRevenueId = platformRevenueAccount.rows[0]?.id;
+    for (const order of seedOrders) {
+      const sellerPayableAccount = await client.query<{ id: string }>(
+        `SELECT id FROM ledger_accounts WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable' LIMIT 1`,
+        [order.sellerId]
+      );
+      const sellerPayableId = sellerPayableAccount.rows[0]?.id;
+      if (!sellerPayableId || !platformRevenueId) continue;
+
+      const subtotal = parseFloat(order.subtotalGbp);
+      const fee = parseFloat(order.protectionGbp);
+      const daysAgoStr = String(order.daysAgo);
+
+      // Seller receives subtotal as a credit
+      await client.query(
+        `INSERT INTO ledger_entries (
+            account_id, counterparty_account_id, direction,
+            amount_gbp, amount, amount_base_units, asset_code, asset_scale, asset_registry_version, amount_quarantined,
+            currency, source_type, source_id, line_type, metadata, created_at
+          )
+         VALUES (
+            $1, $2, 'credit',
+            $3::NUMERIC, $3::NUMERIC, ($3::NUMERIC * 100)::BIGINT, 'GBP', 2, 'iso4217-2026-07', FALSE,
+            'GBP', 'order_payment', $4, 'seller_payable_credit', '{}', NOW() - ($5 || ' days')::INTERVAL
+          )
+         ON CONFLICT DO NOTHING`,
+        [sellerPayableId, platformRevenueId, subtotal, order.id, daysAgoStr]
+      );
+
+      // Platform fee debited from seller_payable
+      if (fee > 0) {
+        await client.query(
+          `INSERT INTO ledger_entries (
+              account_id, counterparty_account_id, direction,
+              amount_gbp, amount, amount_base_units, asset_code, asset_scale, asset_registry_version, amount_quarantined,
+              currency, source_type, source_id, line_type, metadata, created_at
+            )
+           VALUES (
+              $1, $2, 'debit',
+              $3::NUMERIC, $3::NUMERIC, ($3::NUMERIC * 100)::BIGINT, 'GBP', 2, 'iso4217-2026-07', FALSE,
+              'GBP', 'order_payment', $4, 'platform_fee', '{}', NOW() - ($5 || ' days')::INTERVAL
+            )
+           ON CONFLICT DO NOTHING`,
+          [sellerPayableId, platformRevenueId, fee, order.id, daysAgoStr]
+        );
+      }
+    }
+    console.log(`[seed] ledger entries for ${seedOrders.length} orders upserted`);
+
+    // ── Payout reserve holds (for shipped/delivered orders) ────────────────
+    // Schema: payout_reserve_holds(id BIGSERIAL, user_id, order_id, payout_account_id,
+    //   held_amount_gbp, reserve_percentage, released_at, release_eligible_at, created_at)
+    const seedReserveHolds = [
+      { userId: 'seed_u1', orderId: 'seed_order_1', payoutAccountId: 9001, heldAmount: 19.00, released: false, daysAgo: 14 },
+      { userId: 'seed_u3', orderId: 'seed_order_2', payoutAccountId: 9003, heldAmount: 8.50, released: false, daysAgo: 3 },
+    ];
+    for (const hold of seedReserveHolds) {
+      await client.query(
+        `INSERT INTO payout_reserve_holds (user_id, order_id, payout_account_id, held_amount_gbp, reserve_percentage, released_at, release_eligible_at, created_at)
+         VALUES ($1, $2, $3, $4, 10.00, NULL, NOW() + '16 days'::INTERVAL, NOW() - ($5 || ' days')::INTERVAL)
+         ON CONFLICT (order_id) DO UPDATE SET
+           held_amount_gbp = EXCLUDED.held_amount_gbp`,
+        [hold.userId, hold.orderId, hold.payoutAccountId, hold.heldAmount, String(hold.daysAgo)]
+      );
+    }
+    console.log(`[seed] ${seedReserveHolds.length} payout reserve holds upserted`);
+
+    // ── Listing price events (for price history charts) ────────────────────
+    // Schema: listing_price_events(id BIGSERIAL, listing_id, previous_price_gbp, new_price_gbp, changed_at)
+    const seedPriceEvents = [
+      { listingId: 'seed_l1', prevPrice: 220, newPrice: 200, daysAgo: 20 },
+      { listingId: 'seed_l2', prevPrice: 55, newPrice: 48, daysAgo: 15 },
+      { listingId: 'seed_l6', prevPrice: 85, newPrice: 75, daysAgo: 10 },
+      { listingId: 'seed_l11', prevPrice: 4500, newPrice: 4200, daysAgo: 7 },
+      { listingId: 'seed_l15', prevPrice: 7200, newPrice: 6800, daysAgo: 5 },
+    ];
+    for (const event of seedPriceEvents) {
+      await client.query(
+        `INSERT INTO listing_price_events (listing_id, previous_price_gbp, new_price_gbp, changed_at)
+         VALUES ($1, $2, $3, NOW() - ($4 || ' days')::INTERVAL)
+         ON CONFLICT DO NOTHING`,
+        [event.listingId, event.prevPrice, event.newPrice, String(event.daysAgo)]
+      );
+    }
+    console.log(`[seed] ${seedPriceEvents.length} listing price events upserted`);
+
+    // ── Group conversation + settings + members ────────────────────────────
+    // Schema: chat_conversations(id, type, title, owner_id, item_id, metadata)
+    //         chat_members(conversation_id, user_id, role, joined_at)
+    //         chat_group_settings(conversation_id, edit_group_info_scope, ...)
+    const seedGroupConversations = [
+      {
+        id: 'seed_group_1',
+        title: 'Vintage Finds UK',
+        ownerId: 'seed_u1',
+        memberIds: ['seed_u1', 'seed_u2', 'seed_u3', 'seed_u4'],
+        description: 'A community for vintage and designer clothing enthusiasts in the UK.',
+        avatar: null,
+        coverPhoto: null,
+      },
+      {
+        id: 'seed_group_2',
+        title: 'Sneakerheads Manchester',
+        ownerId: 'seed_u3',
+        memberIds: ['seed_u3', 'seed_u4', 'seed_u1'],
+        description: 'Buy, sell, trade sneakers in Manchester.',
+        avatar: null,
+        coverPhoto: null,
+      },
+    ];
+    for (const group of seedGroupConversations) {
+      await client.query(
+        `INSERT INTO chat_conversations (id, type, title, owner_id, item_id, metadata, created_at, updated_at)
+         VALUES ($1, 'group', $2, $3, NULL, $4, NOW() - '30 days'::INTERVAL, NOW() - '2 hours'::INTERVAL)
+         ON CONFLICT (id) DO UPDATE SET
+           type = 'group',
+           title = EXCLUDED.title,
+           owner_id = EXCLUDED.owner_id,
+           metadata = EXCLUDED.metadata`,
+        [group.id, group.title, group.ownerId, JSON.stringify({ description: group.description, avatar: group.avatar, coverPhoto: group.coverPhoto })]
+      );
+      for (const memberId of group.memberIds) {
+        const role = memberId === group.ownerId ? 'owner' : 'member';
+        await client.query(
+          `INSERT INTO chat_members (conversation_id, user_id, role, joined_at)
+           VALUES ($1, $2, $3, NOW() - '30 days'::INTERVAL)
+           ON CONFLICT (conversation_id, user_id) DO UPDATE SET
+             role = EXCLUDED.role`,
+          [group.id, memberId, role]
+        );
+      }
+      // Group settings — default: admins can edit, everyone can send messages
+      await client.query(
+        `INSERT INTO chat_group_settings (conversation_id, edit_group_info_scope, send_messages_scope, add_members_scope, updated_by)
+         VALUES ($1, 'admins', 'everyone', 'admins', $2)
+         ON CONFLICT (conversation_id) DO UPDATE SET
+           edit_group_info_scope = EXCLUDED.edit_group_info_scope,
+           send_messages_scope = EXCLUDED.send_messages_scope,
+           add_members_scope = EXCLUDED.add_members_scope`,
+        [group.id, group.ownerId]
+      );
+    }
+    console.log(`[seed] ${seedGroupConversations.length} group conversations + settings upserted`);
+
+    // ── Listing batch jobs (catalogue import history) ──────────────────────
+    // Schema: listing_batch_jobs(id UUID, idempotency_key, request_hash, seller_id,
+    //   command, status, total_items, applied_count, rejected_count, conflict_count, created_at, completed_at)
+    const seedBatchJobs = [
+      { sellerId: 'seed_u1', command: 'pause', status: 'completed', totalItems: 5, appliedCount: 5, daysAgo: 12 },
+      { sellerId: 'seed_u3', command: 'resume', status: 'completed', totalItems: 3, appliedCount: 3, daysAgo: 5 },
+    ];
+    for (const job of seedBatchJobs) {
+      const idemKey = `seed_batch_${job.sellerId}_${job.daysAgo}`;
+      await client.query(
+        `INSERT INTO listing_batch_jobs (idempotency_key, request_hash, seller_id, command, status, total_items, applied_count, rejected_count, conflict_count, created_at, completed_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 0, NOW() - ($8 || ' days')::INTERVAL, NOW() - ($8 || ' days')::INTERVAL + '1 hour'::INTERVAL)
+         ON CONFLICT (idempotency_key) DO UPDATE SET
+           status = EXCLUDED.status,
+           applied_count = EXCLUDED.applied_count`,
+        [idemKey, `seed_hash_${idemKey}`, job.sellerId, job.command, job.status, job.totalItems, job.appliedCount, String(job.daysAgo)]
+      );
+    }
+    console.log(`[seed] ${seedBatchJobs.length} listing batch jobs upserted`);
 
     await client.query('COMMIT');
     console.log('[seed] done — all data committed');

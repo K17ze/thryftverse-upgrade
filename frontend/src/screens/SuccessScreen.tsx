@@ -32,7 +32,7 @@ export default function SuccessScreen() {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { show } = useToast();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const reducedMotionEnabled = useReducedMotion();
 
   const [order, setOrder] = React.useState<CommerceOrder | null>(null);
@@ -126,7 +126,7 @@ export default function SuccessScreen() {
           <Ionicons name="checkmark" size={64} color={colors.success} style={styles.successIcon} />
 
           <View>
-            <Text style={styles.title}>Payment Successful</Text>
+            <Text style={styles.title} accessibilityRole="header">Payment Successful</Text>
             <Text style={styles.subtitle}>
               Your order has been placed.{ '\n' }
               {isLoading
@@ -151,7 +151,7 @@ export default function SuccessScreen() {
                 <View style={styles.orderInfo}>
                   <Text style={styles.orderTitle} numberOfLines={2}>{order.listingTitle}</Text>
                   <Text style={styles.orderSeller}>from @{sellerName}</Text>
-                  <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, currencyCode)}</Text>
+                  <Text style={styles.orderAmount}>{formatFromFiat(order.totalGbp, 'GBP')}</Text>
                 </View>
               </ElevatedSurface>
             </View>

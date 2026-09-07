@@ -23,6 +23,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { RootStackParamList } from '../navigation/types';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
@@ -70,7 +71,7 @@ export default function ClosetScreen() {
   const BOARD_CARD_W = (SCREEN_W - Space.md * 2 - BOARD_GAP) / BOARD_COLS;
   const BOARD_CARD_H = BOARD_CARD_W / AspectRatio.portrait + 8;
 
-  const t = StyleSheet.create({
+  const t = useMemo(() => StyleSheet.create({
     container: { backgroundColor: colors.background },
     headerBorder: { backgroundColor: colors.background, borderBottomColor: colors.border },
     tabBar: { borderBottomColor: colors.border },
@@ -105,11 +106,11 @@ export default function ClosetScreen() {
     brandChipText: { color: colors.textSecondary },
     brandChipTextActive: { color: colors.background },
     closetToolbarBadge: { backgroundColor: colors.textPrimary },
-    closetToolbarBadgeText: { color: colors.background } });
+    closetToolbarBadgeText: { color: colors.background } }), [colors]);
 
   const navigation = useNavigation<NavT>();
   const haptic = useHaptic();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const [activeTab, setActiveTab] = useState<TabKey>('SAVED');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('Default');
@@ -185,7 +186,7 @@ export default function ClosetScreen() {
   }, [navigation]);
 
   const handleBrowse = useCallback(() => {
-    navigation.navigate('GlobalSearch');
+    navigation.navigate('UnifiedDiscovery');
   }, [navigation]);
 
   const savedItems = useMemo(
@@ -453,7 +454,7 @@ export default function ClosetScreen() {
         {/* 3-column media mosaic — 3:4 portrait thumbnails, media-first */}
         <ClosetMediaMosaic
           items={filteredSaved}
-          onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
+          onPressItem={(item) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'ClosetSaved' })}
           showSaveButton
         />
       </>
@@ -466,7 +467,7 @@ export default function ClosetScreen() {
       return (
         <EmptyState
           graphic={<FlagshipEmptyGraphic variant="bag" size={120} />}
-          title="Your wishlist is empty"
+          title="Your Saved is empty"
           subtitle="Heart items to track price drops and get notified when they go on sale."
           ctaLabel="Browse"
           onCtaPress={handleBrowse}
@@ -477,7 +478,7 @@ export default function ClosetScreen() {
       <>
         <ClosetMediaMosaic
           items={filteredWishlist}
-          onPressItem={(item) => navigation.navigate('ItemDetail', { itemId: item.id })}
+          onPressItem={(item) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'ClosetWishlist' })}
           showWishlistButton
         />
       </>
@@ -684,7 +685,7 @@ export default function ClosetScreen() {
                 WISHLIST: wishlistItems.length,
                 COLLECTIONS: collections.length,
                 OUTFITS: outfits.length };
-              const tabLabel = tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : tab === 'COLLECTIONS' ? 'Collections' : 'Outfits';
+              const tabLabel = tab === 'SAVED' ? 'Saved' : tab === 'WISHLIST' ? 'Wishlist' : tab === 'COLLECTIONS' ? 'Closets' : 'Outfits';
               return (
                 <AnimatedPressable
                   key={tab}
@@ -695,7 +696,7 @@ export default function ClosetScreen() {
                   accessibilityState={{ selected: isActive }}
                   accessibilityLabel={`${tabLabel.toLowerCase()} tab, ${tabCounts[tab]} items`}
                 >
-                  <Text style={[styles.tabLabel, t.tabLabel, isActive && styles.tabLabelActive, isActive && t.tabLabelActive]}>
+                  <Text style={[styles.tabLabel, t.tabLabel, isActive && styles.tabLabelActive, isActive && t.tabLabelActive]} maxFontSizeMultiplier={2}>
                     {tabLabel}
                   </Text>
                   {isActive && <View style={[styles.tabIndicator, t.tabIndicator]} />}
@@ -821,7 +822,7 @@ export default function ClosetScreen() {
               accessibilityLabel={`Filter price drops: ${priceDropCount} items on sale`}
             >
               <Ionicons name="cash-outline" size={13} color={showPriceDropsOnly ? colors.background : colors.brand} />
-              <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]}>
+              <Text style={[styles.filterChipText, t.filterChipText, showPriceDropsOnly && styles.filterChipTextActive, showPriceDropsOnly && t.filterChipTextActive]} maxFontSizeMultiplier={2}>
                 Price drops ({priceDropCount})
               </Text>
             </AnimatedPressable>
@@ -842,7 +843,7 @@ export default function ClosetScreen() {
               </View>
               <View style={[styles.statDivider, t.statDivider]} />
               <View style={styles.statItem}>
-                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, currencyCode)}</Text>
+                <Text style={[styles.statValue, t.statValue]}>{formatFromFiat(closetStats.totalValue, 'GBP')}</Text>
                 <Text style={[styles.statLabel, t.statLabel]}>Total value</Text>
               </View>
               <View style={[styles.statDivider, t.statDivider]} />
@@ -854,8 +855,8 @@ export default function ClosetScreen() {
             {closetStats.totalSavings > 0 ? (
               <View style={[styles.savingsRow, t.savingsRow]}>
                 <Ionicons name="trending-down" size={12} color={colors.success} />
-                <Text style={[styles.savingsText, t.savingsText]}>
-                  {formatFromFiat(closetStats.totalSavings, currencyCode)} in price drops tracked
+                <Text style={[styles.savingsText, t.savingsText]} maxFontSizeMultiplier={2}>
+                  {formatFromFiat(closetStats.totalSavings, 'GBP')} in price drops tracked
                 </Text>
               </View>
             ) : null}

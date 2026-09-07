@@ -983,7 +983,7 @@ export default function LookDetailScreen() {
                       {inspectTag.isSold ? (
                         <Text style={styles.inspectSold}>Sold</Text>
                       ) : typeof inspectTag.price === 'number' ? (
-                        <Text style={styles.inspectPrice}>{formatFromFiat(inspectTag.price, currencyCode)}</Text>
+                        <Text style={styles.inspectPrice}>{formatFromFiat(inspectTag.price, 'GBP')}</Text>
                       ) : null}
                       {inspectTag.label && inspectTag.title && (
                         <Text style={styles.inspectLabel}>{inspectTag.label}</Text>

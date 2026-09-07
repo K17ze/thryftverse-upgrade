@@ -43,8 +43,14 @@
     "test": "vitest run --dir src",
     "test:watch": "vitest --dir src",
     "test:smoke": "vitest run src/__tests__/smoke-flows.test.ts",
-    "lint": "eslint src/ --ext .ts,.tsx",
-    "lint:fix": "eslint src/ --ext .ts,.tsx --fix",
+    "test:a11y": "maestro test .maestro/flows/accessibility/",
+    "test:a11y:auth": "maestro test .maestro/flows/accessibility/auth-voiceover.yaml",
+    "test:a11y:browse": "maestro test .maestro/flows/accessibility/browse-talkback.yaml",
+    "test:a11y:pdp": "maestro test .maestro/flows/accessibility/pdp-voiceover.yaml",
+    "test:a11y:checkout": "maestro test .maestro/flows/accessibility/checkout-talkback.yaml",
+    "test:a11y:chat": "maestro test .maestro/flows/accessibility/chat-voiceover.yaml",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,json,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,json,md}\"",
     "verify:phase": "npm run typecheck && npm run check:animated-scroll && npm run lint:design-tokens && npm run check:visual-gates && npm run check:ssl-pins && vitest run src/__tests__/premium-form-primitives.test.ts src/__tests__/animated-scroll-usage.test.ts src/__tests__/platformCapabilities.test.ts src/__tests__/platformRuntime.test.ts",
@@ -203,7 +209,7 @@
   },
   "reanimated": {
     "staticFeatureFlags": {
-      "ENABLE_SHARED_ELEMENT_TRANSITIONS": true,
+      "ENABLE_SHARED_ELEMENT_TRANSITIONS": false,
       "ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS": true,
       "IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS": true
     }

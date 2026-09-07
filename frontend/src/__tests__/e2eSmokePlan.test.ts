@@ -212,7 +212,7 @@ describe('E2E smoke test plan — critical user journeys', () => {
 
     it('should return results for a text query ("vintage denim") — journey owned', () => {
       const journey = 'should return results for a text query ("vintage denim")';
-      expectScreen('GlobalSearchScreen.tsx', journey);
+      expectScreen('UnifiedDiscoveryScreen.tsx', journey);
       expectMaestroFlow('search-flow.yml', journey);
     });
 
@@ -224,7 +224,7 @@ describe('E2E smoke test plan — critical user journeys', () => {
 
     it('should clear the query and return to discover — journey owned', () => {
       const journey = 'should clear the query and return to discover';
-      expectScreen('GlobalSearchScreen.tsx', journey);
+      expectScreen('UnifiedDiscoveryScreen.tsx', journey);
       expectMaestroFlow('search-flow.yml', journey);
     });
 

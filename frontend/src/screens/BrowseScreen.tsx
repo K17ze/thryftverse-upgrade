@@ -41,11 +41,14 @@ import { useHaptic } from '../hooks/useHaptic';
 import { AppButton } from '../components/ui/AppButton';
 import { T } from '../components/ui/Text';
 import { SharedTransitionView } from '../components/SharedTransitionView';
+import { openProductDetail } from '../platform/product/openProductDetail';
 
 import { Space, Radius, Elevation, Typography, AspectRatio, Control, IconSize } from '../theme/designTokens';
 import { AppIcon } from '../components/common/AppIcon';
 import { AppIconButton } from '../components/common/AppIconButton';
 import { TypographyV2 } from '../theme/typography.v2';
+import { useDynamicAlgorithmSignals } from '../hooks/useDynamicAlgorithmSignals';
+import { matchesSignal } from '../services/algorithmicSignalsService';
 const GRID_SPACING = 16;
 
 const BROWSE_SORT_PREF_KEY = 'thryftverse:browse-sort-pref:v1';
@@ -109,6 +112,11 @@ export default function BrowseScreen() {
   const reducedMotion = useReducedMotion();
   const { width: windowWidth } = useWindowDimensions();
   const itemWidth = (windowWidth - 40 - GRID_SPACING) / 2;
+  const {
+    signals: browseSignals,
+    activeSignal: activeBrowseSignal,
+    selectSignal: selectBrowseSignal,
+  } = useDynamicAlgorithmSignals({ surface: 'browse' });
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -138,21 +146,16 @@ export default function BrowseScreen() {
     itemCountText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
-      color: colors.textSecondary,
-      fontVariant: ['tabular-nums'] },
+      color: colors.textMuted,
+      fontVariant: ['tabular-nums'],
+      marginTop: Space.xs },
     itemCountPill: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: Space.xxs,
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xxs + 1,
-      borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt,
-      marginTop: Space.xs + 2,
-      alignSelf: 'flex-start' },
+      gap: Space.xxs },
 
     filterBar: { paddingBottom: Space.md },
-    filterRow: { paddingHorizontal: Space.md, gap: Space.sm, alignItems: 'center' },
+    filterRow: { paddingHorizontal: Space.md, gap: Space.xs + 2, alignItems: 'center' },
     filterPill: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -160,10 +163,12 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       backgroundColor: 'transparent' },
     filterPillActive: {
-      backgroundColor: colors.surfaceAlt },
-    filterPillTextActive: { color: colors.textPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
+      borderColor: colors.textPrimary },
+    filterPillTextActive: { color: colors.textPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.bodyStrong.fontFamily },
     filterPillOutline: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -171,10 +176,12 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       backgroundColor: 'transparent' },
-    filterPillText: { color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
+    filterPillText: { color: colors.textSecondary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     saveSearchPillActive: {
-      backgroundColor: colors.surfaceAlt },
+      borderColor: colors.brand },
     saveSearchTextActive: {
       color: colors.brand,
       fontFamily: Typography.family.semibold },
@@ -185,10 +192,12 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm + 2,
       paddingVertical: Space.sm,
       borderRadius: Radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       backgroundColor: 'transparent' },
     sortTriggerActive: {
-      backgroundColor: colors.surfaceAlt },
-    sortTriggerText: { color: colors.textMuted, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
+      borderColor: colors.textPrimary },
+    sortTriggerText: { color: colors.textSecondary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily },
     sortTriggerTextActive: { color: colors.textPrimary, fontFamily: TypographyV2.meta.fontFamily },
     sortMenu: {
       marginHorizontal: Space.md,
@@ -227,7 +236,8 @@ export default function BrowseScreen() {
       paddingHorizontal: Space.sm,
       paddingVertical: Space.xs + 2,
       borderRadius: Radius.full,
-      backgroundColor: colors.surfaceAlt },
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border },
     activeBadgeText: {
       color: colors.textPrimary,
       fontSize: TypographyV2.meta.size,
@@ -237,6 +247,51 @@ export default function BrowseScreen() {
       height: Control.iconCompact,
       alignItems: 'center',
       justifyContent: 'center' },
+    signalSubRail: {
+      paddingBottom: Space.sm,
+    },
+    signalSubRailContent: {
+      paddingHorizontal: Space.md,
+      gap: Space.xs,
+      alignItems: 'center',
+    },
+    signalSubChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: Space.sm + 2,
+      paddingVertical: Space.xs,
+      borderRadius: Radius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: 'transparent',
+    },
+    signalSubChipPersonalized: {
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.surfaceAlt,
+    },
+    signalSubChipActive: {
+      backgroundColor: colors.textPrimary,
+      borderColor: colors.textPrimary,
+    },
+    signalSubDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: colors.brand,
+    },
+    signalSubDotActive: {
+      backgroundColor: colors.background,
+    },
+    signalSubText: {
+      fontSize: TypographyV2.meta.size,
+      fontFamily: TypographyV2.meta.fontFamily,
+      color: colors.textSecondary,
+    },
+    signalSubTextActive: {
+      color: colors.background,
+      fontFamily: Typography.family.semibold,
+    },
     activeBadgeDivider: {
       width: StyleSheet.hairlineWidth,
       height: Space.md,
@@ -630,8 +685,12 @@ export default function BrowseScreen() {
         break;
     }
 
+    if (activeBrowseSignal.filterKey !== 'all') {
+      return sorted.filter((listing) => matchesSignal(listing, activeBrowseSignal));
+    }
+
     return sorted;
-  }, [browseFilters, categoryId, listings, subcategoryId, title]);
+  }, [browseFilters, categoryId, listings, subcategoryId, title, activeBrowseSignal]);
 
   const showBrowseLoadingSkeleton = isSyncing && dataToRender.length === 0 && !lastError;
 
@@ -674,14 +733,14 @@ export default function BrowseScreen() {
           />
           <AppIconButton
             name="search"
-            onPress={() => navigation.navigate('GlobalSearch')}
+            onPress={() => navigation.navigate('UnifiedDiscovery')}
             accessibilityLabel="Search listings"
           />
         </View>
       </View>
 
       <View style={styles.titleContainer}>
-        <Text style={styles.hugeTitle}>{title}</Text>
+        <Text style={styles.hugeTitle} accessibilityRole="header">{title}</Text>
         <View style={styles.itemCountPill} accessibilityLiveRegion="polite" accessibilityLabel={backendLoading ? 'Loading items' : `${displayCount} items`}>
           <AppIcon name="bag-handle-outline" size={IconSize.micro} color="textMuted" accessible={false} />
           <Text style={styles.itemCountText}>{backendLoading ? 'Loading…' : `${displayCount} items`}</Text>
@@ -785,7 +844,7 @@ export default function BrowseScreen() {
                 styles.filterPillText,
                 browseFilters.sustainableOnly && styles.filterPillTextActive,
               ]}
-            >
+             maxFontSizeMultiplier={2}>
               Sustainable
             </Text>
           </AnimatedPressable>
@@ -805,11 +864,56 @@ export default function BrowseScreen() {
                 color={isCurrentSaved ? colors.brand : colors.textSecondary}
                 aria-hidden={true}
               />
-              <Text style={[styles.filterPillText, isCurrentSaved && styles.saveSearchTextActive]}>
+              <Text style={[styles.filterPillText, isCurrentSaved && styles.saveSearchTextActive]} maxFontSizeMultiplier={2}>
                 {isCurrentSaved ? 'Saved' : 'Save search'}
               </Text>
             </AnimatedPressable>
           )}
+        </ScrollView>
+      </View>
+
+      {/* Dynamic Algorithmic Signal Rail for Current Browse Context */}
+      <View style={styles.signalSubRail}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.signalSubRailContent}
+          accessibilityRole="tablist"
+          accessibilityLabel="Browse style suggestions"
+        >
+          {browseSignals.map((signal) => {
+            const isSelected = activeBrowseSignal.filterKey === signal.filterKey;
+            return (
+              <AnimatedPressable
+                key={`browse-signal-${signal.id}-${signal.filterKey}`}
+                style={[
+                  styles.signalSubChip,
+                  isSelected && styles.signalSubChipActive,
+                  signal.isPersonalized && !isSelected && styles.signalSubChipPersonalized,
+                ]}
+                onPress={() => {
+                  haptic.selection();
+                  selectBrowseSignal(signal);
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${signal.label}${signal.isPersonalized ? ', personalized' : ''}`}
+                accessibilityState={{ selected: isSelected }}
+              >
+                {signal.isPersonalized && signal.kind !== 'all' ? (
+                  <View style={[styles.signalSubDot, isSelected && styles.signalSubDotActive]} />
+                ) : null}
+                <Text
+                  style={[
+                    styles.signalSubText,
+                    isSelected && styles.signalSubTextActive,
+                  ]}
+                 maxFontSizeMultiplier={2}>
+                  {signal.label}
+                </Text>
+              </AnimatedPressable>
+            );
+          })}
         </ScrollView>
       </View>
 
@@ -823,11 +927,12 @@ export default function BrowseScreen() {
                 key={opt.value}
                 onPress={() => handleSortSelect(opt.value)}
                 style={[styles.sortMenuItem, idx === sortOpts.length - 1 && { borderBottomWidth: 0 }]}
+                hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={`Sort by ${opt.label}`}
                 accessibilityState={{ selected: isActive }}
               >
-                <Text style={[styles.sortMenuItemText, isActive && styles.sortMenuItemTextActive]}>
+                <Text style={[styles.sortMenuItemText, isActive && styles.sortMenuItemTextActive]} maxFontSizeMultiplier={2}>
                   {opt.label}
                 </Text>
                 {isActive ? <Ionicons name="checkmark" size={16} color={colors.brand} aria-hidden={true} /> : null}
@@ -965,13 +1070,14 @@ export default function BrowseScreen() {
         ) : displayListings.length > 0 ? (
           <PinterestMasonryGrid
             items={displayListings}
-            onPressItem={(item) => navigation.push('ItemDetail', { itemId: item.id })}
+            onPressItem={(item) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'BrowseScreen' })}
             numColumns={gridDensity === 'compact' ? 3 : 2}
             showSaveButton
             gap={gridDensity === 'compact' ? Space.xs + 2 : 3}
             horizontalPadding={Space.md}
             testIDPrefix="golden-browse-product-card"
             firstItemTestID="golden-browse-first-product"
+            enableImagePrefetch
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}

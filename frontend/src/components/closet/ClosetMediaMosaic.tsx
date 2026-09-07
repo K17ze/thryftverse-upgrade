@@ -119,7 +119,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const haptic = useHaptic();
   const { show } = useToast();
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   const isFav = useStore((state) => state.isWishlisted(item.id));
   const toggleFav = useStore((state) => state.toggleWishlist);
@@ -169,7 +169,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
         scaleValue={PressScale.gentle}
         hapticFeedback="light"
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}${isSold ? ', Sold' : ''}`}
+        accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.brand ? `, ${item.brand}` : ''}${isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
       >
         {/* Media — 3:4 portrait, full bleed */}
@@ -265,7 +265,7 @@ const ClosetMediaTile = React.memo(function ClosetMediaTile({
                 </Text>
               ) : null}
               <Text style={styles.priceText} numberOfLines={1}>
-                {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
+                {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
               </Text>
             </View>
           </>

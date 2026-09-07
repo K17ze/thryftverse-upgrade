@@ -177,7 +177,10 @@ export type RootStackParamList = {
   DistributionHistory: { assetId?: string } | undefined;
 
   // ── Chat & Messaging ──
-  Inbox: { filterItemId?: string } | undefined;
+  // Optional listingId preserves the source listing context when navigating
+  // from ManageListing → Questions, so the inbox can scope to that item's
+  // conversations instead of dropping context (P2-06).
+  Inbox: { listingId?: string } | undefined;
   Chat: {
     conversationId: string;
     focusQuery?: string;
@@ -193,17 +196,17 @@ export type RootStackParamList = {
       counterRound: number;
     };
   };
-  CreateGroupChat: undefined;
-  GroupChat: { groupId: string; groupName: string };
+  CreateGroupChat: { prefillMemberIds?: string[]; prefillTitle?: string } | undefined;
+  GroupChat: { groupId: string; groupName: string; initialSearch?: boolean };
   GroupChatInfo: { conversationId: string };
   GroupMembers: { conversationId: string };
-  GroupPermissions: { conversationId: string };
   GroupBotManagement: { conversationId: string };
   BotDirectory: undefined;
   BotDetail: { botId: string; conversationId?: string };
   CustomBots: undefined;
   BotBuilder: { botId?: string };
   EditGroup: { conversationId: string };
+  GroupPermissions: { conversationId: string };
 
   // ── Social / Profile ──
   UserProfile: { userId: string };
@@ -222,7 +225,6 @@ export type RootStackParamList = {
   Personalisation: { fromOnboarding?: boolean } | undefined;
   Settings: undefined;
   EditProfile: { focus?: 'avatar' | 'cover' };
-  AccountSettings: undefined;
   AccountControl: undefined;
   AccountSecurity: undefined;
   AccountSecurityRecovery: { caseId: string } | undefined;
@@ -257,7 +259,6 @@ export type RootStackParamList = {
   Withdraw: undefined;
   CategoryTree: { categoryPrefix: string };
   // Phase 24 new screens
-  GlobalSearch: { initialQuery?: string } | undefined;
   /** Unified discovery surface — combines Galleria editorial, personalised
    *  listings, looks, mood boards, pulse and curated collections into one
    *  flagship discovery entry from the Home search button. */
@@ -307,7 +308,7 @@ export type RootStackParamList = {
   // ── Creator Studio ── (looks, camera, studio, outfits, explore)
   // Explore / Creator screens
   CreatorStudio: {
-    type: 'look' | 'poster';
+    type: 'look' | 'poster' | 'moodboard';
     draftId?: string;
     templateId?: string;
     sourceDocumentId?: string;
@@ -337,7 +338,7 @@ export type RootStackParamList = {
   CreatorDraftList: undefined;
   CoOwnIssue: { assetId?: string };
   OutfitBuilder: undefined;
-  // UI-22R.6B — Experience elevation
+  // Experience elevation
   LookDetail: { lookId: string };
   PulseFeed: undefined;
   ExploreCollection: {
@@ -351,7 +352,6 @@ export type RootStackParamList = {
       | { type: 'closet_affinity' }
       | { type: 'auction' };
   };
-  StyleQuiz: undefined;
 
   // ── Settings & Account ── (chat settings, sessions, privacy, about)
   // Phase 13 — Settings integrity
@@ -365,7 +365,7 @@ export type RootStackParamList = {
   ManageQuickReplies: { role: 'seller' | 'buyer' };
 
   // ── Chat & Messaging ── (conversations, messages, media)
-  // VISUAL-15 — UI Architecture + Feature Depth
+  // UI Architecture + Feature Depth
   ConversationInfo: { conversationId: string };
   MessageRequests: undefined;
   NewMessage:
@@ -386,16 +386,14 @@ export type RootStackParamList = {
   EmailNotifications: undefined;
   AccessibilitySettings: undefined;
 
-  // ── Co-Own / Syndicate ── (price alerts, tax, recurring orders)
+  // ── Co-Own / Syndicate ── (price alerts)
   CoOwnPriceAlerts: undefined;
-  CoOwnTaxDocuments: undefined;
-  CoOwnRecurringOrders: undefined;
 
   // ── Chat & Messaging ── (media preview)
-  ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video' | 'document'; senderLabel?: string; timestamp?: string; messageId?: string };
+  ChatMediaPreview: { mediaUri: string; mediaType?: 'image' | 'video'; senderLabel?: string; timestamp?: string; messageId?: string };
 
   // ── Commerce ── (collection editing)
-  // UI-18 — Reference-perfect product UX
+  // Reference-perfect product UX
   EditCollection: { collectionId: string };
 
   // ── Support & Help ── (tickets, resolution centre, conversations)
@@ -409,7 +407,7 @@ export type RootStackParamList = {
   SupportCaseDetail: { caseId: string };
 
   // ── Seller Tools ── (listing preview)
-  // UI-19 — Sell / Co-own / Chat marketplace UX
+  // Sell / Co-own / Chat marketplace UX
   ListingPreview: {
     preview: {
       title?: string;
@@ -473,8 +471,10 @@ export type RootStackParamList = {
   // Trust & Verification
   Verification: undefined;
   VerificationStatus: undefined;
-  // Seller analytics (entry via MyListings)
-  SellerAnalytics: { listingId?: string; listingTitle?: string } | undefined;
+  // Seller analytics (entry via MyListings / ManageListing / Seller Hub)
+  // Optional listing context preserves the source listing so the analytics
+  // surface can scope to a single item instead of dropping context (P2-06).
+  SellerAnalytics: { listingId?: string; listingTitle?: string; listingImage?: string } | undefined;
   // Seller Hub — unified seller management dashboard
   SellerHub: undefined;
   // Creator analytics — creator-side performance insights (views, engagement, timeline)
@@ -485,7 +485,7 @@ export type RootStackParamList = {
   VerificationResponse: { assetId: string; demandId: number } | undefined;
 
   // ── Live Shopping ──
-  // Live shopping — Whatnot/Tilt-style live commerce
+  // Live shopping — live commerce
   LiveShopping: undefined;
   // Live stream viewer — watch + bid + chat
   LiveStreamViewer: { sessionId: string };
@@ -567,7 +567,6 @@ export const ROOT_STACK_ROUTES = [
   'GroupChat',
   'GroupChatInfo',
   'GroupMembers',
-  'GroupPermissions',
   'GroupBotManagement',
   'BotDirectory',
   'BotDetail',
@@ -584,7 +583,6 @@ export const ROOT_STACK_ROUTES = [
   'Personalisation',
   'Settings',
   'EditProfile',
-  'AccountSettings',
   'AccountControl',
   'AccountSecurity',
   'AccountSecurityRecovery',
@@ -607,7 +605,6 @@ export const ROOT_STACK_ROUTES = [
   'EditListing',
   'Withdraw',
   'CategoryTree',
-  'GlobalSearch',
   'CollectionDetail',
   'Filter',
   'ListingSuccess',
@@ -630,7 +627,6 @@ export const ROOT_STACK_ROUTES = [
   'LookDetail',
   'PulseFeed',
   'ExploreCollection',
-  'StyleQuiz',
   'ChatSettings',
   'ActiveSessions',
   'BlockedUsers',
@@ -651,8 +647,6 @@ export const ROOT_STACK_ROUTES = [
   'EmailNotifications',
   'AccessibilitySettings',
   'CoOwnPriceAlerts',
-  'CoOwnTaxDocuments',
-  'CoOwnRecurringOrders',
   'ChatMediaPreview',
   'EditCollection',
   'SupportTicketDetail',
@@ -711,12 +705,9 @@ export type RootStackRouteName = typeof ROOT_STACK_ROUTES[number];
 
 export type HomeTabParamList = {
   Home: undefined;
-  ExploreCollection: RootStackParamList['ExploreCollection'];
-  LookDetail: RootStackParamList['LookDetail'];
-  GalleriaCollectionDetail: RootStackParamList['GalleriaCollectionDetail'];
-  MoodboardHome: undefined;
-  YourAlgorithm: undefined;
-  StyleQuiz: undefined;
+  // Discovery surfaces (ExploreCollection, GalleriaCollectionDetail,
+  // MoodboardHome, YourAlgorithm, LookDetail) are registered
+  // in the root stack only for cross-tab navigation.
 };
 
 export type ExploreTabParamList = {
@@ -727,20 +718,17 @@ export type ExploreTabParamList = {
   Filter: RootStackParamList['Filter'];
   SavedSearches: undefined;
   CollectionDetail: RootStackParamList['CollectionDetail'];
-  LookDetail: RootStackParamList['LookDetail'];
-  // Discovery surfaces — moved from HomeStack during IA convergence (item-26 Phase 3).
-  PulseFeed: undefined;
-  Galleria: undefined;
-  ConversationalSearch: undefined;
+  // Discovery surfaces (PulseFeed, Galleria, ConversationalSearch, LookDetail)
+  // are registered in the root stack only for cross-tab navigation.
 };
 
 export type InboxTabParamList = {
-  Inbox: undefined;
+  Inbox: { listingId?: string } | undefined;
 };
 
 export type ProfileTabParamList = {
   Profile: undefined;
-  LookDetail: RootStackParamList['LookDetail'];
+  // LookDetail is registered in the root stack only.
 };
 
 // ── Main Tabs ──

@@ -71,7 +71,7 @@ interface BaseShellProps {
 }
 
 /** Resolve a density config, falling back to the shell's default. */
-function resolveDensity(density: Density | undefined, fallback: Density): DensityConfig {
+function useResolveDensity(density: Density | undefined, fallback: Density): DensityConfig {
   return useDensity(density ?? fallback);
 }
 
@@ -117,7 +117,7 @@ export function MediaStageScreen({
   style,
 }: MediaStageScreenProps) {
   const { colors } = useAppTheme();
-  const cfg = resolveDensity(density, 'editorial');
+  const cfg = useResolveDensity(density, 'editorial');
   const insets = useSafeAreaInsets();
   const stageHeight = mediaHeight ?? Math.round(360 * (4 / 3));
 
@@ -225,7 +225,7 @@ export function DenseListScreen({
   style,
 }: DenseListScreenProps) {
   const { colors } = useAppTheme();
-  const cfg = resolveDensity(density, 'compact');
+  const cfg = useResolveDensity(density, 'compact');
 
   return (
     <FlagshipScreen
@@ -317,7 +317,7 @@ export function SettingsCanvasScreen({
   style,
 }: SettingsCanvasScreenProps) {
   const { colors } = useAppTheme();
-  const cfg = resolveDensity(density, 'regular');
+  const cfg = useResolveDensity(density, 'regular');
   const [query, setQuery] = React.useState('');
 
   const handleSearch = (text: string) => {
@@ -424,7 +424,7 @@ export function TaskQueueScreen({
   style,
 }: TaskQueueScreenProps) {
   const { colors } = useAppTheme();
-  const cfg = resolveDensity(density, 'regular');
+  const cfg = useResolveDensity(density, 'regular');
 
   return (
     <FlagshipScreen
@@ -495,7 +495,7 @@ export function CommitmentScreen({
   style,
 }: CommitmentScreenProps) {
   const { colors } = useAppTheme();
-  const cfg = resolveDensity(density, 'regular');
+  const cfg = useResolveDensity(density, 'regular');
   const insets = useSafeAreaInsets();
 
   return (

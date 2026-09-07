@@ -119,7 +119,6 @@ export default function RuntimeSmokeTestScreen({ navigation }: Props) {
     { label: 'ChatSettings', screen: 'ChatSettings' },
     { label: 'BotDirectory', screen: 'BotDirectory' },
     { label: 'Settings', screen: 'Settings' },
-    { label: 'AccountSettings', screen: 'AccountSettings' },
     { label: 'PushNotifications', screen: 'PushNotifications' },
     { label: 'PrivacySettings', screen: 'PrivacySettings' },
     { label: 'BlockedUsers', screen: 'BlockedUsers' },

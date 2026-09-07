@@ -38,7 +38,7 @@ export default function MessageRequestsScreen() {
   const navigation = useNavigation<NavT>();
   const { show } = useToast();
   const haptic = useHaptic();
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
 
@@ -233,7 +233,7 @@ export default function MessageRequestsScreen() {
               )}
               <Text style={styles.listingTitle} numberOfLines={1}>{listing.title}</Text>
               {listing.price != null && (
-                <Text style={styles.listingPrice}>{formatFromFiat(listing.price, currencyCode)}</Text>
+                <Text style={styles.listingPrice}>{formatFromFiat(listing.price, 'GBP')}</Text>
               )}
             </View>
           )}

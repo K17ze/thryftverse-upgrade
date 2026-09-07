@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 
 import { sanitizeDecimalInput } from '../../utils/currencyAuthoringFlows';
@@ -9,6 +9,7 @@ import {
 import { haptics } from '../../utils/haptics';
 import {
   convertPickerAsset,
+  convertCaptureUri,
   validateMediaAssets,
   type ListingMediaDraftItem,
   type MediaUploadAsset,
@@ -41,10 +42,13 @@ export interface SellScreenActionsResult {
   // Photo/media handlers
   handlePickFromLibrary: () => Promise<void>;
   handlePickFromCamera: () => Promise<void>;
+  handleCameraCapture: (uris: string[]) => void;
+  cameraSheetVisible: boolean;
+  setCameraSheetVisible: (visible: boolean) => void;
   removeItem: (itemId: string) => void;
   handleRetryItem: (itemId: string) => void;
   handleReorderIds: (newOrderedIds: string[]) => void;
-  handleSetCover: (itemId: string) => void;
+  handleTransformItem: (itemId: string, transformedUri: string) => void;
 
   // Price handlers
   handlePriceChange: (text: string) => void;
@@ -96,6 +100,12 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
   } = setters;
 
   const { completeness, publishReady } = form;
+
+  // ── Flagship camera sheet state ──
+  // Replaces the system camera (ImagePicker.launchCameraAsync) with the
+  // in-app CreatorCamera via ListingCameraSheet. The sheet is rendered by
+  // SellScreen and controlled by this visibility state.
+  const [cameraSheetVisible, setCameraSheetVisible] = useState(false);
 
   /* -- autofill -- */
   const handleApplyAutofill = useCallback(() => {
@@ -208,35 +218,38 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
         setErrorMsg(t('listing.create.errorCameraAccess'));
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-        quality: 0.9 });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        const asset = convertPickerAsset(result.assets[0]);
-        const existing = mediaDraftItems.map((m) => ({
-          id: m.id,
-          uri: m.uri,
-          fileName: m.fileName ?? 'existing',
-          mimeType: m.mimeType ?? 'image/jpeg',
-          kind: m.kind,
-          fileSize: m.fileSize,
-          width: m.width,
-          height: m.height,
-          durationMs: m.durationMs }));
-        const validation = validateMediaAssets([asset], existing, { maxTotalCount: 10 });
-        if (validation.errors.length > 0) {
-          setErrorMsg(validation.errors.map((e) => e.message).join('. '));
-        }
-        for (const a of validation.assets) {
-          appendPhotoAsset(a);
-        }
-        if (validation.assets.length > 0) {
-          haptics.success();
-        }
-      }
+      // Open the flagship CreatorCamera sheet instead of the system camera.
+      setCameraSheetVisible(true);
     } catch (e) {
       setErrorMsg(t('listing.create.errorCamera'));
     }
+  }, [setErrorMsg]);
+
+  // Process URIs captured from ListingCameraSheet / CreatorCamera.
+  const handleCameraCapture = useCallback((uris: string[]) => {
+    if (uris.length === 0) return;
+    const assets = uris.map(convertCaptureUri);
+    const existing = mediaDraftItems.map((m) => ({
+      id: m.id,
+      uri: m.uri,
+      fileName: m.fileName ?? 'existing',
+      mimeType: m.mimeType ?? 'image/jpeg',
+      kind: m.kind,
+      fileSize: m.fileSize,
+      width: m.width,
+      height: m.height,
+      durationMs: m.durationMs }));
+    const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
+    if (validation.errors.length > 0) {
+      setErrorMsg(validation.errors.map((e) => e.message).join('. '));
+    }
+    for (const a of validation.assets) {
+      appendPhotoAsset(a);
+    }
+    if (validation.assets.length > 0) {
+      haptics.success();
+    }
+    setCameraSheetVisible(false);
   }, [appendPhotoAsset, mediaDraftItems, setErrorMsg]);
 
   const removeItem = useCallback((itemId: string) => {
@@ -275,22 +288,23 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
     haptics.tap();
   }, [setMediaDraftItems, setPhotos]);
 
-  // ── Set as cover ──
-  // Per audit 04 P0: "Add cover-photo semantics and explicit reorder affordance."
-  // Moves the selected item to position 0 (cover) and shifts the previous
-  // cover and intervening items down. This is an explicit, discoverable
-  // action — not only achievable via drag reorder.
-  const handleSetCover = useCallback((itemId: string) => {
+  // ── Transform item (crop/rotate/flip) ──
+  // Replaces the item's URI with the transformed result and syncs the
+  // photos array. A same-URI call is a focal-only update: it must keep the
+  // item's uploaded state — only a real URI replacement clears publicUrl
+  // and re-queues the item (mirrors EditListingScreen).
+  const handleTransformItem = useCallback((itemId: string, transformedUri: string) => {
     setMediaDraftItems((prev) => {
-      const idx = prev.findIndex((m) => m.id === itemId);
-      if (idx <= 0) return prev; // already cover or not found
-      const next = [...prev];
-      const [item] = next.splice(idx, 1);
-      next.unshift(item);
+      const next = prev.map((m) => {
+        if (m.id !== itemId) return m;
+        const uriChanged = transformedUri !== m.uri;
+        return {
+          ...m,
+          ...(uriChanged ? { uri: transformedUri, publicUrl: undefined, status: 'draft' as const } : {}) };
+      });
       setPhotos(next.map((m) => m.publicUrl || m.uri));
       return next;
     });
-    haptics.press();
   }, [setMediaDraftItems, setPhotos]);
 
   /* -- price handlers -- */
@@ -394,10 +408,13 @@ export function useSellScreenActions(params: SellScreenActionsParams): SellScree
     handleApplyAutofill,
     handlePickFromLibrary,
     handlePickFromCamera,
+    handleCameraCapture,
+    cameraSheetVisible,
+    setCameraSheetVisible,
     removeItem,
     handleRetryItem,
     handleReorderIds,
-    handleSetCover,
+    handleTransformItem,
     handlePriceChange,
     handleShareCountChange,
     getPickerOptions,

@@ -15,8 +15,13 @@ import type { CreatorInitialMedia } from '../navigation/types';
 
 export function CreatorStudioScreen() {
   const route = useRoute<any>();
-  const initialType = route.params?.type === 'poster' ? 'poster' : 'look';
-  const [activeType, setActiveType] = React.useState<'look' | 'poster'>(initialType);
+  const initialType: 'look' | 'poster' | 'moodboard' =
+    route.params?.type === 'poster'
+      ? 'poster'
+      : route.params?.type === 'moodboard'
+      ? 'moodboard'
+      : 'look';
+  const [activeType, setActiveType] = React.useState<'look' | 'poster' | 'moodboard'>(initialType);
   const draftId = route.params?.draftId as string | undefined;
   const templateId = route.params?.templateId as string | undefined;
   const sourceDocumentId = route.params?.sourceDocumentId as string | undefined;
@@ -74,7 +79,13 @@ export function CreatorStudioScreen() {
     );
   }
 
-  // Unreachable — initialType is always 'look' or 'poster' based on the
-  // ternary above. Return null as a safe fallback.
+  // ── Moodboard: dedicated editorial collage & curation workspace ────
+  // Integrates Moodboard directly into the Creator Studio department so users
+  // can author themed collages and post them seamlessly to poster stories / feeds.
+  if (activeType === 'moodboard') {
+    const MoodboardEditorScreen = require('../screens/MoodboardEditorScreen').default;
+    return <MoodboardEditorScreen />;
+  }
+
   return null;
 }

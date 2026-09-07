@@ -8,7 +8,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -19,21 +18,18 @@ import { IconSize } from '../theme/iconTokens';
 import { useToast } from '../context/ToastContext';
 import { useCurrencyPref } from '../hooks/useCurrencyPref';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { useConnectivity } from '../hooks/useConnectivity';
 import { CURRENCIES } from '../constants/currencies';
-import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { sanitizeDecimalInput } from '../utils/currencyAuthoringFlows';
-import { convertPickerAsset, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
+import { convertPickerAsset, convertCaptureUri, validateMediaAssets, ListingMediaDraftItem } from '../utils/mediaUploadAsset';
 import type { MediaUploadAsset } from '../utils/mediaUploadAsset';
 import { haptics } from '../utils/haptics';
 import { useStore } from '../store/useStore';
 
 import { BottomSheetPicker } from '../components/BottomSheetPicker';
-import { BottomSheet } from '../components/BottomSheet';
-import { AppButton } from '../components/ui/AppButton';
 import { fetchListingByIdFromApi, patchListingOnApi, createListingImageOnApi } from '../services/listingsApi';
-import { MediaUploadQueue } from '../services/mediaUploadQueue';
+import { MediaUploadQueue, type UploadQueueItem } from '../services/mediaUploadQueue';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
+import { ListingCameraSheet } from '../components/listing/ListingCameraSheet';
 import { EditListingFooter } from '../components/listing/EditListingFooter';
 import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from '../platform/keyboard/KeyboardProvider';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
@@ -41,10 +37,8 @@ import { SkeletonLoader } from '../components/SkeletonLoader';
 import { ConfirmationSheet } from '../components/ConfirmationSheet';
 import { useBackendData } from '../context/BackendDataContext';
 import { useTaxonomy } from '../context/TaxonomyContext';
-import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '../platform/server/queryKeys';
+import { useQueryClient } from '@tanstack/react-query';import { queryKeys } from '../platform/server/queryKeys';
 import { useSoldComps } from '../hooks/useSoldComps';
-import { calculateListingQuality } from '../utils/listingQuality';
 import {
 
   evaluateListingCompleteness,
@@ -61,31 +55,6 @@ interface EditListingRouteParams {
   itemId: string;
   focus?: SectionFocus;
 }
-
-/* ── Autosave draft ──
-   Persisted to AsyncStorage so a seller doesn't lose work after a crash,
-   force-quit, or accidental navigation. Best-effort: write failures are
-   swallowed and never block the user. */
-interface EditListingDraft {
-  title: string;
-  description: string;
-  price: string;
-  originalPrice: string;
-  category: string;
-  brand: string;
-  size: string;
-  condition: string;
-  shippingMethod: 'standard' | 'express' | null;
-  shippingPayer: 'buyer' | 'seller' | null;
-  /** Epoch ms when the draft was last written. */
-  savedAt: number;
-  /** Server `updatedAt` captured when the draft was started — used to
-      decide whether the draft is newer than the server copy. */
-  baseUpdatedAt: string | null;
-}
-
-const draftKey = (itemId: string) => `editListingDraft:${itemId}`;
-const AUTOSAVE_DEBOUNCE_MS = 2000;
 
 export default function EditListingScreen() {
   const insets = useSafeAreaInsets();
@@ -115,10 +84,6 @@ export default function EditListingScreen() {
     descInput: { color: colors.textPrimary },
     charCount: { color: colors.textMuted },
     inlineErrorText: { color: colors.danger },
-    photoGuideCard: { backgroundColor: colors.surface, borderColor: colors.border },
-    photoGuideTitle: { color: colors.textSecondary },
-    photoGuideTip: { color: colors.textMuted },
-    photoGuideMin: { color: colors.textMuted },
     priceSuggestion: { color: colors.brand },
     priceMarketHigh: { color: colors.warning },
     priceMarketLow: { color: colors.textMuted },
@@ -127,24 +92,16 @@ export default function EditListingScreen() {
     fieldValid: { color: colors.success },
     fieldRequiredHint: { color: colors.textMuted },
     charCountWarn: { color: colors.warning },
-    qualityBar: { backgroundColor: colors.surface, borderTopColor: colors.border },
-    qualityBarLabel: { color: colors.textPrimary },
-    qualityBarScore: { color: colors.textPrimary },
-    qualityBarTier: { color: colors.textSecondary },
-    qualityTipsRow: { backgroundColor: colors.surfaceAlt },
-    qualityTipsText: { color: colors.textSecondary },
-    qualityTipsLabel: { color: colors.brand },
     soldCompsText: { color: colors.textMuted },
     soldCompsAction: { color: colors.brand } }), [colors]);
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { itemId, focus } = (route.params as EditListingRouteParams) ?? {};
+  const { itemId, focus } = route.params as EditListingRouteParams;
   const { show: showToast } = useToast();
   const { currencyCode } = useCurrencyPref();
   const currencySymbol = CURRENCIES[currencyCode].symbol;
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
-  const { isOffline } = useConnectivity();
 
   const { categories, conditions, sizes, brands } = useTaxonomy();
   const categoryOptions = useMemo(
@@ -174,8 +131,6 @@ export default function EditListingScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [saveStage, setSaveStage] = useState<SaveStage>('idle');
-  const [photoGuideCollapsed, setPhotoGuideCollapsed] = useState(false);
-  const [qualityTipsExpanded, setQualityTipsExpanded] = useState(false);
 
   const [confirmSheet, setConfirmSheet] = useState<{
     visible: boolean;
@@ -187,31 +142,15 @@ export default function EditListingScreen() {
     variant: 'default' | 'danger';
   }>({ visible: false, title: '', message: '', confirmLabel: 'Confirm', cancelLabel: 'Cancel', onConfirm: () => {}, variant: 'default' });
 
-  /* ── autosave / conflict state ── */
-  // The server `updatedAt` captured when the listing was first loaded.
-  // Compared against a fresh fetch before saving to detect concurrent
-  // edits from another device/session.
-  const mountUpdatedAtRef = useRef<string | null>(null);
-  // True while a debounced autosave is writing the draft to storage.
-  const [isAutosaving, setIsAutosaving] = useState(false);
-  // True once the form has been clean-and-saved at least once since the
-  // last edit — drives the green "Saved" resting state.
-  const [isCleanSaved, setIsCleanSaved] = useState(false);
-  // Conflict-resolution sheet state.
-  const [conflictSheet, setConflictSheet] = useState<{
-    visible: boolean;
-    serverUpdatedAt: string;
-    onKeepMine: () => void;
-    onUseTheirs: () => void;
-  } | null>(null);
-  // Restore-draft prompt state.
-  const [restoreSheet, setRestoreSheet] = useState<{
-    visible: boolean;
-    draft: EditListingDraft;
-  } | null>(null);
-
   // Media state — stable-ID based
   const [mediaItems, setMediaItems] = useState<ListingMediaDraftItem[]>([]);
+  // P0-09: Track remote media mutations so removals, reorders and cover
+  // changes are detected and persisted. The API needs explicit
+  // `attachmentOrder` and `removedAttachmentIds` manifests — without these
+  // the patch is a no-op for remote media.
+  const [removedRemoteIds, setRemovedRemoteIds] = useState<string[]>([]);
+  const [remoteMediaOrder, setRemoteMediaOrder] = useState<string[]>([]);
+  const [initialRemoteOrder, setInitialRemoteOrder] = useState<string[]>([]);
 
   // Ownership
   const currentUser = useStore((s) => s.currentUser);
@@ -225,7 +164,12 @@ export default function EditListingScreen() {
   const [queueState, setQueueState] = useState(uploadQueueRef.current.getState());
   useEffect(() => {
     const unsub = uploadQueueRef.current.subscribe((s) => setQueueState(s));
-    return () => { unsub(); };
+    return () => {
+      unsub();
+      // The snapshot dies with the screen — reset so a later edit of the
+      // same listing starts from a clean queue.
+      uploadQueueRef.current.reset();
+    };
   }, []);
 
   /* ── focus scroll (ManageListing deep-links: price / shipping / format) ── */
@@ -252,57 +196,37 @@ export default function EditListingScreen() {
     setIsLoading(true);
     setLoadError(false);
     fetchListingByIdFromApi(itemId)
-      .then(async (res) => {
+      .then((res) => {
         if (!mounted) return;
         if (res.ok && res.listing) {
           const l = res.listing;
-          const serverUpdatedAt = l.updatedAt ?? l.createdAt ?? null;
-          mountUpdatedAtRef.current = serverUpdatedAt;
           setListing(l);
-
-          // Check for a persisted draft. Only offer to restore when the
-          // draft is newer than the server copy (i.e. the user made
-          // changes that never made it to the server).
-          let appliedDraft = false;
-          try {
-            const raw = await AsyncStorage.getItem(draftKey(itemId));
-            if (raw) {
-              const draft = JSON.parse(raw) as EditListingDraft;
-              const serverMs = serverUpdatedAt ? Date.parse(serverUpdatedAt) : 0;
-              const draftMs = draft.savedAt ?? 0;
-              if (draftMs > serverMs) {
-                setRestoreSheet({ visible: true, draft });
-                appliedDraft = true;
-              } else {
-                // Stale draft — clear it so it doesn't resurface.
-                void AsyncStorage.removeItem(draftKey(itemId));
-              }
-            }
-          } catch {
-            // Best-effort: ignore storage read errors.
-          }
-
-          if (!appliedDraft) {
-            setTitle(l.title ?? '');
-            setDescription(l.description ?? '');
-            setPrice(String(l.priceGbp ?? ''));
-            setOriginalPrice(l.originalPriceGbp ? String(l.originalPriceGbp) : '');
-            setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
-            setBrand(l.brand ?? '');
-            setSize(l.size ?? '');
-            setCondition(l.condition ?? '');
-            setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
-            setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
-          }
+          setTitle(l.title ?? '');
+          setDescription(l.description ?? '');
+          setPrice(String(l.priceGbp ?? ''));
+          setOriginalPrice(l.originalPriceGbp ? String(l.originalPriceGbp) : '');
+          setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
+          setBrand(l.brand ?? '');
+          setSize(l.size ?? '');
+          setCondition(l.condition ?? '');
+          setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
+          setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
           const initialPhotos = l.images ?? (l.imageUrl ? [l.imageUrl] : []);
-          const items: ListingMediaDraftItem[] = initialPhotos.map((uri: string, i: number) => ({
-            id: `remote_${itemId}_${i}`,
+          const apiMedia = l.media ?? [];
+          const hasMediaIds = apiMedia.length > 0;
+          const items: ListingMediaDraftItem[] = (hasMediaIds ? apiMedia.map((m) => m.url) : initialPhotos).map((uri: string, i: number) => ({
+            id: hasMediaIds ? apiMedia[i].id : `remote_${itemId}_${i}`,
+            mediaId: hasMediaIds ? apiMedia[i].id : undefined,
             uri,
             kind: 'image' as const,
             source: 'remote' as const,
             status: 'uploaded' as const,
             publicUrl: uri }));
           setMediaItems(items);
+          const remoteIds = items.map((m) => m.mediaId ?? m.id);
+          setRemoteMediaOrder(remoteIds);
+          setInitialRemoteOrder(remoteIds);
+          setRemovedRemoteIds([]);
         } else {
           setLoadError(true);
           showToast(t('listing.edit.couldNotLoad'), 'error');
@@ -339,69 +263,12 @@ export default function EditListingScreen() {
       condition !== (listing.condition ?? '') ||
       shippingMethod !== originalShippingMethod ||
       shippingPayer !== originalShippingPayer ||
-      mediaItems.some((m) => m.source === 'local')
+      mediaItems.some((m) => m.source === 'local') ||
+      removedRemoteIds.length > 0 ||
+      remoteMediaOrder.length !== initialRemoteOrder.length ||
+      remoteMediaOrder.some((id, i) => id !== initialRemoteOrder[i])
     );
-  }, [listing, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, mediaItems]);
-
-  /* ── debounced autosave draft ──
-     Writes the text-field form state to AsyncStorage 2s after the user
-     stops editing. Media is intentionally excluded — local asset URIs are
-     transient and can't be re-attached reliably across sessions. The
-     autosave is best-effort: failures are swallowed so they never block
-     the user. Layered ON TOP of the manual save; it does not replace it. */
-  useEffect(() => {
-    if (!listing) return;
-    if (!hasChanges) return;
-    // Mark dirty as soon as the user edits so the resting "Saved" state
-    // doesn't persist after a new edit.
-    setIsCleanSaved(false);
-    const timer = setTimeout(() => {
-      const draft: EditListingDraft = {
-        title,
-        description,
-        price,
-        originalPrice,
-        category,
-        brand,
-        size,
-        condition,
-        shippingMethod,
-        shippingPayer,
-        savedAt: Date.now(),
-        baseUpdatedAt: mountUpdatedAtRef.current,
-      };
-      setIsAutosaving(true);
-      AsyncStorage.setItem(draftKey(itemId), JSON.stringify(draft))
-        .catch(() => { /* best-effort */ })
-        .finally(() => setIsAutosaving(false));
-    }, AUTOSAVE_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [listing, hasChanges, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, itemId]);
-
-  /* ── restore-draft handler ── */
-  const handleRestoreDraft = useCallback(() => {
-    const sheet = restoreSheet;
-    setRestoreSheet((s) => s ? { ...s, visible: false } : null);
-    if (!sheet) return;
-    const d = sheet.draft;
-    setTitle(d.title);
-    setDescription(d.description);
-    setPrice(d.price);
-    setOriginalPrice(d.originalPrice);
-    setCategory(d.category);
-    setBrand(d.brand);
-    setSize(d.size);
-    setCondition(d.condition);
-    setShippingMethod(d.shippingMethod);
-    setShippingPayer(d.shippingPayer);
-    haptics.tap();
-  }, [restoreSheet]);
-
-  const handleDiscardDraft = useCallback(() => {
-    setRestoreSheet((s) => s ? { ...s, visible: false } : null);
-    void AsyncStorage.removeItem(draftKey(itemId)).catch(() => {});
-    haptics.tap();
-  }, [itemId]);
+  }, [listing, title, description, price, originalPrice, category, brand, size, condition, shippingMethod, shippingPayer, mediaItems, removedRemoteIds, remoteMediaOrder, initialRemoteOrder]);
 
   /* ── media handling ── */
   const appendPhotoAsset = useCallback((asset: MediaUploadAsset) => {
@@ -466,6 +333,8 @@ export default function EditListingScreen() {
     }
   }, [appendPhotoAsset, mediaItems]);
 
+  const [cameraSheetVisible, setCameraSheetVisible] = useState(false);
+
   const handlePickFromCamera = useCallback(async () => {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
@@ -473,43 +342,49 @@ export default function EditListingScreen() {
         setErrorMsg(t('listing.edit.allowCamera'));
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-        quality: 0.9 });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        const asset = convertPickerAsset(result.assets[0]);
-        const existing = mediaItems.map((m) => ({
-          id: m.id,
-          uri: m.uri,
-          fileName: m.fileName ?? 'existing',
-          mimeType: m.mimeType ?? 'image/jpeg',
-          kind: m.kind,
-          fileSize: m.fileSize,
-          width: m.width,
-          height: m.height,
-          durationMs: m.durationMs }));
-        const validation = validateMediaAssets([asset], existing, { maxTotalCount: 10 });
-        if (validation.errors.length > 0) {
-          setErrorMsg(validation.errors.map((e) => e.message).join('. '));
-        }
-        for (const a of validation.assets) {
-          appendPhotoAsset(a);
-        }
-        if (validation.assets.length > 0) {
-          haptics.success();
-        }
-      }
+      setCameraSheetVisible(true);
     } catch {
       setErrorMsg(t('listing.edit.couldNotOpenCamera'));
     }
-  }, [appendPhotoAsset, mediaItems]);
+  }, [setErrorMsg]);
+
+  const handleCameraCapture = useCallback((uris: string[]) => {
+    if (uris.length === 0) return;
+    const assets = uris.map(convertCaptureUri);
+    const existing = mediaItems.map((m) => ({
+      id: m.id,
+      uri: m.uri,
+      fileName: m.fileName ?? 'existing',
+      mimeType: m.mimeType ?? 'image/jpeg',
+      kind: m.kind,
+      fileSize: m.fileSize,
+      width: m.width,
+      height: m.height,
+      durationMs: m.durationMs }));
+    const validation = validateMediaAssets(assets, existing, { maxTotalCount: 10 });
+    if (validation.errors.length > 0) {
+      setErrorMsg(validation.errors.map((e) => e.message).join('. '));
+    }
+    for (const a of validation.assets) {
+      appendPhotoAsset(a);
+    }
+    if (validation.assets.length > 0) {
+      haptics.success();
+    }
+    setCameraSheetVisible(false);
+  }, [appendPhotoAsset, mediaItems, setErrorMsg]);
 
   const handleRemoveItem = useCallback((itemId: string) => {
     const item = mediaItems.find((m) => m.id === itemId);
     if (!item) return;
-    if (item.source === 'remote') return;
     haptics.tap();
-    uploadQueueRef.current.removeItem(itemId);
+    if (item.source === 'remote') {
+      const remoteId = item.mediaId ?? item.id;
+      setRemovedRemoteIds((prev) => prev.includes(remoteId) ? prev : [...prev, remoteId]);
+      setRemoteMediaOrder((prev) => prev.filter((id) => id !== remoteId));
+    } else {
+      uploadQueueRef.current.removeItem(itemId);
+    }
     setMediaItems((prev) => prev.filter((m) => m.id !== itemId));
   }, [mediaItems]);
 
@@ -529,17 +404,33 @@ export default function EditListingScreen() {
   }, []);
 
   const handleReorder = useCallback((newOrderedIds: string[]) => {
-    setMediaItems((prev) => {
-      const itemMap = new Map(prev.map((m) => [m.id, m]));
-      return newOrderedIds.map((id) => itemMap.get(id)).filter(Boolean) as ListingMediaDraftItem[];
-    });
+    const itemMap = new Map(mediaItems.map((m) => [m.id, m]));
+    const next = newOrderedIds.map((id) => itemMap.get(id)).filter(Boolean) as ListingMediaDraftItem[];
+    setMediaItems(next);
+    setRemoteMediaOrder(next.filter((m) => m.source === 'remote').map((m) => m.mediaId ?? m.id));
     haptics.tap();
-  }, []);
+  }, [mediaItems]);
 
   const canRemoveItem = useCallback((itemId: string) => {
     const item = mediaItems.find((m) => m.id === itemId);
-    return item ? item.source === 'local' : false;
+    return !!item;
   }, [mediaItems]);
+
+  // ── Transform item (crop/rotate/flip) ──
+  // A same-URI call is a focal-only update: store the point without
+  // resetting upload state. Only a real URI replacement re-queues the item.
+  const handleTransformItem = useCallback((itemId: string, transformedUri: string, focalPoint?: { x: number; y: number }) => {
+    setMediaItems((prev) =>
+      prev.map((m) => {
+        if (m.id !== itemId) return m;
+        const uriChanged = transformedUri !== m.uri;
+        return {
+          ...m,
+          ...(uriChanged ? { uri: transformedUri, publicUrl: undefined, status: 'draft' as const } : {}),
+          ...(focalPoint ? { focalPoint } : {}) };
+      })
+    );
+  }, []);
 
   /* ── validation ── */
   // Category-aware validation: use the completeness result's missing
@@ -612,13 +503,15 @@ export default function EditListingScreen() {
     return '';
   }, [title, category, brand, size, condition, description, price, mediaItems, editCompleteness]);
 
-  /* ── save handler ──
-     The manual save flow is preserved exactly. Autosave/conflict logic is
-     layered on top: before applying the save we re-fetch the listing and
-     compare its `updatedAt` to the value captured at mount. If they
-     differ, the listing was edited on another device and we surface a
-     conflict-resolution sheet instead of silently overwriting it. */
-  const performSave = useCallback(async () => {
+  /* ── save handler ── */
+  const handleSave = useCallback(async () => {
+    const error = validate();
+    if (error) {
+      setErrorMsg(error);
+      setSaveStage('failed_recoverable');
+      haptics.error();
+      return;
+    }
     if (!isOwner) {
       setErrorMsg(t('listing.edit.noPermission'));
       setSaveStage('failed_recoverable');
@@ -631,6 +524,7 @@ export default function EditListingScreen() {
       let coverFinalizationId: string | undefined;
       const existingRemotePhotos = mediaItems.filter((m) => m.source === 'remote').map((m) => m.publicUrl || m.uri);
       const newLocalItems = mediaItems.filter((m) => m.source === 'local');
+      let uploadedItems: UploadQueueItem[] = [];
 
       // 1. Upload new local media via queue (if any)
       if (newLocalItems.length > 0) {
@@ -646,7 +540,7 @@ export default function EditListingScreen() {
           width: m.width,
           height: m.height,
           durationMs: m.durationMs }));
-        queue.addAssets(assets);
+        await queue.addAssets(assets);
         await queue.run();
         const queueItems = queue.getItems();
         setMediaItems((prev) =>
@@ -670,8 +564,8 @@ export default function EditListingScreen() {
         }
 
         // 2. Attach uploaded images with deterministic IDs
-        const uploadedItems = queueItems.filter(
-          (q) => q.state === 'uploaded' && q.publicUrl && q.finalizationId,
+        uploadedItems = queueItems.filter(
+          (q) => q.state === 'uploaded' && !!q.publicUrl && !!q.finalizationId,
         );
         const firstMedia = mediaItems[0];
         if (firstMedia?.source === 'local') {
@@ -691,9 +585,53 @@ export default function EditListingScreen() {
         }
       }
 
-      // 3. Patch listing metadata (text fields + cover image)
+      // 3. Build the attachment manifest from the current mediaItems order.
+      //    Remote items map to their backend mediaId; newly uploaded local
+      //    items map to the deterministic attachment id used above. This is
+      //    what tells the backend the final order, removals and cover.
+      const attachmentOrder: string[] = [];
+      for (const m of mediaItems) {
+        if (m.source === 'remote') {
+          const remoteId = m.mediaId ?? m.id;
+          if (!removedRemoteIds.includes(remoteId)) {
+            attachmentOrder.push(remoteId);
+          }
+        } else {
+          const qi = uploadedItems.find((q) => q.id === m.id);
+          if (qi) {
+            attachmentOrder.push(`${itemId}_media_${qi.id}`);
+          }
+        }
+      }
+
+      // Determine the cover media id — the first item in the final order.
+      let coverMediaId: string | undefined;
+      const coverItem = mediaItems[0];
+      if (coverItem) {
+        if (coverItem.source === 'remote') {
+          coverMediaId = coverItem.mediaId ?? coverItem.id;
+        } else {
+          const qi = uploadedItems.find((q) => q.id === coverItem.id);
+          if (qi) {
+            coverMediaId = `${itemId}_media_${qi.id}`;
+          }
+        }
+      }
+
+      // 4. Patch listing metadata (text fields + attachment manifest + cover)
       setSaveStage('updating_listing');
-      const coverUri = mediaItems[0]?.publicUrl || mediaItems[0]?.uri;
+      // The queue result is fresher than state — the setMediaItems above has
+      // not re-rendered into this closure, so read the cover's uploaded URL
+      // from the queue items first. A local file:// URI is useless to the
+      // API: with no canonical remote URL the save fails through the
+      // existing error path instead of sending one.
+      const coverUri = coverItem
+        ? (uploadedItems.find((q) => q.id === coverItem.id)?.publicUrl
+          || coverItem.publicUrl)
+        : undefined;
+      if (coverItem && !coverUri) {
+        throw new Error(t('listing.edit.mediaFailedRetry'));
+      }
       await patchListingOnApi(itemId, {
         title: title.trim(),
         description: description.trim(),
@@ -706,14 +644,18 @@ export default function EditListingScreen() {
         shippingMethod: shippingMethod || undefined,
         shippingPayer: shippingPayer || undefined,
         imageUrl: coverUri,
-        coverFinalizationId });
+        coverFinalizationId,
+        attachmentOrder,
+        removedAttachmentIds: removedRemoteIds.length > 0 ? removedRemoteIds : undefined,
+        coverMediaId: coverMediaId ?? null });
+
+      // Results are synced into state and attachments are created — drop
+      // the queue snapshot so nothing leaks into a future save.
+      uploadQueueRef.current.reset();
 
       setSaveStage('completed');
-      setIsCleanSaved(true);
       haptics.success();
       showToast(t('listing.edit.updated'), 'success');
-      // Clear the persisted draft — the server now holds the latest copy.
-      void AsyncStorage.removeItem(draftKey(itemId)).catch(() => {});
       // Refresh feed + invalidate cached detail so the edit propagates
       // immediately when the user returns to the feed or profile.
       void refreshListings();
@@ -726,93 +668,7 @@ export default function EditListingScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [isOwner, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, showToast, navigation, refreshListings, queryClient]);
-
-  /* ── reload listing from server (conflict: "Use their changes") ── */
-  const reloadFromServer = useCallback(async () => {
-    setConflictSheet(null);
-    setIsSaving(true);
-    try {
-      const res = await fetchListingByIdFromApi(itemId);
-      if (res.ok && res.listing) {
-        const l = res.listing;
-        mountUpdatedAtRef.current = l.updatedAt ?? l.createdAt ?? null;
-        setListing(l);
-        setTitle(l.title ?? '');
-        setDescription(l.description ?? '');
-        setPrice(String(l.priceGbp ?? ''));
-        setOriginalPrice(l.originalPriceGbp ? String(l.originalPriceGbp) : '');
-        setCategory(l.category ? l.category.charAt(0).toUpperCase() + l.category.slice(1) : '');
-        setBrand(l.brand ?? '');
-        setSize(l.size ?? '');
-        setCondition(l.condition ?? '');
-        setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
-        setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
-        const initialPhotos = l.images ?? (l.imageUrl ? [l.imageUrl] : []);
-        const items: ListingMediaDraftItem[] = initialPhotos.map((uri: string, i: number) => ({
-          id: `remote_${itemId}_${i}`,
-          uri,
-          kind: 'image' as const,
-          source: 'remote' as const,
-          status: 'uploaded' as const,
-          publicUrl: uri }));
-        setMediaItems(items);
-        setIsCleanSaved(true);
-        void AsyncStorage.removeItem(draftKey(itemId)).catch(() => {});
-        showToast(t('listing.edit.updated'), 'success');
-      } else {
-        showToast(t('listing.edit.couldNotLoad'), 'error');
-      }
-    } catch {
-      showToast(t('listing.edit.couldNotLoad'), 'error');
-    } finally {
-      setIsSaving(false);
-      setSaveStage('idle');
-    }
-  }, [itemId, showToast]);
-
-  const handleSave = useCallback(async () => {
-    const error = validate();
-    if (error) {
-      setErrorMsg(error);
-      setSaveStage('failed_recoverable');
-      haptics.error();
-      return;
-    }
-
-    // Conflict detection: re-fetch the listing and compare its updatedAt
-    // to the value captured at mount. Skip the check when offline (the
-    // fetch would fail anyway) or when we have no baseline timestamp.
-    if (!isOffline && mountUpdatedAtRef.current) {
-      try {
-        const fresh = await fetchListingByIdFromApi(itemId);
-        if (fresh.ok && fresh.listing) {
-          const serverUpdatedAt = fresh.listing.updatedAt ?? fresh.listing.createdAt ?? null;
-          if (serverUpdatedAt && serverUpdatedAt !== mountUpdatedAtRef.current) {
-            // The listing was edited elsewhere since this screen opened.
-            setConflictSheet({
-              visible: true,
-              serverUpdatedAt,
-              onKeepMine: () => {
-                setConflictSheet(null);
-                // Force save — update the baseline so a subsequent save
-                // doesn't re-trigger the conflict prompt.
-                mountUpdatedAtRef.current = serverUpdatedAt;
-                void performSave();
-              },
-              onUseTheirs: reloadFromServer,
-            });
-            return;
-          }
-        }
-      } catch {
-        // Network hiccup during the pre-save check — proceed with the
-        // save; the server will reject it if there's a real conflict.
-      }
-    }
-
-    void performSave();
-  }, [validate, isOffline, itemId, performSave, reloadFromServer]);
+  }, [validate, isOwner, itemId, title, description, price, brand, size, condition, category, originalPrice, shippingMethod, shippingPayer, mediaItems, removedRemoteIds, showToast, navigation]);
 
   /* ── preview handler ── */
   const handlePreview = useCallback(() => {
@@ -896,17 +752,9 @@ export default function EditListingScreen() {
 
   const saveDisabled = !hasChanges || isSaving;
 
-  /* ── coarse save state for the footer button ── */
-  const saveState: 'saved' | 'saving' | 'offline' | 'dirty' = useMemo(() => {
-    if (isSaving || isAutosaving) return 'saving';
-    if (isOffline && hasChanges) return 'offline';
-    if (!hasChanges && isCleanSaved) return 'saved';
-    return 'dirty';
-  }, [isSaving, isAutosaving, isOffline, hasChanges, isCleanSaved]);
-
   /* ── sold comparables for pricing guidance ── */
   const { listings: backendListings } = useBackendData();
-  const soldComps = useSoldComps(backendListings, category || undefined, brand || undefined);
+  const soldComps = useSoldComps(backendListings, category || undefined, brand || undefined, itemId);
   const numericPrice = Number(sanitizeDecimalInput(price));
   const hasValidPrice = Number.isFinite(numericPrice) && numericPrice > 0;
   const priceVsMarket = useMemo(() => {
@@ -915,25 +763,6 @@ export default function EditListingScreen() {
     if (soldComps.maxPrice != null && numericPrice > soldComps.maxPrice * 1.2) return 'above' as const;
     return 'in_range' as const;
   }, [soldComps, hasValidPrice, numericPrice]);
-
-  /* ── listing quality ── */
-  // The listings API does not expose a sales-format field (auctions are
-  // separate rows joined by listing id), so the meter scores the editable
-  // fixed-price record fields — always listingMode 'sell_now'.
-  const qualityResult = useMemo(() => calculateListingQuality({
-    photos: mediaItems.map((m) => m.publicUrl || m.uri),
-    title,
-    brand,
-    category,
-    size,
-    condition,
-    description,
-    price,
-    originalPrice,
-    tags: [],
-    shippingMethod,
-    shippingPayer,
-    listingMode: 'sell_now' }), [mediaItems, title, brand, category, size, condition, description, price, originalPrice, shippingMethod, shippingPayer]);
 
   /* ── listing status label ── */
   const listingStatusLabel = useMemo(() => {
@@ -994,14 +823,21 @@ export default function EditListingScreen() {
                     setShippingMethod((l.shippingMethod as 'standard' | 'express' | null) ?? null);
                     setShippingPayer((l.shippingPayer as 'buyer' | 'seller' | null) ?? null);
                     const initialPhotos = l.images ?? (l.imageUrl ? [l.imageUrl] : []);
-                    const items: ListingMediaDraftItem[] = initialPhotos.map((uri: string, i: number) => ({
-                      id: `remote_${itemId}_${i}`,
+                    const apiMedia = l.media ?? [];
+                    const hasMediaIds = apiMedia.length > 0;
+                    const items: ListingMediaDraftItem[] = (hasMediaIds ? apiMedia.map((m) => m.url) : initialPhotos).map((uri: string, i: number) => ({
+                      id: hasMediaIds ? apiMedia[i].id : `remote_${itemId}_${i}`,
+                      mediaId: hasMediaIds ? apiMedia[i].id : undefined,
                       uri,
                       kind: 'image' as const,
                       source: 'remote' as const,
                       status: 'uploaded' as const,
                       publicUrl: uri }));
                     setMediaItems(items);
+                    const remoteIds = items.map((m) => m.mediaId ?? m.id);
+                    setRemoteMediaOrder(remoteIds);
+                    setInitialRemoteOrder(remoteIds);
+                    setRemovedRemoteIds([]);
                   } else {
                     setLoadError(true);
                   }
@@ -1055,6 +891,7 @@ export default function EditListingScreen() {
               onReorder={handleReorder}
               onRemoveItem={handleRemoveItem}
               onRetryItem={handleRetryItem}
+              onTransformItem={handleTransformItem}
               canRemoveItem={canRemoveItem}
               reorderEnabled={true}
               lockedNote={t('listing.edit.lockedPhotos')}
@@ -1075,41 +912,6 @@ export default function EditListingScreen() {
               lockedNote={t('listing.edit.noPermission')}
             />
           )}
-
-          {/* ── 2a. PHOTO UPLOAD GUIDANCE ── */}
-          <View style={[styles.photoGuideCard, themed.photoGuideCard]}>
-            <Pressable
-              style={({ pressed }) => [styles.photoGuideHeader, pressed && { opacity: 0.85 }]}
-              onPress={() => setPhotoGuideCollapsed((v) => !v)}
-              accessibilityRole="button"
-              accessibilityLabel={photoGuideCollapsed ? t('listing.edit.expandPhotoTips') : t('listing.edit.collapsePhotoTips')}
-            >
-              <AppIcon name="camera-outline" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
-              <Text style={[styles.photoGuideTitle, themed.photoGuideTitle]}>{t('listing.create.photoTips')}</Text>
-              <Text style={[styles.photoGuideMin, themed.photoGuideMin]}>{t('listing.create.photoTipsMin')}</Text>
-              <AppIcon name={photoGuideCollapsed ? 'chevron-down' : 'chevron-up'} size={12} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
-            {!photoGuideCollapsed && (
-              <Reanimated.View
-                entering={reducedMotion ? undefined : FadeIn.duration(200)}
-                exiting={reducedMotion ? undefined : FadeOut.duration(200)}
-                style={styles.photoGuideTips}
-              >
-                <View style={styles.photoGuideTipRow}>
-                  <AppIcon name="sunny-outline" size={12} color="textMuted" opticalCenter accessible={false} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipLighting')}</Text>
-                </View>
-                <View style={styles.photoGuideTipRow}>
-                  <AppIcon name="camera-reverse-outline" size={12} color="textMuted" opticalCenter accessible={false} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipAngles')}</Text>
-                </View>
-                <View style={styles.photoGuideTipRow}>
-                  <AppIcon name="leaf-outline" size={12} color="textMuted" opticalCenter accessible={false} />
-                  <Text style={[styles.photoGuideTip, themed.photoGuideTip]}>{t('listing.create.photoTipBackground')}</Text>
-                </View>
-              </Reanimated.View>
-            )}
-          </View>
 
           {/* ── 3. LISTING STATUS/CONTEXT ── */}
           {listingStatusLabel && (
@@ -1466,69 +1268,6 @@ export default function EditListingScreen() {
           <View style={{ height: DockConstants.singleActionHeight }} />
         </KeyboardAwareScrollView>
 
-      {/* ── 8b. COMPACT LISTING QUALITY METER (fixed above save footer) ── */}
-      {isOwner && (
-        <View style={[styles.qualityBar, themed.qualityBar]}>
-          <View style={styles.qualityBarRow}>
-            <View style={styles.qualityBarLeft}>
-              <AppIcon
-                name={qualityResult.tier === 'excellent' ? 'star' : qualityResult.tier === 'good' ? 'star-half-outline' : 'ellipse-outline'}
-                size={IconSize.sm}
-                color="textSecondary"
-                opticalCenter
-                accessible={false}
-              />
-              <Text style={[styles.qualityBarLabel, themed.qualityBarLabel]}>{t('listing.edit.listingQuality')}</Text>
-            </View>
-            <View style={styles.qualityBarRight}>
-              <Text style={[styles.qualityBarScore, themed.qualityBarScore]}>{qualityResult.score}%</Text>
-              <Text style={[styles.qualityBarTier, themed.qualityBarTier]}>{qualityResult.tierLabel}</Text>
-              <Pressable
-                hitSlop={8}
-                onPress={() => setQualityTipsExpanded((v) => !v)}
-                style={({ pressed }) => [styles.qualityTipsToggle, pressed && { opacity: 0.85 }]}
-                accessibilityRole="button"
-                accessibilityLabel={qualityTipsExpanded ? t('listing.edit.hideTips') : t('listing.edit.showTips')}
-              >
-                <Text style={[styles.qualityTipsLabel, themed.qualityTipsLabel]}>{t('listing.edit.tipsToImprove')}</Text>
-                <AppIcon name={qualityTipsExpanded ? 'chevron-up' : 'chevron-down'} size={12} color="brand" opticalCenter accessible={false} />
-              </Pressable>
-            </View>
-          </View>
-          <View style={styles.qualityBarTrack}>
-            <View style={[styles.qualityBarFill, { width: `${qualityResult.score}%`, backgroundColor: colors.brand }]} />
-          </View>
-          {qualityTipsExpanded && qualityResult.missingItems.length > 0 && (
-            <Reanimated.View
-              entering={reducedMotion ? undefined : FadeIn.duration(200)}
-              exiting={reducedMotion ? undefined : FadeOut.duration(200)}
-              style={[styles.qualityTipsRow, themed.qualityTipsRow]}
-            >
-              {qualityResult.missingItems.slice(0, 6).map((item) => (
-                <View key={item.key} style={styles.qualityTipChip}>
-                  <AppIcon name={item.icon} size={12} color="textMuted" opticalCenter accessible={false} />
-                  <Text style={[styles.qualityTipsText, themed.qualityTipsText]}>{item.label}</Text>
-                </View>
-              ))}
-            </Reanimated.View>
-          )}
-          {qualityTipsExpanded && qualityResult.tips.length > 0 && (
-            <Reanimated.View
-              entering={reducedMotion ? undefined : FadeIn.duration(200)}
-              exiting={reducedMotion ? undefined : FadeOut.duration(200)}
-              style={styles.qualityTipsList}
-            >
-              {qualityResult.tips.slice(0, 4).map((tip, i) => (
-                <View key={i} style={styles.qualityTipBulletRow}>
-                  <Text style={[styles.qualityTipBullet, themed.qualityTipsText]}>•</Text>
-                  <Text style={[styles.qualityTipsText, themed.qualityTipsText]}>{tip}</Text>
-                </View>
-              ))}
-            </Reanimated.View>
-          )}
-        </View>
-      )}
-
       {/* ── 9. STICKY PREVIEW/SAVE FOOTER ── */}
       {isOwner && (
         <EditListingFooter
@@ -1539,7 +1278,6 @@ export default function EditListingScreen() {
           onPreview={handlePreview}
           onSave={handleSave}
           bottomInset={insets.bottom}
-          saveState={saveState}
         />
       )}
 
@@ -1564,65 +1302,13 @@ export default function EditListingScreen() {
         variant={confirmSheet.variant}
       />
 
-      {/* ── Restore unsaved draft prompt ── */}
-      {restoreSheet && (
-        <ConfirmationSheet
-          visible={restoreSheet.visible}
-          onDismiss={handleDiscardDraft}
-          title={t('listing.edit.draftFound')}
-          message={t('listing.edit.draftRestore', { date: new Date(restoreSheet.draft.savedAt).toLocaleString() })}
-          confirmLabel={t('listing.edit.draftRestoreAction')}
-          cancelLabel={t('listing.edit.draftDiscard')}
-          onConfirm={handleRestoreDraft}
-          onCancel={handleDiscardDraft}
-        />
-      )}
-
-      {/* ── Conflict resolution sheet ──
-          Three options: keep my changes (force save), use their changes
-          (reload), or compare. Compare re-fetches and reloads so the user
-          can see the server version before deciding whether to re-apply. */}
-      {conflictSheet && (
-        <BottomSheet
-          visible={conflictSheet.visible}
-          onDismiss={() => setConflictSheet(null)}
-          variant="transaction"
-          snapPoint={0.46}
-        >
-          <View style={styles.conflictContainer} accessibilityRole="alert" accessibilityLiveRegion="assertive">
-            <Text style={[styles.conflictTitle, { color: colors.textPrimary }]} accessibilityRole="header">
-              {t('listing.edit.conflictTitle')}
-            </Text>
-            <Text style={[styles.conflictMessage, { color: colors.textSecondary }]}>
-              {t('listing.edit.conflictMessage')}
-            </Text>
-            <View style={styles.conflictActions}>
-              <AppButton
-                title={t('listing.edit.conflictKeepMine')}
-                onPress={conflictSheet.onKeepMine}
-                variant="primary"
-                size="lg"
-                style={styles.conflictBtn}
-                accessibilityLabel={t('listing.edit.conflictKeepMine')}
-              />
-              <AppButton
-                title={t('listing.edit.conflictUseTheirs')}
-                onPress={conflictSheet.onUseTheirs}
-                variant="ghost"
-                size="md"
-                accessibilityLabel={t('listing.edit.conflictUseTheirs')}
-              />
-              <AppButton
-                title={t('listing.edit.conflictCompare')}
-                onPress={conflictSheet.onUseTheirs}
-                variant="ghost"
-                size="md"
-                accessibilityLabel={t('listing.edit.conflictCompare')}
-              />
-            </View>
-          </View>
-        </BottomSheet>
-      )}
+      {/* Flagship camera sheet — replaces system camera for listing photos */}
+      <ListingCameraSheet
+        visible={cameraSheetVisible}
+        onClose={() => setCameraSheetVisible(false)}
+        onCapture={handleCameraCapture}
+        maxPhotos={10 - mediaItems.length}
+      />
     </FlagshipScreen>
   );
 }
@@ -1756,38 +1442,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily },
 
-  /* -- photo guidance card -- */
-  photoGuideCard: {
-    marginHorizontal: Space.md,
-    marginTop: Space.sm,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm + 2,
-    borderRadius: Radius.md,
-    borderWidth: StyleSheet.hairlineWidth },
-  photoGuideHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2 },
-  photoGuideTitle: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  photoGuideMin: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  photoGuideTips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.sm + 2,
-    marginTop: Space.sm },
-  photoGuideTipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs },
-  photoGuideTip: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-
   /* -- price suggestion block -- */
   priceSuggestionBlock: {
     marginTop: Space.xs,
@@ -1831,98 +1485,4 @@ const styles = StyleSheet.create({
     fontFamily: TypographyV2.meta.fontFamily },
   completenessHint: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-
-  /* -- compact quality bar (fixed above footer) -- */
-  qualityBar: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    paddingBottom: Space.xs,
-    gap: Space.xs },
-  qualityBarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between' },
-  qualityBarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2 },
-  qualityBarLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  qualityBarRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2 },
-  qualityBarScore: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily },
-  qualityBarTier: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  qualityTipsToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2 },
-  qualityTipsLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  qualityBarTrack: {
-    height: Stroke.emphasis,
-    borderRadius: Radius.sm,
-    backgroundColor: 'transparent',
-    overflow: 'hidden' },
-  qualityBarFill: {
-    height: '100%',
-    borderRadius: Radius.sm },
-  qualityTipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Space.xs + 1,
-    paddingVertical: Space.xs,
-    paddingHorizontal: Space.sm,
-    borderRadius: Radius.sm,
-    marginTop: Space.xs },
-  qualityTipChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2 + 1 },
-  qualityTipsList: {
-    gap: Space.xs - 1,
-    marginTop: Space.xs },
-  qualityTipBulletRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Space.xs + 2 },
-  qualityTipBullet: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily },
-  qualityTipsText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    lineHeight: TypographyV2.meta.lineHeight - 1 },
-
-  /* -- conflict resolution sheet -- */
-  conflictContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingBottom: Space.lg },
-  conflictTitle: {
-    fontSize: TypographyV2.sectionTitle.size,
-    lineHeight: TypographyV2.sectionTitle.lineHeight,
-    fontFamily: TypographyV2.sectionTitle.fontFamily,
-    letterSpacing: TypographyV2.sectionTitle.letterSpacing,
-    marginBottom: Space.sm },
-  conflictMessage: {
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: TypographyV2.body.letterSpacing,
-    marginBottom: Space.lg },
-  conflictActions: {
-    gap: Space.sm },
-  conflictBtn: {
-    borderRadius: Radius.lg,
-    marginBottom: Space.xs } });
+    fontFamily: TypographyV2.meta.fontFamily } });

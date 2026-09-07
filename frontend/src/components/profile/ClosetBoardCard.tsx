@@ -1,15 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { CachedImage } from '../CachedImage';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Typography, Space, Radius, AspectRatio, PressScale } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { PressPresets } from '../../hooks/usePremiumPressFeedback';
 
-const COLLAGE_GAP = 2;
+const COLLAGE_GAP = 1.5;
 
 interface ClosetBoardCardProps {
   title: string;
@@ -50,182 +49,175 @@ export function ClosetBoardCard({
   updatedAt,
   isPrivate,
   onPress,
-  index = 0 }: ClosetBoardCardProps) {
+  index = 0,
+}: ClosetBoardCardProps) {
   const { colors } = useAppTheme();
   const { width: SCREEN_W } = useWindowDimensions();
   const cardW = (SCREEN_W - Space.md * 2 - Space.sm) / 2;
-  // 3:4 portrait cover — media-first, matches the closet mosaic geometry
-  const coverH = cardW / AspectRatio.portrait;
-  const styles = React.useMemo(() => createStyles(colors, cardW, coverH), [colors, cardW, coverH]);
+  const styles = React.useMemo(() => createStyles(colors, cardW), [colors, cardW]);
   const hasCovers = covers.length > 0;
 
   return (
     <AnimatedPressable
-        style={styles.card}
-        onPress={onPress}
-        {...PressPresets.card}
-        accessibilityRole="button"
-        accessibilityLabel={`${title} board, ${itemCount} items${isPrivate ? ', private' : ''}${updatedAt ? `, updated ${formatRelativeTime(updatedAt)} ago` : ''}`}
-      >
-        {/* Cover — media mosaic. 1 image = full-bleed; 2-4 = 2×2 grid collage.
-            Uses 3:4 portrait aspect to match the closet mosaic geometry. */}
-        <View style={styles.collage}>
-          {hasCovers ? (
-            covers.length === 1 ? (
-              <CachedImage
-                uri={covers[0]}
-                style={styles.coverImg}
-                contentFit="cover"
-                downscaleWidth={cardW}
-                emptyLabel={title}
-                emptyIcon="image-outline"
-              />
-            ) : (
-              <View style={styles.gridCollage}>
-                {Array.from({ length: 4 }).map((_, i) => {
-                  const uri = covers[i];
-                  if (!uri) {
-                    return (
-                      <View key={i} style={[styles.collageCell, styles.collageCellEmpty]}>
-                        <Ionicons name="add" size={14} color={colors.scrimTextTertiary} />
-                      </View>
-                    );
-                  }
+      style={styles.card}
+      onPress={onPress}
+      {...PressPresets.card}
+      accessibilityRole="button"
+      accessibilityLabel={`${title} board, ${itemCount} items${isPrivate ? ', private' : ''}${updatedAt ? `, updated ${formatRelativeTime(updatedAt)} ago` : ''}`}
+    >
+      {/* Cover — 1:1 square media container (matches Instagram/Pinterest saved collections benchmark) */}
+      <View style={styles.coverContainer}>
+        {hasCovers ? (
+          covers.length === 1 ? (
+            <CachedImage
+              uri={covers[0]}
+              style={styles.coverImg}
+              contentFit="cover"
+              downscaleWidth={cardW}
+              emptyLabel={title}
+              emptyIcon="image-outline"
+            />
+          ) : (
+            <View style={styles.gridCollage}>
+              {Array.from({ length: 4 }).map((_, i) => {
+                const uri = covers[i];
+                if (!uri) {
                   return (
-                    <View key={uri + i} style={styles.collageCell}>
-                      <CachedImage
-                        uri={uri}
-                        style={styles.coverImg}
-                        contentFit="cover"
-                        downscaleWidth={cardW / 2}
-                        emptyIcon="image-outline"
-                      />
+                    <View key={i} style={[styles.collageCell, styles.collageCellEmpty]}>
+                      <Ionicons name="images-outline" size={14} color={colors.textMuted} />
                     </View>
                   );
-                })}
-              </View>
-            )
-          ) : (
-            <View style={styles.emptyCollage}>
-              <Ionicons name="folder-open-outline" size={28} color={colors.textMuted} />
+                }
+                return (
+                  <View key={uri + i} style={styles.collageCell}>
+                    <CachedImage
+                      uri={uri}
+                      style={styles.coverImg}
+                      contentFit="cover"
+                      downscaleWidth={cardW / 2}
+                      emptyIcon="image-outline"
+                    />
+                  </View>
+                );
+              })}
             </View>
-          )}
-        </View>
-
-        {/* Bottom gradient for text legibility */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.65)']}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-
-        {/* Title + metadata overlay at bottom */}
-        <View style={styles.textOverlay}>
-          <View style={styles.titleRow}>
-            <Text style={styles.title} numberOfLines={1}>{title}</Text>
-            {isPrivate ? (
-              <View style={styles.privacyBadge}>
-                <Ionicons name="lock-closed" size={10} color={colors.scrimTextSecondary} />
-              </View>
-            ) : null}
+          )
+        ) : (
+          <View style={styles.emptyCollage}>
+            <Ionicons name="folder-open-outline" size={32} color={colors.textMuted} />
           </View>
-          <View style={styles.metaRow}>
+        )}
+      </View>
+
+      {/* Metadata below media — clean typography, zero gradient obscuration */}
+      <View style={styles.textContainer}>
+        <View style={styles.titleRow}>
+          <Text style={styles.title} numberOfLines={1}>
+            {title}
+          </Text>
+        </View>
+        <View style={styles.metaRow}>
+          {isPrivate ? (
+            <View style={styles.privateMetaWrap}>
+              <Ionicons name="lock-closed" size={11} color={colors.textMuted} />
+              <Text style={styles.meta}>Private</Text>
+            </View>
+          ) : (
             <Text style={styles.meta}>
               {itemCount} {itemCount === 1 ? 'item' : 'items'}
             </Text>
-            {updatedAt ? (
-              <>
-                <Text style={styles.metaDot}>·</Text>
-                <Text style={styles.metaUpdated}>{formatRelativeTime(updatedAt)}</Text>
-              </>
-            ) : null}
-          </View>
+          )}
+          {updatedAt ? (
+            <>
+              <Text style={styles.metaDot}>·</Text>
+              <Text style={styles.meta}>{formatRelativeTime(updatedAt)}</Text>
+            </>
+          ) : null}
         </View>
-      </AnimatedPressable>
+      </View>
+    </AnimatedPressable>
   );
 }
 
-function createStyles(colors: ThemeColors, cardW: number, coverH: number) {
+function createStyles(colors: ThemeColors, cardW: number) {
   return StyleSheet.create({
-  card: {
-    width: cardW,
-    height: coverH + 8,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
-    position: 'relative' },
-  collage: {
-    width: '100%',
-    height: '100%' },
-  gridCollage: {
-    width: '100%',
-    height: '100%',
-    flexDirection: 'row',
-    flexWrap: 'wrap' },
-  collageCell: {
-    width: '50%',
-    height: '50%',
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt },
-  collageCellEmpty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.overlay },
-  coverImg: {
-    width: '100%',
-    height: '100%' },
-  emptyCollage: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center' },
-  textOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: Space.sm + 2,
-    paddingTop: Space.lg },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs },
-  privacyBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: Radius.full,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0 },
-  title: {
-    flexShrink: 1,
-    fontFamily: Typography.family.bold,
-    fontSize: TypographyV2.bodyStrong.size,
-    color: colors.scrimTextPrimary,
-    textShadowColor: colors.shadow,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3 },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs / 2 + 1,
-    marginTop: 2 },
-  meta: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size,
-    color: colors.scrimTextSecondary,
-    textShadowColor: colors.shadow,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2 },
-  metaDot: {
-    fontFamily: Typography.family.medium,
-    fontSize: TypographyV2.meta.size,
-    color: colors.scrimTextTertiary },
-  metaUpdated: {
-    fontFamily: Typography.family.regular,
-    fontSize: TypographyV2.meta.size,
-    color: colors.scrimTextSecondary,
-    textShadowColor: colors.shadow,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2 } });
+    card: {
+      width: cardW,
+      marginBottom: Space.sm,
+    },
+    coverContainer: {
+      width: cardW,
+      height: cardW,
+      borderRadius: Radius.lg,
+      overflow: 'hidden',
+      backgroundColor: colors.surfaceAlt,
+    },
+    gridCollage: {
+      width: '100%',
+      height: '100%',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: COLLAGE_GAP,
+      backgroundColor: colors.borderSubtle,
+    },
+    collageCell: {
+      width: (cardW - COLLAGE_GAP) / 2,
+      height: (cardW - COLLAGE_GAP) / 2,
+      overflow: 'hidden',
+      backgroundColor: colors.surfaceAlt,
+    },
+    collageCellEmpty: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceAlt,
+    },
+    coverImg: {
+      width: '100%',
+      height: '100%',
+    },
+    emptyCollage: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surfaceAlt,
+    },
+    textContainer: {
+      paddingTop: Space.xs + 2,
+      paddingHorizontal: 2,
+    },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs / 2,
+    },
+    title: {
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
+      fontSize: TypographyV2.bodyStrong.size,
+      color: colors.textPrimary,
+      lineHeight: TypographyV2.bodyStrong.lineHeight,
+      flexShrink: 1,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.xs / 2 + 1,
+      marginTop: 2,
+    },
+    privateMetaWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+    },
+    meta: {
+      fontFamily: TypographyV2.caption.fontFamily,
+      fontSize: TypographyV2.caption.size,
+      color: colors.textMuted,
+      lineHeight: TypographyV2.caption.lineHeight,
+    },
+    metaDot: {
+      fontFamily: TypographyV2.caption.fontFamily,
+      fontSize: TypographyV2.caption.size,
+      color: colors.textMuted,
+    },
+  });
 }

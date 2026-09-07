@@ -33,6 +33,9 @@ export interface CoOwnPositionCardProps {
   totalUnits: number;
   ownershipPct: number;
   currentValueLabel: string;
+  /** Executable sale estimate from current bid depth; may be "No current bids". */
+  estimatedSaleProceedsLabel?: string;
+  saleDepthLabel?: string;
   avgEntryLabel?: string;
   unrealizedLabel?: string;
   realizedLabel?: string;
@@ -76,6 +79,8 @@ export function CoOwnPositionCard({
   totalUnits,
   ownershipPct,
   currentValueLabel,
+  estimatedSaleProceedsLabel,
+  saleDepthLabel,
   avgEntryLabel,
   unrealizedLabel,
   realizedLabel,
@@ -120,7 +125,6 @@ export function CoOwnPositionCard({
   const reservedUnits = positionState?.reservedForSale ?? 0;
   const pendingInUnits = positionState?.pendingIn ?? 0;
   const pendingOutUnits = positionState?.pendingOut ?? 0;
-  const sellableUnits = settledUnits - reservedUnits;
 
   // Outstanding denominator — prefer positionState.outstandingUnits, then the
   // separate prop, then fall back to totalUnits
@@ -209,6 +213,19 @@ export function CoOwnPositionCard({
           )}
 
           <View style={[styles.valueRow, { borderColor: colors.border }]}>
+            <View style={styles.valueItem}>
+              <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>Marked value</Text>
+              <Text style={[styles.valueAmount, { color: colors.textSecondary }]} numberOfLines={1}>{currentValueLabel}</Text>
+            </View>
+            {estimatedSaleProceedsLabel ? (
+              <View style={styles.valueItem}>
+                <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>Est. sale proceeds</Text>
+                <Text style={[styles.valueAmount, { color: colors.textSecondary }]} numberOfLines={1}>{estimatedSaleProceedsLabel}</Text>
+                {saleDepthLabel ? (
+                  <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>{saleDepthLabel}</Text>
+                ) : null}
+              </View>
+            ) : null}
             <View style={styles.valueItem}>
               <Text style={[styles.valueLabel, { color: colors.textMuted }]} numberOfLines={1}>Cost basis</Text>
               <Text style={[styles.valueAmount, { color: colors.textSecondary }]} numberOfLines={1}>{avgEntryLabel ?? '—'}</Text>
@@ -415,12 +432,15 @@ const styles = StyleSheet.create({
   },
   valueRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Space.md,
     paddingTop: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   valueItem: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '42%',
+    minWidth: 120,
     gap: 2,
   },
   valueLabel: {

@@ -120,6 +120,8 @@ export interface SearchAutocompleteProps {
   trending: string[];
   /** Recent searches shown when the input is empty and focused. */
   recent: string[];
+  /** Algorithmic taste topics suggested dynamically for the user. */
+  suggested?: string[];
   /** The raw query — used to highlight the matched portion and fetch suggestions. */
   query: string;
   /** Whether the dropdown is visible (focused + no explicit hide). */
@@ -147,6 +149,7 @@ export function SearchAutocomplete({
   suggestions: suggestionsProp,
   trending,
   recent,
+  suggested = [],
   query,
   visible,
   onSelect,
@@ -178,6 +181,7 @@ export function SearchAutocomplete({
   // Build a flat list of renderable rows for FlashList.
   type Row =
     | { kind: 'header'; text: string }
+    | { kind: 'suggested'; term: string }
     | { kind: 'trending'; term: string }
     | { kind: 'recent'; term: string }
     | { kind: 'clear' }
@@ -188,18 +192,24 @@ export function SearchAutocomplete({
   const rows: Row[] = useMemo(() => {
     const out: Row[] = [];
     const normalizedQuery = query.trim();
-    // Idle search shows one memory aid, never two competing catalogues.
-    // Once typing starts, only ranked intents remain in the reading path.
-    if (normalizedQuery.length === 0 && recent.length > 0) {
-      out.push({ kind: 'header', text: 'Recent' });
-      for (const term of recent.slice(0, 4)) {
-        out.push({ kind: 'recent', term });
+    if (normalizedQuery.length === 0) {
+      if (suggested && suggested.length > 0) {
+        out.push({ kind: 'header', text: 'Suggested for you' });
+        for (const term of suggested.slice(0, 4)) {
+          out.push({ kind: 'suggested', term });
+        }
       }
-      if (onClearRecent) out.push({ kind: 'clear' });
-    } else if (normalizedQuery.length === 0 && trending.length > 0) {
-      out.push({ kind: 'header', text: 'Trending' });
-      for (const term of trending.slice(0, 5)) {
-        out.push({ kind: 'trending', term });
+      if (recent.length > 0) {
+        out.push({ kind: 'header', text: 'Recent' });
+        for (const term of recent.slice(0, 4)) {
+          out.push({ kind: 'recent', term });
+        }
+        if (onClearRecent) out.push({ kind: 'clear' });
+      } else if (trending.length > 0) {
+        out.push({ kind: 'header', text: 'Trending' });
+        for (const term of trending.slice(0, 5)) {
+          out.push({ kind: 'trending', term });
+        }
       }
     } else if (normalizedQuery.length > 0 && suggestions.length > 0) {
       for (const suggestion of suggestions.slice(0, 5)) {
@@ -213,7 +223,7 @@ export function SearchAutocomplete({
       out.push({ kind: 'demo' });
     }
     return out;
-  }, [trending, recent, suggestions, onClearRecent, query, isSelfFetching, isLoading, isDemo]);
+  }, [suggested, trending, recent, suggestions, onClearRecent, query, isSelfFetching, isLoading, isDemo]);
 
   const hasContent = rows.some(
     (r) => r.kind === 'trending' || r.kind === 'recent' || r.kind === 'suggestion' || r.kind === 'loading',
@@ -225,6 +235,26 @@ export function SearchAutocomplete({
     switch (item.kind) {
       case 'header':
         return <Text style={styles.sectionHeader}>{item.text}</Text>;
+      case 'suggested':
+        return (
+          <Pressable
+            style={styles.row}
+            onPress={() =>
+              handleSelect({
+                query: item.term,
+                type: 'trending',
+                confidence: 0.9,
+                source: 'trending' })
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Search suggested: ${item.term}`}
+          >
+            <Ionicons name="sparkles-outline" size={18} color={colors.brand} style={styles.rowIcon} />
+            <Text style={styles.rowText} numberOfLines={1}>
+              {item.term}
+            </Text>
+          </Pressable>
+        );
       case 'trending':
         return (
           <Pressable

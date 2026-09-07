@@ -1641,6 +1641,33 @@ function MediaLayerContent({
   const skiaImage = useSkiaImage(payload.mediaUri);
   const useSkiaRendering = (hasColorMatrix || hasMask) && !!skiaImage;
 
+  // ── Skia fit + focal-point transform ─────────────────────────────
+  // Computed unconditionally (rules-of-hooks) — used only when
+  // useSkiaRendering is true, but the useMemo must always run.
+  const contentFitMap: Record<string, SkiaFit> = {
+    cover: 'cover',
+    contain: 'contain',
+    fill: 'fill' };
+  const fit = contentFitMap[payload.contentFit] ?? 'cover';
+
+  // Focal-point art direction for Skia image paths. Skia's cover fit
+  // crops from center by default. When the layer carries a focalPoint,
+  // compute a translate offset that shifts the over-scaled image so the
+  // focal region stays in frame. The offset is the difference between
+  // the focal point and center, scaled by the overflow on each axis.
+  const focalTransform = useMemo(() => {
+    if (fit !== 'cover' || !payload.focalPoint || !skiaImage) return undefined;
+    const imgW = skiaImage.width();
+    const imgH = skiaImage.height();
+    if (imgW === 0 || imgH === 0) return undefined;
+    const scale = Math.max(width / imgW, height / imgH);
+    const overflowX = imgW * scale - width;
+    const overflowY = imgH * scale - height;
+    const dx = (0.5 - payload.focalPoint.x) * overflowX;
+    const dy = (0.5 - payload.focalPoint.y) * overflowY;
+    return [{ translateX: dx }, { translateY: dy }];
+  }, [fit, payload.focalPoint, skiaImage, width, height]);
+
   // ── Video playback state ─────────────────────────────────────────
   // When a playback clock is provided, video play/pause follows the clock.
   // When no clock is present (Look composer, viewer), fall back to the
@@ -1726,30 +1753,6 @@ function MediaLayerContent({
   // a Skia Canvas with ColorMatrix and Mask components. Otherwise, use
   // the standard CachedImage for memory/disk caching and BlurHash support.
   if (useSkiaRendering) {
-    const contentFitMap: Record<string, SkiaFit> = {
-      cover: 'cover',
-      contain: 'contain',
-      fill: 'fill' };
-    const fit = contentFitMap[payload.contentFit] ?? 'cover';
-
-    // Focal-point art direction for Skia image paths. Skia's cover fit
-    // crops from center by default. When the layer carries a focalPoint,
-    // compute a translate offset that shifts the over-scaled image so the
-    // focal region stays in frame. The offset is the difference between
-    // the focal point and center, scaled by the overflow on each axis.
-    const focalTransform = useMemo(() => {
-      if (fit !== 'cover' || !payload.focalPoint || !skiaImage) return undefined;
-      const imgW = skiaImage.width();
-      const imgH = skiaImage.height();
-      if (imgW === 0 || imgH === 0) return undefined;
-      const scale = Math.max(width / imgW, height / imgH);
-      const overflowX = imgW * scale - width;
-      const overflowY = imgH * scale - height;
-      const dx = (0.5 - payload.focalPoint.x) * overflowX;
-      const dy = (0.5 - payload.focalPoint.y) * overflowY;
-      return [{ translateX: dx }, { translateY: dy }];
-    }, [fit, payload.focalPoint, skiaImage, width, height]);
-
     return (
       <SkiaCanvas style={{ width, height }} accessibilityLabel="Media layer with effects" accessibilityRole="image">
         {hasMask && skiaMaskImage ? (
@@ -2013,7 +2016,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
     return (
       <View
         style={productImageStyles.imageContainer}
-        accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}`}
+        accessibilityLabel={`Listing layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}`}
         accessibilityRole="link"
       >
         <ExpoImage
@@ -2047,7 +2050,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
     return (
       <View
         style={[o.overlayPill, { borderRadius: Radius.full, paddingHorizontal: Space.smMd, paddingVertical: 6, gap: 6 }]}
-        accessibilityLabel={`Product hotspot, ${payload.hotspotLabel}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}`}
+        accessibilityLabel={`Listing hotspot, ${payload.hotspotLabel}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}`}
         accessibilityRole="link"
       >
         <View style={{ width: 7, height: 7, borderRadius: Radius.full, backgroundColor: colors.textPrimary, borderWidth: Stroke.standard, borderColor: colors.brand }} />
@@ -2066,7 +2069,7 @@ function ProductLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
   return (
     <View
       style={o.overlayPill}
-      accessibilityLabel={`Product layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}${isDeleted ? ', unavailable' : ''}`}
+      accessibilityLabel={`Listing layer, ${payload.snapshotTitle || 'Listing'}${payload.snapshotPriceGbp !== undefined ? `, ${currencySymbol}${payload.snapshotPriceGbp.toFixed(0)}` : ''}${isSold ? ', sold' : ''}${isDeleted ? ', unavailable' : ''}`}
       accessibilityRole="link"
     >
       <View style={o.overlayRow}>
@@ -2135,7 +2138,7 @@ function VoteLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'vot
       <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
         {payload.options.map((opt) => (
           <View key={opt.id} style={o.overlayOption}>
-            <Text style={[o.overlayLabel, { fontFamily: FontFamily.medium, fontSize: TypographyV2.meta.size + 1 }]} numberOfLines={1}>{opt.label}</Text>
+            <Text style={[o.overlayLabel, { fontFamily: FontFamily.medium, fontSize: TypographyV2.caption.size }]} numberOfLines={1}>{opt.label}</Text>
           </View>
         ))}
       </View>
@@ -2473,7 +2476,7 @@ function MusicLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'mu
         </View>
       )}
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: colors.scrimTextPrimary }} numberOfLines={1}>
+        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: colors.scrimTextPrimary }} numberOfLines={1}>
           {payload.trackName}
         </Text>
         {payload.artistName ? (
@@ -2509,7 +2512,7 @@ function LinkLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'lin
       backgroundColor: payload.backgroundColor,
       minWidth: 120 }} accessibilityLabel={`Link, ${payload.ctaText}`} accessibilityRole="link">
       <Ionicons name="link-outline" size={IconGrammar.metadata} color={payload.textColor} aria-hidden={true} />
-      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: payload.textColor }} numberOfLines={1}>
         {payload.ctaText}
       </Text>
     </View>
@@ -2531,7 +2534,7 @@ function LocationLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 
       backgroundColor: colors.mediaOverlayScrim,
       minWidth: 100 }} accessibilityLabel={`Location, ${payload.placeName}`} accessibilityRole="link">
       <Ionicons name="location-outline" size={IconGrammar.metadata} color={colors.scrimTextPrimary} aria-hidden={true} />
-      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: colors.scrimTextPrimary }} numberOfLines={1}>
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: colors.scrimTextPrimary }} numberOfLines={1}>
         {payload.placeName}
       </Text>
     </View>
@@ -2551,7 +2554,7 @@ function HashtagLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       borderRadius: Radius.md,
       backgroundColor: payload.backgroundColor,
       minWidth: 80 }} accessibilityLabel={`Hashtag, ${payload.tag}`} accessibilityRole="link">
-      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: payload.textColor }} numberOfLines={1}>
         #{payload.tag}
       </Text>
     </View>
@@ -2579,7 +2582,7 @@ function TimeLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: 'tim
       backgroundColor: payload.backgroundColor ?? colors.mediaOverlayScrim,
       minWidth: 80 }} accessibilityLabel={`Time, ${timeStr}`} accessibilityRole="text">
       <Ionicons name="time-outline" size={IconGrammar.metadata} color={payload.textColor} aria-hidden={true} />
-      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
+      <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: payload.textColor }} numberOfLines={1}>
         {timeStr}
       </Text>
     </View>
@@ -2602,7 +2605,7 @@ function WeatherLayerContent({ layer }: { layer: Extract<CreatorLayer, { type: '
       minWidth: 120 }} accessibilityLabel={`Weather, ${payload.temperature}° ${payload.condition}${payload.locationName ? `, ${payload.locationName}` : ''}`} accessibilityRole="text">
       <Text style={{ fontSize: TypographyV2.priceList.size }}>{payload.emoji}</Text>
       <View style={{ gap: 1 }}>
-        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size + 1, color: payload.textColor }} numberOfLines={1}>
+        <Text style={{ fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.caption.size, color: payload.textColor }} numberOfLines={1}>
           {payload.temperature}° {payload.condition}
         </Text>
         {payload.locationName ? (
@@ -2679,7 +2682,7 @@ function SelectionHandles({
   //   top-right:    +X / -Y  (centre is bottom-left;  drag up-right enlarges)
   //   bottom-left:  -X / +Y  (centre is top-right;    drag down-left enlarges)
   //   bottom-right: +X / +Y  (centre is top-left;     drag down-right enlarges)
-  const makeCornerPan = (signX: number, signY: number, touchSV: SharedValue<number>) =>
+  const useMakeCornerPan = (signX: number, signY: number, touchSV: SharedValue<number>) =>
     useMemo(
       () =>
         Gesture.Pan()
@@ -2712,10 +2715,10 @@ function SelectionHandles({
       [layerLocked, scaleSV, startScale, onCommit, layerWidth, layerHeight, touchSV]
     );
 
-  const cornerPanTL = makeCornerPan(-1, -1, touchTL);
-  const cornerPanTR = makeCornerPan(1, -1, touchTR);
-  const cornerPanBL = makeCornerPan(-1, 1, touchBL);
-  const cornerPanBR = makeCornerPan(1, 1, touchBR);
+  const cornerPanTL = useMakeCornerPan(-1, -1, touchTL);
+  const cornerPanTR = useMakeCornerPan(1, -1, touchTR);
+  const cornerPanBL = useMakeCornerPan(-1, 1, touchBL);
+  const cornerPanBR = useMakeCornerPan(1, 1, touchBR);
 
   // Rotation: 1:1 finger tracking — translationX maps directly to
   // degrees. The 15° snap is applied only on commit (in onCommit →
@@ -2972,7 +2975,7 @@ function createOverlayStyles(colors: ThemeColors) {
     overlayOptionText: {
       color: colors.textPrimary,
       fontFamily: TypographyV2.body.fontFamily,
-      fontSize: TypographyV2.meta.size + 1,
+      fontSize: TypographyV2.caption.size,
       flex: 1,
     },
     overlayOptionTextCorrect: {
@@ -3080,7 +3083,7 @@ const countdownStyles = StyleSheet.create({
     marginBottom: 2 },
   label: {
     fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.meta.size - 1,
+    fontSize: TypographyV2.meta.size,
     letterSpacing: 0.3,
     textTransform: 'uppercase' },
   time: {

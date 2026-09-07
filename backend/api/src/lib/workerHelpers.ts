@@ -172,6 +172,33 @@ export function mapEventTypeToChannelId(eventType: string): string {
 }
 
 /**
+ * Map a notification event type to an iOS notification category identifier.
+ * G5: The category identifier must match a category registered via
+ * `Notifications.setNotificationCategoryAsync()` in App.tsx. This tells iOS
+ * which inline action buttons to show on the notification banner.
+ *
+ * Returns null for event types that don't have interactive actions — the
+ * notification still renders as a plain banner.
+ */
+export function mapEventTypeToIosCategory(eventType: string): string | null {
+  // Message category: Reply + Mark as read
+  if (eventType === 'chat_message') return 'message';
+
+  // Order category: Track + Mark as read
+  if (eventType.startsWith('order_') || eventType === 'payout_processed' || eventType === 'refund_completed') return 'order';
+  if (eventType === 'resolution_opened' || eventType === 'resolution_status_changed') return 'order';
+
+  // Auction category: View bid + Dismiss
+  if (eventType.startsWith('auction_')) return 'auction';
+
+  // Social category: View + Mark as read
+  if (eventType === 'new_follower' || eventType === 'new_listing_from_followed_seller' || eventType === 'review_received') return 'social';
+
+  // No interactive actions for price drops, offers, or generic news
+  return null;
+}
+
+/**
  * Map a notification event type to an iOS interruption level.
  * Apple HIG defines: passive, active, timeSensitive, critical.
  * - passive: no sound, no screen wake (marketing, social)

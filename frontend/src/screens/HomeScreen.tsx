@@ -21,7 +21,7 @@ import Reanimated, {
   withTiming } from 'react-native-reanimated';
 import { Video, ResizeMode } from '../components/compat/Video';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppIcon } from '../components/common/AppIcon';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
 
 // Typography simplified - using direct font names
@@ -56,15 +56,17 @@ import { HomeDiscoveryCard } from '../components/discover/HomeDiscoveryCard';
 import { toHomeDiscoveryItemVM, type HomeDiscoveryItemVM } from '../presentation/homeDiscoveryViewModel';
 import { getBackendSyncStatus } from '../utils/syncStatus';
 import { isVideoUri } from '../utils/media';
+import { preloadCriticalImages } from '../utils/imagePreloader';
 import { AppButton } from '../components/ui/AppButton';
-import { Space, Radius, FontFamily, Stroke, Elevation, Control, AvatarSize } from '../theme/designTokens';
+import { Space, Radius, FontFamily, Stroke, Control, Elevation } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
+import { appStorage } from '../storage/mmkv';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { ProductAnalytics } from '../platform/product/productAnalytics';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useFollowingFeed } from '../hooks/useFollowingFeed';
 import { useForYouFeed } from '../hooks/useForYouFeed';
 import { useRecommendationImpressions } from '../hooks/useRecommendationImpressions';
-import { markInteractive } from '../platform/monitoring';
 import { useFeatureFlag } from '../analytics';
 import { useVisuallyComplete } from '../performance/visuallyComplete';
 
@@ -83,7 +85,6 @@ function safeMarkInteractive(attributes: Record<string, string | number | boolea
     // Observability must never crash the app.
   }
 }
-import { resolveListingMediaHeightRatio } from '../utils/listingMediaGeometry';
 import { safeValidateDocument, type CreatorDocument } from '../creator/composition';
 import { CreatorCanvas } from '../creator/CreatorCanvas';
 
@@ -93,12 +94,8 @@ const HEADER_EXPANDED = 58;
 const HEADER_COLLAPSED = 52;
 // Design.md Component B: 8pt gutters for dense media/discovery surfaces.
 const GRID_GAP = Space.sm;
-// Missing media is not photography and should not dominate discovery like it is.
-// Keep the fallback compact while real assets continue to use their API geometry.
-const MISSING_MEDIA_HEIGHT_RATIO = 0.78;
 const POSTER_CARD_WIDTH = 76;
 const POSTER_CARD_HEIGHT = 135;
-const LISTING_CARD_CHROME_HEIGHT = 110;
 // Look rail card dimensions — used in the feed interruption rail for Looks.
 const LOOK_CARD_WIDTH = 120;
 const LOOK_CARD_HEIGHT = 160;
@@ -124,7 +121,7 @@ const AnimatedFlashList: any = Platform.OS === 'web'
  * markers. The FlashList renders both through the same masonry path.
  * The `type` field discriminates the two variants — VMs do not carry it.
  * Posters rail renders in the ListHeaderComponent (above the grid) so it
- * is visible in the first viewport — aligned with Instagram/Pinterest 2026
+ * is visible in the first viewport — aligned with 2026
  * story-tray placement.
  */
 
@@ -151,6 +148,13 @@ type FeedDataItem = HomeDiscoveryItemVM | LookFeedMarker;
 
 function isLookMarker(item: FeedDataItem): item is LookFeedMarker {
   return (item as LookFeedMarker).type === 'looks';
+}
+
+function extractFeedImageUri(item: FeedDataItem): string | null {
+  if (isLookMarker(item)) {
+    return item.looks[0]?.mediaUri ?? null;
+  }
+  return item.media.posterUri || item.media.uri || null;
 }
 
 const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { story: PosterStory }) {
@@ -190,7 +194,7 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
   }
 
   if (firstFrame?.mediaUrl) {
-    return <CachedImage uri={firstFrame.mediaUrl} style={styles.posterImage} contentFit="cover" />;
+    return <CachedImage uri={firstFrame.mediaUrl} style={styles.posterImage} contentFit="cover" priority="high" />;
   }
 
   // Quiet text-only Poster preview — no decorative sparkle/orb. The caption
@@ -198,12 +202,20 @@ const PosterStoryArtwork = React.memo(function PosterStoryArtwork({ story }: { s
   const backgroundColor = firstFrame?.backgroundColor ?? colors.surfaceAlt;
   return (
     <View style={[styles.posterTextArtwork, { backgroundColor }]}>
-      <Text style={styles.posterTextArtworkCopy} numberOfLines={5}>
+      <Text style={styles.posterTextArtworkCopy} numberOfLines={5} maxFontSizeMultiplier={2}>
         {firstFrame?.caption || 'Poster'}
       </Text>
     </View>
   );
 });
+
+// G2: In-feed quick signal chips dynamically driven by the user's algorithm.
+// Replaces static categories with real-time intent topics & recommendation vectors.
+import { useDynamicAlgorithmSignals } from '../hooks/useDynamicAlgorithmSignals';
+import { matchesSignal, type DynamicSignalChip } from '../services/algorithmicSignalsService';
+
+// Flagship Feed mode type — focused on personalised 'foryou' and creator 'following' feeds.
+type FeedMode = 'foryou' | 'following';
 
 export default function HomeScreen() {
   const { colors, isDark } = useAppTheme();
@@ -218,6 +230,7 @@ export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const notificationCount = useStore((state) => state.notificationCount);
   const isGuest = useIsGuest();
+  const currentUser = useStore((state) => state.currentUser);
   const { formatFromFiat, currencyCode } = useFormattedPrice();
   const haptic = useHaptic();
   const { requireAuth } = useSignupWall();
@@ -239,7 +252,27 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [peekItem, setPeekItem] = React.useState<HomeDiscoveryItemVM | null>(null);
   const [newListingIds, setNewListingIds] = React.useState<Set<string>>(() => new Set());
-  const [feedMode, setFeedMode] = React.useState<'foryou' | 'following'>('foryou');
+  // Persist feed mode across sessions via MMKV so the user's last-used
+  // feed view (For you / Following) is restored on app launch.
+  const [feedMode, setFeedModeState] = React.useState<FeedMode>(() => {
+    try {
+      const stored = appStorage.getString('home.feedMode');
+      if (stored === 'foryou' || stored === 'following') {
+        return stored;
+      }
+    } catch {}
+    return 'foryou';
+  });
+  const setFeedMode = React.useCallback((mode: FeedMode) => {
+    setFeedModeState(mode);
+    try { appStorage.set('home.feedMode', mode); } catch {}
+  }, []);
+  const {
+    signals: dynamicSignals,
+    activeSignal: selectedSignalChip,
+    selectSignal: handleSelectSignalChip,
+    isPersonalized: hasPersonalizedSignals,
+  } = useDynamicAlgorithmSignals({ surface: 'home' });
 
   // Viewability-driven video autoplay: only the most-visible feed tile plays
   // its video. Settlement delay (350ms) avoids spinning up players during fast
@@ -273,6 +306,7 @@ export default function HomeScreen() {
   const knownListingIdsRef = React.useRef<Set<string>>(new Set());
   const seededKnownListingIdsRef = React.useRef(false);
   const refreshTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPrefetchedIndexRef = React.useRef(-1);
 
   const headerExpandedHeight = React.useMemo(() => HEADER_EXPANDED + insets.top, [insets.top]);
   const headerCollapsedHeight = React.useMemo(() => HEADER_COLLAPSED + insets.top, [insets.top]);
@@ -346,8 +380,8 @@ export default function HomeScreen() {
   });
 
   const headerShadowStyle = useAnimatedStyle(() => {
-    const shadowOpacity = interpolate(scrollY.value, [0, 60], [0, 0.12], Extrapolation.CLAMP);
-    const shadowRadius = interpolate(scrollY.value, [0, 60], [0, 12], Extrapolation.CLAMP);
+    const shadowOpacity = interpolate(scrollY.value, [0, 60], [0, Elevation.floating.shadowOpacity], Extrapolation.CLAMP);
+    const shadowRadius = interpolate(scrollY.value, [0, 60], [0, Elevation.floating.shadowRadius], Extrapolation.CLAMP);
     return {
       shadowOpacity,
       shadowRadius,
@@ -437,11 +471,7 @@ export default function HomeScreen() {
     await refreshListings();
     void followingFeed.refresh();
     void forYouFeed.refresh();
-    setPostersLoading(true);
-    fetchPosterStories({ active: true, limit: 20 })
-      .then((res) => setRealPosters(res.items))
-      .catch(() => {})
-      .finally(() => setPostersLoading(false));
+    loadPostersAndLooks();
     acknowledgeNewListings();
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => {
@@ -525,7 +555,7 @@ export default function HomeScreen() {
 
   // Phase 5: Home discovery view models carry product identity (brand + title)
   // and price below media so the feed reads as visual commerce, not
-  // "Pinterest with prices". Identity synthesis follows doc 46 precedence.
+  // a passive image board. Identity synthesis follows doc 46 precedence.
   //
   // Asymmetric editorial rhythm (spec 11): 6-12 normal tiles, one larger
   // featured unit, continue feed. We use a deterministic-but-varied pattern
@@ -577,7 +607,28 @@ export default function HomeScreen() {
   const forYouHasError = feedMode === 'foryou' && forYouFeed.error !== null && forYouFeed.listings.length === 0;
   const forYouIsDegraded = feedMode === 'foryou' && forYouFeed.serveMode === 'degraded_baseline' && forYouFeed.listings.length > 0;
 
-  const activeFeedData = feedMode === 'following' ? followingExploreData : effectiveForYouData;
+  // Base feed data switches between Following and For You feeds.
+  const baseFeedData = React.useMemo(() => {
+    if (feedMode === 'following') {
+      return followingExploreData;
+    }
+    return effectiveForYouData;
+  }, [feedMode, followingExploreData, effectiveForYouData]);
+
+  // G2: Apply dynamic quick signal filtering to the base feed data.
+  const activeFeedData = React.useMemo(() => {
+    if (selectedSignalChip.filterKey === 'all') return baseFeedData;
+    return baseFeedData.filter((item) => matchesSignal(item, selectedSignalChip));
+  }, [baseFeedData, selectedSignalChip]);
+
+  const handleSelectSignal = React.useCallback(
+    (signal: DynamicSignalChip) => {
+      haptic.selection();
+      handleSelectSignalChip(signal);
+    },
+    [handleSelectSignalChip, haptic]
+  );
+
   const showFollowingLoading = feedMode === 'following' && followingFeed.isLoading && !followingFeed.isRefreshing;
   const showFollowingRefreshing = feedMode === 'following' && followingFeed.isRefreshing;
   const showForYouLoading = feedMode === 'foryou' && forYouFeed.isLoading && !forYouFeed.isRefreshing && forYouFeed.listings.length === 0;
@@ -585,7 +636,7 @@ export default function HomeScreen() {
   // Posters rail injected into the feed after 4 items (2 rows in 2-column
   // grid) so the first viewport shows header + tabs + media — nothing else.
   // Posters rail renders in the ListHeaderComponent (above the grid) so it
-  // is visible in the first viewport — aligned with Instagram/Pinterest 2026
+  // is visible in the first viewport — aligned with 2026
   // story-tray placement. The rail is a compact horizontal scroll that does
   // not displace the first media row significantly.
   // Looks rail injected as a full-span item further down the feed to create
@@ -633,8 +684,9 @@ export default function HomeScreen() {
     // Reset viewability playback when the feed content swaps so a stale
     // activeIndex does not cause a now-offscreen video to keep playing.
     resetPlayback();
+    lastPrefetchedIndexRef.current = -1;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [feedMode]);
+  }, [feedMode, selectedSignalChip.filterKey]);
 
   const feedOpacityStyle = useAnimatedStyle(() => ({
     opacity: feedOpacity.value }));
@@ -706,7 +758,7 @@ export default function HomeScreen() {
 
                     {story.totalFrameCount > 1 && (
                       <View style={styles.frameCountBadge} accessible={false}>
-                        <AppIcon name="layers" focused size={10} color={colors.scrimTextPrimary} />
+                        <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
                         <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                       </View>
                     )}
@@ -735,7 +787,7 @@ export default function HomeScreen() {
 
                   {story.totalFrameCount > 1 && (
                     <View style={styles.frameCountBadge} accessible={false}>
-                      <AppIcon name="layers" focused size={10} color={colors.scrimTextPrimary} />
+                      <Ionicons name="layers" size={10} color={colors.scrimTextPrimary} />
                       <Text style={styles.frameCountBadgeText}>{story.totalFrameCount}</Text>
                     </View>
                   )}
@@ -766,8 +818,8 @@ export default function HomeScreen() {
           style={styles.newListingsBanner}
           contentStyle={styles.newListingsBannerContent}
           titleStyle={styles.newListingsBannerText}
-          icon={<AppIcon name="arrowUp" size={14} color={colors.background} />}
-          trailingIcon={<AppIcon name="chevronUp" size={14} color={colors.background} />}
+          icon={<Ionicons name="arrow-up-circle-outline" size={14} color={colors.background} />}
+          trailingIcon={<Ionicons name="chevron-up" size={14} color={colors.background} />}
           iconContainerStyle={styles.newListingsBannerIconWrap}
           trailingIconContainerStyle={styles.newListingsBannerIconWrap}
           hapticFeedback="selection"
@@ -815,7 +867,7 @@ export default function HomeScreen() {
     if (!routeId) return;
     haptic.selection();
     ProductAnalytics.itemView(routeId);
-    navigation.push('ItemDetail', { itemId: routeId });
+    openProductDetail(navigation, { referenceKind: 'listing', canonicalId: routeId, sourceSurface: 'HomeScreen' });
   }, [navigation, haptic]);
 
   const handleTileLongPress = React.useCallback((item: HomeDiscoveryItemVM) => {
@@ -867,7 +919,7 @@ export default function HomeScreen() {
                     />
                     {look.taggedCount && look.taggedCount > 0 ? (
                       <View style={{ position: 'absolute', bottom: 6, right: 6, backgroundColor: colors.overlay, borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: Space.xxs }}>
-                        <Text style={{ color: colors.scrimTextPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily }}>
+                        <Text style={{ color: colors.scrimTextPrimary, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily }} maxFontSizeMultiplier={2}>
                           {look.taggedCount} items
                         </Text>
                       </View>
@@ -921,7 +973,7 @@ export default function HomeScreen() {
 
         <View style={[styles.headerForeground, { paddingTop: insets.top + Space.xxs, paddingBottom: Space.sm }]}>
           <Reanimated.View style={[headerTitleStyle, styles.headerTitleWrap]}>
-            <Text style={styles.brandTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.3}>Thryftverse</Text>
+            <Text style={styles.brandTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.3} accessibilityRole="header">Thryftverse</Text>
             {isGuest ? (
               <Pressable
                 onPress={() => navigation.navigate('AuthLanding')}
@@ -957,7 +1009,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens sell listing flow"
             >
-              <AppIcon name="plus" size={24} color={colors.textPrimary} />
+              <Ionicons name="add" size={24} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -966,7 +1018,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens discovery — explore items, looks, mood boards, editorials and more"
             >
-              <AppIcon name="search" focused size={22} color={colors.textPrimary} />
+              <Ionicons name="search" size={22} color={colors.textPrimary} />
             </AnimatedPressable>
             <AnimatedPressable
               style={styles.headerBtn}
@@ -975,7 +1027,7 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityHint="Opens notifications center"
             >
-              <AppIcon name="notifications" size={22} color={colors.textPrimary} />
+              <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
               {notificationCount > 0 && (
                 <View style={styles.notificationBadge} pointerEvents="none" accessible={false}>
                   <Text style={styles.notificationBadgeText} maxFontSizeMultiplier={1.5}>
@@ -1002,6 +1054,21 @@ export default function HomeScreen() {
         onViewableItemsChanged={(info: { changed: import('react-native').ViewToken[]; viewableItems: import('react-native').ViewToken[] }) => {
           onPlaybackViewableItemsChanged(info);
           onImpressionViewableItemsChanged(info);
+          const maxVisibleIndex = info.viewableItems.reduce((max, token) => {
+            const idx = typeof token.index === 'number' ? token.index : -1;
+            return idx > max ? idx : max;
+          }, -1);
+          if (maxVisibleIndex < 0 || maxVisibleIndex <= lastPrefetchedIndexRef.current) return;
+          lastPrefetchedIndexRef.current = maxVisibleIndex;
+          const ahead = feedGridData.slice(maxVisibleIndex + 1, maxVisibleIndex + 11);
+          const uris: string[] = [];
+          for (const item of ahead) {
+            const uri = extractFeedImageUri(item);
+            if (uri) uris.push(uri);
+          }
+          if (uris.length > 0) {
+            void preloadCriticalImages(uris, { priority: 'normal', cachePolicy: 'disk' });
+          }
         }}
         onEndReached={() => {
           if (hasMore && !isLoadingMore) void loadMoreListings();
@@ -1023,7 +1090,11 @@ export default function HomeScreen() {
             <View style={styles.feedTabBar} accessibilityRole="tablist">
               {(['foryou', 'following'] as const).map((option) => {
                 const isSelected = feedMode === option;
-                const label = option === 'foryou' ? 'For you' : 'Following';
+                const labels: Record<typeof option, string> = {
+                  foryou: 'For you',
+                  following: 'Following',
+                };
+                const label = labels[option];
                 return (
                   <AnimatedPressable
                     key={option}
@@ -1054,6 +1125,44 @@ export default function HomeScreen() {
               })}
             </View>
 
+            {/* G2: Dynamic quick signal chips driven by user algorithm topics & recommendation vectors.
+                Horizontal scroll rail with haptic feedback and closed-loop learning. */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.signalRail}
+              contentContainerStyle={styles.signalRailContent}
+              accessibilityRole="tablist"
+              accessibilityLabel="Personalized category signals"
+            >
+              {dynamicSignals.map((signal) => {
+                const active = selectedSignalChip.filterKey === signal.filterKey;
+                return (
+                  <AnimatedPressable
+                    key={`signal-${signal.id}-${signal.filterKey}`}
+                    style={[
+                      styles.signalChip,
+                      active && styles.signalChipActive,
+                      signal.isPersonalized && !active && styles.signalChipPersonalized,
+                    ]}
+                    onPress={() => handleSelectSignal(signal)}
+                    activeOpacity={0.85}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Filter by ${signal.label}${signal.isPersonalized ? ', personalized' : ''}`}
+                    accessibilityState={{ selected: active }}
+                  >
+                    {signal.isPersonalized && signal.kind !== 'all' ? (
+                      <View style={[styles.signalDot, active && styles.signalDotActive]} />
+                    ) : null}
+                    <Text style={[styles.signalChipText, active && styles.signalChipTextActive]} maxFontSizeMultiplier={2}>
+                      {signal.label}
+                    </Text>
+                  </AnimatedPressable>
+                );
+              })}
+            </ScrollView>
+
             {/* New home feed editorial header — gated by the new_home_feed
                 feature flag. Additive enhancement; absent when the flag is
                 off (current behaviour). Introduces the feed with a curated
@@ -1061,10 +1170,10 @@ export default function HomeScreen() {
                 generic product grid. */}
             {newHomeFeedEnabled ? (
               <View style={styles.editorialHeader}>
-                <Text style={styles.editorialEyebrow} numberOfLines={1}>
+                <Text style={styles.editorialEyebrow} numberOfLines={1} maxFontSizeMultiplier={2}>
                   Fresh today
                 </Text>
-                <Text style={styles.editorialTitle} numberOfLines={1}>
+                <Text style={styles.editorialTitle} numberOfLines={1} maxFontSizeMultiplier={2}>
                   New listings from sellers you follow
                 </Text>
               </View>
@@ -1074,7 +1183,12 @@ export default function HomeScreen() {
 
             {renderNewListingsBanner()}
 
-            {lastError ? (
+            {/* ── Consolidated status surface — one banner at a time ──
+                Priority: offline > sync error > degraded feed.
+                Per 2026 research: never stack multiple banners. */}
+            {isOffline && feedGridData.length > 0 ? (
+              <OfflineBanner onRetry={() => void handleRefresh()} />
+            ) : lastError ? (
               <SyncRetryBanner
                 message="Sync is unavailable. Showing cached items."
                 onRetry={() => void handleRefresh()}
@@ -1082,15 +1196,9 @@ export default function HomeScreen() {
                 telemetryContext="home_feed_sync"
                 containerStyle={styles.feedStatusBanner}
               />
-            ) : null}
-
-            {isOffline && feedGridData.length > 0 ? (
-              <OfflineBanner onRetry={() => void handleRefresh()} />
-            ) : null}
-
-            {forYouIsDegraded ? (
+            ) : forYouIsDegraded ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, paddingVertical: Space.sm, gap: Space.xs }}>
-                <AppIcon name="info" size={16} color={colors.textSecondary} />
+                <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} accessible={false} />
                 <Text style={{ flex: 1, fontSize: TypographyV2.meta.size, fontFamily: TypographyV2.meta.fontFamily, color: colors.textSecondary }} maxFontSizeMultiplier={1.5}>
                   Showing baseline listings — personalised feed is temporarily unavailable.
                 </Text>
@@ -1100,7 +1208,33 @@ export default function HomeScreen() {
             {showFeedLoadingSkeleton || showFollowingLoading || showForYouLoading ? (
               renderExploreLoadingState()
             ) : feedGridData.length === 0 ? (
-              feedMode === 'following' ? (
+              isOffline ? (
+                <View style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon="cloud-offline-outline"
+                    title="You are offline"
+                    subtitle="Connect to the internet to load listings."
+                    ctaLabel="Retry"
+                    onCtaPress={() => void handleRefresh()}
+                    secondaryCtaLabel="Browse cached"
+                    onSecondaryCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                  />
+                </View>
+              ) : feedMode === 'following' && followingFeed.error ? (
+                <View style={{ flex: 1 }}>
+                  <EmptyState
+                    density="compact"
+                    icon="cloud-offline-outline"
+                    title="Couldn't load your Following feed"
+                    subtitle={followingFeed.error ?? 'Pull to refresh or browse all listings.'}
+                    ctaLabel="Retry"
+                    onCtaPress={() => void followingFeed.refresh()}
+                    secondaryCtaLabel="Browse all"
+                    onSecondaryCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Explore' })}
+                  />
+                </View>
+              ) : feedMode === 'following' ? (
                 <View style={{ flex: 1 }}>
                   <EmptyState
                     density="compact"
@@ -1242,11 +1376,11 @@ export default function HomeScreen() {
                     align="center"
                     style={styles.peekPrimaryBtn}
                     titleStyle={styles.peekPrimaryText}
-                    icon={<AppIcon name="forward" focused size={14} color={colors.background} />}
+                    icon={<Ionicons name="arrow-forward" size={14} color={colors.background} />}
                     iconContainerStyle={styles.peekPrimaryIconWrap}
                     onPress={() => {
                       if (peekItem.routeId) {
-                        navigation.push('ItemDetail', { itemId: peekItem.routeId });
+                        openProductDetail(navigation, { referenceKind: 'listing', canonicalId: peekItem.routeId, sourceSurface: 'HomeScreenPeek' });
                       }
                       closePeek();
                     }}
@@ -1330,7 +1464,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.danger,
-    letterSpacing: 0.2 },
+    letterSpacing: TypographyV2.meta.letterSpacing },
   // New home feed editorial header — additive section gated by the
   // new_home_feed feature flag. An eyebrow + title pair that introduces the
   // feed with an authored, curated voice.
@@ -1339,11 +1473,11 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     marginBottom: Space.sm,
     gap: Space.xxs },
   editorialEyebrow: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
+    fontSize: TypographyV2.label.size,
+    lineHeight: TypographyV2.label.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.brand,
-    letterSpacing: TypographyV2.meta.letterSpacing,
+    letterSpacing: TypographyV2.label.letterSpacing,
     textTransform: 'uppercase' },
   editorialTitle: {
     fontSize: TypographyV2.sectionTitle.size,
@@ -1402,6 +1536,42 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   feedTabLabelActive: {
     fontFamily: FontFamily.semibold,
     color: colors.textPrimary },
+  // G2: Quick signal chip styles
+  signalRail: {
+    maxHeight: 40 },
+  signalRailContent: {
+    paddingHorizontal: Space.md,
+    gap: Space.xs,
+    alignItems: 'center' },
+  signalChip: {
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    borderWidth: Stroke.hairline,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5 },
+  signalChipPersonalized: {
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.surfaceAlt },
+  signalChipActive: {
+    backgroundColor: colors.textPrimary,
+    borderColor: colors.textPrimary },
+  signalDot: {
+    width: 5,
+    height: 5,
+    borderRadius: Radius.full,
+    backgroundColor: colors.brand },
+  signalDotActive: {
+    backgroundColor: colors.background },
+  signalChipText: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    color: colors.textSecondary },
+  signalChipTextActive: {
+    color: colors.background },
   feedTabCount: {
     minWidth: 20,
     height: 20,
@@ -1451,7 +1621,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.semibold,
     color: colors.background,
-    letterSpacing: 0.2 },
+    letterSpacing: TypographyV2.meta.letterSpacing },
 
   postersSection: {
     marginTop: 0,
@@ -1512,81 +1682,6 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   posterShade: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.overlay },
-  posterAvatarOverlay: {
-    position: 'absolute',
-    top: 5,
-    left: 5,
-    width: AvatarSize.inline,
-    height: AvatarSize.inline,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-    borderWidth: Stroke.emphasis,
-    borderColor: colors.scrimTextPrimary,
-    ...Elevation.floating },
-  posterAvatarOverlayWrap: {
-    width: AvatarSize.inline,
-    height: AvatarSize.inline,
-    borderRadius: Radius.full },
-  posterAvatarOverlayImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: Radius.full },
-  posterTopRow: {
-    position: 'absolute',
-    top: 5,
-    left: 5,
-    right: 5,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Space.xs },
-  posterOwnerPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.overlay,
-    paddingHorizontal: 5,
-    paddingVertical: 3,
-    borderRadius: Radius.lg,
-    flex: 1,
-    gap: Space.xs },
-  posterOwnerAvatarWrap: {
-    width: 14,
-    height: 14,
-    borderRadius: Radius.full },
-  posterOwnerAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: Radius.full },
-  posterOwnerName: {
-    color: colors.scrimTextPrimary,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-    flex: 1 },
-  posterExpiryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.overlay,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 6,
-    paddingVertical: 3 },
-  posterExpiryText: {
-    color: colors.scrimTextPrimary,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.bold },
-  posterBottomOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 7,
-    backgroundColor: colors.overlay },
-  posterCaption: {
-    color: colors.scrimTextPrimary,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium },
   posterCreatorOverlay: {
     position: 'absolute',
     left: 5,

@@ -42,8 +42,6 @@ export const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'BalanceHistory', label: 'Payout history', searchTerms: 'balance payout', section: 'Selling', rowKey: 'rows.payoutHistory' },
   { key: 'Postage', label: 'Shipping preferences', searchTerms: 'postage carrier shipping', section: 'Selling', rowKey: 'rows.shippingPreferences' },
   { key: 'CoOwnPriceAlerts', label: 'Price alerts', searchTerms: 'notifications co-own price', section: 'Selling', rowKey: 'rows.priceAlerts', subtitleKey: 'rows.priceAlertsSubtitle' },
-  { key: 'CoOwnRecurringOrders', label: 'Auto-invest plans', searchTerms: 'recurring orders co-own', section: 'Selling', rowKey: 'rows.autoInvestPlans', subtitleKey: 'rows.autoInvestPlansSubtitle' },
-  { key: 'CoOwnTaxDocuments', label: 'Tax documents', searchTerms: 'statements cgt co-own tax', section: 'Selling', rowKey: 'rows.taxDocuments', subtitleKey: 'rows.taxDocumentsSubtitle' },
   { key: 'ResolutionCentre', label: 'Resolution Centre', searchTerms: 'dispute resolution', section: 'Selling', rowKey: 'rows.resolutionCentre', subtitleKey: 'rows.resolutionCentreSubtitle' },
   // ── Notifications ──
   { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push alerts', section: 'Notifications', showSection: true, rowKey: 'rows.notificationCategories' },

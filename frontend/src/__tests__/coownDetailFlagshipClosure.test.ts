@@ -13,6 +13,10 @@ function readComponent(relativePath: string): string {
   return readFileSync(resolve(COMPONENTS, relativePath), 'utf-8');
 }
 
+function readSection(name: string): string {
+  return readFileSync(resolve(COMPONENTS, `coown/asset-detail/${name}`), 'utf-8');
+}
+
 describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   const src = readScreen('AssetDetailScreen.tsx');
   const ownershipPanel = readComponent('coown/CoOwnOwnershipPanel.tsx');
@@ -20,8 +24,9 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   // ── §1 Replace three-column fundamentals with stacked layout ──
   describe('fundamentals layout', () => {
     it('uses stacked fundamentals layout, not three columns', () => {
-      expect(src).toContain('fundamentalsStacked');
-      expect(src).toContain('fundamentalsRow');
+      const fundamentals = readComponent('asset/FundamentalsSection.tsx');
+      expect(fundamentals).toContain('fundamentalsStacked');
+      expect(fundamentals).toContain('fundamentalsRow');
     });
 
     it('does not use the old three-column marketSecondaryFacts in JSX', () => {
@@ -35,12 +40,14 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   // ── §2 Reference price label ──
   describe('reference price label', () => {
     it('uses "Reference unit price" by default', () => {
-      expect(src).toContain('Reference unit price');
+      const marketSection = readSection('AssetMarketSection.tsx');
+      expect(marketSection).toContain('Reference price');
     });
 
     it('uses "Last settled trade" only when backend provides lastExecutionPriceGbp', () => {
-      expect(src).toContain('marketSnapshot?.lastExecutionPriceGbp');
-      expect(src).toContain('Last settled trade');
+      const marketSection = readSection('AssetMarketSection.tsx');
+      expect(marketSection).toContain('marketSnapshot?.lastExecutionPriceGbp');
+      expect(marketSection).toContain('Last trade');
     });
 
     it('does not label reference price as "Last trade" without proof', () => {
@@ -59,7 +66,8 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
     });
 
     it('transaction surface uses family="co_own"', () => {
-      const surfaceMatch = src.match(/<CommerceDetailTransactionSurface[\s\S]*?\/>/);
+      const marketSection = readSection('AssetMarketSection.tsx');
+      const surfaceMatch = marketSection.match(/<CommerceDetailTransactionSurface[\s\S]*?\/>/);
       expect(surfaceMatch).toBeTruthy();
       expect(surfaceMatch![0]).toContain('family="co_own"');
     });
@@ -79,8 +87,9 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
     });
 
     it('candleChart is undefined when no candle data', () => {
-      expect(src).toMatch(/hasCandleData \? \(/);
-      expect(src).toMatch(/: undefined/);
+      const overviewSection = readSection('AssetOverviewSection.tsx');
+      expect(overviewSection).toMatch(/hasCandleData \? \(/);
+      expect(overviewSection).toMatch(/: undefined/);
     });
   });
 
@@ -98,8 +107,9 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
     });
 
     it('asset story excerpt is shown before market data', () => {
-      expect(src).toContain('assetStoryText');
-      expect(src).toContain('Read the full story');
+      const overviewSection = readSection('AssetOverviewSection.tsx');
+      expect(overviewSection).toContain('assetStoryText');
+      expect(overviewSection).toContain('Read the full story');
     });
   });
 
@@ -154,20 +164,19 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   // ── §8 Rights & risks compress ──
   describe('rights & risks compress', () => {
     it('risk disclosure is collapsed by default', () => {
-      expect(src).toContain('riskDisclosureVisible');
-      expect(src).toContain('setRiskDisclosureVisible');
+      expect(src).toContain('riskDisclosure');
+      expect(src).toContain('openSheet');
     });
 
-    it('has "Risks" disclosure row (not "View risk disclosure")', () => {
-      // Per spec 09: use "Risks" instead of "View risk disclosure".
-      expect(src).toContain('"Risks"');
-      expect(src).not.toContain('label="View risk disclosure"');
+    it('has "Risk disclosure" row (not "View risk disclosure")', () => {
+      const overviewSection = readSection('AssetOverviewSection.tsx');
+      expect(overviewSection).toContain('label="Risk disclosure"');
+      expect(overviewSection).not.toContain('label="View risk disclosure"');
     });
 
-    it('does not render CoOwnRiskDisclosure inline in the Due diligence section', () => {
-      // The old code rendered <CoOwnRiskDisclosure ... /> directly in
-      // the section. The new code opens it in a modal.
-      const ddSection = src.match(/CommerceDetailSection label="Due diligence"[\s\S]*?<\/CommerceDetailSection>/);
+    it('does not render CoOwnRiskDisclosure inline in the Asset dossier section', () => {
+      const overviewSection = readSection('AssetOverviewSection.tsx');
+      const ddSection = overviewSection.match(/<CommerceDetailSection[\s\S]*?label="Asset dossier"[\s\S]*?<\/CommerceDetailSection>/);
       expect(ddSection).toBeTruthy();
       expect(ddSection![0]).not.toContain('<CoOwnRiskDisclosure');
     });
@@ -192,8 +201,10 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   // ── §10 NAV vs reference label ──
   describe('NAV vs reference label', () => {
     it('uses "Reference vs NAV" not "Last trade vs NAV"', () => {
-      expect(src).toContain('Reference vs NAV');
-      expect(src).not.toContain('Last trade vs NAV');
+      const overviewSection = readSection('AssetOverviewSection.tsx');
+      expect(overviewSection).toContain('Reference vs appraisal');
+      expect(overviewSection).not.toContain('Reference vs NAV');
+      expect(overviewSection).not.toContain('Last trade vs NAV');
     });
   });
 
@@ -201,7 +212,8 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
   describe('holder P&L', () => {
     it('stores the full holding object for P&L computation', () => {
       expect(src).toContain('yourHolding');
-      expect(src).toContain('MarketCoOwnHolding');
+      const queriesSrc = readFileSync(resolve(__dirname, '../platform/server/useCoOwnQueries.ts'), 'utf-8');
+      expect(queriesSrc).toContain('MarketCoOwnHolding');
     });
 
     it('computes avg entry, unrealized P&L, and P&L percentage', () => {
@@ -211,7 +223,8 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
     });
 
     it('displays avg entry in the holder position', () => {
-      expect(src).toContain('Avg. entry');
+      const holderSummary = readComponent('asset/HolderPositionSummary.tsx');
+      expect(holderSummary).toContain('Avg. entry');
     });
   });
 

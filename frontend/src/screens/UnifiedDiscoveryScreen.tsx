@@ -68,12 +68,14 @@ import { searchListingsFromApi } from '../services/feedApi';
 import { searchUsers, type UserSearchResult } from '../services/profileApi';
 import { buildListingFeedUnit, type DiscoveryFeedUnit } from '../contracts/discoveryFeedUnit';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
+import { openProductDetail } from '../platform/product/openProductDetail';
+import { useDynamicAlgorithmSignals } from '../hooks/useDynamicAlgorithmSignals';
+import { matchesSignal, type DynamicSignalChip } from '../services/algorithmicSignalsService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'UnifiedDiscovery'>;
 
 // ── Category pills ──
-const CATEGORY_PILLS = ['All', 'New', 'Vintage', 'Streetwear', 'Designer', 'Home', 'Tech'] as const;
-type CategoryPill = typeof CATEGORY_PILLS[number];
+type CategoryPill = string;
 
 // ── Search debounce ──
 const SEARCH_DEBOUNCE_MS = 180;
@@ -90,10 +92,42 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   // ── Search state ──
   const [query, setQuery] = useState(route.params?.initialQuery ?? '');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [searchRetryCount, setSearchRetryCount] = useState(0);
   const normalizedQuery = query.trim().toLowerCase();
 
   // ── Discovery feed state ──
   const [activeCategory, setActiveCategory] = useState<CategoryPill>('All');
+  const { signals: dynamicCategorySignals, selectSignal: boostCategorySignal } = useDynamicAlgorithmSignals({ surface: 'discovery' });
+
+  const categoryPills = useMemo<DynamicSignalChip[]>(() => {
+    return [
+      { id: 'all', label: 'All', filterKey: 'all', kind: 'all', score: 100, isPersonalized: false },
+      { id: 'new', label: 'New', filterKey: 'new', kind: 'curated', score: 98, isPersonalized: false },
+      ...dynamicCategorySignals.filter((s) => s.filterKey !== 'all'),
+    ];
+  }, [dynamicCategorySignals]);
+
+  const activeSignalChip = useMemo(() => {
+    return (
+      categoryPills.find(
+        (p) => p.filterKey === activeCategory.toLowerCase() || p.label.toLowerCase() === activeCategory.toLowerCase(),
+      ) || categoryPills[0]
+    );
+  }, [categoryPills, activeCategory]);
+
+  const handleCategoryChange = useCallback(
+    (pill: string) => {
+      setActiveCategory(pill);
+      const chip = categoryPills.find(
+        (p) => p.label === pill || p.filterKey === pill.toLowerCase(),
+      );
+      if (chip) {
+        boostCategorySignal(chip);
+      }
+    },
+    [categoryPills, boostCategorySignal],
+  );
+
   const [looks, setLooks] = useState<LookApiItem[]>([]);
   const [posters, setPosters] = useState<PosterStory[]>([]);
   const [moodboards, setMoodboards] = useState<Moodboard[]>([]);
@@ -101,10 +135,12 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   const [editorials, setEditorials] = useState<GalleriaEditorial[]>([]);
   const [featuredAssets, setFeaturedAssets] = useState<GalleriaFeaturedAsset[]>([]);
   const [isDiscoveryLoading, setIsDiscoveryLoading] = useState(true);
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
 
   // ── Search results state ──
   const [searchResults, setSearchResults] = useState<DiscoveryFeedUnit[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [peopleResults, setPeopleResults] = useState<UserSearchResult[]>([]);
   const [isSearchingPeople, setIsSearchingPeople] = useState(false);
   const [searchScope, setSearchScope] = useState<'items' | 'people'>('items');
@@ -128,6 +164,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   // ── Load all discovery content ──
   const loadDiscoveryContent = useCallback(async () => {
     setIsDiscoveryLoading(true);
+    setDiscoveryError(null);
     const [looksRes, postersRes, moodboardsRes, colsRes, edsRes, assetsRes] = await Promise.allSettled([
       fetchLooksFromApi({ status: 'published', sort: 'foryou', limit: 6 }),
       fetchPosterStories({ active: true, limit: 4 }),
@@ -137,14 +174,21 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
       fetchFeaturedAssets(),
     ]);
 
-    if (looksRes.status === 'fulfilled') setLooks(looksRes.value.items ?? []);
-    if (postersRes.status === 'fulfilled') setPosters(postersRes.value.items ?? []);
+    let fulfilled = 0;
+    if (looksRes.status === 'fulfilled') { setLooks(looksRes.value.items ?? []); fulfilled++; }
+    if (postersRes.status === 'fulfilled') { setPosters(postersRes.value.items ?? []); fulfilled++; }
     if (moodboardsRes.status === 'fulfilled') {
       setMoodboards(moodboardsRes.value.filter((m) => !m.isDemo));
+      fulfilled++;
     }
-    if (colsRes.status === 'fulfilled') setCollections(colsRes.value);
-    if (edsRes.status === 'fulfilled') setEditorials(edsRes.value);
-    if (assetsRes.status === 'fulfilled') setFeaturedAssets(assetsRes.value);
+    if (colsRes.status === 'fulfilled') { setCollections(colsRes.value); fulfilled++; }
+    if (edsRes.status === 'fulfilled') { setEditorials(edsRes.value); fulfilled++; }
+    if (assetsRes.status === 'fulfilled') { setFeaturedAssets(assetsRes.value); fulfilled++; }
+
+    // If every discovery endpoint failed, surface an error state.
+    if (fulfilled === 0) {
+      setDiscoveryError('Discovery content is temporarily unavailable.');
+    }
     setIsDiscoveryLoading(false);
   }, []);
 
@@ -156,6 +200,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!normalizedQuery || normalizedQuery.length < 2) {
       setSearchResults([]);
+      setSearchError(null);
       setPeopleResults([]);
       setIsSearching(false);
       setIsSearchingPeople(false);
@@ -172,7 +217,9 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
           if (cancelled) return;
           if (result.error) {
             setSearchResults([]);
+            setSearchError('Search is temporarily unavailable. Try again.');
           } else {
+            setSearchError(null);
             // Map search results to feed units directly — each result becomes
             // a ListingFeedUnit with its real media URI.
             setSearchResults(result.items.map((item) => buildListingFeedUnit(
@@ -206,7 +253,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     }, SEARCH_DEBOUNCE_MS);
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [normalizedQuery]);
+  }, [normalizedQuery, searchRetryCount]);
 
   // ── People search ──
   useEffect(() => {
@@ -232,7 +279,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
     return backendListings;
   }, [forYouFeed.listings, backendListings]);
 
-  // ── Category filter — pills are functional, not decorative ──
+  // ── Category filter — dynamically matches category, brand, style or recency ──
   const personalisedListings = useMemo(() => {
     if (activeCategory === 'All') return baseListings;
     if (activeCategory === 'New') {
@@ -241,14 +288,8 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
         new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
       );
     }
-    const cat = activeCategory.toLowerCase();
-    return baseListings.filter((listing) => {
-      const lc = (listing.category ?? '').toLowerCase();
-      const sub = (listing.subcategory ?? '').toLowerCase();
-      const brand = (listing.brand ?? '').toLowerCase();
-      return lc.includes(cat) || sub.includes(cat) || brand.includes(cat);
-    });
-  }, [baseListings, activeCategory]);
+    return baseListings.filter((listing) => matchesSignal(listing, activeSignalChip));
+  }, [baseListings, activeCategory, activeSignalChip]);
 
   // ── Assemble the heterogeneous discovery feed ──
   const feedUnits = useMemo(
@@ -278,14 +319,16 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
   }, [haptic, loadDiscoveryContent, forYouFeed, refreshListings]);
 
   const handleListingPress = useCallback((item: DiscoveryListingSummary) => {
-    // DiscoveryListingSummary carries id + sellerId — that's all navigation needs.
-    navigation.navigate('ItemDetail', { itemId: item.id });
+    // DiscoveryListingSummary carries id + sellerId — route via canonical resolver.
+    openProductDetail(navigation, {
+      referenceKind: 'listing',
+      canonicalId: item.id,
+      sourceSurface: 'UnifiedDiscovery',
+    });
   }, [navigation]);
 
   const handleLookPress = useCallback((lookId: string) => {
-    navigation.navigate('MainTabs', {
-      screen: 'Home',
-      params: { screen: 'LookDetail', params: { lookId } } });
+    navigation.navigate('LookDetail', { lookId });
   }, [navigation]);
 
   const handlePosterPress = useCallback((storyId: string) => {
@@ -308,7 +351,7 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
 
   const hasAnyContent = personalisedListings.length > 0 || looks.length > 0 || posters.length > 0 || moodboards.length > 0 || featuredAssets.length > 0;
   const showLoadingSkeleton = !hasAnyContent && (isDiscoveryLoading || forYouFeed.isLoading || (isSyncing && !lastError));
-  const showError = !hasAnyContent && Boolean(lastError) && !isSyncing && !isDiscoveryLoading && !forYouFeed.isLoading;
+  const showError = !hasAnyContent && (Boolean(lastError) || Boolean(discoveryError)) && !isSyncing && !isDiscoveryLoading && !forYouFeed.isLoading;
   const showEmpty = !hasAnyContent && !isSyncing && !lastError && !isDiscoveryLoading && !forYouFeed.isLoading;
   // Filtered-empty: a category pill is selected but returns 0 listings. This
   // is distinct from the generic empty state (no data at all) — here we have
@@ -371,6 +414,11 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             isSearchingPeople={isSearchingPeople}
             peopleResults={peopleResults}
             searchScope={searchScope}
+            searchError={searchError}
+            onRetry={() => {
+              setSearchError(null);
+              setSearchRetryCount((c) => c + 1);
+            }}
             onScopeChange={setSearchScope}
             onListingPress={handleListingPress}
             onLookPress={handleLookPress}
@@ -392,7 +440,8 @@ export default function UnifiedDiscoveryScreen({ navigation, route }: Props) {
             greeting={greeting}
             firstName={firstName}
             activeCategory={activeCategory}
-            onCategoryChange={setActiveCategory}
+            onCategoryChange={handleCategoryChange}
+            categoryPills={categoryPills}
             heroEditorial={heroEditorial}
             collections={collections}
             featuredAssets={featuredAssets}
@@ -429,6 +478,7 @@ function DiscoveryFeedView({
   firstName,
   activeCategory,
   onCategoryChange,
+  categoryPills,
   heroEditorial,
   collections,
   featuredAssets,
@@ -453,6 +503,7 @@ function DiscoveryFeedView({
   firstName: string;
   activeCategory: CategoryPill;
   onCategoryChange: (c: CategoryPill) => void;
+  categoryPills: DynamicSignalChip[];
   heroEditorial?: GalleriaEditorial;
   collections: GalleriaCollection[];
   featuredAssets: GalleriaFeaturedAsset[];
@@ -515,19 +566,14 @@ function DiscoveryFeedView({
   }
 
   // Build the header component for the masonry grid:
-  // greeting + category pills + hero editorial + collections rail
+  // category pills + hero editorial (compact) + collections rail
+  // Per 2026 research: product media should own the first viewport.
+  // Greeting removed — not needed on a search-first surface.
   const listHeader = (
     <>
-      {isOffline && <OfflineBanner />}
+      {isOffline && <OfflineBanner onRetry={onRefresh} />}
 
-      {/* Personalised greeting — one line, no decorative subtitle */}
-      <View style={styles.greetingWrap}>
-        <Text style={styles.greetingText}>
-          {greeting}{firstName ? `, ${firstName}` : ''}
-        </Text>
-      </View>
-
-      {/* Category pills — horizontal scroll, pill = filter not decoration.
+      {/* Category pills — horizontal scroll, dynamically driven by user algorithm.
           Wrapped in a ScrollView so 8+ pills scroll on narrow screens with a
           partial next pill visible at the edge (paddingRight: Space.md). */}
       <View style={styles.categoryBar}>
@@ -536,30 +582,40 @@ function DiscoveryFeedView({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryBarContent}
         >
-          {(CATEGORY_PILLS as readonly CategoryPill[]).map((pill) => (
-            <Pressable
-              key={pill}
-              onPress={() => onCategoryChange(pill)}
-              style={[
-                styles.categoryPill,
-                activeCategory === pill && styles.categoryPillActive,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={`Filter by ${pill}`}
-              accessibilityState={{ selected: activeCategory === pill }}
-            >
-              <Text style={[
-                styles.categoryPillText,
-                activeCategory === pill && styles.categoryPillTextActive,
-              ]}>
-                {pill}
-              </Text>
-            </Pressable>
-          ))}
+          {categoryPills.map((chip) => {
+            const isSelected = activeCategory === chip.label;
+            return (
+              <Pressable
+                key={`pill-${chip.id}-${chip.filterKey}`}
+                onPress={() => onCategoryChange(chip.label)}
+                style={[
+                  styles.categoryPill,
+                  isSelected && styles.categoryPillActive,
+                  chip.isPersonalized && !isSelected && styles.categoryPillPersonalized,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${chip.label}${chip.isPersonalized ? ', personalized' : ''}`}
+                accessibilityState={{ selected: isSelected }}
+              >
+                {chip.isPersonalized && chip.kind !== 'all' && chip.filterKey !== 'new' ? (
+                  <View style={[styles.categoryDot, isSelected && styles.categoryDotActive]} />
+                ) : null}
+                <Text
+                  style={[
+                    styles.categoryPillText,
+                    isSelected && styles.categoryPillTextActive,
+                  ]}
+                 maxFontSizeMultiplier={2}>
+                  {chip.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
       </View>
 
-      {/* Hero editorial — full-width media object, no decorative chrome */}
+      {/* Hero editorial — compact media strip, no decorative chrome.
+          Per 2026 research: hero max 96-120pt on discovery feeds. */}
       {heroEditorial && heroEditorial.heroImage && (
         <View style={styles.heroWrap}>
           <CachedImage
@@ -574,10 +630,10 @@ function DiscoveryFeedView({
           />
           <View style={styles.heroOverlay} pointerEvents="none">
             <Text style={styles.heroEyebrow}>EDITORIAL</Text>
-            <Text style={styles.heroTitle} numberOfLines={3}>
+            <Text style={styles.heroTitle} numberOfLines={2} maxFontSizeMultiplier={2}>
               {heroEditorial.title}
             </Text>
-            <Text style={styles.heroMeta} numberOfLines={1}>
+            <Text style={styles.heroMeta} numberOfLines={1} maxFontSizeMultiplier={2}>
               {heroEditorial.author} · {heroEditorial.readTime}
             </Text>
           </View>
@@ -602,11 +658,6 @@ function DiscoveryFeedView({
           </HorizontalRail>
         </View>
       )}
-
-      {/* For You section label — quiet, one line */}
-      <View style={styles.feedLabelWrap}>
-        <Text style={styles.feedLabel}>For you</Text>
-      </View>
     </>
   );
 
@@ -647,6 +698,8 @@ function SearchResultsView({
   isSearchingPeople,
   peopleResults,
   searchScope,
+  searchError,
+  onRetry,
   onScopeChange,
   onListingPress,
   onLookPress,
@@ -660,6 +713,8 @@ function SearchResultsView({
   isSearchingPeople: boolean;
   peopleResults: UserSearchResult[];
   searchScope: 'items' | 'people';
+  searchError: string | null;
+  onRetry: () => void;
   onScopeChange: (s: 'items' | 'people') => void;
   onListingPress: (listing: DiscoveryListingSummary) => void;
   onLookPress: (id: string) => void;
@@ -681,7 +736,7 @@ function SearchResultsView({
           accessibilityRole="button"
           accessibilityState={{ selected: searchScope === 'items' }}
         >
-          <Text style={[styles.scopeTabText, searchScope === 'items' && styles.scopeTabTextActive]}>
+          <Text style={[styles.scopeTabText, searchScope === 'items' && styles.scopeTabTextActive]} maxFontSizeMultiplier={2}>
             Items
           </Text>
           {searchScope === 'items' && <View style={styles.scopeIndicator} />}
@@ -692,7 +747,7 @@ function SearchResultsView({
           accessibilityRole="button"
           accessibilityState={{ selected: searchScope === 'people' }}
         >
-          <Text style={[styles.scopeTabText, searchScope === 'people' && styles.scopeTabTextActive]}>
+          <Text style={[styles.scopeTabText, searchScope === 'people' && styles.scopeTabTextActive]} maxFontSizeMultiplier={2}>
             People
           </Text>
           {searchScope === 'people' && <View style={styles.scopeIndicator} />}
@@ -703,6 +758,17 @@ function SearchResultsView({
         isSearching && units.length === 0 ? (
           <View style={styles.searchingWrap}>
             <ActivityIndicator size="large" color={colors.brand} />
+          </View>
+        ) : searchError && units.length === 0 ? (
+          <View style={styles.stateWrap}>
+            <EmptyState
+              density="compact"
+              icon="cloud-offline-outline"
+              title="Search unavailable"
+              subtitle={searchError}
+              ctaLabel="Retry"
+              onCtaPress={onRetry}
+            />
           </View>
         ) : units.length === 0 ? (
           <View style={styles.stateWrap}>
@@ -788,13 +854,13 @@ function CollectionRailCard({
           pointerEvents="none"
         />
         <View style={{ position: 'absolute', left: Space.sm, right: Space.sm, bottom: Space.sm }} pointerEvents="none">
-          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.semibold, fontSize: TypographyV2.meta.size, letterSpacing: 0.5 }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.semibold, fontSize: TypographyV2.meta.size, letterSpacing: 0.5 }} numberOfLines={1} maxFontSizeMultiplier={2}>
             {collection.theme.toUpperCase()}
           </Text>
-          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.bold, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight }} numberOfLines={2}>
+          <Text style={{ color: colors.scrimTextPrimary, fontFamily: FontFamily.bold, fontSize: TypographyV2.body.size, lineHeight: TypographyV2.body.lineHeight }} numberOfLines={2} maxFontSizeMultiplier={2}>
             {collection.title}
           </Text>
-          <Text style={{ color: colors.scrimTextSecondary, fontFamily: FontFamily.regular, fontSize: TypographyV2.meta.size }} numberOfLines={1}>
+          <Text style={{ color: colors.scrimTextSecondary, fontFamily: FontFamily.regular, fontSize: TypographyV2.meta.size }} numberOfLines={1} maxFontSizeMultiplier={2}>
             {collection.curator}
           </Text>
         </View>
@@ -838,11 +904,11 @@ function PeopleResultRow({
         </View>
       )}
       <View style={styles.peopleInfo}>
-        <Text style={styles.peopleName} numberOfLines={1}>
+        <Text style={styles.peopleName} numberOfLines={1} maxFontSizeMultiplier={2}>
           {user.displayName || `@${user.username}`}
         </Text>
         {user.displayName && (
-          <Text style={styles.peopleUsername} numberOfLines={1}>
+          <Text style={styles.peopleUsername} numberOfLines={1} maxFontSizeMultiplier={2}>
             @{user.username}
           </Text>
         )}
@@ -903,12 +969,28 @@ function createStyles(colors: ThemeColors) {
       gap: Space.xs,
       alignItems: 'center' },
     categoryPill: {
-      paddingHorizontal: Space.sm + 2,
-      paddingVertical: Space.xs + 2,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
       borderRadius: Radius.full,
+      backgroundColor: 'transparent',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle },
+    categoryPillPersonalized: {
+      borderColor: colors.border,
       backgroundColor: colors.surfaceAlt },
     categoryPillActive: {
-      backgroundColor: colors.textPrimary },
+      backgroundColor: colors.textPrimary,
+      borderColor: colors.textPrimary },
+    categoryDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: colors.brand },
+    categoryDotActive: {
+      backgroundColor: colors.background },
     categoryPillText: {
       fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
@@ -918,7 +1000,7 @@ function createStyles(colors: ThemeColors) {
     // Hero editorial
     heroWrap: {
       width: '100%',
-      height: 280,
+      height: 120,
       marginVertical: Space.sm,
       position: 'relative' },
     heroImage: {

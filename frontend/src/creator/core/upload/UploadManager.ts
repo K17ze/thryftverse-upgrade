@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { fetchJson } from '../../../lib/apiClient';
 import { finalizePresignedMedia, waitForPublishableMedia } from '../../../services/mediaUpload';
+import { xhrPutFile } from '../../../platform/media/xhrUploadTransport';
 import { createStableId } from '../../../utils/createStableId';
 import { detectMimeType, deriveFileName } from './MimeDetector';
 import { MultipartUploader } from './MultipartUploader';
@@ -570,15 +571,13 @@ export class UploadManager {
         signal,
       });
 
-      // Step 2 — PUT the file to S3 via XHR for real byte progress.
-      await this.xhrPutFile(
-        presign.url,
-        job.localPath,
-        job.mimeType,
-        job.sizeBytes,
-        job.id,
+      // Step 2 — PUT the file to S3 via the shared XHR transport for real
+      // byte progress. RN's send({ uri }) can report event.total as 0, so
+      // the job's resolved size is the progress denominator.
+      await xhrPutFile(presign.url, job.localPath, job.mimeType, {
         signal,
-      );
+        onProgress: (loadedBytes, _totalBytes) => this.emitProgress(job.id, loadedBytes, job.sizeBytes),
+      });
 
       // Persist the post-PUT checkpoint before finalization. If the response
       // to finalize is lost, retrying uses the same idempotent object key.
@@ -729,79 +728,6 @@ export class UploadManager {
     });
 
     return { ok: true, remoteUrl, finalizationId, mediaAssetId };
-  }
-
-  // ── XHR file upload with real byte progress ───────────────────────
-
-  /**
-   * PUT a local file to a presigned URL via XMLHttpRequest.
-   *
-   * Uses `xhr.send({ uri: fileUri })` which streams the file natively
-   * on both iOS and Android without loading it into JS memory.
-   * `xhr.upload.onprogress` provides real transmitted-byte events.
-   */
-  private xhrPutFile(
-    url: string,
-    fileUri: string,
-    mimeType: string,
-    totalBytes: number,
-    jobId: string,
-    signal: AbortSignal,
-  ): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      let settled = false;
-      xhr.open('PUT', url);
-      xhr.setRequestHeader('Content-Type', mimeType);
-
-      const cleanup = () => {
-        signal.removeEventListener('abort', onAbort);
-        xhr.upload.onprogress = null;
-      };
-      const succeed = () => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve();
-      };
-      const fail = (error: Error) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(error);
-      };
-
-      // Real byte progress — actual transmitted bytes / total bytes.
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          this.emitProgress(jobId, event.loaded, totalBytes);
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          succeed();
-        } else {
-          fail(new Error(`Upload PUT failed: HTTP ${xhr.status}`));
-        }
-      };
-
-      xhr.onerror = () => fail(new Error('Network error during upload'));
-      xhr.ontimeout = () => fail(new Error('Upload timed out'));
-
-      const onAbort = () => {
-        xhr.abort();
-        fail(new Error('Aborted'));
-      };
-      if (signal.aborted) {
-        onAbort();
-        return;
-      }
-      signal.addEventListener('abort', onAbort, { once: true });
-
-      // `xhr.send({ uri })` streams the file natively in React Native.
-      xhr.send({ uri: fileUri });
-    });
   }
 
   // ── Helpers ───────────────────────────────────────────────────────

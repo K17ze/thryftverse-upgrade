@@ -19,19 +19,28 @@ import {
   IconSize,
   IconOpticalOffset,
   SemanticIconMap,
+  getIconName,
   type IconSizeKey,
   type IoniconsGlyphName,
   type SemanticIconName,
   type SemanticIconDef,
+  type IconConcept,
 } from '../../theme/iconTokens';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 
 export interface AppIconProps {
   /**
+   * Semantic icon concept ('search', 'cart', 'heart', etc.) resolved via the
+   * icon registry — the preferred way to specify an icon. When provided this
+   * takes precedence over `name`.
+   */
+  concept?: IconConcept;
+  /**
    * Semantic icon name ('heart', 'cart', 'search', 'lock', etc.)
    * OR any standard Ionicons glyph name ('heart-outline', 'bag-handle', etc.).
+   * Ignored when `concept` is provided.
    */
-  name: SemanticIconName | IoniconsGlyphName;
+  name?: SemanticIconName | IoniconsGlyphName;
   /**
    * Optical size token ('micro' | 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero' | 'display')
    * or explicit numeric point size. Defaults to 'md' (20pt).
@@ -73,6 +82,7 @@ export interface AppIconProps {
 }
 
 export const AppIcon = memo(function AppIcon({
+  concept,
   name,
   size = 'md',
   color = 'textPrimary',
@@ -102,11 +112,19 @@ export const AppIcon = memo(function AppIcon({
   const effectiveVariant = focused ? 'filled' : variant;
   let resolvedGlyph: string;
 
-  if (name in SemanticIconMap) {
-    const semanticDef = (SemanticIconMap as Record<string, SemanticIconDef>)[name];
-    resolvedGlyph = semanticDef?.[effectiveVariant] ?? name;
+  if (concept) {
+    // Preferred path — semantic concept from the icon registry.
+    resolvedGlyph = getIconName(concept, effectiveVariant === 'filled');
+  } else if (name) {
+    // Legacy path — semantic name from iconTokens or raw Ionicons glyph.
+    if (name in SemanticIconMap) {
+      const semanticDef = (SemanticIconMap as Record<string, SemanticIconDef>)[name];
+      resolvedGlyph = semanticDef?.[effectiveVariant] ?? name;
+    } else {
+      resolvedGlyph = name;
+    }
   } else {
-    resolvedGlyph = name;
+    resolvedGlyph = 'help-outline';
   }
 
   // 4. Resolve optical centroid offset

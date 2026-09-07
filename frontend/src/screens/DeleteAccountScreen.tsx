@@ -52,6 +52,7 @@ const deleteSchema = z.object({
   password: z
     .string()
     .min(1, 'Enter your password to verify identity'),
+  totpCode: z.string().optional(),
   reason: z.string().optional() });
 
 type DeleteFormValues = z.infer<typeof deleteSchema>;
@@ -59,6 +60,7 @@ type DeleteFormValues = z.infer<typeof deleteSchema>;
 export default function DeleteAccountScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
+  const twoFactorEnabled = useStore((state) => state.twoFactorEnabled);
   const logout = useStore((state) => state.logout);
   const { show } = useToast();
   const haptic = useHaptic();
@@ -86,14 +88,17 @@ export default function DeleteAccountScreen({ navigation }: Props) {
     defaultValues: {
       confirmText: '',
       password: '',
+      totpCode: '',
       reason: undefined },
     mode: 'onChange' });
 
   const confirmTextValue = watch('confirmText');
   const passwordValue = watch('password');
+  const totpCodeValue = watch('totpCode');
   const canSubmit =
     confirmTextValue?.trim().toUpperCase() === DELETE_CONFIRM_PHRASE &&
     (passwordValue?.length ?? 0) > 0 &&
+    (!twoFactorEnabled || (totpCodeValue?.replace(/\s+/g, '').length ?? 0) >= 6) &&
     !isDeleting;
 
   const onSubmit = useCallback(
@@ -112,6 +117,7 @@ export default function DeleteAccountScreen({ navigation }: Props) {
           values.password,
           values.confirmText,
           reasonLabel,
+          values.totpCode,
         );
         await logoutFromSession();
         clearUserScopedQueryCache();
@@ -132,12 +138,10 @@ export default function DeleteAccountScreen({ navigation }: Props) {
 
   const consequences = useMemo(
     () => [
-      { icon: 'person-remove-outline' as const, text: 'Your username, email, password and profile are erased immediately.' },
-      { icon: 'location-outline' as const, text: 'All saved delivery addresses are removed.' },
-      { icon: 'card-outline' as const, text: 'Saved payment methods and bank details are removed.' },
-      { icon: 'wallet-outline' as const, text: 'Wallet history and payout records are deleted.' },
-      { icon: 'bag-handle-outline' as const, text: 'Active listings remain visible to buyers until they expire, but you\'ll no longer manage them.' },
-      { icon: 'alert-circle-outline' as const, text: 'Pending payouts, open disputes or active orders may need to be resolved before full erasure.' },
+      { icon: 'person-remove-outline' as const, text: 'Your profile, saved addresses, active sessions, and saved payment credentials will be deleted immediately.' },
+      { icon: 'bag-handle-outline' as const, text: 'Your active listings will be removed and their titles replaced with [erased].' },
+      { icon: 'wallet-outline' as const, text: 'Completed order, payout, and transaction records required for tax, fraud, and legal obligations will be anonymized and retained.' },
+      { icon: 'alert-circle-outline' as const, text: 'Open orders, disputes, or pending payouts must be resolved before deletion can complete.' },
     ],
     [],
   );
@@ -287,6 +291,29 @@ export default function DeleteAccountScreen({ navigation }: Props) {
               />
             )}
           />
+
+          {/* 2FA code — only when two-factor authentication is enabled */}
+          {twoFactorEnabled ? (
+            <Controller
+              control={control}
+              name="totpCode"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <AppInput
+                  label="Enter your 6-digit authentication code"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  keyboardType="number-pad"
+                  placeholder="123456"
+                  accessibilityLabel="Two-factor authentication code"
+                  accessibilityHint="Enter the current 6-digit code from your authenticator app"
+                  containerStyle={styles.fieldWrap}
+                />
+              )}
+            />
+          ) : null}
 
           {/* Reason (optional) */}
           <View style={styles.fieldWrap}>

@@ -20,6 +20,7 @@ interface AppSearchBarProps {
   value: string;
   onChangeText: (text: string) => void;
   onClear?: () => void;
+  onCameraPress?: () => void;
   containerStyle?: StyleProp<ViewStyle>;
   inputProps?: Omit<TextInputProps, 'value' | 'onChangeText' | 'placeholder' | 'placeholderTextColor' | 'style'>;
   rightNode?: React.ReactNode;
@@ -31,6 +32,7 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
     value,
     onChangeText,
     onClear,
+    onCameraPress,
     containerStyle,
     inputProps,
     rightNode },
@@ -83,6 +85,19 @@ export const AppSearchBar = forwardRef<TextInput, AppSearchBarProps>(function Ap
             focused={true}
             accessible={false}
           />
+        </AnimatedPressable>
+      ) : onCameraPress ? (
+        <AnimatedPressable
+          onPress={onCameraPress}
+          hapticFeedback="light"
+          scaleValue={0.95}
+          activeOpacity={0.7}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityLabel="Visual camera search"
+          accessibilityRole="button"
+          accessibilityHint="Open camera to search for items visually"
+        >
+          <Ionicons name="camera-outline" size={20} color={colors.textSecondary} />
         </AnimatedPressable>
       ) : rightNode ? (
         rightNode

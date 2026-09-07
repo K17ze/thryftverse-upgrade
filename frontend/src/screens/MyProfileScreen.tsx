@@ -34,6 +34,7 @@ import { useBackendData } from '../context/BackendDataContext';
 import { listCoOwnAssets, fetchCoOwnHoldings } from '../services/marketApi';
 import { fetchFollowCounts } from '../services/profileApi';
 import { parseApiError } from '../lib/apiClient';
+import { setFeaturedListings } from '../services/storefrontApi';
 import { AnimatedPressable } from '../components/AnimatedPressable';
 import { CachedImage } from '../components/CachedImage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -43,6 +44,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { FlagshipProfileMedia } from '../components/flagship';
 import { LookPreviewCard, ProfileLooksGrid } from '../components/profile';
 import { MyProfileIdentityHero } from '../components/profile/MyProfileIdentityHero';
+import { SharePassportModal } from '../components/profile/SharePassportModal';
 import { ProfileUtilityRail } from '../components/profile/ProfileUtilityRail';
 import { MyProfileTabRail } from '../components/profile/MyProfileTabRail';
 import { useSellerTrust, VERIFICATION_TIERS } from '../platform/product';
@@ -51,6 +53,7 @@ import { ReviewSummaryBlock, ProfileReviewRow } from '../components/profile/Prof
 import { ShopRail, type ShopRailItem } from '../components/profile/ShopRail';
 import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useProfileMediaUpload } from '../hooks/useProfileMediaUpload';
 import { isVideoUri } from '../utils/media';
 import { fetchLooksFromApi, type LookApiItem } from '../services/looksApi';
@@ -134,14 +137,14 @@ export default function MyProfileScreen() {
     trustBadgeText: { color: colors.textSecondary },
     trustBadgeVerified: { color: colors.success },
     trustBadgeSep: { backgroundColor: colors.borderSubtle },
-    completionCard: { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
+    profileStatusPanel: { backgroundColor: colors.surfaceAlt },
+    profileStatusDivider: { backgroundColor: colors.borderSubtle },
     completionTrack: { backgroundColor: colors.borderSubtle },
     completionFill: { backgroundColor: colors.brand },
     completionTitle: { color: colors.textPrimary },
     completionPercent: { color: colors.textMuted },
     completionCta: { backgroundColor: colors.brand },
     completionCtaText: { color: colors.textInverse },
-    growthCard: { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle },
     growthTitle: { color: colors.textPrimary },
     growthRow: { borderColor: colors.borderSubtle },
     growthRowTitle: { color: colors.textPrimary },
@@ -151,7 +154,7 @@ export default function MyProfileScreen() {
     portfolioHoldingTitle: { color: colors.textPrimary },
     portfolioHoldingUnits: { color: colors.textMuted } };
   const tMyProfile = {
-    awayBanner: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+    awayBanner: { backgroundColor: colors.surfaceAlt },
     awayBannerTitle: { color: colors.textPrimary },
     awayBannerSub: { color: colors.textMuted } };
 
@@ -165,7 +168,7 @@ export default function MyProfileScreen() {
   const { show } = useToast();
   const haptic = useHaptic();
 
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   const { listings } = useBackendData();
   const fetchMyProfile = useStore((state) => state.fetchMyProfile);
@@ -257,6 +260,7 @@ export default function MyProfileScreen() {
   const updateUserCover = useStore((state) => state.updateUserCover);
   const user = currentUser;
   const [myLooks, setMyLooks] = React.useState<LookApiItem[]>([]);
+  const [showPassportModal, setShowPassportModal] = React.useState(false);
   const [looksLoading, setLooksLoading] = React.useState(false);
   const [looksError, setLooksError] = React.useState(false);
 
@@ -367,25 +371,136 @@ export default function MyProfileScreen() {
     || profileMediaOverride?.avatar
     || null;
 
+  // ── G4: Profile grid drag-reorder ──────────────────────────────────────
+  // Sellers can pin/unpin listings to their shop grid, reorder pinned
+  // listings, and save the order to the backend via setFeaturedListings.
+  const [isReorderMode, setIsReorderMode] = React.useState(false);
+  const [overrideFeaturedIds, setOverrideFeaturedIds] = React.useState<string[] | null>(null);
+  const [isSavingReorder, setIsSavingReorder] = React.useState(false);
+
   const allOwnedListings = React.useMemo(() => {
     if (!profileUserId) return [];
     // Pinned/featured listings appear first in the Shop grid (2026 pattern).
-    // Stable sort preserves backend ordering for non-featured items.
+    // When an override order is active (reorder mode), sort by the override
+    // rank; otherwise fall back to the backend `featured` flag with a stable
+    // sort that preserves backend ordering for non-featured items.
     return listings
       .filter((item) => item.sellerId === profileUserId)
       .sort((a, b) => {
+        if (overrideFeaturedIds) {
+          const ai = overrideFeaturedIds.indexOf(a.id);
+          const bi = overrideFeaturedIds.indexOf(b.id);
+          const ar = ai === -1 ? Number.MAX_SAFE_INTEGER : ai;
+          const br = bi === -1 ? Number.MAX_SAFE_INTEGER : bi;
+          return ar - br;
+        }
         const af = a.featured === true ? 0 : 1;
         const bf = b.featured === true ? 0 : 1;
         return af - bf;
       });
-  }, [listings, profileUserId]);
+  }, [listings, profileUserId, overrideFeaturedIds]);
+
+  // When overrideFeaturedIds is set, featured state is derived from the
+  // override array; otherwise it falls back to the backend `featured` flag.
+  const isItemFeatured = useCallback(
+    (id: string, defaultFeatured: boolean | null | undefined): boolean => {
+      if (overrideFeaturedIds) return overrideFeaturedIds.includes(id);
+      return defaultFeatured === true;
+    },
+    [overrideFeaturedIds],
+  );
+
+  // Returns the 1-based rank position of a featured item, or 0 if not featured.
+  const getItemFeaturedRank = useCallback(
+    (id: string, defaultFeatured: boolean | null | undefined): number => {
+      if (overrideFeaturedIds) {
+        const idx = overrideFeaturedIds.indexOf(id);
+        return idx === -1 ? 0 : idx + 1;
+      }
+      return defaultFeatured === true ? 1 : 0;
+    },
+    [overrideFeaturedIds],
+  );
+
+  const handleTogglePin = useCallback(
+    (listingId: string) => {
+      haptic.light();
+      const current = overrideFeaturedIds
+        ?? allOwnedListings.filter((l) => l.featured === true).map((l) => l.id);
+      if (current.includes(listingId)) {
+        setOverrideFeaturedIds(current.filter((id) => id !== listingId));
+        show(tt('listings.unpinned'), 'success');
+      } else {
+        if (current.length >= 8) {
+          haptic.medium();
+          show(tt('listings.featuredMaxReached'), 'error');
+          return;
+        }
+        setOverrideFeaturedIds([...current, listingId]);
+        show(tt('listings.pinned'), 'success');
+      }
+    },
+    [overrideFeaturedIds, allOwnedListings, haptic, show, tt],
+  );
+
+  const handleShiftFeatured = useCallback(
+    (listingId: string, direction: -1 | 1) => {
+      if (!overrideFeaturedIds) return;
+      const idx = overrideFeaturedIds.indexOf(listingId);
+      if (idx === -1) return;
+      const target = idx + direction;
+      if (target < 0 || target >= overrideFeaturedIds.length) return;
+      haptic.light();
+      const next = [...overrideFeaturedIds];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      setOverrideFeaturedIds(next);
+    },
+    [overrideFeaturedIds, haptic],
+  );
+
+  const handleSaveReorder = useCallback(async () => {
+    if (!overrideFeaturedIds) {
+      setIsReorderMode(false);
+      return;
+    }
+    setIsSavingReorder(true);
+    try {
+      await setFeaturedListings(overrideFeaturedIds);
+      haptic.light();
+      show(tt('listings.orderSaved'), 'success');
+      setOverrideFeaturedIds(null);
+      setIsReorderMode(false);
+    } catch (err) {
+      const parsed = parseApiError(err, tt('listings.orderSaveFailed'));
+      show(parsed.message, 'error');
+    } finally {
+      setIsSavingReorder(false);
+    }
+  }, [overrideFeaturedIds, haptic, show, tt]);
+
+  const handleToggleReorderMode = useCallback(() => {
+    if (isReorderMode) {
+      // Exit without saving — discard override.
+      haptic.light();
+      setOverrideFeaturedIds(null);
+      setIsReorderMode(false);
+    } else {
+      haptic.light();
+      // Seed override from current featured state so shifts are visible.
+      const currentFeatured = allOwnedListings
+        .filter((l) => l.featured === true)
+        .map((l) => l.id);
+      setOverrideFeaturedIds(currentFeatured.length > 0 ? currentFeatured : []);
+      setIsReorderMode(true);
+    }
+  }, [isReorderMode, allOwnedListings, haptic]);
 
   // Curated shop window — featured listings for the ShopRail. The rail renders
   // only when featured items exist (ShopRail returns null for empty input),
   // keeping the first viewport truthful — no fabricated placeholder content.
   const shopRailItems = React.useMemo<ShopRailItem[]>(() => {
     return allOwnedListings
-      .filter((item) => item.featured === true)
+      .filter((item) => isItemFeatured(item.id, item.featured))
       .slice(0, 10)
       .map((item) => ({
         id: item.id,
@@ -396,7 +511,7 @@ export default function MyProfileScreen() {
         isSold: item.isSold,
         isPinned: true,
       }));
-  }, [allOwnedListings]);
+  }, [allOwnedListings, isItemFeatured]);
 
   // Profile completion — drives the progress prompt. Completion measures ONLY
   // identity fields the user can complete directly: display name, bio, profile
@@ -500,15 +615,10 @@ export default function MyProfileScreen() {
     return { opacity };
   });
 
-  const handleShare = async () => {
+  const handleShare = () => {
     if (!user) return;
     haptic.light();
-    try {
-      await Share.share({
-        message: tt('share.message', { username: user.username }),
-        url: `https://thryftverse.com/@${user.username}`,
-        title: tt('share.title', { name: user.displayName || user.username }) });
-    } catch { /* user cancelled or share unavailable */ }
+    setShowPassportModal(true);
   };
 
   const wishlistCount = useStore((state) => state.wishlist.length);
@@ -522,26 +632,12 @@ export default function MyProfileScreen() {
   const utilityItems = React.useMemo(
     () => [
       {
-        icon: 'bag-handle-outline' as const,
-        label: tt('utility.orders'),
-        onPress: () => { haptic.light(); navigation.navigate('MyOrders'); },
-        accessibilityLabel: tt('accessibility.orders') },
-      {
-        icon: 'stats-chart-outline' as const,
-        label: tt('utility.analytics'),
-        onPress: () => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); },
-        accessibilityLabel: tt('accessibility.creatorAnalytics') },
-      {
-        icon: 'bookmark-outline' as const,
-        label: tt('utility.closet'),
-        value: tt('utility.itemsCount', { count: savedCount + wishlistCount }),
-        onPress: () => { haptic.light(); navigation.navigate('Closet'); },
-        accessibilityLabel: tt('accessibility.closet') },
-      {
-        icon: 'wallet-outline' as const,
-        label: tt('utility.wallet'),
-        onPress: () => { haptic.light(); navigation.navigate('Wallet'); },
-        accessibilityLabel: tt('accessibility.wallet') },
+        icon: 'storefront-outline' as const,
+        label: tt('utility.sellerHub'),
+        value: 'Commerce & Ops',
+        onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
+        accessibilityLabel: tt('accessibility.sellerHub'),
+        accessibilityHint: 'Open Seller Hub for Orders, Wallet, Analytics, and Closet' },
       {
         icon: 'timer-outline' as const,
         label: tt('utility.auctions'),
@@ -553,33 +649,9 @@ export default function MyProfileScreen() {
         value: coOwnHoldings.length > 0 ? tt('utility.assetsCount', { count: coOwnHoldings.length }) : undefined,
         onPress: () => { haptic.light(); navigation.navigate('CoOwnHub'); },
         accessibilityLabel: tt('accessibility.browseCoOwnMarket') },
-      {
-        icon: 'storefront-outline' as const,
-        label: tt('utility.sellerHub'),
-        onPress: () => { haptic.light(); navigation.navigate('SellerHub'); },
-        accessibilityLabel: tt('accessibility.sellerHub') },
     ],
-    [coOwnHoldings.length, savedCount, wishlistCount, allOwnedListings.length, haptic, navigation, tt]
+    [coOwnHoldings.length, haptic, navigation, tt]
   );
-
-  if (!user) {
-    return (
-      <View style={[styles.container, t.container]}>
-        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-        <EmptyState
-          icon="person-outline"
-          title={tt('common:misc.notSignedIn')}
-          subtitle={tt('notSignedIn.subtitle')}
-          ctaLabel={tt('notSignedIn.signIn')}
-          onCtaPress={() => navigation.navigate('Login')}
-        />
-      </View>
-    );
-  }
-
-  const memberSince = user.createdAt
-    ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
-    : undefined;
 
   const GRID_GAP = Space.xs;
   const GRID_COLS = 3;
@@ -588,7 +660,8 @@ export default function MyProfileScreen() {
 
   const renderListingItem = useCallback(
     ({ item, index }: { item: (typeof allOwnedListings)[number]; index: number }) => {
-      const isFeatured = item.featured === true;
+      const isFeatured = isItemFeatured(item.id, item.featured);
+      const featuredRank = isFeatured ? getItemFeaturedRank(item.id, item.featured) : 0;
       const colIndex = index % 3;
       return (
         <View
@@ -600,7 +673,13 @@ export default function MyProfileScreen() {
         >
           <AnimatedPressable
             style={styles.gridCard}
-            onPress={() => navigation.navigate('ManageListing', { itemId: item.id })}
+            onPress={() => {
+              if (isReorderMode) {
+                handleTogglePin(item.id);
+              } else {
+                navigation.navigate('ManageListing', { itemId: item.id });
+              }
+            }}
             accessibilityRole="button"
             accessibilityLabel={`Manage ${item.title}${isFeatured ? ', pinned' : ''}`}
           >
@@ -624,9 +703,72 @@ export default function MyProfileScreen() {
                   <Text style={[styles.soldText, t.soldText]}>{tt('listings.sold')}</Text>
                 </View>
               ) : null}
+
+              {/* ── Reorder-mode controls ── */}
+              {isReorderMode ? (
+                <View style={styles.reorderOverlay} pointerEvents="box-none">
+                  {/* Rank badge for featured items */}
+                  {isFeatured ? (
+                    <View style={[styles.rankBadge, t.pinnedBadge]} pointerEvents="none">
+                      <Text
+                        style={[styles.rankBadgeText, t.soldText]}
+                        maxFontSizeMultiplier={1.3}
+                      >
+                        {featuredRank}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {/* Pin/unpin toggle — top-right */}
+                  <Pressable
+                    style={styles.reorderPinBtn}
+                    onPress={() => handleTogglePin(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={isFeatured ? tt('listings.unpin') : tt('listings.pin')}
+                    hitSlop={4}
+                  >
+                    <View style={[styles.reorderPinVisible, t.pinnedBadge]}>
+                      <Ionicons
+                        name={isFeatured ? 'pin' : 'pin-outline'}
+                        size={16}
+                        color={colors.scrimTextPrimary}
+                        aria-hidden={true}
+                      />
+                    </View>
+                  </Pressable>
+
+                  {/* Shift arrows — bottom-center for featured items */}
+                  {isFeatured ? (
+                    <View style={styles.reorderShiftRow} pointerEvents="box-none">
+                      <Pressable
+                        style={styles.reorderShiftBtn}
+                        onPress={() => handleShiftFeatured(item.id, -1)}
+                        accessibilityRole="button"
+                        accessibilityLabel={tt('listings.shiftLeft')}
+                        hitSlop={4}
+                      >
+                        <View style={[styles.reorderShiftVisible, t.pinnedBadge]}>
+                          <Ionicons name="chevron-back" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
+                        </View>
+                      </Pressable>
+                      <Pressable
+                        style={styles.reorderShiftBtn}
+                        onPress={() => handleShiftFeatured(item.id, 1)}
+                        accessibilityRole="button"
+                        accessibilityLabel={tt('listings.shiftRight')}
+                        hitSlop={4}
+                      >
+                        <View style={[styles.reorderShiftVisible, t.pinnedBadge]}>
+                          <Ionicons name="chevron-forward" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
+                        </View>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
             </SharedTransitionView>
-            <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1}>
-              {formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}
+            <Text style={[styles.gridPrice, t.gridPrice]} numberOfLines={1} maxFontSizeMultiplier={2}>
+              {formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}
             </Text>
             {item.brand ? (
               <Text style={[styles.gridBrand, t.gridBrand]} numberOfLines={1}>{item.brand}</Text>
@@ -635,7 +777,7 @@ export default function MyProfileScreen() {
         </View>
       );
     },
-    [navigation, t, tt, colors, formatFromFiat, currencyCode, CARD_HEIGHT]
+    [navigation, t, tt, colors, formatFromFiat, CARD_HEIGHT, isReorderMode, isItemFeatured, getItemFeaturedRank, handleTogglePin, handleShiftFeatured]
   );
 
   const tabs = React.useMemo(
@@ -647,6 +789,25 @@ export default function MyProfileScreen() {
     ],
     [tt, allOwnedListings.length, myLooks.length, myReviewCount]
   );
+
+  if (!user) {
+    return (
+      <View style={[styles.container, t.container]}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <EmptyState
+          icon="person-outline"
+          title={tt('common:misc.notSignedIn')}
+          subtitle={tt('notSignedIn.subtitle')}
+          ctaLabel={tt('notSignedIn.signIn')}
+          onCtaPress={() => navigation.navigate('Login')}
+        />
+      </View>
+    );
+  }
+
+  const memberSince = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+    : undefined;
 
   return (
     <View testID="profile-screen" style={[styles.container, t.container]}>
@@ -714,7 +875,7 @@ export default function MyProfileScreen() {
           <View style={[styles.coverFailure, t.coverFailure]}>
             <View style={styles.coverFailureCopy}>
               <Ionicons name="alert-circle-outline" size={16} color={colors.scrimTextPrimary} aria-hidden={true} />
-              <Text style={[styles.coverFailureText, t.coverFailureText]} numberOfLines={1}>
+              <Text style={[styles.coverFailureText, t.coverFailureText]} numberOfLines={1} maxFontSizeMultiplier={2}>
                 {coverState.error || tt('cover.uploadFailed')}
               </Text>
             </View>
@@ -812,7 +973,7 @@ export default function MyProfileScreen() {
               <Ionicons name="pause-circle" size={18} color={colors.textMuted} aria-hidden={true} />
               <View style={myProfileStyles.awayBannerTextWrap}>
                 <Text style={[myProfileStyles.awayBannerTitle, tMyProfile.awayBannerTitle]}>{tt('holiday.title')}</Text>
-                <Text style={[myProfileStyles.awayBannerSub, tMyProfile.awayBannerSub]}>
+                <Text style={[myProfileStyles.awayBannerSub, tMyProfile.awayBannerSub]} maxFontSizeMultiplier={2}>
                   {tt('holiday.subtitle')}
                 </Text>
               </View>
@@ -821,7 +982,7 @@ export default function MyProfileScreen() {
           ) : null}
 
           {/* ── STORY HIGHLIGHTS RAIL ──
-              Instagram-pattern: highlights sit between the identity hero and
+              Highlights sit between the identity hero and
               the utility rail. Renders only when highlights exist (truthful UI —
               no fabricated placeholder content). Owner sees a "New" tile. */}
           {highlights.length > 0 ? (
@@ -880,7 +1041,7 @@ export default function MyProfileScreen() {
               <View style={styles.listingsEmpty}>
                 <Ionicons name="bag-add-outline" size={28} color={colors.textSecondary} aria-hidden={true} />
                 <Text style={[styles.listingsEmptyTitle, t.listingsEmptyTitle]}>{tt('listings.emptyTitle')}</Text>
-                <Text style={[styles.listingsEmptyBody, t.listingsEmptyBody]}>
+                <Text style={[styles.listingsEmptyBody, t.listingsEmptyBody]} maxFontSizeMultiplier={2}>
                   {tt('listings.emptyBody')}
                 </Text>
                 <AnimatedPressable
@@ -900,7 +1061,7 @@ export default function MyProfileScreen() {
                   accessibilityHint={tt('accessibility.importListingsHint')}
                   hitSlop={8}
                 >
-                  <Text style={[styles.listingsEmptyImportText, { color: colors.brand }]}>
+                  <Text style={[styles.listingsEmptyImportText, { color: colors.brand }]} maxFontSizeMultiplier={2}>
                     {tt('listings.bringOverListings')}
                   </Text>
                 </AnimatedPressable>
@@ -909,14 +1070,40 @@ export default function MyProfileScreen() {
               <>
                 <View style={styles.gridHeader}>
                   <Text style={[styles.gridHeaderCount, t.gridHeaderCount]}>{tt('listings.listingsCount', { count: allOwnedListings.length })}</Text>
-                  <Pressable
-                    onPress={() => navigation.navigate('MyListings')}
-                    accessibilityRole="button"
-                    accessibilityLabel="View all listings"
-                    hitSlop={13}
-                  >
-                    <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>{tt('listings.viewAll')}</Text>
-                  </Pressable>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.md }}>
+                    {/* G4: Reorder-mode toggle — "Edit" enters, "Done" saves & exits */}
+                    <Pressable
+                      onPress={() => {
+                        if (isReorderMode) {
+                          void handleSaveReorder();
+                        } else {
+                          handleToggleReorderMode();
+                        }
+                      }}
+                      disabled={isSavingReorder}
+                      accessibilityRole="button"
+                      accessibilityLabel={isReorderMode ? tt('listings.done') : tt('listings.editOrder')}
+                      hitSlop={13}
+                    >
+                      {isSavingReorder ? (
+                        <ActivityIndicator size="small" color={colors.brand} />
+                      ) : (
+                        <Text style={[styles.gridHeaderAction, t.gridHeaderAction]} maxFontSizeMultiplier={2}>
+                          {isReorderMode ? tt('listings.done') : tt('listings.editOrder')}
+                        </Text>
+                      )}
+                    </Pressable>
+                    {!isReorderMode ? (
+                      <Pressable
+                        onPress={() => navigation.navigate('MyListings')}
+                        accessibilityRole="button"
+                        accessibilityLabel="View all listings"
+                        hitSlop={13}
+                      >
+                        <Text style={[styles.gridHeaderAction, t.gridHeaderAction]}>{tt('listings.viewAll')}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                 </View>
                 <FlashList
                   data={allOwnedListings}
@@ -930,7 +1117,7 @@ export default function MyProfileScreen() {
           </Reanimated.View>
         )}
 
-        {/* LOOKS TAB — 2-column grid (Instagram/Pinterest profile pattern) */}
+        {/* LOOKS TAB — 2-column grid (standard profile pattern) */}
         {activeTab === 'looks' && (
           <Reanimated.View
             key="looks"
@@ -1013,10 +1200,10 @@ export default function MyProfileScreen() {
                         <View style={[styles.portfolioHoldingImage, { backgroundColor: colors.surfaceAlt }]} />
                       )}
                       <View style={styles.portfolioHoldingInfo}>
-                        <Text style={[styles.portfolioHoldingTitle, t.portfolioHoldingTitle]} numberOfLines={1}>
+                        <Text style={[styles.portfolioHoldingTitle, t.portfolioHoldingTitle]} numberOfLines={1} maxFontSizeMultiplier={2}>
                           {h.title}
                         </Text>
-                        <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]}>
+                        <Text style={[styles.portfolioHoldingUnits, t.portfolioHoldingUnits]} maxFontSizeMultiplier={2}>
                           {h.yourUnits} {h.yourUnits === 1 ? tt('about.unit') : tt('about.units')}
                         </Text>
                       </View>
@@ -1049,7 +1236,7 @@ export default function MyProfileScreen() {
               </View>
               <View style={[styles.aboutRow, t.aboutRow]}>
                 <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.shipping')}</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]}>
+                <Text style={[styles.aboutValue, t.aboutValue]} maxFontSizeMultiplier={2}>
                   {sellerTrust?.dispatchTimeLabel
                     ? tt('about.shippingSeller', { label: sellerTrust.dispatchTimeLabel.toLowerCase() })
                     : tt('about.shippingDefault')}
@@ -1067,7 +1254,7 @@ export default function MyProfileScreen() {
               ) : null}
               <View style={[styles.aboutRow, t.aboutRow, styles.aboutRowLast]}>
                 <Text style={[styles.aboutLabel, t.aboutLabel]}>{tt('about.response')}</Text>
-                <Text style={[styles.aboutValue, t.aboutValue]}>
+                <Text style={[styles.aboutValue, t.aboutValue]} maxFontSizeMultiplier={2}>
                   {sellerTrust?.responseTimeLabel
                     ? tt('about.responseSeller', { label: sellerTrust.responseTimeLabel.toLowerCase() })
                     : tt('about.responseDefault')}
@@ -1120,7 +1307,7 @@ export default function MyProfileScreen() {
                     key={review.id}
                     item={review}
                     onOpenReviewer={(uid) => openProfile(navigation, uid, currentUser?.id)}
-                    onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })}
+                    onOpenListing={(lid) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: lid, sourceSurface: 'MyProfileReview' })}
                   />
                 ))}
               </View>
@@ -1129,100 +1316,117 @@ export default function MyProfileScreen() {
         )}
         </View>
 
-        {/* ── COMPLETION & GROWTH PROMPTS — below the fold, not competing with identity ── */}
-        {/* These are optional onboarding prompts that recede below the tab
-            content so identity dominates the first viewport. They are still
-            accessible by scrolling down. */}
-        {showCompletionPrompt ? (
-          <View style={[styles.completionCard, t.completionCard]}>
-            <View style={styles.completionHead}>
-              <View style={styles.completionHeadText}>
-                <Text style={[styles.completionTitle, t.completionTitle]}>{tt('completion.title')}</Text>
-                <Text style={[styles.completionPercent, t.completionPercent]}>
-                  {tt('completion.progress', { percent: completion.percent, done: completion.done, total: completion.total })}
-                </Text>
-              </View>
-              <AnimatedPressable
-                // TODO: replace `${colors.textMuted}14` with textMutedSubtle token when available
-                style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
-                onPress={() => { haptic.light(); setCompletionDismissed(true); }}
-                accessibilityRole="button"
-                accessibilityLabel={tt('accessibility.dismissCompletion')}
-              >
-                <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
-              </AnimatedPressable>
-            </View>
-            <View style={[styles.completionTrack, t.completionTrack]}>
-              <View style={[styles.completionFill, t.completionFill, { width: `${completion.percent}%` }]} />
-            </View>
-            <AnimatedPressable
-              style={[styles.completionCta, t.completionCta]}
-              onPress={() => {
-                haptic.light();
-                navigation.navigate('EditProfile', completionCta.focus ? { focus: completionCta.focus } : {});
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={completionCta.label}
-            >
-              <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
-              <Ionicons name="chevron-forward" size={12} color={colors.textInverse} aria-hidden={true} />
-            </AnimatedPressable>
-          </View>
-        ) : null}
-
-        {showGrowthPrompt ? (
-          <View style={[styles.growthCard, t.growthCard]}>
-            <View style={styles.growthHead}>
-              <Text style={[styles.growthTitle, t.growthTitle]}>{tt('growth.title')}</Text>
-              <AnimatedPressable
-                // TODO: replace `${colors.textMuted}14` with textMutedSubtle token when available
-                style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
-                onPress={() => { haptic.light(); setGrowthDismissed(true); }}
-                accessibilityRole="button"
-                accessibilityLabel={tt('accessibility.dismissGrowth')}
-              >
-                <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
-              </AnimatedPressable>
-            </View>
-
-            {showFirstListingGrowth ? (
-              <AnimatedPressable
-                style={[styles.growthRow, t.growthRow]}
-                onPress={() => { haptic.light(); navigation.navigate('Sell'); }}
-                accessibilityRole="button"
-                accessibilityLabel={tt('growth.listFirstItemTitle')}
-                accessibilityHint={tt('accessibility.listFirstItemHint')}
-              >
-                <View style={styles.growthRowText}>
-                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.listFirstItemTitle')}</Text>
-                  <Text style={[styles.growthRowSub, t.growthRowSub]}>
-                    {tt('growth.listFirstItemSub')}
-                  </Text>
+        {showCompletionPrompt || showGrowthPrompt ? (
+          <View style={[styles.profileStatusPanel, t.profileStatusPanel]}>
+            {showCompletionPrompt ? (
+              <View style={styles.completionSection}>
+                <View style={styles.completionHead}>
+                  <View style={styles.completionHeadText}>
+                    <Text style={[styles.completionTitle, t.completionTitle]}>{tt('completion.title')}</Text>
+                    <Text style={[styles.completionPercent, t.completionPercent]} maxFontSizeMultiplier={2}>
+                      {tt('completion.progress', { percent: completion.percent, done: completion.done, total: completion.total })}
+                    </Text>
+                  </View>
+                  <AnimatedPressable
+                    style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
+                    onPress={() => { haptic.light(); setCompletionDismissed(true); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={tt('accessibility.dismissCompletion')}
+                  >
+                    <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
+                  </AnimatedPressable>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-              </AnimatedPressable>
+                <View style={[styles.completionTrack, t.completionTrack]}>
+                  <View style={[styles.completionFill, t.completionFill, { width: `${completion.percent}%` }]} />
+                </View>
+                <AnimatedPressable
+                  style={[styles.completionCta, t.completionCta]}
+                  onPress={() => {
+                    haptic.light();
+                    navigation.navigate('EditProfile', completionCta.focus ? { focus: completionCta.focus } : {});
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={completionCta.label}
+                >
+                  <Text style={[styles.completionCtaText, t.completionCtaText]}>{completionCta.label}</Text>
+                  <Ionicons name="chevron-forward" size={12} color={colors.textInverse} aria-hidden={true} />
+                </AnimatedPressable>
+              </View>
             ) : null}
 
-            {showAudienceGrowth ? (
-              <AnimatedPressable
-                style={[styles.growthRow, t.growthRow, styles.growthRowLast]}
-                onPress={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
-                accessibilityRole="button"
-                accessibilityLabel={tt('growth.growAudienceTitle')}
-                accessibilityHint={tt('accessibility.growAudienceHint')}
-              >
-                <View style={styles.growthRowText}>
-                  <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.growAudienceTitle')}</Text>
-                  <Text style={[styles.growthRowSub, t.growthRowSub]}>
-                    {tt('growth.growAudienceSub')}
-                  </Text>
+            {showCompletionPrompt && showGrowthPrompt ? (
+              <View style={[styles.profileStatusDivider, t.profileStatusDivider]} />
+            ) : null}
+
+            {showGrowthPrompt ? (
+              <View style={styles.growthSection}>
+                <View style={styles.growthHead}>
+                  <Text style={[styles.growthTitle, t.growthTitle]}>{tt('growth.title')}</Text>
+                  <AnimatedPressable
+                    style={[styles.completionDismiss, { backgroundColor: `${colors.textMuted}14` }]}
+                    onPress={() => { haptic.light(); setGrowthDismissed(true); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={tt('accessibility.dismissGrowth')}
+                  >
+                    <Ionicons name="close" size={16} color={colors.textMuted} aria-hidden={true} />
+                  </AnimatedPressable>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
-              </AnimatedPressable>
+
+                {showFirstListingGrowth ? (
+                  <AnimatedPressable
+                    style={[styles.growthRow, t.growthRow]}
+                    onPress={() => { haptic.light(); navigation.navigate('Sell'); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={tt('growth.listFirstItemTitle')}
+                    accessibilityHint={tt('accessibility.listFirstItemHint')}
+                  >
+                    <View style={styles.growthRowText}>
+                      <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.listFirstItemTitle')}</Text>
+                      <Text style={[styles.growthRowSub, t.growthRowSub]} maxFontSizeMultiplier={2}>
+                        {tt('growth.listFirstItemSub')}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+                  </AnimatedPressable>
+                ) : null}
+
+                {showAudienceGrowth ? (
+                  <AnimatedPressable
+                    style={[styles.growthRow, t.growthRow, styles.growthRowLast]}
+                    onPress={() => { haptic.light(); navigation.navigate('CreatorAnalyticsDashboard'); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={tt('growth.growAudienceTitle')}
+                    accessibilityHint={tt('accessibility.growAudienceHint')}
+                  >
+                    <View style={styles.growthRowText}>
+                      <Text style={[styles.growthRowTitle, t.growthRowTitle]}>{tt('growth.growAudienceTitle')}</Text>
+                      <Text style={[styles.growthRowSub, t.growthRowSub]} maxFontSizeMultiplier={2}>
+                        {tt('growth.growAudienceSub')}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} aria-hidden={true} />
+                  </AnimatedPressable>
+                ) : null}
+              </View>
             ) : null}
           </View>
         ) : null}
       </Reanimated.ScrollView>
+
+      {user ? (
+        <SharePassportModal
+          visible={showPassportModal}
+          onClose={() => setShowPassportModal(false)}
+          username={user.username}
+          displayName={user.displayName || user.username}
+          avatarUri={displayAvatar}
+          ratingAverage={sellerTrust?.rating ?? null}
+          completedSales={sellerTrust?.completedSales ?? 0}
+          verificationTier={sellerTrust?.verificationTier ?? (sellerTrust?.verified ? 'seller' : null)}
+          memberSince={memberSince}
+          bio={user.bio ?? null}
+        />
+      ) : null}
     </View>
   );
 }
@@ -1236,8 +1440,7 @@ const myProfileStyles = StyleSheet.create({
     marginBottom: Space.md,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md - 2,
-    borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: StyleSheet.hairlineWidth },
+    borderRadius: RadiusRoleValue.sheetDialog },
   awayBannerTextWrap: {
     flex: 1,
     gap: Space.xs / 2 },
@@ -1447,6 +1650,49 @@ const styles = StyleSheet.create({
     borderRadius: RadiusRoleValue.pillAvatar,
     alignItems: 'center',
     justifyContent: 'center' },
+  // ── G4: Reorder-mode overlay controls ──
+  reorderOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 4 },
+  rankBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: RadiusRoleValue.pillAvatar,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  rankBadgeText: {
+    fontSize: TypographyV2.meta.size - 1,
+    fontFamily: FontFamily.bold,
+    fontVariant: ['tabular-nums'] as ['tabular-nums'] },
+  reorderPinBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4 },
+  reorderPinVisible: {
+    width: Space.xl - 2,
+    height: Space.xl - 2,
+    borderRadius: RadiusRoleValue.standalonePanel,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  reorderShiftRow: {
+    position: 'absolute',
+    bottom: 6,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Space.xs },
+  reorderShiftBtn: {},
+  reorderShiftVisible: {
+    width: Space.xl - 2,
+    height: Space.xl - 2,
+    borderRadius: RadiusRoleValue.standalonePanel,
+    alignItems: 'center',
+    justifyContent: 'center' },
   gridImage: {
     width: '100%',
     height: '100%' },
@@ -1607,14 +1853,16 @@ const styles = StyleSheet.create({
     width: StyleSheet.hairlineWidth,
     height: Space.sm + Space.xxs },
 
-  // Profile completion prompt — flagship elevated card
-  completionCard: {
+  profileStatusPanel: {
     marginHorizontal: Space.md,
     marginBottom: Space.md,
+    borderRadius: RadiusRoleValue.sheetDialog,
+    overflow: 'hidden' },
+  profileStatusDivider: {
+    height: StyleSheet.hairlineWidth },
+  completionSection: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: StyleSheet.hairlineWidth,
     gap: Space.md },
   completionHead: {
     flexDirection: 'row',
@@ -1662,14 +1910,9 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     letterSpacing: 0.1 },
 
-  // Growth tasks — optional onboarding prompts (first listing / audience)
-  growthCard: {
-    marginHorizontal: Space.md,
-    marginBottom: Space.md,
+  growthSection: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    borderRadius: RadiusRoleValue.sheetDialog,
-    borderWidth: StyleSheet.hairlineWidth,
     gap: Space.sm },
   growthHead: {
     flexDirection: 'row',

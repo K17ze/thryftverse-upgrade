@@ -32,10 +32,13 @@ export function SwipeableMessage({
   replyThreshold = 80,
 }: SwipeableMessageProps) {
   const translateX = useSharedValue(0);
+  const hasTriggeredHaptic = useSharedValue(false);
   const haptic = useHaptic();
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
+
+  const isSwipeEnabled = (isMe && !!onActions) || (!isMe && !!onReply);
 
   const triggerReply = React.useCallback(() => {
     onReply?.();
@@ -47,68 +50,107 @@ export function SwipeableMessage({
     haptic.light();
   }, [onActions, haptic]);
 
-  const gesture = Gesture.Pan()
-    .activeOffsetX([-10, 10])
-    .onUpdate((event) => {
-      const { translationX } = event;
+  const triggerThresholdHaptic = React.useCallback(() => {
+    haptic.light();
+  }, [haptic]);
 
-      if (!isMe && translationX > 0) {
-        // Swipe right to reply to others' messages
-        translateX.value = Math.min(translationX, replyThreshold + 20);
-      } else if (isMe && translationX < 0) {
-        // Swipe left for actions on my messages
-        translateX.value = Math.max(translationX, -(replyThreshold + 20));
-      }
-    })
-    .onEnd((event) => {
-      const { translationX } = event;
+  const panGesture = React.useMemo(() => {
+    return Gesture.Pan()
+      .enabled(isSwipeEnabled)
+      .activeOffsetX(isMe ? [-10, 0] : [0, 10])
+      .failOffsetY([-12, 12])
+      .onUpdate((event) => {
+        const { translationX } = event;
 
-      if (!isMe && translationX > replyThreshold) {
-        runOnJS(triggerReply)();
-      } else if (isMe && translationX < -replyThreshold) {
-        runOnJS(triggerActions)();
-      }
+        if (!isMe && translationX > 0) {
+          // Swipe right to reply to others' messages
+          if (translationX > replyThreshold) {
+            translateX.value = replyThreshold + (translationX - replyThreshold) * 0.3;
+          } else {
+            translateX.value = translationX;
+          }
 
-      // Snap back to original position with timing
-      translateX.value = withTiming(0, { duration: reducedMotion ? 0 : 200, easing: Easing.out(Easing.cubic) });
-    });
+          if (translateX.value >= replyThreshold && !hasTriggeredHaptic.value) {
+            hasTriggeredHaptic.value = true;
+            runOnJS(triggerThresholdHaptic)();
+          } else if (translateX.value < replyThreshold && hasTriggeredHaptic.value) {
+            hasTriggeredHaptic.value = false;
+          }
+        } else if (isMe && translationX < 0) {
+          // Swipe left for actions on my messages
+          if (translationX < -replyThreshold) {
+            translateX.value = -replyThreshold + (translationX + replyThreshold) * 0.3;
+          } else {
+            translateX.value = translationX;
+          }
+
+          if (translateX.value <= -replyThreshold && !hasTriggeredHaptic.value) {
+            hasTriggeredHaptic.value = true;
+            runOnJS(triggerThresholdHaptic)();
+          } else if (translateX.value > -replyThreshold && hasTriggeredHaptic.value) {
+            hasTriggeredHaptic.value = false;
+          }
+        }
+      })
+      .onEnd((event) => {
+        const { translationX } = event;
+
+        if (!isMe && translationX >= replyThreshold) {
+          runOnJS(triggerReply)();
+        } else if (isMe && translationX <= -replyThreshold) {
+          runOnJS(triggerActions)();
+        }
+
+        hasTriggeredHaptic.value = false;
+        translateX.value = withTiming(0, {
+          duration: reducedMotion ? 0 : 200,
+          easing: Easing.out(Easing.cubic),
+        });
+      });
+  }, [isSwipeEnabled, isMe, replyThreshold, reducedMotion, triggerReply, triggerActions, triggerThresholdHaptic]);
 
   const foregroundStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
   }));
 
-  const backgroundIconOpacity = useAnimatedStyle(() => {
-    const inputRange = isMe
-      ? [-100, -replyThreshold, 0]
-      : [0, replyThreshold, 100];
-    const outputRange = isMe ? [1, 0.5, 0] : [0, 0.5, 1];
+  const actionIndicatorStyle = useAnimatedStyle(() => {
+    const absX = Math.abs(translateX.value);
+    const opacity = interpolate(
+      absX,
+      [0, 12, replyThreshold],
+      [0, 0.4, 1],
+      Extrapolation.CLAMP
+    );
+    const scale = interpolate(
+      absX,
+      [0, 12, replyThreshold],
+      [0.6, 0.8, 1],
+      Extrapolation.CLAMP
+    );
 
     return {
-      opacity: interpolate(
-        translateX.value,
-        inputRange,
-        outputRange,
-        Extrapolation.CLAMP
-      ),
+      opacity,
+      transform: [{ scale }],
     };
   });
 
   return (
-    <GestureDetector gesture={gesture}>
+    <GestureDetector gesture={panGesture}>
       <View style={styles.container}>
-        {/* Background Layer with Icons */}
-        <View style={[
-          styles.backgroundLayer,
-          isMe ? styles.backgroundLeft : styles.backgroundRight,
-        ]}>
-          <Reanimated.View style={[styles.actionIconWrap, backgroundIconOpacity]}>
-            <View style={styles.actionIcon}>
-              <Ionicons
-                name={isMe ? 'ellipsis-horizontal' : 'arrow-undo'}
-                size={24}
-                color={colors.textInverse}
-              />
-            </View>
+        {/* Background Action Indicator — zero static background, completely transparent when idle */}
+        <View
+          pointerEvents="none"
+          style={[
+            styles.actionTrack,
+            isMe ? styles.actionTrackRight : styles.actionTrackLeft,
+          ]}
+        >
+          <Reanimated.View style={[styles.actionBadge, actionIndicatorStyle]}>
+            <Ionicons
+              name={isMe ? 'ellipsis-horizontal' : 'arrow-undo'}
+              size={18}
+              color={isMe ? colors.textSecondary : colors.brand}
+            />
           </Reanimated.View>
         </View>
 
@@ -121,42 +163,38 @@ export function SwipeableMessage({
   );
 }
 
-const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
-  container: {
-    position: 'relative',
-  },
-  backgroundLayer: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 100,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backgroundLeft: {
-    left: 0,
-    backgroundColor: colors.borderSubtle,
-    borderTopLeftRadius: Radius.lg,
-    borderBottomLeftRadius: Radius.lg,
-  },
-  backgroundRight: {
-    right: 0,
-    backgroundColor: colors.brandSubtle,
-    borderTopRightRadius: Radius.lg,
-    borderBottomRightRadius: Radius.lg,
-  },
-  actionIconWrap: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  messageContainer: {
-    backgroundColor: 'transparent',
-  },
-});
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
+  StyleSheet.create({
+    container: {
+      position: 'relative',
+      backgroundColor: 'transparent',
+    },
+    actionTrack: {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: 44,
+      backgroundColor: 'transparent',
+    },
+    actionTrackLeft: {
+      left: 12,
+    },
+    actionTrackRight: {
+      right: 12,
+    },
+    actionBadge: {
+      width: 36,
+      height: 36,
+      borderRadius: Radius.full,
+      backgroundColor: colors.surfaceElevated,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    messageContainer: {
+      backgroundColor: 'transparent',
+    },
+  });

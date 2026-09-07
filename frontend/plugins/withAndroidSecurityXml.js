@@ -137,6 +137,20 @@ function buildNetworkSecurityConfig() {
         </pin-set>
     </domain-config>
 
+    <!-- Dev-only hosts: allow cleartext for local Metro bundler and
+         Docker backend when running on the Android emulator. These
+         domain-config entries are needed in addition to <debug-overrides>
+         because some OkHttp/Android combinations do not reliably apply
+         debug-overrides to cleartext checks for all hostnames. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </domain-config>
+
     <debug-overrides>
         <!-- In debug builds (android:debuggable="true"), allow cleartext to
              any host so the Expo dev client can connect to the Metro bundler

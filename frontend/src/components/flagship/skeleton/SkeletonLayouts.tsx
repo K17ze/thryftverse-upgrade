@@ -322,83 +322,114 @@ export const ChatListSkeleton = memo(function ChatListSkeleton({
 });
 
 // ---------------------------------------------------------------------------
-// Seller hub skeleton — matches SellerHubScreen (TaskQueueScreen) layout
+// Seller hub skeleton — mirrors SellerHubScreen section geometry 1:1
+// (tiles → money panel → trust line → orders rail + task rows → chart)
+// so loading resolves as a content fade with zero box movement.
 // ---------------------------------------------------------------------------
 
 /**
- * Seller hub skeleton — matches the TaskQueueScreen composition:
- *   - Urgent task hero (dominant object)
- *   - Task queue rows
- *   - Analytics metric cards
+ * Seller hub skeleton — final-geometry match:
+ *   - 4 pillar tiles (84h, Radius.xl)
+ *   - Money panel (Radius.xl): label, hero figure, escrow/payout split
+ *   - Trust line, orders header + 132px media rail, task rows, chart block
  */
 export const SellerHubSkeleton = memo(function SellerHubSkeleton() {
   const { colors } = useAppTheme();
   return (
     <View style={styles.sellerHubContainer}>
-      {/* Urgent task hero — dominant object */}
-      <View style={styles.sellerHubHero}>
-        <SkeletonTextLine
-          width="60%"
-          height={TypographyV2.meta.size}
-        />
-        <SkeletonTextLine
-          width="90%"
-          height={TypographyV2.itemTitle.size}
-          style={{ marginTop: Space.xs }}
-        />
-        <SkeletonTextLine
-          width="70%"
-          height={TypographyV2.body.size}
-          style={{ marginTop: Space.xxs }}
-        />
-        <SkeletonBlock
-          width="100%"
-          height={44}
-          radius={Radius.lg}
-          style={{ marginTop: Space.md }}
-        />
+      {/* Pillar tiles */}
+      <View style={styles.sellerHubTiles}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <SkeletonBlock key={i} width="100%" height={84} radius={Radius.xl} style={{ flex: 1 }} />
+        ))}
       </View>
 
-      {/* Task queue rows */}
+      {/* Money panel */}
+      <View style={[styles.sellerHubMoneyPanel, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
+        <SkeletonTextLine width="45%" height={TypographyV2.meta.size} />
+        <SkeletonTextLine
+          width="75%"
+          height={TypographyV2.priceHero.size}
+          style={{ marginTop: Space.xs }}
+        />
+        <View style={styles.sellerHubSplit}>
+          {[0, 1].map((i) => (
+            <View key={i} style={{ flex: 1, gap: Space.xxs }}>
+              <SkeletonTextLine width="70%" height={TypographyV2.caption.size} />
+              <SkeletonTextLine width="50%" height={TypographyV2.numericMeta.size} />
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Trust line */}
+      <SkeletonTextLine
+        width="60%"
+        height={TypographyV2.meta.size}
+        style={{ marginTop: Space.sm }}
+      />
+
+      {/* Orders header + media rail */}
+      <SkeletonTextLine
+        width="30%"
+        height={TypographyV2.sectionTitle.size}
+        style={{ marginTop: Space.lg }}
+      />
+      <View style={styles.sellerHubRail}>
+        {[0, 1].map((i) => (
+          <View key={i} style={{ width: 140 }}>
+            <SkeletonBlock width={132} height={132} radius={Radius.md} />
+            <SkeletonTextLine
+              width="80%"
+              height={TypographyV2.caption.size}
+              style={{ marginTop: Space.xs }}
+            />
+            <SkeletonTextLine
+              width="50%"
+              height={TypographyV2.meta.size}
+              style={{ marginTop: Space.xxs }}
+            />
+          </View>
+        ))}
+      </View>
+
+      {/* Task rows */}
       <View style={[styles.sellerHubSection, { borderTopColor: colors.borderSubtle }]}>
-        {Array.from({ length: 3 }).map((_, i) => (
+        {Array.from({ length: 2 }).map((_, i) => (
           <View key={i} style={styles.sellerHubRow}>
-            <SkeletonCircle size={AvatarSize.md} />
+            <SkeletonBlock width={30} height={30} radius={Radius.full} />
             <View style={{ flex: 1, gap: Space.xxs }}>
               <SkeletonTextLine
                 width="60%"
-                height={TypographyV2.bodyStrong.size}
+                height={TypographyV2.caption.size}
               />
               <SkeletonTextLine
                 width="40%"
                 height={TypographyV2.meta.size}
               />
             </View>
-            <SkeletonBlock
-              width={24}
-              height={24}
-              radius={Radius.full}
-            />
+            <SkeletonTextLine width={48} height={TypographyV2.meta.size} />
           </View>
         ))}
       </View>
 
-      {/* Analytics cards — flat rows, not tile grid */}
-      <View style={[styles.sellerHubSection, { borderTopColor: colors.borderSubtle }]}>
-        {Array.from({ length: 2 }).map((_, i) => (
-          <View key={i} style={styles.sellerHubMetricRow}>
-            <SkeletonTextLine
-              width={100}
-              height={TypographyV2.meta.size}
-            />
-            <SkeletonTextLine
-              width="50%"
-              height={TypographyV2.priceList.size}
-              style={{ marginTop: Space.xxs }}
-            />
-          </View>
-        ))}
-      </View>
+      {/* Analytics chart block */}
+      <SkeletonTextLine
+        width="35%"
+        height={TypographyV2.bodyStrong.size}
+        style={{ marginTop: Space.lg }}
+      />
+      <SkeletonTextLine
+        width="50%"
+        height={TypographyV2.priceList.size}
+        style={{ marginTop: Space.xs }}
+      />
+      <SkeletonBlock
+        width="100%"
+        height={96}
+        radius={Radius.none}
+        style={{ marginTop: Space.sm }}
+      />
     </View>
   );
 });
@@ -723,10 +754,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Seller hub
+  // Seller hub — final-geometry match for SellerHubScreen
   sellerHubContainer: {
     paddingHorizontal: Space.md,
     paddingTop: Space.md,
+  },
+  sellerHubTiles: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.md,
+  },
+  sellerHubMoneyPanel: {
+    borderRadius: Radius.xl,
+    borderWidth: Stroke.hairline,
+    padding: Space.md,
+    marginTop: Space.md,
+  },
+  sellerHubSplit: {
+    flexDirection: 'row',
+    gap: Space.md,
+    marginTop: Space.md,
+  },
+  sellerHubRail: {
+    flexDirection: 'row',
+    gap: Space.sm,
+    marginTop: Space.xs,
   },
   sellerHubHero: {
     paddingBottom: Space.lg,

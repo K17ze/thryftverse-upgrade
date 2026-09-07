@@ -769,6 +769,38 @@ export async function createBuyerProtectionClaim(
 
 /* ─── Seller Analytics ─── */
 
+export interface SellerAnalyticsComparison {
+  revenueGbpMinor: number;
+  netSalesGbpMinor: number | null;
+  itemsSold: number;
+  totalViews: number;
+  totalLikes: number;
+  totalSaves: number;
+  complete: boolean;
+}
+
+export interface SellerAnalyticsTrendPoint {
+  /** ISO date string (YYYY-MM-DD) */
+  date: string;
+  value: number;
+}
+
+export interface SellerAnalyticsTrend {
+  /** The daily series metric. Currently always 'revenue' (gross). Per-day
+   *  refund/fee subtraction is not yet implemented in the backend. */
+  metric: 'revenue';
+  current: SellerAnalyticsTrendPoint[];
+  previous: SellerAnalyticsTrendPoint[];
+}
+
+export interface SellerAnalyticsFunnel {
+  impressions: number;
+  views: number;
+  saves: number;
+  offers: number;
+  purchases: number;
+}
+
 export interface SellerAnalytics {
   totalListings: number;
   activeListings: number;
@@ -791,7 +823,16 @@ export interface SellerAnalytics {
   shipWithinDays: number | null;
   totalSales: number | null;
   positiveRatingPct: number | null;
-  period: string;
+  /** Average Order Value in GBP minor units */
+  aovGbpMinor?: number | null;
+  /** Percentage of orders from repeat buyers (>= 2 completed orders) */
+  repeatBuyerPct?: number | null;
+  /** Previous equal-period comparison — always complete (entirely in the past). */
+  comparison: SellerAnalyticsComparison;
+  /** Daily trend series for current + previous period. */
+  trend: SellerAnalyticsTrend;
+  /** Conversion funnel: impressions → views → saves → offers → purchases. */
+  funnel: SellerAnalyticsFunnel;
 }
 
 export async function fetchSellerAnalytics(
@@ -823,10 +864,38 @@ export interface TopPerformerListing {
 
 export async function fetchTopPerformers(
   sellerId: string,
-  limit: number = 10
+  limit: number = 10,
+  period: '7d' | '30d' | '90d' = '30d'
 ): Promise<TopPerformerListing[]> {
   const payload = await fetchJson<{ ok: true; items: TopPerformerListing[] }>(
-    `/sellers/${encodeURIComponent(sellerId)}/analytics/top-performers?limit=${limit}`
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/top-performers?limit=${limit}&period=${period}`
+  );
+  return payload.items;
+}
+
+export interface NeedsAttentionListing {
+  listingId: string;
+  title: string;
+  coverImageUrl: string | null;
+  status: string;
+  priceGbp: number;
+  category: string | null;
+  brand: string | null;
+  createdAt: string;
+  views: number;
+  likes: number;
+  offerCount: number;
+  reason: string;
+  priority: 'high' | 'medium';
+}
+
+export async function fetchNeedsAttention(
+  sellerId: string,
+  limit: number = 5,
+  period: '7d' | '30d' | '90d' = '30d'
+): Promise<NeedsAttentionListing[]> {
+  const payload = await fetchJson<{ ok: true; items: NeedsAttentionListing[] }>(
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/attention?limit=${limit}&period=${period}`
   );
   return payload.items;
 }
@@ -850,4 +919,79 @@ export async function fetchDailyBreakdown(
     `/sellers/${encodeURIComponent(sellerId)}/analytics/daily?period=${period}`
   );
   return payload.days;
+}
+
+/* ─── Listing Analytics — product-specific metrics, funnel, comparables & price history ─── */
+
+export interface ListingAnalyticsComparables {
+  sampleSize: number;
+  minPrice: number | null;
+  medianPrice: number | null;
+  maxPrice: number | null;
+}
+
+export interface ListingPriceHistoryEvent {
+  previousPrice: number;
+  newPrice: number;
+  changedAt: string;
+}
+
+export interface ListingAnalyticsData {
+  listing: {
+    id: string;
+    title: string;
+    priceGbpMinor: number;
+    status: string;
+    imageUrl: string | null;
+    category: string | null;
+    brand: string | null;
+    condition: string | null;
+    createdAt: string;
+    soldAt: string | null;
+  };
+  views: number;
+  saves: number;
+  offers: number;
+  likes: number;
+  purchases: number;
+  conversionRate: number | null;
+  saveRate: number | null;
+  intentSignal: 'high_intent_price_friction' | 'low_affinity_photo_needed' | 'healthy_velocity' | 'stale_reach' | null;
+  timeOnMarketDays: number;
+  priceHistory: ListingPriceHistoryEvent[];
+  comparables: ListingAnalyticsComparables | null;
+  period: string;
+}
+
+export async function fetchListingAnalytics(
+  sellerId: string,
+  listingId: string,
+  period: '7d' | '30d' | '90d' = '30d'
+): Promise<ListingAnalyticsData> {
+  const payload = await fetchJson<{ ok: true; analytics: ListingAnalyticsData }>(
+    `/sellers/${encodeURIComponent(sellerId)}/analytics/listing/${encodeURIComponent(listingId)}?period=${period}`
+  );
+  return payload.analytics;
+}
+
+export interface PriceAdjustResult {
+  ok: boolean;
+  listingId: string;
+  previousPriceGbp: number;
+  newPriceGbp: number;
+  changedAt: string;
+}
+
+export async function adjustListingPrice(
+  sellerId: string,
+  listingId: string,
+  newPriceGbp: number
+): Promise<PriceAdjustResult> {
+  return await fetchJson<PriceAdjustResult>(
+    `/sellers/${encodeURIComponent(sellerId)}/listings/${encodeURIComponent(listingId)}/price-adjust`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ newPriceGbp }),
+    }
+  );
 }

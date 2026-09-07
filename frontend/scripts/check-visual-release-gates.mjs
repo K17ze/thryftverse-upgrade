@@ -50,6 +50,7 @@ const ALLOWED_COLOR_FILES = new Set([
   join(SRC, 'theme', 'ThemeContext.tsx'),
   join(SRC, 'theme', 'gradients.ts'),
   join(SRC, 'constants', 'colors.ts'),
+  join(SRC, 'utils', 'avatarColor.ts'),
 ]);
 
 // Camera/poster/live/creative surfaces may use hardcoded colors for
@@ -578,6 +579,29 @@ function checkScreenshotBaselines() {
       rule: 'missing-golden-route-baseline',
       message: `Missing golden-route baseline: ${route}. Re-run the Maestro flow and commit the missing screenshot (P0.6).`,
     });
+  }
+
+  // Size check: a real screenshot is at least ~1000 bytes. A 1×1 placeholder
+  // PNG is ~67–70 bytes, so anything below 1000 bytes is treated as a
+  // placeholder rather than an approved visual baseline (P0.6).
+  const MIN_BASELINE_BYTES = 1000;
+  for (const file of files) {
+    const fullPath = join(SCREENSHOT_BASELINE_DIR, file);
+    let size = 0;
+    try {
+      size = statSync(fullPath).size;
+    } catch {
+      // Unreadable file — skip; presence is already validated above.
+      continue;
+    }
+    if (size < MIN_BASELINE_BYTES) {
+      violations.push({
+        file: `src/__tests__/__screenshots__/${file}`,
+        line: 0,
+        rule: 'placeholder-screenshot-baseline',
+        message: `Baseline ${file} is only ${size} bytes — expected a real screenshot, not a placeholder`,
+      });
+    }
   }
   return violations;
 }

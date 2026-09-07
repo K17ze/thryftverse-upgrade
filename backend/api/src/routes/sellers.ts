@@ -40,7 +40,6 @@ const appealBodySchema = z.object({
  *   GET  /sellers/:sellerId/reviews                    — review summary + list
  *   GET  /sellers/:sellerId/analytics                  — seller performance dashboard
  *   GET  /sellers/:sellerId/analytics/top-performers   — top performing listings
- *   GET  /sellers/:sellerId/analytics/daily            — real per-day engagement breakdown
  *   GET  /sellers/:sellerId/standards                  — inspect operational metrics & tier defects (gate 12)
  *   POST /sellers/:sellerId/standards/appeal           — appeal an operational defect (gate 12)
  */
@@ -141,6 +140,38 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     );
     const trustRow = trustResult.rows[0] ?? {};
 
+    // G8: Compute real average response hours from chat_messages.
+    // Measures the median time between a buyer's first message in a
+    // conversation and the seller's first reply, over the last 30 days.
+    // Returns null when no reply data exists — never fabricated.
+    const responseTimeResult = await readDb.query<{ avg_response_hours: string | number | null }>(
+      `WITH seller_replies AS (
+         SELECT
+           c.id AS conversation_id,
+           MIN(CASE WHEN m.sender_user_id = $1 THEN m.created_at END) AS first_seller_msg,
+           MIN(CASE WHEN m.sender_user_id != $1 THEN m.created_at END) AS first_buyer_msg
+         FROM chat_messages m
+         JOIN chat_conversations c ON c.id = m.conversation_id
+         LEFT JOIN listings l ON l.id = c.item_id
+         WHERE (c.owner_id = $1 OR l.seller_id = $1)
+           AND m.sender_user_id IS NOT NULL
+           AND m.deleted_for_everyone_at IS NULL
+           AND m.created_at > NOW() - INTERVAL '30 days'
+         GROUP BY c.id
+       )
+       SELECT
+        PERCENTILE_CONT(0.5) WITHIN GROUP (
+          ORDER BY EXTRACT(EPOCH FROM (first_seller_msg - first_buyer_msg)) / 3600
+        )::numeric(10,1) AS avg_response_hours
+       FROM seller_replies
+       WHERE first_seller_msg IS NOT NULL AND first_buyer_msg IS NOT NULL
+         AND first_seller_msg > first_buyer_msg`,
+      [sellerId]
+    );
+    const avgResponseHours = responseTimeResult.rows[0]?.avg_response_hours != null
+      ? Number(responseTimeResult.rows[0].avg_response_hours)
+      : null;
+
     // Derive human-readable labels from authoritative data.
     // Null when no data — the frontend renders nothing for null labels.
     const dispatchTimeLabel = trustRow.ship_within_days != null
@@ -149,11 +180,18 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         : `Dispatches in ${trustRow.ship_within_days} days`
       : null;
 
-    // Response time label — derived from response_rate percentage.
-    // This is a simplified mapping; a full implementation would compute
-    // actual response time from message events.
+    // G8: Response time label now derived from real avgResponseHours when
+    // available, falling back to response_rate heuristic only when needed.
     const responseRate = trustRow.response_rate != null ? Number(trustRow.response_rate) : null;
-    const responseTimeLabel = responseRate != null && responseRate >= 90
+    const responseTimeLabel = avgResponseHours != null
+      ? avgResponseHours <= 1
+        ? 'in 1h'
+        : avgResponseHours <= 3
+        ? 'in 3h'
+        : avgResponseHours <= 12
+        ? 'in 12h'
+        : 'in 24h+'
+      : responseRate != null && responseRate >= 90
       ? 'in 1h'
       : responseRate != null && responseRate >= 50
       ? 'in 3h'
@@ -185,6 +223,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         // Operational trust signals from seller_trust (authoritative).
         responseRate: trustRow.response_rate != null ? Number(trustRow.response_rate) : null,
         responseTimeLabel,
+        avgResponseHours, // G8: real median response time in hours
         dispatchTimeLabel,
         // Evidence-backed badges — no client-side derivation.
         badges,
@@ -271,10 +310,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     }
 
     // Summary: average, total, distribution + reproducibility metadata.
-    // A LEFT JOIN to review_publication_state is included so that once the
-    // table is populated we can filter to eligible (published, not removed,
-    // not incentivized) reviews. Until then every review is eligible and the
-    // join is a no-op (ps.state defaults to 'published' via COALESCE).
+    // A LEFT JOIN to review_publication_state filters to eligible (published
+    // or restored, not removed/pending) reviews. Until the table is populated
+    // every review is eligible (ps.state defaults to 'published' via COALESCE).
     const summaryRes = await readDb.query<{
       avg_rating: string | null;
       review_count: string;
@@ -290,9 +328,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
          AVG(r.rating)::numeric(3,2) AS avg_rating,
          COUNT(*)::text AS review_count,
          COUNT(*) FILTER (
-           WHERE COALESCE(ps.state, 'published') = 'published'
-              AND COALESCE(ps.removed, false) = false
-              AND COALESCE(ps.incentivized, false) = false
+           WHERE COALESCE(ps.state, 'published') IN ('published', 'restored')
          )::text AS eligible_count,
          MAX(r.created_at) AS as_of,
          COUNT(*) FILTER (WHERE r.rating = 1)::text AS d1,
@@ -449,107 +485,232 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
 
     const querySchema = z.object({
       period: z.enum(['7d', '30d', '90d']).default('30d'),
-      // Offset the window back in time by N days to fetch a prior period
-      // for period-over-period comparison. 0 = current period (default).
-      offsetDays: z.coerce.number().int().min(0).max(365).default(0),
     });
-    const { period, offsetDays } = querySchema.parse(request.query);
+    const { period } = querySchema.parse(request.query);
 
-    const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 };
-    const days = daysMap[period];
-    // Bounded window: [NOW() - (days+offset), NOW() - offset).
-    // When offsetDays === 0 this collapses to the original half-open bound
-    // (>= NOW() - days), preserving backward compatibility.
-    const startBound = `NOW() - INTERVAL '${days + offsetDays} days'`;
-    const endBound = offsetDays > 0 ? `NOW() - INTERVAL '${offsetDays} days'` : null;
-    // Build a column-specific range predicate. The values are derived from
-    // validated integers, so interpolation here is safe (no user strings).
-    const inPeriod = (col: string) =>
-      endBound
-        ? `${col} >= ${startBound} AND ${col} < ${endBound}`
-        : `${col} >= ${startBound}`;
+    const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+    const intervalStr = `${periodDays} days`;
+    const prevIntervalStr = `${periodDays * 2} days`;
 
     // ── Parallel query block ──────────────────────────────────────────
-    // All four queries are independent — run them concurrently to eliminate
-    // the sequential waterfall (was 5–7 round-trips, now 1 round-trip batch).
+    // All queries are independent — run them concurrently to eliminate
+    // the sequential waterfall.
     //
     // Engagement metrics come from the `interactions` table (migration 001 +
     // vocabulary expansion in 143), NOT from non-existent denormalized counter
     // columns. Views = action IN ('view', 'qualified_detail_view'); likes =
     // action = 'wishlist'; saves = action = 'save'. All are period-scoped
     // via interactions.created_at.
-    const [engagementResult, ordersResult, reviewsResult, trustResult] =
-      await Promise.all([
-        // 1. Listing inventory count + period-scoped engagement from interactions
-        readDb.query<{
-          total_listings: string | number;
-          active_listings: string | number;
-          total_views: string | number;
-          total_likes: string | number;
-          total_saves: string | number;
-        }>(
-          `
-            SELECT
-              COUNT(DISTINCT l.id) AS total_listings,
-              COUNT(DISTINCT l.id) FILTER (WHERE l.status = 'active') AS active_listings,
-              COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS total_views,
-              COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS total_likes,
-              COUNT(i.id) FILTER (WHERE i.action = 'save') AS total_saves
-            FROM listings l
-            LEFT JOIN interactions i ON i.listing_id = l.id
-              AND ${inPeriod('i.created_at')}
-            WHERE l.seller_id = $1
-          `,
-          [sellerId]
-        ),
-        // 2. Revenue and items sold from settled order facts (migration 076).
-        //    paid_at is the authoritative sale timestamp.
-        readDb.query<{
-          items_sold: string | number;
-          revenue_gbp_minor: string | number;
-        }>(
-          `
-            SELECT
-              COUNT(*) AS items_sold,
-              COALESCE(SUM(subtotal_gbp) * 100, 0)::bigint AS revenue_gbp_minor
-            FROM orders
-            WHERE seller_id = $1
-              AND status IN ('paid', 'shipped', 'delivered')
-              AND paid_at IS NOT NULL
-              AND ${inPeriod('paid_at')}
-          `,
-          [sellerId]
-        ),
-        // 3. Reviews for the period
-        readDb.query<{
-          avg_rating: string | number | null;
-          review_count: string | number;
-        }>(
-          `
-            SELECT AVG(r.rating) AS avg_rating, COUNT(r.id) AS review_count
-            FROM order_reviews r
-            WHERE r.seller_id = $1 AND ${inPeriod('r.created_at')}
-          `,
-          [sellerId]
-        ),
-        // 4. Trust projection (response rate, dispatch time)
-        readDb.query<{
-          response_rate: string | number | null;
-          ship_within_days: number | null;
-          total_sales: string | number | null;
-          positive_rating_pct: string | number | null;
-        }>(
-          `SELECT response_rate, ship_within_days, total_sales, positive_rating_pct
-           FROM seller_trust WHERE user_id = $1 LIMIT 1`,
-          [sellerId]
-        ),
-      ]);
+    //
+    // In addition to the current-period queries, we run matching previous-
+    // period queries (engagement + orders) for the comparison field, daily
+    // trend series (current + previous) for the trend chart, and a funnel
+    // query (impressions → views → saves → offers → purchases).
+    const [
+      engagementResult,
+      ordersResult,
+      reviewsResult,
+      trustResult,
+      prevEngagementResult,
+      prevOrdersResult,
+      trendCurrentResult,
+      trendPrevResult,
+      funnelResult,
+    ] = await Promise.all([
+      // 1. Listing inventory count + period-scoped engagement from interactions
+      readDb.query<{
+        total_listings: string | number;
+        active_listings: string | number;
+        total_views: string | number;
+        total_likes: string | number;
+        total_saves: string | number;
+      }>(
+        `
+          SELECT
+            COUNT(DISTINCT l.id) AS total_listings,
+            COUNT(DISTINCT l.id) FILTER (WHERE l.status = 'active') AS active_listings,
+            COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS total_views,
+            COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS total_likes,
+            COUNT(i.id) FILTER (WHERE i.action = 'save') AS total_saves
+          FROM listings l
+          LEFT JOIN interactions i ON i.listing_id = l.id
+            AND i.created_at >= NOW() - $2::interval
+          WHERE l.seller_id = $1 AND l.status != 'deleted'
+        `,
+        [sellerId, intervalStr]
+      ),
+      // 2. Revenue and items sold from settled order facts (migration 076).
+      //    paid_at is the authoritative sale timestamp.
+      readDb.query<{
+        items_sold: string | number;
+        revenue_gbp_minor: string | number;
+        repeat_orders: string | number;
+      }>(
+        `
+          SELECT
+            COUNT(*) AS items_sold,
+            COALESCE(SUM(subtotal_gbp) * 100, 0)::bigint AS revenue_gbp_minor,
+            COUNT(*) FILTER (
+              WHERE buyer_id IN (
+                SELECT o2.buyer_id FROM orders o2
+                WHERE o2.seller_id = $1 AND o2.status IN ('paid', 'shipped', 'delivered')
+                GROUP BY o2.buyer_id HAVING COUNT(*) > 1
+              )
+            ) AS repeat_orders
+          FROM orders
+          WHERE seller_id = $1
+            AND status IN ('paid', 'shipped', 'delivered')
+            AND paid_at IS NOT NULL
+            AND paid_at >= NOW() - $2::interval
+        `,
+        [sellerId, intervalStr]
+      ),
+      // 3. Reviews for the period
+      readDb.query<{
+        avg_rating: string | number | null;
+        review_count: string | number;
+      }>(
+        `
+          SELECT AVG(r.rating) AS avg_rating, COUNT(r.id) AS review_count
+          FROM order_reviews r
+          WHERE r.seller_id = $1 AND r.created_at > NOW() - $2::interval
+        `,
+        [sellerId, intervalStr]
+      ),
+      // 4. Trust projection (response rate, dispatch time)
+      readDb.query<{
+        response_rate: string | number | null;
+        ship_within_days: number | null;
+        total_sales: string | number | null;
+        positive_rating_pct: string | number | null;
+      }>(
+        `SELECT response_rate, ship_within_days, total_sales, positive_rating_pct
+         FROM seller_trust WHERE user_id = $1 LIMIT 1`,
+        [sellerId]
+      ),
+      // 5. Previous-period engagement (for comparison)
+      readDb.query<{
+        total_views: string | number;
+        total_likes: string | number;
+        total_saves: string | number;
+      }>(
+        `
+          SELECT
+            COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS total_views,
+            COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS total_likes,
+            COUNT(i.id) FILTER (WHERE i.action = 'save') AS total_saves
+          FROM listings l
+          LEFT JOIN interactions i ON i.listing_id = l.id
+            AND i.created_at >= NOW() - $2::interval
+            AND i.created_at < NOW() - $3::interval
+          WHERE l.seller_id = $1
+        `,
+        [sellerId, prevIntervalStr, intervalStr]
+      ),
+      // 6. Previous-period orders (for comparison)
+      readDb.query<{
+        items_sold: string | number;
+        revenue_gbp_minor: string | number;
+      }>(
+        `
+          SELECT
+            COUNT(*) AS items_sold,
+            COALESCE(SUM(subtotal_gbp) * 100, 0)::bigint AS revenue_gbp_minor
+          FROM orders
+          WHERE seller_id = $1
+            AND status IN ('paid', 'shipped', 'delivered')
+            AND paid_at IS NOT NULL
+            AND paid_at >= NOW() - $2::interval
+            AND paid_at < NOW() - $3::interval
+        `,
+        [sellerId, prevIntervalStr, intervalStr]
+      ),
+      // 7. Daily trend — current period (zero-filled via generate_series)
+      //    Lower bound filter ensures orders before the period start are
+      //    excluded even on the boundary calendar day.
+      readDb.query<{ date: string; value: string | number }>(
+        `
+          WITH date_range AS (
+            SELECT generate_series(
+              (NOW() - $2::interval)::date,
+              NOW()::date,
+              '1 day'::interval
+            )::date AS d
+          )
+          SELECT dr.d::text AS date,
+                 COALESCE(SUM(o.subtotal_gbp) * 100, 0)::bigint AS value
+          FROM date_range dr
+          LEFT JOIN orders o ON date_trunc('day', o.paid_at)::date = dr.d
+            AND o.seller_id = $1
+            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.paid_at IS NOT NULL
+            AND o.paid_at >= NOW() - $2::interval
+          GROUP BY dr.d
+          ORDER BY dr.d
+        `,
+        [sellerId, intervalStr]
+      ),
+      // 8. Daily trend — previous period (zero-filled via generate_series)
+      //    Upper bound is exclusive: the series ends one day BEFORE the
+      //    current period starts, so the two series are disjoint.
+      readDb.query<{ date: string; value: string | number }>(
+        `
+          WITH date_range AS (
+            SELECT generate_series(
+              (NOW() - $2::interval)::date,
+              ((NOW() - $3::interval)::date - '1 day'::interval)::date,
+              '1 day'::interval
+            )::date AS d
+          )
+          SELECT dr.d::text AS date,
+                 COALESCE(SUM(o.subtotal_gbp) * 100, 0)::bigint AS value
+          FROM date_range dr
+          LEFT JOIN orders o ON date_trunc('day', o.paid_at)::date = dr.d
+            AND o.seller_id = $1
+            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.paid_at IS NOT NULL
+            AND o.paid_at < (NOW() - $3::interval)::date
+          GROUP BY dr.d
+          ORDER BY dr.d
+        `,
+        [sellerId, prevIntervalStr, intervalStr]
+      ),
+      // 9. Conversion funnel — impressions, views, saves, offers, purchases
+      readDb.query<{
+        impressions: string | number;
+        views: string | number;
+        saves: string | number;
+        offers: string | number;
+        purchases: string | number;
+      }>(
+        `
+          SELECT
+            COUNT(i.id) FILTER (WHERE i.action = 'impression') AS impressions,
+            COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views,
+            COUNT(i.id) FILTER (WHERE i.action = 'save') AS saves,
+            COUNT(i.id) FILTER (WHERE i.action = 'offer_start') AS offers,
+            COUNT(DISTINCT o.id) AS purchases
+          FROM listings l
+          LEFT JOIN interactions i ON i.listing_id = l.id
+            AND i.created_at >= NOW() - $2::interval
+          LEFT JOIN orders o ON o.listing_id = l.id
+            AND o.seller_id = $1
+            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.paid_at IS NOT NULL
+            AND o.paid_at >= NOW() - $2::interval
+          WHERE l.seller_id = $1
+        `,
+        [sellerId, intervalStr]
+      ),
+    ]);
 
-    // 5. Ledger refunds/fees — dependent on a schema check, so runs after
-    //    the parallel batch. When ledger tables are absent, completeness is
-    //    'partial' and these remain null.
+    // 10. Ledger refunds/fees — dependent on a schema check, so runs after
+    //     the parallel batch. When ledger tables are absent, completeness is
+    //     'partial' and these remain null.
     let refundsGbpMinor: number | null = null;
     let feesGbpMinor: number | null = null;
+    let prevRefundsGbpMinor: number | null = null;
+    let prevFeesGbpMinor: number | null = null;
     let completeness: 'complete' | 'partial' = 'partial';
     const ledgerCheck = await readDb.query<{ exists: boolean }>(
       `SELECT to_regclass('public.ledger_accounts') IS NOT NULL
@@ -557,21 +718,21 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     );
     if (ledgerCheck.rows[0]?.exists) {
       completeness = 'complete';
-      const [refundsResult, feesResult] = await Promise.all([
+      const [refundsResult, feesResult, prevRefundsResult, prevFeesResult] = await Promise.all([
         readDb.query<{ refunds: string | null }>(
           `
             SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS refunds
             FROM ledger_entries
             WHERE account_id = (
               SELECT id FROM ledger_accounts
-              WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+              WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
               LIMIT 1
             )
             AND source_type = 'refund'
             AND direction = 'debit'
-            AND ${inPeriod('created_at')}
+            AND created_at >= NOW() - $2::interval
           `,
-          [sellerId]
+          [sellerId, intervalStr]
         ),
         readDb.query<{ fees: string | null }>(
           `
@@ -579,31 +740,113 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
             FROM ledger_entries
             WHERE account_id = (
               SELECT id FROM ledger_accounts
-              WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+              WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
               LIMIT 1
             )
             AND source_type = 'order_payment'
             AND direction = 'debit'
             AND line_type = 'platform_fee'
-            AND ${inPeriod('created_at')}
+            AND created_at >= NOW() - $2::interval
           `,
-          [sellerId]
+          [sellerId, intervalStr]
+        ),
+        // Previous-period refunds (same account, shifted time window)
+        readDb.query<{ refunds: string | null }>(
+          `
+            SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS refunds
+            FROM ledger_entries
+            WHERE account_id = (
+              SELECT id FROM ledger_accounts
+              WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+              LIMIT 1
+            )
+            AND source_type = 'refund'
+            AND direction = 'debit'
+            AND created_at >= NOW() - $2::interval
+            AND created_at < NOW() - $3::interval
+          `,
+          [sellerId, prevIntervalStr, intervalStr]
+        ),
+        // Previous-period fees (same account, shifted time window)
+        readDb.query<{ fees: string | null }>(
+          `
+            SELECT COALESCE(SUM(amount_gbp) * 100, 0)::bigint AS fees
+            FROM ledger_entries
+            WHERE account_id = (
+              SELECT id FROM ledger_accounts
+              WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+              LIMIT 1
+            )
+            AND source_type = 'order_payment'
+            AND direction = 'debit'
+            AND line_type = 'platform_fee'
+            AND created_at >= NOW() - $2::interval
+            AND created_at < NOW() - $3::interval
+          `,
+          [sellerId, prevIntervalStr, intervalStr]
         ),
       ]);
       refundsGbpMinor = Number(refundsResult.rows[0]?.refunds ?? 0);
       feesGbpMinor = Number(feesResult.rows[0]?.fees ?? 0);
+      prevRefundsGbpMinor = Number(prevRefundsResult.rows[0]?.refunds ?? 0);
+      prevFeesGbpMinor = Number(prevFeesResult.rows[0]?.fees ?? 0);
     }
 
     const row = engagementResult.rows[0] ?? {};
     const orders = ordersResult.rows[0] ?? {};
     const reviews = reviewsResult.rows[0] ?? {};
     const trust = trustResult.rows[0] ?? {};
+    const prevEngagement = prevEngagementResult.rows[0] ?? {};
+    const prevOrders = prevOrdersResult.rows[0] ?? {};
+    const funnel = funnelResult.rows[0] ?? {};
 
     const revenueGbpMinor = Number(orders.revenue_gbp_minor ?? 0);
     const netSalesGbpMinor =
       refundsGbpMinor !== null && feesGbpMinor !== null
         ? revenueGbpMinor - refundsGbpMinor - feesGbpMinor
         : null;
+
+    // ── Comparison (previous equal period) ────────────────────────────
+    // The previous period is always complete (it's entirely in the past).
+    const prevRevenueGbpMinor = Number(prevOrders.revenue_gbp_minor ?? 0);
+    const prevNetSalesGbpMinor =
+      prevRefundsGbpMinor !== null && prevFeesGbpMinor !== null
+        ? prevRevenueGbpMinor - prevRefundsGbpMinor - prevFeesGbpMinor
+        : null;
+    const comparison = {
+      revenueGbpMinor: prevRevenueGbpMinor,
+      netSalesGbpMinor: prevNetSalesGbpMinor,
+      itemsSold: Number(prevOrders.items_sold ?? 0),
+      totalViews: Number(prevEngagement.total_views ?? 0),
+      totalLikes: Number(prevEngagement.total_likes ?? 0),
+      totalSaves: Number(prevEngagement.total_saves ?? 0),
+      complete: prevNetSalesGbpMinor !== null,
+    };
+
+    // ── Trend (daily series, current + previous) ──────────────────────
+    // NOTE: the daily series is gross revenue (SUM(subtotal_gbp)). Per-day
+    // refund/fee subtraction is not implemented yet, so the metric label is
+    // always 'revenue' to avoid mislabeling gross revenue as net sales.
+    const trend = {
+      metric: 'revenue' as const,
+      current: trendCurrentResult.rows.map((r) => ({
+        date: r.date,
+        value: Number(r.value ?? 0),
+      })),
+      previous: trendPrevResult.rows.map((r) => ({
+        date: r.date,
+        value: Number(r.value ?? 0),
+      })),
+    };
+
+    // ── Conversion funnel ─────────────────────────────────────────────
+    const funnelData = {
+      impressions: Number(funnel.impressions ?? 0),
+      views: Number(funnel.views ?? 0),
+      saves: Number(funnel.saves ?? 0),
+      offers: Number(funnel.offers ?? 0),
+      purchases: Number(funnel.purchases ?? 0),
+    };
 
     return {
       ok: true,
@@ -618,6 +861,8 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         refundsGbpMinor,
         feesGbpMinor,
         netSalesGbpMinor,
+        aovGbpMinor: Number(orders.items_sold ?? 0) > 0 ? Math.round(revenueGbpMinor / Number(orders.items_sold)) : null,
+        repeatBuyerPct: Number(orders.items_sold ?? 0) > 0 ? Math.min(100, Math.round((Number(orders.repeat_orders ?? 0) / Number(orders.items_sold)) * 100)) : 0,
         completeness,
         avgRating: reviews.avg_rating ? Number(reviews.avg_rating) : null,
         reviewCount: Number(reviews.review_count ?? 0),
@@ -626,6 +871,9 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         totalSales: trust.total_sales ? Number(trust.total_sales) : null,
         positiveRatingPct: trust.positive_rating_pct ? Number(trust.positive_rating_pct) : null,
         period,
+        comparison,
+        trend,
+        funnel: funnelData,
       },
     };
   });
@@ -646,18 +894,20 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
 
     const querySchema = z.object({
       limit: z.coerce.number().int().min(1).max(50).default(10),
+      period: z.enum(['7d', '30d', '90d']).default('30d'),
     });
-    const { limit } = querySchema.parse(request.query);
+    const { limit, period } = querySchema.parse(request.query);
+    const intervalStr = period === '7d' ? '7 days' : period === '90d' ? '90 days' : '30 days';
 
     // ── Top performers from real interaction counts ──────────────────
     // Aggregates views (view + qualified_detail_view), likes (wishlist),
     // and saves (save) from the interactions table, joined to the seller's
-    // listings. The engagement score weights saves > likes > views to
-    // reflect intent strength. No non-existent denormalized columns.
+    // listings scoped by the requested period. The engagement score weights
+    // saves > likes > views to reflect intent strength.
     const result = await readDb.query<{
       id: string;
       title: string;
-      price_gbp_minor: number | string;
+      price_gbp: string | number;
       views_count: string | number;
       likes_count: string | number;
       saved_count: string | number;
@@ -666,14 +916,14 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     }>(
       `
         SELECT
-          l.id, l.title, l.price_gbp_minor, l.status, l.created_at,
+          l.id, l.title, l.price_gbp, l.status, l.created_at,
           COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views_count,
           COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS likes_count,
           COUNT(i.id) FILTER (WHERE i.action = 'save') AS saved_count
         FROM listings l
-        LEFT JOIN interactions i ON i.listing_id = l.id
+        LEFT JOIN interactions i ON i.listing_id = l.id AND i.created_at >= NOW() - $3::interval
         WHERE l.seller_id = $1
-        GROUP BY l.id, l.title, l.price_gbp_minor, l.status, l.created_at
+        GROUP BY l.id, l.title, l.price_gbp, l.status, l.created_at
         ORDER BY (
           COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view'))
           + COUNT(i.id) FILTER (WHERE i.action = 'wishlist') * 3
@@ -681,7 +931,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         ) DESC
         LIMIT $2
       `,
-      [sellerId, limit]
+      [sellerId, limit, intervalStr]
     );
 
     return {
@@ -693,7 +943,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
         return {
           id: row.id,
           title: row.title,
-          priceGbpMinor: Number(row.price_gbp_minor),
+          priceGbpMinor: Math.round(Number(row.price_gbp) * 100),
           viewsCount: views,
           likesCount: likes,
           savedCount: saves,
@@ -705,10 +955,7 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     };
   });
 
-  // GET /sellers/:sellerId/analytics/daily — real per-day engagement breakdown
-  // Returns one row per day in the period with views, likes, saves, and sales
-  // counted from the interactions and orders tables. This replaces the
-  // client-side fabricated chart shape (Math.sin distribution) with real data.
+  // GET /sellers/:sellerId/analytics/daily — real zero-filled daily breakdown (views, likes, saves, sales)
   app.get('/sellers/:sellerId/analytics/daily', async (request, reply) => {
     if (!request.authUser) {
       reply.code(401);
@@ -716,85 +963,341 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
     }
 
     const { sellerId } = sellerIdParamsSchema.parse(request.params);
-
     if (request.authUser.userId !== sellerId) {
       reply.code(403);
       return { ok: false, error: 'You can only view your own analytics' };
     }
 
-    const dailyQuerySchema = z.object({
+    const querySchema = z.object({
       period: z.enum(['7d', '30d', '90d']).default('30d'),
     });
-    const { period } = dailyQuerySchema.parse(request.query);
-    const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 };
-    const days = daysMap[period];
+    const { period } = querySchema.parse(request.query);
+    const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+    const intervalStr = `${periodDays} days`;
 
-    // Generate the full date series so every day is represented even when
-    // there are zero interactions (a gap in the series is not "no data" —
-    // it's zero activity). We use generate_series to produce the spine,
-    // then left-join interactions and orders onto it.
+    // Zero-filled generate_series joined with interactions and orders
     const result = await readDb.query<{
-      day: string;
+      date: string;
       views: string | number;
       likes: string | number;
       saves: string | number;
       sales: string | number;
     }>(
       `
-        WITH day_spine AS (
+        WITH date_range AS (
           SELECT generate_series(
-            (CURRENT_DATE - (${days} - 1) * INTERVAL '1 day')::date,
-            CURRENT_DATE::date,
-            INTERVAL '1 day'
-          )::date AS day
+            (NOW() - $2::interval)::date,
+            NOW()::date,
+            '1 day'::interval
+          )::date AS d
         ),
-        engagement AS (
+        daily_interactions AS (
           SELECT
-            i.created_at::date AS day,
-            COUNT(*) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views,
-            COUNT(*) FILTER (WHERE i.action = 'wishlist') AS likes,
-            COUNT(*) FILTER (WHERE i.action = 'save') AS saves
+            date_trunc('day', i.created_at)::date AS day,
+            COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views,
+            COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS likes,
+            COUNT(i.id) FILTER (WHERE i.action = 'save') AS saves
           FROM interactions i
           JOIN listings l ON l.id = i.listing_id
           WHERE l.seller_id = $1
-            AND i.created_at >= CURRENT_DATE - (${days} - 1) * INTERVAL '1 day'
-          GROUP BY i.created_at::date
+            AND i.created_at >= NOW() - $2::interval
+          GROUP BY day
         ),
-        sales AS (
+        daily_orders AS (
           SELECT
-            paid_at::date AS day,
-            COUNT(*) AS sales
-          FROM orders
-          WHERE seller_id = $1
-            AND status IN ('paid', 'shipped', 'delivered')
-            AND paid_at IS NOT NULL
-            AND paid_at >= CURRENT_DATE - (${days} - 1) * INTERVAL '1 day'
-          GROUP BY paid_at::date
+            date_trunc('day', o.paid_at)::date AS day,
+            COUNT(o.id) AS sales
+          FROM orders o
+          WHERE o.seller_id = $1
+            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.paid_at IS NOT NULL
+            AND o.paid_at >= NOW() - $2::interval
+          GROUP BY day
         )
         SELECT
-          ds.day::text AS day,
-          COALESCE(e.views, 0)::bigint AS views,
-          COALESCE(e.likes, 0)::bigint AS likes,
-          COALESCE(e.saves, 0)::bigint AS saves,
-          COALESCE(s.sales, 0)::bigint AS sales
-        FROM day_spine ds
-        LEFT JOIN engagement e ON e.day = ds.day
-        LEFT JOIN sales s ON s.day = ds.day
-        ORDER BY ds.day ASC
+          dr.d::text AS date,
+          COALESCE(di.views, 0)::bigint AS views,
+          COALESCE(di.likes, 0)::bigint AS likes,
+          COALESCE(di.saves, 0)::bigint AS saves,
+          COALESCE(dord.sales, 0)::bigint AS sales
+        FROM date_range dr
+        LEFT JOIN daily_interactions di ON di.day = dr.d
+        LEFT JOIN daily_orders dord ON dord.day = dr.d
+        ORDER BY dr.d ASC
       `,
-      [sellerId]
+      [sellerId, intervalStr]
     );
 
     return {
       ok: true,
-      period,
-      days: result.rows.map((row) => ({
-        date: row.day,
-        views: Number(row.views),
-        likes: Number(row.likes),
-        saves: Number(row.saves),
-        sales: Number(row.sales),
+      days: result.rows.map((r) => ({
+        date: r.date,
+        views: Number(r.views ?? 0),
+        likes: Number(r.likes ?? 0),
+        saves: Number(r.saves ?? 0),
+        sales: Number(r.sales ?? 0),
       })),
+    };
+  });
+
+  // GET /sellers/:sellerId/analytics/attention — listings needing attention (low views)
+  app.get('/sellers/:sellerId/analytics/attention', async (request, reply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+    const { sellerId } = sellerIdParamsSchema.parse(request.params);
+    if (request.authUser.userId !== sellerId) {
+      reply.code(403);
+      return { ok: false, error: 'Forbidden' };
+    }
+    const querySchema = z.object({
+      limit: z.coerce.number().int().min(1).max(50).default(10),
+      period: z.enum(['7d', '30d', '90d']).optional(),
+    });
+    const { limit, period } = querySchema.parse(request.query);
+    const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+
+    const result = await db.query(
+      `SELECT l.id, l.title, l.image_url, l.status, l.price_gbp,
+              l.category, l.brand, l.created_at,
+              COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')
+                AND i.created_at >= NOW() - make_interval(days => $2)) AS views,
+              COUNT(i.id) FILTER (WHERE i.action = 'wishlist'
+                AND i.created_at >= NOW() - make_interval(days => $2)) AS likes,
+              COUNT(i.id) FILTER (WHERE i.action = 'offer_start'
+                AND i.created_at >= NOW() - make_interval(days => $2)) AS offers
+       FROM listings l
+       LEFT JOIN interactions i ON i.listing_id = l.id
+       WHERE l.seller_id = $1 AND l.status = 'active'
+       GROUP BY l.id, l.title, l.image_url, l.status, l.price_gbp,
+                l.category, l.brand, l.created_at
+       HAVING COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')
+                AND i.created_at >= NOW() - make_interval(days => $2)) < 10
+       ORDER BY views ASC
+       LIMIT $3`,
+      [sellerId, periodDays, limit],
+    );
+
+    return {
+      ok: true,
+      items: result.rows.map((r: any) => ({
+        listingId: r.id,
+        title: r.title,
+        coverImageUrl: r.image_url,
+        status: r.status,
+        priceGbp: Number(r.price_gbp),
+        category: r.category,
+        brand: r.brand,
+        createdAt: r.created_at,
+        views: Number(r.views),
+        likes: Number(r.likes),
+        offerCount: Number(r.offers),
+        reason: 'Low views in the selected period relative to similar active listings',
+        priority: Number(r.views) < 3 ? 'high' : 'medium',
+      })),
+    };
+  });
+
+  // GET /sellers/:sellerId/analytics/listing/:listingId — listing-specific analytics
+  app.get('/sellers/:sellerId/analytics/listing/:listingId', async (request, reply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const { sellerId } = sellerIdParamsSchema.parse(request.params);
+    if (request.authUser.userId !== sellerId) {
+      reply.code(403);
+      return { ok: false, error: 'You can only view your own analytics' };
+    }
+
+    const listingParamsSchema = z.object({ listingId: z.string().min(2) });
+    const { listingId } = listingParamsSchema.parse(request.params);
+
+    const querySchema = z.object({
+      period: z.enum(['7d', '30d', '90d']).default('30d'),
+    });
+    const { period } = querySchema.parse(request.query);
+    const periodDays = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+
+    // ── Step 1: Listing identity (needed before comparables) ──────────────
+    const listingResult = await readDb.query<{
+      id: string;
+      title: string;
+      price_gbp: number | string;
+      status: string;
+      image_url: string | null;
+      category: string | null;
+      brand: string | null;
+      condition: string | null;
+      created_at: string;
+      sold_at: string | null;
+    }>(
+      `SELECT l.id, l.title, l.price_gbp, l.status, l.image_url,
+              l.category, l.brand, l.condition, l.created_at,
+              (SELECT o.paid_at FROM orders o
+               WHERE o.listing_id = l.id AND o.status IN ('paid','shipped','delivered')
+                 AND o.paid_at IS NOT NULL
+               ORDER BY o.paid_at DESC LIMIT 1) AS sold_at
+       FROM listings l
+       WHERE l.id = $1 AND l.seller_id = $2 LIMIT 1`,
+      [listingId, sellerId]
+    );
+
+    const listing = listingResult.rows[0];
+    if (!listing) {
+      reply.code(404);
+      return { ok: false, error: 'Listing not found' };
+    }
+
+    // ── Step 2: Parallel — engagement, price history, comparables ──────────
+    const [engagementResult, priceHistoryResult, comparablesResult] =
+      await Promise.all([
+        // 1. Period-scoped engagement (views, saves, offers, likes)
+        readDb.query<{
+          views: string | number;
+          saves: string | number;
+          offers: string | number;
+          likes: string | number;
+        }>(
+          `
+            SELECT
+              COUNT(i.id) FILTER (WHERE i.action IN ('view', 'qualified_detail_view')) AS views,
+              COUNT(i.id) FILTER (WHERE i.action = 'save') AS saves,
+              COUNT(i.id) FILTER (WHERE i.action = 'offer_start') AS offers,
+              COUNT(i.id) FILTER (WHERE i.action = 'wishlist') AS likes
+            FROM interactions i
+            WHERE i.listing_id = $1 AND i.created_at >= NOW() - $2::interval
+          `,
+          [listingId, `${periodDays} days`]
+        ),
+        // 2. Price history
+        readDb.query<{
+          previous_price_gbp: number | string;
+          new_price_gbp: number | string;
+          changed_at: string;
+        }>(
+          `SELECT previous_price_gbp, new_price_gbp, changed_at
+           FROM listing_price_events
+           WHERE listing_id = $1
+           ORDER BY changed_at DESC
+           LIMIT 50`,
+          [listingId]
+        ),
+        // 3. Sold comparables (same category/brand)
+        (async () => {
+          if (!listing.category) return null;
+          const compResult = await readDb.query<{ price_gbp: number | string; sold_at: string }>(
+            `SELECT o.subtotal_gbp AS price_gbp, o.paid_at AS sold_at
+             FROM orders o
+             INNER JOIN listings l ON l.id = o.listing_id
+             WHERE o.listing_id <> $1
+               AND o.status IN ('paid', 'shipped', 'delivered')
+               AND o.paid_at IS NOT NULL
+               AND l.status = 'sold'
+               AND LOWER(l.category) = LOWER($2)
+               AND ($3::text IS NULL OR LOWER(l.brand) = LOWER($3))
+             ORDER BY o.paid_at DESC
+             LIMIT 100`,
+            [listingId, listing.category, listing.brand ?? null]
+          );
+          const prices = compResult.rows
+            .map((r) => Number(r.price_gbp))
+            .filter((p) => Number.isFinite(p) && p >= 0)
+            .sort((a, b) => a - b);
+          if (prices.length === 0) {
+            return { sampleSize: 0, minPrice: null, medianPrice: null, maxPrice: null };
+          }
+          const middle = Math.floor(prices.length / 2);
+          const median = prices.length % 2 === 0
+            ? Number(((prices[middle - 1] + prices[middle]) / 2).toFixed(2))
+            : prices[middle];
+          return {
+            sampleSize: prices.length,
+            minPrice: prices[0],
+            medianPrice: median,
+            maxPrice: prices[prices.length - 1],
+          };
+        })(),
+      ]);
+
+    const eng = engagementResult.rows[0] ?? {};
+    const views = Number(eng.views ?? 0);
+    const saves = Number(eng.saves ?? 0);
+    const offers = Number(eng.offers ?? 0);
+    const likes = Number(eng.likes ?? 0);
+
+    // Purchases for this listing in the period
+    const purchasesResult = await readDb.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM orders
+       WHERE listing_id = $1 AND seller_id = $2
+         AND status IN ('paid', 'shipped', 'delivered')
+         AND paid_at IS NOT NULL
+         AND paid_at >= NOW() - $3::interval`,
+      [listingId, sellerId, `${periodDays} days`]
+    );
+    const purchases = Number(purchasesResult.rows[0]?.count ?? 0);
+
+    // Conversion rate — purchases / views * 100 (null when views = 0)
+    const conversionRate = views > 0 ? (purchases / views) * 100 : null;
+
+    // Time on market (days from created_at to now, or to sold_at if sold)
+    const endDate = listing.sold_at ? new Date(listing.sold_at) : new Date();
+    const timeOnMarketDays = Math.max(
+      0,
+      Math.floor((endDate.getTime() - new Date(listing.created_at).getTime()) / 86400000),
+    );
+
+    // Save rate — Purchase Intent Index (Depop / Grailed resale benchmark: saves / views * 100)
+    const saveRate = views > 0 ? Number(((saves / views) * 100).toFixed(1)) : null;
+
+    // Intent signal classification based on circular fashion conversion models
+    let intentSignal: 'high_intent_price_friction' | 'low_affinity_photo_needed' | 'healthy_velocity' | 'stale_reach' | null = null;
+    if (views >= 10 && saveRate != null && saveRate >= 5.0 && (conversionRate == null || conversionRate < 1.5)) {
+      intentSignal = 'high_intent_price_friction';
+    } else if (views >= 20 && saveRate != null && saveRate < 2.0) {
+      intentSignal = 'low_affinity_photo_needed';
+    } else if (conversionRate != null && conversionRate >= 3.0) {
+      intentSignal = 'healthy_velocity';
+    } else if (views < 10 && timeOnMarketDays > 14) {
+      intentSignal = 'stale_reach';
+    }
+
+    const comparables = await comparablesResult;
+
+    return {
+      ok: true,
+      analytics: {
+        listing: {
+          id: listing.id,
+          title: listing.title,
+          priceGbpMinor: Math.round(Number(listing.price_gbp) * 100),
+          status: listing.status,
+          imageUrl: listing.image_url,
+          category: listing.category,
+          brand: listing.brand,
+          condition: listing.condition,
+          createdAt: listing.created_at,
+          soldAt: listing.sold_at,
+        },
+        views,
+        saves,
+        offers,
+        likes,
+        purchases,
+        conversionRate,
+        saveRate,
+        intentSignal,
+        timeOnMarketDays,
+        priceHistory: priceHistoryResult.rows.map((r) => ({
+          previousPrice: Number(r.previous_price_gbp),
+          newPrice: Number(r.new_price_gbp),
+          changedAt: r.changed_at,
+        })),
+        comparables,
+        period,
+      },
     };
   });
 
@@ -1004,5 +1507,80 @@ export const registerSellerRoutes = ({ app, db, readDb }: SellerRouteDependencie
 
     reply.code(201);
     return { ok: true, appealId };
+  });
+
+  // POST /sellers/:sellerId/listings/:listingId/price-adjust — 1-tap fast smart repricing
+  app.post('/sellers/:sellerId/listings/:listingId/price-adjust', async (request, reply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const paramsSchema = z.object({
+      sellerId: z.string().min(2),
+      listingId: z.string().min(2),
+    });
+    const { sellerId, listingId } = paramsSchema.parse(request.params);
+
+    if (request.authUser.userId !== sellerId) {
+      reply.code(403);
+      return { ok: false, error: 'You can only adjust prices for your own listings' };
+    }
+
+    const bodySchema = z.object({
+      newPriceGbp: z.number().positive().max(1_000_000),
+    });
+    const parsed = bodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { ok: false, error: 'Invalid price adjustment payload', details: parsed.error.flatten() };
+    }
+
+    const roundedNewPrice = Math.round(parsed.data.newPriceGbp * 100) / 100;
+
+    // Verify listing ownership and current price
+    const listingResult = await db.query<{ id: string; price_gbp: number | string; status: string }>(
+      `SELECT id, price_gbp, status FROM listings WHERE id = $1 AND seller_id = $2 LIMIT 1`,
+      [listingId, sellerId]
+    );
+    const listing = listingResult.rows[0];
+    if (!listing) {
+      reply.code(404);
+      return { ok: false, error: 'Listing not found' };
+    }
+
+    const previousPrice = Number(listing.price_gbp);
+    if (Math.abs(previousPrice - roundedNewPrice) < 0.01) {
+      reply.code(400);
+      return { ok: false, error: 'New price must differ from current price' };
+    }
+
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE listings SET price_gbp = $1, updated_at = NOW() WHERE id = $2`,
+        [roundedNewPrice, listingId]
+      );
+      await client.query(
+        `INSERT INTO listing_price_events (listing_id, previous_price_gbp, new_price_gbp, changed_at)
+         VALUES ($1, $2, $3, NOW())`,
+        [listingId, previousPrice, roundedNewPrice]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    return {
+      ok: true,
+      listingId,
+      previousPriceGbp: previousPrice,
+      newPriceGbp: roundedNewPrice,
+      changedAt: new Date().toISOString(),
+    };
   });
 };

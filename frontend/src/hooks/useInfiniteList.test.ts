@@ -1,8 +1,66 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
-import { renderHook, act, waitFor } from '@testing-library/react-native';
+import TestRenderer, { act } from 'react-test-renderer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useInfiniteList, type InfiniteListPage } from './useInfiniteList';
+
+function renderHook<TResult, TProps>(
+  render: (props: TProps) => TResult,
+  options?: { wrapper?: React.ComponentType<{ children: React.ReactNode }> }
+) {
+  const result = { current: undefined as unknown as TResult };
+
+  function TestComponent({ hookProps }: { hookProps: TProps }) {
+    result.current = render(hookProps);
+    return null;
+  }
+
+  const Wrapper = options?.wrapper;
+  function getElement(hookProps: TProps) {
+    const child = React.createElement(TestComponent, { hookProps });
+    return Wrapper ? React.createElement(Wrapper, null, child) : child;
+  }
+
+  let testRenderer: TestRenderer.ReactTestRenderer;
+  act(() => {
+    testRenderer = TestRenderer.create(getElement({} as TProps));
+  });
+
+  return {
+    result,
+    rerender: (newProps: TProps = {} as TProps) => {
+      act(() => {
+        testRenderer.update(getElement(newProps));
+      });
+    },
+    unmount: () => {
+      act(() => {
+        testRenderer.unmount();
+      });
+    },
+  };
+}
+
+async function waitFor(
+  callback: () => void | Promise<void>,
+  options?: { timeout?: number; interval?: number }
+): Promise<void> {
+  const timeout = options?.timeout ?? 4000;
+  const interval = options?.interval ?? 30;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      await callback();
+      return;
+    } catch {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, interval));
+      });
+    }
+  }
+  await callback();
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test types
@@ -30,10 +88,21 @@ function createQueryClient(): QueryClient {
   });
 }
 
-/** Wraps a hook in the providers it needs (React Query). */
+import { ThemeProvider } from '../theme/ThemeContext';
+import { AccessibilityPreferencesProvider } from '../context/AccessibilityPreferencesContext';
+
+/** Wraps a hook in the providers it needs (React Query + Accessibility + Theme). */
 function createWrapper(client: QueryClient) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
-    return React.createElement(QueryClientProvider, { client }, children);
+    return React.createElement(
+      QueryClientProvider,
+      { client },
+      React.createElement(
+        AccessibilityPreferencesProvider,
+        null,
+        React.createElement(ThemeProvider, null, children)
+      )
+    );
   };
 }
 
@@ -61,13 +130,6 @@ function createMockQueryFn(
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('useInfiniteList', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
 
   it('flattens items from all loaded pages', async () => {
     const items = Array.from({ length: 50 }, (_, i) => ({
@@ -93,8 +155,10 @@ describe('useInfiniteList', () => {
     await act(async () => {
       await result.current.fetchNextPage();
     });
-    expect(result.current.items).toHaveLength(20);
-    expect(result.current.items[19].id).toBe('item-19');
+    await waitFor(() => {
+      expect(result.current.items).toHaveLength(20);
+      expect(result.current.items[19].id).toBe('item-19');
+    });
   });
 
   it('tracks hasNextPage based on nextCursor', async () => {
@@ -120,8 +184,10 @@ describe('useInfiniteList', () => {
     await act(async () => {
       await result.current.fetchNextPage();
     });
-    expect(result.current.items).toHaveLength(15);
-    expect(result.current.hasNextPage).toBe(false);
+    await waitFor(() => {
+      expect(result.current.items).toHaveLength(15);
+      expect(result.current.hasNextPage).toBe(false);
+    });
   });
 
   it('returns empty items when disabled', async () => {
@@ -209,14 +275,12 @@ describe('useInfiniteList', () => {
     });
 
     await act(async () => {
-      vi.advanceTimersByTime(350);
+      await new Promise((r) => setTimeout(r, 350));
     });
     await waitFor(() => {
       expect(queryFn.mock.calls.length).toBeGreaterThan(initialCallCount);
+      expect(result.current.items).toHaveLength(20);
     });
-
-    // Should have loaded exactly one additional page (not 5)
-    expect(result.current.items).toHaveLength(20);
   });
 
   it('onRefresh triggers a refetch', async () => {

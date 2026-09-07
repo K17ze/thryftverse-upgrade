@@ -229,7 +229,11 @@ export function useChatScreenData({
       const resolvedSenderId = entry.senderId;
       const isCurrentUserSender =
         resolvedSenderId === "me" || resolvedSenderId === currentUser?.id;
-      const sender: "me" | "them" = isCurrentUserSender ? "me" : "them";
+      const sender: "me" | "other" | "system" = isCurrentUserSender
+        ? "me"
+        : resolvedSenderId === "system"
+        ? "system"
+        : "other";
 
       const senderLabel =
         botLookup.get(resolvedSenderId) ??
@@ -264,6 +268,7 @@ export function useChatScreenData({
           },
           text: entry.text,
           date: entry.timestamp,
+          timestamp: entry.timestamp,
         };
       }
 
@@ -274,6 +279,7 @@ export function useChatScreenData({
           sender,
           senderId: resolvedSenderId,
           senderLabel,
+          timestamp: entry.timestamp,
           listing: entry.listing ?? (linkedListing ? {
             id: linkedListing.id,
             title: linkedListing.title,
@@ -302,12 +308,14 @@ export function useChatScreenData({
         sender,
         senderId: resolvedSenderId,
         senderLabel,
+        timestamp: entry.timestamp,
         text: entry.text ?? entry.systemTitle ?? "",
         isSystem: entry.isSystem,
         systemTitle: entry.systemTitle,
         date: entry.timestamp,
         reactions: entry.reactions?.map((r) => ({
           emoji: r.emoji,
+          userIds: r.userIds,
           count: r.userIds.length,
           reactedByMe: r.userIds.includes(currentUser?.id ?? "me"),
         })),

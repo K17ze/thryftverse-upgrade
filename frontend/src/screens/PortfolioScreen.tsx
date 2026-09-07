@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, RefreshControl, useWindowDimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, RefreshControl, useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -40,7 +40,7 @@ export default function PortfolioScreen() {
   const { colors } = useAppTheme();
   const currentUser = useStore((state) => state.currentUser);
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { width: screenWidth } = useWindowDimensions();
   const { listings } = useBackendData();
@@ -65,6 +65,7 @@ export default function PortfolioScreen() {
   const [actionSheetAsset, setActionSheetAsset] = React.useState<CoOwnPositionVM | null>(null);
   const [allocationExpanded, setAllocationExpanded] = React.useState(false);
   const [activePortfolioTab, setActivePortfolioTab] = React.useState<'positions' | 'insights'>('positions');
+  const [isPartial, setIsPartial] = React.useState(false);
 
   const loadPortfolio = React.useCallback((mode: 'initial' | 'refresh' = 'initial') => {
     if (!currentUser?.id) {
@@ -82,12 +83,14 @@ export default function PortfolioScreen() {
         if (cancelled) return;
         setPositions(result.positions);
         setSummary(result.summary);
+        setIsPartial(result.partial ?? false);
       })
       .catch((err) => {
         if (cancelled) return;
         const parsed = parseApiError(err, 'Unable to load portfolio');
         show(parsed.message, 'error');
         setIsError(true);
+        setIsPartial(false);
       })
       .finally(() => {
         if (!cancelled) {
@@ -267,16 +270,22 @@ export default function PortfolioScreen() {
         unitsOwned={item.unitsOwned}
         totalUnits={item.totalUnits}
         ownershipPct={item.ownershipPct}
-        currentValueLabel={formatFromFiat(item.currentValueGbp, currencyCode)}
-        avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, currencyCode)}
+        currentValueLabel={formatFromFiat(item.currentValueGbp, 'GBP')}
+        estimatedSaleProceedsLabel={item.estimatedSaleProceedsGbp === null
+          ? 'No current bids'
+          : formatFromFiat(item.estimatedSaleProceedsGbp, 'GBP')}
+        saleDepthLabel={item.estimatedSaleProceedsGbp === null
+          ? undefined
+          : `Bid depth: ${item.saleDepthUnits} units`}
+        avgEntryLabel={formatFromFiat(item.avgEntryPriceGbp, 'GBP')}
         unrealizedLabel={item.unrealizedPnlGbp >= 0
-          ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), currencyCode)}`
-          : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), currencyCode)}`
+          ? `+${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
+          : `-${formatFromFiat(Math.abs(item.unrealizedPnlGbp), 'GBP')}`
         }
         realizedLabel={item.realizedPnlGbp !== 0
           ? (item.realizedPnlGbp >= 0
-            ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), currencyCode)}`
-            : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), currencyCode)}`)
+            ? `+${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`
+            : `-${formatFromFiat(Math.abs(item.realizedPnlGbp), 'GBP')}`)
           : undefined
         }
         status={formatPositionStatus(item)}
@@ -348,6 +357,47 @@ export default function PortfolioScreen() {
       >
         <CoOwnStateCanvas
           variant="error"
+          title="Portfolio unavailable"
+          subtitle="We couldn't load your holdings. Tap below to try again."
+          actionLabel="Try again"
+          onAction={() => loadPortfolio()}
+        />
+      </FlagshipScreen>
+    );
+  }
+
+  // ── Partial-failure state ──
+  // Holdings were fetched but every asset-detail fetch failed. The user
+  // owns something, but we can't value or display it. This is materially
+  // different from owning nothing — show a retry, not an empty state.
+  if (isPartial && positions.length === 0) {
+    return (
+      <FlagshipScreen
+        header={
+          <FlagshipHeader
+            title="Portfolio"
+            onBack={handleBack}
+            rightAction={
+              <AnimatedPressable
+                onPress={() => navigation.navigate('CoOwnOrderHistory')}
+                scaleValue={0.9}
+                hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Activity"
+                accessibilityHint="View order history"
+              >
+                <Ionicons name="receipt-outline" size={22} color={colors.textPrimary} />
+              </AnimatedPressable>
+            }
+          />
+        }
+        scrollEnabled={false}
+        contentStyle={{ paddingHorizontal: 0, paddingTop: 0 }}
+      >
+        <CoOwnStateCanvas
+          variant="error"
+          title="Portfolio unavailable"
+          subtitle="We fetched your holdings but couldn't load the asset details. Tap below to try again."
           actionLabel="Try again"
           onAction={() => loadPortfolio()}
         />
@@ -383,7 +433,7 @@ export default function PortfolioScreen() {
         <CoOwnStateCanvas
           variant="empty"
           title="No positions yet"
-          subtitle="Buy units to start your portfolio."
+          subtitle="Buy units to start."
           actionLabel="Browse items"
           onAction={() => navigation.navigate('CoOwnHub')}
           emptyGraphicVariant="bag"
@@ -398,7 +448,6 @@ export default function PortfolioScreen() {
       header={
         <FlagshipHeader
           title="Portfolio"
-          subtitle="Your Co-Own positions"
           onBack={handleBack}
           rightAction={
             <AnimatedPressable
@@ -419,6 +468,15 @@ export default function PortfolioScreen() {
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
 
+      {isPartial && (
+        <View style={[styles.partialBanner, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder }]}>
+          <Ionicons name="alert-circle-outline" size={16} color={colors.warning} />
+          <Text style={[styles.partialBannerText, { color: colors.textSecondary }]} numberOfLines={2}>
+            Some positions are unavailable. Totals may be incomplete.
+          </Text>
+        </View>
+      )}
+
       <FlashList
         data={activePortfolioTab === 'positions' ? positions : []}
         keyExtractor={(item) => item.assetId}
@@ -435,7 +493,7 @@ export default function PortfolioScreen() {
           <View>
             {/* Portfolio summary — ownership surface, not a finance dashboard */}
             <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Portfolio value</Text>
+              <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Marked portfolio value</Text>
               <CoOwnNumericText
                 value={summary.totalValueGbp}
                 unit="1ZE"
@@ -477,6 +535,17 @@ export default function PortfolioScreen() {
                   Per anti-AI design: remove the generic dashboard silhouette.
                   Each metric is a flat row with a hairline divider. */}
               <View style={styles.pnlRows}>
+                <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
+                  <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Cost basis</Text>
+                  <CoOwnNumericText
+                    value={totalCostBasisGbp}
+                    unit="1ZE"
+                    size="price"
+                    showUnit={false}
+                    showGlyph={false}
+                    color={colors.textPrimary}
+                  />
+                </View>
                 <View style={[styles.pnlRow, { borderBottomColor: colors.border }]}>
                   <Text style={[styles.pnlLabel, { color: colors.textSecondary }]} numberOfLines={1}>Total return</Text>
                   <CoOwnNumericText
@@ -537,14 +606,15 @@ export default function PortfolioScreen() {
               )}
             </View>
 
-            {/* Portfolio performance chart — flat canvas, no card chrome.
-                Shows cost-basis accumulation over time and current mark value.
-                Only rendered when there are positions with cost basis. */}
-            {totalCostBasisGbp > 0 && (
+            {/* Cost vs value comparison — flat canvas, no card chrome.
+                Shows total cost basis against current marked value with
+                unrealised and realised P&L. No fabricated historical line. */}
+            {positions.length > 0 && (
               <CoOwnPortfolioPerformanceChart
                 positions={positions}
                 totalValueGbp={summary.totalValueGbp}
                 totalCostBasisGbp={totalCostBasisGbp}
+                totalRealizedGbp={summary.totalRealizedGbp}
               />
             )}
 
@@ -552,9 +622,10 @@ export default function PortfolioScreen() {
                 Positions shows holdings immediately; Insights moves allocations,
                 P&L decomposition, performers and storytelling to a separate tab. */}
             <View style={[styles.portfolioTabRow, { borderColor: colors.border }]}>
-              <Pressable
+              <AnimatedPressable
                 onPress={() => { haptics.selection(); setActivePortfolioTab('positions'); }}
-                style={({ pressed }) => [styles.portfolioTab, activePortfolioTab === 'positions' && { borderBottomColor: colors.textPrimary }, pressed && { opacity: 0.7 }]}
+                style={[styles.portfolioTab, activePortfolioTab === 'positions' && { borderBottomColor: colors.textPrimary }]}
+                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                 accessibilityRole="tab"
                 accessibilityLabel="Positions tab"
                 accessibilityState={{ selected: activePortfolioTab === 'positions' }}
@@ -568,10 +639,11 @@ export default function PortfolioScreen() {
                 ]}>
                   Positions
                 </Text>
-              </Pressable>
-              <Pressable
+              </AnimatedPressable>
+              <AnimatedPressable
                 onPress={() => { haptics.selection(); setActivePortfolioTab('insights'); }}
-                style={({ pressed }) => [styles.portfolioTab, activePortfolioTab === 'insights' && { borderBottomColor: colors.textPrimary }, pressed && { opacity: 0.7 }]}
+                style={[styles.portfolioTab, activePortfolioTab === 'insights' && { borderBottomColor: colors.textPrimary }]}
+                hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                 accessibilityRole="tab"
                 accessibilityLabel="Insights tab"
                 accessibilityState={{ selected: activePortfolioTab === 'insights' }}
@@ -585,7 +657,7 @@ export default function PortfolioScreen() {
                 ]}>
                   Insights
                 </Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
 
             {/* ── Insights tab ──
@@ -600,8 +672,8 @@ export default function PortfolioScreen() {
             {(performers.best || performers.worst) && (
               <View style={[styles.insightCard, { borderBottomColor: colors.border }]}>
                 {performers.best && performers.best.avgEntryPriceGbp > 0 && (
-                  <Pressable
-                    style={({ pressed }) => [styles.insightRow, pressed && { opacity: 0.7 }]}
+                  <AnimatedPressable
+                    style={styles.insightRow}
                     onPress={() => handlePositionPress(performers.best!)}
                     accessibilityRole="button"
                     accessibilityLabel={`Best position: ${performers.best.title}`}
@@ -621,11 +693,11 @@ export default function PortfolioScreen() {
                       showGlyph={false}
                       color={colors.success}
                     />
-                  </Pressable>
+                  </AnimatedPressable>
                 )}
                 {performers.worst && performers.worst.avgEntryPriceGbp > 0 && performers.worst.assetId !== performers.best?.assetId && (
-                  <Pressable
-                    style={({ pressed }) => [styles.insightRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }, pressed && { opacity: 0.7 }]}
+                  <AnimatedPressable
+                    style={[styles.insightRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
                     onPress={() => handlePositionPress(performers.worst!)}
                     accessibilityRole="button"
                     accessibilityLabel={`Worst position: ${performers.worst.title}`}
@@ -645,7 +717,7 @@ export default function PortfolioScreen() {
                       showGlyph={false}
                       color={colors.danger}
                     />
-                  </Pressable>
+                  </AnimatedPressable>
                 )}
               </View>
             )}
@@ -654,8 +726,8 @@ export default function PortfolioScreen() {
                 Collapsed by default to calm the screen; expands on tap. */}
             {allocationBars.length > 0 && (
               <View style={[styles.allocationCard, { borderBottomColor: colors.border }]}>
-                <Pressable
-                  style={({ pressed }) => [styles.allocationHeader, pressed && { opacity: 0.7 }]}
+                <AnimatedPressable
+                  style={styles.allocationHeader}
                   onPress={() => setAllocationExpanded((prev) => !prev)}
                   accessibilityRole="button"
                   accessibilityLabel={allocationExpanded ? 'Collapse allocation breakdown' : 'Expand allocation breakdown'}
@@ -673,7 +745,7 @@ export default function PortfolioScreen() {
                     size={18}
                     color={colors.textSecondary}
                   />
-                </Pressable>
+                </AnimatedPressable>
                 {allocationExpanded && (
                   <>
                     <Text style={[styles.allocationSubtitle, { color: colors.textMuted }]}>By asset</Text>
@@ -771,7 +843,7 @@ export default function PortfolioScreen() {
             {performers.best && performers.best.avgEntryPriceGbp > 0 && (
               <CoOwnPortfolioStorytelling
                 premiumPct={null}
-                lastPriceLabel={formatFromFiat(performers.best.currentValueGbp / performers.best.unitsOwned, currencyCode)}
+                lastPriceLabel={formatFromFiat(performers.best.currentValueGbp / performers.best.unitsOwned, 'GBP')}
                 markSourceLabel="Last trade"
                 markAgeLabel={undefined}
               />
@@ -801,9 +873,9 @@ export default function PortfolioScreen() {
             <View style={[styles.rightsCard, { borderBottomColor: colors.border }]}>
               <View style={styles.rightsHeader}>
                 <Ionicons name="document-text-outline" size={14} color={colors.textSecondary} />
-                <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Rights are instrument-specific</Text>
+                <Text style={[styles.rightsTitle, { color: colors.textPrimary }]}>Rights depend on the instrument</Text>
               </View>
-              <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Rights depend on the instrument. Open a position to review.</Text>
+              <Text style={[styles.rightsText, { color: colors.textSecondary }]}>Open a position to review.</Text>
             </View>
             </>
             )}
@@ -823,6 +895,7 @@ export default function PortfolioScreen() {
                   accessibilityLabel="View distribution history"
                   scaleValue={0.96}
                   hapticFeedback="light"
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
                   <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Distributions</Text>
                 </AnimatedPressable>
@@ -832,6 +905,7 @@ export default function PortfolioScreen() {
                   accessibilityLabel="Open market overview"
                   scaleValue={0.96}
                   hapticFeedback="light"
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
                   <Text style={[styles.sectionLink, { color: colors.textSecondary }]}>Market overview</Text>
                 </AnimatedPressable>
@@ -853,7 +927,7 @@ export default function PortfolioScreen() {
         title={actionSheetAsset?.title ?? ''}
         unitsOwned={actionSheetAsset?.unitsOwned ?? 0}
         ownershipPct={actionSheetAsset?.ownershipPct ?? 0}
-        currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, currencyCode) : ''}
+        currentValueLabel={actionSheetAsset ? formatFromFiat(actionSheetAsset.currentValueGbp, 'GBP') : ''}
         statusLabel={actionSheetAsset ? (actionSheetAsset.isOpen ? 'Active' : 'Closed') : ''}
         actions={actionSheetActions}
       />
@@ -864,6 +938,24 @@ export default function PortfolioScreen() {
 const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: Space.md,
+  },
+  // ── Partial-failure warning banner ──
+  // Inline warning when some asset fetches failed. Does not replace the
+  // positions list — sits above it as an additional advisory.
+  partialBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  partialBannerText: {
+    flex: 1,
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   // ── Portfolio summary — the one dominant panel above the fold ──
   // Per AGENTS.md §4 surface budget: one dominant non-media panel is allowed.

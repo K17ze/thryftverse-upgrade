@@ -11,7 +11,7 @@ import {
 import { Image } from 'expo-image';
 import { FlashList, ListRenderItem } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
-import { AppGlyph } from '../components/common/AppGlyph';
+import { AppIcon } from '../components/common/AppIcon';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
@@ -755,7 +755,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.9 });
-    if (!result.canceled && result.assets[0]) {
+    if (!result.canceled && result.assets.length > 0) {
       onAddLayer({
         ...baseLayer(createStableId('media'), 0),
         type: 'media',
@@ -775,7 +775,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
       quality: 0.9 });
-    if (!result.canceled && result.assets[0]) {
+    if (!result.canceled && result.assets.length > 0) {
       const durationMs = result.assets[0].duration ?? 0;
       if (durationMs > MAX_VIDEO_DURATION_MS) {
         haptic.error();
@@ -840,7 +840,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
       accessibilityRole="button"
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
     >
-      <AppGlyph name="camera" size={IconGrammar.hero} color={colors.textPrimary} />
+      <AppIcon name="camera-outline" size={IconGrammar.hero} color="textPrimary" opticalCenter={true} accessible={false} />
       <Text style={[styles.mediaCameraHeroLabel, { color: colors.textPrimary }]}>
         Camera
       </Text>
@@ -864,8 +864,8 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     return (
       <PickerShell title="Select" onClose={onClose}>
         <PermissionDeniedState
-          title="Photo access needed"
-          message="Allow access to your photos to start creating."
+          title="Allow photo access"
+          message="ThryftVerse needs access to your library to add photos."
           ctaLabel="Open settings"
           onCta={handleOpenSettings}
           colors={colors}
@@ -879,8 +879,8 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
     return (
       <PickerShell title="Select" onClose={onClose}>
         <PermissionDeniedState
-          title="Photo access needed"
-          message="Allow access to your photos to start creating."
+          title="Allow photo access"
+          message="ThryftVerse needs access to your library to add photos."
           ctaLabel="Allow access"
           onCta={() => requestPermission()}
           colors={colors}
@@ -1004,10 +1004,10 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
       ) : filteredAssets.length === 0 ? (
         <View style={styles.mediaEmptyState}>
           <Text style={[styles.mediaEmptyTitle, { color: colors.textPrimary }]}>
-            No photos yet
+            Camera access needed
           </Text>
           <Text style={[styles.mediaEmptySubtitle, { color: colors.textSecondary }]}>
-            Take photos with the camera to get started.
+            Enable the camera to capture items directly.
           </Text>
           <Pressable
             onPress={handleTakePhoto}
@@ -1037,7 +1037,7 @@ const MediaPicker = React.memo(function MediaPicker({ onClose, onAddLayer }: { o
               accessibilityLabel="Limited photo access — tap to select more photos"
               accessibilityRole="button"
             >
-              <AppGlyph name="media-image" size={IconGrammar.metadata} color={colors.textSecondary} />
+              <AppIcon name="image-outline" size={IconGrammar.metadata} color="textSecondary" opticalCenter={true} accessible={false} />
               <Text style={[styles.limitedAccessText, { color: colors.textSecondary }]}>
                 Limited access — tap to add more photos
               </Text>
@@ -1427,7 +1427,7 @@ const ProductPicker = React.memo(function ProductPicker({ onClose, onAddLayer }:
   const renderProductItem = useCallback<ListRenderItem<ListingSearchResult>>(({ item }) => (
     <Pressable onPress={() => handleSelect(item)} style={styles.resultRow} accessibilityLabel={`Select ${item.title}`} accessibilityRole="button" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
       <View style={styles.resultThumb}>
-        {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <AppGlyph name="store-bag" size={IconGrammar.metadata} color={colors.textSecondary} />}
+        {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.resultThumbImg} /> : <AppIcon name="bag-handle-outline" size={IconGrammar.metadata} color="textSecondary" opticalCenter={true} accessible={false} />}
       </View>
       <View style={styles.resultInfo}>
         <Text style={styles.resultName} numberOfLines={1}>{item.title}</Text>
@@ -4342,7 +4342,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     borderRadius: Radius.sm,
     overflow: 'hidden' },
   selectionPreviewItemSelected: {
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.brand },
   selectionPreviewThumb: {
     width: '100%',
@@ -4414,7 +4414,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     fontFamily: Typography.family.medium },
   mediaGridSelectedOverlay: {
     ...StyleSheet.absoluteFill,
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderRadius: Radius.sm },
   mediaGridSelectionBadge: {
     position: 'absolute',
@@ -4529,7 +4529,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   styleOptionText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.textPrimary },
   styleOptionTextActive: { color: colors.brand },
   colorRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-  colorOption: { width: 44, height: 44, borderRadius: Radius.full, borderWidth: 2, borderColor: 'transparent', ...Elevation.card },
+  colorOption: { width: 44, height: 44, borderRadius: Radius.full, borderWidth: Stroke.emphasis, borderColor: 'transparent', ...Elevation.card },
   colorOptionActive: { borderColor: colors.brand, shadowColor: colors.brand, shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 0 }, elevation: 2 },
   colorOptionTransparent: { borderWidth: Stroke.standard, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   alignmentRow: { flexDirection: 'row', gap: Space.sm },
@@ -4600,7 +4600,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   musicAddBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   // ── Quiz picker ──
   quizOptionRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.xs },
-  quizCorrectDot: { width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  quizCorrectDot: { width: 28, height: 28, borderRadius: Radius.full, borderWidth: Stroke.emphasis, borderColor: colors.border, justifyContent: 'center', alignItems: 'center' },
   quizRemoveBtn: { padding: Space.xs },
   quizAddOptionBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.sm },
   quizAddOptionText: { fontFamily: TypographyV2.body.fontFamily, fontSize: TypographyV2.body.size, color: colors.brand },
@@ -4649,7 +4649,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   spectrumWrap: { marginTop: Space.sm, gap: Space.xs },
   spectrumBar: { height: 36, borderRadius: Radius.full, overflow: 'hidden', position: 'relative', ...Elevation.floating },
   spectrumOverlay: { ...StyleSheet.absoluteFill },
-  spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: Radius.full, borderWidth: 2, borderColor: colors.textInverse, backgroundColor: colors.textInverse, ...Elevation.modal, left: '50%', marginLeft: -14 },
+  spectrumIndicator: { position: 'absolute', top: -4, width: 28, height: 28, borderRadius: Radius.full, borderWidth: Stroke.emphasis, borderColor: colors.textInverse, backgroundColor: colors.textInverse, ...Elevation.modal, left: '50%', marginLeft: -14 },
   spectrumClose: { alignSelf: 'center', paddingVertical: Space.xs },
   // ── Vertical brush size slider ──
   brushSliderWrap: { position: 'absolute', left: Space.sm, top: '50%', marginTop: -60, zIndex: 10, ...Elevation.modal },
@@ -4711,7 +4711,7 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
   sliderPreviewEmoji: { fontSize: TypographyV2.display.size },
   sliderPreviewTrack: { flex: 1, height: 8, borderRadius: Radius.sm, backgroundColor: colors.surfaceAlt, position: 'relative' },
   sliderPreviewFill: { height: '100%', borderRadius: Radius.sm },
-  sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: 2, borderColor: colors.textInverse, ...Elevation.modal },
+  sliderPreviewHandle: { position: 'absolute', top: -6, width: 20, height: 20, borderRadius: Radius.full, marginLeft: -10, borderWidth: Stroke.emphasis, borderColor: colors.textInverse, ...Elevation.modal },
   sliderPreviewEndLabel: { fontFamily: TypographyV2.meta.fontFamily, fontSize: TypographyV2.meta.size, color: colors.textSecondary, textAlign: 'center' },
   // ── Product source tabs ──
   productTabBar: { flexDirection: 'row', paddingHorizontal: Space.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },

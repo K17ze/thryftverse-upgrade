@@ -40,9 +40,8 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCoOwnIze } from '../utils/currency';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
-type SortOption = 'progress' | 'closing' | 'roi';
-type HubSegment = 'active' | 'new_issues' | 'watchlist';
-type FundingFilter = 'all' | 'funding' | 'funded' | 'matured';
+type SortOption = 'newest' | 'price' | 'activity';
+type HubSegment = 'offerings' | 'trading' | 'watchlist';
 
 interface HubAsset {
   id: string;
@@ -55,6 +54,13 @@ interface HubAsset {
   availableUnits: number;
   unitPriceGBP: number;
   unitPriceStable: number;
+  bestBidGBP?: number | null;
+  bidDepthUnits?: number;
+  bestAskGBP?: number | null;
+  askDepthUnits?: number;
+  volume24hGbp?: number | null;
+  lastExecutionPriceGBP?: number | null;
+  lastExecutionAt?: string | null;
   settlementMode: 'ONEZE';
   issuerJurisdiction?: string;
   holders: number;
@@ -74,46 +80,68 @@ type HubRow =
   | { kind: 'instrumentsEmpty'; key: 'instruments-empty' }
   | { kind: 'remaining'; key: 'remaining' };
 
-const SEGMENTS: HubSegment[] = ['active', 'new_issues', 'watchlist'];
-const SORT_OPTIONS: SortOption[] = ['progress', 'closing', 'roi'];
-const FUNDING_FILTERS: FundingFilter[] = ['all', 'funding', 'funded', 'matured'];
+const SEGMENTS: HubSegment[] = ['offerings', 'trading', 'watchlist'];
+const SORT_OPTIONS: SortOption[] = ['newest', 'price', 'activity'];
 const POSITION_CARD_WIDTH = COOWN_POSITION_CARD_WIDTH;
 const POSITION_CARD_GAP = 12;
 const POSITION_SNAP_INTERVAL = POSITION_CARD_WIDTH + POSITION_CARD_GAP;
 const SEGMENT_LABELS: Record<HubSegment, string> = {
-  active: 'Active',
-  new_issues: 'New issues',
+  offerings: 'Offerings',
+  trading: 'Trading',
   watchlist: 'Watchlist',
 };
 const SORT_LABELS: Record<SortOption, string> = {
-  progress: 'Progress',
-  closing: 'Closing date',
-  roi: 'ROI',
-};
-const FUNDING_FILTER_LABELS: Record<FundingFilter, string> = {
-  all: 'All',
-  funding: 'Funding',
-  funded: 'Funded',
-  matured: 'Matured',
+  newest: 'Newest',
+  price: 'Price',
+  activity: 'Activity',
 };
 const SECTION_TITLES: Record<HubSegment, string> = {
-  active: 'Open markets',
-  new_issues: 'New issues',
+  offerings: 'Offerings',
+  trading: 'Trading',
   watchlist: 'Watchlist',
 };
 
+/** Map legacy route param values (defined in RootStackParamList, which we
+ * cannot edit) to the new discovery segments. */
 function normalizeInitialSegment(value: 'active' | 'new_issues' | 'watchlist' | undefined): HubSegment {
-  return value === 'new_issues' || value === 'watchlist' ? value : 'active';
+  if (value === 'watchlist') return 'watchlist';
+  // 'active' and 'new_issues' both map to the offerings discovery segment.
+  return 'offerings';
 }
 
+/** Whether an asset has secondary-market activity — used to classify it
+ * as "Trading" and to choose tile content. Fails closed: only true when
+ * the API actually reports orders or settled trades. */
+function hasMarketActivity(asset: HubAsset): boolean {
+  return (
+    asset.bestBidGBP != null ||
+    asset.bestAskGBP != null ||
+    (asset.volume24hGbp ?? 0) > 0 ||
+    asset.lastExecutionPriceGBP != null
+  );
+}
+
+/** Lifecycle status — drives the status-dot colour on tiles.
+ * 'open' (active/green) is used for both Offering and Trading so the
+ * dot reads as "live". 'closed' (muted) marks tradeable-but-quiet
+ * assets. 'paused' (warning) marks ended/failed offerings. */
 function getStatus(asset: HubAsset): CoOwnAssetStatus {
-  if (!asset.isOpen) return 'paused';
-  return asset.availableUnits > 0 ? 'open' : 'closed';
+  // Offering — initial offering still accepting funds.
+  if (asset.isOpen && asset.availableUnits > 0) return 'open';
+  // Fully allocated — secondary market territory.
+  if (asset.availableUnits === 0) {
+    return hasMarketActivity(asset) ? 'open' : 'closed';
+  }
+  // isOpen but no units left to fund AND no market activity, or closed.
+  return asset.isOpen ? 'closed' : 'paused';
 }
 
 function getStatusLabel(asset: HubAsset): string {
-  const status = getStatus(asset);
-  return status === 'open' ? 'Available' : status === 'paused' ? 'Paused' : 'Fully allocated';
+  if (asset.isOpen && asset.availableUnits > 0) return 'Offering';
+  if (asset.availableUnits === 0) {
+    return hasMarketActivity(asset) ? 'Trading' : 'Available to trade';
+  }
+  return asset.isOpen ? 'Available to trade' : 'Funding ended';
 }
 
 export default function CoOwnHubScreen() {
@@ -122,7 +150,7 @@ export default function CoOwnHubScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const coOwnWatchlist = useStore((state) => state.coOwnWatchlist);
   const toggleCoOwnWatch = useStore((state) => state.toggleCoOwnWatch);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const { colors } = useAppTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -133,8 +161,7 @@ export default function CoOwnHubScreen() {
   const [query, setQuery] = React.useState('');
   const [isSearchExpanded, setIsSearchExpanded] = React.useState(false);
   const [isSortExpanded, setIsSortExpanded] = React.useState(false);
-  const [sortBy, setSortBy] = React.useState<SortOption>('progress');
-  const [fundingFilter, setFundingFilter] = React.useState<FundingFilter>('all');
+  const [sortBy, setSortBy] = React.useState<SortOption>('newest');
   const [activeSegment, setActiveSegment] = React.useState<HubSegment>(normalizeInitialSegment(route.params?.initialSegment));
   const [remoteAssets, setRemoteAssets] = React.useState<HubAsset[]>([]);
   const [holdings, setHoldings] = React.useState<Map<string, { units: number; avgEntry: number; realized: number }>>(new Map());
@@ -144,20 +171,25 @@ export default function CoOwnHubScreen() {
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   const loadData = React.useCallback(() => {
-    if (!actingUserId) {
-      setIsSyncing(false);
-      return;
-    }
+    // Public browsing: always fetch the marketplace catalogue so
+    // unauthenticated users can explore offerings and trading activity.
+    // Holdings (portfolio) are only fetched when the user is signed in —
+    // auth is requested at the point of saving, funding, or trading, not
+    // at the point of discovery.
     let cancelled = false;
     setIsSyncing(true);
     setIsError(false);
     setHoldingsError(false);
 
+    const holdingsPromise = actingUserId
+      ? fetchCoOwnHoldings(actingUserId)
+          .then((items) => ({ items, failed: false }))
+          .catch(() => ({ items: [], failed: true }))
+      : Promise.resolve({ items: [] as Awaited<ReturnType<typeof fetchCoOwnHoldings>>, failed: false });
+
     Promise.all([
       listCoOwnAssets({ limit: 120 }),
-      fetchCoOwnHoldings(actingUserId)
-        .then((items) => ({ items, failed: false }))
-        .catch(() => ({ items: [], failed: true })),
+      holdingsPromise,
     ])
       .then(([items, holdingResult]) => {
         if (cancelled) return;
@@ -176,6 +208,13 @@ export default function CoOwnHubScreen() {
             availableUnits: item.availableUnits,
             unitPriceGBP: item.unitPriceGbp,
             unitPriceStable: item.unitPriceStable,
+            bestBidGBP: item.bestBidGbp ?? null,
+            bidDepthUnits: item.bidDepthUnits ?? 0,
+            bestAskGBP: item.bestAskGbp ?? null,
+            askDepthUnits: item.askDepthUnits ?? 0,
+            volume24hGbp: item.volume24hGbp ?? null,
+            lastExecutionPriceGBP: item.marketSnapshot?.lastExecutionPriceGbp ?? null,
+            lastExecutionAt: item.marketSnapshot?.lastExecutionAt ?? null,
             settlementMode: item.settlementMode as HubAsset['settlementMode'],
             issuerJurisdiction: item.issuerJurisdiction ?? undefined,
             holders: item.holders,
@@ -293,71 +332,57 @@ export default function CoOwnHubScreen() {
   );
 
   const segmentCounts = React.useMemo<Record<HubSegment, number>>(() => {
-    const now = Date.now();
     return {
-      active: marketAssets.filter((asset) => asset.isOpen && asset.availableUnits > 0).length,
-      new_issues: marketAssets.filter((asset) => {
-        const createdAt = new Date(asset.createdAt).getTime();
-        return Number.isFinite(createdAt) && now - createdAt <= 7 * 24 * 60 * 60 * 1000;
-      }).length,
+      // Assets in initial offering — still accepting funds.
+      offerings: marketAssets.filter((asset) => asset.isOpen && asset.availableUnits > 0).length,
+      // Fully allocated assets with secondary-market activity, or any
+      // asset that has settled trades / live orders on the book.
+      trading: marketAssets.filter((asset) =>
+        asset.availableUnits === 0 || hasMarketActivity(asset)
+      ).length,
+      // User's watched assets.
       watchlist: marketAssets.filter((asset) => coOwnWatchlist.includes(asset.id)).length,
     };
   }, [coOwnWatchlist, marketAssets]);
 
   const filteredAssets = React.useMemo(() => {
-    const now = Date.now();
     const normalized = query.trim().toLowerCase();
-    // Segment filter — active, new_issues, or watchlist
+    // Segment filter — Offerings, Trading, or Watchlist
     const segmentFiltered = marketAssets.filter((asset) => {
-      if (activeSegment === 'active') return asset.isOpen && asset.availableUnits > 0;
-      if (activeSegment === 'watchlist') return coOwnWatchlist.includes(asset.id);
-      const createdAt = new Date(asset.createdAt).getTime();
-      return Number.isFinite(createdAt) && now - createdAt <= 7 * 24 * 60 * 60 * 1000;
-    });
-    // Funding status filter — All, Funding, Funded, Matured
-    const fundingFiltered = segmentFiltered.filter((asset) => {
-      if (fundingFilter === 'all') return true;
-      if (fundingFilter === 'funding') return asset.isOpen && asset.availableUnits > 0;
-      if (fundingFilter === 'funded') return asset.isOpen && asset.availableUnits === 0;
-      if (fundingFilter === 'matured') return !asset.isOpen;
-      return true;
+      if (activeSegment === 'offerings') return asset.isOpen && asset.availableUnits > 0;
+      if (activeSegment === 'trading') return asset.availableUnits === 0 || hasMarketActivity(asset);
+      return coOwnWatchlist.includes(asset.id);
     });
     // Search filter
     const searched = normalized
-      ? fundingFiltered.filter((asset) =>
+      ? segmentFiltered.filter((asset) =>
           asset.title.toLowerCase().includes(normalized) ||
           asset.category.toLowerCase().includes(normalized) ||
           (asset.issuerJurisdiction ?? '').toLowerCase().includes(normalized)
         )
-      : fundingFiltered;
-    // Sort — by progress, closing date, or ROI
+      : segmentFiltered;
+    // Sort — factual options only (no fabricated ROI).
     return [...searched].sort((a, b) => {
-      if (sortBy === 'progress') {
-        const aProgress = a.totalUnits > 0 ? (a.totalUnits - a.availableUnits) / a.totalUnits : 0;
-        const bProgress = b.totalUnits > 0 ? (b.totalUnits - b.availableUnits) / b.totalUnits : 0;
-        return bProgress - aProgress;
-      }
-      if (sortBy === 'closing') {
-        // Closing date proxy: oldest first (longest-running syndicates
-        // are likely closest to closing). Falls back to newest when equal.
+      if (sortBy === 'newest') {
         const aDate = new Date(a.createdAt).getTime();
         const bDate = new Date(b.createdAt).getTime();
-        return aDate - bDate;
+        return bDate - aDate;
       }
-      if (sortBy === 'roi') {
-        // ROI: sort by unrealized P&L percentage for held positions.
-        // Assets without holdings sort last (ROI not applicable).
-        const aRoi = a.avgEntryPriceGBP != null && a.avgEntryPriceGBP > 0 && a.yourUnits > 0
-          ? ((a.unitPriceGBP - a.avgEntryPriceGBP) / a.avgEntryPriceGBP) * 100
-          : -Infinity;
-        const bRoi = b.avgEntryPriceGBP != null && b.avgEntryPriceGBP > 0 && b.yourUnits > 0
-          ? ((b.unitPriceGBP - b.avgEntryPriceGBP) / b.avgEntryPriceGBP) * 100
-          : -Infinity;
-        return bRoi - aRoi;
+      if (sortBy === 'price') {
+        return a.unitPriceGBP - b.unitPriceGBP;
+      }
+      if (sortBy === 'activity') {
+        // Rank by 24h volume (GBP), then by recency of last settled trade.
+        const aVol = a.volume24hGbp ?? 0;
+        const bVol = b.volume24hGbp ?? 0;
+        if (aVol !== bVol) return bVol - aVol;
+        const aLast = a.lastExecutionAt ? new Date(a.lastExecutionAt).getTime() : 0;
+        const bLast = b.lastExecutionAt ? new Date(b.lastExecutionAt).getTime() : 0;
+        return bLast - aLast;
       }
       return 0;
     });
-  }, [activeSegment, coOwnWatchlist, fundingFilter, marketAssets, query, sortBy]);
+  }, [activeSegment, coOwnWatchlist, marketAssets, query, sortBy]);
 
   const format1ze = React.useCallback(
     (value1ze: number) => formatCoOwnIze(value1ze),
@@ -365,10 +390,13 @@ export default function CoOwnHubScreen() {
   );
 
   const formatLocal = React.useCallback((valueGbp: number) => (
-    formatFromFiat(valueGbp, currencyCode, { displayMode: 'fiat', fiatFractionDigits: 2 })
+    formatFromFiat(valueGbp, 'GBP', { displayMode: 'fiat', fiatFractionDigits: 2 })
   ), [formatFromFiat]);
 
   const highlightAssets = React.useMemo(() => {
+    // Discovery carousel surfaces active offerings first — the primary
+    // discovery intent. Falls back to the full catalogue when no
+    // offerings are live so the carousel is never empty.
     const open = marketAssets.filter((asset) => asset.isOpen && asset.availableUnits > 0);
     const source = open.length > 0 ? open : marketAssets;
     return [...source]
@@ -384,6 +412,7 @@ export default function CoOwnHubScreen() {
     const allocatedPct = asset.totalUnits > 0
       ? ((asset.totalUnits - asset.availableUnits) / asset.totalUnits) * 100
       : 0;
+    const inOffering = asset.isOpen && asset.availableUnits > 0;
     return {
       id: asset.id,
       imageUri: asset.image,
@@ -391,7 +420,17 @@ export default function CoOwnHubScreen() {
       categoryLabel: asset.category,
       unitPriceLabel: format1ze(asset.unitPriceGBP),
       localReferenceLabel: formatLocal(asset.unitPriceGBP),
-      availabilityLabel: `${asset.availableUnits} of ${asset.totalUnits} units available`,
+      // Offering tiles show funding progress; trading tiles show depth.
+      availabilityLabel: inOffering
+        ? `${asset.totalUnits - asset.availableUnits}/${asset.totalUnits} funded`
+        : `${asset.availableUnits} of ${asset.totalUnits} units`,
+      liquidityLabel: inOffering
+        ? `${Math.round(allocatedPct)}% funded`
+        : asset.bestBidGBP != null && asset.bestAskGBP != null
+          ? `Bid ${format1ze(asset.bestBidGBP)} · Ask ${format1ze(asset.bestAskGBP)}`
+          : asset.bestAskGBP != null
+            ? `Ask ${format1ze(asset.bestAskGBP)}`
+            : 'No live orders',
       allocatedPct,
       statusLabel: getStatusLabel(asset),
       status: getStatus(asset),
@@ -589,6 +628,11 @@ export default function CoOwnHubScreen() {
     }
 
     if (item.kind === 'instrumentsHeader') {
+      const searchPlaceholder = activeSegment === 'watchlist'
+        ? 'Search watchlist'
+        : activeSegment === 'trading'
+          ? 'Search trading markets'
+          : 'Search offerings';
       return (
         <View style={styles.instrumentsHeader} accessibilityLabel="Market search and sorting">
           <View style={styles.sectionHeader}>
@@ -603,7 +647,7 @@ export default function CoOwnHubScreen() {
                 <AppInput
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Search markets"
+                  placeholder={searchPlaceholder}
                   prefix={<Ionicons name="search-outline" size={16} color={colors.textMuted} />}
                   suffix={
                     <AnimatedPressable
@@ -620,7 +664,7 @@ export default function CoOwnHubScreen() {
                     </AnimatedPressable>
                   }
                   autoFocus
-                  accessibilityLabel="Search open markets"
+                  accessibilityLabel={searchPlaceholder}
                 />
               </View>
             ) : (
@@ -632,7 +676,7 @@ export default function CoOwnHubScreen() {
                 }}
                 style={[styles.controlButton, styles.searchControl, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 accessibilityRole="button"
-                accessibilityLabel="Search open markets"
+                accessibilityLabel={searchPlaceholder}
               >
                 <Ionicons name="search-outline" size={17} color={colors.textSecondary} />
                 <Text style={[styles.controlText, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.25}>Search</Text>
@@ -683,49 +727,6 @@ export default function CoOwnHubScreen() {
               })}
             </View>
           ) : null}
-
-          {/* Funding status filter — All | Funding | Funded | Matured.
-              Secondary filter dimension within the instruments section.
-              Flat chip row, no card chrome. */}
-          <View style={styles.fundingFilterRow}>
-            {FUNDING_FILTERS.map((filter) => {
-              const isActive = fundingFilter === filter;
-              return (
-                <AnimatedPressable
-                  key={filter}
-                  onPress={() => {
-                    haptics.selection();
-                    setFundingFilter(filter);
-                  }}
-                  style={[
-                    styles.fundingFilterChip,
-                    {
-                      backgroundColor: isActive ? colors.brandSubtle : 'transparent',
-                      borderColor: isActive ? colors.brand : colors.border,
-                    },
-                  ]}
-                  scaleValue={0.97}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Filter by ${FUNDING_FILTER_LABELS[filter]}`}
-                  accessibilityState={{ selected: isActive }}
-                >
-                  <Text
-                    style={[
-                      styles.fundingFilterText,
-                      {
-                        color: isActive ? colors.brand : colors.textSecondary,
-                        fontFamily: isActive ? Typography.family.semibold : Typography.family.regular,
-                      },
-                    ]}
-                    maxFontSizeMultiplier={1.25}
-                  >
-                    {FUNDING_FILTER_LABELS[filter]}
-                  </Text>
-                </AnimatedPressable>
-              );
-            })}
-          </View>
         </View>
       );
     }
@@ -733,23 +734,45 @@ export default function CoOwnHubScreen() {
     if (item.kind === 'instrumentRow') {
       return (
         <View style={styles.instrumentRow}>
-          {item.assets.map((asset) => (
-            <CoOwnInstrumentCard
-              key={asset.id}
-              imageUri={asset.image}
-              title={asset.title}
-              categoryLabel={asset.category}
-              unitPriceLabel={format1ze(asset.unitPriceGBP)}
-              localReferenceLabel={formatLocal(asset.unitPriceGBP)}
-              availabilityLabel={`${asset.availableUnits} of ${asset.totalUnits} units`}
-              statusLabel={getStatusLabel(asset)}
-              status={getStatus(asset)}
-              isWatched={coOwnWatchlist.includes(asset.id)}
-              focalPoint={getCategoryFocalPoint(asset.category)}
-              onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
-              onToggleWatch={() => toggleCoOwnWatch(asset.id)}
-            />
-          ))}
+          {item.assets.map((asset) => {
+            const inOffering = asset.isOpen && asset.availableUnits > 0;
+            const allocatedPct = asset.totalUnits > 0
+              ? Math.round(((asset.totalUnits - asset.availableUnits) / asset.totalUnits) * 100)
+              : 0;
+            // Discovery tile content is tailored to the asset's lifecycle
+            // state — offering tiles surface funding progress; trading
+            // tiles surface last trade price and best bid/ask depth.
+            const availabilityLabel = inOffering
+              ? `${asset.totalUnits - asset.availableUnits}/${asset.totalUnits} funded`
+              : `${asset.availableUnits} of ${asset.totalUnits} units`;
+            const liquidityLabel = inOffering
+              ? `${allocatedPct}% funded`
+              : asset.lastExecutionPriceGBP != null
+                ? `Last ${format1ze(asset.lastExecutionPriceGBP)}`
+                : asset.bestBidGBP != null && asset.bestAskGBP != null
+                  ? `Bid ${format1ze(asset.bestBidGBP)} · Ask ${format1ze(asset.bestAskGBP)}`
+                  : asset.bestAskGBP != null
+                    ? `Ask ${format1ze(asset.bestAskGBP)} · ${asset.askDepthUnits ?? 0} units`
+                    : 'No trades yet';
+            return (
+              <CoOwnInstrumentCard
+                key={asset.id}
+                imageUri={asset.image}
+                title={asset.title}
+                categoryLabel={asset.category}
+                unitPriceLabel={format1ze(asset.unitPriceGBP)}
+                localReferenceLabel={formatLocal(asset.unitPriceGBP)}
+                availabilityLabel={availabilityLabel}
+                liquidityLabel={liquidityLabel}
+                statusLabel={getStatusLabel(asset)}
+                status={getStatus(asset)}
+                isWatched={coOwnWatchlist.includes(asset.id)}
+                focalPoint={getCategoryFocalPoint(asset.category)}
+                onPress={() => navigation.navigate('AssetDetail', { assetId: asset.id })}
+                onToggleWatch={() => toggleCoOwnWatch(asset.id)}
+              />
+            );
+          })}
           {item.assets.length < columns
             ? Array.from({ length: columns - item.assets.length }).map((_, index) => <View key={`spacer-${index}`} style={styles.instrumentSpacer} />)
             : null}
@@ -760,14 +783,18 @@ export default function CoOwnHubScreen() {
     if (item.kind === 'instrumentsEmpty') {
       const title = activeSegment === 'watchlist'
         ? 'Your watchlist is empty'
-        : query.trim()
-          ? 'No matching markets'
-          : 'No markets available';
+        : activeSegment === 'trading'
+          ? 'No trading markets yet'
+          : query.trim()
+            ? 'No matching offerings'
+            : 'No active offerings';
       const subtitle = activeSegment === 'watchlist'
         ? 'Use the bookmark control on an instrument to keep it here.'
-        : query.trim()
-          ? 'Try a broader search or change the market tab.'
-          : 'Check another market tab or refresh for the latest listings.';
+        : activeSegment === 'trading'
+          ? 'Fully allocated assets with live orders will appear here.'
+          : query.trim()
+            ? 'Try a broader search or switch to the Trading tab.'
+            : 'New offerings from issuers will appear here. Try the Trading tab for live markets.';
       return (
         <View style={styles.instrumentsEmptyWrap}>
           <CoOwnStateCanvas
@@ -817,7 +844,6 @@ export default function CoOwnHubScreen() {
     handleHighlightPress,
     highlights,
     holdingsError,
-    fundingFilter,
     isSearchExpanded,
     isSortExpanded,
     loadData,
@@ -1115,26 +1141,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
-  },
-  // ── Funding status filter chips ──
-  // Flat chip row below sort controls. Uses brandSubtle for selected state
-  // per design tokens. No card chrome — flat canvas with hairline borders.
-  fundingFilterRow: {
-    paddingHorizontal: Space.md,
-    paddingTop: Space.sm,
-    flexDirection: 'row',
-    gap: Space.sm,
-  },
-  fundingFilterChip: {
-    paddingHorizontal: Space.smMd,
-    paddingVertical: Space.xs + 1,
-    borderRadius: Radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  fundingFilterText: {
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    letterSpacing: LetterSpacing.normal - 0.1,
   },
   instrumentRow: {
     paddingHorizontal: Space.md,

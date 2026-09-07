@@ -28,7 +28,10 @@ export interface CoOwnPriceChartProps {
   lastAgeSeconds?: number | null;
   change24hTimestamp?: string;
   // Phase 2: candle chart delegate
-  candleChart?: React.ReactNode;
+  // Accepts either a pre-rendered node (backward compatible) or a render
+  // function that receives { showVolume } so the volume toggle state flows
+  // through to the candle chart.
+  candleChart?: React.ReactNode | ((props: { showVolume: boolean }) => React.ReactNode);
 }
 
 interface PricePoint {
@@ -361,8 +364,9 @@ export function CoOwnPriceChart({
             })}
           </View>
           <View style={styles.toggleRow}>
-            {/* Phase 2: volume toggle — only when volume data exists */}
-            {volume24hGbp != null && (
+            {/* Phase 2: volume toggle — only in candle mode (line charts
+                don't render volume bars) and when volume data exists */}
+            {chartMode === 'candle' && candleChart && volume24hGbp != null && (
               <AnimatedPressable
                 style={[
                   styles.toggleBtn,
@@ -407,7 +411,7 @@ export function CoOwnPriceChart({
 
       {/* Chart area */}
       {chartMode === 'candle' && candleChart && hasHistory ? (
-        candleChart
+        typeof candleChart === 'function' ? candleChart({ showVolume }) : candleChart
       ) : isLoading ? (
         <View style={styles.chartLoading}>
           <View style={[styles.skeletonLine, { backgroundColor: colors.surfaceAlt, width: '60%' }]} />

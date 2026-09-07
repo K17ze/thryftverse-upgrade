@@ -20,6 +20,7 @@ import {
   getStatusExplanation,
   getStatusTone,
   resolveStatusColor,
+  resolveStatusSubtleColor,
   formatTimelineDate,
   isTerminalStatus,
   getParcelEventDisplay,
@@ -31,6 +32,7 @@ import {
   formatPackageSummary } from '../utils/orderDetailLogic';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useOrderDetail } from '../hooks/useOrderDetail';
 import { useBackendData } from '../context/BackendDataContext';
@@ -55,6 +57,7 @@ import { IssueCategorySelector, type IssueCategory } from '../components/orders/
 import { CompletedOrderSummary } from '../components/orders/CompletedOrderSummary';
 import { OrderCounterpartySection, type CounterpartyInfo } from '../components/orders/OrderCounterpartySection';
 import { EscrowBanner } from '../components/orders/EscrowBanner';
+import { createDmConversationOnApi } from '../services/chatApi';
 import { EtaBanner } from '../components/orders/EtaBanner';
 import { ShipmentDetails } from '../components/orders/ShipmentDetails';
 import { TransactionBreakdown } from '../components/orders/TransactionBreakdown';
@@ -74,7 +77,7 @@ export default function OrderDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteT>();
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
   const { orderId } = route.params ?? {};
   const { show } = useToast();
@@ -101,6 +104,31 @@ export default function OrderDetailScreen() {
 
   const currentUser = useStore((state) => state.currentUser);
   const getSupportTicketsForOrder = useStore((state) => state.getSupportTicketsForOrder);
+  const upsertConversation = useStore((state) => state.upsertConversation);
+
+  // Resolve a real DM conversation via the backend before navigating to Chat.
+  // Replaces fabricated IDs like `${counterparty.id}_${listingId}`.
+  const resolveAndOpenConversation = useCallback(async (
+    recipientUserId: string,
+    itemId: string | undefined,
+    focusQuery?: string,
+  ) => {
+    try {
+      const conversation = await createDmConversationOnApi({
+        recipientUserId,
+        itemId,
+      });
+      upsertConversation(conversation);
+      navigation.navigate('Chat', {
+        conversationId: conversation.id,
+        focusQuery,
+        partnerUserId: recipientUserId,
+        itemId,
+      });
+    } catch {
+      show('Could not start conversation. Try again.', 'error');
+    }
+  }, [navigation, upsertConversation, show]);
 
   const {
     backendOrder,
@@ -196,6 +224,7 @@ export default function OrderDetailScreen() {
   const isSeller = currentUser?.id === backendOrder?.sellerId;
   const statusTone = getStatusTone(normalisedStatus);
   const statusColor = resolveStatusColor(statusTone, colors);
+  const statusSubtleColor = resolveStatusSubtleColor(statusTone, colors);
 
   const listingId = backendOrder?.listingId;
   const existingListing = listingId ? listings.find((item) => item.id === listingId) : undefined;
@@ -583,11 +612,11 @@ export default function OrderDetailScreen() {
             label: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }),
             onPress: () => {
               haptics.tap();
-              navigation.navigate('Chat', {
-                conversationId: `${counterparty.id}_${backendOrder.listingId}`,
-                focusQuery: counterparty.username,
-                partnerUserId: counterparty.id,
-                itemId: backendOrder.listingId });
+              resolveAndOpenConversation(
+                counterparty.id,
+                backendOrder.listingId,
+                counterparty.username,
+              );
             },
             variant: 'secondary',
             accessibilityLabel: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }) };
@@ -661,11 +690,11 @@ export default function OrderDetailScreen() {
         key: 'contact',
         label: t('orderDetail.action.messageRole', { role: counterparty.role.toLowerCase() }),
         icon: 'chatbubble-outline',
-        onPress: () => navigation.navigate('Chat', {
-          conversationId: `${counterparty.id}_${backendOrder?.listingId}`,
-          focusQuery: counterparty.username,
-          partnerUserId: counterparty.id,
-          itemId: backendOrder?.listingId }) });
+        onPress: () => resolveAndOpenConversation(
+          counterparty.id,
+          backendOrder?.listingId,
+          counterparty.username,
+        ) });
     }
 
     actions.push({
@@ -715,7 +744,7 @@ export default function OrderDetailScreen() {
           variant="large"
           onBack={() => navigation.goBack()}
           style={{
-            paddingTop: insets.top,
+            paddingTop: 0,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
             borderBottomColor: colors.border }}
@@ -734,7 +763,7 @@ export default function OrderDetailScreen() {
           variant="large"
           onBack={() => navigation.goBack()}
           style={{
-            paddingTop: insets.top,
+            paddingTop: 0,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
             borderBottomColor: colors.border }}
@@ -765,7 +794,7 @@ export default function OrderDetailScreen() {
           variant="large"
           onBack={() => navigation.goBack()}
           style={{
-            paddingTop: insets.top,
+            paddingTop: 0,
             paddingBottom: Space.sm,
             borderBottomWidth: StyleSheet.hairlineWidth,
             borderBottomColor: colors.border }}
@@ -790,7 +819,7 @@ export default function OrderDetailScreen() {
         variant="large"
         onBack={() => navigation.goBack()}
         style={{
-          paddingTop: insets.top,
+          paddingTop: 0,
           paddingBottom: Space.sm,
           borderBottomWidth: StyleSheet.hairlineWidth,
           borderBottomColor: colors.border }}
@@ -833,10 +862,9 @@ export default function OrderDetailScreen() {
 
         {/* 2. Current order status and order number */}
         <View style={styles.statusHeader}>
-          <Text style={[styles.orderNumber, themed.orderNumber]}>ORDER #{shortOrderId}</Text>
+          <Text style={[styles.orderNumber, themed.orderNumber]}>Order #{shortOrderId}</Text>
           <View style={styles.statusBadgeRow}>
-            {/* TODO: replace `${statusColor}15` with statusColorSubtle token when available */}
-            <View style={[styles.statusBadge, { backgroundColor: `${statusColor}15` }]}>
+            <View style={[styles.statusBadge, { backgroundColor: statusSubtleColor }]}>
               <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
               <Text style={[styles.statusBadgeText, { color: statusColor }]}>
                 {statusLabel}
@@ -882,11 +910,11 @@ export default function OrderDetailScreen() {
           title={orderTitle}
           imageUrl={orderImage}
           subtitle={orderSubtitle}
-          priceLabel={formatFromFiat(orderSubtotal ?? 0, currencyCode, fiatOpts)}
+          priceLabel={formatFromFiat(orderSubtotal ?? 0, 'GBP', fiatOpts)}
           listingAvailable={listingExists}
           onPress={listingExists && listingId ? () => {
             haptics.tap();
-            navigation.navigate('ItemDetail', { itemId: listingId });
+            openProductDetail(navigation, { referenceKind: 'listing', canonicalId: listingId, sourceSurface: 'OrderDetailSummary' });
           } : undefined}
         />
 
@@ -901,11 +929,7 @@ export default function OrderDetailScreen() {
             navigation={navigation}
             onMessage={(cp, listingId) => {
               haptics.tap();
-              navigation.navigate('Chat', {
-                conversationId: `${cp.id}_${listingId}`,
-                focusQuery: cp.username,
-                partnerUserId: cp.id,
-                itemId: listingId });
+              resolveAndOpenConversation(cp.id, listingId, cp.username);
             }}
           />
         ) : null}
@@ -976,7 +1000,7 @@ export default function OrderDetailScreen() {
               subtitle={orderSubtitle}
               onPress={listingExists && listingId ? () => {
                 haptics.tap();
-                navigation.navigate('ItemDetail', { itemId: listingId });
+                openProductDetail(navigation, { referenceKind: 'listing', canonicalId: listingId, sourceSurface: 'OrderDetailPackage' });
               } : undefined}
             />
           </View>
@@ -998,7 +1022,7 @@ export default function OrderDetailScreen() {
             <View style={[styles.staleBanner, themed.staleBanner]}>
               <Ionicons name="time-outline" size={16} color={colors.warning} aria-hidden={true} />
               <Text style={[styles.staleText, themed.staleText]}>
-                Tracking has not updated in over 48 hours. The carrier may be delayed. Check the carrier site for the latest status.
+                Tracking hasn't updated in over 48 hours — the carrier may be delayed.
               </Text>
             </View>
           ) : null}
@@ -1047,7 +1071,6 @@ export default function OrderDetailScreen() {
           postageFee={postageFee}
           totalPaid={totalPaid}
           formatFromFiat={formatFromFiat}
-          currencyCode={currencyCode}
           fiatOpts={fiatOpts}
         />
 
@@ -1174,7 +1197,6 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: TypographyV2.meta.letterSpacing,
-    textTransform: 'uppercase',
     fontVariant: ['tabular-nums'] },
   statusBadgeRow: {
     flexDirection: 'row',

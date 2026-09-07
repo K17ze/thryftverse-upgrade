@@ -42,7 +42,11 @@ type LedgerAccountCode =
   | 'revenue_fx';
 
 type CoOwnOrderStatus = 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected';
-type CoOwnOrderType = 'market' | 'limit';
+// Protected market orders are executable market instructions with a
+// caller-supplied worst-price guard. Preserve that type through persistence
+// and history responses so the client does not relabel a protected order as
+// an uncapped market order.
+type CoOwnOrderType = 'market' | 'limit' | 'protected_market';
 
 interface CoOwnHoldingRow {
   user_id: string;
@@ -57,6 +61,38 @@ interface CoOwnHoldingRow {
 const CO_OWN_TRADE_FEE_RATE = 0.01;
 const CO_OWN_ELIGIBILITY_TTL_MS = 5 * 60_000; // 5 minutes
 const CO_OWN_RESERVATION_TTL_MS = 60_000; // 60 seconds
+
+// ── Asset lifecycle projection helpers ──
+// Computed (non-persisted) fields that separate offering status from
+// secondary-market status. These are additive to the existing `isOpen` flag,
+// which is retained for backward compatibility. No schema changes are
+// required — both fields are derived from existing columns and runtime state.
+
+type CoOwnOfferingStatus = 'offering' | 'allocated' | 'failed' | 'closed';
+
+function computeOfferingStatus(isOpen: boolean, availableUnits: number): CoOwnOfferingStatus {
+  if (isOpen && availableUnits > 0) return 'offering';
+  if (isOpen && availableUnits === 0) return 'allocated';
+  if (!isOpen && availableUnits > 0) return 'failed';
+  return 'closed'; // !isOpen && availableUnits === 0
+}
+
+type CoOwnMarketStatus = 'pre_market' | 'trading' | 'paused' | 'closed';
+
+function computeMarketStatus(
+  offeringStatus: CoOwnOfferingStatus,
+  hasExitAction: boolean,
+  isReconciliationHalted: boolean
+): CoOwnMarketStatus {
+  // An exited asset is terminally closed regardless of other state.
+  if (hasExitAction) return 'closed';
+  // An active 1ZE reconciliation pause suspends secondary trading.
+  if (isReconciliationHalted) return 'paused';
+  if (offeringStatus === 'allocated' || offeringStatus === 'closed') return 'trading';
+  // 'offering' (still allocating primary units) and 'failed' (offering closed
+  // without full allocation) both have no active secondary market yet.
+  return 'pre_market';
+}
 
 // ── Dependency injection ──
 
@@ -703,6 +739,25 @@ async function recalcCoOwnHolders(client: PoolClient, assetId: string): Promise<
   return Number(result.rows[0]?.count ?? '0');
 }
 
+// Exit lifecycle enforcement: an active exit corporate action (announced or
+// executing) terminally closes the secondary market. Mutating trade handlers
+// must reject with 423 when this returns true, even if `is_open` is still true.
+// The buyout accept handler is intentionally exempt — holders must be able to
+// accept buyout offers during exit proceedings.
+async function hasActiveExitAction(assetId: string): Promise<boolean> {
+  const result = await db.query<{ exists: number }>(
+    `
+      SELECT 1 FROM coown_corporate_actions
+      WHERE asset_id = $1
+        AND action_type = 'exit'
+        AND status IN ('announced', 'executing')
+      LIMIT 1
+    `,
+    [assetId]
+  );
+  return result.rows.length > 0;
+}
+
 // ── Co-Own route handlers ──
 
 /* ── Co-Own Price Alerts ── */
@@ -1016,23 +1071,18 @@ app.post('/co-own/corporate-actions/:actionId/vote', async (request, reply) => {
 
   const { assetId, vote, rationale } = bodySchema.parse(request.body ?? {});
 
-  // Verify the user holds units of this asset
-  const holdingsResult = await db.query<{ units: string | number }>(
-    `SELECT COALESCE(SUM(units), 0)::bigint AS units
-     FROM coown_holdings
-     WHERE asset_id = $1 AND holder_user_id = $2`,
-    [assetId, request.authUser.userId]
-  );
-
-  const votingPower = Number(holdingsResult.rows[0]?.units ?? 0);
-  if (votingPower === 0) {
-    reply.code(403);
-    return { ok: false, error: 'You must hold units of this asset to vote' };
-  }
-
-  // Verify the corporate action is a governance type and still open
-  const actionResult = await db.query<{ status: string; action_type: string }>(
-    `SELECT status, action_type FROM coown_corporate_actions WHERE id = $1`,
+  // Verify the corporate action exists, belongs to the submitted asset, is a
+  // governance action, and is still open. record_date is fetched here so we
+  // can enforce record-date eligibility before reading holdings.
+  const actionResult = await db.query<{
+    status: string;
+    action_type: string;
+    asset_id: string;
+    record_date: string | null;
+  }>(
+    `SELECT status, action_type, asset_id, record_date
+     FROM coown_corporate_actions
+     WHERE id = $1`,
     [actionId]
   );
 
@@ -1041,14 +1091,93 @@ app.post('/co-own/corporate-actions/:actionId/vote', async (request, reply) => {
     return { ok: false, error: 'Corporate action not found' };
   }
 
-  if (actionResult.rows[0].action_type !== 'governance') {
+  const action = actionResult.rows[0];
+
+  // Bug B: enforce that the action belongs to the asset submitted in the body.
+  // Without this check a user could vote on an action for asset A using their
+  // holdings in asset B.
+  if (action.asset_id !== assetId) {
+    reply.code(400);
+    return { ok: false, error: 'Corporate action does not belong to this asset' };
+  }
+
+  if (action.action_type !== 'governance') {
     reply.code(400);
     return { ok: false, error: 'Voting is only available for governance actions' };
   }
 
-  if (actionResult.rows[0].status !== 'open') {
+  if (action.status !== 'open') {
     reply.code(400);
     return { ok: false, error: 'Voting has closed for this action' };
+  }
+
+  // Bug C: record-date eligibility. When a record date is set and is in the
+  // future, voting is not yet open. When the record date is in the past,
+  // eligibility is based on a holdings snapshot reconstructed at that date by
+  // replaying the coown_trades ledger (buyer_id gains units, seller_id loses
+  // units) up to and including the record date. When record_date is null,
+  // current holdings apply directly.
+  if (action.record_date != null) {
+    const recordDateMs = new Date(action.record_date).getTime();
+    if (Number.isFinite(recordDateMs) && recordDateMs > Date.now()) {
+      reply.code(403);
+      return { ok: false, error: 'Voting is not yet open' };
+    }
+  }
+
+  // Verify the user holds units of this asset and compute voting power.
+  // The coown_holdings table uses `user_id` (not `holder_user_id`, which
+  // belongs to coown_buyout_responses) and `units_owned` (not `units`).
+  // The coown_trades table uses `buyer_id`/`seller_id` and `created_at`.
+  let votingPower: number;
+  if (action.record_date != null) {
+    const recordDateMs = new Date(action.record_date).getTime();
+    if (Number.isFinite(recordDateMs) && recordDateMs <= Date.now()) {
+      // Reconstruct holdings at the record date from the trade ledger.
+      // Sum buys (positive) and sells (negative) executed up to and including
+      // the record date. This is more accurate than current holdings because
+      // it excludes trades that occurred after the record date.
+      const historicalResult = await db.query<{ units: string | number }>(
+        `SELECT COALESCE(
+          SUM(CASE
+            WHEN buyer_id = $2 THEN units
+            WHEN seller_id = $2 THEN -units
+            ELSE 0
+          END), 0
+        )::bigint AS units
+         FROM coown_trades
+         WHERE asset_id = $1
+           AND (buyer_id = $2 OR seller_id = $2)
+           AND created_at <= $3`,
+        [assetId, request.authUser.userId, action.record_date]
+      );
+      votingPower = Number(historicalResult.rows[0]?.units ?? 0);
+    } else {
+      // Record date is in the future — voting not yet open (already handled
+      // above). This branch shouldn't be reached, but use current holdings as
+      // a safe fallback.
+      const holdingsResult = await db.query<{ units: string | number }>(
+        `SELECT COALESCE(SUM(units_owned), 0)::bigint AS units
+         FROM coown_holdings
+         WHERE asset_id = $1 AND user_id = $2`,
+        [assetId, request.authUser.userId]
+      );
+      votingPower = Number(holdingsResult.rows[0]?.units ?? 0);
+    }
+  } else {
+    // No record date — use current holdings.
+    const holdingsResult = await db.query<{ units: string | number }>(
+      `SELECT COALESCE(SUM(units_owned), 0)::bigint AS units
+       FROM coown_holdings
+       WHERE asset_id = $1 AND user_id = $2`,
+      [assetId, request.authUser.userId]
+    );
+    votingPower = Number(holdingsResult.rows[0]?.units ?? 0);
+  }
+
+  if (votingPower <= 0) {
+    reply.code(403);
+    return { ok: false, error: 'You must hold units of this asset to vote' };
   }
 
   // Upsert the vote (user can change their vote while open)
@@ -1391,9 +1520,15 @@ app.get('/co-own/assets', async (request) => {
     market_move_pct_24h: number | string;
     holders: number;
     volume_24h_gbp: number | string;
+    best_bid_gbp: number | string | null;
+    best_ask_gbp: number | string | null;
+    bid_depth_units: number | string;
+    ask_depth_units: number | string;
     is_open: boolean;
     created_at: string;
     updated_at: string;
+    has_exit: boolean;
+    last_trade_price_gbp: number | string | null;
   }>(
     `
       SELECT
@@ -1411,10 +1546,36 @@ app.get('/co-own/assets', async (request) => {
         sa.market_move_pct_24h,
         sa.holders,
         sa.volume_24h_gbp,
+        book.best_bid_gbp,
+        book.best_ask_gbp,
+        book.bid_depth_units,
+        book.ask_depth_units,
         sa.is_open,
         sa.created_at,
-        sa.updated_at
+        sa.updated_at,
+        EXISTS (
+          SELECT 1 FROM coown_corporate_actions ca
+          WHERE ca.asset_id = sa.id AND ca.action_type = 'exit'
+        ) AS has_exit,
+        (
+          SELECT t.unit_price_gbp
+          FROM coOwn_trades t
+          WHERE t.asset_id = sa.id AND t.settlement_status = 'settled'
+          ORDER BY t.created_at DESC, t.id DESC
+          LIMIT 1
+        ) AS last_trade_price_gbp
       FROM coOwn_assets sa
+      LEFT JOIN LATERAL (
+        SELECT
+          MAX(o.unit_price_gbp) FILTER (WHERE o.side = 'buy') AS best_bid_gbp,
+          MIN(o.unit_price_gbp) FILTER (WHERE o.side = 'sell') AS best_ask_gbp,
+          COALESCE(SUM(o.remaining_units) FILTER (WHERE o.side = 'buy'), 0)::int AS bid_depth_units,
+          COALESCE(SUM(o.remaining_units) FILTER (WHERE o.side = 'sell'), 0)::int AS ask_depth_units
+        FROM coOwn_orders o
+        WHERE o.asset_id = sa.id
+          AND o.status IN ('open', 'partially_filled')
+          AND o.remaining_units > 0
+      ) book ON TRUE
       ${whereClause}
       ORDER BY sa.volume_24h_gbp DESC, sa.created_at DESC
       LIMIT ${limitPlaceholder}
@@ -1422,9 +1583,16 @@ app.get('/co-own/assets', async (request) => {
     whereParams
   );
 
+  // The 1ZE reconciliation halt is a global runtime state, not per-asset, so it
+  // is fetched once and applied to every row's marketStatus projection.
+  const haltState = await getOnezeMintBurnHaltState();
+  const isReconciliationHalted = haltState.halted;
+
   return {
     ok: true,
-    items: result.rows.map((row) => ({
+    items: result.rows.map((row) => {
+      const offeringStatus = computeOfferingStatus(row.is_open, row.available_units);
+      return {
       id: row.id,
       listingId: row.listing_id,
       issuerId: row.issuer_id,
@@ -1439,10 +1607,75 @@ app.get('/co-own/assets', async (request) => {
       marketMovePct24h: row.market_move_pct_24h == null ? null : Number(row.market_move_pct_24h),
       holders: row.holders,
       volume24hGbp: row.volume_24h_gbp == null ? null : Number(row.volume_24h_gbp),
+      bestBidGbp: row.best_bid_gbp == null ? null : Number(row.best_bid_gbp),
+      bestAskGbp: row.best_ask_gbp == null ? null : Number(row.best_ask_gbp),
+      bidDepthUnits: Number(row.bid_depth_units),
+      askDepthUnits: Number(row.ask_depth_units),
       isOpen: row.is_open,
+      offeringStatus,
+      marketStatus: computeMarketStatus(offeringStatus, row.has_exit, isReconciliationHalted),
+      lastTradePriceGbp: row.last_trade_price_gbp == null ? null : Number(row.last_trade_price_gbp),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-    })),
+      };
+    }),
+  };
+});
+
+// POST /co-own/assets/:assetId/issues — persist an authenticated user report.
+// Reports are private support records; this response intentionally returns
+// only the reporter-safe acknowledgement fields.
+app.post('/co-own/assets/:assetId/issues', async (request, reply) => {
+  const actorUserId = resolveAuthenticatedUserId(request);
+  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
+  const bodySchema = z.object({
+    category: z.enum(['dispute', 'technical', 'fraud', 'other']),
+    description: z.string().trim().min(10).max(4000),
+  });
+  const { assetId } = paramsSchema.parse(request.params);
+  const payload = bodySchema.parse(request.body);
+
+  const assetResult = await db.query<{ id: string }>(
+    'SELECT id FROM coOwn_assets WHERE id = $1 LIMIT 1',
+    [assetId]
+  );
+  if (!assetResult.rows[0]) {
+    reply.code(404);
+    return { ok: false, error: 'Co-Own asset not found', code: 'COOWN_ASSET_NOT_FOUND' };
+  }
+
+  await ensureUserExists(actorUserId);
+  const issueId = createRuntimeId('coown_issue');
+  const createdAt = new Date().toISOString();
+  await db.query(
+    `
+      INSERT INTO coown_asset_issues (
+        id, asset_id, reporter_id, category, description, status, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, 'open', $6, $6)
+    `,
+    [issueId, assetId, actorUserId, payload.category, payload.description, createdAt]
+  );
+
+  await appendComplianceAuditSafe(request, {
+    eventType: 'coown.asset_issue.created',
+    actorUserId,
+    subjectUserId: actorUserId,
+    payload: {
+      issueId,
+      assetId,
+      category: payload.category,
+    },
+  });
+
+  reply.code(201);
+  return {
+    ok: true,
+    issue: {
+      id: issueId,
+      status: 'open' as const,
+      createdAt,
+    },
   };
 });
 
@@ -1480,6 +1713,18 @@ app.post('/co-own/assets', async (request, reply) => {
   });
 
   const payload = bodySchema.parse(request.body);
+
+  // Issuers may submit an authentication method, but cannot self-attest a
+  // verified status. Verification is an evidence-review outcome owned by the
+  // platform and must be awarded through the review workflow.
+  if (payload.authenticityStatus === 'verified') {
+    reply.code(400);
+    return {
+      ok: false,
+      error: 'Authenticity must be reviewed before it can be marked verified',
+      code: 'AUTHENTICITY_REVIEW_REQUIRED',
+    };
+  }
 
   // Truthfulness invariant: if custody is insured, the insurer must be named.
   if (payload.custodyInsured && !payload.custodyInsurer) {
@@ -1704,6 +1949,15 @@ app.post('/co-own/assets', async (request, reply) => {
       holders: result.rows[0].holders,
       volume24hGbp: result.rows[0].volume_24h_gbp == null ? null : Number(result.rows[0].volume_24h_gbp),
       isOpen: result.rows[0].is_open,
+      offeringStatus: computeOfferingStatus(result.rows[0].is_open, result.rows[0].available_units),
+      // A freshly created asset has no exit corporate action and no trades yet,
+      // so its secondary market is pre-market regardless of global halt state.
+      marketStatus: computeMarketStatus(
+        computeOfferingStatus(result.rows[0].is_open, result.rows[0].available_units),
+        false,
+        false
+      ),
+      lastTradePriceGbp: null,
       createdAt: result.rows[0].created_at,
       updatedAt: result.rows[0].updated_at,
     },
@@ -1790,6 +2044,9 @@ app.get('/co-own/assets/:assetId/orders', async (request, reply) => {
     return { ok: false, error: 'Co-Own asset not found' };
   }
 
+  // This endpoint is a public market-history projection. Counterparty
+  // identity is private and must never be exposed; owner-scoped history is
+  // served by /users/:userId/market-history after authentication.
   const result = await db.query<{
     id: number;
     asset_id: string;
@@ -1838,7 +2095,6 @@ app.get('/co-own/assets/:assetId/orders', async (request, reply) => {
     items: result.rows.map((row) => ({
       id: row.id,
       assetId: row.asset_id,
-      userId: row.user_id,
       side: row.side,
       orderType: row.order_type,
       limitPriceGbp: row.limit_price_gbp === null ? null : Number(row.limit_price_gbp),
@@ -2137,6 +2393,17 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
     return { ok: false, error: 'Co-Own asset is closed for trading' };
   }
 
+  if (await hasActiveExitAction(assetId)) {
+    reply.code(423);
+    return { ok: false, error: 'CO_OWN_MARKET_CLOSED', message: 'This asset is in exit proceedings. Trading is closed.' };
+  }
+
+  const previewHaltState = await getOnezeMintBurnHaltState();
+  if (previewHaltState.halted) {
+    reply.code(423);
+    return { ok: false, error: 'CO_OWN_RECONCILIATION_HALT', message: 'Trading is temporarily paused for reconciliation.' };
+  }
+
   const referencePriceGbp = Number(asset.unit_price_gbp);
   const protectionCapGbp =
     payload.orderType === 'protected_market'
@@ -2254,16 +2521,21 @@ app.post('/co-own/assets/:assetId/orders/preview', async (request, reply) => {
         remainingUnits: Math.max(0, remainingUnits),
         avgFillPrice,
         avgFillPriceStr: formatGbp(avgFillPrice),
+        avgFillPriceGbpStr: formatGbp(avgFillPrice),
         worstPrice,
         worstPriceStr: formatGbp(worstPrice),
+        worstPriceGbpStr: formatGbp(worstPrice),
         grossNotional,
         grossNotionalStr: formatGbp(grossNotional),
+        grossNotionalGbpStr: formatGbp(grossNotional),
         slippageBeyondDepth,
       },
       fee,
       feeStr: formatGbp(fee),
+      feeGbpStr: formatGbp(fee),
       total,
       totalStr: formatGbp(total),
+      totalGbpStr: formatGbp(total),
       feeRate: CO_OWN_TRADE_FEE_RATE,
       availableUnits: asset.available_units,
       totalUnits: asset.total_units,
@@ -2313,6 +2585,17 @@ app.post('/co-own/assets/:assetId/orders/reserve', async (request, reply) => {
   const { assetId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body);
   await ensureUserExists(payload.userId);
+
+  const reserveHaltState = await getOnezeMintBurnHaltState();
+  if (reserveHaltState.halted) {
+    reply.code(423);
+    return { ok: false, error: 'CO_OWN_RECONCILIATION_HALT', message: 'Trading is temporarily paused for reconciliation.' };
+  }
+
+  if (await hasActiveExitAction(assetId)) {
+    reply.code(423);
+    return { ok: false, error: 'CO_OWN_MARKET_CLOSED', message: 'This asset is in exit proceedings. Trading is closed.' };
+  }
 
   const reservationIdempotencyHash = payload.idempotencyKey
     ? hashCoOwnReservationPayload({
@@ -2586,6 +2869,7 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     minPriceGbp: z.number().positive().optional(),
     reservationId: z.string().min(8).max(160),
     idempotencyKey: z.string().min(8).max(140).optional(),
+    timeInForce: z.enum(['GFD', 'GTC90']).optional().default('GFD'),
   }).superRefine((value, ctx) => {
     if (value.orderType === 'limit' && !value.limitPriceGbp) {
       ctx.addIssue({
@@ -2759,6 +3043,12 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
       return { ok: false, error: 'Co-Own asset is closed for trading' };
     }
 
+    if (await hasActiveExitAction(assetId)) {
+      await client.query('ROLLBACK');
+      reply.code(423);
+      return { ok: false, error: 'CO_OWN_MARKET_CLOSED', message: 'This asset is in exit proceedings. Trading is closed.' };
+    }
+
     const reservationResult = await client.query<{
       id: string;
       user_id: string;
@@ -2815,10 +3105,12 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         : payload.orderType === 'protected_market' && protectionCapGbp
           ? roundTo(protectionCapGbp, 4)
           : referencePriceGbp;
-    const proposedNotionalGbp = roundTo(Math.max(0, payload.units) * proposedUnitPrice, 2);
-    const requiredBuyReservationUnits = Math.ceil(
-      roundTo(proposedNotionalGbp * (1 + CO_OWN_TRADE_FEE_RATE), 4) * 1000
-    );
+    const proposedNotionalGbp = roundTo(Math.max(0, payload.units) * proposedUnitPrice, 4);
+    const proposedFeeGbp = roundTo(proposedNotionalGbp * CO_OWN_TRADE_FEE_RATE, 4);
+    const proposedTotalGbp = payload.side === 'buy'
+      ? roundTo(proposedNotionalGbp + proposedFeeGbp, 4)
+      : roundTo(proposedNotionalGbp - proposedFeeGbp, 4);
+    const requiredBuyReservationUnits = Math.ceil(roundTo(proposedTotalGbp, 4) * 1000);
     const reservationIsInsufficient = payload.side === 'buy'
       ? Number(reservation.reserved_1ze_units) < requiredBuyReservationUnits
       : Number(reservation.reserved_units) < payload.units;
@@ -3020,6 +3312,22 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
     );
 
     const incomingOrderId = orderResult.rows[0].id;
+
+    // ── Time-in-force / expiry ──
+    // The coOwn_orders table does not yet have an `expires_at` column, so the
+    // computed expiry is accepted and surfaced in the response (and audit
+    // trail) for now. Once the column is added, this value should be persisted
+    // and a sweeper should cancel orders past their expiry.
+    const orderExpiryDate = payload.timeInForce === 'GTC90'
+      ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+      : (() => {
+          // GFD: end of the current trading day (UTC midnight of the next day).
+          const endOfDay = new Date();
+          endOfDay.setUTCHours(24, 0, 0, 0);
+          return endOfDay;
+        })();
+    const orderExpiresAt = orderExpiryDate.toISOString();
+
     await client.query(
       `
         UPDATE coown_order_reservations
@@ -3463,6 +3771,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         totalGbp: orderTotalGbp,
         totalGbpStr: formatGbp(orderTotalGbp),
         status: incomingOrder.rows[0].status,
+        timeInForce: payload.timeInForce,
+        expiresAt: orderExpiresAt,
         createdAt: incomingOrder.rows[0].created_at,
         updatedAt: incomingOrder.rows[0].updated_at,
       },
@@ -3598,6 +3908,8 @@ app.post('/co-own/assets/:assetId/orders', async (request, reply) => {
         filledUnits: incomingOrder.rows[0].filled_units,
         remainingUnits: incomingOrder.rows[0].remaining_units,
         status: incomingOrder.rows[0].status,
+        timeInForce: payload.timeInForce,
+        expiresAt: orderExpiresAt,
         amlAlertId: amlAlert?.alertId ?? null,
       },
     });
@@ -3837,10 +4149,18 @@ app.post('/co-own/assets/:assetId/buyout-offers', {
     targetUnits: z.number().int().min(1).max(COOWN_POLICY.maxBuyoutUnits).optional(),
     expiresInHours: z.number().int().min(1).max(168).default(24),
     metadata: z.record(z.unknown()).optional(),
-  });
+  }).strict();
 
   const { assetId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
+
+  // P0: Verify the bidder in the body matches the authenticated user to
+  // prevent user-impersonation via raw-body userId injection.
+  if (!request.authUser || request.authUser.userId !== payload.bidderUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Authenticated user does not match bidder' };
+  }
+
   await ensureUserExists(payload.bidderUserId);
 
   const client = await db.connect();
@@ -3873,6 +4193,12 @@ app.post('/co-own/assets/:assetId/buyout-offers', {
       await client.query('ROLLBACK');
       reply.code(409);
       return { ok: false, error: 'Co-Own asset is closed for buyout offers' };
+    }
+
+    if (await hasActiveExitAction(assetId)) {
+      await client.query('ROLLBACK');
+      reply.code(423);
+      return { ok: false, error: 'CO_OWN_MARKET_CLOSED', message: 'This asset is in exit proceedings. Trading is closed.' };
     }
 
     const bidderHolding = await getCoOwnHoldingForUpdate(client, payload.bidderUserId, assetId);
@@ -4093,10 +4419,18 @@ app.post('/co-own/buyout-offers/:offerId/accept', async (request, reply) => {
     holderUserId: z.string().min(2),
     units: z.number().int().min(1).max(COOWN_POLICY.maxBuyoutUnits),
     metadata: z.record(z.unknown()).optional(),
-  });
+  }).strict();
 
   const { offerId } = paramsSchema.parse(request.params);
   const payload = bodySchema.parse(request.body ?? {});
+
+  // P0: Verify the holder in the body matches the authenticated user to
+  // prevent user-impersonation via raw-body userId injection.
+  if (!request.authUser || request.authUser.userId !== payload.holderUserId) {
+    reply.code(403);
+    return { ok: false, error: 'Authenticated user does not match holder' };
+  }
+
   await ensureUserExists(payload.holderUserId);
 
   const client = await db.connect();
@@ -4892,6 +5226,23 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       }
     : null;
 
+  // Lifecycle projection inputs: an exit corporate action marks the asset as
+  // terminally closed, and the global 1ZE reconciliation halt pauses the
+  // secondary market. lastTradePriceGbp reuses the most recent settled trade
+  // price already fetched in the market snapshot above.
+  const exitActionResult = await db.query<{ id: string }>(
+    `SELECT id FROM coown_corporate_actions
+     WHERE asset_id = $1 AND action_type = 'exit'
+     LIMIT 1`,
+    [assetId]
+  );
+  const hasExitAction = exitActionResult.rows.length > 0;
+
+  const haltState = await getOnezeMintBurnHaltState();
+
+  const offeringStatus = computeOfferingStatus(row.is_open, row.available_units);
+  const marketStatus = computeMarketStatus(offeringStatus, hasExitAction, haltState.halted);
+
   return {
     ok: true,
     item: {
@@ -4926,6 +5277,9 @@ app.get('/co-own/assets/:assetId', async (request, reply) => {
       holders: row.holders,
       volume24hGbp: row.volume_24h_gbp == null ? null : Number(row.volume_24h_gbp),
       isOpen: row.is_open,
+      offeringStatus,
+      marketStatus,
+      lastTradePriceGbp: lastExecutionPriceGbp,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       legalVehicleType: row.legal_vehicle_type,

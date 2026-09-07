@@ -15,6 +15,7 @@ import { useHaptic } from '../hooks/useHaptic';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useStore } from '../store/useStore';
 import { Radius, Space, TypeStyles } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -35,7 +36,7 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
     quickActions: { borderColor: colors.border } }), [colors]);
   const { show } = useToast();
   const haptic = useHaptic();
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { listings } = useBackendData();
   const conversations = useStore((state) => state.conversations);
   const deleteConversation = useStore((state) => state.deleteConversation);
@@ -251,8 +252,8 @@ export default function ConversationInfoScreen({ navigation, route }: Props) {
               icon="bag-handle-outline"
               label={linkedListing?.title || 'Linked listing'}
               subtitle="Open the product linked to this conversation"
-              detail={linkedListing ? formatFromFiat(linkedListing.price, currencyCode) : undefined}
-              onPress={() => navigation.navigate('ItemDetail', { itemId: conversation.itemId! })}
+              detail={linkedListing ? formatFromFiat(linkedListing.price, 'GBP') : undefined}
+              onPress={() => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: conversation.itemId!, sourceSurface: 'ConversationInfo' })}
               showChevron
             />
           </ChatInfoSection>

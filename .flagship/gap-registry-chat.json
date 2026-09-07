@@ -1,0 +1,134 @@
+{
+  "department": "chat-messaging",
+  "audit_date": "2026-09-03",
+  "competitor_benchmark": {
+    "primary": "WhatsApp 2026 (beta 2.26.24.3+), Telegram 2026",
+    "secondary": "iMessage, Google Messages 2026, Discord",
+    "sources": [
+      "https://about.fb.com/news/2026/08/were-upgrading-your-whatsapp-group-chats/",
+      "https://wabetainfo.com/whatsapp-is-updating-the-group-chat-info-interface-on-ios/",
+      "https://wabetainfo.com/whatsapp-is-rolling-out-new-settings-for-group-info-on-android/",
+      "https://www.brandligo.com/whatsapps-new-group-typing-indicator/",
+      "https://telegram.org/blog/ai-bot-revolution-11-new-features/",
+      "https://telegram.org/tour/groups/tr?setln=en",
+      "https://ethora.com/blog/chat-app-ui-ux-design/",
+      "https://9to5google.com/2026/08/29/new-google-messages-features/"
+    ]
+  },
+  "current_state": {
+    "screens": [
+      "ChatScreen.tsx (2267 lines) — 1:1 DM with commerce context, agent suggestions, voice, reactions, reply, edit, safety",
+      "GroupChatScreen.tsx (704 lines) — group chat with send permissions, typing, reactions, reply, members, media",
+      "GroupChatInfoScreen.tsx (1061+ lines) — group info with hero, tabs (members/media/settings), invite links, mute, leave",
+      "CreateGroupChatScreen.tsx — two-stage group creation with member search, photo/cover upload",
+      "InboxScreen.tsx — conversation list with segments, search, swipe actions, realtime updates",
+      "ChatSettingsScreen.tsx — DM chat settings"
+    ],
+    "components": [
+      "MessageBubble — WhatsApp-style bubbles with cluster radius, sender color, reactions, reply, media, voice, translation",
+      "ChatTopBar — avatar, title, subtitle, search, info, presence dot",
+      "ChatComposerBar — attachment, camera, voice, quick replies, safety warnings",
+      "ChatActionSheet — gallery/camera/document/agent/offer/share_listing",
+      "MessageContextMenu — copy/reply/react/delete/report with animated sheet",
+      "EmojiReactionsBar — default + extended emoji picker",
+      "TypingIndicator — animated 3-dot indicator (exists but NOT used in GroupChatScreen header)",
+      "ScrollToBottomFAB — with unread count badge",
+      "InboxConversationRow — typing dots, unread badge, pinned/muted icons, commerce thumbnail"
+    ],
+    "backend_support": {
+      "typing_indicator": "YES — sends userId in payload, but frontend hook discards it (returns boolean only)",
+      "pinned_messages": "NO — no backend endpoint for pinning messages",
+      "polls": "NO — no backend endpoint for polls in chat",
+      "mentions": "NO — no @mention parsing or notification in chat (exists only in creator stickers)",
+      "message_forwarding": "NO — no forward feature",
+      "unread_separator": "NO — no unread separator in message list",
+      "group_description": "YES — stored in conversation.description, shown in info screen but NOT in chat"
+    }
+  },
+  "gaps": [
+    {
+      "id": "CHAT-001",
+      "severity": "P1",
+      "title": "Group chat shows generic 'Someone is typing…' instead of named typing indicator",
+      "evidence": "GroupChatScreen.tsx line 524: '<Caption color={colors.textMuted}>Someone is typing…</Caption>'. useTypingIndicator (realtimeClient.ts line 259) returns only boolean, discarding payload.userId that the backend already sends.",
+      "competitor_evidence": "WhatsApp 2026 beta: shows 'Ali is typing…' / '2 people are typing…' / '3 people are typing…' (brandligo.com, WABetaInfo). Telegram: shows sender name with typing indicator. iMessage: shows 'X is typing…' with animated dots.",
+      "impact": "Prototype-grade tell. Users can't tell who is typing in a group. Reads as AI-made. WhatsApp/Telegram/iMessage all show names.",
+      "fix": "Upgrade useTypingIndicator to expose typing user IDs. Resolve to display names from participant profiles. Render 'Alice is typing…' / 'Alice and Bob are typing…' / '3 people are typing…' with animated dots.",
+      "validation": "Visual: header subtitle shows named typing with animated dots. Multiple typists show count. Auto-clears after 4s."
+    },
+    {
+      "id": "CHAT-002",
+      "severity": "P1",
+      "title": "No swipe-to-reply gesture on message bubbles",
+      "evidence": "No swipe/GestureHandler found in chat components. Reply is only via long-press → context menu → reply. MessageBubble has onLongPress but no swipe gesture.",
+      "competitor_evidence": "WhatsApp/iMessage: swipe right on message to reply. Telegram: swipe left on message to reply. Google Messages 2026: swipe right to reply, swipe left for timestamps. ethora.com: 'Swipe right on mobile (the WhatsApp/iMessage convention)' — don't invent new gestures.",
+      "impact": "Missing the most-used reply interaction in messaging. Long-press-only reply feels prototype-grade. Every flagship messaging app has swipe-to-reply.",
+      "fix": "Add swipe-right-to-reply gesture on message rows using react-native-gesture-handler. Show reply preview in composer on release. Haptic on trigger threshold.",
+      "validation": "Swipe right on any message triggers reply. Haptic feedback at threshold. Reply preview appears in composer. Cancels if swipe doesn't cross threshold."
+    },
+    {
+      "id": "CHAT-003",
+      "severity": "P1",
+      "title": "Group chat typing indicator uses plain text, not animated dots",
+      "evidence": "GroupChatScreen line 522-526: renders '<Caption>Someone is typing…</Caption>' — plain text, no animated dots. TypingIndicator component with animated dots EXISTS (TypingIndicator.tsx) but is not used in GroupChatScreen. InboxConversationRow has its own TypingDots component.",
+      "competitor_evidence": "WhatsApp/Telegram/iMessage all use animated dots for typing. Plain text 'typing…' reads as prototype-grade.",
+      "impact": "Inconsistent with inbox row (which has animated dots). Reads as unfinished. WhatsApp/Telegram use animated dots universally.",
+      "fix": "Use TypingIndicator animated dots alongside named typing text in group header subtitle and in-chat typing row.",
+      "validation": "Animated dots visible when someone is typing. Consistent with inbox row typing indicator."
+    },
+    {
+      "id": "CHAT-004",
+      "severity": "P2",
+      "title": "No unread message separator in message list",
+      "evidence": "No unread separator found in ChatScreen or GroupChatScreen. No 'unreadSeparator' or 'UNREAD_SEPARATOR' in codebase.",
+      "competitor_evidence": "WhatsApp: 'X unread messages' separator when scrolling to unread. Telegram: unread separator line. iMessage: unread separator.",
+      "impact": "Users can't see where unread messages begin when returning to a conversation. Standard messaging feature missing.",
+      "fix": "Add unread separator pill ('X unread messages') at the first unread message index, computed from conversation.unread count and message list.",
+      "validation": "Separator appears at first unread message. Shows count. Disappears after messages are read."
+    },
+    {
+      "id": "CHAT-005",
+      "severity": "P2",
+      "title": "Group description not shown as pinned bar in chat",
+      "evidence": "GroupChatInfoScreen shows description in hero section, but GroupChatScreen does not show it. conversation.description is available but unused in the chat view.",
+      "competitor_evidence": "WhatsApp: shows group description as a system message at the top of new groups. Telegram: shows group description in a pinned info bar.",
+      "impact": "Group purpose/context is hidden in info screen. New members don't see the group description in the chat itself.",
+      "fix": "Show a dismissible group description bar at the top of the message list when description exists and hasn't been dismissed.",
+      "validation": "Description bar appears at top of group chat. Dismissible. Does not reappear after dismissal for the same group."
+    },
+    {
+      "id": "CHAT-006",
+      "severity": "P2",
+      "title": "No message forwarding",
+      "evidence": "MessageContextMenu actions: copy, reply, react, delete, report. No 'forward' action. deriveMessageActions in messageContextMenuCapabilities has no forward.",
+      "competitor_evidence": "WhatsApp/Telegram/iMessage all have forward in context menu. Standard messaging action.",
+      "impact": "Users can't share a message to another conversation. Missing standard messaging action.",
+      "fix": "Add 'forward' action to context menu. Open conversation picker. Send message content to selected conversation.",
+      "validation": "Forward action in context menu. Opens conversation picker. Message content sent to selected conversation."
+    },
+    {
+      "id": "CHAT-007",
+      "severity": "P3",
+      "title": "No @mentions or @all in group chat",
+      "evidence": "No mention parsing, mention suggestions, or @all feature in chat. Backend has no mention endpoint for chat.",
+      "competitor_evidence": "WhatsApp 2026: @all mentions for admins in groups >32, @name mentions with notifications. Telegram: @username mentions with @ badge navigation.",
+      "impact": "Can't address specific members in busy groups. Can't notify all members. Major group chat feature missing.",
+      "fix": "Backend: add mention metadata to messages. Frontend: parse @mentions, show suggestion picker, render mentions with color, send notifications.",
+      "validation": "Typing @ shows member suggestions. Mentioned user gets notification. @all available for admins."
+    },
+    {
+      "id": "CHAT-008",
+      "severity": "P3",
+      "title": "No polls in group chat",
+      "evidence": "No poll feature in chat. Backend has no poll endpoint.",
+      "competitor_evidence": "WhatsApp 2026: polls with end time, hidden voter names, edit within 15min. Telegram: polls with media, statistics, time limits, quiz mode.",
+      "impact": "Can't make group decisions. Major group chat feature missing for coordination (group buys, co-own decisions).",
+      "fix": "Backend: add poll creation/voting endpoints. Frontend: poll composer, poll message bubble, vote UI, results display.",
+      "validation": "Can create poll in group. Members can vote. Results show in real-time. Poll closes at end time."
+    }
+  ],
+  "implementation_priority": {
+    "wave_1_frontend_only": ["CHAT-001", "CHAT-002", "CHAT-003", "CHAT-004", "CHAT-005"],
+    "wave_2_needs_backend": ["CHAT-006", "CHAT-007", "CHAT-008"]
+  }
+}

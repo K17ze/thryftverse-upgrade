@@ -56,7 +56,7 @@ export function ConditionInfoSheet({
           {/* TODO: Replace runtime conditionMeta.color hex-alpha with theme token when color source is staticized */}
           <View style={[styles.conditionSheetBadge, { backgroundColor: conditionMeta ? `${conditionMeta.color}1F` : colors.surfaceAlt }]}>
             <View style={[styles.conditionDot, { backgroundColor: conditionMeta?.color ?? colors.textMuted }]} />
-            <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]} maxFontSizeMultiplier={1}>
+            <Text style={[styles.conditionSheetBadgeText, { color: conditionMeta?.color ?? colors.textPrimary }]} maxFontSizeMultiplier={1.4}>
               {condition}
             </Text>
           </View>
@@ -73,7 +73,7 @@ export function ConditionInfoSheet({
               accessibilityRole="button"
             >
               <Ionicons name="images-outline" size={18} color={colors.brand} />
-              <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={1}>
+              <Text style={[styles.conditionEvidenceJumpText, { color: colors.brand }]} maxFontSizeMultiplier={1.4}>
                 View condition photos
               </Text>
               <Ionicons name="chevron-forward" size={16} color={colors.brand} />

@@ -72,7 +72,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
   const selectedCountry = COMMON_COUNTRIES.find(c => c.code === countryCode) || COMMON_COUNTRIES[0];
   const needsRegion = selectedCountry.needsState;
 
-  const isFormValid = name.trim() && streetAddress.trim() && city.trim() && postalCode.trim();
+  const isFormValid = name.trim() && streetAddress.trim() && city.trim() && postalCode.trim() && (!needsRegion || region.trim());
 
   const handleSave = async () => {
     if (!isFormValid || isSaving) return;
@@ -164,6 +164,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
               value={name}
               onChangeText={setName}
               selectionColor={colors.brand}
+              accessibilityLabel="Full name"
             />
           </View>
         </View>
@@ -179,6 +180,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
               value={streetAddress}
               onChangeText={setStreetAddress}
               selectionColor={colors.brand}
+              accessibilityLabel="Street address"
             />
           </View>
         </View>
@@ -196,6 +198,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
               value={apartment}
               onChangeText={setApartment}
               selectionColor={colors.brand}
+              accessibilityLabel="Apartment, suite, unit (optional)"
             />
           </View>
         </View>
@@ -211,6 +214,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
               value={city}
               onChangeText={setCity}
               selectionColor={colors.brand}
+              accessibilityLabel="City"
             />
           </View>
         </View>
@@ -232,6 +236,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
                 value={region}
                 onChangeText={setRegion}
                 selectionColor={colors.brand}
+                accessibilityLabel="Region/State"
               />
             </View>
           </View>
@@ -251,6 +256,7 @@ export function AddAddressSheet({ visible, onDismiss, onSuccess }: Props) {
               onChangeText={setPostalCode}
               selectionColor={colors.brand}
               autoCapitalize="characters"
+              accessibilityLabel="Postcode"
             />
           </View>
         </View>

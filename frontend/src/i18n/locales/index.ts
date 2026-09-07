@@ -95,18 +95,18 @@ function mergeWithEnglishFallback(
   return merged;
 }
 
-const esFlattened = buildFlattenedResources(esJson as LocaleNamespaces);
-const frFlattened = buildFlattenedResources(frJson as LocaleNamespaces);
-const deFlattened = buildFlattenedResources(deJson as LocaleNamespaces);
-const arFlattened = buildFlattenedResources(arJson as LocaleNamespaces);
-const hiFlattened = buildFlattenedResources(hiJson as LocaleNamespaces);
-const zhFlattened = buildFlattenedResources(zhJson as LocaleNamespaces);
-const ptFlattened = buildFlattenedResources(ptJson as LocaleNamespaces);
-const jaFlattened = buildFlattenedResources(jaJson as LocaleNamespaces);
-const ruFlattened = buildFlattenedResources(ruJson as LocaleNamespaces);
-const trFlattened = buildFlattenedResources(trJson as LocaleNamespaces);
-const koFlattened = buildFlattenedResources(koJson as LocaleNamespaces);
-const idFlattened = buildFlattenedResources(idJson as LocaleNamespaces);
+const esFlattened = buildFlattenedResources(esJson as unknown as LocaleNamespaces);
+const frFlattened = buildFlattenedResources(frJson as unknown as LocaleNamespaces);
+const deFlattened = buildFlattenedResources(deJson as unknown as LocaleNamespaces);
+const arFlattened = buildFlattenedResources(arJson as unknown as LocaleNamespaces);
+const hiFlattened = buildFlattenedResources(hiJson as unknown as LocaleNamespaces);
+const zhFlattened = buildFlattenedResources(zhJson as unknown as LocaleNamespaces);
+const ptFlattened = buildFlattenedResources(ptJson as unknown as LocaleNamespaces);
+const jaFlattened = buildFlattenedResources(jaJson as unknown as LocaleNamespaces);
+const ruFlattened = buildFlattenedResources(ruJson as unknown as LocaleNamespaces);
+const trFlattened = buildFlattenedResources(trJson as unknown as LocaleNamespaces);
+const koFlattened = buildFlattenedResources(koJson as unknown as LocaleNamespaces);
+const idFlattened = buildFlattenedResources(idJson as unknown as LocaleNamespaces);
 
 /** Per-locale flattened namespace resources (with English fallback). */
 export const localeResources: Record<string, FlattenedResources> = {

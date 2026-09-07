@@ -436,14 +436,14 @@ export default function WalletScreen({ navigation }: Props) {
               style={[styles.balanceMasked, { color: colors.textMuted }]}
               accessibilityLabel={t('commerce.wallet.balanceHidden')}
               accessibilityHint={t('commerce.wallet.a11y.activateEyeToReveal')}
-            >
+             maxFontSizeMultiplier={2}>
               ••••••
             </Text>
           ) : (
             <Text
               style={[styles.balanceValue, { color: colors.textPrimary }]}
               accessibilityLabel={`${formatBalance(balance.available)} 1ZE`}
-            >
+             maxFontSizeMultiplier={2}>
               {formatBalance(balance.available)}
               <Text style={[styles.balanceUnit, { color: colors.textSecondary }]}> 1ZE</Text>
             </Text>
@@ -451,7 +451,7 @@ export default function WalletScreen({ navigation }: Props) {
           {usdLabel && !balanceHidden && (
             <View style={styles.localFiatRow}>
               <Ionicons name="cash-outline" size={IconGrammar.badge} color={colors.textMuted} />
-              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${usdLabel} USD at par`}>
+              <Text style={[styles.localFiatText, { color: colors.textMuted }]} numberOfLines={1} accessibilityLabel={`${usdLabel} USD at par`} maxFontSizeMultiplier={2}>
                 {usdLabel}
                 <Text style={styles.localFiatSuffix}> USD · at par</Text>
               </Text>
@@ -461,12 +461,11 @@ export default function WalletScreen({ navigation }: Props) {
 
         {/* ── Primary actions — 3 equal-width buttons in a row (spec 17 viewport 1) ── */}
         <View style={styles.actionRow}>
-          <Pressable
-            style={({ pressed }) => [
+          <AnimatedPressable
+            style={[
               styles.actionBtn,
               styles.actionBtnPrimary,
               { backgroundColor: colors.brand },
-              pressed && { opacity: 0.85 },
               !isWalletOperational && { opacity: 0.5 },
             ]}
             onPress={handleAddMoney}
@@ -477,13 +476,12 @@ export default function WalletScreen({ navigation }: Props) {
           >
             <Ionicons name="add-circle-outline" size={IconGrammar.standard} color={colors.background} />
             <Text style={[styles.actionBtnLabel, { color: colors.background }]}>{t('commerce.wallet.addMoney')}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={[
               styles.actionBtn,
               styles.actionBtnSecondary,
               { borderColor: colors.border },
-              pressed && { opacity: 0.7 },
               !isWalletOperational && { opacity: 0.5 },
             ]}
             onPress={handleWithdraw}
@@ -494,13 +492,12 @@ export default function WalletScreen({ navigation }: Props) {
           >
             <Ionicons name="arrow-down-circle-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>{t('commerce.wallet.withdraw')}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
+          </AnimatedPressable>
+          <AnimatedPressable
+            style={[
               styles.actionBtn,
               styles.actionBtnSecondary,
               { borderColor: colors.border },
-              pressed && { opacity: 0.7 },
               (balance.available <= 0 || !isWalletOperational) && { opacity: 0.5 },
             ]}
             onPress={handleConvert}
@@ -511,7 +508,7 @@ export default function WalletScreen({ navigation }: Props) {
           >
             <Ionicons name="swap-horizontal-outline" size={IconGrammar.standard} color={colors.textPrimary} />
             <Text style={[styles.actionBtnLabel, { color: colors.textPrimary }]}>{t('commerce.wallet.convert')}</Text>
-          </Pressable>
+          </AnimatedPressable>
         </View>
 
         {/* ── Pending attention — if real (spec 17 viewport 1) ── */}
@@ -533,9 +530,9 @@ export default function WalletScreen({ navigation }: Props) {
             icon="cash-outline"
             iconColor={colors.brand}
             title={t('commerce.wallet.sellerEarnings')}
-            subtitle={t('commerce.wallet.sellerEarningsSubtitle', { available: formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' }) })}
+            subtitle={t('commerce.wallet.sellerEarningsSubtitle', { available: formatFromFiat(sellerBalances.availableGbp, 'GBP', { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, 'GBP', { displayMode: 'fiat' }) })}
             onPress={handleViewEarnings}
-            accessibilityLabel={t('commerce.wallet.a11y.sellerEarnings', { available: formatFromFiat(sellerBalances.availableGbp, currencyCode, { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, currencyCode, { displayMode: 'fiat' }) })}
+            accessibilityLabel={t('commerce.wallet.a11y.sellerEarnings', { available: formatFromFiat(sellerBalances.availableGbp, 'GBP', { displayMode: 'fiat' }), pending: formatFromFiat(sellerBalances.pendingGbp, 'GBP', { displayMode: 'fiat' }) })}
             accessibilityHint={t('commerce.wallet.a11y.viewSellerEarnings')}
           />
         )}
@@ -569,7 +566,7 @@ export default function WalletScreen({ navigation }: Props) {
               <Ionicons name="arrow-down-circle-outline" size={IconGrammar.metadata} color={colors.textMuted} />
               <Text style={[styles.withdrawableLabel, { color: colors.textMuted }]}>{t('commerce.wallet.withdrawable')}</Text>
             </View>
-            <Text style={[styles.withdrawableValue, { color: colors.textSecondary }]}>
+            <Text style={[styles.withdrawableValue, { color: colors.textSecondary }]} maxFontSizeMultiplier={2}>
               {formatBalance(withdrawable)}
               <Text style={[styles.subBalanceUnit, { color: colors.textMuted }]}> 1ZE</Text>
             </Text>
@@ -596,7 +593,7 @@ export default function WalletScreen({ navigation }: Props) {
         <View style={styles.disclosureSection}>
           <View style={styles.infoHeader}>
             <Ionicons name="checkmark-circle-outline" size={IconGrammar.metadata} color={colors.brand} />
-            <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>
+            <Text style={[styles.infoTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
               {balance.safeguarded
                 ? balance.safeguardingPartner
                   ? t('commerce.wallet.safeguardedAt', { partner: balance.safeguardingPartner })
@@ -604,7 +601,7 @@ export default function WalletScreen({ navigation }: Props) {
                 : t('commerce.wallet.safeguardingPending')}
             </Text>
           </View>
-          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+          <Text style={[styles.infoBody, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
             {balance.safeguarded
               ? t('commerce.wallet.safeguardedBody', { currency: currencyCode })
               : t('commerce.wallet.safeguardingPendingBody', { currency: currencyCode })}
@@ -613,33 +610,31 @@ export default function WalletScreen({ navigation }: Props) {
           {balance.safeguarded && (balance.safeguardingEvidenceUrl || balance.safeguardingTermsUrl) ? (
             <View style={styles.safeguardingLinksRow}>
               {balance.safeguardingEvidenceUrl ? (
-                <Pressable
+                <AnimatedPressable
                   onPress={() => Linking.openURL(balance.safeguardingEvidenceUrl!)}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
                   accessibilityRole="link"
                   accessibilityLabel={t('commerce.wallet.a11y.viewSafeguardingEvidence')}
                   accessibilityHint={t('commerce.wallet.a11y.opensExternalBrowser')}
                 >
                   <Text style={[styles.safeguardingLink, { color: colors.brand }]}>{t('commerce.wallet.evidence')}</Text>
-                </Pressable>
+                </AnimatedPressable>
               ) : null}
               {balance.safeguardingTermsUrl ? (
-                <Pressable
+                <AnimatedPressable
                   onPress={() => Linking.openURL(balance.safeguardingTermsUrl!)}
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
                   accessibilityRole="link"
                   accessibilityLabel={t('commerce.wallet.a11y.viewSafeguardingTerms')}
                   accessibilityHint={t('commerce.wallet.a11y.opensExternalBrowser')}
                 >
                   <Text style={[styles.safeguardingLink, { color: colors.brand }]}>{t('commerce.wallet.terms')}</Text>
-                </Pressable>
+                </AnimatedPressable>
               ) : null}
             </View>
           ) : null}
 
           <View style={[styles.infoDivider, { borderColor: colors.border }]} />
 
-          <Text style={[styles.infoBody, { color: colors.textMuted }]}>
+          <Text style={[styles.infoBody, { color: colors.textMuted }]} maxFontSizeMultiplier={2}>
             {t('commerce.wallet.1zeDisclosure')}
           </Text>
         </View>
@@ -683,12 +678,12 @@ function SubBalanceRow({
       <Text
         style={[styles.subBalanceLabel, { color: emphasize ? colors.textSecondary : colors.textMuted }]}
         numberOfLines={1}
-      >
+       maxFontSizeMultiplier={2}>
         {label}
       </Text>
       <Text
         style={[styles.subBalanceValue, { color: emphasize ? colors.textPrimary : colors.textSecondary }]}
-      >
+       maxFontSizeMultiplier={2}>
         {formatBalance(value)}
         <Text style={[styles.subBalanceUnit, { color: colors.textMuted }]}> 1ZE</Text>
       </Text>

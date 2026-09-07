@@ -229,7 +229,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
         <FlagshipState
           variant="unavailable"
           title="Verification is temporarily unavailable"
-          subtitle="We couldn't open identity verification right now. Please try again later."
+          subtitle="Please try again later."
           actionLabel="Try again"
           onAction={() => {
             setProviderUnavailable(false);
@@ -250,7 +250,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
         <FlagshipState
           variant="offline"
           title="You're offline"
-          subtitle="Identity verification needs a connection. Check your network and try again."
+          subtitle="Check your connection and try again."
           actionLabel="Try again"
           onAction={loadStatus}
           style={styles.stateFill}
@@ -266,7 +266,6 @@ export default function KYCVerificationScreen({ navigation }: Props) {
         <FlagshipState
           variant="loading"
           title="Checking your details"
-          subtitle="One moment while we check your verification status."
           style={styles.stateFill}
         />
       </FlagshipScreen>
@@ -302,12 +301,12 @@ export default function KYCVerificationScreen({ navigation }: Props) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Identity verification" onBack={handleBack} />}>
         <View style={styles.stateFill} accessibilityLiveRegion="polite">
-          <View style={styles.stateIconWrap}>
-            <Ionicons name="hourglass-outline" size={Control.icon + 6} color={colors.warning} aria-hidden={true} />
+          <View style={styles.stateIconWrap} accessible={false}>
+            <Ionicons name="hourglass-outline" size={Control.icon + 6} color={colors.warning} aria-hidden={true} accessible={false} />
           </View>
           <Text style={styles.stateTitle} maxFontSizeMultiplier={1.3}>Checking your details</Text>
           <Text style={styles.stateBody} maxFontSizeMultiplier={1.3}>
-            Stripe is reviewing your verification. This usually takes a short while. You can leave and we'll notify you when it's done.
+            Stripe is reviewing your verification. We'll notify you when it's done.
           </Text>
           <AppButton
             title="View verification status"
@@ -336,12 +335,12 @@ export default function KYCVerificationScreen({ navigation }: Props) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Identity verification" onBack={handleBack} />}>
         <View style={styles.stateFill} accessibilityLiveRegion="polite">
-          <View style={[styles.stateIconWrap, { backgroundColor: colors.successSubtle, borderRadius: Radius.full }]}>
-            <Ionicons name="checkmark-circle" size={Control.icon + 6} color={colors.success} aria-hidden={true} />
+          <View style={[styles.stateIconWrap, { backgroundColor: colors.successSubtle, borderRadius: Radius.full }]} accessible={false}>
+            <Ionicons name="checkmark-circle" size={Control.icon + 6} color={colors.success} aria-hidden={true} accessible={false} />
           </View>
           <Text style={styles.stateTitle} maxFontSizeMultiplier={1.3}>Identity checked</Text>
           <Text style={styles.stateBody} maxFontSizeMultiplier={1.3}>
-            Your identity has been verified. You can sell and trade on ThryftVerse.
+            Your identity has been verified.
           </Text>
           <AppButton
             title="View verification status"
@@ -370,12 +369,12 @@ export default function KYCVerificationScreen({ navigation }: Props) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Identity verification" onBack={handleBack} />}>
         <View style={styles.stateFill} accessibilityLiveRegion="polite">
-          <View style={[styles.stateIconWrap, { backgroundColor: colors.dangerSubtle, borderRadius: Radius.full }]}>
-            <Ionicons name="close-circle-outline" size={Control.icon + 6} color={colors.danger} aria-hidden={true} />
+          <View style={[styles.stateIconWrap, { backgroundColor: colors.dangerSubtle, borderRadius: Radius.full }]} accessible={false}>
+            <Ionicons name="close-circle-outline" size={Control.icon + 6} color={colors.danger} aria-hidden={true} accessible={false} />
           </View>
           <Text style={styles.stateTitle} maxFontSizeMultiplier={1.3}>Verification wasn't approved</Text>
           <Text style={styles.stateBody} maxFontSizeMultiplier={1.3}>
-            We couldn't confirm your identity this time. Contact support for help, or try again with updated details.
+            We couldn't confirm your identity this time. Contact support for help.
           </Text>
           <AppButton
             title="Try again"
@@ -407,12 +406,12 @@ export default function KYCVerificationScreen({ navigation }: Props) {
     return (
       <FlagshipScreen header={<FlagshipHeader title="Identity verification" onBack={handleBack} />}>
         <View style={styles.stateFill} accessibilityLiveRegion="polite">
-          <View style={[styles.stateIconWrap, { backgroundColor: colors.warningSubtle, borderRadius: Radius.full }]}>
-            <Ionicons name="time-outline" size={Control.icon + 6} color={colors.warning} aria-hidden={true} />
+          <View style={[styles.stateIconWrap, { backgroundColor: colors.warningSubtle, borderRadius: Radius.full }]} accessible={false}>
+            <Ionicons name="time-outline" size={Control.icon + 6} color={colors.warning} aria-hidden={true} accessible={false} />
           </View>
           <Text style={styles.stateTitle} maxFontSizeMultiplier={1.3}>Verification expired</Text>
           <Text style={styles.stateBody} maxFontSizeMultiplier={1.3}>
-            Your previous verification has expired. Verify again to continue selling and trading.
+            Your previous verification has expired.
           </Text>
           <AppButton
             title="Verify again"
@@ -452,13 +451,12 @@ export default function KYCVerificationScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Dominant object: the verification entry. One title, one honest
-            explanation, the minimal identity inputs the provider needs to
-            seed the session, and a single primary action. No step wizard,
-            no capture tiles, no review summary. */}
-        <Text style={styles.entryTitle} maxFontSizeMultiplier={1.2}>Verify your identity</Text>
+        {/* Dominant object: the verification entry. One honest explanation,
+            the minimal identity inputs the provider needs to seed the
+            session, and a single primary action. No step wizard, no capture
+            tiles, no review summary. */}
         <Text style={styles.entryBody} maxFontSizeMultiplier={1.3}>
-          We need to confirm who you are before you can sell and trade on ThryftVerse. Stripe will check your name, date of birth, and a government-issued ID.
+          We need to confirm who you are before you can sell and trade on ThryftVerse.
         </Text>
 
         <View style={styles.fieldGroup}>
@@ -496,7 +494,7 @@ export default function KYCVerificationScreen({ navigation }: Props) {
 
         <View style={styles.privacyNote}>
           <Text style={styles.privacyText} maxFontSizeMultiplier={1.3}>
-            Stripe handles your document and selfie capture. Your data is processed by Stripe under their privacy policy for verification purposes.
+            Stripe handles your document and selfie capture under their privacy policy.
           </Text>
           <Pressable
             onPress={openStripePrivacy}

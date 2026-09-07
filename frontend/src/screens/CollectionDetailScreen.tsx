@@ -22,6 +22,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { ThemeColors } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useStore } from '../store/useStore';
 import { useBackendData } from '../context/BackendDataContext';
 import { EmptyState } from '../components/EmptyState';
@@ -70,7 +71,7 @@ export default function CollectionDetailScreen() {
   const route = useRoute<any>();
   const haptic = useHaptic();
   const { show } = useToast();
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { colors, isDark } = useAppTheme();
   const reducedMotion = useReducedMotion();
   const { width: SCREEN_W } = useWindowDimensions();
@@ -194,8 +195,11 @@ export default function CollectionDetailScreen() {
       {/* Floating Header with scroll fade */}
       <Reanimated.View style={[styles.floatingHeader, headerBgStyle]}>
         <View style={styles.headerInner}>
-          <AnimatedPressable style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.85}>
-            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+          <AnimatedPressable style={styles.backBtn} onPress={handleGoBack} activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.textPrimary} accessible={false} />
           </AnimatedPressable>
           <Text style={styles.floatingTitle} numberOfLines={1}>{collection.name}</Text>
           <View style={{ width: 40 }} />
@@ -211,7 +215,7 @@ export default function CollectionDetailScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={22} color={colors.scrimTextPrimary} style={styles.backBtnGlyph} />
+          <Ionicons name="arrow-back" size={22} color={colors.scrimTextPrimary} style={styles.backBtnGlyph} accessible={false} />
         </AnimatedPressable>
       </View>
 
@@ -236,7 +240,7 @@ export default function CollectionDetailScreen() {
         {coverImages.length > 0 && (
           <View style={styles.coverWrap}>
             {coverImages.length === 1 ? (
-              <CachedImage uri={coverImages[0]} style={styles.coverImage} contentFit="cover" />
+              <CachedImage uri={coverImages[0]} style={styles.coverImage} contentFit="cover" accessible={false} />
             ) : (
               <View style={styles.coverMosaic}>
                 {coverImages.map((uri, i) => (
@@ -245,6 +249,7 @@ export default function CollectionDetailScreen() {
                     uri={uri}
                     style={styles.coverMosaicTile}
                     contentFit="cover"
+                    accessible={false}
                   />
                 ))}
                 {/* Fill empty slots with dark tiles */}
@@ -262,7 +267,7 @@ export default function CollectionDetailScreen() {
                 <Text style={styles.coverTitle} numberOfLines={1}>{collection.name}</Text>
                 {collection.isPrivate && (
                   <View style={styles.privacyBadge}>
-                    <Ionicons name="lock-closed" size={10} color={colors.scrimTextPrimary} />
+                    <Ionicons name="lock-closed" size={10} color={colors.scrimTextPrimary} accessible={false} />
                     <Text style={styles.privacyText}>Private</Text>
                   </View>
                 )}
@@ -292,7 +297,7 @@ export default function CollectionDetailScreen() {
                   accessibilityLabel="Share collection"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="share-outline" size={18} color={colors.scrimTextPrimary} />
+                  <Ionicons name="share-outline" size={18} color={colors.scrimTextPrimary} accessible={false} />
                 </AnimatedPressable>
                 <AnimatedPressable
                   style={styles.actionBtnOverlay}
@@ -302,7 +307,7 @@ export default function CollectionDetailScreen() {
                   accessibilityLabel="Edit collection"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="settings-outline" size={18} color={colors.scrimTextPrimary} />
+                  <Ionicons name="settings-outline" size={18} color={colors.scrimTextPrimary} accessible={false} />
                 </AnimatedPressable>
               </View>
             </View>
@@ -317,7 +322,7 @@ export default function CollectionDetailScreen() {
                 <Text style={styles.noCoverTitle}>{collection.name}</Text>
                 {collection.isPrivate && (
                   <View style={styles.privacyBadgeOutline}>
-                    <Ionicons name="lock-closed" size={10} color={colors.textMuted} />
+                    <Ionicons name="lock-closed" size={10} color={colors.textMuted} accessible={false} />
                     <Text style={styles.privacyTextOutline}>Private</Text>
                   </View>
                 )}
@@ -337,22 +342,24 @@ export default function CollectionDetailScreen() {
             </View>
             <View style={styles.actionRow}>
               <AnimatedPressable
-                style={styles.actionBtn}
+                style={styles.actionBtnTransparent}
                 onPress={handleShare}
                 activeOpacity={0.85}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityLabel="Share collection"
                 accessibilityRole="button"
               >
-                <Ionicons name="share-outline" size={20} color={colors.textPrimary} />
+                <Ionicons name="share-outline" size={20} color={colors.textPrimary} accessible={false} />
               </AnimatedPressable>
               <AnimatedPressable
-                style={styles.actionBtn}
+                style={styles.actionBtnTransparent}
                 onPress={() => { haptic.light(); navigation.navigate('EditCollection', { collectionId }); }}
                 activeOpacity={0.85}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityLabel="Edit collection"
                 accessibilityRole="button"
               >
-                <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
+                <Ionicons name="settings-outline" size={20} color={colors.textPrimary} accessible={false} />
               </AnimatedPressable>
             </View>
           </View>
@@ -365,12 +372,13 @@ export default function CollectionDetailScreen() {
             onPress={() => navigation.navigate('ManageCollectionItems', { collectionId })}
             activeOpacity={0.85}
             hapticFeedback="light"
+            hitSlop={{ top: 6, bottom: 6, left: 0, right: 0 }}
             accessibilityLabel="Manage collection items"
             accessibilityRole="button"
           >
-            <Ionicons name="list-outline" size={18} color={colors.textSecondary} />
+            <Ionicons name="list-outline" size={18} color={colors.textSecondary} accessible={false} />
             <Text style={styles.manageRowText}>Manage items</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} accessible={false} />
           </AnimatedPressable>
         )}
 
@@ -384,23 +392,23 @@ export default function CollectionDetailScreen() {
           <View style={{ marginTop: Space.md }}>
             <ClosetMediaMosaic
               items={collectionItems}
-              onPressItem={(item: any) => navigation.navigate('ItemDetail', { itemId: item.id })}
+              onPressItem={(item: any) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'CollectionDetail' })}
               showSaveButton
             />
           </View>
         )}
         {count === 0 && (
           <EmptyState
-            graphic={<BoardEmptyGraphic title="No items yet" subtitle="Add items to this board" icon="folder-open-outline" size={140} />}
+            graphic={<BoardEmptyGraphic title="" subtitle="" icon="folder-open-outline" size={140} />}
             title="This collection is empty"
-            subtitle="Browse items and save them to this collection to start curating your board."
+            subtitle="Save items to this collection."
             ctaLabel="Browse items"
             onCtaPress={() => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' })}
           />
         )}
 
         {/* More like this */}
-        <MoreLikeThisRow collectionItems={collectionItems} listings={listings} navigation={navigation} formatFromFiat={formatFromFiat} currencyCode={currencyCode} />
+        <MoreLikeThisRow collectionItems={collectionItems} listings={listings} navigation={navigation} formatFromFiat={formatFromFiat} />
 
         <View style={{ height: DockConstants.singleActionHeight }} />
       </Reanimated.ScrollView>
@@ -436,13 +444,11 @@ function MoreLikeThisRow({
   collectionItems,
   listings,
   navigation,
-  formatFromFiat,
-  currencyCode }: {
+  formatFromFiat }: {
   collectionItems: any[];
   listings: any[];
   navigation: any;
   formatFromFiat: any;
-  currencyCode: string;
 }) {
   const { colors } = useAppTheme();
   const { width: SCREEN_W } = useWindowDimensions();
@@ -467,7 +473,7 @@ function MoreLikeThisRow({
           <AnimatedPressable
             key={item.id}
             style={styles.moreCard}
-            onPress={() => navigation.navigate('ItemDetail', { itemId: item.id })}
+            onPress={() => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'CollectionMoreLikeThis' })}
             activeOpacity={0.9}
           >
             <SharedTransitionView
@@ -481,7 +487,7 @@ function MoreLikeThisRow({
                 contentFit="cover"
               />
             </SharedTransitionView>
-            <Text style={styles.morePrice}>{formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}</Text>
+            <Text style={styles.morePrice}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
           </AnimatedPressable>
         ))}
       </ScrollView>
@@ -522,12 +528,8 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     left: Space.md,
     zIndex: 60 },
   backBtn: {
-    width: Space.xl + Space.xs + 4,
-    height: Space.xl + Space.xs + 4,
-    borderRadius: Radius.md,
-    borderWidth: Stroke.standard,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    width: Control.hit,
+    height: Control.hit,
     alignItems: 'center',
     justifyContent: 'center' },
   backBtnOverlay: {
@@ -683,6 +685,11 @@ function createStyles(colors: ThemeColors, screenWidth: number) {
     borderWidth: Stroke.standard,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center' },
+  actionBtnTransparent: {
+    width: Space.xl + Space.xs + 4,
+    height: Space.xl + Space.xs + 4,
     alignItems: 'center',
     justifyContent: 'center' },
   manageRow: {

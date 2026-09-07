@@ -29,7 +29,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Platform, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Platform, Linking, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
@@ -42,6 +42,7 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { SettingsSection } from '../components/settings/SettingsSection';
 import { SettingsRow } from '../components/settings/SettingsRow';
 import { SettingsInfoBanner } from '../components/settings/SettingsInfoBanner';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { useSettingsPreferences } from '../context/SettingsPreferencesContext';
 import {
   PUSH_NOTIFICATION_DEFINITIONS,
@@ -210,9 +211,16 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <Text style={[styles.permissionBannerText, { color: colors.textSecondary }]}>
             Push is blocked by device settings.
           </Text>
-          <Pressable onPress={() => Linking.openSettings()} accessibilityRole="button">
-            <Text style={[styles.permissionBannerAction, { color: colors.brand }]}>Open Settings</Text>
-          </Pressable>
+          <AnimatedPressable
+            scaleValue={0.98}
+            hapticFeedback="light"
+            onPress={() => Linking.openSettings()}
+            accessibilityRole="button"
+            accessibilityLabel="Open device settings"
+            hitSlop={8}
+          >
+            <Text style={[styles.permissionBannerAction, { color: colors.brand }]}>Open settings</Text>
+          </AnimatedPressable>
         </View>
       )}
 
@@ -221,7 +229,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <SettingsRow
             icon="notifications-outline"
             title="Enable push notifications"
-            subtitle="Master switch for all push alerts"
             toggleValue={masterOn}
             onToggle={(v) => void handleMasterToggle(v)}
             isFirst
@@ -242,8 +249,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <>
           <SettingsRow
             icon="cash-outline"
-            title="Offer notifications"
-            subtitle="When buyers make an offer on your item"
+            title="Offers"
             toggleValue={!!toggles.offers}
             onToggle={() => void toggleCategory('offers')}
             disabled={!masterOn}
@@ -252,8 +258,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="chatbubble-outline"
-            title="Message notifications"
-            subtitle="When someone sends you a message"
+            title="Messages"
             toggleValue={!!toggles.messages}
             onToggle={() => void toggleCategory('messages')}
             disabled={!masterOn}
@@ -261,8 +266,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="heart-outline"
-            title="Listing notifications"
-            subtitle="New listings from sellers you follow"
+            title="New listings"
             toggleValue={!!toggles.wishlist}
             onToggle={() => void toggleCategory('wishlist')}
             disabled={!masterOn}
@@ -270,8 +274,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="car-outline"
-            title="Order notifications"
-            subtitle="Shipping and delivery status changes"
+            title="Order updates"
             toggleValue={!!toggles.orderUpdates}
             onToggle={() => void toggleCategory('orderUpdates')}
             disabled={!masterOn}
@@ -280,7 +283,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <SettingsRow
             icon="trophy-outline"
             title="Auction alerts"
-            subtitle="Outbid, auction ending, and auction won alerts"
             toggleValue={!!toggles.auctionAlerts}
             onToggle={() => void toggleCategory('auctionAlerts')}
             disabled={!masterOn}
@@ -288,8 +290,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="cash-outline"
-            title="Price drop alerts"
-            subtitle="For items on your wishlist"
+            title="Price drops"
             toggleValue={!!toggles.priceDrops}
             onToggle={() => void toggleCategory('priceDrops')}
             disabled={!masterOn}
@@ -297,8 +298,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
           <SettingsRow
             icon="megaphone-outline"
-            title="Marketing notifications"
-            subtitle="Promotions, features and announcements"
+            title="Marketing"
             toggleValue={!!toggles.news}
             onToggle={() => void toggleCategory('news')}
             disabled={!masterOn}
@@ -314,7 +314,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <SettingsRow
             icon="moon-outline"
             title="Do Not Disturb"
-            subtitle="Pause non-urgent notifications during set hours"
             toggleValue={quietHours.enabled}
             onToggle={() => { haptic.selection(); setQuietHours({ enabled: !quietHours.enabled }); }}
             isFirst
@@ -322,8 +321,10 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           />
           {quietHours.enabled ? (
             <View style={styles.quietHoursRow}>
-              <Pressable
-                style={({ pressed }) => [styles.quietTimePicker, pressed && styles.quietTimePickerPressed]}
+              <AnimatedPressable
+                scaleValue={0.98}
+                hapticFeedback="light"
+                style={styles.quietTimePicker}
                 onPress={() => setEditingQuietTime(editingQuietTime === 'start' ? null : 'start')}
                 accessibilityRole="button"
                 accessibilityLabel={`Quiet hours start: ${formatHour(quietHours.startHour)}. Tap to change.`}
@@ -331,10 +332,12 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
                 <Text style={styles.quietTimeLabel}>From</Text>
                 <Text style={styles.quietTimeValue}>{formatHour(quietHours.startHour)}</Text>
                 <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-              </Pressable>
+              </AnimatedPressable>
               <Ionicons name="arrow-forward" size={16} color={colors.textMuted} />
-              <Pressable
-                style={({ pressed }) => [styles.quietTimePicker, { backgroundColor: colors.surfaceAlt }, pressed && styles.quietTimePickerPressed]}
+              <AnimatedPressable
+                scaleValue={0.98}
+                hapticFeedback="light"
+                style={[styles.quietTimePicker, { backgroundColor: colors.surfaceAlt }]}
                 onPress={() => setEditingQuietTime(editingQuietTime === 'end' ? null : 'end')}
                 accessibilityRole="button"
                 accessibilityLabel={`Quiet hours end: ${formatHour(quietHours.endHour)}. Tap to change.`}
@@ -342,7 +345,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
                 <Text style={[styles.quietTimeLabel, { color: colors.textMuted }]}>To</Text>
                 <Text style={[styles.quietTimeValue, { color: colors.textPrimary }]}>{formatHour(quietHours.endHour)}</Text>
                 <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-              </Pressable>
+              </AnimatedPressable>
             </View>
           ) : null}
           {quietHours.enabled && editingQuietTime ? (
@@ -356,13 +359,14 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
                     ? quietHours.startHour === h
                     : quietHours.endHour === h;
                   return (
-                    <Pressable
+                    <AnimatedPressable
                       key={h}
-                      style={({ pressed }) => [
+                      scaleValue={0.98}
+                      hapticFeedback="light"
+                      style={[
                         styles.quietHourCell,
                         { backgroundColor: colors.surfaceAlt },
                         selected && [styles.quietHourCellActive, { backgroundColor: colors.brand }],
-                        pressed && styles.quietHourCellPressed,
                       ]}
                       onPress={() => {
                         haptic.light();
@@ -379,7 +383,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
                       <Text style={[styles.quietHourCellText, { color: colors.textPrimary }, selected && [styles.quietHourCellTextActive, { color: colors.textInverse }]]}>
                         {formatHour(h)}
                       </Text>
-                    </Pressable>
+                    </AnimatedPressable>
                   );
                 })}
               </View>
@@ -388,7 +392,7 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           {quietHours.enabled ? (
             <SettingsInfoBanner
               icon="moon-outline"
-              text={`Urgent alerts (order updates, security) still arrive during quiet hours. Non-urgent push notifications are silenced on this device between ${formatHour(quietHours.startHour)} and ${formatHour(quietHours.endHour)}. This setting applies to this device only.`}
+              text={`Urgent alerts still arrive. Non-urgent push is silenced between ${formatHour(quietHours.startHour)} and ${formatHour(quietHours.endHour)} on this device.`}
             />
           ) : null}
         </SettingsSection>
@@ -398,7 +402,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <SettingsRow
             icon="eye-off-outline"
             title="Notification preview"
-            subtitle="Show message content in notification previews"
             toggleValue={showPreview}
             onToggle={handleShowPreviewChange}
             isFirst
@@ -411,7 +414,6 @@ export default function NotificationPreferencesScreen({ navigation }: Props) {
           <SettingsRow
             icon="notifications-outline"
             title="Send test notification"
-            subtitle="Verify your notification settings are working"
             onPress={handleTestNotification}
             isFirst
             isLast

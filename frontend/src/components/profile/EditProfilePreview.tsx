@@ -9,12 +9,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Stroke, AvatarSize, ProfileLayout, Scrim } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { CachedImage } from '../CachedImage';
 
-const COVER_H = 120;
-const AVATAR_SIZE = 76;
+const COVER_H = ProfileLayout.coverHeightEdit;
+const AVATAR_SIZE = AvatarSize.edit;
 
 interface EditProfilePreviewProps {
   coverUri: string;
@@ -28,6 +28,8 @@ interface EditProfilePreviewProps {
   onEditAvatar: () => void;
   isUploadingCover: boolean;
   isUploadingAvatar: boolean;
+  hasCoverError?: boolean;
+  hasAvatarError?: boolean;
 }
 
 export function EditProfilePreview({
@@ -41,7 +43,9 @@ export function EditProfilePreview({
   onEditCover,
   onEditAvatar,
   isUploadingCover,
-  isUploadingAvatar }: EditProfilePreviewProps) {
+  isUploadingAvatar,
+  hasCoverError = false,
+  hasAvatarError = false }: EditProfilePreviewProps) {
   const { colors } = useAppTheme();
   const styles = React.useMemo(() => createStyles(colors), [colors]);
   const { width: SCREEN_W } = useWindowDimensions();
@@ -72,30 +76,38 @@ export function EditProfilePreview({
         {/* Bottom gradient for button legibility (only over real media) */}
         {coverUri ? (
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.35)']}
+            colors={Scrim.bottom.colors}
+            locations={Scrim.bottom.locations}
             style={styles.coverGradient}
           />
         ) : null}
 
         {/* Edit cover button — primary control on the preview */}
         <Pressable
-          style={({ pressed }) => [styles.editCoverBtn, !coverUri && styles.editCoverBtnEmpty, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [
+            styles.editCoverBtn,
+            !coverUri && styles.editCoverBtnEmpty,
+            hasCoverError && styles.editCoverBtnError,
+            pressed && { opacity: 0.6 },
+          ]}
           onPress={onEditCover}
           accessibilityRole="button"
           accessibilityLabel="Change cover photo"
           disabled={isUploadingCover}
         >
           {isUploadingCover ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={colors.textInverse} />
+          ) : hasCoverError ? (
+            <Ionicons name="alert-circle" size={18} color={colors.danger} />
           ) : (
-            <Ionicons name="camera" size={18} color={coverUri ? '#fff' : colors.textSecondary} />
+            <Ionicons name="camera" size={18} color={coverUri ? colors.textInverse : colors.textSecondary} />
           )}
         </Pressable>
       </View>
 
       {/* Avatar row — stable negative overlap */}
       <View style={styles.avatarRow}>
-        <View style={styles.avatarWrap}>
+        <View style={[styles.avatarWrap, hasAvatarError && styles.avatarWrapError]}>
           {avatarUri ? (
             <CachedImage
               uri={avatarUri}
@@ -111,7 +123,7 @@ export function EditProfilePreview({
 
           {/* Edit avatar button — primary control on the preview */}
           <Pressable
-            style={({ pressed }) => [styles.editAvatarBtn, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [styles.editAvatarBtn, hasAvatarError && styles.editAvatarBtnError, pressed && { opacity: 0.6 }]}
             onPress={onEditAvatar}
             accessibilityRole="button"
             accessibilityLabel="Change avatar photo"
@@ -119,9 +131,11 @@ export function EditProfilePreview({
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             {isUploadingAvatar ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={colors.textInverse} />
+            ) : hasAvatarError ? (
+              <Ionicons name="alert-circle" size={13} color={colors.danger} />
             ) : (
-              <Ionicons name="camera" size={13} color="#fff" />
+              <Ionicons name="camera" size={13} color={colors.textInverse} />
             )}
           </Pressable>
         </View>
@@ -183,14 +197,16 @@ function createStyles(colors: ThemeColors) {
     width: 44,
     height: 44,
     borderRadius: Radius.xxl,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: Stroke.standard,
-    borderColor: 'rgba(255,255,255,0.2)' },
+    borderColor: colors.scrimTextSecondary },
   editCoverBtnEmpty: {
     backgroundColor: colors.surface,
     borderColor: colors.border },
+  editCoverBtnError: {
+    borderColor: colors.danger },
   avatarRow: {
     flexDirection: 'row',
     paddingHorizontal: Space.md,
@@ -199,15 +215,17 @@ function createStyles(colors: ThemeColors) {
     width: AVATAR_SIZE,
     height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
-    borderWidth: 3,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.background,
     backgroundColor: colors.surface,
     overflow: 'visible',
     position: 'relative' },
+  avatarWrapError: {
+    borderColor: colors.danger },
   avatarImage: {
-    width: AVATAR_SIZE - 6,
-    height: AVATAR_SIZE - 6,
-    borderRadius: (AVATAR_SIZE - 6) / 2 },
+    width: AVATAR_SIZE - Stroke.emphasis * 2,
+    height: AVATAR_SIZE - Stroke.emphasis * 2,
+    borderRadius: (AVATAR_SIZE - Stroke.emphasis * 2) / 2 },
   avatarFallback: {
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
@@ -222,8 +240,10 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: Stroke.emphasis,
     borderColor: colors.background },
+  editAvatarBtnError: {
+    backgroundColor: colors.danger },
   identityCol: {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm },

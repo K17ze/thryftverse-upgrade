@@ -11,6 +11,9 @@ type ProfileUserRow = {
   email: string | null;
   display_name: string | null;
   bio: string | null;
+  pronouns?: string | null;
+  gender?: string | null;
+  is_ai_creator?: boolean | null;
   location: string | null;
   website: string | null;
   phone: string | null;
@@ -93,7 +96,7 @@ app.get('/users/me', async (request, reply) => {
     `
       SELECT
         id, username, email, display_name, bio, location, website, phone, avatar, cover_photo, cover_video,
-        role, email_verified_at, two_factor_enabled, created_at, updated_at
+        role, email_verified_at, two_factor_enabled, pronouns, gender, is_ai_creator, created_at, updated_at
       FROM users
       WHERE id = $1
       LIMIT 1
@@ -123,6 +126,9 @@ app.patch('/users/me', async (request, reply) => {
     displayName: z.string().trim().min(1).max(120).optional(),
     username: z.string().trim().min(3).max(32).optional(),
     bio: z.string().trim().max(500).optional(),
+    pronouns: z.string().trim().max(60).optional(),
+    gender: z.string().trim().max(80).optional(),
+    isAiCreator: z.boolean().optional(),
     location: z.string().trim().max(120).optional(),
     website: z.string().trim().max(255).optional(),
     phone: z.string().trim().max(30).optional(),
@@ -254,6 +260,9 @@ app.patch('/users/me', async (request, reply) => {
   if (payload.displayName !== undefined) allowed.display_name = payload.displayName;
   if (payload.username !== undefined) allowed.username = payload.username;
   if (payload.bio !== undefined) allowed.bio = payload.bio;
+  if (payload.pronouns !== undefined) allowed.pronouns = payload.pronouns;
+  if (payload.gender !== undefined) allowed.gender = payload.gender;
+  if (payload.isAiCreator !== undefined) allowed.is_ai_creator = payload.isAiCreator;
   if (payload.location !== undefined) allowed.location = payload.location;
   if (payload.website !== undefined) allowed.website = payload.website;
   if (payload.phone !== undefined) allowed.phone = payload.phone;
@@ -322,7 +331,7 @@ app.patch('/users/me', async (request, reply) => {
     `
       SELECT
         id, username, email, display_name, bio, location, website, phone, avatar, cover_photo, cover_video,
-        role, email_verified_at, two_factor_enabled, created_at, updated_at
+        role, email_verified_at, two_factor_enabled, pronouns, gender, is_ai_creator, created_at, updated_at
       FROM users
       WHERE id = $1
       LIMIT 1
@@ -1351,7 +1360,7 @@ app.get('/users/:userId/profile', async (request, reply) => {
       SELECT
         u.id, u.username, u.email, u.display_name, u.bio, u.location, u.website, u.phone,
         u.avatar, u.cover_photo, u.cover_video, u.role, u.email_verified_at,
-        u.two_factor_enabled, u.created_at, u.updated_at,
+        u.two_factor_enabled, u.pronouns, u.is_ai_creator, u.created_at, u.updated_at,
         u.private_profile, u.holiday_mode, u.away_message
       FROM users u
       WHERE u.id = $1

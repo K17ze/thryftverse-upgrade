@@ -289,6 +289,7 @@ const CommentRow = React.memo(function CommentRow({
       delayLongPress={400}
       disabled={isPending || isFailed}
       accessibilityRole="button"
+      accessibilityLabel={`Comment by ${comment.author.username}`}
       accessibilityActions={[{ name: 'longpress', label: 'Show comment actions' }]}
       onAccessibilityAction={(e) => {
         if (e.nativeEvent.actionName === 'longpress') handleLongPress();
@@ -1056,28 +1057,28 @@ export function LookCommentsSheet({
 
       {/* Long-press context menu — destructive actions live one level deep */}
       <Modal transparent visible={menuComment !== null} animationType="fade" onRequestClose={closeMenu}>
-        <Pressable style={styles.menuBackdrop} onPress={closeMenu} accessibilityRole="button" accessibilityLabel="Close menu">
+        <Pressable style={styles.menuBackdrop} onPress={closeMenu} accessibilityLabel="Close menu" accessibilityRole="button">
           <View style={styles.menuSheet}>
             <Text style={styles.menuTitle} numberOfLines={1}>
               {menuComment?.author.username ?? 'Comment'}
             </Text>
-            <Pressable style={styles.menuItem} onPress={handleMenuReply} accessibilityRole="button">
+            <Pressable style={styles.menuItem} onPress={handleMenuReply} accessibilityRole="button" accessibilityLabel="Reply to comment" accessibilityHint="Opens reply composer">
               <Ionicons name="arrow-undo" size={20} color={colors.textPrimary} />
               <Text style={styles.menuItemText}>Reply</Text>
             </Pressable>
             {!!menuComment?.body && (
-              <Pressable style={styles.menuItem} onPress={handleMenuCopy} accessibilityRole="button">
+              <Pressable style={styles.menuItem} onPress={handleMenuCopy} accessibilityRole="button" accessibilityLabel="Copy comment text" accessibilityHint="Copies text to clipboard">
                 <Ionicons name="copy-outline" size={20} color={colors.textPrimary} />
                 <Text style={styles.menuItemText}>Copy text</Text>
               </Pressable>
             )}
             {menuComment && currentUserId === menuComment.authorId && isAuthenticated && (
-              <Pressable style={styles.menuItem} onPress={handleMenuDelete} accessibilityRole="button">
+              <Pressable style={styles.menuItem} onPress={handleMenuDelete} accessibilityRole="button" accessibilityLabel="Delete comment" accessibilityHint="Removes this comment permanently">
                 <Ionicons name="trash-outline" size={20} color={colors.danger} />
                 <Text style={[styles.menuItemText, { color: colors.danger }]}>Delete comment</Text>
               </Pressable>
             )}
-            <Pressable style={styles.menuCancel} onPress={closeMenu} accessibilityRole="button">
+            <Pressable style={styles.menuCancel} onPress={closeMenu} accessibilityRole="button" accessibilityLabel="Cancel" accessibilityHint="Closes the menu">
               <Text style={styles.menuCancelText}>Cancel</Text>
             </Pressable>
           </View>
@@ -1228,7 +1229,7 @@ const createStyles = (colors: ThemeColors) =>
     emptyWrap: {
       alignItems: 'center',
       gap: Space.xs,
-      paddingVertical: 48,
+      paddingVertical: Space.xxl,
     },
     emptyText: {
       fontSize: TypographyV2.bodyStrong.size,

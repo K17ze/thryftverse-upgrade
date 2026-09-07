@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { CachedImage } from '../components/CachedImage';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -33,7 +34,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ListingSuccess'>;
 export default function ListingSuccessScreen({ navigation, route }: Props) {
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { refreshListings } = useBackendData();
   const queryClient = useQueryClient();
 
@@ -78,7 +79,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
   const listingTitle = backendListing?.title || routeTitle || 'your listing';
   const listingPriceRaw = backendListing?.priceGbp ?? routePrice;
-  const listingPrice = listingPriceRaw != null ? formatFromFiat(listingPriceRaw, currencyCode, { displayMode: 'fiat' }) : null;
+  const listingPrice = listingPriceRaw != null ? formatFromFiat(listingPriceRaw, 'GBP', { displayMode: 'fiat' }) : null;
   const listingCategory = backendListing?.category || routeCategory;
   const listingPhoto = backendListing?.imageUrl || routePhoto;
 
@@ -113,7 +114,7 @@ export default function ListingSuccessScreen({ navigation, route }: Props) {
 
   const handleViewListing = React.useCallback(() => {
     if (listingId) {
-      navigation.push('ItemDetail', { itemId: listingId });
+      openProductDetail(navigation, { referenceKind: 'listing', canonicalId: listingId, sourceSurface: 'ListingSuccess' });
     }
   }, [navigation, listingId]);
 

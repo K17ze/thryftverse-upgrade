@@ -690,15 +690,15 @@ export default function WalletConvertScreen() {
                       )}
                       {renderSummaryRow(
                         'Principal',
-                        formatFromFiat(quote.principalAmount, currencyCode, { displayMode: 'fiat' })
+                        formatFromFiat(quote.principalAmount, 'GBP', { displayMode: 'fiat' })
                       )}
                       {renderSummaryRow(
                         `Platform fee (${quote.feeBps} bps)`,
-                        `−${formatFromFiat(quote.feeAmount, currencyCode, { displayMode: 'fiat' })}`
+                        `−${formatFromFiat(quote.feeAmount, 'GBP', { displayMode: 'fiat' })}`
                       )}
                       {renderSummaryRow(
                         'You receive',
-                        formatFromFiat(quote.netFiatAmount, currencyCode, { displayMode: 'fiat' }),
+                        formatFromFiat(quote.netFiatAmount, 'GBP', { displayMode: 'fiat' }),
                         { total: true }
                       )}
                     </>
@@ -744,15 +744,15 @@ export default function WalletConvertScreen() {
               {renderSummaryRow('You convert', `${formatIzeAmount(izeValue, 2)} · ${formatUsd(usdEquivalent)}`, { emphasis: true })}
               {renderSummaryRow(
                 'Principal',
-                formatFromFiat(quote.principalAmount, currencyCode, { displayMode: 'fiat' })
+                formatFromFiat(quote.principalAmount, 'GBP', { displayMode: 'fiat' })
               )}
               {renderSummaryRow(
                 `Platform fee (${quote.feeBps} bps)`,
-                `−${formatFromFiat(quote.feeAmount, currencyCode, { displayMode: 'fiat' })}`
+                `−${formatFromFiat(quote.feeAmount, 'GBP', { displayMode: 'fiat' })}`
               )}
               {renderSummaryRow(
                 'You receive',
-                formatFromFiat(quote.netFiatAmount, currencyCode, { displayMode: 'fiat' }),
+                formatFromFiat(quote.netFiatAmount, 'GBP', { displayMode: 'fiat' }),
                 { total: true }
               )}
 

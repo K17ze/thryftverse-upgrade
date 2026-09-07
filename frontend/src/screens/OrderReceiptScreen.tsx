@@ -26,6 +26,7 @@ import { normaliseOrderStatus, humaniseStatus, isTerminalStatus } from '../compo
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { haptics } from '../utils/haptics';
 import { t } from '../i18n';
+import { useConnectivity } from '../hooks/useConnectivity';
 
 
 type OrderReceiptRoute = RouteProp<{ OrderReceipt: { orderId: string } }, 'OrderReceipt'>;
@@ -45,10 +46,11 @@ export default function OrderReceiptScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<OrderReceiptRoute>();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
   const currentUser = useStore((state) => state.currentUser);
   const { colors, isDark } = useAppTheme();
+  const { isOffline } = useConnectivity();
 
   // Theme-aware color overrides for the static styles.
   const themed = React.useMemo(() => ({
@@ -116,7 +118,7 @@ export default function OrderReceiptScreen() {
     if (!order) return;
     haptics.tap();
     const shortId = order.id.slice(0, 8).toUpperCase();
-    const total = formatFromFiat(order.totalGbp, currencyCode, { displayMode: 'fiat' });
+    const total = formatFromFiat(order.totalGbp, 'GBP', { displayMode: 'fiat' });
     const status = humaniseStatus(order.status);
     const date = formatReceiptDate(order.createdAt);
     try {
@@ -181,7 +183,7 @@ export default function OrderReceiptScreen() {
     );
   }
 
-  if (loadError || !order) {
+  if (loadError) {
     return (
       <View style={[styles.container, themed.container]}>
         <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
@@ -191,11 +193,30 @@ export default function OrderReceiptScreen() {
           style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
         />
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
-          <Text style={[styles.errorTitle, themed.errorTitle]}>Receipt could not be loaded</Text>
+          <Ionicons name={isOffline ? 'cloud-offline-outline' : 'alert-circle-outline'} size={36} color={colors.textMuted} />
+          <Text style={[styles.errorTitle, themed.errorTitle]} maxFontSizeMultiplier={2}>{isOffline ? 'You are offline' : 'Receipt could not be loaded'}</Text>
+          {!isOffline && <Text style={[themed.pendingText, { color: colors.textMuted, marginTop: 4 }]} maxFontSizeMultiplier={2}>Check your connection and try again.</Text>}
           <Pressable style={({ pressed }) => [styles.retryBtn, themed.retryBtn, pressed && styles.retryBtnPressed]} onPress={() => { setLoadError(null); setIsLoading(true); void fetchOrder(); }} accessibilityRole="button" accessibilityLabel="Retry">
-            <Text style={[styles.retryBtnText, themed.retryBtnText]}>Retry</Text>
+            <Text style={[styles.retryBtnText, themed.retryBtnText]} maxFontSizeMultiplier={2}>Retry</Text>
           </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  if (!order) {
+    return (
+      <View style={[styles.container, themed.container]}>
+        <StatusBar barStyle={!isDark ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+        <ScreenHeader
+          title="Receipt"
+          onBack={() => navigation.goBack()}
+          style={{ paddingTop: insets.top, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
+        />
+        <View style={styles.errorContainer}>
+          <Ionicons name="document-text-outline" size={36} color={colors.textMuted} />
+          <Text style={[styles.errorTitle, themed.errorTitle]} maxFontSizeMultiplier={2}>Order not found</Text>
+          <Text style={[themed.pendingText, { color: colors.textMuted, marginTop: 4 }]} maxFontSizeMultiplier={2}>This order may have been removed or is no longer available.</Text>
         </View>
       </View>
     );
@@ -224,10 +245,10 @@ export default function OrderReceiptScreen() {
   const isReceiptFinal = isTerminalStatus(normalisedStatus);
 
   const fiatOpts = { displayMode: 'fiat' as const };
-  const subtotal = formatFromFiat(order.subtotalGbp, currencyCode, fiatOpts);
-  const platformCharge = formatFromFiat(order.platformChargeGbp, currencyCode, fiatOpts);
-  const postage = formatFromFiat(order.postageFeeGbp, currencyCode, fiatOpts);
-  const total = formatFromFiat(order.totalGbp, currencyCode, fiatOpts);
+  const subtotal = formatFromFiat(order.subtotalGbp, 'GBP', fiatOpts);
+  const platformCharge = formatFromFiat(order.platformChargeGbp, 'GBP', fiatOpts);
+  const postage = formatFromFiat(order.postageFeeGbp, 'GBP', fiatOpts);
+  const total = formatFromFiat(order.totalGbp, 'GBP', fiatOpts);
   const buyerProtectionFee = order.buyerProtectionFeeGbp;
   const hasBuyerProtection = buyerProtectionFee != null && buyerProtectionFee !== 0;
 
@@ -333,10 +354,10 @@ export default function OrderReceiptScreen() {
           <View style={[styles.receiptDivider, themed.receiptDivider]} />
 
           <View style={styles.receiptSection}>
-            <Text style={[styles.sectionLabel, themed.sectionLabel]}>Transaction breakdown</Text>
+            <Text style={[styles.sectionLabel, themed.sectionLabel]}>Order breakdown</Text>
             <ReceiptRow label="Item" value={subtotal} />
             {hasBuyerProtection && (
-              <ReceiptRow label="Buyer protection" value={formatFromFiat(buyerProtectionFee!, currencyCode, fiatOpts)} />
+              <ReceiptRow label="Buyer protection" value={formatFromFiat(buyerProtectionFee!, 'GBP', fiatOpts)} />
             )}
             <ReceiptRow label="Platform charge" value={platformCharge} />
             <ReceiptRow label="Delivery" value={postage} />
@@ -370,7 +391,7 @@ export default function OrderReceiptScreen() {
           <View style={styles.immutableNotice}>
             <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
             <Text style={[styles.immutableText, themed.immutableText]}>
-              This receipt is an immutable record of the transaction at the time of the order.
+              This receipt is an immutable record of the order.
             </Text>
           </View>
 

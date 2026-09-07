@@ -14,14 +14,15 @@ function readContract(name: string): string {
   return readFileSync(resolve(FRONTEND_CONTRACTS, name), 'utf-8');
 }
 
-function readBackend(): string {
-  return readFileSync(BACKEND_INDEX, 'utf-8');
+function readBackend(file = 'index.ts'): string {
+  return readFileSync(resolve(__dirname, '../../../backend/api/src', file), 'utf-8');
 }
 
 describe('backend contracts (spec 05_BACKEND)', () => {
   const marketApi = readService('marketApi.ts');
   const listingContract = readContract('listingDetailContract.ts');
   const backend = readBackend();
+  const backendCoOwn = readBackend('routes/coOwn.ts');
 
   // ── Auction media contract ──
   describe('auction media contract', () => {
@@ -86,7 +87,7 @@ describe('backend contracts (spec 05_BACKEND)', () => {
     });
 
     it('backend co-own asset detail response includes marketSnapshot', () => {
-      const coOwnHandler = backend.match(/app\.get\('\/co-own\/assets\/:assetId'[^/][\s\S]*?^\}\);/m);
+      const coOwnHandler = backendCoOwn.match(/app\.get\('\/co-own\/assets\/:assetId'[^/][\s\S]*?^\}\);/m);
       expect(coOwnHandler).toBeTruthy();
       expect(coOwnHandler![0]).toContain('marketSnapshot');
     });
@@ -109,7 +110,7 @@ describe('backend contracts (spec 05_BACKEND)', () => {
     });
 
     it('backend co-own asset detail response includes candles', () => {
-      const coOwnHandler = backend.match(/app\.get\('\/co-own\/assets\/:assetId'[^/][\s\S]*?^\}\);/m);
+      const coOwnHandler = backendCoOwn.match(/app\.get\('\/co-own\/assets\/:assetId'[^/][\s\S]*?^\}\);/m);
       expect(coOwnHandler).toBeTruthy();
       expect(coOwnHandler![0]).toContain('candles');
     });

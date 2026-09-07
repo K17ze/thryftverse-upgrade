@@ -15,6 +15,7 @@ import Reanimated, { useSharedValue, useAnimatedScrollHandler, FadeIn } from 're
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useToast } from '../context/ToastContext';
 import { useA11yAudit } from '../hooks/useA11yAudit';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
@@ -263,7 +264,7 @@ export default function AuctionDetailScreen() {
 
   const priceText = React.useMemo(() => {
     if (priceLabel === 'No bids') return 'No bids';
-    return formatFromFiat(priceAmount, currencyCode);
+    return formatFromFiat(priceAmount, 'GBP');
   }, [priceLabel, priceAmount, formatFromFiat]);
 
   const countdown = React.useMemo(() => {
@@ -404,8 +405,10 @@ export default function AuctionDetailScreen() {
       reasonCode?: string,
       personalised?: boolean,
     ) => {
-      navigation.push('ItemDetail', {
-        itemId: recItem.id,
+      openProductDetail(navigation, {
+        referenceKind: 'listing',
+        canonicalId: recItem.id,
+        sourceSurface: 'AuctionDetail',
         sectionKey,
         position,
         reasonCode,
@@ -786,7 +789,7 @@ export default function AuctionDetailScreen() {
                   Minimum to lead
                 </Text>
                 <Text style={[styles.transactionMinValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(auction.minimumNextBidGbp, currencyCode)}
+                  {formatFromFiat(auction.minimumNextBidGbp, 'GBP')}
                 </Text>
               </View>
             )}
@@ -1024,7 +1027,7 @@ export default function AuctionDetailScreen() {
                 id: rel.id,
                 title: rel.title,
                 imageUrl: rel.imageUrl,
-                priceText: formatFromFiat(relPrice, currencyCode),
+                priceText: formatFromFiat(relPrice, 'GBP'),
                 sizeText: displayMode !== 'fiat' ? formatIzeAmount(toIze(relPrice, currencyCode, fxRates), 2) : undefined,
                 badgeText: relStateLabel,
                 mode: 'auction' as const,
@@ -1309,7 +1312,7 @@ export default function AuctionDetailScreen() {
         // Live bidder — current/min next bid + Place bid (+ optional Buy now).
         if (showBidControls && stateAction && stateAction.primary.type !== 'none') {
           const dockValue = isLive && auction.minimumNextBidGbp > 0
-            ? formatFromFiat(auction.minimumNextBidGbp, currencyCode)
+            ? formatFromFiat(auction.minimumNextBidGbp, 'GBP')
             : priceText;
           const dockValueLabel = isLive && auction.minimumNextBidGbp > 0
             ? 'Min next bid'
@@ -1380,7 +1383,7 @@ export default function AuctionDetailScreen() {
                       onPress: () => { haptics.press(); openBuyNowSheet(); },
                       disabled: isBuyNowLoading,
                       loading: isBuyNowLoading,
-                      accessibilityLabel: `Buy now for ${formatFromFiat(auction.buyNowPriceGbp ?? 0, currencyCode)}`,
+                      accessibilityLabel: `Buy now for ${formatFromFiat(auction.buyNowPriceGbp ?? 0, 'GBP')}`,
                     }
                   : undefined
               }

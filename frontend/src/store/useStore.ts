@@ -48,13 +48,15 @@ import {
   unmuteConversationOnApi,
   archiveConversationOnApi,
   unarchiveConversationOnApi,
+  pinConversationOnApi,
+  setConversationUnreadOnApi,
   acceptMessageRequestOnApi,
   declineMessageRequestOnApi,
   addMessageReactionOnApi,
   removeMessageReactionOnApi,
 } from '../services/chatApi';
 import { fetchJson } from '../lib/apiClient';
-import { fetchMyProfile as fetchMyProfileFromApi } from '../services/profileApi';
+import { fetchMyProfile as fetchMyProfileFromApi, getBlockedUsers } from '../services/profileApi';
 import {
   createSupportTicket as createSupportTicketOnApi,
   listSupportTickets as listSupportTicketsFromApi,
@@ -81,6 +83,10 @@ export interface User {
   bio?: string | null;
   location?: string | null;
   gender?: string;
+  /** Pronouns for the user (e.g. "she/her", "they/them"). */
+  pronouns?: string;
+  /** Whether this user is an AI-assisted creator. */
+  isAiCreator?: boolean;
   website?: string | null;
   email?: string | null;
   phone?: string | null;
@@ -326,7 +332,7 @@ const makeLedgerEntry = (
 // Anti-sniping (pop-bidding) constants — when a bid is placed within the
 // extension window of the auction end, the end time is extended to give
 // other bidders a fair chance to respond. This is standard practice on
-// eBay, Catawiki, and other flagship auction platforms.
+// flagship auction platforms.
 const ANTI_SNIPE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes before end
 const ANTI_SNIPE_EXTENSION_MS = 5 * 60 * 1000; // extend by 5 minutes
 
@@ -373,7 +379,7 @@ async function persistLocalAuthSnapshot(
   }
 }
 
-// Collection for organizing saved items (like Pinterest boards)
+// Collection for organizing saved items (like boards)
 export interface Collection {
   id: string;
   name: string;
@@ -531,10 +537,10 @@ interface StoreState {
   upsertConversation: (conversation: Conversation) => void;
   reconcileGroupMembershipEvent: (event: ChatGroupMembershipEvent) => void;
   markConversationRead: (id: string) => void;
-  toggleConversationUnread: (id: string) => void;
+  toggleConversationUnread: (id: string) => Promise<void>;
   archiveConversation: (id: string) => void;
   deleteConversation: (id: string) => void;
-  toggleConversationPinned: (id: string) => void;
+  toggleConversationPinned: (id: string) => Promise<void>;
   createGroupConversation: (input: CreateGroupConversationInput) => string;
   deployBotToConversation: (conversationId: string, botId: string) => void;
   undeployBotFromConversation: (conversationId: string, botId: string) => void;
@@ -547,6 +553,8 @@ interface StoreState {
   blockedUsers: string[];
   toggleBlockedUser: (userId: string) => void;
   isBlockedUser: (userId: string) => boolean;
+  hydrateBlockedUsers: () => Promise<void>;
+  setBlockedUsers: (userIds: string[]) => void;
   mutedConversationIds: string[];
   toggleMutedConversation: (id: string) => Promise<void>;
   isMutedConversation: (id: string) => boolean;
@@ -692,9 +700,10 @@ export const useStore = create<StoreState>()(
       email: user.email ?? undefined,
       username: user.username,
     });
+    get().hydrateBlockedUsers().catch(() => undefined);
   },
   logout: () => {
-    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false });
+    set({ currentUser: null, isAuthenticated: false, twoFactorEnabled: false, biometricLoginPending: false, blockedUsers: [] });
     persistLocalAuthSnapshot(null, false);
     // Scrub Sentry user context on logout so subsequent crashes are anonymous.
     setSentryUser(null);
@@ -716,6 +725,9 @@ export const useStore = create<StoreState>()(
               username: profile.username,
               displayName: profile.displayName,
               bio: profile.bio,
+              pronouns: profile.pronouns ?? undefined,
+              gender: profile.gender ?? undefined,
+              isAiCreator: profile.isAiCreator ?? undefined,
               location: profile.location,
               website: profile.website,
               phone: profile.phone,
@@ -1482,6 +1494,7 @@ export const useStore = create<StoreState>()(
           participantIds: conversation.participantIds ?? existing.participantIds,
           botIds: conversation.botIds ?? existing.botIds,
           messages: conversation.messages.length ? conversation.messages : existing.messages,
+          context: conversation.context ?? existing.context,
         };
         nextConversations = [
           mergedConversation,
@@ -1546,12 +1559,24 @@ export const useStore = create<StoreState>()(
       /* best-effort: ignore — next sync reconciles */
     });
   },
-  toggleConversationUnread: (id) =>
+  toggleConversationUnread: (id) => {
+    const convo = get().conversations.find((c) => c.id === id);
+    const wasUnread = convo ? convo.unread : false;
+    const nextUnread = !wasUnread;
     set((state) => ({
       conversations: state.conversations.map((c) =>
-        c.id === id ? { ...c, unread: !c.unread } : c
+        c.id === id ? { ...c, unread: nextUnread, markedUnread: nextUnread } : c
       ),
-    })),
+    }));
+    return setConversationUnreadOnApi(id, nextUnread).catch((error) => {
+      set((state) => ({
+        conversations: state.conversations.map((c) =>
+          c.id === id ? { ...c, unread: wasUnread, markedUnread: wasUnread } : c
+        ),
+      }));
+      throw error;
+    });
+  },
   archiveConversation: (id) =>
     set((state) => ({
       conversations: state.conversations.filter((c) => c.id !== id),
@@ -1565,12 +1590,24 @@ export const useStore = create<StoreState>()(
       archivedConversationIds: state.archivedConversationIds.filter((aid) => aid !== id),
       messageRequests: state.messageRequests.filter((rid) => rid !== id),
     })),
-  toggleConversationPinned: (id) =>
+  toggleConversationPinned: (id) => {
+    const convo = get().conversations.find((c) => c.id === id);
+    const wasPinned = convo ? Boolean(convo.isPinned) : false;
+    const nextPinned = !wasPinned;
     set((state) => ({
       conversations: state.conversations.map((c) =>
-        c.id === id ? { ...c, isPinned: !c.isPinned } : c
+        c.id === id ? { ...c, isPinned: nextPinned } : c
       ),
-    })),
+    }));
+    return pinConversationOnApi(id, nextPinned).catch((error) => {
+      set((state) => ({
+        conversations: state.conversations.map((c) =>
+          c.id === id ? { ...c, isPinned: wasPinned } : c
+        ),
+      }));
+      throw error;
+    });
+  },
   setConversationDraft: (conversationId, draft) =>
     set((state) => ({
       conversations: state.conversations.map((c) =>
@@ -1744,6 +1781,15 @@ export const useStore = create<StoreState>()(
       };
     }),
   isBlockedUser: (userId) => get().blockedUsers.includes(userId),
+  setBlockedUsers: (userIds) => set({ blockedUsers: userIds }),
+  hydrateBlockedUsers: async () => {
+    try {
+      const entries = await getBlockedUsers();
+      set({ blockedUsers: entries.map((e) => e.userId) });
+    } catch {
+      // Best-effort — block list hydration must not block app usage.
+    }
+  },
   mutedConversationIds: [],
   toggleMutedConversation: (id) => {
     const wasMuted = get().mutedConversationIds.includes(id);

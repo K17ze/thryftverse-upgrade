@@ -474,7 +474,7 @@ app.get('/users/:userId/wallet/balances', async (request, reply) => {
       FROM ledger_entries
       WHERE account_id = (
         SELECT id FROM ledger_accounts
-        WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+        WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
         LIMIT 1
       )
     `,

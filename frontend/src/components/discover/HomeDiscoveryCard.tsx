@@ -204,7 +204,6 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
           <Pressable
             onPress={handleSavePress}
             style={styles.saveButton}
-            hitSlop={{ top: Space.xs, bottom: Space.xs, left: Space.xs, right: Space.xs }}
             accessibilityLabel={item.saved ? 'Unsave item' : 'Save item'}
             accessibilityRole="button"
           >
@@ -220,7 +219,7 @@ export const HomeDiscoveryCard = React.memo(function HomeDiscoveryCard({
           {useOverlayPrice && (
             <>
               <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.62)']}
+                colors={['transparent', colors.mediaOverlayScrim]}
                 style={styles.bottomScrim}
                 pointerEvents="none"
               />
@@ -386,7 +385,7 @@ const createStyles = (colors: ThemeColors) =>
       lineHeight: TypographyV2.body.lineHeight,
       fontFamily: FontFamily.medium,
       color: colors.textPrimary,
-      letterSpacing: -0.15 } as TextStyle,
+      letterSpacing: TypographyV2.body.letterSpacing } as TextStyle,
     // Price row: current price + optional strikethrough original
     priceRow: {
       flexDirection: 'row',
@@ -400,7 +399,7 @@ const createStyles = (colors: ThemeColors) =>
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
-      letterSpacing: -0.1 } as TextStyle,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing } as TextStyle,
     priceOriginal: {
       fontSize: TypographyV2.meta.size,
       lineHeight: TypographyV2.meta.lineHeight,
@@ -445,7 +444,7 @@ const createStyles = (colors: ThemeColors) =>
       lineHeight: TypographyV2.bodyStrong.lineHeight,
       fontFamily: FontFamily.semibold,
       fontVariant: ['tabular-nums'],
-      letterSpacing: -0.1,
+      letterSpacing: TypographyV2.bodyStrong.letterSpacing,
       color: colors.scrimTextPrimary,
       ...GlyphShadow.glyph,
       textShadowColor: colors.shadow } as TextStyle });

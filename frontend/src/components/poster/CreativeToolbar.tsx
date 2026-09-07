@@ -112,7 +112,7 @@ const ToolButton = React.memo(function ToolButton({ tool, isActive, onPress }: T
                 backgroundColor: 'transparent' },
             ]}
           >
-            <Ionicons name={tool.icon} size={iconSize} color="rgba(255,255,255,0.9)" />
+            <Ionicons name={tool.icon} size={iconSize} color={colors.scrimTextSecondary} />
           </View>
         )}
       </Reanimated.View>
@@ -198,11 +198,11 @@ function createStyles(colors: ThemeColors) {
   groupDivider: {
     width: 1,
     height: 28,
-    backgroundColor: 'rgba(255,255,255,0.12)' },
+    backgroundColor: colors.scrimTextTertiary },
   toolLabel: {
     fontSize: TypographyV2.meta.size,
     fontFamily: Typography.family.semibold,
-    color: 'rgba(255,255,255,0.75)' },
+    color: colors.mediaOverlayTextMuted },
   toolLabelActive: {
     color: colors.brand,
     fontFamily: Typography.family.bold },

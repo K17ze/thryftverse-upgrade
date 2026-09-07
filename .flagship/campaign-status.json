@@ -1,0 +1,32 @@
+{
+  "campaignId": "flagship-coown-market-2026-09",
+  "lastUpdated": "2026-09-07",
+  "phase": "IMPLEMENTATION-WAVE-2",
+  "scope": ["CoOwnHub", "AssetDetail", "Trade", "Portfolio", "Ledger", "IssueReporting", "CoOwnAPI"],
+  "gates": {
+    "researchSaturated": true,
+    "specApproved": true,
+    "implementationStarted": true,
+    "typecheckPass": true,
+    "focusedTestsPass": true,
+    "liveEndpointPass": true,
+    "lintPass": true,
+    "visualVerified": false,
+    "nativeDeviceValidated": false,
+    "adversarialReauditPass": true
+  },
+  "openGates": [
+    "Capture native Co-Own Hub, Asset Detail, Trade, Portfolio and Issue states",
+    "Run native accessibility traversal when a configured device is available"
+  ],
+  "lastValidation": {
+    "frontendTypecheck": "pass",
+    "backendTypecheck": "pass",
+    "focusedFrontendTests": "14 files, 211 passed",
+    "targetedLint": "0 errors (repository warning set remains)",
+    "liveAssetsProjection": "200 with bid/ask/depth fields",
+    "liveHoldingsProjection": "200 authenticated empty holdings",
+    "liveIssueReport": "201 persisted open issue",
+    "publicOrderPrivacy": "userId omitted"
+  }
+}

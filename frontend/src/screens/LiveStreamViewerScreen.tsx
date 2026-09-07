@@ -145,7 +145,7 @@ export function LiveStreamViewerScreen() {
   const { show } = useToast();
   const { requireAuth } = useSignupWall();
   const reducedMotion = useReducedMotion();
-  const { formatFromFiat, currencyCode, currencySymbol } = useFormattedPrice();
+  const { formatFromFiat, currencySymbol } = useFormattedPrice();
   const { height: SCREEN_HEIGHT } = useWindowDimensions();
   const styles = useMemo(() => createStyles(colors, SCREEN_HEIGHT), [colors, SCREEN_HEIGHT]);
   const { t } = useAppTranslation('liveStreamViewer');
@@ -515,7 +515,9 @@ export function LiveStreamViewerScreen() {
         <View style={styles.stateContainer}>
           <ActivityIndicator size="large" color={colors.brand} />
           <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>{t('connecting.title')}</Text>
-          <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>{t('connecting.subtitle')}</Text>
+          {t('connecting.subtitle') ? (
+            <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>{t('connecting.subtitle')}</Text>
+          ) : null}
         </View>
       </View>
     );
@@ -527,7 +529,7 @@ export function LiveStreamViewerScreen() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle="light-content" />
         <View style={styles.stateContainer}>
-          <Ionicons name="cloud-offline-outline" size={48} color={colors.textMuted} />
+          <Ionicons name="cloud-offline-outline" size={48} color={colors.textMuted} accessible={false} />
           <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>{t('error.title')}</Text>
           <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>{t('error.subtitle')}</Text>
           <Pressable
@@ -557,9 +559,7 @@ export function LiveStreamViewerScreen() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle="light-content" />
         <View style={styles.stateContainer}>
-          <View style={[styles.endedIcon, { backgroundColor: colors.successSubtle }]}>
-            <Ionicons name="checkmark-done-circle" size={48} color={colors.success} />
-          </View>
+          <Ionicons name="checkmark-done-circle" size={48} color={colors.success} accessible={false} />
           <Text style={[styles.stateTitle, { color: colors.textPrimary }]}>{t('ended.title')}</Text>
           <Text style={[styles.stateSubtitle, { color: colors.textSecondary }]}>{t('ended.subtitle')}</Text>
           {streamEndSummary && (
@@ -575,7 +575,7 @@ export function LiveStreamViewerScreen() {
               </View>
               <View style={[styles.endedStatDivider, { backgroundColor: colors.border }]} />
               <View style={styles.endedStatItem}>
-                <Text style={[styles.endedStatValue, { color: colors.textPrimary }]}>{formatFromFiat(streamEndSummary.totalSales, currencyCode)}</Text>
+                <Text style={[styles.endedStatValue, { color: colors.textPrimary }]}>{formatFromFiat(streamEndSummary.totalSales, 'GBP')}</Text>
                 <Text style={[styles.endedStatLabel, { color: colors.textSecondary }]}>{t('ended.totalSales')}</Text>
               </View>
             </View>
@@ -605,7 +605,7 @@ export function LiveStreamViewerScreen() {
             <View style={styles.demoPill}>
               <Text style={styles.demoPillText}>{t('demo.label')}</Text>
             </View>
-            <Ionicons name="videocam-outline" size={48} color={colors.textMuted} />
+            <Ionicons name="videocam-outline" size={48} color={colors.textMuted} accessible={false} />
             <Text style={styles.demoVideoText}>{t('demo.stream')}</Text>
           </View>
         ) : (
@@ -628,18 +628,18 @@ export function LiveStreamViewerScreen() {
               <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} />
             </Pressable>
             <View style={styles.sellerIdentityChip}>
-              <Image source={{ uri: stream?.sellerAvatar }} style={styles.sellerAvatarSmall} />
+              <Image source={{ uri: stream?.sellerAvatar }} style={styles.sellerAvatarSmall} accessible={false} />
               <View style={styles.sellerIdentityText}>
                 <View style={styles.sellerNameRowOverlay}>
                   <Text style={styles.sellerNameOverlay} numberOfLines={1}>{stream?.sellerName}</Text>
                   {stream?.sellerVerified && (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.scrimTextPrimary} />
+                    <Ionicons name="checkmark-circle" size={12} color={colors.scrimTextPrimary} accessible={false} />
                   )}
                 </View>
                 <Pressable
                   onPress={handleFollowToggle}
                   disabled={followMutation.isPending}
-                  hitSlop={4}
+                  hitSlop={8}
                   style={({ pressed }) => [styles.followChip, pressed && { opacity: 0.7 }]}
                   accessibilityRole="button"
                   accessibilityLabel={isFollowing ? 'Unfollow seller' : 'Follow seller'}
@@ -657,13 +657,13 @@ export function LiveStreamViewerScreen() {
 
           {/* Right: live badge + viewer count + like + share */}
           <View style={styles.topRightCluster}>
-            <View style={styles.liveBadgeOverlay}>
+            <View style={styles.liveBadgeOverlay} accessible={false}>
               <View style={styles.liveDotOverlay} />
               <Text style={styles.liveBadgeTextOverlay}>{t('live.label')}</Text>
             </View>
             {viewerCount > 0 && (
               <View style={styles.viewerBadgeOverlay}>
-                <Ionicons name="eye-outline" size={12} color={colors.scrimTextPrimary} />
+                <Ionicons name="eye-outline" size={12} color={colors.scrimTextPrimary} accessible={false} />
                 <Text style={styles.viewerBadgeTextOverlay}>{viewerCount >= 1000 ? `${(viewerCount / 1000).toFixed(1)}K` : viewerCount}</Text>
               </View>
             )}
@@ -674,7 +674,7 @@ export function LiveStreamViewerScreen() {
               accessibilityRole="button"
               accessibilityLabel={hasLiked ? 'Unlike stream' : 'Like stream'}
             >
-              <Ionicons name={hasLiked ? 'heart' : 'heart-outline'} size={22} color={hasLiked ? colors.danger : colors.scrimTextPrimary} />
+              <Ionicons name={hasLiked ? 'heart' : 'heart-outline'} size={22} color={hasLiked ? colors.danger : colors.scrimTextPrimary} accessible={false} />
             </Pressable>
             <Pressable
               onPress={handleShare}
@@ -683,7 +683,7 @@ export function LiveStreamViewerScreen() {
               accessibilityRole="button"
               accessibilityLabel="Share stream"
             >
-              <Ionicons name="share-outline" size={20} color={colors.scrimTextPrimary} />
+              <Ionicons name="share-outline" size={20} color={colors.scrimTextPrimary} accessible={false} />
             </Pressable>
           </View>
         </View>
@@ -761,11 +761,11 @@ export function LiveStreamViewerScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`View ${currentLot.title} details`}
               >
-                <Image source={{ uri: currentLot.imageUri }} style={styles.productImageSmall} />
+                <Image source={{ uri: currentLot.imageUri }} style={styles.productImageSmall} accessible={false} />
                 <View style={styles.productInfoCompact}>
                   <Text style={styles.productTitleOverlay} numberOfLines={1}>{currentLot.title}</Text>
                   <View style={styles.productPriceRow}>
-                    <Text style={styles.productPriceValue}>{formatFromFiat(currentLot.currentPrice, currencyCode)}</Text>
+                    <Text style={styles.productPriceValue}>{formatFromFiat(currentLot.currentPrice, 'GBP')}</Text>
                     <Text style={styles.productPriceLabel}>{currentLot.bidCount} {t('product.bids')}</Text>
                     {timeRemaining > 0 && (
                       <Text style={[styles.productTimer, { color: timeRemaining <= 10 ? colors.danger : colors.scrimTextSecondary }]}>
@@ -823,7 +823,7 @@ export function LiveStreamViewerScreen() {
             <Pressable
               onPress={handleSendChat}
               disabled={!chatInput.trim()}
-              hitSlop={4}
+              hitSlop={8}
               style={({ pressed }) => [
                 styles.chatSendBtnOverlay,
                 !chatInput.trim() && { opacity: 0.4 },
@@ -832,7 +832,7 @@ export function LiveStreamViewerScreen() {
               accessibilityRole="button"
               accessibilityLabel="Send message"
             >
-              <Ionicons name="send" size={16} color={colors.scrimTextPrimary} />
+              <Ionicons name="send" size={16} color={colors.scrimTextPrimary} accessible={false} />
             </Pressable>
           </View>
         </KeyboardAvoidingView>
@@ -841,7 +841,7 @@ export function LiveStreamViewerScreen() {
       {bidOutcome === 'unknown' && (
         <View style={[styles.unknownBanner, { backgroundColor: colors.warningSubtle, borderColor: colors.warningBorder, top: insets.top + Space.lg }]} pointerEvents="box-none">
           <View style={styles.unknownBannerContent}>
-            <Ionicons name="cloud-offline-outline" size={20} color={colors.warning} />
+            <Ionicons name="cloud-offline-outline" size={20} color={colors.warning} accessible={false} />
             <View style={styles.unknownBannerText}>
               <Text style={[styles.unknownBannerTitle, { color: colors.textPrimary }]}>
                 {t('unknown.title')}
@@ -892,21 +892,21 @@ export function LiveStreamViewerScreen() {
           accessibilityRole="button"
           >
             <View style={styles.bidSheetHandle} />
-            <Image source={{ uri: currentLot.imageUri }} style={styles.itemSheetImage} />
+            <Image source={{ uri: currentLot.imageUri }} style={styles.itemSheetImage} accessible={false} />
             <Text style={[styles.bidSheetTitle, { color: colors.textPrimary }]}>{currentLot.title}</Text>
             <View style={styles.itemSheetPriceRow}>
               <View>
                 <Text style={[styles.bidSheetCurrentLabel, { color: colors.textSecondary }]}>{t('bidSheet.currentBid')}</Text>
-                <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>{formatFromFiat(currentLot.currentPrice, currencyCode)}</Text>
+                <Text style={[styles.bidSheetCurrent, { color: colors.textPrimary }]}>{formatFromFiat(currentLot.currentPrice, 'GBP')}</Text>
               </View>
               <View style={styles.itemSheetBidCount}>
-                <Ionicons name="cash-outline" size={14} color={colors.textSecondary} />
+                <Ionicons name="cash-outline" size={14} color={colors.textSecondary} accessible={false} />
                 <Text style={[styles.itemSheetBidCountText, { color: colors.textSecondary }]}>{currentLot.bidCount} {t('product.bids')}</Text>
               </View>
             </View>
             {timeRemaining > 0 && (
               <View style={styles.timeRow}>
-                <Ionicons name="time-outline" size={14} color={timeRemaining <= 10 ? colors.danger : colors.textSecondary} />
+                <Ionicons name="time-outline" size={14} color={timeRemaining <= 10 ? colors.danger : colors.textSecondary} accessible={false} />
                 <Text style={[styles.timeText, { color: timeRemaining <= 10 ? colors.danger : colors.textSecondary }]}>
                   {formatTime(timeRemaining)}
                 </Text>
@@ -983,7 +983,7 @@ export function LiveStreamViewerScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Bid ${currencySymbol}${amount}`}
                 >
-                  <Text style={[styles.quickBidText, { color: colors.textPrimary }]}>{formatFromFiat(amount, currencyCode)}</Text>
+                  <Text style={[styles.quickBidText, { color: colors.textPrimary }]}>{formatFromFiat(amount, 'GBP')}</Text>
                 </Pressable>
               ))}
             </View>
@@ -1209,7 +1209,7 @@ const createStyles = (colors: ThemeColors, screenHeight: number) => StyleSheet.c
     padding: Space.sm,
     gap: Space.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.glassBorder },
+    borderColor: colors.border },
   lotStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1293,7 +1293,7 @@ const createStyles = (colors: ThemeColors, screenHeight: number) => StyleSheet.c
     flex: 1,
     paddingVertical: Space.sm,
     borderRadius: Radius.lg,
-    backgroundColor: colors.glassBorder,
+    backgroundColor: colors.surfaceAlt,
     minHeight: Control.chrome,
     alignItems: 'center',
     justifyContent: 'center' },
@@ -1360,12 +1360,6 @@ const createStyles = (colors: ThemeColors, screenHeight: number) => StyleSheet.c
   secondaryBtnText: {
     fontSize: TypographyV2.body.size,
     fontFamily: TypographyV2.body.fontFamily },
-  endedIcon: {
-    width: Space.xxl + Space.xxl + Space.xs,
-    height: Space.xxl + Space.xxl + Space.xs,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center' },
   endedStats: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1479,7 +1473,6 @@ const createStyles = (colors: ThemeColors, screenHeight: number) => StyleSheet.c
     lineHeight: TypographyV2.label.lineHeight,
     fontFamily: TypographyV2.label.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing,
-    textTransform: 'uppercase',
     textAlign: 'center' },
   bidSheetCurrent: {
     fontSize: TypographyV2.priceHero.size,

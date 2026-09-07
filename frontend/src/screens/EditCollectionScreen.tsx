@@ -10,7 +10,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../context/ToastContext';
 import { useAppTheme } from '../theme/ThemeContext';
 import type { ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, Elevation, Control, LetterSpacing, Stroke } from '../theme/designTokens';
+import { Space, Radius, Elevation, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { AnimatedPressable } from '../components/AnimatedPressable';
@@ -93,7 +93,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
     haptic.heavy();
     setConfirmSheet({
       visible: true,
-      title: 'Delete Collection?',
+      title: 'Delete collection?',
       message: `This will permanently delete "${collection?.name}". Items in your Saved will not be affected.`,
       confirmLabel: 'Delete',
       cancelLabel: 'Cancel',
@@ -116,7 +116,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
       <FlagshipScreen
         header={
           <FlagshipHeader
-            title="Edit Collection"
+            title="Edit collection"
             onBack={() => navigation.goBack()}
           />
         }
@@ -124,7 +124,6 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
         <EmptyState
           icon="folder-open-outline"
           title="Collection not found"
-          subtitle="This collection may have been deleted."
           ctaLabel="Go back"
           onCtaPress={() => navigation.goBack()}
         />
@@ -136,7 +135,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Edit Collection"
+          title="Edit collection"
           onBack={() => navigation.goBack()}
           rightAction={
             <AnimatedPressable
@@ -165,7 +164,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-          <View style={styles.card}>
+          <View style={styles.flatSection}>
             <Text style={styles.label}>Name</Text>
             <AppInput
               value={name}
@@ -178,7 +177,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
             <Text style={styles.charCount}>{name.length}/40</Text>
           </View>
 
-          <View style={styles.card}>
+          <View style={styles.flatSection}>
             <Text style={styles.label}>Description</Text>
             <AppInput
               value={description}
@@ -192,18 +191,15 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
             <Text style={styles.charCount}>{description.length}/200</Text>
           </View>
 
-          <View style={styles.card}>
+          <View style={styles.flatSection}>
             <View style={styles.toggleRow}>
-              <View style={styles.toggleIconWrap}>
-                <Ionicons
-                  name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'}
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </View>
+              <Ionicons
+                name={isPrivate ? 'lock-closed-outline' : 'lock-open-outline'}
+                size={20}
+                color={colors.textSecondary}
+              />
               <View style={styles.toggleText}>
                 <Text style={styles.toggleLabel}>Private collection</Text>
-                <Text style={styles.toggleSub}>Only you can see this collection</Text>
               </View>
               <AnimatedPressable
                 onPress={() => {
@@ -215,6 +211,7 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
                 accessibilityLabel="Toggle private collection"
                 accessibilityRole="switch"
                 accessibilityState={{ checked: isPrivate }}
+                hitSlop={8}
               >
                 <View style={[styles.togglePill, isPrivate && styles.togglePillActive]}>
                   <View style={[styles.toggleKnob, isPrivate && styles.toggleKnobActive]} />
@@ -235,17 +232,13 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               <Ionicons name="list-outline" size={18} color={colors.textSecondary} />
               <View style={styles.manageItemsText}>
                 <Text style={styles.manageItemsLabel}>Manage items</Text>
-                <Text style={styles.manageItemsSub}>
-                  {itemCount} {itemCount === 1 ? 'item' : 'items'} in this collection
-                </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </AnimatedPressable>
 
-          <View style={styles.dangerCard}>
-            <Text style={styles.dangerLabel}>Danger Zone</Text>
+          <View style={styles.dangerSection}>
             <AppButton
-              title="Delete Collection"
+              title="Delete collection"
               variant="secondary"
               size="lg"
               icon={<Ionicons name="trash-outline" size={18} color={colors.danger} />}
@@ -255,9 +248,6 @@ export default function EditCollectionScreen({ navigation, route }: Props) {
               hapticFeedback="heavy"
               accessibilityLabel="Delete collection"
             />
-            <Text style={styles.dangerSub}>
-              This action cannot be undone. Your saved items will remain in Saved.
-            </Text>
           </View>
       </KeyboardAwareScrollView>
 
@@ -291,17 +281,16 @@ function createStyles(colors: ThemeColors) {
     letterSpacing: TypographyV2.body.letterSpacing },
   headerActionDisabled: {
     color: colors.textMuted },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Space.md,
-    ...Elevation.subtle },
+  flatSection: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border },
   label: {
     fontSize: TypographyV2.meta.size,
     fontFamily: TypographyV2.meta.fontFamily,
     color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + 0.38,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     marginBottom: Space.sm },
   textArea: {
     minHeight: Space.xl + Space.xxl,
@@ -316,12 +305,6 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.smMd },
-  toggleIconWrap: {
-    width: Control.chrome,
-    height: Control.chrome,
-    borderRadius: Radius.full,
-    justifyContent: 'center',
-    alignItems: 'center' },
   toggleText: {
     flex: 1 },
   toggleLabel: {
@@ -329,12 +312,6 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     letterSpacing: TypographyV2.body.letterSpacing },
-  toggleSub: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    marginTop: Space.xs / 2,
-    letterSpacing: TypographyV2.meta.letterSpacing },
   togglePill: {
     width: Space.xxl,
     height: Space.lg + Space.xs,
@@ -359,7 +336,6 @@ function createStyles(colors: ThemeColors) {
     backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Space.md,
-    ...Elevation.subtle,
     marginTop: Space.md },
   manageItemsRow: {
     flexDirection: 'row',
@@ -367,12 +343,7 @@ function createStyles(colors: ThemeColors) {
     gap: Space.sm,
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: Stroke.hairline,
-    borderColor: colors.border,
-    minHeight: Control.hit,
-    ...Elevation.subtle },
+    minHeight: Control.hit },
   manageItemsText: {
     flex: 1 },
   manageItemsLabel: {
@@ -380,25 +351,9 @@ function createStyles(colors: ThemeColors) {
     fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     letterSpacing: TypographyV2.body.letterSpacing },
-  manageItemsSub: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    marginTop: Space.xs / 2,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  dangerLabel: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.danger,
-    textTransform: 'uppercase',
-    letterSpacing: LetterSpacing.caps + 0.38,
-    marginBottom: Space.sm },
+  dangerSection: {
+    paddingHorizontal: Space.md,
+    paddingTop: Space.lg },
   deleteBtn: {
-    borderColor: colors.danger },
-  dangerSub: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    color: colors.textMuted,
-    marginTop: Space.sm,
-    textAlign: 'center' } });
+    borderColor: colors.danger } });
 }

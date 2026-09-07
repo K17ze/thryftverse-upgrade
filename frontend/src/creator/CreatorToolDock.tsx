@@ -15,6 +15,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { useCreator } from './CreatorContext';
 import { PressScale } from './CreatorAnimations';
 import { useHaptic } from '../hooks/useHaptic';
+import { useEditorHapticGrammar } from './haptics/editorHapticGrammar';
 import { ToolButton, type RailTool } from './dock/ToolButton';
 import type { CreatorLayer } from './composition';
 import type { AssetPickerMode } from './CreatorAssetPicker';
@@ -66,6 +67,7 @@ export function CreatorToolDock({
   const { document } = useCreator();
   const { colors } = useAppTheme();
   const haptic = useHaptic();
+  const editorHaptics = useEditorHapticGrammar();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
   const isLook = (documentType ?? document.type) === 'look';
@@ -119,10 +121,10 @@ export function CreatorToolDock({
       } else {
         secondaryExpandSV.value = withTiming(next ? 1 : 0, { duration: Motion.tier.micro, easing: Motion.easing.crisp });
       }
-      haptic.light();
+      editorHaptics.railSwap();
       return next;
     });
-  }, [reduceMotion, secondaryExpandSV, haptic]);
+  }, [reduceMotion, secondaryExpandSV, editorHaptics]);
 
   // Build contextual tools based on selection state and mode.
   // Poster mode uses an Instagram Stories tool set; Look mode keeps the
@@ -140,18 +142,19 @@ export function CreatorToolDock({
   const showSecondaryToggle = !isSelectionMode && secondaryTools.length > 0;
 
   const handleToolPress = useCallback((tool: RailTool) => {
+    editorHaptics.toolSelect();
     tool.action();
-  }, []);
+  }, [editorHaptics]);
 
   const handlePublish = useCallback(() => {
-    haptic.medium();
+    editorHaptics.publishSuccess();
     onPublish();
-  }, [haptic, onPublish]);
+  }, [editorHaptics, onPublish]);
 
   const handleMore = useCallback(() => {
-    haptic.selection();
+    editorHaptics.railSwap();
     onMore();
-  }, [haptic, onMore]);
+  }, [editorHaptics, onMore]);
 
   const toolSize = 44;
   const toolIconSize = IconGrammar.standard;

@@ -59,7 +59,7 @@ export function useMotionConfig() {
 
     return {
       duration: reducedMotion
-        ? { ...Motion.duration, touch: 0, fast: 0, normal: 0, slow: 0, slower: 0, crawl: 0 }
+        ? { ...Motion.duration, touch: 0, pressRelease: 0, fast: 0, normal: 0, slow: 0, slower: 0, crawl: 0 }
         : Motion.duration,
       // Tiers collapse to instant (0ms) under reduced motion so every
       // surface that references a tier settles instantly without travel.

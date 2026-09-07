@@ -1,0 +1,77 @@
+- generic [ref=e12]:
+  - generic [ref=e352]:
+    - generic [ref=e355]:
+      - button "Go back" [ref=e356] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e357]: 
+      - generic [ref=e358]: Group details
+    - generic [ref=e364]:
+      - generic [ref=e365]: T
+      - generic [ref=e370]:
+        - generic [ref=e371]: Thryft Snipers
+        - generic [ref=e372]: 3 members · 1 agent connected
+      - generic [ref=e373]:
+        - button "Mute group" [ref=e374] [cursor=pointer]:
+          - generic [ref=e375]: 
+          - generic [ref=e377]: Mute
+        - button "Share invite link" [ref=e378] [cursor=pointer]:
+          - generic [ref=e379]: 
+          - generic [ref=e381]: Invite
+        - button "Share group" [ref=e382] [cursor=pointer]:
+          - generic [ref=e383]: 
+          - generic [ref=e385]: Share
+      - generic [ref=e386]:
+        - tab "Members" [ref=e387] [cursor=pointer]
+        - tab "Media" [ref=e389] [cursor=pointer]
+        - tab "Settings" [active] [ref=e391] [cursor=pointer]
+      - generic [ref=e414]:
+        - generic [ref=e415]:
+          - generic [ref=e416]: Conversation
+          - generic [ref=e417]:
+            - button "Quick replies" [ref=e418] [cursor=pointer]:
+              - generic [ref=e419]:
+                - generic [ref=e420]: 
+                - generic [ref=e422]:
+                  - generic [ref=e423]: Quick replies
+                  - generic [ref=e424]: Reusable message templates
+                - generic [ref=e425]: 
+            - button "Mute notifications" [ref=e426] [cursor=pointer]:
+              - generic [ref=e427]:
+                - generic [ref=e428]: 
+                - generic [ref=e430]: Mute notifications
+        - generic [ref=e432]:
+          - generic [ref=e433]: Chat history
+          - button "Archive conversation" [ref=e435] [cursor=pointer]:
+            - generic [ref=e436]:
+              - generic [ref=e437]: 
+              - generic [ref=e439]:
+                - generic [ref=e440]: Archive conversation
+                - generic [ref=e441]: Move this chat out of your active inbox
+        - generic [ref=e442]:
+          - generic [ref=e443]: Advanced
+          - button "Automations" [ref=e445] [cursor=pointer]:
+            - generic [ref=e446]:
+              - generic [ref=e447]: 
+              - generic [ref=e449]:
+                - generic [ref=e450]: Automations
+                - generic [ref=e451]: 1 connected
+              - generic [ref=e452]: 
+        - generic [ref=e453]:
+          - generic [ref=e454]: Membership
+          - generic [ref=e455]:
+            - button "Report group" [ref=e456] [cursor=pointer]:
+              - generic [ref=e457]:
+                - generic [ref=e458]: 
+                - generic [ref=e460]:
+                  - generic [ref=e461]: Report group
+                  - generic [ref=e462]: Spam, abuse or policy violation
+                - generic [ref=e463]: 
+            - button "Leave group" [ref=e464] [cursor=pointer]:
+              - generic [ref=e465]:
+                - generic [ref=e466]: 
+                - generic [ref=e468]: Leave group
+            - button "Delete for me" [ref=e470] [cursor=pointer]:
+              - generic [ref=e471]:
+                - generic [ref=e472]: 
+                - generic [ref=e474]: Delete for me
+  - button "Open command palette" [ref=e32] [cursor=pointer]:
+    - generic [ref=e33]: 

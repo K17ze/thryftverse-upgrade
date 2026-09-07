@@ -21,7 +21,7 @@ import {
   FlatList } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
-import { Space, Radius, Stroke} from '../../theme/designTokens';
+import { Space, Radius, Stroke, GlyphShadow } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { isVideoUri } from '../../utils/media';
 import { CachedImage } from '../CachedImage';
@@ -323,7 +323,7 @@ export function ProductMediaGallery({
           {...PressPresets.iconButton}
           accessibilityLabel="Go back"
         >
-          <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.scrimTextPrimary} style={GlyphShadow.glyph} />
         </AnimatedPressable>
 
         <View style={styles.headerRight}>
@@ -333,7 +333,7 @@ export function ProductMediaGallery({
             {...PressPresets.iconButton}
             accessibilityLabel="Share this listing"
           >
-            <Ionicons name="share-outline" size={24} color={colors.scrimTextPrimary} />
+            <Ionicons name="share-outline" size={24} color={colors.scrimTextPrimary} style={GlyphShadow.glyph} />
           </AnimatedPressable>
 
           <AnimatedPressable
@@ -347,6 +347,7 @@ export function ProductMediaGallery({
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={24}
               color={isSaved ? colors.brand : colors.scrimTextPrimary}
+              style={GlyphShadow.glyph}
             />
           </AnimatedPressable>
 
@@ -439,16 +440,12 @@ function createStyles(colors: ThemeColors) {
     left: 0,
     right: 0,
     height: 120,
-    backgroundColor: colors.glassBg },
+    backgroundColor: colors.mediaOverlayScrim },
   bigHeartWrap: {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 5 },
-  bigHeartIcon: {
-    shadowColor: colors.textPrimary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10 },
+  bigHeartIcon: {},
   soldOverlay: {
     position: 'absolute',
     bottom: Space.lg,
@@ -477,15 +474,13 @@ function createStyles(colors: ThemeColors) {
   controlBtn: {
     width: 44,
     height: 44,
-    borderRadius: Radius.xxl,
-    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center' },
   indexBadge: {
     position: 'absolute',
     bottom: Space.sm,
     right: Space.md,
-    backgroundColor: colors.overlay,
+    backgroundColor: colors.mediaOverlayScrim,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: Radius.md },
@@ -500,7 +495,7 @@ function createStyles(colors: ThemeColors) {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    backgroundColor: colors.overlay,
+    backgroundColor: colors.mediaOverlayScrim,
     paddingHorizontal: Space.sm + 2,
     paddingVertical: 5,
     borderRadius: Radius.md },
@@ -537,7 +532,7 @@ function createStyles(colors: ThemeColors) {
     width: 14,
     height: 14,
     borderRadius: Radius.md,
-    backgroundColor: colors.overlay,
+    backgroundColor: colors.mediaOverlayScrim,
     alignItems: 'center',
     justifyContent: 'center' } });
 }

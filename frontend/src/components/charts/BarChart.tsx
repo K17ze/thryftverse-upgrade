@@ -21,7 +21,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { useFont, Line as SkiaLine, vec } from '@shopify/react-native-skia';
-import { useDerivedValue, type SharedValue } from 'react-native-reanimated';
+import { useDerivedValue, useReducedMotion, type SharedValue } from 'react-native-reanimated';
 import {
   CartesianChart,
   Bar,
@@ -30,6 +30,9 @@ import {
 import { useAppTheme } from '../../theme/ThemeContext';
 import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { FontFamily } from '../../theme/fontFamily';
+import { IconSize } from '../../theme/iconTokens';
+import { AppIcon } from '../common/AppIcon';
 import {
   type ChartPoint,
   type ChartPadding,
@@ -45,8 +48,12 @@ export interface BarChartProps {
   data: ChartPoint[];
   /** Chart height in canvas pixels. */
   height: number;
+  /** Visual container treatment. 'card' (default) draws the bordered card surface; 'flat' renders directly on the parent canvas with no border, padding or background. */
+  variant?: 'card' | 'flat';
   /** Bar fill colour. Defaults to theme.positive. */
   barColor?: string;
+  /** Fraction of horizontal space reserved between bars (0–1). Higher = thinner bars. Defaults to 0.25. */
+  innerPadding?: number;
   /** Padding around the plotting area. Defaults to a sensible chart padding. */
   padding?: ChartPadding;
   /** Override the theme colours. Defaults to the app theme. */
@@ -152,7 +159,9 @@ function CrosshairLine({
 export function BarChart({
   data,
   height,
+  variant = 'card',
   barColor,
+  innerPadding = 0.25,
   padding = DEFAULT_PADDING,
   theme: themeOverride,
   valueFormat = defaultValueFormat,
@@ -167,6 +176,7 @@ export function BarChart({
   );
   const { colors } = useAppTheme();
   const fillColor = barColor ?? theme.positive;
+  const reducedMotion = useReducedMotion();
 
   // Responsive sizing via onLayout (width only; height is fixed via prop).
   const [layoutWidth, setLayoutWidth] = useState(MIN_WIDTH);
@@ -177,8 +187,8 @@ export function BarChart({
   }, []);
 
   // Skia font for axis labels and tooltip text.
-  // useFont(null, size) uses the system default font.
-  const font = useFont(null, FONT_SIZE);
+  // Inter is loaded globally via @expo-google-fonts/inter in App.tsx.
+  const font = useFont(FontFamily.regular, FONT_SIZE);
 
   // Chart press state for touch feedback.
   const { state: pressState, isActive } = useChartPressState({
@@ -218,13 +228,16 @@ export function BarChart({
   const axisColor = theme.axisLine;
   const labelColor = theme.textSecondary;
 
+  // Container treatment: 'card' draws the bordered card surface (default);
+  // 'flat' renders directly on the parent canvas — no border, padding or fill.
+  const containerStyle = variant === 'flat'
+    ? styles.containerFlat
+    : [styles.container, { backgroundColor: colors.surface, borderColor: colors.border }];
+
   // ── Loading state ──
   if (loading) {
     return (
-      <View
-        style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onLayout={onLayout}
-      >
+      <View style={containerStyle} onLayout={onLayout}>
         <View style={[styles.placeholder, { height }]}>
           <View style={[styles.skeletonBar, { backgroundColor: colors.borderSubtle }]} />
           <View style={[styles.skeletonBar, { backgroundColor: colors.borderSubtle, width: '50%' }]} />
@@ -236,10 +249,7 @@ export function BarChart({
   // ── Error state ──
   if (error) {
     return (
-      <View
-        style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onLayout={onLayout}
-      >
+      <View style={containerStyle} onLayout={onLayout}>
         <View style={[styles.placeholder, { height }]}>
           <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
         </View>
@@ -250,12 +260,15 @@ export function BarChart({
   // ── Empty state ──
   if (chartData.length === 0) {
     return (
-      <View
-        style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onLayout={onLayout}
-      >
+      <View style={containerStyle} onLayout={onLayout}>
         <View style={[styles.placeholder, { height }]}>
-          <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>
+          <AppIcon
+            concept="analytics"
+            size={IconSize.lg}
+            color="textMuted"
+            accessible={false}
+          />
+          <Text style={[styles.emptyTitle, { color: colors.textMuted }]}>
             {emptyMessage}
           </Text>
         </View>
@@ -265,10 +278,7 @@ export function BarChart({
 
   // ── Ready state ──
   return (
-    <View
-      style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      onLayout={onLayout}
-    >
+    <View style={containerStyle} onLayout={onLayout}>
       {/* Off-screen text for screen readers — the Skia canvas is invisible
           to VoiceOver/TalkBack, so we expose a textual summary (WCAG 1.1.1). */}
       <Text
@@ -333,9 +343,10 @@ export function BarChart({
           <Bar
             points={points.value}
             chartBounds={chartBounds}
+            innerPadding={innerPadding}
             color={fillColor}
-            roundedCorners={{ topLeft: 4, topRight: 4 }}
-            animate={{ type: 'timing', duration: 400 }}
+            roundedCorners={{ topLeft: Radius.sm, topRight: Radius.sm }}
+            animate={{ type: 'timing', duration: reducedMotion ? 0 : 400 }}
           />
         )}
       </CartesianChart>
@@ -353,6 +364,12 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: Space.sm,
     overflow: 'hidden' },
+  containerFlat: {
+    borderRadius: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 0 },
   placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -366,8 +383,8 @@ const styles = StyleSheet.create({
     fontFamily: TypographyV2.body.fontFamily,
     textAlign: 'center' },
   emptyTitle: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: TypographyV2.bodyStrong.fontFamily,
+    fontSize: TypographyV2.caption.size,
+    fontFamily: TypographyV2.caption.fontFamily,
     textAlign: 'center' } });
 
 export default BarChart;

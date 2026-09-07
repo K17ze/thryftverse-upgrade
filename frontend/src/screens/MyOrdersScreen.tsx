@@ -82,7 +82,7 @@ export default function MyOrdersScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((state) => state.currentUser);
   const viewerId = currentUser?.id;
   const { isOffline } = useConnectivity();
@@ -298,7 +298,7 @@ export default function MyOrdersScreen() {
     ({ item }: { item: OrderViewModel }) => (
       <OrderLedgerRow
         order={item}
-        formattedTotal={formatFromFiat(item.totalGbp, currencyCode, { displayMode: 'fiat' })}
+        formattedTotal={formatFromFiat(item.totalGbp, 'GBP', { displayMode: 'fiat' })}
         onPress={() => handleOrderPress(item.id)}
       />
     ),
@@ -343,8 +343,7 @@ export default function MyOrdersScreen() {
         <EmptyState
           icon="bag-outline"
           title="Sign in to view orders"
-          subtitle="Your buying and selling history appears here once you're signed in."
-          ctaLabel="Sign In"
+          ctaLabel="Sign in"
           onCtaPress={() => navigation.navigate('Login')}
         />
       );
@@ -354,8 +353,7 @@ export default function MyOrdersScreen() {
       return (
         <EmptyState
           icon="search-outline"
-          title="No results found"
-          subtitle={`No orders matching "${debouncedQuery.trim()}". Try a different search term.`}
+          title={`No orders matching "${debouncedQuery.trim()}"`}
           ctaLabel="Clear search"
           onCtaPress={handleClearSearch}
         />
@@ -367,7 +365,6 @@ export default function MyOrdersScreen() {
         <EmptyState
           icon="document-text-outline"
           title="No orders match these filters"
-          subtitle="Try adjusting your filters to see more orders."
           ctaLabel="Clear filters"
           onCtaPress={() => {
             setFilter({ classification: 'all', year: null });
@@ -383,7 +380,6 @@ export default function MyOrdersScreen() {
         <EmptyState
           icon="bag-outline"
           title="No purchases yet"
-          subtitle="When you buy something, your orders will show up here."
           ctaLabel="Browse items"
           onCtaPress={() => navigation.navigate('MainTabs')}
         />
@@ -394,8 +390,7 @@ export default function MyOrdersScreen() {
       return (
         <EmptyState
           icon="checkmark-done-outline"
-          title="No completed orders yet"
-          subtitle="Orders you've received and confirmed will appear here."
+          title="No completed orders"
           ctaLabel="Browse items"
           onCtaPress={() => navigation.navigate('MainTabs')}
         />
@@ -407,7 +402,6 @@ export default function MyOrdersScreen() {
         <EmptyState
           icon="bag-outline"
           title="No orders yet"
-          subtitle="When you buy or sell something, your orders will show up here."
           ctaLabel="Start shopping"
           onCtaPress={() => navigation.navigate('MainTabs')}
         />
@@ -418,7 +412,6 @@ export default function MyOrdersScreen() {
       <EmptyState
         icon="bag-handle-outline"
         title="No sales yet"
-        subtitle="When you sell something, your orders will show up here."
         ctaLabel="List an item"
         onCtaPress={() => navigation.navigate('Sell')}
       />
@@ -431,9 +424,9 @@ export default function MyOrdersScreen() {
 
   const renderError = useCallback(() => (
     <View style={styles.errorContainer}>
-      <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} />
+      <Ionicons name="cloud-offline-outline" size={40} color={colors.textMuted} accessible={false} />
       <Text style={styles.errorTitle}>{isOffline ? 'You are offline' : 'Orders could not be loaded'}</Text>
-      <Text style={styles.errorSubtitle}>{isOffline ? 'Check your connection and try again.' : 'We couldn\'t load your orders. Tap below to try again.'}</Text>
+      <Text style={styles.errorSubtitle}>{isOffline ? 'Check your connection and try again.' : 'Tap below to try again.'}</Text>
       <Pressable
         style={styles.retryBtn}
         onPress={() => {
@@ -524,6 +517,7 @@ export default function MyOrdersScreen() {
               name={hasActiveFilter ? 'filter' : 'filter-outline'}
               size={22}
               color={hasActiveFilter ? colors.brand : colors.textPrimary}
+              accessible={false}
             />
           </Pressable>
         }
@@ -542,23 +536,24 @@ export default function MyOrdersScreen() {
         <Pressable
           style={[styles.needsActionBanner, { backgroundColor: colors.brandSubtle }]}
           onPress={() => setFilter({ classification: 'needs_action', year: null })}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityRole="button"
           accessibilityLabel={`${needsActionCount} orders need your attention. Tap to view.`}
         >
-          <Ionicons name="alert-circle-outline" size={16} color={colors.brand} />
+          <Ionicons name="alert-circle-outline" size={16} color={colors.brand} accessible={false} />
           <Text style={[styles.needsActionText, { color: colors.brand }]}>
             {needsActionCount} {needsActionCount === 1 ? 'order' : 'orders'} need{needsActionCount === 1 ? 's' : ''} your attention
           </Text>
-          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} accessible={false} />
         </Pressable>
       )}
 
       <View style={styles.searchRow}>
         <ElevatedSurface variant="surface" style={styles.searchInputWrap}>
-          <Ionicons name="search-outline" size={16} color={colors.textMuted} style={styles.searchIcon} />
+          <Ionicons name="search-outline" size={16} color={colors.textMuted} style={styles.searchIcon} accessible={false} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by item, order number, member, or tracking"
+            placeholder="Search orders"
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -574,7 +569,7 @@ export default function MyOrdersScreen() {
               accessibilityRole="button"
               accessibilityLabel="Clear search"
             >
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+              <Ionicons name="close-circle" size={16} color={colors.textMuted} accessible={false} />
             </Pressable>
           )}
         </ElevatedSurface>
@@ -699,8 +694,7 @@ function createStyles(colors: ThemeColors) {
     lineHeight: TypographyV2.label.lineHeight,
     fontFamily: TypographyV2.label.fontFamily,
     letterSpacing: TypographyV2.label.letterSpacing,
-    color: colors.textMuted,
-    textTransform: 'uppercase' },
+    color: colors.textMuted },
   listContent: {
     paddingBottom: Space.xl },
   separator: {

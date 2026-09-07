@@ -9,7 +9,7 @@ import {
   ScrollView,
   Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, Radius, TypeStyles } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { AnimatedPressable } from '../AnimatedPressable';
@@ -54,6 +54,7 @@ interface ChatComposerBarProps {
   }) => void;
   isVoiceRecording?: boolean;
   onVoiceRecordingChange?: (isRecording: boolean) => void;
+  onSelectionChange?: (event: { nativeEvent: { selection: { start: number; end: number } } }) => void;
 }
 
 const MAX_INPUT_HEIGHT = 120;
@@ -78,7 +79,8 @@ export function ChatComposerBar({
   onDismissCautionWarning,
   onVoiceRecord,
   isVoiceRecording = false,
-  onVoiceRecordingChange }: ChatComposerBarProps) {
+  onVoiceRecordingChange,
+  onSelectionChange }: ChatComposerBarProps) {
   const { colors } = useAppTheme();
   const { t } = useAppTranslation('messaging');
   const styles = React.useMemo(() => createStyles(colors), [colors]);
@@ -207,6 +209,7 @@ export function ChatComposerBar({
               style={styles.input}
               value={value}
               onChangeText={onChangeText}
+              onSelectionChange={onSelectionChange}
               placeholder={placeholder}
               placeholderTextColor={colors.textMuted}
               multiline
@@ -276,7 +279,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   safetyBannerText: {
     flex: 1,
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textMuted,
     lineHeight: TypographyV2.meta.lineHeight + 1 },
   dangerBanner: {
@@ -359,7 +362,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.surfaceAlt },
   quickReplyText: {
     fontSize: TypographyV2.meta.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textSecondary },
   inputRow: {
     flexDirection: 'row',
@@ -386,7 +389,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   input: {
     flex: 1,
     fontSize: TypographyV2.body.size,
-    fontFamily: TypeStyles.body.fontFamily,
+    fontFamily: TypographyV2.body.fontFamily,
     color: colors.textPrimary,
     letterSpacing: TypographyV2.body.letterSpacing,
     lineHeight: TypographyV2.body.lineHeight,

@@ -60,7 +60,7 @@ export default function AuthLandingScreen() {
   const [isMagicLinkTwoFactorVerifying, setIsMagicLinkTwoFactorVerifying] = useState(false);
   const [magicLinkTwoFactorError, setMagicLinkTwoFactorError] = useState<string | null>(null);
 
-  // UI-21P: Prevent crash when OAuth client IDs are not configured in dev builds
+  // Prevent crash when OAuth client IDs are not configured in dev builds
   const hasGoogleOAuth = Boolean(
     process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID ||
     process.env.EXPO_PUBLIC_GOOGLE_OAUTH_ANDROID_CLIENT_ID ||

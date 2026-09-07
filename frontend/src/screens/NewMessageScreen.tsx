@@ -175,6 +175,9 @@ export default function NewMessageScreen({ navigation, route }: Props) {
 
   // Start a direct chat with an AI agent. Creates a local demo conversation
   // (AGENTS.md §11 — truthful: the agent is demo-mode, clearly labelled).
+  // NOTE: This conversation ID is locally generated for demo-mode agent chats.
+  // It is NOT a backend conversation ID and is only reachable when
+  // CHAT_AGENTS_DEMO_MODE is active. The conversation is marked isDemo.
   const handleStartAgentChat = useCallback((agent: ChatAgent) => {
     haptic.light();
     const conversationId = `agent_dm_${agent.id}`;
@@ -578,23 +581,23 @@ export default function NewMessageScreen({ navigation, route }: Props) {
               accessibilityLabel="Invite link input"
             />
             <View style={joinStyles.actions}>
-              <Pressable
+              <AnimatedPressable
                 onPress={() => setJoinModalVisible(false)}
-                style={({ pressed }) => [joinStyles.actionBtn, pressed && { opacity: 0.6 }]}
+                style={joinStyles.actionBtn}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
               >
                 <Text style={[joinStyles.actionText, { color: colors.textMuted }]}>Cancel</Text>
-              </Pressable>
-              <Pressable
+              </AnimatedPressable>
+              <AnimatedPressable
                 onPress={handleConfirmJoinGroup}
                 disabled={!joinLinkInput.trim()}
-                style={({ pressed }) => [joinStyles.actionBtn, pressed && { opacity: 0.6 }, !joinLinkInput.trim() && { opacity: 0.4 }]}
+                style={[joinStyles.actionBtn, !joinLinkInput.trim() && { opacity: 0.4 }]}
                 accessibilityRole="button"
                 accessibilityLabel="Join group"
               >
                 <Text style={[joinStyles.actionText, { color: colors.brand }]}>Join</Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
           </View>
         </KeyboardAvoidingView>

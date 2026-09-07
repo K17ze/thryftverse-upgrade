@@ -130,7 +130,7 @@ describe('COOWN-FLAGSHIP: Co-Own department flagship upgrade', () => {
     it('SyndicateHubScreen restores compact positions inline', () => {
       const src = readSrc('screens/SyndicateHubScreen.tsx');
       expect(src).toContain('CoOwnCompactPositionCard');
-      expect(src).toContain('YOUR PORTFOLIO');
+      expect(src).toContain('Positions');
       expect(src).toContain("navigation.navigate('Portfolio')");
     });
 

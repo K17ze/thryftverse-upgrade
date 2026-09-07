@@ -258,11 +258,6 @@ const createStyles = (colors: ThemeColors) =>
       gap: Space.sm + 1,
       width: '100%',
       maxWidth: 340,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
-      elevation: 2,
     },
     headerRow: {
       flexDirection: 'row',
@@ -298,7 +293,7 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: Radius.sm,
     },
     statusBadgeText: {
-      fontSize: 9,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.bold,
       letterSpacing: 0.6,
     },
@@ -308,7 +303,7 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.textSecondary,
     },
     timestamp: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       flexShrink: 0,
@@ -343,7 +338,7 @@ const createStyles = (colors: ThemeColors) =>
       color: colors.textPrimary,
     },
     orderIdTag: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       letterSpacing: 0.2,
@@ -362,7 +357,7 @@ const createStyles = (colors: ThemeColors) =>
       alignSelf: 'flex-start',
     },
     trackingText: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
       color: colors.textSecondary,
       letterSpacing: 0.3,
@@ -373,7 +368,7 @@ const createStyles = (colors: ThemeColors) =>
       gap: 5,
     },
     nextStepText: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
       letterSpacing: 0.1,

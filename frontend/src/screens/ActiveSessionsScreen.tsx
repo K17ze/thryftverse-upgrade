@@ -152,8 +152,8 @@ export default function ActiveSessionsScreen({ navigation }: Props) {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Security overview */}
-          <View style={[styles.trustSurface, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {/* Security overview — flat, no card wrapper (AGENTS.md §4) */}
+          <View style={styles.trustSurface}>
             <View style={styles.trustHeader}>
               <AppIcon name="lock" focused size={IconSize.md} color="success" opticalCenter accessible={false} />
               <Text style={styles.trustTitle}>
@@ -337,11 +337,10 @@ function createStyles(colors: ThemeColors) {
     lineHeight: TypographyV2.meta.lineHeight,
     paddingHorizontal: Space.md },
   trustSurface: {
-    borderRadius: Radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.lg,
-    marginHorizontal: Space.md,
-    marginBottom: Space.lg },
+    paddingHorizontal: Space.md,
+    paddingTop: Space.md,
+    paddingBottom: Space.sm,
+    marginBottom: Space.sm },
   trustHeader: {
     flexDirection: 'row',
     alignItems: 'center',

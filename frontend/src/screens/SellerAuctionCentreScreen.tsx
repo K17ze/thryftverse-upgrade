@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   RefreshControl,
-  Pressable,
   StatusBar,
   Text,
   ScrollView,
@@ -345,7 +344,7 @@ function SellerSummary({
     ? formatAuctionIze(toIze(stats.highestBid, currencyCode, fxRates))
     : null;
   const highestBidLocal = hasBidContext
-    ? formatFromFiat(stats.highestBid, currencyCode)
+    ? formatFromFiat(stats.highestBid, 'GBP', { displayMode: 'fiat' })
     : null;
 
   return (
@@ -469,13 +468,11 @@ export default function SellerAuctionCentreScreen() {
   // SectionList's ListEmptyComponent behaviour (which FlashList cannot trigger
   // because the header keeps `data` non-empty).
   const flatData = useMemo<FlatListItem[]>(() => {
-    const header: SectionHeaderItem = { type: 'header', sectionTitle: activeTab };
     if (filteredItems.length === 0) {
-      return [header, { type: 'empty' }];
+      return [{ type: 'empty' }];
     }
-    const rows: SectionRowItem[] = filteredItems.map((i) => ({ type: 'item', ...i }));
-    return [header, ...rows];
-  }, [activeTab, filteredItems]);
+    return filteredItems.map((i) => ({ type: 'item', ...i }));
+  }, [filteredItems]);
 
   const handleRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -601,18 +598,15 @@ export default function SellerAuctionCentreScreen() {
         <Text style={styles.inlineStateTitle}>{cfg.title}</Text>
         <Text style={styles.inlineStateMessage}>{cfg.message}</Text>
         {cfg.cta && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.inlineCtaBtn,
-              pressed && styles.inlineCtaPressed,
-            ]}
+          <AnimatedPressable
+            style={styles.inlineCtaBtn}
             onPress={navigateToCreate}
             accessibilityRole="button"
             accessibilityLabel={cfg.cta}
           >
             <Text style={styles.inlineCtaText}>{cfg.cta}</Text>
             <Ionicons name="add" size={15} color={colors.brand} style={styles.inlineCtaIcon} />
-          </Pressable>
+          </AnimatedPressable>
         )}
       </View>
     );
@@ -632,12 +626,9 @@ export default function SellerAuctionCentreScreen() {
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key;
           return (
-            <Pressable
+            <AnimatedPressable
               key={tab.key}
-              style={({ pressed }) => [
-                styles.tab,
-                pressed && styles.tabPressed,
-              ]}
+              style={styles.tab}
               onPress={() => handleTabPress(tab.key)}
               onLayout={(e) => {
                 tabLayoutsRef.current[tab.key] = {
@@ -657,7 +648,7 @@ export default function SellerAuctionCentreScreen() {
                 </Text>
               )}
               {isActive && <View style={styles.tabIndicator} />}
-            </Pressable>
+            </AnimatedPressable>
           );
         })}
       </ScrollView>
@@ -677,12 +668,10 @@ export default function SellerAuctionCentreScreen() {
   }, []);
 
   const renderItem: ListRenderItem<FlatListItem> = useCallback(({ item }) => {
-    if (item.type === 'header') {
-      return renderSectionHeader();
-    }
     if (item.type === 'empty') {
       return renderEmpty();
     }
+    if (item.type !== 'item') return null;
     return (
       <SellerAuctionRow
         item={item}
@@ -693,18 +682,14 @@ export default function SellerAuctionCentreScreen() {
         currencyCode={currencyCode}
       />
     );
-  }, [renderSectionHeader, renderEmpty, secondClock, navigateToDetail, formatFromFiat, fxRates, currencyCode]);
+  }, [renderEmpty, secondClock, navigateToDetail, formatFromFiat, fxRates, currencyCode]);
 
-  // Row separator — only between two row items. FlashList inserts separators
-  // between every adjacent pair in the flattened array, so suppress the divider
-  // when either neighbour is the header (preserves SectionList behaviour where
-  // no separator sat between the section header and the first row).
   const renderSeparator = useCallback(
     ({ leadingItem, trailingItem }: { leadingItem: FlatListItem; trailingItem: FlatListItem }) => {
       if (leadingItem.type !== 'item' || trailingItem.type !== 'item') return null;
       return <View style={styles.rowSeparator} />;
     },
-    [],
+    [styles.rowSeparator],
   );
 
   // Summary — scrolls away as ListHeaderComponent
@@ -759,54 +744,46 @@ export default function SellerAuctionCentreScreen() {
       {/* Header — native, deliberate, 44pt touch targets, no filled icon backgrounds */}
       <View style={[styles.header, { paddingTop: insets.top + Space.sm }]}>
         <View style={styles.headerRow}>
-          <Pressable
+          <AnimatedPressable
             onPress={handleBack}
             hitSlop={{ top: 8, bottom: 8, left: 12, right: 8 }}
             accessibilityRole="button"
             accessibilityLabel="Go back"
-            style={({ pressed }) => [
-              styles.headerIconBtn,
-              pressed && styles.headerIconPressed,
-            ]}
+            style={styles.headerIconBtn}
           >
             <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
-          </Pressable>
+          </AnimatedPressable>
           <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle} numberOfLines={1}>Seller Centre</Text>
             <Text style={styles.headerSubtitle} numberOfLines={1}>
               {stats.total > 0 ? `${stats.total} auctions` : 'Auction listings'}
             </Text>
           </View>
-          <Pressable
+          <AnimatedPressable
             onPress={navigateToCreate}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Create new auction"
-            style={({ pressed }) => [
-              styles.headerIconBtn,
-              pressed && styles.headerIconPressed,
-            ]}
+            style={styles.headerIconBtn}
           >
             <Ionicons name="add" size={26} color={colors.textPrimary} />
-          </Pressable>
+          </AnimatedPressable>
         </View>
       </View>
 
       {/* Offline banner */}
       <OfflineBanner onRetry={() => void fetchAuctions(false)} />
 
-      {/* Single authoritative virtualised list (FlashList):
-          - ListHeaderComponent: summary (scrolls away)
-          - data[0] ('header' item): tab rail, kept sticky via stickyHeaderIndices
-          - data[1..] ('item' items): inventory rows
-          - 'empty' item: loading / error / empty-state content when no rows */}
+      {/* Single authoritative tab selector */}
+      {renderSectionHeader()}
+
+      {/* Authoritative virtualised list (FlashList) */}
       <FlashList
         ref={listRef}
         data={flatData}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         getItemType={getItemType}
-        stickyHeaderIndices={[0]}
         ListHeaderComponent={listHeader}
         ListFooterComponent={listFooter}
         ItemSeparatorComponent={renderSeparator}

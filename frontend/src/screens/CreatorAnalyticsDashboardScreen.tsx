@@ -613,7 +613,7 @@ export default function CreatorAnalyticsDashboardScreen() {
               Top content
             </Text>
             {ranking.items.map((item, i) => (
-              <Pressable
+              <AnimatedPressable
                 key={`${item.contentType}:${item.contentId}`}
                 onPress={() => {
                   // Navigate to content detail — looks have a detail screen,
@@ -624,10 +624,7 @@ export default function CreatorAnalyticsDashboardScreen() {
                     navigation.navigate('PosterViewer', { storyId: item.contentId });
                   }
                 }}
-                style={({ pressed }) => [
-                  styles.contentRowPress,
-                  pressed && { opacity: 0.6 },
-                ]}
+                style={styles.contentRowPress}
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${item.title}`}
               >
@@ -637,7 +634,7 @@ export default function CreatorAnalyticsDashboardScreen() {
                   colors={colors}
                   isLast={i === ranking.items.length - 1}
                 />
-              </Pressable>
+              </AnimatedPressable>
             ))}
           </View>
         ) : null}

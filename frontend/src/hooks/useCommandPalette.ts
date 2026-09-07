@@ -4,7 +4,7 @@
  * A small, dedicated Zustand store keeps command-palette UI state decoupled from
  * the main app store. Recent screens are persisted to AsyncStorage so the
  * "Recent" section survives restarts. Recent searches are read from the existing
- * AsyncStorage key used by GlobalSearchScreen (`@thryftverse_recent_searches`)
+ * AsyncStorage key used by UnifiedDiscoveryScreen (`@thryftverse_recent_searches`)
  * so the palette reflects what the user actually searched.
  */
 import { useEffect, useState, useCallback } from 'react';

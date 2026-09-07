@@ -15,6 +15,7 @@ import Reanimated from 'react-native-reanimated';
 import type { Listing } from '../../domain';
 import type {
   DiscoveryFeedUnit,
+  EditorialFeedUnit,
   ListingFeedUnit,
   LookFeedUnit,
   MoodboardFeedUnit,
@@ -29,6 +30,7 @@ import { typographyV2Style } from '../../theme/typography.v2';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { resolveListingMediaAspectRatio } from '../../utils/listingMediaGeometry';
+import { preloadCriticalImages } from '../../utils/imagePreloader';
 import { MasonrySkeleton } from '../skeletons/MasonrySkeleton';
 import { PremiumSkeletonTile } from './PremiumSkeletonTile';
 import { EmptyState } from '../EmptyState';
@@ -60,6 +62,26 @@ const FEED_UNIT_TYPES = new Set<string>([
 
 function isFeedUnit(item: Listing | DiscoveryFeedUnit): item is DiscoveryFeedUnit {
   return typeof (item as DiscoveryFeedUnit).type === 'string' && FEED_UNIT_TYPES.has((item as DiscoveryFeedUnit).type);
+}
+
+function extractFeedUnitImageUri(item: Listing | DiscoveryFeedUnit): string | null {
+  if (isFeedUnit(item)) {
+    switch (item.type) {
+      case 'listing':
+        return (item as ListingFeedUnit).posterUri || (item as ListingFeedUnit).mediaUri || null;
+      case 'look':
+        return (item as LookFeedUnit).coverImageUri || null;
+      case 'poster':
+        return (item as PosterFeedUnit).coverUri || null;
+      case 'moodboard':
+        return (item as MoodboardFeedUnit).coverUri || null;
+      case 'editorial':
+        return (item as EditorialFeedUnit).mediaUri || null;
+      default:
+        return null;
+    }
+  }
+  return item.images?.[0] ?? null;
 }
 
 interface Props {
@@ -144,6 +166,9 @@ interface Props {
    * Used by DiscoverScene to mount the category pill bar.
    */
   listHeaderComponent?: React.ReactElement;
+  /** When true, prefetches image URIs for the ~10 items ahead of the
+   *  current viewport into the disk cache as the user scrolls. */
+  enableImagePrefetch?: boolean;
 }
 
 /**
@@ -192,7 +217,8 @@ export function PinterestMasonryGrid({
   refreshControl,
   onScroll,
   scrollRef,
-  listHeaderComponent }: Props) {
+  listHeaderComponent,
+  enableImagePrefetch = false }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const reducedMotionEnabled = useReducedMotion();
   const { colors } = useAppTheme();
@@ -238,6 +264,29 @@ export function PinterestMasonryGrid({
       return 'listing:1';
     },
     [],
+  );
+
+  const lastPrefetchedIndexRef = React.useRef(-1);
+  const prefetchViewabilityConfig = React.useRef({ itemVisiblePercentThreshold: 50, minimumViewTime: 100 });
+  const handlePrefetchViewableItemsChanged = React.useCallback(
+    (info: { viewableItems: import('react-native').ViewToken[] }) => {
+      const maxVisibleIndex = info.viewableItems.reduce((max, token) => {
+        const idx = typeof token.index === 'number' ? token.index : -1;
+        return idx > max ? idx : max;
+      }, -1);
+      if (maxVisibleIndex < 0 || maxVisibleIndex <= lastPrefetchedIndexRef.current) return;
+      lastPrefetchedIndexRef.current = maxVisibleIndex;
+      const ahead = items.slice(maxVisibleIndex + 1, maxVisibleIndex + 11);
+      const uris: string[] = [];
+      for (const item of ahead) {
+        const uri = extractFeedUnitImageUri(item);
+        if (uri) uris.push(uri);
+      }
+      if (uris.length > 0) {
+        void preloadCriticalImages(uris, { priority: 'normal', cachePolicy: 'disk' });
+      }
+    },
+    [items],
   );
 
   const renderItem = useCallback(
@@ -363,6 +412,8 @@ export function PinterestMasonryGrid({
       ListHeaderComponent={listHeaderComponent}
       ListFooterComponent={ListFooterComponent}
       refreshControl={refreshControl}
+      viewabilityConfig={enableImagePrefetch ? prefetchViewabilityConfig.current : undefined}
+      onViewableItemsChanged={enableImagePrefetch ? handlePrefetchViewableItemsChanged : undefined}
     />
   );
 }

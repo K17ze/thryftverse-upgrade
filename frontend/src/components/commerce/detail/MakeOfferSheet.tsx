@@ -266,7 +266,7 @@ export function MakeOfferSheet({
           originalPriceGbp: askingPriceGbp,
           source: 'detail_sheet' } });
 
-      const focusQuery = `Offer: ${formatFromFiat(numericOfferGbp, currencyCode)} for ${listing.title}. Valid for ${DEFAULT_EXPIRY_HOURS}h.`;
+      const focusQuery = `Offer: ${formatFromFiat(numericOfferGbp, 'GBP')} for ${listing.title}. Valid for ${DEFAULT_EXPIRY_HOURS}h.`;
       onSent({
         // Use the real conversation ID from the API response — never fabricate
         // an ID (§11). Null means the backend created the offer but did not
@@ -307,8 +307,8 @@ export function MakeOfferSheet({
 
   if (!listing) return null;
 
-  const askingDisplay = formatFromFiat(askingPriceGbp, currencyCode, { displayMode: 'fiat' });
-  const offerDisplayFormatted = formatFromFiat(numericOfferGbp, currencyCode, { displayMode: 'fiat' });
+  const askingDisplay = formatFromFiat(askingPriceGbp, 'GBP', { displayMode: 'fiat' });
+  const offerDisplayFormatted = formatFromFiat(numericOfferGbp, 'GBP', { displayMode: 'fiat' });
 
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.78}>
@@ -430,7 +430,7 @@ export function MakeOfferSheet({
               ]}
               accessibilityRole="button"
               accessibilityLabel={`Offer ${entry.discount} percent below asking price`}
-              accessibilityHint={`Sets your offer to ${formatFromFiat(askingPriceGbp * entry.fraction, currencyCode, { displayMode: 'fiat' })}`}
+              accessibilityHint={`Sets your offer to ${formatFromFiat(askingPriceGbp * entry.fraction, 'GBP', { displayMode: 'fiat' })}`}
               accessibilityState={{ selected: isSelected }}
             >
               <Text
@@ -476,7 +476,7 @@ export function MakeOfferSheet({
           <Text style={[styles.smartSellText, { color: colors.textSecondary }]}>
             {SMART_SELL_PREVIEW_MODE ? 'Preview — ' : ''}
             Seller has Smart Sell enabled — offers above{' '}
-            {formatFromFiat(smartSellThreshold, currencyCode, { displayMode: 'fiat' })} auto-accept
+            {formatFromFiat(smartSellThreshold, 'GBP', { displayMode: 'fiat' })} auto-accept
           </Text>
         </View>
       ) : null}

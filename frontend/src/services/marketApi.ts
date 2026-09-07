@@ -254,9 +254,23 @@ export interface MarketCoOwnAsset {
   marketMovePct24h: number | null;
   holders: number;
   volume24hGbp: number | null;
+  /** Current top-of-book and executable depth; null price means no orders. */
+  bestBidGbp?: number | null;
+  bestAskGbp?: number | null;
+  bidDepthUnits?: number;
+  askDepthUnits?: number;
   isOpen: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Backend lifecycle: offering stage. Optional for backward
+   * compatibility — older projections may omit this. */
+  offeringStatus?: 'offering' | 'allocated' | 'failed' | 'closed';
+  /** Backend lifecycle: secondary-market trading stage. Optional
+   * for backward compatibility. */
+  marketStatus?: 'pre_market' | 'trading' | 'paused' | 'closed';
+  /** Last settled trade price in GBP. Null when no trades have
+   * occurred. Optional for backward compatibility. */
+  lastTradePriceGbp?: number | null;
   /** Per spec 03_COOWN §2: backend-backed market snapshot. Null
    * until the backend exposes lastExecutionPriceGbp. The frontend
    * must not label reference price as "Last trade" without this. */
@@ -442,10 +456,12 @@ export type CoOwnOrderSide = 'buy' | 'sell';
 export interface MarketCoOwnOrder {
   id: number;
   assetId: string;
-  userId: string;
+  /** Omitted from public market responses; present only in owner-scoped views. */
+  userId?: string;
   side: CoOwnOrderSide;
-  orderType?: 'market' | 'limit';
+  orderType?: 'market' | 'limit' | 'protected_market';
   limitPriceGbp?: number | null;
+  protectionPriceGbp?: number | null;
   units: number;
   remainingUnits?: number;
   filledUnits?: number;
@@ -485,7 +501,7 @@ export interface MarketHistoryItem {
   unitPriceGbp: number | null;
   feeGbp: number | null;
   status: 'open' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected' | null;
-  orderType: 'market' | 'limit' | null;
+  orderType: 'market' | 'limit' | 'protected_market' | null;
   note: string | null;
   timestamp: string;
   /** Backend-provided numeric order ID for cancel/amend operations. */
@@ -702,6 +718,8 @@ interface PlaceCoOwnOrderInput {
   reservationId: string;
   /** Client-supplied idempotency key per spec 10 §1. Prevents duplicate orders on retry. */
   idempotencyKey?: string;
+  /** Time-in-force / duration for resting limit orders. GFD = Good For Day, GTC90 = Good Till Cancelled (90 days). */
+  timeInForce?: 'GFD' | 'GTC90';
 }
 
 interface CreateCoOwnBuyoutOfferInput {
@@ -1673,19 +1691,14 @@ export async function fetchCoOwnAssetById(assetId: string): Promise<MarketCoOwnA
 }
 
 // ── Co-Own asset issue reporting ──────────────────────────────────────
-// The backend has a `coown_asset_issues` table (migration 126) with columns
-// for asset_id, reporter_id, category, description, and status. The POST
-// endpoint to create issues still needs to be implemented on the backend.
-// This function calls the expected path so it works once the endpoint lands.
-// TODO(backend): Implement POST /co-own/assets/:assetId/issues in api/src/index.ts
 export async function createCoOwnAssetIssue(input: {
   assetId: string;
   category: 'dispute' | 'technical' | 'fraud' | 'other';
   description: string;
-}): Promise<{ id: string; status: string }> {
+}): Promise<{ id: string; status: 'open'; createdAt: string }> {
   const payload = await fetchJson<{
     ok: true;
-    issue: { id: string; status: string };
+    issue: { id: string; status: 'open'; createdAt: string };
   }>(`/co-own/assets/${encodeURIComponent(input.assetId)}/issues`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1880,7 +1893,7 @@ export interface CoOwnOrderPreviewResponse {
     assetId: string;
     side: CoOwnOrderSide;
     units: number;
-    orderType: 'market' | 'limit';
+    orderType: 'market' | 'limit' | 'protected_market';
     limitPriceGbp: number | null;
     protectionPriceGbp: number | null;
     /** P0.8: Exact decimal string. */
@@ -2194,6 +2207,15 @@ export interface MarketCoOwnHolding {
   unitsOwned: number;
   avgEntryPriceGbp: number;
   realizedPnlGbp: number;
+  /** Units committed to active or placed sell orders. */
+  reservedUnits?: number;
+  /** Highest currently executable bid, when the book has depth. */
+  bestBidGbp?: number | null;
+  /** Number of units covered by the current bid depth. */
+  saleDepthUnits?: number;
+  /** Bid-depth proceeds for this position size; null means no current bids. */
+  estimatedSaleProceedsGbp?: number | null;
+  saleProceedsAsOf?: string;
   updatedAt: string;
 }
 
@@ -2736,69 +2758,4 @@ export async function updateDripEnrollment(assetId: string, enrolled: boolean): 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ assetId, enrolled }),
   });
-}
-
-/* ─── Co-Own Recurring Orders ─── */
-
-export interface CoOwnRecurringOrder {
-  id: string;
-  assetId: string;
-  side: 'buy';
-  unitsPerExecution: number;
-  frequency: 'weekly' | 'biweekly' | 'monthly';
-  nextExecutionAt: string;
-  maxPriceGbpMinor: number | null;
-  active: boolean;
-  executionsCount: number;
-  createdAt: string;
-}
-
-export async function fetchCoOwnRecurringOrders(): Promise<CoOwnRecurringOrder[]> {
-  const payload = await fetchJson<{ ok: true; orders: CoOwnRecurringOrder[] }>('/co-own/recurring-orders');
-  return payload.orders;
-}
-
-export async function createCoOwnRecurringOrder(input: {
-  assetId: string;
-  unitsPerExecution: number;
-  frequency: 'weekly' | 'biweekly' | 'monthly';
-  maxPriceGbpMinor?: number;
-}): Promise<CoOwnRecurringOrder> {
-  const payload = await fetchJson<{ ok: true; order: CoOwnRecurringOrder }>('/co-own/recurring-orders', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-  });
-  return payload.order;
-}
-
-export async function cancelCoOwnRecurringOrder(id: string): Promise<void> {
-  await fetchJson<{ ok: true }>(`/co-own/recurring-orders/${encodeURIComponent(id)}`, { method: 'DELETE' });
-}
-
-/* ─── Co-Own Tax Documents ─── */
-
-export interface CoOwnTaxDocument {
-  taxYear: string;
-  startDate: string;
-  endDate: string;
-  currency: string;
-  summary: {
-    totalPurchasesGbpMinor: number;
-    totalSalesGbpMinor: number;
-    totalDistributionsGbpMinor: number;
-    realizedPnlGbpMinor: number;
-  };
-  purchases: Array<{ assetId: string; totalGbpMinor: number; units: number; executionCount: number }>;
-  sales: Array<{ assetId: string; totalGbpMinor: number; units: number; executionCount: number }>;
-  distributions: Array<{ assetId: string; totalGbpMinor: number; count: number }>;
-  generatedAt: string;
-}
-
-export async function fetchCoOwnTaxDocument(taxYear?: string): Promise<CoOwnTaxDocument> {
-  const query = toQuery({ taxYear });
-  const payload = await fetchJson<{ ok: true; taxDocument: CoOwnTaxDocument }>(
-    `/users/me/co-own/tax-documents${query}`
-  );
-  return payload.taxDocument;
 }

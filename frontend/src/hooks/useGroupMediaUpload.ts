@@ -37,6 +37,8 @@ export interface GroupMediaUploadResult {
   revertCover: () => void;
   removeAvatar: () => void;
   removeCover: () => void;
+  setAvatarUrl: (url: string) => void;
+  setCoverUrl: (url: string) => void;
   /** True when either media type has a pending local pick not yet confirmed. */
   hasPendingUpload: boolean;
 }
@@ -227,6 +229,19 @@ export function useGroupMediaUpload(
     });
   }, [updateAvatar, updateCover, haptic]);
 
+  const setMediaUrl = useCallback((type: GroupMediaType, url: string): void => {
+    const updateState = type === 'avatar' ? updateAvatar : updateCover;
+    pendingAssetRef.current[type] = undefined;
+    haptic.selection();
+    updateState({
+      confirmedRemote: url,
+      pendingLocal: null,
+      finalizationId: null,
+      status: 'confirmed',
+      error: null,
+    });
+  }, [updateAvatar, updateCover, haptic]);
+
   const avatarDisplayUri = avatar.pendingLocal ?? avatar.confirmedRemote;
   const coverDisplayUri = cover.pendingLocal ?? cover.confirmedRemote;
   const hasPendingUpload = avatar.status === 'uploading' || cover.status === 'uploading';
@@ -244,6 +259,8 @@ export function useGroupMediaUpload(
     revertCover: () => revertMedia('cover'),
     removeAvatar: () => removeMedia('avatar'),
     removeCover: () => removeMedia('cover'),
+    setAvatarUrl: (url: string) => setMediaUrl('avatar', url),
+    setCoverUrl: (url: string) => setMediaUrl('cover', url),
     hasPendingUpload,
   };
 }

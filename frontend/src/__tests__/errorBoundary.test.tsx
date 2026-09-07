@@ -125,9 +125,9 @@ describe('AppErrorBoundary', () => {
     });
 
     const json = renderer?.toJSON();
-    // The crash recovery UI should contain "Something went wrong"
+    // The crash recovery UI should contain "The app couldn't continue"
     const jsonStr = JSON.stringify(json);
-    expect(jsonStr).toContain('Something went wrong');
+    expect(jsonStr).toContain("The app couldn't continue");
 
     // The telemetry event should have been fired
     expect(trackTelemetryEvent).toHaveBeenCalledWith(

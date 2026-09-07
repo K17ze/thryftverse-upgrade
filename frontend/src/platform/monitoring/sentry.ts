@@ -76,7 +76,7 @@ export function initSentry(opts?: SentryInitOptions): void {
     try {
       if (typeof realSentry.mobileReplayIntegration === 'function') {
         integrations.push(realSentry.mobileReplayIntegration({
-          maskAllText: false, // Privacy: don't capture text content
+          maskAllText: true, // Privacy: never capture text content (PII)
           maskAllImages: true,
         }));
       }

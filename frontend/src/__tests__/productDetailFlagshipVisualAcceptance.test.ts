@@ -56,7 +56,22 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
       });
 
       it(`${screen} imports CommerceDetailSection`, () => {
-        expect(readScreen(screen)).toContain('CommerceDetailSection');
+        // AssetDetailScreen was refactored: CommerceDetailSection now
+        // lives in the extracted section components (AssetOverview/
+        // AssetMarket/AssetOwnership). The screen still orchestrates
+        // them, so we check the section files for the import.
+        if (screen === 'AssetDetailScreen.tsx') {
+          const overview = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOverviewSection.tsx'));
+          const market = read(resolve(COMPONENTS, 'coown/asset-detail/AssetMarketSection.tsx'));
+          const ownership = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOwnershipSection.tsx'));
+          expect(
+            overview.includes('CommerceDetailSection')
+            || market.includes('CommerceDetailSection')
+            || ownership.includes('CommerceDetailSection'),
+          ).toBe(true);
+        } else {
+          expect(readScreen(screen)).toContain('CommerceDetailSection');
+        }
       });
 
       it(`${screen} imports CommerceDetailMediaRail`, () => {
@@ -103,9 +118,11 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
     it('AssetDetailScreen uses compact flagship hero fractions', () => {
       const src = readScreen('AssetDetailScreen.tsx');
       expect(src).toContain('useBreakpoint');
-      expect(src).toContain('isVeryCompact ? 0.5');
-      expect(src).toContain('isCompact ? 0.54');
-      expect(src).toContain(': 0.58');
+      // Media height reduced from 0.5-0.58 to 0.26-0.30 for a
+      // collectible-first identity-on-clean-canvas composition.
+      expect(src).toContain('isVeryCompact ? 0.3');
+      expect(src).toContain('isCompact ? 0.28');
+      expect(src).toContain(': 0.26');
       expect(src).not.toContain(': 0.65');
     });
 
@@ -175,7 +192,11 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
 
     it('AssetDetailScreen has one dominant price (unit price) in transaction surface', () => {
       const src = readScreen('AssetDetailScreen.tsx');
-      expect(src).toMatch(/CommerceDetailTransactionSurface|primaryValue/);
+      // The dominant price is rendered in the identity header as a
+      // single priceHero number (dominantPriceValue). The transaction
+      // surface with executable depth lives in AssetMarketSection.
+      expect(src).toContain('dominantPriceValue');
+      expect(src).toContain('formatCoOwnIze(dominantPriceValue)');
     });
   });
 
@@ -222,11 +243,10 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
     });
   });
 
-  // ── 7. No duplicated appraisal modules (Co-Own) ──
   describe('no duplicated appraisal modules (Co-Own)', () => {
-    it('AssetDetailScreen does not render a separate valuation card alongside CoOwnAssetDossier', () => {
+    it('AssetDetailScreen does not render a separate valuation card alongside due diligence', () => {
       const src = readScreen('AssetDetailScreen.tsx');
-      expect(src).toContain('CoOwnAssetDossier');
+      expect(src).toContain('AssetDueDiligence');
       // The old valuation provenance card has been removed; the dossier
       // is the single source of appraisal truth.
       expect(src).not.toContain('valuationCard');
@@ -236,13 +256,10 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
 
   // ── 8. Buyout contradiction resolved ──
   describe('buyout contradiction resolved', () => {
-    it('AssetDetailScreen does not navigate to Buyout for unavailable buyout', () => {
+    it('AssetDetailScreen does not navigate to fake Buyout screen', () => {
       const src = readScreen('AssetDetailScreen.tsx');
-      // The Buyout row is a truthful unavailable state, not a navigation
-      // to a Buyout flow that does not exist.
       expect(src).not.toContain("navigation.navigate('Buyout'");
-      expect(src).toContain('Full-asset buyout');
-      expect(src).toContain('Not available');
+      expect(src).not.toContain("navigate('Buyout'");
     });
   });
 
@@ -310,17 +327,27 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
 
   describe('Co-Own native composition regressions', () => {
     it('renders a structured bid, ask, and spread market snapshot', () => {
-      const src = readScreen('AssetDetailScreen.tsx');
-      expect(src).toContain('marketBookRow');
-      expect(src).toContain('Bid');
-      expect(src).toContain('Ask');
-      expect(src).toContain('Spread');
+      // Bid/ask/CoOwnOrderBook moved to AssetMarketSection.tsx during
+      // the AssetDetailScreen refactor.
+      const marketSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetMarketSection.tsx'));
+      expect(marketSection).toContain('CoOwnOrderBook');
+      expect(marketSection).toContain('Bid');
+      expect(marketSection).toContain('Ask');
+      expect(marketSection).toContain('Spread');
     });
 
     it('keeps unavailable fundamentals outside the dominant market surface', () => {
-      const src = readScreen('AssetDetailScreen.tsx');
-      expect(src).toContain('marketSecondaryFacts');
-      expect(src).not.toContain('secondaryMetrics');
+      // trustFactualLine moved to the extracted section components
+      // (AssetOverviewSection / AssetOwnershipSection). The market
+      // surface (AssetMarketSection) must not carry secondaryMetrics.
+      const overviewSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOverviewSection.tsx'));
+      const ownershipSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOwnershipSection.tsx'));
+      const marketSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetMarketSection.tsx'));
+      expect(
+        overviewSection.includes('trustFactualLine')
+        || ownershipSection.includes('trustFactualLine'),
+      ).toBe(true);
+      expect(marketSection).not.toContain('secondaryMetrics');
     });
 
     it('uses the real Co-Own watchlist action', () => {

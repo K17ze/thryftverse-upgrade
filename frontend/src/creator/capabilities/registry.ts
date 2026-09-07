@@ -56,7 +56,7 @@ export const CAPABILITY_REGISTRY: Record<string, CreatorCapability> = {
     mediaKinds: ['image'],
     editor: 'supported',
     viewer: 'supported',
-    export: 'hidden', // no authored render export yet
+    export: 'supported', // Skia offscreen render → upload
     backend: 'supported',
   },
   videoCapture: {
@@ -109,7 +109,7 @@ export const CAPABILITY_REGISTRY: Record<string, CreatorCapability> = {
     mediaKinds: ['image'],
     editor: 'supported', // Skia
     viewer: 'supported', // shared canvas
-    export: 'hidden', // no authored render export
+    export: 'supported', // Skia offscreen render → upload
     backend: 'supported', // stored in composition
   },
   videoEffect: {
@@ -250,7 +250,7 @@ export const CAPABILITY_REGISTRY: Record<string, CreatorCapability> = {
     mediaKinds: ['image', 'video'],
     editor: 'supported',
     viewer: 'supported',
-    export: 'hidden',
+    export: 'supported', // Skia offscreen render burns layer into output
     backend: 'hidden', // composition-document only, no sticker row
   },
   layerDraw: {
@@ -258,7 +258,7 @@ export const CAPABILITY_REGISTRY: Record<string, CreatorCapability> = {
     mediaKinds: ['image', 'video'],
     editor: 'supported',
     viewer: 'supported',
-    export: 'hidden',
+    export: 'supported', // Skia offscreen render burns layer into output
     backend: 'hidden', // composition-document only
   },
   layerGif: {
@@ -266,7 +266,7 @@ export const CAPABILITY_REGISTRY: Record<string, CreatorCapability> = {
     mediaKinds: ['image', 'video'],
     editor: 'supported',
     viewer: 'supported',
-    export: 'hidden',
+    export: 'supported', // Skia offscreen render burns layer into output
     backend: 'hidden', // composition-document only
   },
   layerTime: {
@@ -274,7 +274,7 @@ export const CAPABILITY_REGISTRY: Record<string, CreatorCapability> = {
     mediaKinds: ['image', 'video'],
     editor: 'supported',
     viewer: 'supported',
-    export: 'hidden',
+    export: 'supported', // Skia offscreen render burns layer into output
     backend: 'hidden', // composition-document only
   },
   layerWeather: {
@@ -282,7 +282,7 @@ export const CAPABILITY_REGISTRY: Record<string, CreatorCapability> = {
     mediaKinds: ['image', 'video'],
     editor: 'supported',
     viewer: 'supported',
-    export: 'hidden',
+    export: 'supported', // Skia offscreen render burns layer into output
     backend: 'hidden', // composition-document only
   },
   layerAdjustment: {
@@ -290,7 +290,7 @@ export const CAPABILITY_REGISTRY: Record<string, CreatorCapability> = {
     mediaKinds: ['image', 'video'],
     editor: 'supported',
     viewer: 'supported',
-    export: 'hidden',
+    export: 'supported', // Skia offscreen render burns layer into output
     backend: 'hidden', // composition-document only
   },
 
@@ -300,7 +300,7 @@ export const CAPABILITY_REGISTRY: Record<string, CreatorCapability> = {
     mediaKinds: ['image', 'video'],
     editor: 'supported',
     viewer: 'supported', // shared evaluator
-    export: 'hidden', // no authored render export
+    export: 'supported', // Skia/AVFoundation render evaluates keyframes
     backend: 'supported', // metadata only
   },
 

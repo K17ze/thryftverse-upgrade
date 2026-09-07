@@ -5,7 +5,6 @@
 
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, Text, Pressable } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../theme/ThemeContext';
 import { AnimatedPressable } from './AnimatedPressable';
@@ -173,7 +172,7 @@ function ProductCardBase({
         style={styles.imageWrap}
         hapticFeedback="light"
         accessibilityRole="none"
-        accessibilityLabel={`${identityLine}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
+        accessibilityLabel={`${identityLine}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}`}
         accessibilityHint="Opens item details"
         testID={testID}
       >
@@ -308,7 +307,7 @@ function ProductCardBase({
           ) : null}
           <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <View style={styles.priceRow}>
-            <Text style={styles.priceHero}>{formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}</Text>
+            <Text style={styles.priceHero}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
           </View>
           {sellerUsername ? (
             <View style={styles.sellerRow}>
@@ -379,7 +378,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => Style
   soldContainer: {
     opacity: 0.7 },
 
-  // Image - Pinterest/Depop tight editorial feel. No shadow, minimal radius.
+  // Image - tight editorial feel. No shadow, minimal radius.
   // Art direction (AGENTS.md §15 — media storytelling):
   //  - Media is the primary visual anchor; chrome recedes.
   //  - No decorative border or shadow on the media itself.
@@ -586,7 +585,7 @@ interface ProductDiscoveryTileProps {
   /** Whether this item is currently saved. Drives the bookmark glyph state. */
   isSaved?: boolean;
   /** Toggle the saved state. When provided, a bookmark button renders over
-   *  the media (top-right) — the Pinterest/Depop quick-save pattern that
+   *  the media (top-right) — the quick-save pattern that
    *  turns passive browsing into engagement. */
   onSaveToggle?: () => void;
 }
@@ -613,9 +612,6 @@ function ProductDiscoveryTileBase({
   // "Do not rely on cover blindly"). Converted to ExpoImage's
   // `contentPosition` format — the same mechanism CachedImage uses.
   const focalPoint = getCategoryFocalPoint(item.category);
-  const contentPosition = {
-    top: `${Math.round(focalPoint.y * 100)}%`,
-    left: `${Math.round(focalPoint.x * 100)}%` };
 
   // Condition badge — single state marker only (sold > condition). Sits over
   // the media on the semantic `overlay` scrim; "New with tags" uses the
@@ -648,21 +644,18 @@ function ProductDiscoveryTileBase({
       hapticFeedback="light"
       style={tileStyles.container}
       accessibilityRole="button"
-      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
+      accessibilityLabel={`${item.title}, ${formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}${item.condition ? `, ${item.condition}` : ''}${item.isSold ? ', Sold' : ''}${isSaved ? ', Saved' : ''}`}
       accessibilityHint="Opens item details"
       testID={testID}
     >
       <View style={[tileStyles.media, { aspectRatio: ratio, backgroundColor: colors.surfaceAlt }]}>
         {primaryImage ? (
-          <ExpoImage
-            source={{ uri: primaryImage }}
+          <CachedImage
+            uri={primaryImage}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            contentPosition={contentPosition}
-            recyclingKey={item.id}
-            placeholder={colors.surfaceAlt}
-            transition={200}
-            cachePolicy="memory-disk"
+            focalPoint={focalPoint}
+            priority="high"
           />
         ) : (
           <ImageEmptyGraphic icon="shirt-outline" style={StyleSheet.absoluteFill} />
@@ -693,7 +686,7 @@ function ProductDiscoveryTileBase({
       </View>
       <View style={tileStyles.info}>
         <Text style={tileStyles.title} numberOfLines={1}>{item.title}</Text>
-        <Text style={tileStyles.price}>{formatFromFiat(item.price, currencyCode, { displayMode: 'fiat' })}</Text>
+        <Text style={tileStyles.price}>{formatFromFiat(item.price, 'GBP', { displayMode: 'fiat' })}</Text>
       </View>
     </AnimatedPressable>
   );
@@ -749,7 +742,7 @@ const createTileStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => S
     paddingHorizontal: Space.xxs,
     gap: 0 },
   // Title — 1 line, caption size, muted. The image is the dominant object;
-  // the title is a quiet label, not a competing headline. Pinterest pattern:
+  // the title is a quiet label, not a competing headline. Editorial pattern:
   // media dominates, text recedes.
   title: {
     fontSize: TypographyV2.meta.size,

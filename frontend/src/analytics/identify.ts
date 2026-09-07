@@ -63,6 +63,7 @@ export function identifyUser(user: UserIdentity): void {
   if (!isAnalyticsEnabled()) return;
   const client = getPostHogClient();
   if (!client) return;
+  if (!isAnalyticsEnabled()) return;
 
   // Identify the user — creates the person profile and sets person
   // properties (email, username, plan) for segmentation in PostHog.

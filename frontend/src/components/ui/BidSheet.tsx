@@ -518,11 +518,11 @@ export function BidSheet({
             <View style={styles.bidContextStack}>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Current bid</Text>
-                <Text style={styles.bidContextValue}>{formatFromFiat(auction.currentBidGbp, currencyCode)}</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
               </View>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Minimum to lead</Text>
-                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, currencyCode)}</Text>
+                <Text style={styles.bidContextValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
               </View>
               <View style={styles.bidContextRow}>
                 <Text style={styles.bidContextLabel}>Time remaining</Text>
@@ -684,16 +684,16 @@ export function BidSheet({
             <View style={styles.reviewReceipt}>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Current value</Text>
-                <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, currencyCode)}</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(auction.currentBidGbp, 'GBP')}</Text>
               </View>
               <View style={styles.reviewReceiptRow}>
                 <Text style={styles.reviewReceiptLabel}>Minimum to lead</Text>
-                <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, currencyCode)}</Text>
+                <Text style={styles.reviewReceiptValue}>{formatFromFiat(currentMinimum, 'GBP')}</Text>
               </View>
               {proxyEnabled && maxBidGbp != null && (
                 <View style={styles.reviewReceiptRow}>
                   <Text style={styles.reviewReceiptLabel}>Maximum bid</Text>
-                  <Text style={styles.reviewReceiptValue}>{formatFromFiat(maxBidGbp, currencyCode)}</Text>
+                  <Text style={styles.reviewReceiptValue}>{formatFromFiat(maxBidGbp, 'GBP')}</Text>
                 </View>
               )}
               <View style={styles.reviewReceiptRow}>
@@ -797,7 +797,7 @@ export function BidSheet({
             </View>
             <Text style={styles.successTitle}>Bid placed</Text>
             <Text style={styles.successDetail}>
-              Your bid of {formatFromFiat(gbpAmount ?? 0, currencyCode)} has been submitted
+              Your bid of {formatFromFiat(gbpAmount ?? 0, 'GBP')} has been submitted
             </Text>
             <AppButton
               style={styles.doneBtn}
@@ -823,7 +823,7 @@ export function BidSheet({
               <View style={styles.conflictPriceRow}>
                 <Meta style={styles.conflictPriceLabel}>Buy Now price</Meta>
                 <Text style={styles.conflictPriceValue}>
-                  {formatFromFiat(error.buyNowPriceGbp, currencyCode)}
+                  {formatFromFiat(error.buyNowPriceGbp, 'GBP')}
                 </Text>
               </View>
             )}

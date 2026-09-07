@@ -21,6 +21,7 @@ export async function waitForPaymentIntentSettlement(
 ): Promise<CheckoutPaymentSettlementStatus> {
   let maxAttempts = PAYMENT_INTENT_POLL_ATTEMPTS;
   let intervalMs = PAYMENT_INTENT_POLL_INTERVAL_MS;
+  let openedActionUrl: string | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (!shouldContinue()) {
@@ -45,10 +46,11 @@ export async function waitForPaymentIntentSettlement(
       // authenticate with their bank.
       if (normalizedStatus === 'requires_action' || normalizedStatus === 'requires_confirmation') {
         const nextActionUrl = (latestIntent as { nextActionUrl?: string | null }).nextActionUrl;
-        if (nextActionUrl) {
+        if (nextActionUrl && openedActionUrl !== nextActionUrl && shouldContinue()) {
           // Open the bank's 3DS authentication page in the device browser.
           try {
             await Linking.openURL(nextActionUrl);
+            openedActionUrl = nextActionUrl;
           } catch {
             // Linking may fail on some platforms; the user can also
             // complete auth in the PaymentSheet.

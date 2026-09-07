@@ -1,8 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
-  AnimatedPressable
-} from '../components/AnimatedPressable';
-import {
   View,
   StyleSheet,
   StatusBar,
@@ -16,7 +13,9 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import { useStore } from '../store/useStore';
+import { createDmConversationOnApi } from '../services/chatApi';
 import { SyncRetryBanner } from '../components/SyncRetryBanner';
 import { useBackendData } from '../context/BackendDataContext';
 import { Space, Radius, Control, LetterSpacing, Stroke } from '../theme/designTokens';
@@ -25,10 +24,12 @@ import { OfflineBanner } from '../components/OfflineBanner';
 import { useHaptic } from '../hooks/useHaptic';
 import { DiscoveryModeNav, type DiscoveryMode } from '../components/discovery/DiscoveryModeNav';
 import { DiscoverScene, PulseScene, LooksScene } from '../scenes/discovery';
+import { AppSearchBar } from '../components/ui/AppSearchBar';
 import { SearchAutocomplete } from '../components/search/SearchAutocomplete';
 import { loadRecentSearchStrings, recordRecentSearch, clearRecentSearches } from '../services/searchHistory';
 import type { DiscoveryListingSummary } from '../contracts/DiscoveryListingSummary';
 import { useTaxonomy } from '../context/TaxonomyContext';
+import { useDynamicAlgorithmSignals } from '../hooks/useDynamicAlgorithmSignals';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -41,8 +42,18 @@ export default function SearchScreen() {
   const currentUser = useStore((state) => state.currentUser);
   const toggleSavedProduct = useStore((state) => state.toggleSavedProduct);
   const isSavedProduct = useStore((state) => state.isSavedProduct);
+  const upsertConversation = useStore((state) => state.upsertConversation);
   const haptic = useHaptic();
   const { categories } = useTaxonomy();
+
+  const { signals: algorithmSignals } = useDynamicAlgorithmSignals({ surface: 'search' });
+
+  const suggestedSearches = useMemo(() => {
+    return algorithmSignals
+      .filter((s) => s.kind !== 'all' && s.isPersonalized)
+      .slice(0, 4)
+      .map((s) => s.label);
+  }, [algorithmSignals]);
 
   const trendingSearches = useMemo(
     () =>
@@ -88,7 +99,7 @@ export default function SearchScreen() {
     recordRecentSearch(trimmed, currentUser?.id)
       .then((updated) => setRecentSearches(updated.map((e) => e.query)))
       .catch(() => undefined);
-    navigation.navigate('GlobalSearch', { initialQuery: trimmed });
+    navigation.navigate('UnifiedDiscovery', { initialQuery: trimmed });
   }, [navigation, currentUser?.id]);
 
   const handleRefresh = async () => {
@@ -120,38 +131,7 @@ export default function SearchScreen() {
     paddingHorizontal: Space.md,
     paddingTop: Space.sm,
     paddingBottom: Space.smMd,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.smMd },
-  searchBar: {
-    flex: 1,
-    minHeight: Control.hit,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.smMd,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: Radius.lg,
-    borderWidth: Stroke.hairline,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: Space.md },
-  searchBarFocused: {
-    backgroundColor: colors.surface,
-    borderColor: colors.brand },
-  searchInput: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    color: colors.textPrimary,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: LetterSpacing.wide,
-    padding: 0 },
-  searchPlaceholder: {
-    flex: 1,
-    fontSize: TypographyV2.body.size,
-    lineHeight: TypographyV2.body.lineHeight,
-    color: colors.textMuted,
-    fontFamily: TypographyV2.body.fontFamily,
-    letterSpacing: LetterSpacing.wide },
+  },
   autocompleteOverlay: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
@@ -160,15 +140,6 @@ export default function SearchScreen() {
   autocompleteDropdown: {
     flex: 1,
     paddingHorizontal: Space.md },
-  visualSearchButton: {
-    width: Control.hit,
-    height: Control.hit,
-    borderRadius: Radius.lg,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    borderColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center' },
 
   syncRetryBanner: {
     marginHorizontal: Space.md,
@@ -200,15 +171,27 @@ export default function SearchScreen() {
     // tiles carry the production DiscoveryListingSummary, so the navigation
     // callbacks are typed against that contract (it exposes id + sellerId,
     // which is all navigation needs here).
-    onPressItem: (item: DiscoveryListingSummary) => navigation.navigate('ItemDetail', { itemId: item.id }),
+    onPressItem: (item: DiscoveryListingSummary) =>
+      openProductDetail(navigation, { referenceKind: 'listing', canonicalId: item.id, sourceSurface: 'SearchScreen' }),
     onPressSeller: (item: DiscoveryListingSummary) => openProfile(navigation, item.sellerId, currentUser?.id),
-    onMessageSeller: (item: DiscoveryListingSummary) => navigation.navigate('Chat', {
-      conversationId: `${item.sellerId}_${item.id}`,
-      focusQuery: '',
-      partnerUserId: item.sellerId,
-      itemId: item.id }),
+    onMessageSeller: async (item: DiscoveryListingSummary) => {
+      try {
+        const conversation = await createDmConversationOnApi({
+          recipientUserId: item.sellerId,
+          itemId: item.id,
+        });
+        upsertConversation(conversation);
+        navigation.navigate('Chat', {
+          conversationId: conversation.id,
+          partnerUserId: item.sellerId,
+          itemId: item.id,
+        });
+      } catch {
+        // Silent fail — user can retry from product detail
+      }
+    },
     onBrowseCategories: () => navigation.navigate('Browse', { categoryId: 'all', title: 'Browse' }),
-    // Quick-save: bookmark button on each discovery tile (Pinterest/Depop
+    // Quick-save: bookmark button on each discovery tile (quick-save
     // pattern). The store owns the saved state; the tile reflects it.
     onToggleSave: (item: DiscoveryListingSummary) => {
       haptic.light();
@@ -236,45 +219,20 @@ export default function SearchScreen() {
         style={styles.searchRow}
         onLayout={(e) => setSearchRowHeight(e.nativeEvent.layout.height)}
       >
-        <Pressable
-          style={[styles.searchBar, isSearchFocused && styles.searchBarFocused]}
-          onPress={() => searchInputRef.current?.focus()}
-          accessibilityRole="button"
-          accessibilityLabel="Search"
-        >
-          <AppIcon name="search" focused size={20} color={colors.textMuted} />
-          <TextInput
-            ref={searchInputRef}
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search items, brands and people"
-            placeholderTextColor={colors.textMuted}
-            onFocus={() => setIsSearchFocused(true)}
-            onSubmitEditing={() => submitSearch(searchQuery)}
-            returnKeyType="search"
-            accessibilityRole="search"
-            accessibilityLabel="Search"
-          />
-          {searchQuery.length > 0 && (
-            <Pressable
-              hitSlop={8}
-              onPress={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-            >
-              <AppIcon name="closeCircle" focused size={20} color={colors.textMuted} />
-            </Pressable>
-          )}
-        </Pressable>
-        <AnimatedPressable
-          style={styles.visualSearchButton}
-          onPress={() => navigation.navigate('VisualSearch')}
-          accessibilityLabel="Visual search"
-          accessibilityRole="button"
-        >
-          <AppIcon name="camera" size={20} color={colors.textPrimary} />
-        </AnimatedPressable>
+        <AppSearchBar
+          ref={searchInputRef}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onClear={() => setSearchQuery('')}
+          placeholder="Search items, brands and people"
+          onCameraPress={() => navigation.navigate('VisualSearch')}
+          inputProps={{
+            onFocus: () => setIsSearchFocused(true),
+            onSubmitEditing: () => submitSearch(searchQuery),
+            returnKeyType: 'search',
+          }}
+          containerStyle={{ flex: 1 }}
+        />
       </View>
 
       {/* Autocomplete overlay — covers scene content while the search is focused. */}
@@ -284,6 +242,7 @@ export default function SearchScreen() {
             <SearchAutocomplete
               query={searchQuery}
               visible={isSearchFocused}
+              suggested={suggestedSearches}
               trending={trendingSearches}
               recent={recentSearches}
               userId={currentUser?.id}

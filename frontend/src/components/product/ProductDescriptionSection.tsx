@@ -76,7 +76,7 @@ export function ProductDescriptionSection({
               accessibilityRole="button"
               accessibilityState={{ expanded: descriptionExpanded }}
             >
-              <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1}>
+              <Text style={[styles.descriptionToggle, { color: colors.textSecondary }]} maxFontSizeMultiplier={1.4}>
                 {descriptionExpanded ? 'Show less' : 'Read more'}
               </Text>
             </Pressable>
@@ -163,7 +163,7 @@ export function ProductDescriptionSection({
       })()}
 
       {item.createdAt ? (
-        <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1}>
+        <Text style={[styles.postedDate, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
           Posted {new Date(item.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
         </Text>
       ) : null}

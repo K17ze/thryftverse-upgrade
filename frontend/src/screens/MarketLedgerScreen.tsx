@@ -1,7 +1,6 @@
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppTheme } from '../theme/ThemeContext';
@@ -91,14 +90,13 @@ export default function MarketLedgerScreen() {
   const { colors } = useAppTheme();
   const localEntries = useStore((state) => state.marketLedger);
   const currentUser = useStore((state) => state.currentUser);
-  const coOwnRuntime = useStore((state) => state.coOwnRuntime);
   const viewerId = currentUser?.id ?? '';
   const { isOffline } = useConnectivity();
-  const { formatFromFiat, currencyCode } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
 
   const formatMoney = useCallback(
-    (value: number) => formatFromFiat(value, currencyCode),
-    [formatFromFiat, currencyCode]
+    (value: number) => formatFromFiat(value, 'GBP'),
+    [formatFromFiat]
   );
 
   const formatSignedMoney = useCallback(
@@ -113,6 +111,7 @@ export default function MarketLedgerScreen() {
   const [remoteEntries, setRemoteEntries] = React.useState<LedgerEntry[]>([]);
   const [isSyncingLedger, setIsSyncingLedger] = React.useState(false);
   const [isRemoteAvailable, setIsRemoteAvailable] = React.useState(false);
+  const [remoteError, setRemoteError] = React.useState(false);
   const [hasMoreRemote, setHasMoreRemote] = React.useState(false);
   const [nextCursor, setNextCursor] = React.useState<MarketHistoryCursor | null>(null);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
@@ -121,6 +120,7 @@ export default function MarketLedgerScreen() {
   const refreshRemoteLedger = React.useCallback(async () => {
     if (!viewerId) {
       setIsSyncingLedger(false);
+      setRemoteError(false);
       return;
     }
     setIsSyncingLedger(true);
@@ -128,10 +128,12 @@ export default function MarketLedgerScreen() {
       const page = await listUserMarketHistory(viewerId, { channel: 'all', limit: PAGE_SIZE });
       setRemoteEntries(mapHistoryToLedgerEntries(page.items));
       setIsRemoteAvailable(true);
+      setRemoteError(false);
       setHasMoreRemote(page.pageInfo.hasMore);
       setNextCursor(page.pageInfo.nextCursor ?? null);
     } catch {
       setIsRemoteAvailable(false);
+      setRemoteError(true);
       setRemoteEntries([]);
       setHasMoreRemote(false);
       setNextCursor(null);
@@ -169,7 +171,13 @@ export default function MarketLedgerScreen() {
 
   React.useEffect(() => { void refreshRemoteLedger(); }, [refreshRemoteLedger]);
 
-  const entries = React.useMemo(() => (isRemoteAvailable ? remoteEntries : localEntries), [isRemoteAvailable, localEntries, remoteEntries]);
+  // Local entries are only a safe fallback when the device is offline. While
+  // online, a failed history request must remain an explicit recoverable
+  // state instead of silently presenting a partial client cache as complete.
+  const entries = React.useMemo(
+    () => (isRemoteAvailable || isOffline || !viewerId ? (isRemoteAvailable ? remoteEntries : localEntries) : []),
+    [isOffline, isRemoteAvailable, localEntries, remoteEntries, viewerId],
+  );
 
   const filteredEntries = React.useMemo(() => {
     if (filter === 'ALL') return entries;
@@ -180,11 +188,6 @@ export default function MarketLedgerScreen() {
   const totalMarketValue = React.useMemo(
     () => filteredEntries.reduce((sum, entry) => sum + entry.amountGBP, 0),
     [filteredEntries]
-  );
-
-  const realizedCoOwnPL = React.useMemo(
-    () => Object.values(coOwnRuntime).reduce((sum, runtime) => sum + runtime.realizedProfitGBP, 0),
-    [coOwnRuntime]
   );
 
   const netCashflow = React.useMemo(
@@ -275,7 +278,10 @@ export default function MarketLedgerScreen() {
       scrollEnabled={false}
     >
       <CoOwnOfflineBanner isOffline={isOffline} />
-      <CoOwnReconciliationBanner isActive={false} />
+      <CoOwnReconciliationBanner
+        isActive={remoteError && !isOffline}
+        onContactSupport={() => navigation.navigate('HelpSupport')}
+      />
 
       {/* Summary card */}
       <View style={[styles.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -292,9 +298,9 @@ export default function MarketLedgerScreen() {
         </View>
         <View style={[styles.summaryStatDivider, { backgroundColor: colors.border }]} />
         <View style={styles.summaryStat}>
-          <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Realized P&L</Text>
-          <Text style={[styles.summaryStatValue, { color: realizedCoOwnPL >= 0 ? colors.success : colors.danger }]} numberOfLines={1}>
-            {formatSignedMoney(realizedCoOwnPL)}
+          <Text style={[styles.summaryStatLabel, { color: colors.textMuted }]} numberOfLines={1}>Entries</Text>
+          <Text style={[styles.summaryStatValue, { color: colors.textPrimary }]} numberOfLines={1}>
+            {filteredEntries.length}
           </Text>
         </View>
       </View>
@@ -342,6 +348,14 @@ export default function MarketLedgerScreen() {
                 </View>
               ))}
             </View>
+          ) : remoteError && !isOffline ? (
+            <CoOwnStateCanvas
+              variant="error"
+              title="Ledger unavailable"
+              subtitle="Your server history could not be loaded. Retry to reconcile it."
+              actionLabel="Retry"
+              onAction={handleRefresh}
+            />
           ) : (
             <CoOwnStateCanvas
               variant="empty"

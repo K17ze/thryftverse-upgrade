@@ -86,7 +86,6 @@ function BioText({ bio, style, linkStyle, seeMoreStyle }: { bio: string; style: 
 
 const AVATAR_SIZE = 96; // design contract: 96-128pt seam avatar — matches ProfileHero (2026 standard)
 const AVATAR_OVERLAP = AVATAR_SIZE / 2;
-const ACTION_RADIUS = 11;
 const ACTION_HEIGHT = 44;
 
 interface MyProfileIdentityHeroProps {
@@ -254,26 +253,6 @@ export function MyProfileIdentityHero({
 
         {bio ? <BioText bio={bio} style={styles.bio} linkStyle={styles.bioLink} seeMoreStyle={styles.bioSeeMore} /> : null}
 
-        {location ? (
-          <Text style={styles.contextLine} numberOfLines={1}>{location}</Text>
-        ) : null}
-
-        {/* Website — tappable link, matches ProfileHero */}
-        {website ? (
-          <Pressable
-            style={({ pressed }) => [styles.websiteLink, pressed && { opacity: 0.6 }]}
-            onPress={() => {
-              let normalized = website.trim();
-              if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
-              Linking.openURL(normalized).catch(() => {});
-            }}
-            accessibilityRole="link"
-            accessibilityLabel={`Open website ${website}`}
-          >
-            <Text style={styles.websiteText} numberOfLines={1}>{website}</Text>
-          </Pressable>
-        ) : null}
-
         {/* Trust header — rating row + joined caption on separate lines.
             The rating is part of the identity block, not a lonely chip: star +
             score + review count give the 5.0 context. Joined date is a less
@@ -308,30 +287,52 @@ export function MyProfileIdentityHero({
             {memberSince ? <Text style={styles.trustJoined}>Joined {memberSince}</Text> : null}
           </View>
         ) : null}
+
+        {location ? (
+          <Text style={styles.contextLine} numberOfLines={1}>{location}</Text>
+        ) : null}
+
+        {/* Website — tappable link, matches ProfileHero */}
+        {website ? (
+          <Pressable
+            style={({ pressed }) => [styles.websiteLink, pressed && { opacity: 0.6 }]}
+            onPress={() => {
+              let normalized = website.trim();
+              if (!/^https?:\/\//i.test(normalized)) normalized = `https://${normalized}`;
+              Linking.openURL(normalized).catch(() => {});
+            }}
+            accessibilityRole="link"
+            accessibilityLabel={`Open website ${website}`}
+          >
+            <Text style={styles.websiteText} numberOfLines={1}>{website}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
-      {/* Actions — flat, single row, clear primary/secondary hierarchy */}
+      {/* Actions — authored, luxury curator & collector identity controls */}
       <View style={styles.actionRow}>
         <AnimatedPressable
           style={[styles.action, styles.editAction]}
           onPress={onEditProfile}
           activeOpacity={0.88}
+          scaleValue={0.98}
           hapticFeedback="light"
-          accessibilityLabel="Edit profile"
+          accessibilityLabel="Edit profile and curator studio"
           accessibilityRole="button"
         >
-          <Ionicons name="create-outline" size={15} color={colors.textInverse} />
-          <Text style={styles.editActionText}>Edit profile</Text>
+          <Ionicons name="create-outline" size={15} color={colors.textPrimary} />
+          <Text style={styles.editActionText}>Edit Profile</Text>
         </AnimatedPressable>
         <AnimatedPressable
           style={[styles.action, styles.shareAction]}
           onPress={onShare}
           activeOpacity={0.88}
+          scaleValue={0.98}
           hapticFeedback="light"
-          accessibilityLabel="Share profile"
+          accessibilityLabel="Share your profile"
           accessibilityRole="button"
         >
-          <Ionicons name="share-outline" size={17} color={colors.textPrimary} />
+          <Ionicons name="share-outline" size={16} color={colors.brand} />
           <Text style={styles.shareActionText}>Share</Text>
         </AnimatedPressable>
       </View>
@@ -353,7 +354,7 @@ function ProfileStat({ value, label, styles, onPress, a11yLabel }: {
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={a11yLabel ?? value}
-        hitSlop={4}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
         <Text style={styles.seamStatValue} numberOfLines={1}>{value}</Text>
         <Text style={styles.seamStatLabel} numberOfLines={1}>{label}</Text>
@@ -548,19 +549,24 @@ function createStyles(colors: ThemeColors) {
     justifyContent: 'center',
     gap: Space.xs + 3,
     height: ACTION_HEIGHT,
-    borderRadius: ACTION_RADIUS },
+    borderRadius: Radius.lg },
   editAction: {
-    backgroundColor: colors.brand },
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
   editActionText: {
-    color: colors.textInverse,
+    color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
     fontSize: TypographyV2.bodyStrong.size },
   shareAction: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    backgroundColor: colors.background },
+    backgroundColor: colors.surfaceAlt },
   shareActionText: {
     color: colors.textPrimary,
     fontFamily: Typography.family.semibold,
-    fontSize: TypographyV2.bodyStrong.size } });
+    fontSize: TypographyV2.bodyStrong.size },
+
+});
 }

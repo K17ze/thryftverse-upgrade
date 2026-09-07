@@ -54,7 +54,7 @@ export default function BuyerProtectionScreen({ navigation, route }: Props) {
   const { currencyCode, formatFromFiat } = useFormattedPrice();
 
   const formatGbp = React.useCallback(
-    (minor: number) => formatFromFiat(minor / 100, currencyCode),
+    (minor: number) => formatFromFiat(minor / 100, 'GBP'),
     [formatFromFiat, currencyCode]
   );
   const { orderId } = route.params;

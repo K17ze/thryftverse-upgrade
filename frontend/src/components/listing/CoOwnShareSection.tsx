@@ -109,7 +109,7 @@ export function CoOwnShareSection({
       </View>
 
       {/* Allocation bar */}
-      <View style={styles.allocationBar}>
+      <View style={[styles.allocationBar, { backgroundColor: colors.border }]}>
         <View
           style={[
             styles.allocationFilled,
@@ -227,7 +227,6 @@ const styles = StyleSheet.create({
   allocationBar: {
     height: 4,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(128,128,128,0.15)',
     overflow: 'hidden',
   },
   allocationFilled: {

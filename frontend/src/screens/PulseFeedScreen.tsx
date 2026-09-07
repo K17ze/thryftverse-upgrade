@@ -23,6 +23,7 @@ import { useConnectivity } from '../hooks/useConnectivity';
 import { formatCountdown } from '../data/tradeHub';
 import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
+import { openProductDetail } from '../platform/product/openProductDetail';
 
 type NavT = NativeStackNavigationProp<RootStackParamList>;
 
@@ -61,7 +62,11 @@ function EventCard({ event, index }: { event: FeedEvent; index: number }) {
   const handlePress = () => {
     haptic.light();
     if (event.routeId) {
-      navigation.push('ItemDetail', { itemId: event.routeId });
+      openProductDetail(navigation, {
+        referenceKind: event.type === 'auction_live' ? 'auction' : 'listing',
+        canonicalId: event.routeId,
+        sourceSurface: 'PulseFeed',
+      });
     }
   };
 
@@ -148,7 +153,7 @@ export default function PulseFeedScreen() {
           id: `auction_${a.id}`,
           type: 'auction_live',
           title: a.title,
-          subtitle: `Current bid · ${formatFromFiat(a.currentBid, currencyCode)}`,
+          subtitle: `Current bid · ${formatFromFiat(a.currentBid, 'GBP')}`,
           image: a.image,
           meta: `Ends ${formatCountdown(Math.max(0, endsAtMs - now))}`,
           metaAccent: true,
@@ -172,7 +177,7 @@ export default function PulseFeedScreen() {
         title: l.title ?? 'New Listing',
         subtitle: l.brand ?? 'ThryftVerse',
         image: l.images?.[0] ?? '',
-        meta: formatFromFiat(l.price, currencyCode),
+        meta: formatFromFiat(l.price, 'GBP'),
         routeId: l.id,
         timestamp: l.createdAt ? Date.parse(l.createdAt) : now });
     });
@@ -189,7 +194,7 @@ export default function PulseFeedScreen() {
           title: l.title ?? 'Item',
           subtitle: l.brand ?? 'ThryftVerse',
           image: l.images?.[0] ?? '',
-          meta: `Down ${dropPct}% · Now ${formatFromFiat(l.price, currencyCode)}`,
+          meta: `Down ${dropPct}% · Now ${formatFromFiat(l.price, 'GBP')}`,
           metaAccent: true,
           routeId: l.id,
           timestamp: now - 3600000, // Approximate recent

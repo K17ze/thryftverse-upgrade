@@ -49,6 +49,32 @@ export interface SellerHubMoney {
   nextPayoutAt: string | null;
 }
 
+/**
+ * Seller trust posture, projected from the backend-owned seller_trust row.
+ * Null when the seller has no trust row — render nothing (fail-closed).
+ * Individual signals may be null — hide per-signal chips, never placeholders.
+ */
+export interface SellerHubTrust {
+  responseRatePct: number | null;
+  avgDispatchDays: number | null;
+  totalSales: number;
+  positiveRatingPct: number | null;
+  /** Last recompute time of the projection. Null when unknown. */
+  calculatedAt: string | null;
+}
+
+/**
+ * Near-winner: an active listing with real 30-day view volume and zero
+ * 30-day sales. Empty array = none found; null = source unavailable.
+ */
+export interface SellerHubOpportunity {
+  listingId: string;
+  title: string;
+  imageUrl: string | null;
+  priceGbp: number | null;
+  views30d: number;
+}
+
 export interface SellerHubBusinessPulse {
   period: '30d';
   grossSalesGbp: number;
@@ -57,6 +83,16 @@ export interface SellerHubBusinessPulse {
   netSalesGbp: number;
   orders: number;
   completeness: 'complete' | 'partial';
+  /**
+   * Net sales change vs the previous 30-day period (percentage points).
+   * Null when the previous period had zero sales (division by zero avoided).
+   */
+  netSalesPrevPeriodPct: number | null;
+  /**
+   * Order count change vs the previous 30-day period (percentage points).
+   * Null when the previous period had zero orders.
+   */
+  ordersPrevPeriodPct: number | null;
 }
 
 export interface SellerHubOverview {
@@ -75,6 +111,8 @@ export interface SellerHubOverview {
     listedValueGbp: number;
   };
   businessPulse: SellerHubBusinessPulse | null;
+  trust: SellerHubTrust | null;
+  opportunities: SellerHubOpportunity[] | null;
 }
 
 interface SellerHubOverviewResponse {
@@ -87,9 +125,27 @@ export async function fetchSellerHubOverview(): Promise<SellerHubOverview> {
   return response.overview;
 }
 
+export interface SellerInventoryTotals {
+  active: number;
+  drafts: number;
+  paused: number;
+  sold: number;
+  listedValueGbp: number;
+}
+
+interface SellerInventoryTotalsResponse {
+  ok: boolean;
+  totals: SellerInventoryTotals;
+}
+
+export async function fetchSellerInventoryTotals(): Promise<SellerInventoryTotals> {
+  const response = await fetchJson<SellerInventoryTotalsResponse>('/seller-hub/inventory/totals');
+  return response.totals;
+}
+
 // ── Batch command types ──
 
-export type SellerHubBatchCommand = 'pause' | 'resume' | 'delete' | 'mark_sold_external';
+export type SellerHubBatchCommand = 'pause' | 'resume' | 'delete';
 
 export interface SellerHubBatchItem {
   listingId: string;
@@ -98,16 +154,21 @@ export interface SellerHubBatchItem {
 
 export interface SellerHubBatchResult {
   listingId: string;
-  state: 'applied' | 'rejected' | 'conflict' | 'unknown';
-  code?: string;
+  state: 'applied' | 'rejected' | 'conflict';
+  newStatus?: string;
+  reason?: string;
   currentStatus?: string;
 }
 
 export interface SellerHubBatchResponse {
   ok: boolean;
   batchId: string;
+  idempotencyKey: string;
   state: 'complete' | 'partial';
   results: SellerHubBatchResult[];
+  appliedCount: number;
+  rejectedCount: number;
+  conflictCount: number;
 }
 
 export async function submitSellerHubBatchCommand(

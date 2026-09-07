@@ -295,6 +295,9 @@ export function MarketplaceChatCard({
                 activeOpacity={0.8}
                 scaleValue={0.96}
                 hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="View order"
+                accessibilityHint="Opens the order details"
               >
                 <Text style={styles.offerStatusActionText}>View Order</Text>
               </AnimatedPressable>
@@ -320,6 +323,9 @@ export function MarketplaceChatCard({
                 activeOpacity={0.8}
                 scaleValue={0.96}
                 hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Make new offer"
+                accessibilityHint="Opens the offer composer"
               >
                 <Text style={styles.offerStatusActionText}>New Offer</Text>
               </AnimatedPressable>
@@ -345,6 +351,9 @@ export function MarketplaceChatCard({
                 activeOpacity={0.8}
                 scaleValue={0.96}
                 hapticFeedback="light"
+                accessibilityRole="button"
+                accessibilityLabel="Retry offer"
+                accessibilityHint="Opens the offer composer"
               >
                 <Text style={styles.offerStatusActionText}>Retry</Text>
               </AnimatedPressable>
@@ -450,7 +459,7 @@ export function MarketplaceChatCard({
               <Text style={styles.shareSellerText}>@{listing.sellerUsername}</Text>
               {listing.sellerRating && (
                 <View style={styles.shareRatingChip}>
-                  <Ionicons name="star" size={10} color="#F59E0B" />
+                  <Ionicons name="star" size={10} color={colors.warning} />
                   <Text style={styles.shareRatingText}>{listing.sellerRating.toFixed(1)}</Text>
                 </View>
               )}
@@ -514,6 +523,9 @@ export function MarketplaceChatCard({
             activeOpacity={0.8}
             scaleValue={0.98}
             hapticFeedback="light"
+            accessibilityRole="button"
+            accessibilityLabel="View order receipt"
+            accessibilityHint="Opens the order receipt"
           >
             <Text style={styles.receiptActionText}>View order receipt</Text>
             <Ionicons name="chevron-forward" size={13} color={colors.brand} />
@@ -528,7 +540,7 @@ export function MarketplaceChatCard({
     return (
       <View style={styles.safetyCard}>
         <View style={styles.safetyIconSquircle}>
-          <Ionicons name="shield-checkmark" size={16} color="#0D9488" />
+          <Ionicons name="shield-checkmark" size={16} color={colors.brand} />
         </View>
         <View style={styles.safetyContent}>
           <Text style={styles.safetyHeadline}>ThryftVerse Buyer Protection</Text>
@@ -587,11 +599,6 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.borderSubtle,
       padding: Space.md - 2,
       gap: Space.sm,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
-      elevation: 2,
     },
     offerCardThem: {
       alignSelf: 'flex-start',
@@ -621,7 +628,6 @@ const createStyles = (colors: ThemeColors) =>
       width: 48,
       height: 48,
       borderRadius: Radius.md - 2,
-      backgroundColor: colors.surfaceAlt,
     },
     offerItemThumbFallback: {
       alignItems: 'center',
@@ -634,13 +640,13 @@ const createStyles = (colors: ThemeColors) =>
       gap: 2,
     },
     offerBrandEyebrow: {
-      fontSize: 9,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.bold,
       color: colors.textMuted,
       letterSpacing: 1.1,
     },
     offerItemTitle: {
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
     },
@@ -650,12 +656,12 @@ const createStyles = (colors: ThemeColors) =>
       gap: 4,
     },
     offerTagText: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
     },
     offerTagDot: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       color: colors.textMuted,
     },
     offerHeroBody: {
@@ -667,7 +673,7 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'space-between',
     },
     offerHeroEyebrow: {
-      fontSize: 10,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.semibold,
       color: colors.textMuted,
       letterSpacing: 0.8,
@@ -681,7 +687,7 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: Radius.full,
     },
     offerUrgencyText: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
       fontVariant: ['tabular-nums'],
     },
@@ -691,14 +697,14 @@ const createStyles = (colors: ThemeColors) =>
       gap: Space.xs + 2,
     },
     offerPrice: {
-      fontSize: 24,
+      fontSize: TypographyV2.screenTitle.size,
       fontFamily: FontFamily.bold,
       color: colors.textPrimary,
       fontVariant: ['tabular-nums'],
       letterSpacing: -0.4,
     },
     offerStrike: {
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textMuted,
       textDecorationLine: 'line-through',
@@ -712,7 +718,7 @@ const createStyles = (colors: ThemeColors) =>
       marginLeft: 2,
     },
     offerDiscountText: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.bold,
       color: colors.success,
       fontVariant: ['tabular-nums'],
@@ -726,7 +732,7 @@ const createStyles = (colors: ThemeColors) =>
       borderTopColor: colors.borderSubtle,
     },
     offerWaitingText: {
-      fontSize: 12,
+      fontSize: TypographyV2.caption.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
     },
@@ -752,24 +758,20 @@ const createStyles = (colors: ThemeColors) =>
       gap: 1,
     },
     offerStatusTitle: {
-      fontSize: 12,
+      fontSize: TypographyV2.caption.size,
       fontFamily: FontFamily.semibold,
     },
     offerStatusSubtitle: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
     },
     offerStatusActionBtn: {
-      backgroundColor: colors.surface,
       paddingHorizontal: Space.sm,
       paddingVertical: 5,
-      borderRadius: Radius.sm,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.borderSubtle,
     },
     offerStatusActionText: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
       color: colors.textPrimary,
     },
@@ -789,7 +791,7 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'center',
     },
     offerPassText: {
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       fontFamily: FontFamily.medium,
       color: colors.textMuted,
     },
@@ -804,7 +806,7 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.border,
     },
     offerCounterText: {
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
     },
@@ -817,7 +819,7 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.brand,
     },
     offerAcceptText: {
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       fontFamily: FontFamily.semibold,
       color: colors.textInverse,
     },
@@ -831,11 +833,6 @@ const createStyles = (colors: ThemeColors) =>
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.borderSubtle,
       overflow: 'hidden',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.06,
-      shadowRadius: 10,
-      elevation: 3,
     },
     shareCardThem: {
       alignSelf: 'flex-start',
@@ -848,7 +845,6 @@ const createStyles = (colors: ThemeColors) =>
     shareImageContainer: {
       width: '100%',
       aspectRatio: 1.2,
-      backgroundColor: colors.surfaceAlt,
       position: 'relative',
     },
     shareImage: {
@@ -859,7 +855,7 @@ const createStyles = (colors: ThemeColors) =>
       position: 'absolute',
       bottom: 10,
       left: 10,
-      backgroundColor: 'rgba(0,0,0,0.72)',
+      backgroundColor: colors.mediaOverlayScrim,
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 10,
@@ -868,32 +864,32 @@ const createStyles = (colors: ThemeColors) =>
       gap: 6,
     },
     shareFloatingPrice: {
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       fontFamily: FontFamily.bold,
-      color: '#FFFFFF',
+      color: colors.mediaOverlayText,
       fontVariant: ['tabular-nums'],
     },
     sharePillDot: {
       width: 3,
       height: 3,
       borderRadius: 1.5,
-      backgroundColor: 'rgba(255,255,255,0.6)',
+      backgroundColor: colors.scrimTextTertiary,
     },
     shareFloatingCondition: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.medium,
-      color: 'rgba(255,255,255,0.85)',
+      color: colors.scrimTextSecondary,
     },
     shareSoldOverlay: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
     },
     shareSoldText: {
-      fontSize: 16,
+      fontSize: TypographyV2.bodyStrong.size,
       fontFamily: FontFamily.bold,
-      color: '#FFFFFF',
+      color: colors.mediaOverlayText,
       letterSpacing: 2,
     },
     shareContent: {
@@ -901,16 +897,16 @@ const createStyles = (colors: ThemeColors) =>
       gap: 6,
     },
     shareBrandEyebrow: {
-      fontSize: 9,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.bold,
       color: colors.textMuted,
       letterSpacing: 1.1,
     },
     shareTitle: {
-      fontSize: 14,
+      fontSize: TypographyV2.body.size,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
-      lineHeight: 18,
+      lineHeight: TypographyV2.captionElevated.lineHeight,
     },
     shareSellerRow: {
       flexDirection: 'row',
@@ -919,7 +915,7 @@ const createStyles = (colors: ThemeColors) =>
       marginTop: 2,
     },
     shareSellerText: {
-      fontSize: 12,
+      fontSize: TypographyV2.caption.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
     },
@@ -927,13 +923,9 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 2,
-      backgroundColor: colors.surfaceAlt,
-      paddingHorizontal: 5,
-      paddingVertical: 1,
-      borderRadius: Radius.sm,
     },
     shareRatingText: {
-      fontSize: 10,
+      fontSize: TypographyV2.meta.size,
       fontFamily: FontFamily.bold,
       color: colors.textPrimary,
     },
@@ -958,7 +950,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: Space.sm,
     },
     sharePrimaryText: {
-      fontSize: 12,
+      fontSize: TypographyV2.caption.size,
       fontFamily: FontFamily.semibold,
       color: colors.textInverse,
     },
@@ -974,7 +966,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: Space.sm,
     },
     shareSecondaryText: {
-      fontSize: 12,
+      fontSize: TypographyV2.caption.size,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
     },
@@ -990,11 +982,6 @@ const createStyles = (colors: ThemeColors) =>
       borderColor: colors.borderSubtle,
       padding: Space.md - 2,
       gap: Space.sm,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
-      elevation: 2,
     },
     purchaseReceiptHeader: {
       flexDirection: 'row',
@@ -1014,15 +1001,15 @@ const createStyles = (colors: ThemeColors) =>
       gap: 2,
     },
     receiptTitle: {
-      fontSize: 13,
+      fontSize: TypographyV2.captionElevated.size,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
     },
     receiptBody: {
-      fontSize: 12,
+      fontSize: TypographyV2.caption.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      lineHeight: 16,
+      lineHeight: TypographyV2.caption.lineHeight,
     },
     receiptActionRow: {
       flexDirection: 'row',
@@ -1033,7 +1020,7 @@ const createStyles = (colors: ThemeColors) =>
       borderTopColor: colors.borderSubtle,
     },
     receiptActionText: {
-      fontSize: 12,
+      fontSize: TypographyV2.caption.size,
       fontFamily: FontFamily.semibold,
       color: colors.brand,
     },
@@ -1055,8 +1042,6 @@ const createStyles = (colors: ThemeColors) =>
     safetyIconSquircle: {
       width: 28,
       height: 28,
-      borderRadius: Radius.sm,
-      backgroundColor: '#CCFBF1',
       alignItems: 'center',
       justifyContent: 'center',
       flexShrink: 0,
@@ -1066,15 +1051,15 @@ const createStyles = (colors: ThemeColors) =>
       gap: 2,
     },
     safetyHeadline: {
-      fontSize: 12,
+      fontSize: TypographyV2.caption.size,
       fontFamily: FontFamily.semibold,
       color: colors.textPrimary,
     },
     safetyBody: {
-      fontSize: 11,
+      fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.textSecondary,
-      lineHeight: 15,
+      lineHeight: TypographyV2.meta.lineHeight,
     },
 
     // ── System Notice Pill Styles ─────────────────────

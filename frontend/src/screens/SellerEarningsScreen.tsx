@@ -23,7 +23,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { useStore } from '../store/useStore';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
-import { useCurrencyContext } from '../context/CurrencyContext';
+
 import { useToast } from '../context/ToastContext';
 import { Space, Radius, DockConstants } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -50,7 +50,6 @@ export default function SellerEarningsScreen({ navigation }: Props) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const currentUser = useStore((state) => state.currentUser);
-  const { currencyCode } = useCurrencyContext();
   const { formatFromFiat } = useFormattedPrice();
   const { show } = useToast();
 
@@ -155,7 +154,7 @@ export default function SellerEarningsScreen({ navigation }: Props) {
               Available
             </Text>
             <Text style={[styles.heroValue, { color: colors.textPrimary }]}>
-              {formatFromFiat(balances?.availableGbp ?? 0, currencyCode, { displayMode: 'fiat' })}
+              {formatFromFiat(balances?.availableGbp ?? 0, 'GBP', { displayMode: 'fiat' })}
             </Text>
             {(balances?.availableGbp ?? 0) > 0 && (
               <Pressable
@@ -181,7 +180,7 @@ export default function SellerEarningsScreen({ navigation }: Props) {
               <View style={[styles.balanceRow, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.balanceLabel, { color: colors.textSecondary }]}>Pending</Text>
                 <Text style={[styles.balanceValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(balances!.pendingGbp, currencyCode, { displayMode: 'fiat' })}
+                  {formatFromFiat(balances!.pendingGbp, 'GBP', { displayMode: 'fiat' })}
                 </Text>
               </View>
             )}
@@ -189,7 +188,7 @@ export default function SellerEarningsScreen({ navigation }: Props) {
               <View style={[styles.balanceRow, { borderBottomColor: colors.border }]}>
                 <Text style={[styles.balanceLabel, { color: colors.textSecondary }]}>In reserve</Text>
                 <Text style={[styles.balanceValue, { color: colors.textPrimary }]}>
-                  {formatFromFiat(balances!.heldInReserveGbp, currencyCode, { displayMode: 'fiat' })}
+                  {formatFromFiat(balances!.heldInReserveGbp, 'GBP', { displayMode: 'fiat' })}
                 </Text>
               </View>
             )}
@@ -243,7 +242,7 @@ export default function SellerEarningsScreen({ navigation }: Props) {
                         </Text>
                       </View>
                       <Text style={[styles.scheduleItemAmount, { color: isException ? colors.danger : colors.textPrimary }]}>
-                        {formatFromFiat(item.amountGbp, currencyCode, { displayMode: 'fiat' })}
+                        {formatFromFiat(item.amountGbp, 'GBP', { displayMode: 'fiat' })}
                       </Text>
                     </View>
                   );

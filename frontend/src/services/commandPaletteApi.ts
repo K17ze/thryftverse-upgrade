@@ -199,7 +199,7 @@ export function getCommands(navigation: CommandNavigation): Command[] {
       category: 'navigation',
       icon: 'search-outline',
       keywords: ['global search', 'find', 'lookup'],
-      action: nav('GlobalSearch'),
+      action: nav('UnifiedDiscovery'),
     },
     {
       id: 'nav-sell',
@@ -457,7 +457,7 @@ export function getCommands(navigation: CommandNavigation): Command[] {
       category: 'search',
       icon: 'search-outline',
       keywords: ['global search', 'find', 'items', 'products'],
-      action: nav('GlobalSearch'),
+      action: nav('UnifiedDiscovery'),
     },
     {
       id: 'search-category',

@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { NativeStackScreenProps, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useAppTheme } from '../theme/ThemeContext';
 import { Space, Radius, Typography, Numeric } from '../theme/designTokens';
+import { TypographyV2 } from '../theme/typography.v2';
+import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
 import { AppButton } from '../components/ui/AppButton';
 import { HoldToSubmitButton } from '../components/ui/HoldToSubmitButton';
 import { useHaptic } from '../hooks/useHaptic';
@@ -27,6 +29,28 @@ import { t } from '../i18n';
 
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TradeConfirm'>;
+
+// CoOwnOrderHistory is typed as `undefined` in the shared RootStackParamList
+// (navigation/types.ts — owned by another team). The history screen reads
+// orderId / assetId / idempotencyKey from route.params at runtime to
+// highlight the just-submitted order. Widen the route locally so this
+// screen can pass those params type-safely without editing the shared types.
+type OrderHistoryHighlightParams = {
+  orderId?: string;
+  assetId?: string;
+  idempotencyKey?: string;
+};
+type LocalStackParamList = Omit<RootStackParamList, 'CoOwnOrderHistory'> & {
+  CoOwnOrderHistory: OrderHistoryHighlightParams | undefined;
+};
+
+// Phase 2.5: the shared RootStackParamList ('TradeConfirm') is owned by
+// another team and does not yet declare `ticketDuration`. Widen the route
+// params locally so the duration forwarded from TradeScreen can be read
+// type-safely without editing the shared navigation types.
+type TradeConfirmRouteParams = RootStackParamList['TradeConfirm'] & {
+  ticketDuration?: 'GFD' | 'GTC90';
+};
 
 export default function TradeConfirmScreen({ navigation, route }: Props) {
   useScreenCaptureProtection();
@@ -54,7 +78,9 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
     previewValidUntil,
     maxReserved1ze,
     marketDataTimestamp,
-  } = route.params ?? {};
+    // Phase 2.5: duration (GFD / GTC90) forwarded from TradeScreen
+    ticketDuration,
+  } = (route.params as TradeConfirmRouteParams) ?? {};
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { isVeryCompact: isCompactDock } = useBreakpoint();
@@ -80,6 +106,18 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
   const isBuy = side === 'buy';
   // 1ZE is the canonical settlement unit. GBP is a secondary reference.
   const settlementLabel = '1ZE';
+
+  // Land the user on the order history with the submitted order highlighted
+  // (orderId) and a route back to the asset (assetId). The history screen
+  // reads these from route.params at runtime; the shared nav types are
+  // widened locally (see LocalStackParamList above) so this stays type-safe.
+  const orderHistoryNav = navigation as unknown as NativeStackNavigationProp<
+    LocalStackParamList,
+    'TradeConfirm'
+  >;
+  const goOrderHistory = (params: OrderHistoryHighlightParams) => {
+    orderHistoryNav.navigate('CoOwnOrderHistory', params);
+  };
 
   // Hold-to-submit threshold: orders > 5,000 1ZE OR > 5% of public float.
   // We don't have public float in route params, so use total value as proxy.
@@ -159,6 +197,9 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           : { limitPriceGbp }),
         reservationId,
         idempotencyKey: idempotencyKeyRef.current!,
+        // Phase 2.5: forward the duration selector so the backend can set
+        // the order's lifetime (GFD = end of day, GTC90 = 90 days).
+        timeInForce: ticketDuration,
       });
 
       reservationPlacedRef.current = true;
@@ -171,19 +212,36 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
         await releaseReservation();
         return;
       }
-      if (remoteOrder.order.status === 'open' || remoteOrder.order.status === 'partially_filled') {
+      if (remoteOrder.order.status === 'open') {
         show('Offer placed on the server order book.', 'info');
+      } else if (remoteOrder.order.status === 'partially_filled') {
+        show('Order partially filled. Remaining units are on the order book.', 'info');
       } else {
         show('Order executed on CO-OWN engine.', 'success');
       }
       if (remoteOrder.aml?.alertId) show('Trade is flagged for AML review.', 'info');
-      track('coown_order_filled', {
-        asset_id: assetId,
-        order_id: String(remoteOrder.order.id),
-        units: quantity,
-        price_gbp: remoteOrder.order.unitPriceGbp,
-      });
-      navigation.navigate('CoOwnHub');
+      // Keep telemetry aligned with the server outcome. An open or partially
+      // filled order is a placement, not an execution.
+      if (remoteOrder.order.status === 'filled') {
+        track('coown_order_filled', {
+          asset_id: assetId,
+          order_id: String(remoteOrder.order.id),
+          units: quantity,
+          price_gbp: remoteOrder.order.unitPriceGbp,
+        });
+      } else {
+        track('coown_order_placed', {
+          asset_id: assetId,
+          side,
+          units: quantity,
+          price_gbp: remoteOrder.order.unitPriceGbp,
+        });
+      }
+      // The order ledger is the source of truth for open, partial and filled
+      // states. Land there so the user can see the server-confirmed outcome,
+      // highlighted on the specific order — with assetId retained so the
+      // history screen can offer a route back to the asset.
+      goOrderHistory({ orderId: String(remoteOrder.order.id), assetId });
     } catch (error) {
       const parsedError = parseApiError(error, 'Unable to submit order');
       if (!parsedError.isNetworkError) {
@@ -201,14 +259,26 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
             idempotencyKeyRef.current!,
           );
           if (lookup.status === 'acknowledged') {
-            // The order was actually placed — navigate to the hub.
-            show('Order placed.', 'success');
-            navigation.navigate('CoOwnHub');
+            // The idempotency lookup returned the server's actual order
+            // status. Mirror that status instead of treating acknowledgement
+            // as execution.
+            if (lookup.order.status === 'rejected') {
+              show('Order rejected by matching engine.', 'error');
+            } else if (lookup.order.status === 'partially_filled') {
+              show('Order partially filled. Remaining units are on the order book.', 'info');
+            } else if (lookup.order.status === 'filled') {
+              show('Order executed on CO-OWN engine.', 'success');
+            } else {
+              show('Offer placed on the server order book.', 'info');
+            }
+            goOrderHistory({ orderId: String(lookup.order.id), assetId });
             return;
           }
           if (lookup.status === 'processing') {
-            show('Result not confirmed. Check order before trying again.', 'info');
-            navigation.navigate('CoOwnHub');
+            show('Result not confirmed. Check order history before trying again.', 'info');
+            // Outcome unknown — pass the idempotency key so the history screen
+            // can locate the order once the server finishes processing it.
+            goOrderHistory({ idempotencyKey: idempotencyKeyRef.current!, assetId });
             return;
           }
           // safe_to_retry — no record found, keep the key for safe retry
@@ -274,7 +344,22 @@ export default function TradeConfirmScreen({ navigation, route }: Props) {
           timestamp={`Quote ${secondsRemaining}s · market ${new Date(marketDataTimestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`}
           maxReservedLabel={maxReservedLabel}
           marketWarning={marketWarning}
+          localFiatLabel={`Reference: £${netValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GBP`}
+          localFiatSource="Settlement in 1ZE"
         />
+
+        {/* Remainder behavior — plain-language summary of what happens to
+            unfilled units, so the user knows the outcome before confirming. */}
+        <View style={[styles.remainderCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.remainderHeader, { color: colors.textMuted }]}>
+            {ticketOrderType === 'limit' ? 'Resting order' : 'Immediate order'}
+          </Text>
+          <Text style={[styles.remainderText, { color: colors.textSecondary }]}>
+            {ticketOrderType === 'limit'
+              ? `${isBuy ? 'Buy' : 'Sell'} ${quantity} units at your limit or ${isBuy ? 'lower' : 'higher'}. The order stays open until filled or expired.`
+              : `${isBuy ? 'Buy' : 'Sell'} up to ${quantity} units within your price limit. Any unfilled amount is canceled.`}
+          </Text>
+        </View>
 
         {/* Risk disclosure */}
         <View style={styles.riskWrap}>
@@ -324,6 +409,29 @@ const styles = StyleSheet.create({
   // the receipt to ensure the user reviews it before confirming.
   riskWrap: {
     marginTop: Space.xl,
+  },
+  // ── Remainder card — plain-language fill behavior before confirmation ──
+  // Mirrors the receipt card grammar (hairline border, surface fill) so it
+  // reads as part of the review surface, not a decorative alert.
+  remainderCard: {
+    marginTop: Space.lg,
+    borderRadius: RadiusRoleValue.sheetDialog,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: Space.md,
+    gap: Space.xs,
+  },
+  remainderHeader: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    letterSpacing: TypographyV2.label.letterSpacing,
+    textTransform: 'uppercase',
+  },
+  remainderText: {
+    fontSize: TypographyV2.body.size,
+    lineHeight: TypographyV2.body.lineHeight + 2,
+    fontFamily: TypographyV2.body.fontFamily,
+    letterSpacing: TypographyV2.body.letterSpacing,
   },
   // ── Dock row — calm, professional confirm/cancel actions ──
   // Per spec 11_COOWN: "Buy/sell action is impossible to confuse."

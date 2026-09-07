@@ -41,14 +41,6 @@ const PERMISSIONS: Array<{
   },
 ];
 
-const FALLBACK_SETTINGS: GroupSettings = {
-  editGroupInfo: 'admins',
-  sendMessages: 'everyone',
-  addMembers: 'admins',
-  updatedBy: null,
-  updatedAt: null,
-};
-
 export default function GroupPermissionsScreen({ navigation, route }: Props) {
   const { conversationId } = route.params ?? {};
   const { colors } = useAppTheme();
@@ -56,7 +48,10 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
   const { show } = useToast();
   const haptic = useHaptic();
   const requestSequence = useRef(0);
-  const [settings, setSettings] = useState<GroupSettings>(FALLBACK_SETTINGS);
+  // §37.5 fail-closed: settings start as null and render only from the
+  // server row. No client-side fallback defaults that could contradict
+  // actual group authority.
+  const [settings, setSettings] = useState<GroupSettings | null>(null);
   const [capabilities, setCapabilities] = useState<GroupSettingsCapabilities | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [pendingKey, setPendingKey] = useState<EditablePermission | null>(null);
@@ -87,11 +82,11 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
     key: EditablePermission,
     value: GroupPermissionScope,
   ) => {
-    if (!capabilities?.canManage || pendingKey || settings[key] === value) return;
+    if (!settings || !capabilities?.canManage || pendingKey || settings[key] === value) return;
     const previous = settings;
     haptic.selection();
     setPendingKey(key);
-    setSettings((current) => ({ ...current, [key]: value }));
+    setSettings((current) => current ? { ...current, [key]: value } : null);
     try {
       const confirmed = await updateGroupSettingsOnApi(conversationId, { [key]: value });
       setSettings(confirmed);
@@ -115,7 +110,7 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
     } finally {
       setPendingKey(null);
     }
-  }, [capabilities?.canManage, conversationId, haptic, pendingKey, settings, show]);
+  }, [settings, capabilities?.canManage, conversationId, haptic, pendingKey, show]);
 
   return (
     <FlagshipScreen
@@ -170,7 +165,7 @@ export default function GroupPermissionsScreen({ navigation, route }: Props) {
 
                 <View style={styles.scopeControl} accessibilityRole="radiogroup">
                   {(['everyone', 'admins'] as const).map((scope) => {
-                    const selected = settings[permission.key] === scope;
+                    const selected = settings?.[permission.key] === scope;
                     const disabled = !capabilities?.canManage || pendingKey !== null;
                     return (
                       <Pressable

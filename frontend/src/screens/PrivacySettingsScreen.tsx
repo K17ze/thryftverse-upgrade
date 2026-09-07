@@ -63,7 +63,9 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
 
   const isHydrating = activityStatusVisible === null || searchVisibility === null;
 
-  // Compute privacy posture score — only from hydrated values.
+  // §11 truthfulness: show the raw count of active protections — no
+  // fabricated "Strong/Moderate/Basic" label. The count is factual: it
+  // counts toggles that are currently in the "protected" direction.
   const postureItems = [
     { label: 'Private profile', active: accountPreferences.privateProfile },
     { label: '2FA enabled', active: twoFactorEnabled },
@@ -71,8 +73,6 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
     { label: 'Search hidden', active: searchVisibility === 'hidden' },
   ];
   const activeCount = postureItems.filter((p) => p.active).length;
-  const postureLabel = activeCount >= 3 ? 'Strong' : activeCount >= 2 ? 'Moderate' : activeCount >= 1 ? 'Basic' : 'Open';
-  const postureColor = activeCount >= 3 ? colors.success : activeCount >= 2 ? colors.bronze : colors.textMuted;
 
   const handleOpenExternal = async (url: string) => {
     try {
@@ -142,19 +142,12 @@ export default function PrivacySettingsScreen({ navigation }: Props) {
         <SettingsSection title="Privacy posture">
           <SettingsRow
             icon="checkmark-circle-outline"
-            iconColor={postureColor}
+            iconColor={activeCount > 0 ? colors.success : colors.textMuted}
             title="Privacy posture"
             subtitle={`${activeCount} of ${postureItems.length} protections active`}
             isFirst
             isLast
-          >
-            {/* TODO: replace `${postureColor}18` with postureColorSubtle token when available */}
-            <View style={[styles.postureBadge, { backgroundColor: `${postureColor}18` }]}>
-              <Text style={[styles.postureBadgeText, { color: postureColor }]}>
-                {postureLabel}
-              </Text>
-            </View>
-          </SettingsRow>
+          />
         </SettingsSection>
       )}
 
@@ -284,12 +277,5 @@ function createStyles(colors: ThemeColors) {
     skeletonBar: {
       height: 20,
       borderRadius: Radius.sm,
-      backgroundColor: colors.surfaceAlt },
-    postureBadge: {
-      paddingHorizontal: Space.sm,
-      paddingVertical: Space.xs,
-      borderRadius: Radius.full },
-    postureBadgeText: {
-      fontSize: TypographyV2.meta.size,
-      fontFamily: TypographyV2.meta.fontFamily } });
+      backgroundColor: colors.surfaceAlt } });
 }

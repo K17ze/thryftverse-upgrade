@@ -42,9 +42,10 @@ import {
   FeedExplanationReason,
   SignalSource,
   ConfidenceLabel,
-  ALGORITHM_DEMO_MODE,
+  getAlgorithmDemoMode,
   fetchFeedExplanation,
-  removeTopic } from '../../services/algorithmTransparencyApi';
+  removeTopic,
+  updateTopicWeight } from '../../services/algorithmTransparencyApi';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 export interface FeedExplanationSheetProps {
@@ -127,33 +128,43 @@ export function FeedExplanationSheet({
   }, [visible, itemId]);
 
   // ── Handlers ──
-  const topReasonTopic = useMemo(() => {
+  const topReason = useMemo(() => {
     if (!explanation || explanation.reasons.length === 0) return null;
-    return explanation.reasons[0].topic;
+    return explanation.reasons[0];
   }, [explanation]);
 
+  const topReasonTopic = topReason?.topic ?? null;
+
   const handleSeeMore = useCallback(() => {
-    if (!topReasonTopic) return;
+    if (!topReason) return;
     haptic.light();
-    onSeeMoreLikeThis?.(topReasonTopic);
-  }, [topReasonTopic, haptic, onSeeMoreLikeThis]);
+    // G1: Wire to real API — boost the topic weight.
+    if (topReason.topicId) {
+      void updateTopicWeight(topReason.topicId, 'high');
+    }
+    onSeeMoreLikeThis?.(topReason.topic);
+  }, [topReason, haptic, onSeeMoreLikeThis]);
 
   const handleShowLess = useCallback(() => {
-    if (!topReasonTopic) return;
+    if (!topReason) return;
     haptic.light();
-    onShowLessLikeThis?.(topReasonTopic);
-  }, [topReasonTopic, haptic, onShowLessLikeThis]);
+    // G1: Wire to real API — reduce the topic weight.
+    if (topReason.topicId) {
+      void updateTopicWeight(topReason.topicId, 'low');
+    }
+    onShowLessLikeThis?.(topReason.topic);
+  }, [topReason, haptic, onShowLessLikeThis]);
 
   const handleRemoveTopic = useCallback(async () => {
     if (!topReasonTopic) return;
     haptic.medium();
     setRemovingTopic(topReasonTopic);
     try {
-      // The explanation reasons don't carry a topic ID, so we attempt removal
-      // by matching the label. In demo mode this updates the session profile.
-      // We use a best-effort approach: the service removes by ID, so we pass
-      // a derived identifier. In demo mode the mock handles it gracefully.
-      const ok = await removeTopic(`topic-label-${topReasonTopic}`);
+      // G1: Use the real topicId from the backend explanation, not a
+      // fabricated `topic-label-...` string. Fall back to the label-based
+      // ID only if the backend didn't provide a topicId (demo mode).
+      const topicId = topReason?.topicId ?? `topic-label-${topReasonTopic}`;
+      const ok = await removeTopic(topicId);
       if (ok) {
         onTopicRemoved?.(topReasonTopic);
         onDismiss();
@@ -172,7 +183,7 @@ export function FeedExplanationSheet({
         </Text>
 
         {/* ── Demo mode indicator ── */}
-        {ALGORITHM_DEMO_MODE && (
+        {getAlgorithmDemoMode() && (
           <View style={[styles.demoPill, { backgroundColor: colors.surfaceAlt }]}>
             <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
             <Text style={styles.demoPillText}>Demo mode — illustrative data</Text>

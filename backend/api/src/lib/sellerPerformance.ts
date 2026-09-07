@@ -325,8 +325,59 @@ export async function persistSellerMetrics(
   );
 
   // ── seller_trust upsert (migration 166) ─────────────────────────────────
-  // We only overwrite fields derivable from order/carrier data, preserving
-  // response_rate and positive_rating_pct if they were set by another process.
+  // All four Hub signals are derived here from 90-day facts — no column is
+  // left to seed data or another process:
+  // - response_rate: share of 90d offers the seller acted on, i.e. not left
+  //   pending or expired unanswered.
+  // - positive_rating_pct: share of 90d order reviews at 4-5 stars.
+  // - source_watermark: latest order/review/offer event actually consumed
+  //   (never wall-clock — a NOW() watermark cannot distinguish fresh from
+  //   months-stale). Zero denominators yield null (fail-closed for new
+  //   sellers); missing tables yield null, never a throw.
+  let responseRate: number | null = null;
+  let positiveRatingPct: number | null = null;
+  let watermark: string | null = null;
+  try {
+    const [respResult, ratingResult, wmResult] = await Promise.all([
+      db.query<{ total: string; acted: string }>(
+        `SELECT COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE status NOT IN ('pending', 'expired')) AS acted
+         FROM listing_offers
+         WHERE seller_id = $1 AND created_at >= NOW() - INTERVAL '90 days'`,
+        [sellerId],
+      ),
+      db.query<{ total: string; positive: string }>(
+        `SELECT COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE rating >= 4) AS positive
+         FROM order_reviews
+         WHERE seller_id = $1 AND created_at >= NOW() - INTERVAL '90 days'`,
+        [sellerId],
+      ),
+      db.query<{ watermark: string | null }>(
+        `SELECT GREATEST(
+           (SELECT MAX(paid_at) FROM orders WHERE seller_id = $1 AND paid_at >= NOW() - INTERVAL '90 days'),
+           (SELECT MAX(created_at) FROM order_reviews WHERE seller_id = $1 AND created_at >= NOW() - INTERVAL '90 days'),
+           (SELECT MAX(updated_at) FROM listing_offers WHERE seller_id = $1 AND updated_at >= NOW() - INTERVAL '90 days')
+         ) AS watermark`,
+        [sellerId],
+      ),
+    ]);
+    const offerTotal = parseInt(respResult.rows[0]?.total ?? '0', 10) || 0;
+    const offerActed = parseInt(respResult.rows[0]?.acted ?? '0', 10) || 0;
+    if (offerTotal > 0) {
+      responseRate = Math.round((offerActed / offerTotal) * 10000) / 100;
+    }
+    const reviewTotal = parseInt(ratingResult.rows[0]?.total ?? '0', 10) || 0;
+    const reviewPositive = parseInt(ratingResult.rows[0]?.positive ?? '0', 10) || 0;
+    if (reviewTotal > 0) {
+      positiveRatingPct = Math.round((reviewPositive / reviewTotal) * 10000) / 100;
+    }
+    const wm = wmResult.rows[0]?.watermark;
+    watermark = wm != null && !Number.isNaN(new Date(wm).getTime()) ? wm : null;
+  } catch {
+    // Read-optimised projection only — keep nulls; order-derived fields below
+    // still persist.
+  }
   try {
     const shipWithinDays = metrics.averageShipTimeHours90d > 0
       ? Math.max(1, Math.round(metrics.averageShipTimeHours90d / 24))
@@ -334,14 +385,16 @@ export async function persistSellerMetrics(
 
     await db.query(
       `INSERT INTO seller_trust
-         (user_id, ship_within_days, total_sales, calculated_at, source_watermark)
-       VALUES ($1, $2, $3, NOW(), NOW())
+         (user_id, ship_within_days, total_sales, response_rate, positive_rating_pct, calculated_at, source_watermark)
+       VALUES ($1, $2, $3, $4, $5, NOW(), $6)
        ON CONFLICT (user_id) DO UPDATE SET
-         ship_within_days = EXCLUDED.ship_within_days,
-         total_sales      = EXCLUDED.total_sales,
-         calculated_at    = NOW(),
-         source_watermark = NOW()`,
-      [sellerId, shipWithinDays, metrics.lifetimeOrdersShipped]
+         ship_within_days   = EXCLUDED.ship_within_days,
+         total_sales        = EXCLUDED.total_sales,
+         response_rate      = EXCLUDED.response_rate,
+         positive_rating_pct = EXCLUDED.positive_rating_pct,
+         calculated_at      = NOW(),
+         source_watermark   = EXCLUDED.source_watermark`,
+      [sellerId, shipWithinDays, metrics.lifetimeOrdersShipped, responseRate, positiveRatingPct, watermark]
     );
   } catch (err) {
     // The seller_trust upsert is a read-optimised projection — a failure here

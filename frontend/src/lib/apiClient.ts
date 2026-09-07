@@ -210,13 +210,19 @@ export function getApiBaseUrl() {
     return normalizeConfiguredBaseUrlForPlatform(configured);
   }
 
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction) {
+    throw new Error(
+      'EXPO_PUBLIC_API_BASE_URL is not set. Production builds must define this environment variable — refusing to fall back to localhost.'
+    );
+  }
+
   const developmentHost = getExpoDevelopmentHost();
   if (developmentHost) {
     return `http://${developmentHost}:4000/api/v1`;
   }
 
   if (Platform.OS === 'android') {
-    // Android emulator localhost bridge.
     return 'http://10.0.2.2:4000/api/v1';
   }
 

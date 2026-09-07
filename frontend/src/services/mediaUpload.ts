@@ -1,5 +1,18 @@
+import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { fetchJson } from '../lib/apiClient';
 import { MediaUploadAsset } from '../utils/mediaUploadAsset';
+import {
+  xhrPutFile,
+  isAbortError,
+  createAbortError,
+} from '../platform/media/xhrUploadTransport';
+
+/** Optional cancellation + real byte progress for the PUT transport. */
+export interface MediaUploadOptions {
+  signal?: AbortSignal;
+  onProgress?: (loadedBytes: number, totalBytes: number) => void;
+}
 
 export interface PresignResponse {
   uploadIntentId: string;
@@ -86,19 +99,30 @@ export async function presignUpload(
   fileName: string,
   contentType: string,
   folder = 'uploads',
-  sizeBytes: number
+  sizeBytes: number,
+  signal?: AbortSignal
 ): Promise<PresignResponse> {
   return fetchJson<PresignResponse>('/uploads/presign', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fileName, contentType, folder, sizeBytes }),
+    signal,
   });
 }
 
-/** Maximum retries for 5xx server errors during the presigned PUT. */
+/** Maximum PUT attempts (including the first) before giving up. */
 const UPLOAD_MAX_RETRIES = 3;
 /** Base delay (ms) for exponential backoff between upload retries. */
 const UPLOAD_BASE_BACKOFF_MS = 1000;
+/** Upper bound (ms) for exponential backoff between upload retries. */
+const UPLOAD_MAX_BACKOFF_MS = 30_000;
+
+/** Exponential backoff with +25% jitter, mirroring UploadManager.computeBackoff. */
+function computeBackoff(attempt: number): number {
+  const exp = UPLOAD_BASE_BACKOFF_MS * Math.pow(2, attempt);
+  const capped = Math.min(UPLOAD_MAX_BACKOFF_MS, exp);
+  return Math.round(capped + Math.random() * capped * 0.25);
+}
 
 /** Map an HTTP status code to a human-friendly error string. */
 function httpStatusToMessage(status: number): string {
@@ -115,7 +139,7 @@ function httpStatusToMessage(status: number): string {
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new Error('Upload cancelled'));
+      reject(createAbortError());
       return;
     }
     const timer = setTimeout(() => {
@@ -124,7 +148,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     }, ms);
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new Error('Upload cancelled'));
+      reject(createAbortError());
     };
     signal?.addEventListener('abort', onAbort, { once: true });
   });
@@ -134,41 +158,40 @@ export async function uploadToPresignedUrl(
   presignedUrl: string,
   fileUri: string,
   contentType: string,
-  preparedBlob?: Blob
+  preparedBlob?: Blob,
+  opts?: MediaUploadOptions
 ): Promise<void> {
-  const blob = preparedBlob ?? await fetch(fileUri).then((response) => response.blob());
-
   let lastError: Error | undefined;
-  for (let attempt = 0; attempt <= UPLOAD_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt < UPLOAD_MAX_RETRIES; attempt++) {
     if (attempt > 0) {
-      const delay = Math.min(30_000, UPLOAD_BASE_BACKOFF_MS * Math.pow(2, attempt - 1));
-      await sleep(delay);
+      await sleep(computeBackoff(attempt - 1), opts?.signal);
     }
 
     try {
-      const uploadResponse = await fetch(presignedUrl, {
-        method: 'PUT',
-        body: blob,
-        headers: {
-          'Content-Type': contentType,
-        },
+      await xhrPutFile(presignedUrl, fileUri, contentType, {
+        signal: opts?.signal,
+        onProgress: opts?.onProgress,
+        blob: preparedBlob,
       });
-
-      if (uploadResponse.ok) return;
-
-      // 5xx server errors are retryable; 4xx are deterministic failures.
-      if (uploadResponse.status >= 500 && attempt < UPLOAD_MAX_RETRIES) {
-        lastError = new Error(httpStatusToMessage(uploadResponse.status));
-        continue;
-      }
-      throw new Error(httpStatusToMessage(uploadResponse.status));
+      return;
     } catch (err) {
-      // Network-level failure (fetch threw) — retry if attempts remain.
-      if (err instanceof Error && err.message !== 'Upload cancelled' && attempt < UPLOAD_MAX_RETRIES) {
-        lastError = err;
+      // Cancellation is never retried — rethrow immediately.
+      if (isAbortError(err)) throw err;
+      const status = (err as { status?: number }).status;
+      // 4xx are deterministic failures; only 5xx and network errors retry.
+      if (typeof status === 'number' && status < 500) {
+        throw new Error(httpStatusToMessage(status));
+      }
+      const error = typeof status === 'number'
+        ? new Error(httpStatusToMessage(status))
+        : err instanceof Error
+        ? err
+        : new Error('Upload failed');
+      if (attempt < UPLOAD_MAX_RETRIES) {
+        lastError = error;
         continue;
       }
-      throw err;
+      throw error;
     }
   }
 
@@ -225,7 +248,7 @@ const MEDIA_PROCESSING_POLL_MS = 1_500;
 function waitFor(delayMs: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new Error('Upload cancelled'));
+      reject(createAbortError());
       return;
     }
     const timer = setTimeout(() => {
@@ -234,7 +257,7 @@ function waitFor(delayMs: number, signal?: AbortSignal): Promise<void> {
     }, delayMs);
     const onAbort = () => {
       clearTimeout(timer);
-      reject(new Error('Upload cancelled'));
+      reject(createAbortError());
     };
     signal?.addEventListener('abort', onAbort, { once: true });
   });
@@ -299,7 +322,7 @@ export async function waitForPublishableMedia(
   ]);
 
   while (Date.now() < deadline) {
-    if (signal?.aborted) throw new Error('Upload cancelled');
+    if (signal?.aborted) throw createAbortError();
     const asset = await fetchMediaAsset(assetId, signal);
     if (asset.status === 'published') {
       return asset;
@@ -394,34 +417,76 @@ export async function finalizePresignedMedia(
   };
 }
 
-export async function uploadMedia(fileUri: string, folder?: string): Promise<UploadedMedia>;
-export async function uploadMedia(asset: MediaUploadAsset, folder?: string): Promise<UploadedMedia>;
+/** Performance marks are unavailable on some Hermes runtimes — never throw. */
+const safeMark = (name: string) => {
+  if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+    performance.mark(name);
+  }
+};
+
+/**
+ * Resolve the real byte size without holding the file in JS memory.
+ * Native uploads stream from disk via `send({ uri })`, so only the byte
+ * count is needed for presign; web must read a Blob to send one. The Blob
+ * is returned when one was read so callers can reuse it as the PUT body.
+ */
+async function resolveUploadSize(
+  fileUri: string,
+  knownSizeBytes: number,
+  signal?: AbortSignal
+): Promise<{ sizeBytes: number; blob?: Blob }> {
+  if (Platform.OS === 'web') {
+    const blob = await fetch(fileUri, { signal }).then((response) => response.blob());
+    return { sizeBytes: blob.size || knownSizeBytes, blob };
+  }
+  if (knownSizeBytes > 0) return { sizeBytes: knownSizeBytes };
+  try {
+    const info = await FileSystem.getInfoAsync(fileUri);
+    if (info.exists && typeof info.size === 'number' && info.size > 0) {
+      return { sizeBytes: info.size };
+    }
+  } catch {
+    // getInfoAsync may not support ph:// or content:// URIs.
+  }
+  // An upload of unknown-size garbage is worse than a clean failure — the
+  // caller's retry/error path surfaces this instead of preloading a Blob.
+  throw new Error('Could not determine file size. The file may be inaccessible.');
+}
+
+export function uploadMedia(
+  fileUri: string,
+  folder?: string,
+  opts?: MediaUploadOptions
+): Promise<UploadedMedia>;
+export function uploadMedia(
+  asset: MediaUploadAsset,
+  folder?: string,
+  opts?: MediaUploadOptions
+): Promise<UploadedMedia>;
+
 export async function uploadMedia(
   source: string | MediaUploadAsset,
-  folder = 'uploads'
+  folder = 'uploads',
+  opts?: MediaUploadOptions
 ): Promise<UploadedMedia> {
   // Performance mark: image/media upload start.
-  performance.mark('upload:start');
+  safeMark('upload:start');
 
   let fileUri: string;
   let fileName: string;
   let contentType: string;
-  let preloadedBlob: Blob | undefined;
+  let sizeBytes: number;
+  let preparedBlob: Blob | undefined;
 
   if (typeof source === 'string') {
     fileUri = source;
-    // Fetch the blob early so we can use blob.type for MIME detection.
-    // Extension-based detection is unreliable for ph:// and content://
-    // URIs (e.g. "ph://EB4F8C9C-.../L/0") which often lack extensions.
-    const probedBlob = await fetch(fileUri).then((response) => response.blob());
-    preloadedBlob = probedBlob;
     const ext = fileUri.split('.').pop()?.toLowerCase() ?? 'jpg';
-    // Prefer blob.type when the platform provides a non-empty value;
-    // fall back to extension-based inference otherwise.
+    // Extension-based inference; refined from the actual bytes below when a
+    // Blob is read (web, or the native size-probe last resort). Extension
+    // detection alone is unreliable for ph:// and content:// URIs (e.g.
+    // "ph://EB4F8C9C-.../L/0") which often lack extensions.
     contentType =
-      probedBlob.type && probedBlob.type.length > 0
-        ? probedBlob.type
-        : ext === 'png'
+      ext === 'png'
         ? 'image/png'
         : ext === 'gif'
         ? 'image/gif'
@@ -439,25 +504,32 @@ export async function uploadMedia(
         ? 'audio/webm'
         : 'image/jpeg';
     fileName = `media_${Date.now()}_${Math.floor(Math.random() * 1_000_000).toString(36)}.${ext}`;
+
+    const resolved = await resolveUploadSize(fileUri, 0, opts?.signal);
+    sizeBytes = resolved.sizeBytes;
+    preparedBlob = resolved.blob;
+    if (resolved.blob?.type && resolved.blob.type.length > 0) {
+      contentType = resolved.blob.type;
+    }
   } else {
     fileUri = source.uri;
     fileName = source.fileName;
     contentType = source.mimeType;
+    const resolved = await resolveUploadSize(fileUri, source.fileSize ?? 0, opts?.signal);
+    sizeBytes = resolved.sizeBytes;
+    preparedBlob = resolved.blob;
   }
 
-  const blob: Blob = preloadedBlob !== undefined
-    ? preloadedBlob
-    : await fetch(fileUri).then((response) => response.blob());
-  const presign = await presignUpload(fileName, contentType, folder, blob.size);
-  await uploadToPresignedUrl(presign.url, fileUri, contentType, blob);
+  const presign = await presignUpload(fileName, contentType, folder, sizeBytes, opts?.signal);
+  await uploadToPresignedUrl(presign.url, fileUri, contentType, preparedBlob, opts);
 
   // Finalize with the backend so the object is verified in S3 and recorded
   // durably. If this throws, the caller must surface an honest error — the
   // upload may have landed but the backend cannot vouch for it.
-  const uploaded = await finalizePresignedMedia({ presign, fileName, folder });
+  const uploaded = await finalizePresignedMedia({ presign, fileName, folder, signal: opts?.signal });
 
   // Performance mark: image/media upload complete (finalized + published).
-  performance.mark('upload:complete');
+  safeMark('upload:complete');
 
   return uploaded;
 }

@@ -61,6 +61,7 @@ import { useSignupWall } from '../hooks/useSignupWall';
 import { useToast } from '../context/ToastContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import type { ListingApiItem } from '../services/listingsApi';
 import type { LookApiItem } from '../services/looksApi';
 import type { SellerReviewItem, SellerReviewSummary } from '../services/sellerReviewsApi';
@@ -80,6 +81,7 @@ import { ProfileMoreSheet, ProfileReportSheet, ProfileBlockConfirmSheet } from '
 import { PublicProfileConnectionsSheet } from '../components/profile/PublicProfileConnectionsSheet';
 import { PosterHighlightsRail } from '../components/poster/PosterHighlightsRail';
 import { ShopRail, type ShopRailItem } from '../components/profile/ShopRail';
+import { SharePassportModal } from '../components/profile/SharePassportModal';
 import { fetchPosterHighlights, type PosterHighlight } from '../services/postersApi';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { track } from '../analytics';
@@ -169,6 +171,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   const [shopSegment, setShopSegment] = useState<ShopSegment>('forsale');
   const [connectionsSheet, setConnectionsSheet] = useState<{ visible: boolean; segment: 'followers' | 'following' }>({ visible: false, segment: 'followers' });
   const [moreSheetVisible, setMoreSheetVisible] = useState(false);
+  const [showPassportModal, setShowPassportModal] = useState(false);
   const [reportSheetVisible, setReportSheetVisible] = useState(false);
   const [blockConfirmVisible, setBlockConfirmVisible] = useState(false);
   const [collapsedVisible, setCollapsedVisible] = useState(false);
@@ -444,12 +447,10 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   });
 
   // Handlers
-  const handleShare = useCallback(async () => {
+  const handleShare = useCallback(() => {
     haptic.light();
-    try {
-      await Share.share({ message: `${displayUsername} on Thryftverse - ${profileDeepLink}`, url: Platform.OS === 'ios' ? profileDeepLink : undefined });
-    } catch { /* ignore */ }
-  }, [displayUsername, profileDeepLink, haptic]);
+    setShowPassportModal(true);
+  }, [haptic]);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -549,7 +550,16 @@ export default function UserProfileScreen({ navigation, route }: Props) {
   // Render item
   const renderItem = useCallback(({ item }: { item: ListingApiItem | LookApiItem | SellerReviewItem }): React.ReactElement | null => {
     if (activeTab === 'Listings') {
-      return <ProfileShopTile item={item as ListingApiItem} isSold={shopSegment === 'sold'} onPress={() => navigation.push('ItemDetail', { itemId: (item as ListingApiItem).id })} formatPrice={formatFromFiat} cardWidth={cardWidth} cardHeight={cardHeight} />;
+      return (
+        <ProfileShopTile
+          item={item as ListingApiItem}
+          isSold={shopSegment === 'sold'}
+          onPress={() => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: (item as ListingApiItem).id, sourceSurface: 'UserProfile' })}
+          formatPrice={formatFromFiat}
+          cardWidth={cardWidth}
+          cardHeight={cardHeight}
+        />
+      );
     }
     if (activeTab === 'Looks') {
       return <ProfileLookTile item={item as LookApiItem} onPress={() => navigation.navigate('LookDetail', { lookId: (item as LookApiItem).id })} cardWidth={lookTileWidth} cardHeight={lookTileHeight} gap={LOOK_GAP} />;
@@ -559,7 +569,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
       <ProfileReviewRow
         item={reviewItem}
         onOpenReviewer={(uid) => openProfile(navigation, uid, currentUserId)}
-        onOpenListing={(lid) => navigation.navigate('ItemDetail', { itemId: lid })}
+        onOpenListing={(lid) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: lid, sourceSurface: 'UserProfileReview' })}
         onRespond={targetUserId === currentUserId
           ? (reviewId, reviewerName, rating) => setResponseComposer({ visible: true, reviewId, reviewerName, rating })
           : undefined}
@@ -723,7 +733,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           and matching listings are loaded (ShopRail returns null when empty). */}
       <ShopRail
         items={shopRailItems}
-        onPressItem={(id) => navigation.push('ItemDetail', { itemId: id })}
+        onPressItem={(id) => openProductDetail(navigation, { referenceKind: 'listing', canonicalId: id, sourceSurface: 'UserProfileShopRail' })}
       />
 
       {/* Tab rail - measures Y for sticky threshold */}
@@ -847,8 +857,8 @@ export default function UserProfileScreen({ navigation, route }: Props) {
     if (activeQuery.isLoading) return null;
     if (activeQuery.error) {
       return (
-        <Pressable
-          style={({ pressed }) => [styles.listState, pressed && { opacity: 0.7 }]}
+        <AnimatedPressable
+          style={styles.listState}
           onPress={() => activeQuery.refetch()}
           accessibilityRole="button"
           accessibilityLabel="Retry loading content"
@@ -856,7 +866,7 @@ export default function UserProfileScreen({ navigation, route }: Props) {
           <Ionicons name="cloud-offline-outline" size={32} color={MUTED} />
           <Text style={[styles.listStateTitle, t.listStateTitle]}>Couldn't load {activeTab === 'Listings' ? 'listings' : activeTab === 'Looks' ? 'Looks' : 'reviews'}</Text>
           <Text style={[styles.listStateSub, t.listStateSub]}>Tap to retry</Text>
-        </Pressable>
+        </AnimatedPressable>
       );
     }
     if (listData.length === 0) {
@@ -1160,6 +1170,21 @@ export default function UserProfileScreen({ navigation, route }: Props) {
         onSubmitted={() => showToast('Report submitted', 'success')}
         onError={(message) => showToast(message, 'error')}
       />
+
+      {targetProfile ? (
+        <SharePassportModal
+          visible={showPassportModal}
+          onClose={() => setShowPassportModal(false)}
+          username={targetProfile.username}
+          displayName={targetProfile.displayName || targetProfile.username}
+          avatarUri={displayAvatar}
+          ratingAverage={sellerTrust?.rating ?? null}
+          completedSales={sellerTrust?.completedSales ?? 0}
+          verificationTier={sellerTrust?.verificationTier ?? (sellerTrust?.verified ? 'seller' : null)}
+          memberSince={memberSince}
+          bio={targetProfile.bio ?? null}
+        />
+      ) : null}
     </View>
   );
 }

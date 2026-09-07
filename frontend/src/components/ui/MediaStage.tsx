@@ -422,7 +422,7 @@ function VideoPage({ item, width, height, isActive, onOpenFullscreen }: VideoPag
   const showPoster = !!item.posterUri && !isPlaying;
 
   return (
-    <View style={{ width, height, backgroundColor: colors.surfaceAlt }} accessible accessibilityLabel={item.altText ?? 'Video'}>
+    <View style={{ width, height, backgroundColor: colors.surfaceAlt }} accessibilityLabel={item.altText ?? 'Video'}>
       <VideoView
         player={player}
         style={{ width: '100%', height: '100%' }}

@@ -1,0 +1,25 @@
+{
+  "campaignId": "flagship-coown-market-2026-09",
+  "startDate": "2026-09-06",
+  "branch": "feat/product-detail-contract-media-device-closure",
+  "head": "6fec36c4051ad7f18ad628e7c350336eeda4fca3",
+  "phase": "IMPLEMENTATION-WAVE-2",
+  "surfaces": ["CoOwnHub", "AssetDetail", "Trade", "Portfolio", "Ledger", "IssueReporting", "CoOwnAPI"],
+  "audits": {
+    "analytics": { "agentId": "8603f704", "status": "complete", "findings": "P0: fabricated daily data, hardcoded '0 offers', fake status fallbacks. P1: 2x2 executive grid silhouette, rainbow funnel, radius budget blowout, touch targets <44pt, system font on charts." },
+    "sellerHub": { "agentId": "88882242", "status": "complete", "findings": "P0: fabricated status labels, formatMoney lossy, import errors swallowed. P1: dashboard silhouette not task-queue, equal-weight KPI grid, raw Ionicons, touch targets <44pt, verbose AI copy." },
+    "editProfile": { "agentId": "df5eef15", "status": "complete", "findings": "P0: ARCHIVAL_SPECIALTIES fabricated+not persisted, upload commits before Save, revert doesn't cancel in-flight, fake QR in SharePassportModal. P1: decorative passport chrome, hardcoded colors/sizes, touch targets <44pt, dead route param." },
+    "coOwn": { "agentId": "root", "status": "complete", "findings": "P0: issue report endpoint was a dead TODO; public order projection exposed user IDs; portfolio treated all held units as sellable and marked value as cash-out. P1: discovery omitted executable ask depth; ledger silently fell back to partial local cache online. Closed with authenticated issue persistence/audit, private public history, reservation-aware holdings, bid-depth proceeds, ask depth discovery, online ledger error state, first-viewport bid/ask context, and shared-hook foreground fail-closed revalidation." }
+  },
+  "gates": {
+    "specApproved": true,
+    "implementationStarted": true,
+    "typecheckPass": true,
+    "lintPass": true,
+    "testsPass": true,
+    "visualVerified": false,
+    "adversarialReauditPass": true,
+    "liveEndpointValidated": true,
+    "nativeDeviceValidated": false
+  }
+}

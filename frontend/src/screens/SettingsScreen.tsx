@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Linking, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -25,6 +25,10 @@ import {
   getThemePreferenceLabel,
   ThemePreference,
   updateThemePreference } from '../theme/themePreference';
+import {
+  ACCENT_PRESETS,
+  getAccentPresetLabel,
+  type AccentPreset } from '../theme/accentPreference';
 import { useAppTheme } from '../theme/ThemeContext';
 import { useBiometricGate } from '../hooks/useBiometricGate';
 import { t } from '../i18n';
@@ -37,6 +41,9 @@ import { FlagshipScreen, FlagshipHeader } from '../components/flagship';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { SettingsSignOutRow } from '../components/settings/SettingsSignOutRow';
 import { SettingsListSkeleton } from '../components/skeletons/SettingsListSkeleton';
+import { AnimatedPressable } from '../components/AnimatedPressable';
+import { getWalletSnapshot } from '../services/walletApi';
+import { useFormattedPrice } from '../hooks/useFormattedPrice';
 
 import { Space, FontFamily, Radius } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
@@ -182,8 +189,6 @@ const ROUTE_METADATA: DestinationMeta[] = [
   { key: 'BalanceHistory', label: 'Payout history', searchTerms: 'balance', section: 'Buying & selling' },
   { key: 'Postage', label: 'Shipping preferences', searchTerms: 'postage carrier', section: 'Buying & selling' },
   { key: 'CoOwnPriceAlerts', label: 'Price alerts', searchTerms: 'notifications co-own', section: 'Buying & selling' },
-  { key: 'CoOwnRecurringOrders', label: 'Auto-invest plans', searchTerms: 'recurring orders co-own', section: 'Buying & selling' },
-  { key: 'CoOwnTaxDocuments', label: 'Tax documents', searchTerms: 'statements cgt co-own', section: 'Buying & selling' },
   { key: 'ResolutionCentre', label: 'Resolution Centre', searchTerms: 'dispute resolution', section: 'Buying & selling' },
   // ΓöÇΓöÇ Notifications ΓöÇΓöÇ
   { key: 'PushNotifications', label: 'Notification categories', searchTerms: 'push alerts', section: 'Notifications', showSection: true },
@@ -234,11 +239,32 @@ export default function SettingsScreen({ navigation }: Props) {
 
   const [currencyPickerVisible, setCurrencyPickerVisible] = React.useState(false);
   const [themePickerVisible, setThemePickerVisible] = React.useState(false);
+  const [accentPickerVisible, setAccentPickerVisible] = React.useState(false);
   const [languagePickerVisible, setLanguagePickerVisible] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [pushPermissionGranted, setPushPermissionGranted] = React.useState<boolean | null>(null);
   const [isTogglingPush, setIsTogglingPush] = React.useState(false);
   const [isHydrating, setIsHydrating] = React.useState(!useStore.persist.hasHydrated());
+
+  const { formatFromFiat } = useFormattedPrice();
+  const [walletBalance, setWalletBalance] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (!currentUser?.id) return;
+    let cancelled = false;
+    getWalletSnapshot(currentUser.id)
+      .then((snap) => {
+        if (!cancelled && snap) {
+          setWalletBalance(snap.snapshot?.availableGbp ?? 0);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setWalletBalance(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
 
   // Probe biometric hardware availability so the toggle subtitle is truthful ΓÇö
   // "Not available on this device" when the device has no enrolled biometric,
@@ -272,7 +298,7 @@ export default function SettingsScreen({ navigation }: Props) {
     };
   }, []);
 
-  const { themePreference, setThemePreference } = useAppTheme();
+  const { themePreference, setThemePreference, accentPreset, setAccentPreset } = useAppTheme();
 
   const {
     currencyCode,
@@ -308,6 +334,15 @@ export default function SettingsScreen({ navigation }: Props) {
     [themeOptions, themePreference]
   );
 
+  const accentOptions = React.useMemo(
+    () => ACCENT_PRESETS.map((p) => p.label),
+    [],
+  );
+  const selectedAccentOption = React.useMemo(
+    () => getAccentPresetLabel(accentPreset),
+    [accentPreset],
+  );
+
   const handleCurrencySelect = (option: string) => {
     const selectedCode = option.split(' | ')[0] as SupportedCurrencyCode;
     if (selectedCode !== currencyCode) {
@@ -337,6 +372,14 @@ export default function SettingsScreen({ navigation }: Props) {
     const nextLanguage = option as SupportedLanguageOption;
     if (nextLanguage === selectedLanguage) return;
     setLanguage(nextLanguage);
+  };
+
+  const handleAccentSelect = (option: string) => {
+    const preset = ACCENT_PRESETS.find((p) => p.label === option);
+    if (!preset || preset.id === accentPreset) return;
+    setAccentPickerVisible(false);
+    setAccentPreset(preset.id);
+    show(`Accent changed to ${preset.label}`, 'success');
   };
 
   const handleOpenExternal = React.useCallback(
@@ -496,6 +539,32 @@ export default function SettingsScreen({ navigation }: Props) {
             accessibilityHint={ts('accessibility.editProfileAccountHint')}
             style={{ paddingVertical: Space.sm }}
           />
+
+          {/* ── Thryft Balance Card — Depop flagship benchmark (settings reference.png) ── */}
+          {currentUser ? (
+            <AnimatedPressable
+              style={[styles.balanceCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+              onPress={() => navigation.navigate('Wallet')}
+              activeOpacity={0.88}
+              scaleValue={0.98}
+              hapticFeedback="light"
+              accessibilityRole="button"
+              accessibilityLabel={`Thryft Balance: ${formatFromFiat(walletBalance ?? 0, 'GBP')}. Tap to open wallet.`}
+            >
+              <View style={styles.balanceCardLeft}>
+                <Text style={[styles.balanceCardLabel, { color: colors.textSecondary }]}>Thryft Balance</Text>
+                <Text style={[styles.balanceCardValue, { color: colors.textPrimary }]}>
+                  {formatFromFiat(walletBalance ?? 0, 'GBP')}
+                </Text>
+              </View>
+              <View style={styles.balanceCardRight}>
+                <View style={[styles.walletJumpBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Text style={[styles.walletJumpBtnText, { color: colors.textPrimary }]}>Wallet</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+                </View>
+              </View>
+            </AnimatedPressable>
+          ) : null}
 
           {/* ΓöÇΓöÇ Verification prompt ΓÇö shows when identity/seller verification
               is not yet complete. Email verification alone does not grant
@@ -700,18 +769,6 @@ export default function SettingsScreen({ navigation }: Props) {
               onPress={() => navigation.navigate('CoOwnPriceAlerts')}
             />
             <SettingsRow
-              icon="repeat"
-              title={ts('rows.autoInvestPlans')}
-              subtitle={ts('rows.autoInvestPlansSubtitle')}
-              onPress={() => navigation.navigate('CoOwnRecurringOrders')}
-            />
-            <SettingsRow
-              icon="document"
-              title={ts('rows.taxDocuments')}
-              subtitle={ts('rows.taxDocumentsSubtitle')}
-              onPress={() => navigation.navigate('CoOwnTaxDocuments')}
-            />
-            <SettingsRow
               icon="folder"
               title={ts('rows.resolutionCentre')}
               subtitle={ts('rows.resolutionCentreSubtitle')}
@@ -760,6 +817,12 @@ export default function SettingsScreen({ navigation }: Props) {
               value={getThemePreferenceLabel(themePreference)}
               onPress={() => setThemePickerVisible(true)}
               isFirst
+            />
+            <SettingsRow
+              icon="color-palette-outline"
+              title="Accent colour"
+              value={getAccentPresetLabel(accentPreset)}
+              onPress={() => setAccentPickerVisible(true)}
             />
             <SettingsRow
               icon="repeat"
@@ -955,6 +1018,15 @@ export default function SettingsScreen({ navigation }: Props) {
         selectedValue={selectedThemeOption}
         onSelect={handleThemeSelect}
       />
+
+      <BottomSheetPicker
+        visible={accentPickerVisible}
+        onClose={() => setAccentPickerVisible(false)}
+        title="Accent colour"
+        options={accentOptions}
+        selectedValue={selectedAccentOption}
+        onSelect={handleAccentSelect}
+      />
     </View>
   );
 }
@@ -986,4 +1058,49 @@ const styles = StyleSheet.create({
   healthPillText: {
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing } });
+    letterSpacing: TypographyV2.meta.letterSpacing },
+  // Thryft Balance Card
+  balanceCard: {
+    marginHorizontal: Space.md,
+    marginTop: Space.xs,
+    marginBottom: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm + 4,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  balanceCardLeft: {
+    gap: 2,
+  },
+  balanceCardLabel: {
+    fontSize: TypographyV2.caption.size,
+    fontFamily: TypographyV2.caption.fontFamily,
+    letterSpacing: TypographyV2.caption.letterSpacing,
+  },
+  balanceCardValue: {
+    fontSize: TypographyV2.sectionTitle.size,
+    fontFamily: TypographyV2.sectionTitle.fontFamily,
+    fontVariant: ['tabular-nums'],
+  },
+  balanceCardRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  walletJumpBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Space.sm + 2,
+    paddingVertical: Space.xs + 2,
+    borderRadius: Radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  walletJumpBtnText: {
+    fontSize: TypographyV2.meta.size,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontWeight: '600',
+  },
+});

@@ -58,10 +58,10 @@ export function MoodboardPosterFrame({ moodboardId, width, height }: MoodboardPo
           top: Space.sm,
           left: Space.sm,
           padding: Space.sm,
-          backgroundColor: 'rgba(0,0,0,0.4)',
+          backgroundColor: colors.overlay,
           borderRadius: Radius.sm },
         titleText: {
-          color: '#FFFFFF',
+          color: colors.scrimTextPrimary,
           fontSize: TypographyV2.meta.size,
           lineHeight: TypographyV2.meta.lineHeight,
           fontWeight: TypographyV2.meta.weight as '400' | '500' | '600' | '700',

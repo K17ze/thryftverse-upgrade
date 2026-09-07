@@ -38,7 +38,7 @@ function statusLabel(status: string): string {
 interface OrderHistoryRowProps {
   id: string;
   side: OrderSide;
-  type: 'market' | 'limit';
+  type: 'market' | 'limit' | 'protected';
   assetTitle: string;
   quantity: number;
   filledQuantity?: number;

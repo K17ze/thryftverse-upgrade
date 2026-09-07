@@ -36,7 +36,7 @@ function getAttachmentOptions(colors: ThemeColors): AttachmentOption[] {
     { id: 'file', icon: 'document', label: 'File', color: colors.textSecondary },
     { id: 'location', icon: 'location', label: 'Location', color: colors.warning },
     { id: 'contact', icon: 'person', label: 'Contact', color: colors.brandPressed },
-    { id: 'product', icon: 'bag-handle-outline', label: 'Product', color: colors.danger },
+    { id: 'product', icon: 'pricetag-outline', label: 'Listing', color: colors.danger },
   ];
 }
 

@@ -53,6 +53,7 @@ export function CommerceDetailDisclosureRow({
   return (
     <Pressable
       onPress={handlePress}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       style={({ pressed }) => [
         styles.row,
         { borderTopColor: colors.borderSubtle },
@@ -60,7 +61,6 @@ export function CommerceDetailDisclosureRow({
       ]}
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole="button"
-      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
     >
       <View style={styles.labelCluster}>
         {leadingIcon ? (

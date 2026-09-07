@@ -77,12 +77,6 @@ export function SmartSellCard({
 
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Preview contexts (e.g. the AI listing composer) pass listing context
-  // without a policy — nothing to render until a listing exists.
-  if (!policy || !onPolicyChange || !listingId) return null;
-
-  const isPreview = policy.capability.kind === 'preview';
-
   const handleToggle = useCallback(
     (next: boolean) => {
       haptic.light();
@@ -112,9 +106,10 @@ export function SmartSellCard({
     [listingId, onPolicyChange],
   );
 
-  // Summary text for the compact row
+  // Summary text for the compact row — computed before the early return so
+  // hook order is stable across renders.
   const summary = useMemo(() => {
-    if (!policy.enabled) return 'Auto-accept offers above your threshold';
+    if (!policy || !policy.enabled) return 'Auto-accept offers above your threshold';
     if (policy.minimumNet > 0) {
       return `Min payout ${currencySymbol}${policy.minimumNet.toFixed(2)}`;
     }
@@ -122,7 +117,13 @@ export function SmartSellCard({
       return `Auto-accept above ${currencySymbol}${policy.acceptGrossThreshold.toFixed(2)}`;
     }
     return 'Configure thresholds';
-  }, [policy.enabled, policy.minimumNet, policy.acceptGrossThreshold, currencySymbol]);
+  }, [policy, currencySymbol]);
+
+  // Preview contexts (e.g. the AI listing composer) pass listing context
+  // without a policy — nothing to render until a listing exists.
+  if (!policy || !onPolicyChange || !listingId) return null;
+
+  const isPreview = policy.capability.kind === 'preview';
 
   return (
     <>

@@ -101,10 +101,10 @@ export function OfferToLikersSheet({
     return askingPrice * (1 - selectedDiscount / 100);
   }, [useCustomPrice, customPrice, askingPrice, selectedDiscount]);
 
-  const formattedOfferPrice = formatFromFiat(computedOfferPrice, currencyCode);
-  const formattedAskingPrice = formatFromFiat(askingPrice, currencyCode);
+  const formattedOfferPrice = formatFromFiat(computedOfferPrice, 'GBP');
+  const formattedAskingPrice = formatFromFiat(askingPrice, 'GBP');
   const savingsAmount = askingPrice - computedOfferPrice;
-  const formattedSavings = formatFromFiat(savingsAmount, currencyCode);
+  const formattedSavings = formatFromFiat(savingsAmount, 'GBP');
 
   const likerCount = listing?.likes ?? 0;
 

@@ -62,7 +62,7 @@ export const SCREEN_ROLE_MATRIX: ScreenRoleEntry[] = [
   { screen: 'HomeScreen', role: 'mediaLed', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
   { screen: 'BrowseScreen', role: 'mediaLed', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
   { screen: 'CategoryDetailScreen', role: 'mediaLed', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
-  { screen: 'GlobalSearchScreen', role: 'mediaLed', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
+  { screen: 'UnifiedDiscoveryScreen', role: 'mediaLed', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
   { screen: 'GalleriaScreen', role: 'mediaLed', layoutFamily: 'mediaLed', maxDominantPanelsAboveFold: 0, hasStickyActionDock: false, mediaMeetsEdges: true, tabularFigures: false },
 
   // ── Product detail (mediaLed + evidence) ──
@@ -86,7 +86,6 @@ export const SCREEN_ROLE_MATRIX: ScreenRoleEntry[] = [
   { screen: 'OrderReceiptScreen', role: 'evidence', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'OrderDetailScreen', role: 'evidence', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'AssetDueDiligenceScreen', role: 'evidence', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
-  { screen: 'CoOwnTaxDocumentsScreen', role: 'evidence', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
   { screen: 'PortfolioScreen', role: 'evidence', layoutFamily: 'denseUtilityList', maxDominantPanelsAboveFold: 1, hasStickyActionDock: false, mediaMeetsEdges: false, tabularFigures: true },
 
   // ── Live market ──

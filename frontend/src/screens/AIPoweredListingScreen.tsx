@@ -16,7 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { NativeStackScreenProps, RootStackParamList } from '../navigation/types';
 import { useAppTheme, type ThemeColors } from '../theme/ThemeContext';
-import { Space, Radius, TypeStyles, Stroke, Control, LetterSpacing } from '../theme/designTokens';
+import { Space, Radius, TypeStyles, Stroke, Control, LetterSpacing, FontFamily } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
 import { AppButton } from '../components/ui/AppButton';
@@ -36,7 +36,6 @@ import {
 import { MediaUploadQueue } from '../services/mediaUploadQueue';
 import { consumeEnhancementResult } from '../services/enhancementResultHandoff';
 import { SmartSellCard } from '../components/sell/SmartSellCard';
-import { ListingQualityMeter } from '../components/sell/ListingQualityMeter';
 import { ListingPreviewCard } from '../components/sell/ListingPreviewCard';
 import { SustainabilityTags } from '../components/sell/SustainabilityTags';
 import {
@@ -45,9 +44,6 @@ import {
 import {
   type FieldSuggestion,
   type ListingField } from '../services/aiListingApi';
-import {
-  scoreListing,
-  type ListingQualityScore } from '../services/listingQualityApi';
 import { useTaxonomy } from '../context/TaxonomyContext';
 import { useFormattedPrice } from '../hooks/useFormattedPrice';
 import { useAppTranslation } from '../i18n/useAppTranslation';
@@ -426,22 +422,6 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
     }
   }, [currentUser, isOffline, photos, title, price, description, category, brand, condition, materialComposition, weightKg, navigation, smartSellPolicy, showInfo, t]);
 
-  // -- Listing quality score (heuristic, updates live as the form fills) -----
-  const qualityScore: ListingQualityScore = useMemo(() => {
-    const numericPrice = Number(sanitizeDecimalInput(price)) || 0;
-    return scoreListing({
-      images: photoUris,
-      title,
-      description,
-      price: numericPrice,
-      category: category || undefined,
-      condition: (condition || undefined) as
-        | import('../services/listingsApi').ListingCondition
-        | undefined,
-      brand: brand || undefined,
-      shippingMethod: 'standard' });
-  }, [photoUris, title, description, price, category, condition, brand]);
-
   const numericPriceForPreview = Number(sanitizeDecimalInput(price)) || 0;
   const previewCoverUri = photoUris[0] ?? null;
   const sellerName = currentUser?.username ?? currentUser?.handle ?? null;
@@ -800,14 +780,6 @@ export default function AIPoweredListingScreen({ navigation }: Props) {
                 sellerName={sellerName}
                 sellerAvatar={sellerAvatar}
               />
-
-              {/* Listing quality meter */}
-              <View style={styles.sectionLabelWrap}>
-                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                  {t('preview.completeness')}
-                </Text>
-              </View>
-              <ListingQualityMeter score={qualityScore} />
             </View>
           )}
         </ScrollView>
@@ -1267,7 +1239,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.sm },
     coverBadgeText: {
       fontSize: TypographyV2.meta.size,
-      fontWeight: '700',
+      fontFamily: FontFamily.bold,
       letterSpacing: LetterSpacing.wide + 0.18 },
     photoRemoveBtn: {
       position: 'absolute',
@@ -1289,7 +1261,7 @@ function createStyles(colors: ThemeColors) {
       borderRadius: Radius.sm },
     photoEnhanceText: {
       fontSize: TypographyV2.meta.size,
-      fontWeight: '700',
+      fontFamily: FontFamily.bold,
       letterSpacing: LetterSpacing.wide + 0.08 },
     captureRow: {
       flexDirection: 'row',
@@ -1306,13 +1278,11 @@ function createStyles(colors: ThemeColors) {
       minHeight: Control.hit },
     captureBtnText: {
       fontSize: TypographyV2.body.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     // Form fields
     fieldLabel: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      fontWeight: '500',
+      fontFamily: FontFamily.medium,
       marginBottom: Space.xs,
       marginTop: Space.md },
     fieldInput: {
@@ -1394,8 +1364,7 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.standard },
     suggestionAcceptText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     // Smart Sell
     smartSellWrap: {
       marginTop: Space.md,
@@ -1416,8 +1385,7 @@ function createStyles(colors: ThemeColors) {
       borderWidth: Stroke.hairline },
     tagText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     tagInputWrap: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1437,8 +1405,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.xs },
     sectionLabel: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.body.fontFamily,
-      fontWeight: '600',
+      fontFamily: FontFamily.semibold,
       letterSpacing: LetterSpacing.wide + 0.28,
       textTransform: 'uppercase' },
     // Skeleton
@@ -1460,8 +1427,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: Space.md },
     emptyTitle: {
       fontSize: TypographyV2.sectionTitle.size,
-      fontFamily: TypeStyles.title.fontFamily,
-      fontWeight: '700',
+      fontFamily: FontFamily.bold,
       marginBottom: Space.xs },
     emptyDesc: {
       fontSize: TypographyV2.body.size,
@@ -1492,8 +1458,7 @@ function createStyles(colors: ThemeColors) {
       marginTop: Space.xs },
     errorRetryText: {
       fontSize: TypographyV2.meta.size,
-      fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-      fontWeight: '600' },
+      fontFamily: FontFamily.semibold },
     // Footer
     footer: {
       borderTopWidth: StyleSheet.hairlineWidth,
@@ -1522,8 +1487,7 @@ const pickerStyles = StyleSheet.create({
     marginBottom: Space.sm },
   title: {
     fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: TypeStyles.bodyEmphasis.fontFamily,
-    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     marginBottom: Space.sm },
   row: {
     flexDirection: 'row',

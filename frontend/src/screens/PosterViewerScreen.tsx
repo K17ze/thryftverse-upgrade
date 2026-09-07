@@ -20,6 +20,7 @@ import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-ha
 import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
+import { openProductDetail } from '../platform/product/openProductDetail';
 import {
   fetchPosterStories,
   fetchPosterStoryById,
@@ -119,7 +120,7 @@ export default function PosterViewerScreen() {
   // ── Sticker interaction state ────────────────────────────────────────
   // Tracks the currently active interactive sticker (poll, quiz, question,
   // style_vote) and cached vote/answer results so the user sees feedback
-  // after interacting. Follows Instagram's tap-sticker-to-interact pattern.
+  // after interacting. Tap sticker to interact.
   const [activeInteractionSticker, setActiveInteractionSticker] = React.useState<ApiPosterSticker | null>(null);
   // Ref mirror of activeInteractionSticker.id so vote/answer closures always
   // read the current value instead of a stale render-time capture.
@@ -391,7 +392,7 @@ export default function PosterViewerScreen() {
   }, [activeStory?.id]);
 
   // Preload the next frame's media and the first frame of the next story
-  // to eliminate blank-spinner gaps during navigation (Snapchat/Instagram
+  // to eliminate blank-spinner gaps during navigation (reference apps
   // three-layer preloading pattern).
   React.useEffect(() => {
     if (!activeStory) return;
@@ -885,7 +886,7 @@ export default function PosterViewerScreen() {
           end={{ x: 0.7, y: 1 }}
           style={styles.mediaFull}
         >
-          {/* Subtle vignette for depth — Instagram Create-mode pattern */}
+          {/* Subtle vignette for depth — Create-mode pattern */}
           <LinearGradient
             colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.18)']}
             style={styles.textFrameVignette}
@@ -952,7 +953,7 @@ export default function PosterViewerScreen() {
         </View>
       )}
 
-      {/* Double-tap heart burst — Instagram core gesture.
+      {/* Double-tap heart burst — Core gesture.
           Shows a floating heart at the tap location that scales up and fades. */}
       {heartBurst && (
         <HeartBurst key={heartBurst.id} x={heartBurst.x} y={heartBurst.y} reducedMotion={reducedMotion} />
@@ -1174,19 +1175,16 @@ export default function PosterViewerScreen() {
                     top: tag.y * SCREEN_HEIGHT },
                 ]}
               >
-                <Pressable
+                <AnimatedPressable
                   hitSlop={12}
                   accessibilityLabel={tag.label}
                   accessibilityRole="button"
                   accessibilityHint="View tagged product"
                   onPress={() => handleTagPress(tag, activeStory, navigation, haptic, show, analyticsEvent)}
-                  style={({ pressed }) => [
-                    styles.tagDot,
-                    pressed && styles.tagDotPressed,
-                  ]}
+                  style={styles.tagDot}
                 >
                   <View style={[styles.tagDotInner, { backgroundColor: colors.brand }]} />
-                </Pressable>
+                </AnimatedPressable>
                 <View style={styles.tagLabelWrap}>
                   <Text style={styles.tagLabelText} numberOfLines={1}>
                     {tag.label}
@@ -1341,8 +1339,7 @@ function handleTagPress(
     ownerId: activeStory.creatorId,
   });
   if (tag.listingId) {
-    (navigation as unknown as { navigate: (route: string, params: Record<string, unknown>) => void })
-      .navigate('ItemDetail', { itemId: tag.listingId });
+    openProductDetail(navigation, { referenceKind: 'listing', canonicalId: tag.listingId, sourceSurface: 'PosterViewer' });
   } else {
     show('This product is no longer available', 'info');
   }
@@ -1429,7 +1426,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors'], screenWi
     right: 0,
     flexDirection: 'row',
     zIndex: 5 },
-  // Instagram-style tap zones: left third for previous frame,
+  // Tap zones: left third for previous frame,
   // right two-thirds for next frame. The "next" action is the primary
   // intent (users advance forward far more often than they go back),
   // so it gets the larger hit area.

@@ -1,12 +1,16 @@
 import React, { ErrorInfo, ReactNode } from 'react';
-import { View, Text, StyleSheet, Linking, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Linking } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ExpoLinking from 'expo-linking';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { trackTelemetryEvent } from '../../lib/telemetry';
 import { Sentry, isSentryAvailable } from './sentry';
 import { resetNavigationToHome, getAppNavigationRef } from './appNavigation';
-import { Space, Radius } from '../../theme/designTokens';
+import { AnimatedPressable } from '../../components/AnimatedPressable';
+import { Typography, Radius, Space } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface AppErrorBoundaryProps {
   children: ReactNode;
@@ -117,11 +121,25 @@ class AppErrorBoundaryInner extends React.Component<AppErrorBoundaryProps, AppEr
     reloadApp();
   };
 
+  handleReportFeedback = () => {
+    if (!isSentryAvailable()) return;
+    try {
+      // Sentry's React Native SDK exposes a user feedback form via
+      // captureMessage with a dedicated level; this is best-effort.
+      Sentry.captureMessage?.('User feedback from crash recovery screen', {
+        level: 'info',
+        tags: { source: 'crash_recovery_feedback' } });
+    } catch {
+      // Observability must never crash the app.
+    }
+  };
+
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) {
         return <>{this.props.fallback}</>;
       }
+      const styles = createStyles(this.props.colors);
       return (
         <CrashRecoveryUI
           key={`recovery_${this.state.recoveryAttempt}`}
@@ -129,7 +147,10 @@ class AppErrorBoundaryInner extends React.Component<AppErrorBoundaryProps, AppEr
           onRetry={this.handleRetry}
           onGoHome={this.handleGoHome}
           onReload={this.handleReload}
+          onReportFeedback={this.handleReportFeedback}
+          canReportFeedback={isSentryAvailable()}
           colors={this.props.colors}
+          styles={styles}
         />
       );
     }
@@ -142,7 +163,10 @@ interface CrashRecoveryUIProps {
   onRetry: () => void;
   onGoHome: () => void;
   onReload: () => void;
+  onReportFeedback: () => void;
+  canReportFeedback: boolean;
   colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
 }
 
 function CrashRecoveryUI({
@@ -150,64 +174,107 @@ function CrashRecoveryUI({
   onRetry,
   onGoHome,
   onReload,
+  onReportFeedback,
+  canReportFeedback,
   colors,
-}: CrashRecoveryUIProps) {
-  return (
-    <View style={styles(colors).container}>
-      <View style={styles(colors).content}>
-        <Text style={styles(colors).title}>
-          The app needs to restart
-        </Text>
+  styles }: CrashRecoveryUIProps) {
+  const reducedMotionEnabled = useReducedMotion();
+  const enter = reducedMotionEnabled ? undefined : FadeIn.duration(300);
 
-        <Text style={styles(colors).subtitle}>
-          Reload to continue, or go back to home.
-        </Text>
+  return (
+    <View style={styles.container}>
+      <Reanimated.View entering={enter} style={styles.content}>
+        {/* App wordmark */}
+        <Reanimated.View entering={enter} style={styles.logoWrap}>
+          <Text style={styles.logoText}>Thryftverse</Text>
+        </Reanimated.View>
+
+        {/* Warning icon */}
+        <Reanimated.View entering={enter} style={styles.iconBox}>
+          <Ionicons name="warning-outline" size={56} color={colors.danger} />
+        </Reanimated.View>
+
+        <Reanimated.Text entering={enter} style={styles.title}>
+          The app couldn't continue
+        </Reanimated.Text>
+
+        <Reanimated.Text entering={enter} style={styles.subtext}>
+          Try again, go home, or reload the app.
+        </Reanimated.Text>
 
         {__DEV__ && message ? (
-          <Text style={styles(colors).devMessage} numberOfLines={4}>
+          <Reanimated.Text entering={enter} style={styles.devMessage} numberOfLines={4}>
             {message}
-          </Text>
+          </Reanimated.Text>
         ) : null}
 
-        <Pressable
-          style={({ pressed }) => [
-            styles(colors).primaryBtn,
-            { backgroundColor: colors.brand, opacity: pressed ? 0.86 : 1 },
-          ]}
-          onPress={onReload}
-          accessibilityRole="button"
-          accessibilityLabel="Reload app"
-          accessibilityHint="Reloads the app to recover"
-        >
-          <Text style={styles(colors).primaryBtnText}>Reload</Text>
-        </Pressable>
+        {/* Primary action: Reload app */}
+        <Reanimated.View entering={enter}>
+          <AnimatedPressable
+            style={styles.primaryBtn}
+            onPress={onReload}
+            accessibilityRole="button"
+            accessibilityLabel="Reload app"
+            accessibilityHint="Reloads the entire app to recover from the crash"
+            activeOpacity={0.85}
+            scaleValue={0.97}
+            autoHaptic
+          >
+            <Ionicons name="refresh-outline" size={20} color={colors.background} style={styles.btnIcon} />
+            <Text style={styles.primaryBtnText}>Reload app</Text>
+          </AnimatedPressable>
+        </Reanimated.View>
 
-        <Pressable
-          style={({ pressed }) => [
-            styles(colors).secondaryBtn,
-            { opacity: pressed ? 0.7 : 1 },
-          ]}
-          onPress={onGoHome}
-          accessibilityRole="button"
-          accessibilityLabel="Go to home"
-          accessibilityHint="Resets to the home screen"
-        >
-          <Text style={styles(colors).secondaryBtnText}>Go to home</Text>
-        </Pressable>
+        {/* Secondary action: Go to home */}
+        <Reanimated.View entering={enter}>
+          <AnimatedPressable
+            style={styles.secondaryBtn}
+            onPress={onGoHome}
+            accessibilityRole="button"
+            accessibilityLabel="Go to home"
+            accessibilityHint="Resets navigation to the home screen"
+            activeOpacity={0.85}
+            scaleValue={0.97}
+            autoHaptic
+          >
+            <Ionicons name="home-outline" size={20} color={colors.textPrimary} style={styles.btnIcon} />
+            <Text style={styles.secondaryBtnText}>Go to home</Text>
+          </AnimatedPressable>
+        </Reanimated.View>
 
-        <Pressable
-          style={({ pressed }) => [
-            styles(colors).tertiaryBtn,
-            { opacity: pressed ? 0.7 : 1 },
-          ]}
-          onPress={onRetry}
-          accessibilityRole="button"
-          accessibilityLabel="Try again"
-          accessibilityHint="Attempts to re-render the current screen"
-        >
-          <Text style={styles(colors).tertiaryBtnText}>Try again</Text>
-        </Pressable>
-      </View>
+        {/* Tertiary action: Try again (re-render same screen) */}
+        <Reanimated.View entering={enter}>
+          <AnimatedPressable
+            style={styles.tertiaryBtn}
+            onPress={onRetry}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            accessibilityHint="Attempts to re-render the current screen"
+            activeOpacity={0.85}
+            scaleValue={0.97}
+            autoHaptic
+          >
+            <Text style={styles.tertiaryBtnText}>Try again</Text>
+          </AnimatedPressable>
+        </Reanimated.View>
+
+        {/* Optional: Report feedback */}
+        {canReportFeedback ? (
+          <Reanimated.View entering={enter}>
+            <AnimatedPressable
+              style={styles.feedbackBtn}
+              onPress={onReportFeedback}
+              accessibilityRole="button"
+              accessibilityLabel="Report feedback"
+              accessibilityHint="Sends a feedback note to the development team"
+              activeOpacity={0.85}
+              scaleValue={0.97}
+            >
+              <Text style={styles.feedbackBtnText}>Report feedback</Text>
+            </AnimatedPressable>
+          </Reanimated.View>
+        ) : null}
+      </Reanimated.View>
     </View>
   );
 }
@@ -221,83 +288,103 @@ export function AppErrorBoundary({ children, fallback }: Omit<AppErrorBoundaryPr
   );
 }
 
-function styles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: Space.xl,
-    },
+      paddingHorizontal: Space.xl },
     content: {
       alignItems: 'center',
       width: '100%',
-      maxWidth: 320,
-    },
+      maxWidth: 360 },
+    logoWrap: {
+      marginBottom: Space.xl },
+    logoText: {
+      color: colors.textPrimary,
+      fontFamily: Typography.family.bold,
+      fontSize: TypographyV2.display.size,
+      letterSpacing: -0.4,
+      textAlign: 'center' },
+    iconBox: {
+      width: 96,
+      height: 96,
+      borderRadius: Radius.full,
+      backgroundColor: colors.dangerSubtle,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: Space.lg,
+      overflow: 'hidden' },
     title: {
       fontSize: TypographyV2.screenTitle.size,
       fontFamily: TypographyV2.screenTitle.fontFamily,
       color: colors.textPrimary,
-      textAlign: 'center',
-      marginBottom: Space.sm,
-    },
-    subtitle: {
-      fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
+      marginBottom: 12,
+      textAlign: 'center' },
+    subtext: {
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily,
       color: colors.textSecondary,
       textAlign: 'center',
       marginBottom: Space.xl,
-      lineHeight: TypographyV2.body.lineHeight,
-    },
+      lineHeight: 21 },
     devMessage: {
       fontSize: TypographyV2.meta.size,
       fontFamily: TypographyV2.meta.fontFamily,
       color: colors.danger,
       textAlign: 'center',
       marginBottom: Space.lg,
-      lineHeight: TypographyV2.meta.lineHeight,
-      opacity: 0.8,
-    },
+      lineHeight: 18,
+      opacity: 0.8 },
     primaryBtn: {
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.brand,
+      backgroundColor: colors.textPrimary,
       paddingVertical: Space.md,
-      borderRadius: Radius.full,
+      borderRadius: Radius.xl,
       width: '100%',
-      minHeight: 52,
-      marginBottom: Space.sm,
-    },
+      marginBottom: 12 },
     primaryBtnText: {
-      color: colors.textInverse,
-      fontSize: TypographyV2.bodyStrong.size,
-      fontFamily: TypographyV2.bodyStrong.fontFamily,
-    },
+      color: colors.background,
+      fontSize: TypographyV2.body.size,
+      fontFamily: TypographyV2.body.fontFamily },
     secondaryBtn: {
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: Space.sm,
+      backgroundColor: colors.surface,
+      paddingVertical: Space.md,
+      borderRadius: Radius.xl,
       width: '100%',
-      minHeight: 44,
-      marginBottom: Space.xs,
-    },
+      marginBottom: 12 },
     secondaryBtnText: {
       color: colors.textPrimary,
       fontSize: TypographyV2.body.size,
-      fontFamily: TypographyV2.body.fontFamily,
-    },
+      fontFamily: TypographyV2.body.fontFamily },
     tertiaryBtn: {
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: Space.sm,
+      paddingVertical: 14,
+      borderRadius: Radius.xl,
       width: '100%',
-      minHeight: 44,
-    },
+      marginBottom: 12 },
     tertiaryBtnText: {
+      color: colors.textSecondary,
+      fontSize: TypographyV2.bodyStrong.size,
+      fontFamily: TypographyV2.bodyStrong.fontFamily },
+    feedbackBtn: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      marginTop: Space.sm },
+    feedbackBtnText: {
       color: colors.textSecondary,
       fontSize: TypographyV2.body.size,
       fontFamily: TypographyV2.body.fontFamily,
-    },
-  });
+      textDecorationLine: 'underline' },
+    btnIcon: {
+      marginRight: Space.sm } });
 }

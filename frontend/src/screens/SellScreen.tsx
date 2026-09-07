@@ -1,15 +1,15 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
-  Pressable,
   Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { useAppTheme } from '../theme/ThemeContext';
+import { AnimatedPressable } from '../components/AnimatedPressable';
 import { Space, Radius, FontFamily, DockConstants, Stroke, Control } from '../theme/designTokens';
 import { TypographyV2 } from '../theme/typography.v2';
 import { RadiusRoleValue } from '../theme/surfaceRadiusRules';
@@ -23,11 +23,11 @@ import { useA11yAudit } from '../hooks/useA11yAudit';
 import { DebouncedTextInput } from '../components/ui/DebouncedTextInput';
 import { sanitizeDecimalInput, calculatePlatformChargeGbp } from '../utils/currencyAuthoringFlows';
 import {
-  buildContextualPhotoPrompts,
   formatShippingSummary,
   formatReviewSummary } from '../utils/sellScreenLogic';
 import { haptics } from '../utils/haptics';
 import { ListingMediaStudio } from '../components/listing/ListingMediaStudio';
+import { ListingCameraSheet } from '../components/listing/ListingCameraSheet';
 import { EmptyState } from '../components/EmptyState';
 import { ListingModeSelector } from '../components/listing/ListingModeSelector';
 import { ListingPublishFooter } from '../components/listing/ListingPublishFooter';
@@ -39,7 +39,7 @@ import ShippingPickerSheet from '../components/sell/ShippingPickerSheet';
 import TagInputWithSuggestions from '../components/sell/TagInputWithSuggestions';
 
 export default function SellScreen() {
-  const a11yRef = useRef<any>(null);
+  const a11yRef = useRef<View>(null);
   useA11yAudit(a11yRef, 'SellScreen');
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
@@ -66,6 +66,7 @@ export default function SellScreen() {
     setters,
     photos,
     mediaDraftItems,
+    setMediaDraftItems,
     queueState,
     errors,
     setErrors,
@@ -75,8 +76,6 @@ export default function SellScreen() {
     autofillSuggestion,
     autofillDismissed,
     setAutofillDismissed,
-    photoGuideCollapsed,
-    setPhotoGuideCollapsed,
     draftSavedVisible,
     currency,
     currencySymbol,
@@ -126,10 +125,13 @@ export default function SellScreen() {
     handleApplyAutofill,
     handlePickFromLibrary,
     handlePickFromCamera,
+    handleCameraCapture,
+    cameraSheetVisible,
+    setCameraSheetVisible,
     removeItem,
     handleRetryItem,
     handleReorderIds,
-    handleSetCover,
+    handleTransformItem,
     handlePriceChange,
     handleShareCountChange,
     getPickerOptions,
@@ -141,6 +143,21 @@ export default function SellScreen() {
     handlePublish,
     publishDisabled,
   } = actions;
+
+  // Focal-point storage: the actions hook's transform handler is two-arg,
+  // so the screen captures the third argument here and stores it on the
+  // draft item. Same-URI calls (focal-only) keep upload state intact.
+  const handleTransformItemWithFocal = useCallback(
+    (itemId: string, transformedUri: string, focalPoint?: { x: number; y: number }) => {
+      handleTransformItem(itemId, transformedUri);
+      if (focalPoint) {
+        setMediaDraftItems((prev) =>
+          prev.map((m) => (m.id === itemId ? { ...m, focalPoint } : m))
+        );
+      }
+    },
+    [handleTransformItem, setMediaDraftItems]
+  );
 
   // Theme-aware color overrides for the static styles. The static
   // StyleSheet contains only non-color properties; colors are applied
@@ -261,82 +278,10 @@ export default function SellScreen() {
               onReorder={handleReorderIds}
               onRemoveItem={removeItem}
               onRetryItem={handleRetryItem}
-              onSetCover={handleSetCover}
+              onTransformItem={handleTransformItemWithFocal}
             />
           )}
 
-          {/* -- 2a. CONTEXTUAL PHOTO ASSISTANT (consolidated) -- */}
-          {/* One system, not three. Shows only the most relevant guidance
-              for the current media state: an expandable tips affordance
-              before any photos, a count nudge + contextual prompts once
-              photos exist. No redundant labels or stacked hint rows. */}
-          {(() => {
-            const count = mediaDraftItems.length;
-            const prompts = buildContextualPhotoPrompts(brand, condition, count, category);
-            const needsMore = count > 0 && count < 3;
-
-            if (count === 0) {
-              // EmptyState dominates; tips remain accessible via a single
-              // subtle expandable affordance — no stacked hint rows.
-              return (
-                <Pressable
-                  style={({ pressed }) => [styles.photoAssistantToggle, pressed && { opacity: 0.85 }]}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  onPress={() => setPhotoGuideCollapsed((v) => !v)}
-                  accessibilityRole="button"
-                  accessibilityLabel={photoGuideCollapsed ? 'Expand photo tips' : 'Collapse photo tips'}
-                  accessibilityHint="Tips for taking great listing photos"
-                >
-                  <AppIcon name="camera" size={IconSize.sm} color="textSecondary" opticalCenter accessible={false} />
-                  <Text style={[styles.photoAssistantToggleText, { color: colors.textSecondary }]}>
-                    {t('listing.create.photoTips')}
-                  </Text>
-                  <AppIcon name={photoGuideCollapsed ? 'chevronDown' : 'chevronUp'} size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
-                </Pressable>
-              );
-            }
-
-            if (prompts.length === 0 && !needsMore) return null;
-
-            return (
-              <View style={styles.contextualPrompts}>
-                {needsMore && (
-                  <View style={styles.contextualPromptRow}>
-                    <AppIcon name="camera" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
-                    <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
-                      {t('listing.create.addMorePhotos', { count: 3 - count, plural: 3 - count > 1 ? 's' : '' })}
-                    </Text>
-                  </View>
-                )}
-                {prompts.map((prompt, i) => (
-                  <View key={i} style={styles.contextualPromptRow}>
-                    <AppIcon name={prompt.icon as any} size={IconSize.sm} color="brand" opticalCenter accessible={false} />
-                    <Text style={[styles.contextualPromptText, { color: colors.textSecondary }]}>
-                      {prompt.text}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            );
-          })()}
-
-          {/* Photo tips detail — expandable, only before the first photo */}
-          {mediaDraftItems.length === 0 && !photoGuideCollapsed && (
-            <View style={styles.photoAssistantTips}>
-              <View style={styles.contextualPromptRow}>
-                <AppIcon name="bulb-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
-                <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipLighting')}</Text>
-              </View>
-              <View style={styles.contextualPromptRow}>
-                <AppIcon name="camera" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
-                <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipAngles')}</Text>
-              </View>
-              <View style={styles.contextualPromptRow}>
-                <AppIcon name="image-outline" size={IconSize.micro} color="textMuted" opticalCenter accessible={false} />
-                <Text style={[styles.photoAssistantTip, { color: colors.textMuted }]}>{t('listing.create.photoTipBackground')}</Text>
-              </View>
-            </View>
-          )}
           {/* -- 2b. QUICK ACTIONS ROW -- */}
           {/* Per research: quick actions for related seller tasks.
               Transparent 44pt targets with 20-24pt glyphs (AGENTS.md §4).
@@ -344,36 +289,42 @@ export default function SellScreen() {
               cluttering an in-progress listing. */}
           {!hasDraftContent && (
             <View style={styles.sellQuickActions}>
-              <Pressable
-                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.85 }]}
-                onPress={() => { haptics.tap(); navigation.navigate('BulkListing'); }}
+              <AnimatedPressable
+                style={styles.sellQuickAction}
+                scaleValue={0.98}
+                hapticFeedback="light"
+                onPress={() => navigation.navigate('BulkListing')}
                 accessibilityRole="button"
                 accessibilityLabel="Bulk listing — list multiple items at once"
                 accessibilityHint="Opens the bulk listing tool"
               >
                 <AppIcon name="copy" size={IconSize.lg} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>{t('listing.create.bulkList')}</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.85 }]}
-                onPress={() => { haptics.tap(); navigation.navigate('InventoryManagement'); }}
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.sellQuickAction}
+                scaleValue={0.98}
+                hapticFeedback="light"
+                onPress={() => navigation.navigate('InventoryManagement')}
                 accessibilityRole="button"
                 accessibilityLabel="Inventory dashboard"
                 accessibilityHint="Opens the inventory management screen"
               >
                 <AppIcon name="grid" size={IconSize.lg} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>{t('listing.create.inventory')}</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.sellQuickAction, pressed && { opacity: 0.85 }]}
-                onPress={() => { haptics.tap(); navigation.navigate('SellerHub'); }}
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.sellQuickAction}
+                scaleValue={0.98}
+                hapticFeedback="light"
+                onPress={() => navigation.navigate('SellerHub')}
                 accessibilityRole="button"
                 accessibilityLabel="Seller hub"
                 accessibilityHint="Opens the seller hub dashboard"
               >
                 <AppIcon name="storefront" size={IconSize.lg} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.sellQuickActionLabel, { color: colors.textSecondary }]}>{t('listing.create.hub')}</Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
           )}
 
@@ -432,15 +383,16 @@ export default function SellScreen() {
               <View style={styles.autofillHeader}>
                 <AppIcon name="sparkles-outline" size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.autofillTitle, themed.autofillTitle]}>{t('listing.create.suggestedDetails')}</Text>
-                <Pressable
+                <AnimatedPressable
                   hitSlop={8}
                   onPress={() => setAutofillDismissed(true)}
-                  style={({ pressed }) => pressed && { opacity: 0.85 }}
+                  scaleValue={0.98}
+                  hapticFeedback="light"
                   accessibilityLabel="Dismiss suggestions"
                   accessibilityRole="button"
                 >
                   <AppIcon name="close" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-                </Pressable>
+                </AnimatedPressable>
               </View>
               {/* Flattened rows — no nested bordered chips (AGENTS.md §4: no card-on-card) */}
               {autofillSuggestion.title && (
@@ -461,15 +413,17 @@ export default function SellScreen() {
                   <Text style={[styles.autofillRowValue, themed.autofillChipValue]} numberOfLines={2}>{autofillSuggestion.category}</Text>
                 </View>
               )}
-              <Pressable
-                style={({ pressed }) => [styles.autofillApplyBtn, themed.autofillApplyBtn, pressed && { opacity: 0.85 }]}
+              <AnimatedPressable
+                style={[styles.autofillApplyBtn, themed.autofillApplyBtn]}
+                scaleValue={0.98}
+                hapticFeedback="light"
                 onPress={handleApplyAutofill}
                 accessibilityLabel="Apply suggested fields"
                 accessibilityRole="button"
               >
                 <AppIcon name="verified" focused size={IconSize.sm} color="brand" opticalCenter accessible={false} />
                 <Text style={[styles.autofillApplyText, themed.autofillApplyText]}>{t('listing.create.applyToEmptyFields')}</Text>
-              </Pressable>
+              </AnimatedPressable>
             </View>
           )}
 
@@ -488,8 +442,10 @@ export default function SellScreen() {
           <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.details')}</Text>
 
-            <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
+            <AnimatedPressable
+              style={styles.pickerRow}
+              scaleValue={0.98}
+              hapticFeedback="light"
               onPress={() => setPickerMode('Category')}
               accessibilityRole="button"
               accessibilityLabel="Select category"
@@ -508,12 +464,14 @@ export default function SellScreen() {
                 </Text>
               </View>
               <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
+            </AnimatedPressable>
             {errors.category ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.category}</Text> : null}
             <View style={[styles.hairline, themed.hairline]} />
 
-            <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
+            <AnimatedPressable
+              style={styles.pickerRow}
+              scaleValue={0.98}
+              hapticFeedback="light"
               onPress={() => setPickerMode('Brand')}
               accessibilityRole="button"
               accessibilityLabel="Select brand"
@@ -534,7 +492,7 @@ export default function SellScreen() {
                 </Text>
               </View>
               <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
+            </AnimatedPressable>
             {!brand && (
               <Text style={[styles.fieldHelper, themed.fieldHelper]}>
                 {completeness.policy.brandlessValid
@@ -544,8 +502,10 @@ export default function SellScreen() {
             )}
             <View style={[styles.hairline, themed.hairline]} />
 
-            <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
+            <AnimatedPressable
+              style={styles.pickerRow}
+              scaleValue={0.98}
+              hapticFeedback="light"
               onPress={() => setPickerMode('Size')}
               accessibilityRole="button"
               accessibilityLabel="Select size"
@@ -566,7 +526,7 @@ export default function SellScreen() {
                 </Text>
               </View>
               <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
+            </AnimatedPressable>
             {errors.size ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.size}</Text> : null}
             <View style={[styles.hairline, themed.hairline]} />
           </View>
@@ -578,8 +538,10 @@ export default function SellScreen() {
           <View style={styles.sectionGroup}>
             <Text style={[styles.sectionHeading, themed.sectionHeading]}>{t('listing.create.priceAndCondition')}</Text>
 
-            <Pressable
-              style={({ pressed }) => [styles.pickerRow, pressed && { opacity: 0.85 }]}
+            <AnimatedPressable
+              style={styles.pickerRow}
+              scaleValue={0.98}
+              hapticFeedback="light"
               onPress={() => setPickerMode('Condition')}
               accessibilityRole="button"
               accessibilityLabel="Select condition"
@@ -598,7 +560,7 @@ export default function SellScreen() {
                 </Text>
               </View>
               <AppIcon name="forward" size={IconSize.sm} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
+            </AnimatedPressable>
             {errors.condition ? <Text style={[styles.fieldError, themed.fieldError]}>{errors.condition}</Text> : null}
             <View style={[styles.hairline, themed.hairline]} />
 
@@ -630,12 +592,13 @@ export default function SellScreen() {
                         </Text>
                       </View>
                       {soldComps.medianPrice != null && (
-                        <Pressable
-                          style={({ pressed }) => [styles.soldCompsHint, pressed && { opacity: 0.85 }]}
+                        <AnimatedPressable
+                          style={styles.soldCompsHint}
+                          scaleValue={0.98}
+                          hapticFeedback="light"
                           onPress={() => {
                             if (!price) {
                               handlePriceChange(soldComps.medianPrice!.toFixed(2));
-                              haptics.tap();
                             }
                           }}
                           accessibilityRole="button"
@@ -648,7 +611,7 @@ export default function SellScreen() {
                           {!price && (
                             <Text style={[styles.soldCompsAction, themed.soldCompsAction]}>{t('listing.create.tapToSet')}</Text>
                           )}
-                        </Pressable>
+                        </AnimatedPressable>
                       )}
                       {priceVsMarket === 'above' && (
                         <View style={styles.soldCompsHint}>
@@ -813,9 +776,11 @@ export default function SellScreen() {
                     {[24, 48, 72, 168].map((h) => {
                       const active = offeringWindowHours === h;
                       return (
-                        <Pressable
+                        <AnimatedPressable
                           key={h}
-                          style={({ pressed }) => [styles.togglePill, themed.togglePill, active && styles.togglePillActive, active && themed.togglePillActive, pressed && { opacity: 0.85 }]}
+                          style={[styles.togglePill, themed.togglePill, active && styles.togglePillActive, active && themed.togglePillActive]}
+                          scaleValue={0.98}
+                          hapticFeedback="light"
                           onPress={() => setOfferingWindowHours(h)}
                           accessibilityRole="button"
                           accessibilityLabel={`Set offering window to ${h} hours`}
@@ -823,7 +788,7 @@ export default function SellScreen() {
                           <Text style={[styles.toggleText, themed.toggleText, active && styles.toggleTextActive, active && themed.toggleTextActive]}>
                             {h < 72 ? `${h}h` : `${h / 24}d`}
                           </Text>
-                        </Pressable>
+                        </AnimatedPressable>
                       );
                     })}
                   </View>
@@ -903,9 +868,11 @@ export default function SellScreen() {
               </View>
             )}
 
-            <Pressable
-              onPress={() => { setShippingSheetOpen(true); haptics.tap(); }}
-              style={({ pressed }) => [styles.shippingSummaryRow, { borderBottomColor: colors.border }, pressed && { opacity: 0.85 }]}
+            <AnimatedPressable
+              onPress={() => setShippingSheetOpen(true)}
+              style={[styles.shippingSummaryRow, { borderBottomColor: colors.border }]}
+              scaleValue={0.98}
+              hapticFeedback="light"
               accessibilityRole="button"
               accessibilityLabel="Configure delivery"
               accessibilityHint="Opens shipping method and payment options"
@@ -917,7 +884,7 @@ export default function SellScreen() {
                 </Text>
               </View>
               <AppIcon name="forward" size={16} color="textMuted" opticalCenter accessible={false} />
-            </Pressable>
+            </AnimatedPressable>
           </View>
 
           {/* -- SHIPPING BOTTOM SHEET -- */}
@@ -945,29 +912,32 @@ export default function SellScreen() {
                       resizeMode="cover"
                       accessibilityLabel={`Authentication photo ${i + 1}`}
                     />
-                    <Pressable
+                    <AnimatedPressable
                       style={[styles.authThumbRemove, { backgroundColor: colors.background }]}
+                      scaleValue={0.98}
+                      hapticFeedback="light"
                       onPress={() => {
                         setAuthPhotos((prev) => prev.filter((_, idx) => idx !== i));
-                        haptics.tap();
                       }}
                       hitSlop={8}
                       accessibilityRole="button"
                       accessibilityLabel="Remove authentication photo"
                     >
                       <AppIcon name="close-circle" size={22} color="textPrimary" opticalCenter accessible={false} />
-                    </Pressable>
+                    </AnimatedPressable>
                   </View>
                 ))}
                 {authPhotos.length < 2 && (
-                  <Pressable
+                  <AnimatedPressable
                     style={[styles.authAddBtn, themed.authAddBtn]}
+                    scaleValue={0.98}
+                    hapticFeedback="light"
                     onPress={handlePickFromLibrary}
                     accessibilityRole="button"
                     accessibilityLabel="Add authentication photo"
                   >
                     <AppIcon name="add" size={22} color="textMuted" opticalCenter accessible={false} />
-                  </Pressable>
+                  </AnimatedPressable>
                 )}
               </View>
             </View>
@@ -1065,6 +1035,14 @@ export default function SellScreen() {
         options={getPickerOptions()}
         selectedValue={getPickerSelected()}
         onSelect={handlePickerSelect}
+      />
+
+      {/* Flagship camera sheet — replaces system camera for listing photos */}
+      <ListingCameraSheet
+        visible={cameraSheetVisible}
+        onClose={() => setCameraSheetVisible(false)}
+        onCapture={handleCameraCapture}
+        maxPhotos={10 - mediaDraftItems.length}
       />
     </SafeAreaView>
   );
@@ -1366,51 +1344,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-
-  /* -- contextual authenticity prompts -- */
-  /* Per audit 04 P1: contextual prompts by category/value.
-     Flat inline — no card chrome (§4 surface budget). */
-  contextualPrompts: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-    gap: Space.xs },
-  contextualPromptRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 1 },
-  contextualPromptText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.medium,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-
-  /* -- contextual photo assistant (consolidated) -- */
-  /* One system replacing the former contextualHintRow, PhotoGuideCollapse,
-     and contextualPrompts. Flat inline — no card chrome (§4 surface budget). */
-  photoAssistantToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs + 2,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.sm,
-    minHeight: Control.hit },
-  photoAssistantToggleText: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.semibold,
-    letterSpacing: TypographyV2.meta.letterSpacing },
-  photoAssistantTips: {
-    paddingHorizontal: Space.md,
-    paddingBottom: Space.sm,
-    gap: Space.xs },
-  photoAssistantTip: {
-    flex: 1,
-    fontSize: TypographyV2.meta.size,
-    lineHeight: TypographyV2.meta.lineHeight,
-    fontFamily: FontFamily.regular,
     letterSpacing: TypographyV2.meta.letterSpacing },
 
   /* -- price suggestion block -- */

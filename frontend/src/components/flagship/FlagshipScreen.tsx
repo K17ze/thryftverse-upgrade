@@ -115,7 +115,7 @@ export const FlagshipScreen = React.forwardRef<View, FlagshipScreenProps>(functi
   const innerContent = (
     <View style={[styles.container, { backgroundColor: colors.background }, style]}>
       {header && (
-        <Reanimated.View style={[styles.headerWrap, headerBorderStyle]}>
+        <Reanimated.View style={[styles.headerWrap, { backgroundColor: colors.background }, headerBorderStyle]}>
           {header}
         </Reanimated.View>
       )}

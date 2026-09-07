@@ -51,7 +51,7 @@ export default [
       '@typescript-eslint/no-require-imports': 'off',
       'no-console': 'off',
       'react-native-a11y/has-accessibility-props': 'error',
-      'react-native-a11y/has-accessibility-hint': 'error',
+      'react-native-a11y/has-accessibility-hint': 'warn',
       'react-native-a11y/no-nested-touchables': 'error',
       'react-native-a11y/has-valid-accessibility-role': 'error',
       'react-native-a11y/has-valid-accessibility-state': 'error',

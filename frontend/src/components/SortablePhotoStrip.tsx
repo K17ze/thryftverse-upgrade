@@ -1,22 +1,20 @@
 import React, { useCallback } from 'react';
-import { View, StyleSheet, Text } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
+import { View, StyleSheet } from 'react-native';
 import { Video, ResizeMode } from './compat/Video';
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
   useAnimatedReaction,
   runOnJS,
-  withSpring,
-  SharedValue } from 'react-native-reanimated';
+  withSpring } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useAppTheme } from '../theme/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
+import { AppIcon } from './common/AppIcon';
 import { AnimatedPressable } from './AnimatedPressable';
+import { FocalImage } from './media/FocalImage';
 import { isVideoUri } from '../utils/media';
 import { haptics } from '../utils/haptics';
-import { Typography, Radius, Space } from '../theme/designTokens';
-import { TypographyV2 } from '../theme/typography.v2';
+import { Radius, Space, Stroke } from '../theme/designTokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useMotionConfig } from '../hooks/useMotionConfig';
 import { REDUCED_SPRING } from '../theme/motionTokens';
@@ -33,16 +31,15 @@ interface Props {
   itemIds?: string[];
   /** Custom content for each item — when provided, replaces default Image/Video rendering */
   renderItem?: (index: number) => React.ReactNode;
+  /** Focal points keyed by item id — anchors default thumbnails on the user-set subject */
+  focalPoints?: Record<string, { x: number; y: number }>;
   /** Whether to show the trailing add button — default true */
   showAddButton?: boolean;
   /** Whether drag reorder is enabled — default true */
   reorderEnabled?: boolean;
 }
 
-// Helper to get object values sorted by key (not needed strictly if we map properly)
-// We will just manage an array of IDs sorted.
-
-export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, renderItem, showAddButton = true, reorderEnabled = true }: Props) {
+export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, renderItem, focalPoints, showAddButton = true, reorderEnabled = true }: Props) {
   const ids = itemIds ?? photos;
   const { colors } = useAppTheme();
   const reducedMotion = useReducedMotion();
@@ -52,7 +49,7 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, ren
       <Reanimated.ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 20 }}
+        contentContainerStyle={{ paddingHorizontal: Space.md }}
       >
         <View style={{ flexDirection: 'row', position: 'relative', height: ITEM_SIZE }}>
           {photos.map((photo, index) => (
@@ -66,11 +63,11 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, ren
               itemIds={ids}
               onReorder={onReorder}
               renderItem={renderItem}
+              focalPoint={focalPoints?.[ids[index] ?? photo]}
               reorderEnabled={reorderEnabled}
               reducedMotion={reducedMotion}
             />
           ))}
-          {/* Add more button */}
           {showAddButton && onAddPhoto && (
             <AnimatedPressable
               style={[styles.addBtn, { left: photos.length * TOTAL_SIZE }]}
@@ -82,14 +79,11 @@ export function SortablePhotoStrip({ photos, onReorder, onAddPhoto, itemIds, ren
               accessibilityRole="button"
               accessibilityLabel="Add more photos"
             >
-              <Ionicons name="add" size={28} color={colors.background} />
+              <AppIcon name="add" size={28} color="textMuted" accessible={false} />
             </AnimatedPressable>
           )}
         </View>
       </Reanimated.ScrollView>
-      {reorderEnabled && (
-        <Text style={styles.hintText}>Drag to reorder. First media item is the cover.</Text>
-      )}
     </View>
   );
 }
@@ -103,11 +97,12 @@ interface ItemProps {
   itemIds?: string[];
   onReorder: (newOrder: string[]) => void;
   renderItem?: (index: number) => React.ReactNode;
+  focalPoint?: { x: number; y: number };
   reorderEnabled?: boolean;
   reducedMotion?: boolean;
 }
 
-function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, renderItem, reorderEnabled = true, reducedMotion = false }: ItemProps) {
+function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, renderItem, focalPoint, reorderEnabled = true, reducedMotion = false }: ItemProps) {
   const isVideo = isVideoUri(id);
   const { colors } = useAppTheme();
   const { spring } = useMotionConfig();
@@ -162,8 +157,7 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
       transform: [
         { translateX: position.value },
         { scale: withSpring(isDragging.value ? 1.1 : 1, reducedMotion ? REDUCED_SPRING : spring.press) }
-      ],
-      shadowOpacity: withSpring(isDragging.value ? 0.3 : 0, reducedMotion ? REDUCED_SPRING : spring.press) };
+      ] };
   });
 
   const accessibilityActions = reorderEnabled ? [
@@ -209,18 +203,12 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
                 isLooping={false}
               />
             ) : (
-              <ExpoImage source={{ uri: id }} style={styles.image} cachePolicy="memory-disk" recyclingKey={id} enforceEarlyResizing />
+              <FocalImage uri={id} focalPoint={focalPoint} style={styles.image} />
             )}
 
             {isVideo && (
-              <View style={styles.videoBadge}>
-                <Ionicons name="videocam" size={11} color={colors.surfaceElevated} />
-              </View>
-            )}
-
-            {index === 0 && (
-              <View style={styles.coverBadge}>
-                <Text style={styles.coverText}>COVER</Text>
+              <View style={styles.playBadge} pointerEvents="none">
+                <AppIcon name="play" variant="filled" size={11} color="scrimTextPrimary" accessible={false} />
               </View>
             )}
           </>
@@ -232,56 +220,38 @@ function SortableItem({ id, itemId, index, total, photos, itemIds, onReorder, re
 
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) => StyleSheet.create({
   container: {
-    paddingVertical: Space.md,
-    height: ITEM_SIZE + 60 },
+    paddingVertical: Space.md },
   itemWrap: {
     width: ITEM_SIZE,
     height: ITEM_SIZE,
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 15 },
+    borderWidth: Stroke.standard,
+    borderColor: colors.border,
+    overflow: 'hidden' },
   image: {
     width: '100%',
     height: '100%',
-    borderRadius: Radius.xl },
+    borderRadius: Radius.lg },
   addBtn: {
     position: 'absolute',
     width: ITEM_SIZE,
     height: ITEM_SIZE,
-    borderRadius: Radius.xl,
-    borderWidth: 2,
+    borderRadius: Radius.lg,
+    borderWidth: Stroke.standard,
     borderColor: colors.border,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center' },
-  videoBadge: {
+  /* Play glyph over the paused frame — same scrim-circle grammar as the
+     poster thumbs (decorative; aria-hidden). */
+  playBadge: {
     position: 'absolute',
     top: 6,
     right: 6,
-    width: 20,
-    height: 20,
-    borderRadius: Radius.lg,
+    width: 22,
+    height: 22,
+    borderRadius: Radius.full,
     backgroundColor: colors.overlay,
     alignItems: 'center',
-    justifyContent: 'center' },
-  coverBadge: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.brand,
-    paddingVertical: 2,
-    alignItems: 'center' },
-  coverText: {
-    color: colors.background,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: Typography.family.bold },
-  hintText: {
-    color: colors.textMuted,
-    fontSize: TypographyV2.meta.size,
-    fontFamily: TypographyV2.meta.fontFamily,
-    textAlign: 'center',
-    marginTop: Space.md } });
+    justifyContent: 'center' } });

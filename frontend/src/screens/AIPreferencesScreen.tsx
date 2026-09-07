@@ -155,7 +155,7 @@ export default function AIPreferencesScreen({ navigation }: Props) {
     <FlagshipScreen
       header={
         <FlagshipHeader
-          title="Listing suggestions"
+          title="Recommendations"
           onBack={() => navigation.goBack()}
         />
       }

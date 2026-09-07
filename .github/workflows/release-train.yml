@@ -37,6 +37,7 @@ jobs:
       channel: ${{ steps.set-channel.outputs.channel }}
       profile: ${{ steps.set-channel.outputs.profile }}
       is_rollback: ${{ steps.set-channel.outputs.is_rollback }}
+      is_production: ${{ steps.set-channel.outputs.is_production }}
     steps:
       - id: set-channel
         run: |
@@ -44,37 +45,59 @@ jobs:
             echo "is_rollback=true" >> "$GITHUB_OUTPUT"
             echo "channel=${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
             echo "profile=production" >> "$GITHUB_OUTPUT"
+            echo "is_production=true" >> "$GITHUB_OUTPUT"
           elif [ "${{ inputs.channel }}" != "" ]; then
             echo "is_rollback=false" >> "$GITHUB_OUTPUT"
             echo "channel=${{ inputs.channel }}" >> "$GITHUB_OUTPUT"
             if [ "${{ inputs.channel }}" = "production" ]; then
               echo "profile=production" >> "$GITHUB_OUTPUT"
+              echo "is_production=true" >> "$GITHUB_OUTPUT"
             elif [ "${{ inputs.channel }}" = "staging" ]; then
               echo "profile=preview" >> "$GITHUB_OUTPUT"
+              echo "is_production=false" >> "$GITHUB_OUTPUT"
             else
               echo "profile=development" >> "$GITHUB_OUTPUT"
+              echo "is_production=false" >> "$GITHUB_OUTPUT"
             fi
           elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
             echo "is_rollback=false" >> "$GITHUB_OUTPUT"
             echo "channel=development" >> "$GITHUB_OUTPUT"
             echo "profile=development" >> "$GITHUB_OUTPUT"
+            echo "is_production=false" >> "$GITHUB_OUTPUT"
           elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
             echo "is_rollback=false" >> "$GITHUB_OUTPUT"
             echo "channel=staging" >> "$GITHUB_OUTPUT"
             echo "profile=preview" >> "$GITHUB_OUTPUT"
+            echo "is_production=false" >> "$GITHUB_OUTPUT"
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "is_rollback=false" >> "$GITHUB_OUTPUT"
             echo "channel=production" >> "$GITHUB_OUTPUT"
             echo "profile=production" >> "$GITHUB_OUTPUT"
+            echo "is_production=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_rollback=false" >> "$GITHUB_OUTPUT"
             echo "channel=development" >> "$GITHUB_OUTPUT"
             echo "profile=development" >> "$GITHUB_OUTPUT"
+            echo "is_production=false" >> "$GITHUB_OUTPUT"
           fi
+
+  production-approval-gate:
+    name: Production approval gate
+    needs: determine-channel
+    runs-on: ubuntu-latest
+    if: needs.determine-channel.outputs.is_production == 'true' && needs.determine-channel.outputs.is_rollback != 'true'
+    environment: production-approval
+    steps:
+      - name: Await manual approval
+        run: |
+          echo "::notice::Production release requires manual approval."
+          echo "Approve this deployment in the GitHub Actions environment 'production-approval'."
+          echo "Once approved, the build and publish jobs will proceed."
 
   build-ios:
     name: EAS Build iOS
-    needs: determine-channel
+    needs: [determine-channel, production-approval-gate]
+    if: needs.determine-channel.outputs.is_rollback != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: ${{ needs.determine-channel.outputs.channel }}
@@ -96,14 +119,15 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
       - name: Build iOS
         working-directory: frontend
-        run: eas build --profile ${{ needs.determine-channel.outputs.profile }} --platform ios --no-wait
+        run: eas build --profile ${{ needs.determine-channel.outputs.profile }} --platform ios --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
 
   build-android:
     name: EAS Build Android
-    needs: determine-channel
+    needs: [determine-channel, production-approval-gate]
+    if: needs.determine-channel.outputs.is_rollback != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     environment: ${{ needs.determine-channel.outputs.channel }}
@@ -125,7 +149,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
       - name: Build Android
         working-directory: frontend
-        run: eas build --profile ${{ needs.determine-channel.outputs.profile }} --platform android --no-wait
+        run: eas build --profile ${{ needs.determine-channel.outputs.profile }} --platform android --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
@@ -133,6 +157,7 @@ jobs:
   publish-update:
     name: Publish EAS Update
     needs: [determine-channel, build-ios, build-android]
+    if: always() && needs.determine-channel.outputs.is_rollback == 'true' || (needs.build-ios.result == 'success' && needs.build-android.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: ${{ needs.determine-channel.outputs.channel }}
@@ -202,26 +227,12 @@ jobs:
             ### EAS Build
             - iOS profile: ${{ needs.determine-channel.outputs.profile }}
             - Android profile: ${{ needs.determine-channel.outputs.profile }}
+            - iOS Xcode image: latest-xcode26 (pinned in eas.json)
 
             ### EAS Update
             Published to the `${{ needs.determine-channel.outputs.channel }}` channel.
 
-            ### Xcode pinning
-            iOS builds use the pinned Xcode image specified in `eas.json` build profiles.
-            For production, pin `image: latest-xcode26` in the `production` build profile
-            to ensure reproducible iOS builds across EAS build runners.
+            ### Approval
+            Production releases require manual approval via the `production-approval` GitHub environment.
           draft: false
           prerelease: ${{ needs.determine-channel.outputs.channel != 'production' }}
-
-  production-approval-gate:
-    name: Production approval gate
-    needs: determine-channel
-    runs-on: ubuntu-latest
-    if: needs.determine-channel.outputs.channel == 'production' && needs.determine-channel.outputs.is_rollback != 'true'
-    environment: production-approval
-    steps:
-      - name: Await manual approval
-        run: |
-          echo "::notice::Production release requires manual approval."
-          echo "Approve this deployment in the GitHub Actions environment 'production-approval'."
-          echo "Once approved, the build and publish jobs will proceed."

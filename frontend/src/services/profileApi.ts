@@ -6,6 +6,9 @@ export interface ProfileUser {
   email: string | null;
   displayName: string | null;
   bio: string | null;
+  pronouns?: string | null;
+  gender?: string | null;
+  isAiCreator?: boolean | null;
   location: string | null;
   website: string | null;
   phone: string | null;
@@ -35,6 +38,10 @@ export interface PublicProfileUser {
   coverVideo: string | null;
   role: string;
   emailVerified: boolean;
+  /** Pronouns for the user (e.g. "she/her", "they/them"). */
+  pronouns?: string | null;
+  /** Whether this user is an AI-assisted creator. */
+  isAiCreator?: boolean | null;
   /** Identity/KYC verification — separate from email verification. */
   identityVerified?: boolean;
   /** Seller standards verification — separate from email/identity. */
@@ -126,6 +133,9 @@ export async function fetchMyProfile(): Promise<ProfileUser> {
 }
 
 export interface UpdateProfileInput {
+  pronouns?: string;
+  gender?: string;
+  isAiCreator?: boolean;
   displayName?: string;
   username?: string;
   bio?: string;
@@ -192,10 +202,10 @@ export async function unfollowUser(userId: string): Promise<{ isFollowing: boole
 
 // ── Block / unblock ──────────────────────────────────────────────────
 
-export async function blockUser(userId: string): Promise<{ isBlocked: boolean }> {
+export async function blockUser(userId: string, reason?: string): Promise<{ isBlocked: boolean }> {
   const response = await fetchJson<{ ok: boolean; isBlocked: boolean }>(
     `/users/${encodeURIComponent(userId)}/block`,
-    { method: 'POST' }
+    { method: 'POST', body: JSON.stringify({ reason: reason }) }
   );
   return { isBlocked: response.isBlocked };
 }
@@ -206,6 +216,22 @@ export async function unblockUser(userId: string): Promise<{ isBlocked: boolean 
     { method: 'POST' }
   );
   return { isBlocked: response.isBlocked };
+}
+
+export interface BlockedUserEntry {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  blockedAt: string;
+  reason: string | null;
+}
+
+export async function getBlockedUsers(): Promise<BlockedUserEntry[]> {
+  const response = await fetchJson<{ ok: boolean; items: BlockedUserEntry[] }>(
+    `/users/me/blocked-users`
+  );
+  return response.items;
 }
 
 // ── Appeal (DSA Article 20) ───────────────────────────────────────────

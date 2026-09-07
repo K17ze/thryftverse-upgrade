@@ -8,6 +8,7 @@ export type PreloadPriority = 'critical' | 'high' | 'normal' | 'low';
 interface PreloadOptions {
   priority?: PreloadPriority;
   maxConcurrent?: number;
+  cachePolicy?: 'memory-disk' | 'disk' | 'memory';
 }
 
 /**
@@ -86,7 +87,7 @@ export async function preloadCriticalImages(
   urls: string[],
   options: PreloadOptions = {}
 ): Promise<void> {
-  const { priority = 'high', maxConcurrent = 4 } = options;
+  const { priority = 'high', maxConcurrent = 4, cachePolicy = 'memory-disk' } = options;
 
   // Filter out invalid URLs
   const validUrls = urls.filter(url => url && url.startsWith('http'));
@@ -109,7 +110,7 @@ export async function preloadCriticalImages(
       await Promise.all(
         batch.map(url =>
           Image.prefetch(url, {
-            cachePolicy: 'memory-disk',
+            cachePolicy,
           })
         )
       );

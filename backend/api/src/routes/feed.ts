@@ -119,7 +119,8 @@ const discoverQuerySchema = z.object({
  *   GET /feed/discover   — heterogeneous discovery feed with constrained composition (public)
  */
 export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): void => {
-  app.get('/feed/looks', async () => {
+  app.get('/feed/looks', async (request, reply) => {
+    try {
     const now = Date.now();
 
     const realLooksResult = await db.query<{
@@ -164,14 +165,30 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     return {
       items: realLooks.sort((a, b) => a.rank - b.rank),
     };
+    } catch (err) {
+      request.log.error({ err }, 'GET /feed/looks failed');
+      reply.code(500);
+      return { ok: false, error: 'Failed to fetch looks feed' };
+    }
   });
 
-  app.get('/feed/home', async (request) => {
+  app.get('/feed/home', async (request, reply) => {
+    try {
     const { limit, cursor } = homeQuerySchema.parse(request.query ?? {});
 
+    const viewerUserId = request.authUser?.userId ?? null;
     const cursorCondition = cursor ? `AND created_at < $1` : '';
     const cursorParams = cursor ? [cursor, limit] : [limit];
     const limitSlot = `$${cursorParams.length}`;
+
+    let blockedSellerIds: Set<string> | null = null;
+    if (viewerUserId) {
+      const blockedResult = await readDb.query<{ blocked_id: string }>(
+        `SELECT blocked_id FROM user_blocks WHERE blocker_id = $1`,
+        [viewerUserId]
+      );
+      blockedSellerIds = new Set(blockedResult.rows.map((r) => r.blocked_id));
+    }
 
     const listingsResult = await readDb.query<{
       id: string;
@@ -199,6 +216,12 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
       `,
       cursorParams
     );
+
+    if (blockedSellerIds && blockedSellerIds.size > 0) {
+      listingsResult.rows = listingsResult.rows.filter(
+        (row) => !blockedSellerIds!.has(row.seller_id)
+      );
+    }
 
     const listingIds = listingsResult.rows.map((r) => r.id);
     const imagesResult = listingIds.length
@@ -316,6 +339,11 @@ export const registerFeedRoutes = ({ app, db, readDb }: FeedRouteDependencies): 
     }));
 
     return { items, nextCursor };
+    } catch (err) {
+      request.log.error({ err }, 'GET /feed/home failed');
+      reply.code(500);
+      return { ok: false, error: 'Failed to fetch home feed' };
+    }
   });
 
   // GET /feed/trending — trending listings based on engagement velocity.

@@ -374,7 +374,7 @@ export function AddMoneySheet({
       setAmountInput('');
       setReceipt({
         title: `${formatIzeAmount(p.izeAmount)} added to your wallet`,
-        subtitle: `Paid ${formatFromFiat(p.fiatAmount, currencyCode, { displayMode: 'fiat' })} · Fee (${p.feeBps} bps) ${formatFromFiat(p.feeFiat, currencyCode, { displayMode: 'fiat' })} · 1ZE received ${formatIzeAmount(p.izeAmount)}` });
+        subtitle: `Paid ${formatFromFiat(p.fiatAmount, 'GBP', { displayMode: 'fiat' })} · Fee (${p.feeBps} bps) ${formatFromFiat(p.feeFiat, 'GBP', { displayMode: 'fiat' })} · 1ZE received ${formatIzeAmount(p.izeAmount)}` });
       onCompleted();
     } catch (error) {
       const parsed = parseApiError(error, 'Unable to add 1ZE right now.');
@@ -408,7 +408,7 @@ export function AddMoneySheet({
     {
       value: 'fiatBalance',
       label: 'Fiat balance',
-      hint: `Available: ${formatFromFiat(availableFiatBalance, currencyCode, { displayMode: 'fiat' })}`,
+      hint: `Available: ${formatFromFiat(availableFiatBalance, 'GBP', { displayMode: 'fiat' })}`,
       icon: 'wallet-outline',
       disabled: availableFiatBalance <= 0 },
   ];
@@ -571,7 +571,7 @@ export function AddMoneySheet({
                       label="You pay"
                       value={
                         <Text style={[styles.reviewFiat, { color: colors.textPrimary }]}>
-                          {formatFromFiat(fiatValue, currencyCode, { displayMode: 'fiat' })}
+                          {formatFromFiat(fiatValue, 'GBP', { displayMode: 'fiat' })}
                         </Text>
                       }
                       colors={colors}
@@ -580,7 +580,7 @@ export function AddMoneySheet({
                       label={`Fee (~${estimateFeeRateLabel}, estimate)`}
                       value={
                         <Text style={[styles.reviewFiat, { color: colors.textPrimary }]}>
-                          {formatFromFiat(fiatBalanceEstimatedFee, currencyCode, { displayMode: 'fiat' })}
+                          {formatFromFiat(fiatBalanceEstimatedFee, 'GBP', { displayMode: 'fiat' })}
                         </Text>
                       }
                       colors={colors}

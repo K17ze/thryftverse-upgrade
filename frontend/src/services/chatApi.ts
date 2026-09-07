@@ -4,36 +4,6 @@ import { fetchJson } from '../lib/apiClient';
 type ApiConversationType = 'dm' | 'group';
 type ApiSenderType = 'user' | 'bot' | 'system';
 
-interface ApiConversationContextPayload {
-  listing?: {
-    id: string;
-    title: string;
-    price: number;
-    currency: string;
-    imageUrl?: string;
-    status: 'active' | 'sold' | 'paused' | 'deleted';
-    condition?: string;
-  };
-  offer?: {
-    id: string;
-    amount: number;
-    currency: string;
-    status: 'pending' | 'countered' | 'accepted' | 'rejected' | 'expired' | 'withdrawn';
-    expiresAt: string;
-  };
-  order?: {
-    id: string;
-    status: 'pending' | 'paid' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'refunded';
-    totalAmount: number;
-    currency: string;
-    createdAt: string;
-  };
-  protection?: {
-    status: 'active' | 'expired' | 'claimed' | 'resolved';
-    expiresAt?: string;
-  };
-}
-
 interface ApiConversationPayload {
   id: string;
   type: ApiConversationType;
@@ -62,7 +32,6 @@ interface ApiConversationPayload {
   requestStatus?: 'pending' | 'accepted' | 'declined';
   pinnedRank?: number;
   markedUnread?: boolean;
-  context?: ApiConversationContextPayload | null;
 }
 
 interface ApiMessageReaction {
@@ -84,7 +53,8 @@ export interface ApiMessagePayload {
   editVersion?: number;
   editedAt?: string;
   reactions?: ApiMessageReaction[];
-  scamWarning?: boolean;
+  readBy?: string[];
+  isReadByMe?: boolean;
 }
 
 // Voice message receipt — the canonical voice metadata returned by the
@@ -156,7 +126,6 @@ export interface GroupInviteLink {
   expiresAt: string;
   maxUses: number;
   useCount: number;
-  revokedAt?: string | null;
   isExpired?: boolean;
   isRevoked?: boolean;
 }
@@ -174,13 +143,8 @@ export interface GroupSettings {
 export interface GroupSettingsCapabilities {
   canManage: boolean;
   canEditGroupInfo: boolean;
-  canSendMessages: boolean;
   canAddMembers: boolean;
-}
-
-export interface GroupSettingsSnapshot {
-  settings: GroupSettings;
-  capabilities: GroupSettingsCapabilities;
+  canSendMessages: boolean;
 }
 
 function normalizeMemberRoles(
@@ -198,7 +162,10 @@ function normalizeMemberRoles(
   return result;
 }
 
-export function mapApiMessageToConversationMessage(payload: ApiMessagePayload): Message {
+export function mapApiMessageToConversationMessage(
+  payload: ApiMessagePayload,
+  currentUserId?: string,
+): Message {
   const senderId = payload.senderType === 'bot'
     ? payload.senderBotId ?? 'system'
     : payload.senderType === 'user'
@@ -213,63 +180,74 @@ export function mapApiMessageToConversationMessage(payload: ApiMessagePayload): 
   const voice = (payload as ApiMessagePayload & { voice?: VoiceMessageReceipt }).voice;
   const isVoice = Boolean(voice) || meta.voiceMessage === true || meta.mediaType === 'voice';
 
-  const isOffer = meta.type === 'offer' || meta.offerPrice != null || meta.offer != null;
-  const isListingShare = meta.type === 'listing_share' || meta.listing != null;
-  const isCommerceState = meta.type === 'commerce_state' || meta.commerceState != null;
+  // Offer messages (P1-05): the backend attaches an `offer` object or
+  // stashes the offer payload under `metadata.offerPayload`.
+  const offerSource =
+    (payload as ApiMessagePayload & { offer?: Record<string, unknown> }).offer ??
+    (meta.offerPayload as Record<string, unknown> | undefined);
+  const isOffer = Boolean(
+    (payload as ApiMessagePayload & { offer?: unknown }).offer || meta.offerPayload,
+  );
+
+  // Determine which side of the chat this message renders on. When the
+  // current user's id is known and matches the message's senderId, the
+  // message is "me"; otherwise it is "other" (or "system" for system msgs).
+  const isMine = Boolean(currentUserId) && senderId === currentUserId;
 
   return {
     id: payload.id,
     senderId,
     text: payload.body,
     timestamp: payload.createdAt,
+    date: payload.createdAt,
     isSystem: payload.senderType === 'system',
     systemTitle: payload.senderType === 'system' ? 'System' : undefined,
     type: payload.senderType === 'system'
       ? 'system'
-      : isVoice
-        ? 'voice'
-        : isOffer
-          ? 'offer'
-          : isListingShare
-            ? 'listing_share'
-            : isCommerceState
-              ? 'commerce_state'
-              : 'text',
-    sender: payload.senderType === 'system' ? 'system' : 'other',
+      : isOffer
+        ? 'offer'
+        : isVoice
+          ? 'voice'
+          : 'text',
+    sender: payload.senderType === 'system'
+      ? 'system'
+      : isMine
+        ? 'me'
+        : 'other',
+    status: 'sent',
+    isEdited: Boolean(payload.editedAt) || (payload.editVersion ?? 0) > 0,
+    isDeleted: Boolean(payload.deletedForEveryoneAt),
+    clientMessageId: payload.clientMessageId ?? undefined,
+    editVersion: payload.editVersion ?? undefined,
+    editedAt: payload.editedAt ?? undefined,
+    deletedForEveryoneAt: payload.deletedForEveryoneAt ?? undefined,
+    readStatus: 'sent',
     mediaUri: typeof meta.mediaUri === 'string' ? meta.mediaUri : undefined,
-    mediaType: (meta.mediaType === 'image' || meta.mediaType === 'video' || meta.mediaType === 'document') ? meta.mediaType : undefined,
+    mediaType: meta.mediaType === 'image' || meta.mediaType === 'video' ? meta.mediaType : undefined,
     voiceUri: typeof meta.mediaUri === 'string' && isVoice ? meta.mediaUri : undefined,
     voiceDurationMs: voice?.durationMs ?? (typeof meta.durationMs === 'number' ? meta.durationMs : undefined),
     voiceWaveform: voice?.waveform?.samples,
     voiceContainer: voice?.container,
     voiceCodec: voice?.codec,
     voiceModerationState: voice?.moderationState,
+    offer: isOffer && offerSource
+      ? {
+          offerId: typeof offerSource.offerId === 'string' ? offerSource.offerId : undefined,
+          amount: typeof offerSource.amount === 'number' ? offerSource.amount : undefined,
+          status: (offerSource.status as 'pending' | 'accepted' | 'declined' | 'countered' | 'expired' | 'cancelled' | undefined),
+          buyerId: typeof offerSource.buyerId === 'string' ? offerSource.buyerId : undefined,
+          sellerId: typeof offerSource.sellerId === 'string' ? offerSource.sellerId : undefined,
+          listingId: typeof offerSource.listingId === 'string' ? offerSource.listingId : undefined,
+          listingTitle: typeof offerSource.listingTitle === 'string' ? offerSource.listingTitle : undefined,
+          originalPrice: typeof offerSource.originalPrice === 'number' ? offerSource.originalPrice : undefined,
+          offerPrice: typeof offerSource.offerPrice === 'number' ? offerSource.offerPrice : undefined,
+          price: typeof offerSource.offerPrice === 'number' ? offerSource.offerPrice : undefined,
+          expiresAt: typeof offerSource.expiresAt === 'string' ? offerSource.expiresAt : undefined,
+          counterRound: typeof offerSource.counterRound === 'number' ? offerSource.counterRound : undefined,
+        }
+      : undefined,
     replyToMessageId: payload.replyToMessageId,
     reactions: payload.reactions?.map((r) => ({ emoji: r.emoji, userIds: r.userIds })),
-    isEdited: (payload.editVersion ?? 0) > 0 || undefined,
-    editedAt: payload.editedAt ?? undefined,
-    editVersion: payload.editVersion,
-    offerPrice: typeof meta.offerPrice === 'number' ? meta.offerPrice : undefined,
-    originalPrice: typeof meta.originalPrice === 'number' ? meta.originalPrice : undefined,
-    offerStatus: typeof meta.offerStatus === 'string' ? (meta.offerStatus as any) : undefined,
-    offer: (meta.offer as any) ?? (meta.offerPrice != null ? {
-      offerPrice: Number(meta.offerPrice),
-      originalPrice: Number(meta.originalPrice ?? meta.offerPrice),
-      status: (meta.offerStatus as any) ?? 'pending',
-      expiresAt: meta.expiresAt as string | undefined,
-      counterRound: meta.counterRound as number | undefined,
-      itemId: meta.itemId as string | undefined,
-      itemTitle: meta.itemTitle as string | undefined,
-      itemImage: meta.itemImage as string | undefined,
-      itemBrand: meta.itemBrand as string | undefined,
-      itemSize: meta.itemSize as string | undefined,
-      itemCondition: meta.itemCondition as string | undefined,
-    } : undefined),
-    listing: meta.listing as any,
-    commerceState: meta.commerceState as any,
-    documentUri: typeof meta.documentUri === 'string' ? meta.documentUri : undefined,
-    documentName: typeof meta.documentName === 'string' ? meta.documentName : undefined,
-    documentMimeType: typeof meta.documentMimeType === 'string' ? meta.documentMimeType : undefined,
   };
 }
 
@@ -350,6 +328,7 @@ export async function createGroupConversationOnApi(input: {
   avatarFinalizationId?: string;
   coverPhoto?: string;
   coverPhotoFinalizationId?: string;
+  currentUserId?: string;
 }): Promise<Conversation> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -377,7 +356,7 @@ export async function createGroupConversationOnApi(input: {
   });
 
   const messages = payload.initialMessage
-    ? [mapApiMessageToConversationMessage(payload.initialMessage)]
+    ? [mapApiMessageToConversationMessage(payload.initialMessage, input.currentUserId)]
     : [];
 
   return mapApiConversationToApp(payload.conversation, messages);
@@ -400,7 +379,7 @@ export async function fetchConversationMessagesFromApi(
     after?: string;
     aroundMessageId?: string;
   }
-): Promise<{ messages: ApiMessagePayload[]; oldestCursor?: string; newestCursor?: string }> {
+): Promise<{ messages: ApiMessagePayload[]; oldestCursor?: string; newestCursor?: string; hasMore?: boolean }> {
   const limit = options?.limit ?? 120;
   const params = new URLSearchParams();
   params.set('limit', String(limit));
@@ -413,65 +392,15 @@ export async function fetchConversationMessagesFromApi(
     items: ApiMessagePayload[];
     oldestCursor?: string | null;
     newestCursor?: string | null;
+    hasMore?: boolean | null;
   }>(`/chat/conversations/${encodeURIComponent(conversationId)}/messages?${params.toString()}`);
 
   return {
     messages: payload.items,
     oldestCursor: payload.oldestCursor ?? undefined,
     newestCursor: payload.newestCursor ?? undefined,
+    hasMore: payload.hasMore ?? undefined,
   };
-}
-
-export async function fetchConversationMediaFromApi(
-  conversationId: string,
-  options?: { limit?: number }
-): Promise<
-  Array<{
-    id: string;
-    mediaUri: string;
-    mediaType: 'image' | 'video' | 'document';
-    senderUserId: string | null;
-    createdAt: string;
-    documentName?: string;
-    documentMimeType?: string;
-  }>
-> {
-  const limit = options?.limit ?? 90;
-  const payload = await fetchJson<{
-    ok: true;
-    items: Array<{
-      id: string;
-      mediaUri: string;
-      mediaType: 'image' | 'video' | 'document';
-      senderUserId: string | null;
-      createdAt: string;
-      documentName?: string;
-      documentMimeType?: string;
-    }>;
-  }>(
-    `/chat/conversations/${encodeURIComponent(conversationId)}/media?limit=${limit}`,
-  );
-  return payload.items;
-}
-
-export async function markMessageReadOnApi(
-  conversationId: string,
-  messageId: string,
-): Promise<{ ok: true; receipt: { messageId: string; userId: string; readAt: string } }> {
-  return fetchJson<{ ok: true; receipt: { messageId: string; userId: string; readAt: string } }>(
-    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/read`,
-    { method: 'POST' },
-  );
-}
-
-export async function fetchMessageReceiptsFromApi(
-  conversationId: string,
-  messageId: string,
-): Promise<Array<{ userId: string; readAt: string }>> {
-  const payload = await fetchJson<{ ok: true; items: Array<{ userId: string; readAt: string }> }>(
-    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/receipts`,
-  );
-  return payload.items;
 }
 
 export async function sendConversationMessageOnApi(
@@ -480,10 +409,13 @@ export async function sendConversationMessageOnApi(
   metadata?: Record<string, unknown>,
   clientMessageId?: string,
   options?: {
-    type?: 'text' | 'image' | 'video' | 'voice' | 'document';
+    type?: 'text' | 'image' | 'video' | 'voice';
     mediaUri?: string;
     replyToMessageId?: string;
+    voiceDurationMs?: number;
+    voiceWaveform?: number[];
   },
+  currentUserId?: string,
 ): Promise<Message> {
   // P0-MSG-1: Discriminated message payload. The backend accepts a
   // `type` field — 'text' (or absent) requires text; 'image'/'video'
@@ -510,6 +442,12 @@ export async function sendConversationMessageOnApi(
   if (options?.replyToMessageId) {
     body.replyToMessageId = options.replyToMessageId;
   }
+  if (options?.voiceDurationMs !== undefined) {
+    body.voiceDurationMs = options.voiceDurationMs;
+  }
+  if (options?.voiceWaveform !== undefined) {
+    body.voiceWaveform = options.voiceWaveform;
+  }
   const payload = await fetchJson<{
     ok: true;
     message: ApiMessagePayload;
@@ -521,7 +459,7 @@ export async function sendConversationMessageOnApi(
     body: JSON.stringify(body),
   });
 
-  return mapApiMessageToConversationMessage(payload.message);
+  return mapApiMessageToConversationMessage(payload.message, currentUserId);
 }
 
 export async function deleteConversationMessageOnApi(
@@ -533,28 +471,6 @@ export async function deleteConversationMessageOnApi(
     `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}?scope=${scope}`,
     { method: 'DELETE' }
   );
-}
-
-/**
- * P2-03: Edit a message body. Sender-only, enforced server-side within a
- * 15-minute edit window. Returns the updated message (with incremented
- * editVersion and editedAt). The caller applies an optimistic update and
- * reverts on failure.
- */
-export async function editConversationMessageOnApi(
-  conversationId: string,
-  messageId: string,
-  text: string,
-): Promise<Message> {
-  const payload = await fetchJson<{ ok: true; message: ApiMessagePayload }>(
-    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    },
-  );
-  return mapApiMessageToConversationMessage(payload.message);
 }
 
 export async function deleteConversationOnApi(
@@ -590,6 +506,105 @@ export async function removeMessageReactionOnApi(
   return fetchJson<{ ok: true; removed: boolean; emoji: string }>(
     `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions?emoji=${encodeURIComponent(emoji)}`,
     { method: 'DELETE' }
+  );
+}
+
+// ── Pinned messages ───────────────────────────────────────────────────
+
+export interface PinnedMessageResponse {
+  pinned: {
+    messageId: string;
+    pinnedBy: string;
+    pinnedAt: string;
+    message: Record<string, unknown>;
+  } | null;
+}
+
+export async function pinMessageOnApi(
+  conversationId: string,
+  messageId: string,
+): Promise<{ ok: true; pinned: true; messageId: string }> {
+  return fetchJson<{ ok: true; pinned: true; messageId: string }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/pin`,
+    { method: 'POST' },
+  );
+}
+
+export async function unpinMessageOnApi(
+  conversationId: string,
+  messageId: string,
+): Promise<{ ok: true; unpinned: true }> {
+  return fetchJson<{ ok: true; unpinned: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/pin`,
+    { method: 'DELETE' },
+  );
+}
+
+export async function fetchPinnedMessageFromApi(
+  conversationId: string,
+): Promise<PinnedMessageResponse> {
+  return fetchJson<PinnedMessageResponse>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/pinned-message`,
+  );
+}
+
+// ── In-chat message search ────────────────────────────────────────────
+
+export interface ChatSearchResult {
+  messageId: string;
+  createdAt: string;
+}
+
+export interface ChatSearchResponse {
+  query: string;
+  results: ChatSearchResult[];
+}
+
+export async function searchConversationMessagesOnApi(
+  conversationId: string,
+  query: string,
+): Promise<ChatSearchResponse> {
+  const qs = `?q=${encodeURIComponent(query)}&limit=20`;
+  return fetchJson<ChatSearchResponse>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/search${qs}`,
+  );
+}
+
+// ── Polls ──────────────────────────────────────────────────────────────
+
+export interface PollVoteResponse {
+  ok: true;
+  voteCounts: number[];
+  myVotes: number[];
+}
+
+export async function voteInPollOnApi(
+  conversationId: string,
+  messageId: string,
+  optionIndex: number,
+): Promise<PollVoteResponse> {
+  return fetchJson<PollVoteResponse>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/poll/vote`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ optionIndex }),
+    },
+  );
+}
+
+export async function unvoteInPollOnApi(
+  conversationId: string,
+  messageId: string,
+  optionIndex: number,
+): Promise<{ ok: true }> {
+  return fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/poll/unvote`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ optionIndex }),
+    },
   );
 }
 
@@ -789,38 +804,15 @@ export async function fetchConversationMembersFromApi(conversationId: string): P
   return payload.items;
 }
 
-export async function fetchGroupSettingsFromApi(
+export async function updateConversationUserStateOnApi(
   conversationId: string,
-): Promise<GroupSettingsSnapshot> {
-  const payload = await fetchJson<{
-    ok: true;
-    conversationId: string;
-    settings: GroupSettings;
-    capabilities: GroupSettingsCapabilities;
-  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/group-settings`);
-
-  return {
-    settings: payload.settings,
-    capabilities: payload.capabilities,
-  };
-}
-
-export async function updateGroupSettingsOnApi(
-  conversationId: string,
-  updates: Partial<Pick<GroupSettings, 'editGroupInfo' | 'sendMessages' | 'addMembers'>>,
-): Promise<GroupSettings> {
-  const payload = await fetchJson<{
-    ok: true;
-    conversationId: string;
-    changed: boolean;
-    settings: GroupSettings;
-  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/group-settings`, {
+  changes: { pinned?: boolean; markedUnread?: boolean },
+): Promise<void> {
+  await fetchJson(`/chat/conversations/${encodeURIComponent(conversationId)}/user-state`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
+    body: JSON.stringify(changes),
   });
-
-  return payload.settings;
 }
 
 export async function createGroupInviteLinkOnApi(
@@ -859,52 +851,6 @@ export async function createGroupInviteLinkOnApi(
   };
 }
 
-export async function fetchGroupInviteLinksOnApi(
-  conversationId: string,
-): Promise<GroupInviteLink[]> {
-  const payload = await fetchJson<{
-    ok: true;
-    conversationId: string;
-    items: Array<{
-      id: string;
-      tokenPreview: string;
-      createdBy: string;
-      maxUses: number;
-      useCount: number;
-      expiresAt: string;
-      revokedAt: string | null;
-      isExpired: boolean;
-      isRevoked: boolean;
-    }>;
-  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/invite-links?limit=20`, {
-    method: 'GET',
-  });
-  return payload.items.map((item) => ({
-    id: item.id,
-    inviteLink: '',
-    tokenPreview: item.tokenPreview,
-    createdBy: item.createdBy,
-    ownerId: '',
-    expiresAt: item.expiresAt,
-    maxUses: item.maxUses,
-    useCount: item.useCount,
-    revokedAt: item.revokedAt,
-    isExpired: item.isExpired,
-    isRevoked: item.isRevoked,
-  }));
-}
-
-export async function revokeGroupInviteLinkOnApi(
-  conversationId: string,
-  inviteId: string,
-): Promise<boolean> {
-  const payload = await fetchJson<{ ok: true; revoked: boolean }>(
-    `/chat/conversations/${encodeURIComponent(conversationId)}/invite-links/${encodeURIComponent(inviteId)}`,
-    { method: 'DELETE' },
-  );
-  return payload.revoked;
-}
-
 export async function joinGroupByInviteOnApi(inviteToken: string): Promise<{
   joined: boolean;
   conversation: Conversation;
@@ -927,6 +873,92 @@ export async function joinGroupByInviteOnApi(inviteToken: string): Promise<{
     joined: payload.joined,
     conversation: mapApiConversationToApp(payload.conversation, []),
   };
+}
+
+export async function fetchGroupInviteLinksOnApi(conversationId: string): Promise<GroupInviteLink[]> {
+  try {
+    const payload = await fetchJson<{
+      ok: true;
+      links: Array<GroupInviteLink & { isExpired?: boolean; isRevoked?: boolean }>;
+    }>(`/chat/conversations/${encodeURIComponent(conversationId)}/invite-links`);
+    return payload.links ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function revokeGroupInviteLinkOnApi(
+  conversationId: string,
+  inviteId: string,
+): Promise<void> {
+  await fetchJson(`/chat/conversations/${encodeURIComponent(conversationId)}/invite-links/${encodeURIComponent(inviteId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function fetchGroupSettingsFromApi(conversationId: string): Promise<{
+  settings: GroupSettings;
+  capabilities: GroupSettingsCapabilities;
+}> {
+  // §37.5 fail-closed: governance scopes must render only from the server row.
+  // No client-side fallback defaults — a failed fetch must throw so the
+  // caller can render a skeleton or error state, never fabricated authority.
+  const payload = await fetchJson<{
+    ok: true;
+    settings: GroupSettings;
+    capabilities: GroupSettingsCapabilities;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/group-settings`);
+  return {
+    settings: payload.settings,
+    capabilities: payload.capabilities,
+  };
+}
+
+export async function updateGroupSettingsOnApi(
+  conversationId: string,
+  updates: Partial<Record<'editGroupInfo' | 'sendMessages' | 'addMembers', GroupPermissionScope>>,
+): Promise<GroupSettings> {
+  const payload = await fetchJson<{
+    ok: true;
+    settings: GroupSettings;
+  }>(`/chat/conversations/${encodeURIComponent(conversationId)}/group-settings`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return payload.settings;
+}
+
+export async function fetchConversationMediaFromApi(
+  conversationId: string,
+  options?: { limit?: number; before?: string },
+): Promise<Array<{
+  id: string;
+  mediaUri: string;
+  mediaType: 'image' | 'video' | 'document';
+  senderUserId: string | null;
+  createdAt: string;
+  documentName?: string;
+  documentMimeType?: string;
+}>> {
+  try {
+    const query = options?.limit ? `?limit=${encodeURIComponent(options.limit)}` : '';
+    const payload = await fetchJson<{
+      ok: true;
+      items: Array<{
+        id: string;
+        mediaUri: string;
+        mediaType: 'image' | 'video' | 'document';
+        senderUserId: string | null;
+        createdAt: string;
+        documentName?: string;
+        documentMimeType?: string;
+      }>;
+    }>(`/chat/conversations/${encodeURIComponent(conversationId)}/media${query}`);
+    return payload.items ?? [];
+  } catch {
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1173,6 +1205,45 @@ export async function unarchiveConversationOnApi(conversationId: string): Promis
   await fetchJson<{ ok: true }>(
     `/chat/conversations/${encodeURIComponent(conversationId)}/archive`,
     { method: 'DELETE' }
+  );
+}
+
+export async function markConversationReadBatchOnApi(
+  conversationId: string,
+  options?: { upToMessageId?: string; upToTimestamp?: string },
+): Promise<void> {
+  const body: Record<string, unknown> = {};
+  if (options?.upToMessageId) body.upToMessageId = options.upToMessageId;
+  if (options?.upToTimestamp) body.upToTimestamp = options.upToTimestamp;
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/read`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }
+  );
+}
+
+export async function pinConversationOnApi(conversationId: string, pinned: boolean): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/pin`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pinned }),
+    }
+  );
+}
+
+export async function setConversationUnreadOnApi(conversationId: string, unread: boolean): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/unread`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unread }),
+    }
   );
 }
 

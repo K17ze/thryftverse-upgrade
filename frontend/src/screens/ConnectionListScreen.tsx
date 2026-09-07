@@ -110,8 +110,8 @@ export default function ConnectionListScreen() {
       const isSelf = item.id === currentUser?.id;
 
       return (
-        <Pressable
-          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        <AnimatedPressable
+          style={styles.row}
           onPress={() => handleOpenProfile(item.id)}
           accessibilityRole="button"
           accessibilityLabel={`Open ${name}'s profile`}
@@ -137,7 +137,7 @@ export default function ConnectionListScreen() {
             ) : null}
           </View>
           {!isSelf ? <FollowButton userId={item.id} serverIsFollowing={item.isFollowing} colors={colors} styles={styles} /> : null}
-        </Pressable>
+        </AnimatedPressable>
       );
     },
     [handleOpenProfile, currentUser?.id, colors, styles]

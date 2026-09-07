@@ -525,17 +525,56 @@ function ShadowGlyph({ selected }: GlyphRenderProps) {
 // ── Text ──
 
 function TextGlyph({ selected }: GlyphRenderProps) {
-  // Capital T — text tool
+  // Iconic Story "Aa" typography glyph (Instagram / Snapchat standard)
   if (selected) {
     return (
       <>
-        <Path d="M5 5h14M12 5v14" stroke="currentColor" strokeWidth={3} strokeLinecap={STROKE_LINECAP} />
+        {/* Capital A filled */}
+        <Path
+          d="M8.5 4L3 19h2.8l1.3-3.7h4.8L13.2 19H16L10.5 4H8.5zm.5 4.5l1.6 4.6H7.9L9 8.5z"
+          fill="currentColor"
+        />
+        {/* Lowercase a filled */}
+        <Path
+          d="M18.8 10.5h2v8.5h-2v-1.1c-.8.8-1.8 1.3-2.9 1.3-2.4 0-4.1-1.8-4.1-4.1 0-2.4 1.8-4.1 4.1-4.1 1.1 0 2.1.5 2.9 1.3v-1.8zm-2.8 2.2c-1.4 0-2.3 1.1-2.3 2.3s.9 2.3 2.3 2.3 2.3-1.1 2.3-2.3-.9-2.3-2.3-2.3z"
+          fill="currentColor"
+        />
       </>
     );
   }
   return (
     <>
-      <Path d="M5 5h14M12 5v14" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+      {/* Capital A stroke */}
+      <Path
+        d="M3.5 19L8.5 5h.2L13.7 19"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinecap={STROKE_LINECAP}
+        strokeLinejoin={STROKE_LINEJOIN}
+        fill="none"
+      />
+      <Path
+        d="M5.8 14.2h5.8"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinecap={STROKE_LINECAP}
+        fill="none"
+      />
+      {/* Lowercase a stroke */}
+      <Path
+        d="M19.5 11v8"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinecap={STROKE_LINECAP}
+        fill="none"
+      />
+      <Path
+        d="M19.5 13.5c-.9-1-2.2-1.5-3.5-1.5-2.2 0-3.8 1.6-3.8 3.5s1.6 3.5 3.8 3.5c1.3 0 2.6-.5 3.5-1.5"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinecap={STROKE_LINECAP}
+        fill="none"
+      />
     </>
   );
 }
@@ -625,19 +664,51 @@ function SafeZoneGlyph({ selected }: GlyphRenderProps) {
 }
 
 function ProductTagGlyph({ selected }: GlyphRenderProps) {
-  // Tag shape with a dot — product tag
+  // Luxury boutique fashion hangtag with eyelet and knotted thread
   if (selected) {
     return (
       <>
-        <Path d="M3 12l9-9h9v9l-9 9-9-9z" fill="currentColor" />
-        <Circle cx="16" cy="8" r="1.5" fill="currentColor" fillOpacity={0.4} />
+        {/* Filled designer tag */}
+        <Path
+          d="M3.5 12.5L11 5a2 2 0 0 1 1.4-.6H18a2 2 0 0 1 2 2v5.6a2 2 0 0 1-.6 1.4l-7.5 7.5a2 2 0 0 1-2.8 0l-5.6-5.6a2 2 0 0 1 0-2.8z"
+          fill="currentColor"
+        />
+        <Circle cx="15.5" cy="8.5" r="1.5" fill="#000000" fillOpacity={0.5} />
+        {/* Cord loop */}
+        <Path
+          d="M16.5 7.5L20 4a1.5 1.5 0 0 0-2-2l-3.5 3.5"
+          stroke="currentColor"
+          strokeWidth={STROKE_WIDTH}
+          strokeLinecap={STROKE_LINECAP}
+          fill="none"
+        />
       </>
     );
   }
   return (
     <>
-      <Path d="M3 12l9-9h9v9l-9 9-9-9z" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
-      <Circle cx="16" cy="8" r="1.5" stroke="currentColor" strokeWidth={STROKE_WIDTH} fill="none" />
+      <Path
+        d="M3.5 12.5L11 5a2 2 0 0 1 1.4-.6H18a2 2 0 0 1 2 2v5.6a2 2 0 0 1-.6 1.4l-7.5 7.5a2 2 0 0 1-2.8 0l-5.6-5.6a2 2 0 0 1 0-2.8z"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinejoin={STROKE_LINEJOIN}
+        fill="none"
+      />
+      <Circle
+        cx="15.5"
+        cy="8.5"
+        r="1.5"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        fill="none"
+      />
+      <Path
+        d="M16.5 7.5L20 4a1.5 1.5 0 0 0-2-2l-3.5 3.5"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinecap={STROKE_LINECAP}
+        fill="none"
+      />
     </>
   );
 }
@@ -703,21 +774,51 @@ function AdjustGlyph({ selected }: GlyphRenderProps) {
 }
 
 function FilterGlyph({ selected }: GlyphRenderProps) {
-  // Three overlapping circles — filter
+  // Iconic Instagram Stories magic sparkles cluster (effects/filters)
   if (selected) {
     return (
       <>
-        <Circle cx="9" cy="9" r="5" fill="currentColor" fillOpacity={0.5} />
-        <Circle cx="15" cy="9" r="5" fill="currentColor" fillOpacity={0.5} />
-        <Circle cx="12" cy="15" r="5" fill="currentColor" fillOpacity={0.5} />
+        {/* Dominant center sparkle */}
+        <Path
+          d="M12 2.5c0 3.6 3 6.5 6.5 6.5-3.5 0-6.5 2.9-6.5 6.5 0-3.6-3-6.5-6.5-6.5 3.5 0 6.5-2.9 6.5-6.5z"
+          fill="currentColor"
+        />
+        {/* Secondary lower-left sparkle */}
+        <Path
+          d="M5.5 14c0 2 1.6 3.5 3.5 3.5-1.9 0-3.5 1.5-3.5 3.5 0-2-1.6-3.5-3.5-3.5 1.9 0 3.5-1.5 3.5-3.5z"
+          fill="currentColor"
+        />
+        {/* Accent right twinkle */}
+        <Path
+          d="M19 15.5c0 1.3 1 2.5 2.5 2.5-1.5 0-2.5 1.2-2.5 2.5 0-1.3-1-2.5-2.5-2.5 1.5 0 2.5-1.2 2.5-2.5z"
+          fill="currentColor"
+        />
       </>
     );
   }
   return (
     <>
-      <Circle cx="9" cy="9" r="5" stroke="currentColor" strokeWidth={STROKE_WIDTH} fill="none" />
-      <Circle cx="15" cy="9" r="5" stroke="currentColor" strokeWidth={STROKE_WIDTH} fill="none" />
-      <Circle cx="12" cy="15" r="5" stroke="currentColor" strokeWidth={STROKE_WIDTH} fill="none" />
+      <Path
+        d="M12 2.5c0 3.6 3 6.5 6.5 6.5-3.5 0-6.5 2.9-6.5 6.5 0-3.6-3-6.5-6.5-6.5 3.5 0 6.5-2.9 6.5-6.5z"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinejoin={STROKE_LINEJOIN}
+        fill="none"
+      />
+      <Path
+        d="M5.5 14c0 2 1.6 3.5 3.5 3.5-1.9 0-3.5 1.5-3.5 3.5 0-2-1.6-3.5-3.5-3.5 1.9 0 3.5-1.5 3.5-3.5z"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinejoin={STROKE_LINEJOIN}
+        fill="none"
+      />
+      <Path
+        d="M19 15.5c0 1.3 1 2.5 2.5 2.5-1.5 0-2.5 1.2-2.5 2.5 0-1.3-1-2.5-2.5-2.5 1.5 0 2.5-1.2 2.5-2.5z"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinejoin={STROKE_LINEJOIN}
+        fill="none"
+      />
     </>
   );
 }
@@ -725,37 +826,111 @@ function FilterGlyph({ selected }: GlyphRenderProps) {
 // ── Creative tools ──
 
 function DrawingGlyph({ selected }: GlyphRenderProps) {
-  // Pencil / brush — drawing tool
+  // Iconic calligraphy marker with creative ink wave (Instagram/Snapchat doodle)
   if (selected) {
     return (
       <>
-        <Path d="M16 3l5 5-12 12H4v-5L16 3z" fill="currentColor" />
-        <Path d="M14 5l5 5" stroke="currentColor" strokeOpacity={0.4} strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+        <Path
+          d="M17.5 3.5l3 3-9 9-4.5 1.5 1.5-4.5 9-9z"
+          fill="currentColor"
+        />
+        <Path
+          d="M3 20.5c3-1.5 5 1.5 8 0s5-1.5 8 0"
+          stroke="currentColor"
+          strokeWidth={STROKE_WIDTH}
+          strokeLinecap={STROKE_LINECAP}
+          fill="none"
+        />
       </>
     );
   }
   return (
     <>
-      <Path d="M16 3l5 5-12 12H4v-5L16 3z" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
-      <Path d="M14 5l5 5" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} />
+      <Path
+        d="M17.5 3.5l3 3-9 9-4.5 1.5 1.5-4.5 9-9z"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinecap={STROKE_LINECAP}
+        strokeLinejoin={STROKE_LINEJOIN}
+        fill="none"
+      />
+      <Path
+        d="M14.5 6.5l3 3"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinecap={STROKE_LINECAP}
+      />
+      <Path
+        d="M3 20.5c3-1.5 5 1.5 8 0s5-1.5 8 0"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinecap={STROKE_LINECAP}
+        fill="none"
+      />
     </>
   );
 }
 
 function StickerGlyph({ selected }: GlyphRenderProps) {
-  // Sticker with a peeled corner
+  // Iconic peeled smiley sticker (Instagram / Snapchat Stories standard)
   if (selected) {
     return (
       <>
-        <Path d="M3 4a1 1 0 0 1 1-1h12l5 5v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z" fill="currentColor" />
-        <Path d="M16 3v5h5" stroke="currentColor" strokeOpacity={0.4} strokeWidth={STROKE_WIDTH} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
+        {/* Sticker body with peeled fold */}
+        <Path
+          d="M4 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10l7-7V5a2 2 0 0 0-2-2H4z"
+          fill="currentColor"
+        />
+        {/* Folded flap */}
+        <Path
+          d="M14 21v-5a2 2 0 0 1 2-2h5l-7 7z"
+          fill="currentColor"
+          fillOpacity={0.6}
+        />
+        {/* Eyes (contrast cutout) */}
+        <Circle cx="8" cy="10" r="1.5" fill="#000000" fillOpacity={0.6} />
+        <Circle cx="14" cy="10" r="1.5" fill="#000000" fillOpacity={0.6} />
+        {/* Cheerful smile */}
+        <Path
+          d="M8 14c1.2 1.8 3.8 1.8 5 0"
+          stroke="#000000"
+          strokeOpacity={0.6}
+          strokeWidth={STROKE_WIDTH}
+          strokeLinecap={STROKE_LINECAP}
+          fill="none"
+        />
       </>
     );
   }
   return (
     <>
-      <Path d="M3 4a1 1 0 0 1 1-1h12l5 5v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4z" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
-      <Path d="M16 3v5h5" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
+      {/* Outer sticker boundary with peel corner */}
+      <Path
+        d="M4 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10l7-7V5a2 2 0 0 0-2-2H4z"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinejoin={STROKE_LINEJOIN}
+        fill="none"
+      />
+      {/* Peeled flap crease */}
+      <Path
+        d="M14 21v-5a2 2 0 0 1 2-2h5"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinejoin={STROKE_LINEJOIN}
+        fill="none"
+      />
+      {/* Smiley eyes */}
+      <Circle cx="8" cy="10" r="1.2" fill="currentColor" />
+      <Circle cx="14" cy="10" r="1.2" fill="currentColor" />
+      {/* Smile */}
+      <Path
+        d="M8 14c1.2 1.8 3.8 1.8 5 0"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinecap={STROKE_LINECAP}
+        fill="none"
+      />
     </>
   );
 }
@@ -781,21 +956,47 @@ function AudioGlyph({ selected }: GlyphRenderProps) {
 }
 
 function MusicGlyph({ selected }: GlyphRenderProps) {
-  // Music note
+  // Beamed eighth notes with angled noteheads (Instagram Music standard)
   if (selected) {
     return (
       <>
-        <Path d="M9 18V5l11-2v13" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
-        <Circle cx="6" cy="18" r="3" fill="currentColor" />
-        <Circle cx="17" cy="16" r="3" fill="currentColor" />
+        <Path
+          d="M9 16V4.5l11-2v11.5"
+          stroke="currentColor"
+          strokeWidth={STROKE_WIDTH}
+          strokeLinecap={STROKE_LINECAP}
+          strokeLinejoin={STROKE_LINEJOIN}
+          fill="none"
+        />
+        <Path
+          d="M9 7.5l11-2"
+          stroke="currentColor"
+          strokeWidth={STROKE_WIDTH + 1}
+          strokeLinecap={STROKE_LINECAP}
+        />
+        <Circle cx="6.5" cy="16.5" r="3" fill="currentColor" />
+        <Circle cx="17.5" cy="14.5" r="3" fill="currentColor" />
       </>
     );
   }
   return (
     <>
-      <Path d="M9 18V5l11-2v13" stroke="currentColor" strokeWidth={STROKE_WIDTH} strokeLinecap={STROKE_LINECAP} strokeLinejoin={STROKE_LINEJOIN} fill="none" />
-      <Circle cx="6" cy="18" r="3" stroke="currentColor" strokeWidth={STROKE_WIDTH} fill="none" />
-      <Circle cx="17" cy="16" r="3" stroke="currentColor" strokeWidth={STROKE_WIDTH} fill="none" />
+      <Path
+        d="M9 16V4.5l11-2v11.5"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH}
+        strokeLinecap={STROKE_LINECAP}
+        strokeLinejoin={STROKE_LINEJOIN}
+        fill="none"
+      />
+      <Path
+        d="M9 7.5l11-2"
+        stroke="currentColor"
+        strokeWidth={STROKE_WIDTH + 1}
+        strokeLinecap={STROKE_LINECAP}
+      />
+      <Circle cx="6.5" cy="16.5" r="3" stroke="currentColor" strokeWidth={STROKE_WIDTH} fill="none" />
+      <Circle cx="17.5" cy="14.5" r="3" stroke="currentColor" strokeWidth={STROKE_WIDTH} fill="none" />
     </>
   );
 }

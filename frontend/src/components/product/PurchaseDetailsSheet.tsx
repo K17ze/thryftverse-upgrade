@@ -49,7 +49,7 @@ export function PurchaseDetailsSheet({
   formatFromFiat,
 }: PurchaseDetailsSheetProps) {
   const { colors } = useAppTheme();
-  const { currencyCode } = useFormattedPrice();
+  
 
   return (
     <BottomSheet visible={visible} onDismiss={onDismiss} snapPoint={0.72}>
@@ -58,7 +58,7 @@ export function PurchaseDetailsSheet({
           <Text style={[styles.purchaseSheetTitle, { color: colors.textPrimary }]} maxFontSizeMultiplier={2}>
             Costs, delivery & protection
           </Text>
-          <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]} maxFontSizeMultiplier={1}>
+          <Text style={[styles.purchaseSheetSubtitle, { color: colors.textMuted }]} maxFontSizeMultiplier={1.4}>
             Confirmed terms for this listing
           </Text>
         </View>
@@ -79,7 +79,7 @@ export function PurchaseDetailsSheet({
         {commerce.buyerProtectionFee != null ? (
           <CommerceDetailMetricRow
             label="Buyer protection fee"
-            value={formatFromFiat(commerce.buyerProtectionFee, currencyCode, { displayMode: 'fiat' })}
+            value={formatFromFiat(commerce.buyerProtectionFee, 'GBP', { displayMode: 'fiat' })}
           />
         ) : null}
         <CommerceDetailMetricRow

@@ -52,6 +52,10 @@ export const Motion = {
     instant: 0,
     /** 80ms — instant feedback (button press highlight). AGENTS §27.2. */
     touch: 80,
+    /** 160ms — press release (slower than press-down for asymmetric feel).
+     *  2026 micro-interaction research: press-down fast (80ms), release
+     *  slower (160ms) — separates "sluggish" from "twitchy". */
+    pressRelease: 160,
     /** 120ms — Quick feedback (tap, press). */
     fast: 120,
     /** 180ms — Standard state change (sheet open, tab switch). */

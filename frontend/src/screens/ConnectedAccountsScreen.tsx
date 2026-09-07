@@ -39,11 +39,18 @@ import { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ConnectedAccounts'>;
 
-const PROVIDER_META: Record<string, { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string }> = {
-  google: { label: 'Google', icon: 'logo-google', color: '#4285F4' },
-  apple: { label: 'Apple', icon: 'logo-apple', color: '#000000' },
-  facebook: { label: 'Facebook', icon: 'logo-facebook', color: '#1877F2' },
-};
+function getProviderMeta(provider: string, colors: ThemeColors): { label: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string } {
+  switch (provider.toLowerCase()) {
+    case 'google':
+      return { label: 'Google', icon: 'logo-google', color: '#4285F4' };
+    case 'apple':
+      return { label: 'Apple', icon: 'logo-apple', color: colors.textPrimary };
+    case 'facebook':
+      return { label: 'Facebook', icon: 'logo-facebook', color: '#1877F2' };
+    default:
+      return { label: provider, icon: 'key', color: colors.textMuted };
+  }
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-GB', {
@@ -91,7 +98,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
   }, [load]);
 
   const handleUnlink = (account: ConnectedAccount) => {
-    const meta = PROVIDER_META[account.provider] ?? { label: account.provider };
+    const meta = getProviderMeta(account.provider, colors);
     setConfirmSheet({
       visible: true,
       title: `Unlink ${meta.label}?`,
@@ -106,8 +113,8 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
           show(`${meta.label} account unlinked`, 'success');
           await load();
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to unlink account';
-          show(message, 'error');
+          haptic.error();
+          show(err instanceof Error ? err.message : 'Failed to unlink account', 'error');
         } finally {
           setUnlinkingId(null);
         }
@@ -166,11 +173,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
               />
             ) : (
               accounts.map((account, idx) => {
-                const meta = PROVIDER_META[account.provider] ?? {
-                  label: account.provider,
-                  icon: 'key',
-                  color: colors.textMuted,
-                };
+                const meta = getProviderMeta(account.provider, colors);
                 const isUnlinking = unlinkingId === account.id;
                 const isLast = idx === accounts.length - 1;
                 return (

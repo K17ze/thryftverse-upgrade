@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Pool } from 'pg';
 import { createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import {
   executeListingCommand,
   type ListingCommand,
@@ -20,7 +21,7 @@ type SellerHubRouteDependencies = {
 async function tableExists(pool: Pool, tableName: string): Promise<boolean> {
   try {
     const result = await pool.query<{ exists: boolean }>(
-      `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)`,
+      `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public')`,
       [tableName],
     );
     return Boolean(result.rows[0]?.exists);
@@ -76,126 +77,66 @@ interface SellerOverviewV2 {
     netSalesGbp: number;
     orders: number;
     completeness: 'complete' | 'partial';
+    /** Net sales change vs the previous 30-day period (percentage points). Null when previous period had zero sales. */
+    netSalesPrevPeriodPct: number | null;
+    /** Order count change vs the previous 30-day period (percentage points). Null when previous period had zero orders. */
+    ordersPrevPeriodPct: number | null;
   } | null;
+  /**
+   * Seller trust posture, projected from the backend-owned seller_trust row
+   * (response_rate, ship_within_days, total_sales, positive_rating_pct).
+   * Null when the seller has no trust row yet — the UI renders nothing
+   * (fail-closed: no badge without a backend row). Individual signals may
+   * still be null; the UI hides per-signal chips it cannot evidence.
+   */
+  trust: {
+    responseRatePct: number | null;
+    avgDispatchDays: number | null;
+    totalSales: number;
+    positiveRatingPct: number | null;
+    /**
+     * When the projection was last recomputed (seller_trust.calculated_at).
+     * Null when unknown. The UI qualifies signals older than 36h as stale.
+     */
+    calculatedAt: string | null;
+  } | null;
+  /**
+   * Near-winners: active listings with real 30-day view volume and zero
+   * 30-day sales. Empty array means none found (not an error); null means
+   * the interactions source is unavailable. Highest views first, max 4.
+   */
+  opportunities: {
+    listingId: string;
+    title: string;
+    imageUrl: string | null;
+    priceGbp: number | null;
+    views30d: number;
+  }[] | null;
 }
 
 // ── Batch command types ──
 
 interface BatchCommandItem {
   listingId: string;
-  expectedVersion?: number;
 }
 
 interface BatchCommandResult {
   listingId: string;
-  state: 'applied' | 'rejected' | 'conflict' | 'unknown';
-  code?: string;
+  state: 'applied' | 'rejected' | 'conflict';
+  newStatus?: string;
+  reason?: string;
   currentStatus?: string;
 }
 
 interface BatchCommandResponse {
   ok: boolean;
   batchId: string;
+  idempotencyKey: string;
   state: 'complete' | 'partial';
   results: BatchCommandResult[];
-}
-
-interface BatchJobRow {
-  id: string;
-  seller_id: string;
-  request_hash: string;
-  status: string;
-  is_stale?: boolean;
-}
-
-interface BatchItemRow {
-  listing_id: string;
-  status: string;
-  reason: string | null;
-  current_status: string | null;
-}
-
-function hashBatchRequest(command: string, items: BatchCommandItem[]): string {
-  return createHash('sha256')
-    .update(JSON.stringify({
-      command,
-      items: items.map((item) => ({
-        listingId: item.listingId,
-        expectedVersion: item.expectedVersion ?? null,
-      })),
-    }))
-    .digest('hex');
-}
-
-function commandForItem(
-  command: 'pause' | 'resume' | 'delete' | 'mark_sold_external',
-  item: BatchCommandItem,
-  actorId: string,
-): ListingCommand {
-  return {
-    type: command,
-    listingId: item.listingId,
-    actorId,
-    reason: 'seller_hub',
-  } as ListingCommand;
-}
-
-async function readBatchResponse(
-  db: Pool,
-  jobId: string,
-): Promise<BatchCommandResponse> {
-  const jobResult = await db.query<{ status: string }>(
-    `SELECT status FROM listing_batch_jobs WHERE id = $1 LIMIT 1`,
-    [jobId],
-  );
-  const itemResult = await db.query<BatchItemRow>(
-    `SELECT listing_id, status, reason, current_status
-       FROM listing_batch_items
-      WHERE batch_job_id = $1
-      ORDER BY created_at ASC, listing_id ASC`,
-    [jobId],
-  );
-
-  const results = itemResult.rows.map<BatchCommandResult>((item) => {
-    if (item.status === 'applied') {
-      return {
-        listingId: item.listing_id,
-        state: 'applied',
-        currentStatus: item.current_status ?? undefined,
-      };
-    }
-    if (item.status === 'rejected') {
-      return {
-        listingId: item.listing_id,
-        state: 'rejected',
-        code: item.reason ?? 'rejected',
-        currentStatus: item.current_status ?? undefined,
-      };
-    }
-    if (item.status === 'conflict' && item.reason !== 'server_error') {
-      return {
-        listingId: item.listing_id,
-        state: 'conflict',
-        code: item.reason ?? 'conflict',
-        currentStatus: item.current_status ?? undefined,
-      };
-    }
-    return {
-      listingId: item.listing_id,
-      state: 'unknown',
-      code: item.reason ?? (item.status === 'pending' ? 'processing' : 'server_error'),
-      currentStatus: item.current_status ?? undefined,
-    };
-  });
-
-  const finished = jobResult.rows[0]?.status === 'completed';
-  const allApplied = finished && results.length > 0 && results.every((item) => item.state === 'applied');
-  return {
-    ok: true,
-    batchId: jobId,
-    state: allApplied ? 'complete' : 'partial',
-    results,
-  };
+  appliedCount: number;
+  rejectedCount: number;
+  conflictCount: number;
 }
 
 export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDependencies) => {
@@ -229,6 +170,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       payoutAvailable,
       trustAvailable,
       reserveHoldsAvailable,
+      interactionsAvailable,
     ] = await Promise.all([
       tableExists(readDb, 'orders'),
       tableExists(readDb, 'listing_offers'),
@@ -236,6 +178,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       tableExists(readDb, 'payout_accounts'),
       tableExists(readDb, 'seller_trust'),
       tableExists(readDb, 'payout_reserve_holds'),
+      tableExists(readDb, 'interactions'),
     ]);
 
     // ── Inventory counts (real, uncapped) ──
@@ -481,7 +424,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
           FROM ledger_entries
           WHERE account_id = (
             SELECT id FROM ledger_accounts
-            WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
+            WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
             LIMIT 1
           )
         `,
@@ -555,64 +498,125 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
     let businessPulse: SellerOverviewV2['businessPulse'] = null;
     if (ordersAvailable) {
       try {
-        const pulseResult = await readDb.query<{
-          gross_sales: string | null;
-          orders: string;
-        }>(
-          `
-          SELECT
-            COALESCE(SUM(subtotal_gbp), 0) AS gross_sales,
-            COUNT(*) AS orders
-          FROM orders
-          WHERE seller_id = $1
-            AND status IN ('paid', 'shipped', 'delivered')
-            AND paid_at >= NOW() - INTERVAL '30 days'
-        `,
-          [sellerId],
-        );
+        const [pulseResult, prevPulseResult] = await Promise.all([
+          readDb.query<{
+            gross_sales: string | null;
+            orders: string;
+          }>(
+            `
+            SELECT
+              COALESCE(SUM(subtotal_gbp), 0) AS gross_sales,
+              COUNT(*) AS orders
+            FROM orders
+            WHERE seller_id = $1
+              AND status IN ('paid', 'shipped', 'delivered')
+              AND paid_at >= NOW() - INTERVAL '30 days'
+          `,
+            [sellerId],
+          ),
+          // Previous 30-day period for period-over-period comparison
+          readDb.query<{
+            gross_sales: string | null;
+            orders: string;
+          }>(
+            `
+            SELECT
+              COALESCE(SUM(subtotal_gbp), 0) AS gross_sales,
+              COUNT(*) AS orders
+            FROM orders
+            WHERE seller_id = $1
+              AND status IN ('paid', 'shipped', 'delivered')
+              AND paid_at >= NOW() - INTERVAL '60 days'
+              AND paid_at < NOW() - INTERVAL '30 days'
+          `,
+            [sellerId],
+          ),
+        ]);
         const grossSalesGbp = parseFloat(String(pulseResult.rows[0]?.gross_sales ?? '0')) || 0;
         const orders = parseInt(pulseResult.rows[0]?.orders ?? '0', 10) || 0;
+        const prevGrossSalesGbp = parseFloat(String(prevPulseResult.rows[0]?.gross_sales ?? '0')) || 0;
+        const prevOrders = parseInt(prevPulseResult.rows[0]?.orders ?? '0', 10) || 0;
 
-        // Refunds and fees from ledger (if available)
+        // Refunds and fees from ledger (if available), current + previous period
         let refundsGbp = 0;
         let feesGbp = 0;
+        let prevRefundsGbp = 0;
+        let prevFeesGbp = 0;
         let completeness: 'complete' | 'partial' = 'complete';
         if (ledgerAvailable) {
           try {
-            const refundsResult = await readDb.query<{ refunds: string | null }>(
-              `
-              SELECT COALESCE(SUM(amount_gbp), 0)::text AS refunds
-              FROM ledger_entries
-              WHERE account_id = (
-                SELECT id FROM ledger_accounts
-                WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
-                LIMIT 1
-              )
-              AND source_type = 'refund'
-              AND direction = 'debit'
-              AND created_at >= NOW() - INTERVAL '30 days'
-            `,
-              [sellerId],
-            );
+            const [refundsResult, feesResult, prevRefundsResult, prevFeesResult] = await Promise.all([
+              readDb.query<{ refunds: string | null }>(
+                `
+                SELECT COALESCE(SUM(amount_gbp), 0)::text AS refunds
+                FROM ledger_entries
+                WHERE account_id = (
+                  SELECT id FROM ledger_accounts
+                  WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+                  LIMIT 1
+                )
+                AND source_type = 'refund'
+                AND direction = 'debit'
+                AND created_at >= NOW() - INTERVAL '30 days'
+              `,
+                [sellerId],
+              ),
+              readDb.query<{ fees: string | null }>(
+                `
+                SELECT COALESCE(SUM(amount_gbp), 0)::text AS fees
+                FROM ledger_entries
+                WHERE account_id = (
+                  SELECT id FROM ledger_accounts
+                  WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+                  LIMIT 1
+                )
+                AND source_type = 'order_payment'
+                AND direction = 'debit'
+                AND line_type = 'platform_fee'
+                AND created_at >= NOW() - INTERVAL '30 days'
+              `,
+                [sellerId],
+              ),
+              // Previous-period refunds
+              readDb.query<{ refunds: string | null }>(
+                `
+                SELECT COALESCE(SUM(amount_gbp), 0)::text AS refunds
+                FROM ledger_entries
+                WHERE account_id = (
+                  SELECT id FROM ledger_accounts
+                  WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+                  LIMIT 1
+                )
+                AND source_type = 'refund'
+                AND direction = 'debit'
+                AND created_at >= NOW() - INTERVAL '60 days'
+                AND created_at < NOW() - INTERVAL '30 days'
+              `,
+                [sellerId],
+              ),
+              // Previous-period fees
+              readDb.query<{ fees: string | null }>(
+                `
+                SELECT COALESCE(SUM(amount_gbp), 0)::text AS fees
+                FROM ledger_entries
+                WHERE account_id = (
+                  SELECT id FROM ledger_accounts
+                  WHERE owner_type = 'user' AND owner_id = $1 AND account_code = 'seller_payable'
+                  LIMIT 1
+                )
+                AND source_type = 'order_payment'
+                AND direction = 'debit'
+                AND line_type = 'platform_fee'
+                AND created_at >= NOW() - INTERVAL '60 days'
+                AND created_at < NOW() - INTERVAL '30 days'
+              `,
+                [sellerId],
+              ),
+            ]);
             refundsGbp = parseFloat(String(refundsResult.rows[0]?.refunds ?? '0')) || 0;
-
-            const feesResult = await readDb.query<{ fees: string | null }>(
-              `
-              SELECT COALESCE(SUM(amount_gbp), 0)::text AS fees
-              FROM ledger_entries
-              WHERE account_id = (
-                SELECT id FROM ledger_accounts
-                WHERE owner_type = 'user' AND owner_id = $1 AND code = 'seller_payable'
-                LIMIT 1
-              )
-              AND source_type = 'order_payment'
-              AND direction = 'debit'
-              AND line_type = 'platform_fee'
-              AND created_at >= NOW() - INTERVAL '30 days'
-            `,
-              [sellerId],
-            );
             feesGbp = parseFloat(String(feesResult.rows[0]?.fees ?? '0')) || 0;
+            prevRefundsGbp = parseFloat(String(prevRefundsResult.rows[0]?.refunds ?? '0')) || 0;
+            prevFeesGbp = parseFloat(String(prevFeesResult.rows[0]?.fees ?? '0')) || 0;
           } catch {
             completeness = 'partial';
           }
@@ -621,6 +625,25 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         }
 
         const netSalesGbp = grossSalesGbp - refundsGbp - feesGbp;
+        const prevNetSalesGbp = prevGrossSalesGbp - prevRefundsGbp - prevFeesGbp;
+
+        // Period-over-period percentage change.
+        // - Null when previous period was zero (avoids division-by-zero).
+        // - Null when previous period was negative (refunds > revenue) — the
+        //   percentage sign is semantically meaningless for negative bases.
+        // - Clamped to ±999% to prevent multi-thousand-percent displays from
+        //   tiny previous-period denominators.
+        const clampPct = (pct: number): number =>
+          Math.min(Math.max(Math.round(pct * 10) / 10, -999), 999);
+
+        const netSalesPrevPeriodPct =
+          prevNetSalesGbp > 0
+            ? clampPct(((netSalesGbp - prevNetSalesGbp) / prevNetSalesGbp) * 100)
+            : null;
+        const ordersPrevPeriodPct =
+          prevOrders > 0
+            ? clampPct(((orders - prevOrders) / prevOrders) * 100)
+            : null;
 
         businessPulse = {
           period: '30d',
@@ -630,6 +653,8 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
           netSalesGbp: Math.round(netSalesGbp * 100) / 100,
           orders,
           completeness,
+          netSalesPrevPeriodPct,
+          ordersPrevPeriodPct,
         };
         freshness.business_pulse = { asOf: generatedAt, state: 'fresh' };
       } catch {
@@ -637,6 +662,113 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       }
     } else {
       freshness.business_pulse = { asOf: generatedAt, state: 'unavailable' };
+    }
+
+    // ── Trust posture (backend-owned seller_trust projection) ──
+    // Fail-closed: no row → trust is null and the UI renders no trust UI.
+    // A row with null columns still returns the row; the UI hides only the
+    // signals it cannot evidence. Freshness is real: it derives from the
+    // row's calculated_at (daily recompute cadence + 12h tolerance), never
+    // from request time — a stale projection is labelled stale, not fresh.
+    let trust: SellerOverviewV2['trust'] = null;
+    if (trustAvailable) {
+      try {
+        const trustResult = await readDb.query<{
+          response_rate: string | null;
+          ship_within_days: string | null;
+          total_sales: string | null;
+          positive_rating_pct: string | null;
+          calculated_at: string | null;
+        }>(
+          `
+          SELECT response_rate::text, ship_within_days::text,
+                 total_sales::text, positive_rating_pct::text,
+                 calculated_at::text
+          FROM seller_trust
+          WHERE user_id = $1
+          LIMIT 1
+        `,
+          [sellerId],
+        );
+        const row = trustResult.rows[0];
+        if (row) {
+          const toNum = (v: string | null): number | null => {
+            if (v == null) return null;
+            const n = Number(v);
+            return Number.isFinite(n) ? n : null;
+          };
+          trust = {
+            responseRatePct: toNum(row.response_rate),
+            avgDispatchDays: toNum(row.ship_within_days),
+            totalSales: Math.max(0, parseInt(row.total_sales ?? '0', 10) || 0),
+            positiveRatingPct: toNum(row.positive_rating_pct),
+            calculatedAt: row.calculated_at,
+          };
+          const ageMs = row.calculated_at ? Date.now() - new Date(row.calculated_at).getTime() : NaN;
+          freshness.trust = {
+            asOf: row.calculated_at ?? generatedAt,
+            state: Number.isFinite(ageMs) && ageMs <= 36 * 60 * 60 * 1000 ? 'fresh' : 'stale',
+          };
+        } else {
+          freshness.trust = { asOf: generatedAt, state: 'unavailable' };
+        }
+      } catch {
+        freshness.trust = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.trust = { asOf: generatedAt, state: 'unavailable' };
+    }
+
+    // ── Near-winners (Etsy 2026 playbook: high views + zero sales) ──
+    // Active listings with ≥10 qualified views in 30d and no settled sale
+    // in 30d, highest views first. Empty array = none found (render nothing);
+    // null = interactions source unavailable (render nothing, no lecture).
+    let opportunities: SellerOverviewV2['opportunities'] = null;
+    if (interactionsAvailable && ordersAvailable) {
+      try {
+        const oppResult = await readDb.query<{
+          id: string;
+          title: string;
+          image_url: string | null;
+          price_gbp: string | null;
+          views: string;
+        }>(
+          `
+          SELECT l.id, l.title, l.image_url, l.price_gbp::text,
+                 COUNT(i.id) FILTER (
+                   WHERE i.action IN ('view', 'qualified_detail_view')
+                     AND i.created_at >= NOW() - INTERVAL '30 days'
+                 ) AS views
+          FROM listings l
+          LEFT JOIN interactions i ON i.listing_id = l.id
+          LEFT JOIN orders o ON o.listing_id = l.id
+            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.paid_at >= NOW() - INTERVAL '30 days'
+          WHERE l.seller_id = $1 AND l.status = 'active'
+          GROUP BY l.id
+          HAVING COUNT(i.id) FILTER (
+                   WHERE i.action IN ('view', 'qualified_detail_view')
+                     AND i.created_at >= NOW() - INTERVAL '30 days'
+                 ) >= 10
+             AND COUNT(o.id) = 0
+          ORDER BY views DESC
+          LIMIT 4
+        `,
+          [sellerId],
+        );
+        opportunities = oppResult.rows.map((r) => ({
+          listingId: r.id,
+          title: r.title,
+          imageUrl: r.image_url,
+          priceGbp: r.price_gbp != null ? Number(r.price_gbp) : null,
+          views30d: parseInt(r.views ?? '0', 10) || 0,
+        }));
+        freshness.opportunities = { asOf: generatedAt, state: 'fresh' };
+      } catch {
+        freshness.opportunities = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.opportunities = { asOf: generatedAt, state: 'unavailable' };
     }
 
     const overview: SellerOverviewV2 = {
@@ -655,9 +787,60 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         listedValueGbp: parseFloat(String(inventory.active_value ?? '0')) || 0,
       },
       businessPulse,
+      trust,
+      opportunities,
     };
 
     return { ok: true, overview };
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // GET /seller-hub/inventory/totals — uncapped status counts for inventory
+  //
+  // Per P0: status totals (active, sold, paused, draft) must come from a
+  // server-side aggregate, not from counting a client-side subset capped at
+  // 200. This lightweight endpoint returns only the counts so inventory
+  // screens can show truthful totals without loading every listing row.
+  // ════════════════════════════════════════════════════════════════════════
+  app.get('/seller-hub/inventory/totals', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.authUser) {
+      reply.code(401);
+      return { ok: false, error: 'Unauthorized' };
+    }
+
+    const sellerId = request.authUser.userId;
+
+    const inventoryResult = await readDb.query<{
+      active: string;
+      drafts: string;
+      paused: string;
+      sold: string;
+      active_value: string | null;
+    }>(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'active') AS active,
+        COUNT(*) FILTER (WHERE status = 'draft') AS drafts,
+        COUNT(*) FILTER (WHERE status = 'paused') AS paused,
+        COUNT(*) FILTER (WHERE status = 'sold') AS sold,
+        COALESCE(SUM(price_gbp) FILTER (WHERE status = 'active'), 0) AS active_value
+      FROM listings
+      WHERE seller_id = $1 AND status != 'deleted'
+    `,
+      [sellerId],
+    );
+    const row = inventoryResult.rows[0] ?? { active: '0', drafts: '0', paused: '0', sold: '0', active_value: '0' };
+
+    return {
+      ok: true,
+      totals: {
+        active: parseInt(row.active, 10) || 0,
+        drafts: parseInt(row.drafts, 10) || 0,
+        paused: parseInt(row.paused, 10) || 0,
+        sold: parseInt(row.sold, 10) || 0,
+        listedValueGbp: parseFloat(String(row.active_value ?? '0')) || 0,
+      },
+    };
   });
 
   // ════════════════════════════════════════════════════════════════════════
@@ -685,9 +868,9 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       reply.code(400);
       return { ok: false, error: 'idempotencyKey is required (min 4 chars)' };
     }
-    if (!['pause', 'resume', 'delete', 'mark_sold_external'].includes(body.command)) {
+    if (!['pause', 'resume', 'delete'].includes(body.command)) {
       reply.code(400);
-      return { ok: false, error: 'command must be pause, resume, delete, or mark_sold_external' };
+      return { ok: false, error: 'command must be pause, resume, or delete' };
     }
     if (!Array.isArray(body.items) || body.items.length === 0) {
       reply.code(400);
@@ -698,168 +881,230 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       return { ok: false, error: 'Maximum 200 items per batch' };
     }
 
-    const command = body.command as 'pause' | 'resume' | 'delete' | 'mark_sold_external';
-    const items: BatchCommandItem[] = body.items.map((item: any) => ({
-      listingId: item.listingId,
-      expectedVersion: Number.isInteger(item.expectedVersion) && item.expectedVersion > 0
-        ? item.expectedVersion
-        : undefined,
-    }));
-    if (items.some((item) => typeof item.listingId !== 'string' || item.listingId.length < 2)) {
-      reply.code(400);
-      return { ok: false, error: 'Each item must include a valid listingId' };
-    }
-    if (new Set(items.map((item) => item.listingId)).size !== items.length) {
-      reply.code(400);
-      return { ok: false, error: 'A listing can appear only once in a batch' };
-    }
+    const command: 'pause' | 'resume' | 'delete' = body.command;
+    const items: BatchCommandItem[] = body.items;
+    const idempotencyKey: string = body.idempotencyKey;
+    const requestHash: string =
+      typeof body.requestHash === 'string' && body.requestHash.length > 0
+        ? body.requestHash
+        : createHash('sha256')
+            .update(JSON.stringify({ command, items }))
+            .digest('hex');
 
-    const requestHash = hashBatchRequest(command, items);
-    // Migration 231 has a global uniqueness constraint. Prefixing the opaque
-    // client key keeps it seller-scoped and prevents cross-account collisions.
-    const durableKey = `${sellerId}:${body.idempotencyKey}`;
-    const initClient = await db.connect();
-    let jobId = '';
-    let shouldProcess = true;
-    try {
-      await initClient.query('BEGIN');
-      const existingJob = await initClient.query<BatchJobRow>(
-        `SELECT id, seller_id, request_hash, status,
-                created_at < NOW() - INTERVAL '30 seconds' AS is_stale
-           FROM listing_batch_jobs
-          WHERE idempotency_key = $1
-          LIMIT 1
-          FOR UPDATE`,
-        [durableKey],
-      );
-
-      if (existingJob.rowCount) {
-        const existing = existingJob.rows[0];
-        if (existing.seller_id !== sellerId || existing.request_hash !== requestHash) {
-          await initClient.query('ROLLBACK');
-          reply.code(409);
-          return {
-            ok: false,
-            error: 'This idempotency key was already used for a different request',
-            code: 'IDEMPOTENCY_KEY_REUSED',
-          };
-        }
-        jobId = existing.id;
-        shouldProcess = existing.status !== 'completed'
-          && (existing.status !== 'processing' || Boolean(existing.is_stale));
-        if (shouldProcess) {
-          await initClient.query(
-            `UPDATE listing_batch_jobs SET status = 'processing' WHERE id = $1`,
-            [jobId],
-          );
-        }
-      } else {
-        const insertedJob = await initClient.query<{ id: string }>(
-          `INSERT INTO listing_batch_jobs (
-             idempotency_key, request_hash, seller_id, command, status, total_items
-           )
-           VALUES ($1, $2, $3, $4, 'processing', $5)
-           RETURNING id`,
-          [durableKey, requestHash, sellerId, command, items.length],
-        );
-        jobId = insertedJob.rows[0].id;
-        for (const item of items) {
-          await initClient.query(
-            `INSERT INTO listing_batch_items (batch_job_id, listing_id, status)
-             VALUES ($1, $2, 'pending')`,
-            [jobId, item.listingId],
-          );
-        }
-      }
-      await initClient.query('COMMIT');
-    } catch (error) {
-      await initClient.query('ROLLBACK');
-      app.log.error({ err: error, sellerId, command }, 'Failed to initialise listing batch command');
-      reply.code(500);
-      return { ok: false, error: 'Failed to start listing update' };
-    } finally {
-      initClient.release();
-    }
-
-    // A concurrent replay returns the durable state as it stands. Pending
-    // rows become `unknown`, prompting reconciliation rather than duplication.
-    if (!shouldProcess) {
-      return readBatchResponse(db, jobId);
-    }
-
-    const pendingRows = await db.query<{ listing_id: string }>(
-      `SELECT listing_id
-         FROM listing_batch_items
-        WHERE batch_job_id = $1 AND status = 'pending'
-        ORDER BY created_at ASC, listing_id ASC`,
-      [jobId],
+    // ── Idempotency replay ────────────────────────────────────────────
+    // If a batch job with this idempotency key already exists, return its
+    // durable receipt. This makes the endpoint safe to retry after a
+    // network timeout: the client re-sends the same key and gets back the
+    // exact same per-item outcomes.
+    const existingJob = await db.query<{
+      id: string;
+      request_hash: string;
+      status: string;
+      applied_count: number;
+      rejected_count: number;
+      conflict_count: number;
+      total_items: number;
+    }>(
+      `SELECT id, request_hash, status, applied_count, rejected_count,
+              conflict_count, total_items
+         FROM listing_batch_jobs
+        WHERE idempotency_key = $1
+        LIMIT 1`,
+      [idempotencyKey],
     );
-    const itemById = new Map(items.map((item) => [item.listingId, item]));
 
-    // Execute independently, but always through the canonical state machine.
-    for (const pending of pendingRows.rows) {
-      const item = itemById.get(pending.listing_id) ?? { listingId: pending.listing_id };
-      const ownership = await db.query<{ seller_id: string }>(
-        `SELECT seller_id FROM listings WHERE id = $1 LIMIT 1`,
-        [item.listingId],
+    if (existingJob.rowCount && existingJob.rows.length > 0) {
+      const job = existingJob.rows[0];
+      if (job.request_hash !== requestHash) {
+        reply.code(409);
+        return {
+          ok: false,
+          error: 'idempotencyKey was already used with a different request body',
+          code: 'IDEMPOTENCY_PAYLOAD_MISMATCH',
+        };
+      }
+      // Replay the persisted per-item results.
+      const persistedItems = await db.query<{
+        listing_id: string;
+        status: string;
+        reason: string | null;
+        current_status: string | null;
+      }>(
+        `SELECT listing_id, status, reason, current_status
+           FROM listing_batch_items
+          WHERE batch_job_id = $1
+          ORDER BY created_at`,
+        [job.id],
       );
-      if (!ownership.rowCount) {
+      const results: BatchCommandResult[] = persistedItems.rows.map((row) => ({
+        listingId: row.listing_id,
+        state: row.status as BatchCommandResult['state'],
+        reason: row.reason ?? undefined,
+        currentStatus: row.current_status ?? undefined,
+      }));
+      const hasFailures = results.some((r) => r.state !== 'applied');
+      const response: BatchCommandResponse = {
+        ok: true,
+        batchId: job.id,
+        idempotencyKey,
+        state: hasFailures ? 'partial' : 'complete',
+        results,
+        appliedCount: job.applied_count,
+        rejectedCount: job.rejected_count,
+        conflictCount: job.conflict_count,
+      };
+      return response;
+    }
+
+    // ── Create the durable batch job row ──────────────────────────────
+    const batchId = randomUUID();
+    await db.query(
+      `INSERT INTO listing_batch_jobs
+         (id, idempotency_key, request_hash, seller_id, command, status, total_items)
+       VALUES ($1, $2, $3, $4, $5, 'processing', $6)`,
+      [batchId, idempotencyKey, requestHash, sellerId, command, items.length],
+    );
+
+    const results: BatchCommandResult[] = [];
+    let appliedCount = 0;
+    let rejectedCount = 0;
+    let conflictCount = 0;
+
+    // ── Batch ownership check ─────────────────────────────────────────
+    // Fetch all listing ownership in a single query instead of per-item
+    // round-trips. This reduces N+1 from 200 queries to 1.
+    const listingIds = items.map((i) => i.listingId);
+    const ownershipResult = await db.query<{ id: string; seller_id: string }>(
+      `SELECT id, seller_id FROM listings WHERE id = ANY($1)`,
+      [listingIds],
+    );
+    const ownershipMap = new Map<string, string>();
+    for (const row of ownershipResult.rows) {
+      ownershipMap.set(row.id, row.seller_id);
+    }
+
+    // Execute each item independently through the canonical listing command
+    // service. A failure on one item does NOT affect the others — this is
+    // the core correctness fix. The canonical service handles the row lock,
+    // transition validation, search index side effects, offer cancellation,
+    // and audit recording.
+    for (const item of items) {
+      // Ownership is verified BEFORE executing the command to prevent
+      // a seller from mutating another seller's listing. The canonical
+      // service is generic (no sellerId parameter), so we enforce the
+      // authorization boundary here, prior to any mutation.
+      const ownerSellerId = ownershipMap.get(item.listingId);
+      if (!ownerSellerId) {
+        results.push({
+          listingId: item.listingId,
+          state: 'rejected',
+          newStatus: undefined,
+          reason: 'not_found',
+          currentStatus: undefined,
+        });
+        rejectedCount += 1;
         await db.query(
-          `UPDATE listing_batch_items
-              SET status = 'rejected', reason = 'not_found', current_status = 'unknown'
-            WHERE batch_job_id = $1 AND listing_id = $2 AND status = 'pending'`,
-          [jobId, item.listingId],
+          `INSERT INTO listing_batch_items
+             (job_id, listing_id, state, reason, current_status, new_status)
+           VALUES ($1, $2, 'rejected', 'not_found', NULL, NULL)`,
+          [batchId, item.listingId],
         );
         continue;
       }
-      if (ownership.rows[0].seller_id !== sellerId) {
+      if (ownerSellerId !== sellerId) {
+        results.push({
+          listingId: item.listingId,
+          state: 'rejected',
+          newStatus: undefined,
+          reason: 'forbidden',
+          currentStatus: undefined,
+        });
+        rejectedCount += 1;
         await db.query(
-          `UPDATE listing_batch_items
-              SET status = 'rejected', reason = 'forbidden', current_status = 'unknown'
-            WHERE batch_job_id = $1 AND listing_id = $2 AND status = 'pending'`,
-          [jobId, item.listingId],
+          `INSERT INTO listing_batch_items
+             (job_id, listing_id, state, reason, current_status, new_status)
+           VALUES ($1, $2, 'rejected', 'forbidden', NULL, NULL)`,
+          [batchId, item.listingId],
         );
         continue;
       }
 
-      const result = await executeListingCommand(
-        db,
-        commandForItem(command, item, sellerId),
-        item.expectedVersion,
-      );
+      const listingCommand: ListingCommand = {
+        type: command,
+        listingId: item.listingId,
+        actorId: sellerId,
+      } as ListingCommand;
+
+      const result = await executeListingCommand(db, listingCommand);
+
+      let state: BatchCommandResult['state'];
+      let reason: string | undefined;
+      let currentStatus: string | undefined;
+      let newStatus: string | undefined;
+
+      if (result.status === 'applied') {
+        state = 'applied';
+        newStatus = result.newStatus;
+        appliedCount += 1;
+      } else if (result.status === 'rejected') {
+        state = 'rejected';
+        reason = result.reason;
+        currentStatus = result.currentStatus;
+        rejectedCount += 1;
+      } else {
+        state = 'conflict';
+        reason = result.reason;
+        currentStatus = result.currentStatus;
+        conflictCount += 1;
+      }
+
+      results.push({
+        listingId: item.listingId,
+        state,
+        newStatus,
+        reason,
+        currentStatus,
+      });
+
+      // Persist the per-item outcome so a replay returns the same receipt.
       await db.query(
-        `UPDATE listing_batch_items
-            SET status = $3, reason = $4, current_status = $5
-          WHERE batch_job_id = $1 AND listing_id = $2 AND status = 'pending'`,
+        `INSERT INTO listing_batch_items
+           (batch_job_id, listing_id, status, reason, current_status)
+         VALUES ($1, $2, $3, $4, $5)`,
         [
-          jobId,
+          batchId,
           item.listingId,
-          result.status,
-          result.status === 'applied' ? null : result.reason,
-          result.status === 'applied' ? result.newStatus : result.currentStatus,
+          state,
+          reason ?? null,
+          currentStatus ?? newStatus ?? null,
         ],
       );
     }
 
+    // ── Finalize the batch job ────────────────────────────────────────
     await db.query(
-      `UPDATE listing_batch_jobs job
+      `UPDATE listing_batch_jobs
           SET status = 'completed',
-              completed_at = NOW(),
-              applied_count = counts.applied_count,
-              rejected_count = counts.rejected_count,
-              conflict_count = counts.conflict_count
-         FROM (
-           SELECT
-             COUNT(*) FILTER (WHERE status = 'applied')::int AS applied_count,
-             COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected_count,
-             COUNT(*) FILTER (WHERE status = 'conflict')::int AS conflict_count
-           FROM listing_batch_items
-           WHERE batch_job_id = $1
-         ) counts
-        WHERE job.id = $1`,
-      [jobId],
+              applied_count = $2,
+              rejected_count = $3,
+              conflict_count = $4,
+              completed_at = NOW()
+        WHERE id = $1`,
+      [batchId, appliedCount, rejectedCount, conflictCount],
     );
 
-    return readBatchResponse(db, jobId);
+    const hasFailures = results.some((r) => r.state !== 'applied');
+    const response: BatchCommandResponse = {
+      ok: true,
+      batchId,
+      idempotencyKey,
+      state: hasFailures ? 'partial' : 'complete',
+      results,
+      appliedCount,
+      rejectedCount,
+      conflictCount,
+    };
+
+    return response;
   });
 };

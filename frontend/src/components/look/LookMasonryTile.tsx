@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
 import { View, StyleSheet, Pressable, Text, type TextStyle } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
@@ -8,6 +7,7 @@ import { Space, Typography, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { useRenderTrace } from '../../performance/renderTrace';
 import { isLookVideo, isLookCarousel, isLookMultiLayer } from '../../utils/lookTemplates';
+import { CachedImage } from '../CachedImage';
 import { AppIcon } from '../common/AppIcon';
 import { IconSize } from '../../theme/iconTokens';
 import type { LookApiItem } from '../../services/looksApi';
@@ -19,7 +19,7 @@ export interface LookMasonryTileProps {
   aspectRatio?: number;
   testID?: string;
   /** Visual variant: 'default' shows caption/creator overlay; 'explore' is
-   *  Instagram-style — media-only with small media-type badges, no text. */
+   *  Media-only with small media-type badges, no text. */
   variant?: 'default' | 'explore';
 }
 
@@ -42,7 +42,7 @@ function LookMasonryTileImpl({
 
   const handlePress = useCallback(() => onPress(look.id), [onPress, look.id]);
 
-  // ── Explore variant: Instagram-style — media is the label ──────────────
+  // ── Explore variant: media is the label ──────────────
   // No text overlays. Small media-type badges top-right. Pricetag badge
   // bottom-right. Tighter radius for discovery density.
   if (variant === 'explore') {
@@ -56,18 +56,16 @@ function LookMasonryTileImpl({
         testID={testID}
       >
         <View style={[styles.imageWrap, { aspectRatio }]}>
-          <ExpoImage
-            source={{ uri: look.mediaUrl }}
+          <CachedImage
+            uri={look.mediaUrl}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            cachePolicy="disk"
-            recyclingKey={look.id}
-            transition={160}
+            priority="high"
           />
 
           {/* Media-type badge — bare glyph top-right with drop-shadow for
               legibility over varying imagery. No chip/pill background —
-              Instagram uses bare glyphs, not contained badges.
+              Use bare glyphs, not contained badges.
               Video → play icon, Carousel → stacked-layers icon,
               Multi-layer collage → layers icon. Single image → no badge. */}
           {(isVideo || isCarousel || isMultiLayer) && (
@@ -112,13 +110,11 @@ function LookMasonryTileImpl({
       testID={testID}
     >
       <View style={[styles.imageWrap, { aspectRatio }]}>
-        <ExpoImage
-          source={{ uri: look.mediaUrl }}
+        <CachedImage
+          uri={look.mediaUrl}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          cachePolicy="memory-disk"
-          recyclingKey={look.id}
-          transition={160}
+          priority="normal"
         />
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.5)']}
@@ -190,7 +186,7 @@ const createStyles = (colors: ThemeColors, variant: 'default' | 'explore') => {
 
     // ── Explore variant styles ──
     // Media badge: bare glyph, top-right. No chip/pill background —
-    // Instagram uses bare glyphs with drop-shadow for legibility.
+    // Use bare glyphs with drop-shadow for legibility.
     // textShadow uses colors.mediaOverlayScrim (dark scrim token) for legibility over
     // varying imagery in both themes.
     mediaBadge: {

@@ -21,6 +21,7 @@ import { useAppTheme } from '../../theme/ThemeContext';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { Motion } from '../../theme/motionTokens';
 
+import { Space } from '../../theme/designTokens';
 import { AppIcon } from '../../components/common/AppIcon';
 import { IconSize } from '../../theme/iconTokens';
 
@@ -98,6 +99,6 @@ const styles = StyleSheet.create({
   band: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: Space.md,
   },
 });

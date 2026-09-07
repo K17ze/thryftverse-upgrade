@@ -140,6 +140,14 @@ export function useBlockMutation(userId: string) {
       }
       return unblockUser(userId);
     },
+    onSuccess: (_data, shouldBlock) => {
+      import('../../store/useStore').then(({ useStore }) => {
+        useStore.getState().toggleBlockedUser(userId);
+        if (!shouldBlock) {
+          useStore.getState().hydrateBlockedUsers().catch(() => undefined);
+        }
+      }).catch(() => undefined);
+    },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: profileKey });
       queryClient.invalidateQueries({ queryKey: queryKeys.user.listings(userId) });

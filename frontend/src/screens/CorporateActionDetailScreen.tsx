@@ -341,8 +341,8 @@ export default function CorporateActionDetailScreen() {
         {isGovernanceAction && actionId && (
           <View style={styles.section}>
             <View style={styles.voteHeaderRow}>
-                <View style={[styles.voteHeaderIcon, { backgroundColor: colors.brand }]}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.textInverse} />
+                <View style={styles.voteHeaderIcon}>
+                  <Ionicons name="checkmark-circle" size={24} color={colors.brand} />
                 </View>
                 <View style={styles.voteHeaderText}>
                   <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 2 }]}>Cast your vote</Text>
@@ -570,7 +570,6 @@ function createStyles(colors: ThemeColors) {
   voteHeaderIcon: {
     width: Space.xl + Space.sm,
     height: Space.xl + Space.sm,
-    borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center' },
   voteHeaderText: { flex: 1 },

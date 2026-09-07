@@ -1,0 +1,22 @@
+- generic [ref=e12]:
+  - generic [ref=e38]:
+    - generic [ref=e39]:
+      - generic [ref=e40]: THRYFT
+      - generic [ref=e41]: buy, sell, trade. no noise.
+      - generic "From independent sellers and creators. Buyer protection on every purchase." [ref=e42]:
+        - generic [ref=e43]: From independent sellers and creators ·
+        - link "Buyer protection policy" [ref=e44] [cursor=pointer]:
+          - generic [ref=e45]: Buyer protection on every purchase
+    - generic [ref=e46]:
+      - button "Continue with Apple" [ref=e47] [cursor=pointer]:
+        - generic [ref=e48]: 
+      - button "Sign in with passkey" [ref=e50] [cursor=pointer]:
+        - generic [ref=e51]: 
+      - generic [ref=e53]: or continue with email
+      - button "Sign up with email" [ref=e57] [cursor=pointer]
+      - button "Log in to existing account" [ref=e59] [cursor=pointer]:
+        - generic [ref=e60]: Already have an account? Log in
+      - generic [ref=e61]: by continuing, you agree to our terms of service and privacy policy.
+      - button "Dev Bypass (UI Testing)" [ref=e62] [cursor=pointer]
+  - button "Open command palette" [ref=e32] [cursor=pointer]:
+    - generic [ref=e33]: 

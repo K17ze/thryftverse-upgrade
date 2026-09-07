@@ -14,13 +14,25 @@ import { useCallback } from "react";
 
 import { acceptListingOfferOnApi, declineListingOfferOnApi } from "../../services/listingOffersApi";
 
+import type { ConversationContext } from "../../domain";
 import type { Message } from "./types";
+
+const MESSAGE_OFFER_TO_CONTEXT_STATUS: Record<string, ConversationContext["offer"] extends infer T ? T extends { status: infer S } ? S : never : never> = {
+  pending: "pending",
+  countered: "countered",
+  accepted: "accepted",
+  declined: "rejected",
+  expired: "expired",
+  cancelled: "withdrawn",
+};
 
 interface UseConversationCommerceOptions {
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   routeItemId?: string;
   conversationItemId?: string;
+  context?: ConversationContext;
+  onUpdateContext?: (context: ConversationContext) => void;
   show: (msg: string, type: "success" | "error" | "info") => void;
   haptic: { light: () => void; medium: () => void };
   navigation: {
@@ -33,6 +45,8 @@ export function useConversationCommerce({
   setMessages,
   routeItemId,
   conversationItemId,
+  context,
+  onUpdateContext,
   show,
   haptic,
   navigation,
@@ -57,6 +71,10 @@ export function useConversationCommerce({
         ),
       );
 
+      if (context?.offer && onUpdateContext) {
+        onUpdateContext({ ...context, offer: { ...context.offer, status: "accepted" } });
+      }
+
       try {
         await acceptListingOfferOnApi(offerId);
         const linkedItemId = routeItemId || conversationItemId;
@@ -73,10 +91,14 @@ export function useConversationCommerce({
               : m,
           ),
         );
+        if (context?.offer && onUpdateContext) {
+          const revertedStatus = prevStatus ? MESSAGE_OFFER_TO_CONTEXT_STATUS[prevStatus] ?? "pending" : "pending";
+          onUpdateContext({ ...context, offer: { ...context.offer, status: revertedStatus } });
+        }
         show("Could not accept offer. Try again.", "error");
       }
     },
-    [messages, setMessages, routeItemId, conversationItemId, show, haptic, navigation],
+    [messages, setMessages, routeItemId, conversationItemId, context, onUpdateContext, show, haptic, navigation],
   );
 
   const handleDeclineOffer = useCallback(
@@ -99,6 +121,10 @@ export function useConversationCommerce({
         ),
       );
 
+      if (context?.offer && onUpdateContext) {
+        onUpdateContext({ ...context, offer: { ...context.offer, status: "rejected" } });
+      }
+
       try {
         await declineListingOfferOnApi(offerId);
       } catch {
@@ -109,10 +135,14 @@ export function useConversationCommerce({
               : m,
           ),
         );
+        if (context?.offer && onUpdateContext) {
+          const revertedStatus = prevStatus ? MESSAGE_OFFER_TO_CONTEXT_STATUS[prevStatus] ?? "pending" : "pending";
+          onUpdateContext({ ...context, offer: { ...context.offer, status: revertedStatus } });
+        }
         show("Could not decline offer. Try again.", "error");
       }
     },
-    [messages, setMessages, show, haptic],
+    [messages, setMessages, context, onUpdateContext, show, haptic],
   );
 
   const handleCounterOffer = useCallback(

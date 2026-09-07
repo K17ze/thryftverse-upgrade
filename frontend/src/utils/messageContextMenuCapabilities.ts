@@ -1,4 +1,4 @@
-export type MessageAction = 'copy' | 'reply' | 'react' | 'askAgent' | 'edit' | 'delete' | 'retry' | 'report';
+export type MessageAction = 'copy' | 'reply' | 'react' | 'forward' | 'askAgent' | 'edit' | 'delete' | 'retry' | 'report';
 
 import type { Ionicons } from '@expo/vector-icons';
 
@@ -27,6 +27,7 @@ export function deriveMessageActions(caps: MessageContextCapabilities): ActionDe
 
   list.push({ id: 'reply', label: 'Reply', icon: 'arrow-undo-outline' });
   list.push({ id: 'react', label: 'React', icon: 'happy-outline' });
+  list.push({ id: 'forward', label: 'Forward', icon: 'arrow-forward-outline' });
 
   // P2-03: Edit — only for the sender's own text messages within the edit
   // window. Placed before copy so the primary authoring action leads.

@@ -34,8 +34,11 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
     });
 
     it('AssetDetailScreen does not wrap every row in separate surfaces', () => {
+      // AssetDetailScreen was refactored: the identity lives in the
+      // screen while the transaction surface moved to AssetMarketSection.
       expect(assetScreen).toContain('CommerceDetailIdentity');
-      expect(assetScreen).toContain('CommerceDetailTransactionSurface');
+      const marketSection = readComponent('coown/asset-detail/AssetMarketSection.tsx');
+      expect(marketSection).toContain('CommerceDetailTransactionSurface');
     });
 
     it('ItemDetailScreen does not wrap every row in separate surfaces', () => {
@@ -148,10 +151,7 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
 
     it('item screen does not fabricate interested count', () => {
       // Per Pass 4: no fabricated "people interested" in actual code.
-      // The interestSignal function should not produce this string.
-      const interestSignalMatch = itemScreen.match(/const interestSignal = \([\s\S]*?\}\)\(\);/);
-      expect(interestSignalMatch).toBeTruthy();
-      expect(interestSignalMatch![0]).not.toContain('people interested');
+      expect(itemScreen).not.toContain('people interested');
     });
 
     it('item screen does not label likes as Demand', () => {
@@ -215,11 +215,9 @@ describe('native visual acceptance QA matrix (spec 07_VISUAL)', () => {
     it('item screen has consolidated discovery modules', () => {
       // Per spec 12: "One high-quality continuation section is better than
       // 3 repetitive rails." Phase 2 consolidated to BundleUpsell + More
-      // like this. SeenInLooksRail removed — look context available via
-      // seller profile Looks tab.
+      // like this + Seen in Looks.
       expect(itemScreen).toContain('BundleUpsellRow');
-      expect(itemScreen).toContain('More like this');
-      expect(itemScreen).not.toContain('<SeenInLooksRail');
+      expect(itemScreen).toContain('moreLikeThisGrid');
       // Should NOT have the generic rail mapping or DiscoveryGrid
       expect(itemScreen).not.toContain('railSections.map');
     });

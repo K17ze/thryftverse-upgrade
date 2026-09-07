@@ -112,6 +112,17 @@ export function resolveStatusColor(tone: StatusTone, colors: ThemeColors): strin
   }
 }
 
+/** Maps a status tone to its subtle background token — replaces hex-alpha hacks. */
+export function resolveStatusSubtleColor(tone: StatusTone, colors: ThemeColors): string {
+  switch (tone) {
+    case 'success': return colors.successSubtle;
+    case 'active': return colors.brandSubtle;
+    case 'danger': return colors.dangerSubtle;
+    case 'pending': return colors.warningSubtle;
+    default: return colors.surfaceAlt;
+  }
+}
+
 // --- Date formatting ---
 
 export function formatTimelineDate(value?: string | null): string | undefined {

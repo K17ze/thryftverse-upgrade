@@ -329,6 +329,10 @@ export async function visualSearch(params: {
 
 /* ── Real backend CRUD ─────────────────────────────────────────────── */
 
+export type ListingMediaCommand =
+  | { kind: 'existing'; mediaId: string }
+  | { kind: 'uploaded'; uploadId: string; imageUrl?: string };
+
 export interface ListingCreateBody {
   id: string;
   sellerId: string;
@@ -347,6 +351,10 @@ export interface ListingCreateBody {
   shippingPayer?: string;
   materialComposition?: string;
   weightKg?: number;
+  attachmentOrder?: string[];
+  removedAttachmentIds?: string[];
+  media?: ListingMediaCommand[];
+  coverMediaId?: string | null;
 }
 
 export interface ListingApiItem {
@@ -366,7 +374,11 @@ export interface ListingApiItem {
   shippingMethod: string | null;
   shippingPayer: string | null;
   createdAt: string;
-  /** Server-side last-update timestamp; used for edit conflict detection. */
+  /**
+   * Server-side last-update timestamp. Used by the EditListingScreen for
+   * conflict detection — if the value changes between form load and save,
+   * another device edited the same listing.
+   */
   updatedAt?: string | null;
   /** M07: When media was frozen (cannot be silently swapped). */
   mediaFrozenAt?: string | null;
@@ -374,6 +386,9 @@ export interface ListingApiItem {
   engagement?: ListingEngagementSummaryApi | null;
   /** Pinned/featured listing — shown first in the Shop grid when true. */
   featured?: boolean | null;
+  /** Backend media records with stable IDs — used by the edit flow to build
+   *  `attachmentOrder` and `removedAttachmentIds` manifests. */
+  media?: Array<{ id: string; url: string; sortOrder: number }>;
 }
 
 export interface ListingSoldComparables {
@@ -484,6 +499,28 @@ export async function createListingOnApi(body: ListingCreateBody): Promise<{ ok:
 
 export async function fetchListingByIdFromApi(listingId: string): Promise<ListingSingleResponse> {
   return fetchJson<ListingSingleResponse>(`/listings/${encodeURIComponent(listingId)}`);
+}
+
+/**
+ * Conflict check — fetches the current server-side `updatedAt` timestamp for
+ * a listing without loading the full record. Used by EditListingScreen before
+ * saving to detect if another device edited the same listing since the form
+ * was loaded.
+ *
+ * Returns `null` when the timestamp cannot be determined (network error,
+ * missing field, non-OK response) so callers can fail open rather than
+ * blocking a save on an unreliable check.
+ */
+export async function fetchListingUpdatedAt(listingId: string): Promise<string | null> {
+  try {
+    const res = await fetchListingByIdFromApi(listingId);
+    if (res.ok && res.listing) {
+      return res.listing.updatedAt ?? res.listing.createdAt ?? null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchListingSoldComparables(listingId: string): Promise<ListingSoldComparables> {
@@ -605,8 +642,8 @@ export async function trackListingInteraction(
 export async function patchListingOnApi(
   listingId: string,
   patch: Partial<Omit<ListingCreateBody, 'id' | 'sellerId'>>
-): Promise<{ ok: boolean; listingId: string }> {
-  return fetchJson<{ ok: boolean; listingId: string }>(`/listings/${listingId}`, {
+): Promise<{ ok: boolean; listingId: string; updatedAt?: string }> {
+  return fetchJson<{ ok: boolean; listingId: string; updatedAt?: string }>(`/listings/${listingId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),

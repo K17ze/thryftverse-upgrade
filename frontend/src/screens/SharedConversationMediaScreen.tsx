@@ -1,8 +1,9 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  ActivityIndicator,
   useWindowDimensions } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ import { isVideoUri } from '../utils/media';
 import { useHaptic } from '../hooks/useHaptic';
 import { EmptyState } from '../components/EmptyState';
 import { useAppTranslation } from '../i18n/useAppTranslation';
+import { fetchConversationMediaFromApi } from '../services/chatApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SharedConversationMedia'>;
 
@@ -82,8 +84,65 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
         thumbnailUri: undefined as string | undefined }));
   }, [conversation]);
 
-  const photos = useMemo(() => allMedia.filter((m) => !m.isVideo), [allMedia]);
-  const videos = useMemo(() => allMedia.filter((m) => m.isVideo), [allMedia]);
+  // ── Remote media fetch ──
+  // The local store only retains recently scrolled messages. Fetching from
+  // the API ensures older media that has scrolled out of cache is visible.
+  const [remoteMedia, setRemoteMedia] = useState<MediaItem[]>([]);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteError, setRemoteError] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const cursorRef = useRef<string | undefined>(undefined);
+  const PAGE_SIZE = 60;
+
+  const fetchRemotePage = useCallback(async (reset = false) => {
+    if (!conversationId || remoteLoading) return;
+    setRemoteLoading(true);
+    setRemoteError(false);
+    try {
+      const items = await fetchConversationMediaFromApi(conversationId, {
+        limit: PAGE_SIZE,
+        before: reset ? undefined : cursorRef.current,
+      });
+      const mapped: MediaItem[] = items
+        .filter((it) => it.mediaType !== 'document')
+        .map((it) => ({
+          id: it.id,
+          mediaUri: it.mediaUri,
+          isVideo: it.mediaType === 'video' || isVideoUri(it.mediaUri),
+          senderLabel: 'Thryft user',
+          timestamp: it.createdAt,
+          thumbnailUri: undefined,
+        }));
+      setRemoteMedia((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        const deduped = mapped.filter((m) => !seen.has(m.id));
+        return reset ? mapped : [...prev, ...deduped];
+      });
+      if (items.length < PAGE_SIZE) {
+        setHasMore(false);
+      } else if (items.length > 0) {
+        cursorRef.current = items[items.length - 1].createdAt;
+      }
+    } catch {
+      setRemoteError(true);
+    } finally {
+      setRemoteLoading(false);
+    }
+  }, [conversationId, remoteLoading]);
+
+  useEffect(() => {
+    void fetchRemotePage(true);
+  }, [fetchRemotePage]);
+
+  // Merge local + remote, deduplicating by id (local takes priority).
+  const mergedMedia = useMemo<MediaItem[]>(() => {
+    const seen = new Set(allMedia.map((m) => m.id));
+    const remoteOnly = remoteMedia.filter((m) => !seen.has(m.id));
+    return [...allMedia, ...remoteOnly];
+  }, [allMedia, remoteMedia]);
+
+  const photos = useMemo(() => mergedMedia.filter((m) => !m.isVideo), [mergedMedia]);
+  const videos = useMemo(() => mergedMedia.filter((m) => m.isVideo), [mergedMedia]);
 
   const showFilter =
     photos.length >= FILTER_THRESHOLD && videos.length >= FILTER_THRESHOLD;
@@ -91,8 +150,8 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
   const filteredMedia = useMemo(() => {
     if (filter === 'photos') return photos;
     if (filter === 'videos') return videos;
-    return allMedia;
-  }, [allMedia, photos, videos, filter]);
+    return mergedMedia;
+  }, [mergedMedia, photos, videos, filter]);
 
   const handlePress = (item: MediaItem) => {
     haptic.light();
@@ -149,7 +208,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
   }, [navigation, selectionMode, exitSelectionMode]);
 
   const subtitle =
-    allMedia.length > 0
+    mergedMedia.length > 0
       ? t('sharedMedia.summary', { photoCount: photos.length, photoPlural: photos.length === 1 ? '' : 's', videoCount: videos.length, videoPlural: videos.length === 1 ? '' : 's' })
       : undefined;
 
@@ -305,7 +364,7 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
         </View>
       )}
 
-      {filteredMedia.length === 0 ? (
+      {filteredMedia.length === 0 && !remoteLoading ? (
         <EmptyState
           icon="images-outline"
           title={t('sharedMedia.noMedia')}
@@ -322,6 +381,15 @@ export default function SharedConversationMediaScreen({ navigation, route }: Pro
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={{ height: GAP }} />}
           showsVerticalScrollIndicator={false}
+          onEndReached={() => { if (hasMore && !remoteLoading) void fetchRemotePage(); }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            remoteLoading ? (
+              <View style={styles.footerLoading}>
+                <ActivityIndicator size="small" color={colors.textMuted} />
+              </View>
+            ) : null
+          }
         />
       )}
     </FlagshipScreen>
@@ -334,6 +402,9 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: Space.md,
       paddingTop: Space.sm,
       paddingBottom: Space.xxl },
+    footerLoading: {
+      paddingVertical: Space.lg,
+      alignItems: 'center' },
     filterRow: {
       flexDirection: 'row',
       gap: Space.sm,

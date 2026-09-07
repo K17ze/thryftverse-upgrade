@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../theme/ThemeContext';
-import { Space, Radius, Typography } from '../../theme/designTokens';
+import { Space, Radius } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
 import { type ReserveStatus } from '../../utils/auctionDetailLogic';
 
@@ -26,7 +26,7 @@ export function ReserveStatusBadge({ status, compact, showExplanation }: Props) 
     : 'The seller may decline the winning bid if the reserve is not met.';
 
   const iconSize = compact ? 11 : 13;
-  const fontSize = compact ? 11 : 12;
+  const fontSize = TypographyV2.meta.size;
   const pillPaddingH = compact ? 6 : Space.xs;
   const pillPaddingV = compact ? 2 : 3;
 
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     alignSelf: 'flex-start' },
   label: {
-    fontFamily: Typography.family.medium,
+    fontFamily: TypographyV2.meta.fontFamily,
     letterSpacing: -0.1 },
   explanation: {
     fontSize: TypographyV2.meta.size,

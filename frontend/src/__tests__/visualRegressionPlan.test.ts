@@ -451,30 +451,30 @@ describe('Visual regression test plan', () => {
     });
   });
 
-  describe('GlobalSearchScreen', () => {
+  describe('UnifiedDiscoveryScreen', () => {
     it('should match screenshot - loading state (searching) — journey owned', () => {
-      expectScreen('GlobalSearchScreen.tsx');
-      expectBaseline('GlobalSearchScreen', 'loading');
+      expectScreen('UnifiedDiscoveryScreen.tsx');
+      expectBaseline('UnifiedDiscoveryScreen', 'loading');
     });
 
     it('should match screenshot - populated state (ranked results) — journey owned', () => {
-      expectScreen('GlobalSearchScreen.tsx');
-      expectBaseline('GlobalSearchScreen', 'populated');
+      expectScreen('UnifiedDiscoveryScreen.tsx');
+      expectBaseline('UnifiedDiscoveryScreen', 'populated');
     });
 
     it('should match screenshot - empty state (no results for query) — journey owned', () => {
-      expectScreen('GlobalSearchScreen.tsx');
-      expectBaseline('GlobalSearchScreen', 'empty');
+      expectScreen('UnifiedDiscoveryScreen.tsx');
+      expectBaseline('UnifiedDiscoveryScreen', 'empty');
     });
 
     it('should match screenshot - error state (search failed) — journey owned', () => {
-      expectScreen('GlobalSearchScreen.tsx');
-      expectBaseline('GlobalSearchScreen', 'error');
+      expectScreen('UnifiedDiscoveryScreen.tsx');
+      expectBaseline('UnifiedDiscoveryScreen', 'error');
     });
 
     it('should match screenshot - recent searches state — journey owned', () => {
-      expectScreen('GlobalSearchScreen.tsx');
-      expectBaseline('GlobalSearchScreen', 'recent-searches');
+      expectScreen('UnifiedDiscoveryScreen.tsx');
+      expectBaseline('UnifiedDiscoveryScreen', 'recent-searches');
     });
   });
 

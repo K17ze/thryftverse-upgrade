@@ -14,6 +14,7 @@ export interface CoOwnInstrumentCardProps {
   unitPriceLabel: string;
   localReferenceLabel: string;
   availabilityLabel: string;
+  liquidityLabel?: string;
   statusLabel: string;
   status: 'open' | 'closed' | 'paused';
   isWatched: boolean;
@@ -29,6 +30,7 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
   unitPriceLabel,
   localReferenceLabel,
   availabilityLabel,
+  liquidityLabel,
   statusLabel,
   status,
   isWatched,
@@ -52,7 +54,7 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
         scaleValue={0.985}
         activeOpacity={0.94}
         accessibilityRole="button"
-        accessibilityLabel={`${title}, ${unitPriceLabel} per unit, ${localReferenceLabel}, ${availabilityLabel}, ${statusLabel}`}
+        accessibilityLabel={`${title}, ${unitPriceLabel} per unit, ${localReferenceLabel}, ${availabilityLabel}, ${liquidityLabel ?? 'Liquidity unavailable'}, ${statusLabel}`}
         accessibilityHint="Opens this market"
       >
         <CachedImage
@@ -101,6 +103,9 @@ export const CoOwnInstrumentCard = React.memo(function CoOwnInstrumentCard({
           <Text style={[styles.availability, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{availabilityLabel}</Text>
           <Ionicons name="chevron-forward" size={13} color={colors.textMuted} />
         </View>
+        {liquidityLabel ? (
+          <Text style={[styles.liquidity, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{liquidityLabel}</Text>
+        ) : null}
       </AnimatedPressable>
     </View>
   );
@@ -198,6 +203,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   availability: {
     flex: 1,
     minWidth: 0,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
+    fontVariant: ['tabular-nums'],
+  },
+  liquidity: {
     fontSize: TypographyV2.meta.size,
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,

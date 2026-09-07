@@ -21,8 +21,6 @@ import { haptics } from '../utils/haptics';
 import { ImageViewer } from '../components/ImageViewer';
 import { ListingIdentityBlock } from '../components/listing/ListingIdentityBlock';
 import { ListingPreviewFooter } from '../components/listing/ListingPreviewFooter';
-import { ListingQualityMeter } from '../components/listing/ListingQualityMeter';
-import { calculateListingQuality } from '../utils/listingQuality';
 import { CachedImage } from '../components/CachedImage';
 import { t } from '../i18n';
 
@@ -32,7 +30,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ListingPreview'>;
 export default function ListingPreviewScreen({ navigation, route }: Props) {
   const { preview, origin } = route.params ?? {};
   const insets = useSafeAreaInsets();
-  const { currencyCode, formatFromFiat } = useFormattedPrice();
+  const { formatFromFiat } = useFormattedPrice();
   const currentUser = useStore((s) => s.currentUser);
   const { colors } = useAppTheme();
   const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
@@ -43,10 +41,10 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
   const title = preview?.title?.trim() || 'Untitled listing';
   const hasRealTitle = !!preview?.title?.trim();
   const priceText = preview?.price != null
-    ? formatFromFiat(preview.price, currencyCode, { displayMode: 'fiat' })
+    ? formatFromFiat(preview.price, 'GBP', { displayMode: 'fiat' })
     : null;
   const originalPriceText = preview?.originalPrice != null && preview.originalPrice > 0
-    ? formatFromFiat(preview.originalPrice, currencyCode, { displayMode: 'fiat' })
+    ? formatFromFiat(preview.originalPrice, 'GBP', { displayMode: 'fiat' })
     : null;
   const hasDiscount = priceText != null && originalPriceText != null && preview!.originalPrice! > (preview!.price ?? 0);
 
@@ -119,27 +117,6 @@ export default function ListingPreviewScreen({ navigation, route }: Props) {
           <View style={styles.previewBadge}>
             <Text style={styles.previewBadgeText}>PREVIEW</Text>
           </View>
-        </View>
-
-        {/* Listing quality meter — seller guidance */}
-        <View>
-          <ListingQualityMeter
-            result={useMemo(() => calculateListingQuality({
-              photos: preview?.photos ?? [],
-              title: preview?.title ?? '',
-              brand: preview?.brand ?? '',
-              category: preview?.category ?? '',
-              size: preview?.size ?? '',
-              condition: preview?.condition ?? '',
-              description: preview?.description ?? '',
-              price: preview?.price != null ? String(preview.price) : '',
-              originalPrice: preview?.originalPrice != null ? String(preview.originalPrice) : '',
-              tags: [],
-              shippingMethod: preview?.shippingMethod === 'standard' ? 'standard' : preview?.shippingMethod === 'express' ? 'express' : null,
-              shippingPayer: preview?.shippingPayer === 'buyer' ? 'buyer' : preview?.shippingPayer === 'seller' ? 'seller' : null,
-              listingMode: preview?.listingMode ?? 'sell_now' }), [preview])}
-            compact
-          />
         </View>
 
         {/* ── 2. PRODUCT IDENTITY ── */}

@@ -19,8 +19,9 @@
  *   7. On failure → exponential backoff, `attempt_count` incremented
  */
 import NetInfo from '@react-native-community/netinfo';
-import { getDb, isDbAvailable } from '../storage/db';
+import { getDb } from '../storage/db';
 import { sendConversationMessageOnApi } from './chatApi';
+import { ApiRequestError } from '../lib/apiClient';
 
 export interface ChatOutboxEntry {
   seq: number;
@@ -30,8 +31,6 @@ export interface ChatOutboxEntry {
   text: string;
   metadataJson: string | null;
   replyToMessageId: string | null;
-  type: string | null;
-  mediaUri: string | null;
   state: string;
   attemptCount: number;
   lastError: string | null;
@@ -48,10 +47,7 @@ export async function enqueueChatMessage(input: {
   text: string;
   metadata?: Record<string, unknown>;
   replyToMessageId?: string;
-  type?: string;
-  mediaUri?: string;
 }): Promise<void> {
-  if (!isDbAvailable()) return;
   const db = await getDb();
   db.execute(
     `INSERT OR REPLACE INTO mutation_outbox
@@ -65,8 +61,6 @@ export async function enqueueChatMessage(input: {
       text: input.text,
       metadata: input.metadata ?? null,
       replyToMessageId: input.replyToMessageId ?? null,
-      type: input.type ?? null,
-      mediaUri: input.mediaUri ?? null,
     }),
   );
 }
@@ -75,7 +69,6 @@ export async function enqueueChatMessage(input: {
  * Read all pending chat message outbox entries, ordered by seq.
  */
 export async function getPendingChatOutbox(): Promise<ChatOutboxEntry[]> {
-  if (!isDbAvailable()) return [];
   const db = await getDb();
   const result = db.execute(
     `SELECT seq, operation_id, entity_id, payload_json, state, attempt_count, last_error
@@ -87,7 +80,7 @@ export async function getPendingChatOutbox(): Promise<ChatOutboxEntry[]> {
   const entries: ChatOutboxEntry[] = [];
   for (let i = 0; i < result.rows.length; i++) {
     const row = result.rows.item(i);
-    let payload: { conversationId?: string; clientMessageId?: string; text?: string; metadata?: Record<string, unknown>; replyToMessageId?: string; type?: string; mediaUri?: string } = {};
+    let payload: { conversationId?: string; clientMessageId?: string; text?: string; metadata?: Record<string, unknown>; replyToMessageId?: string } = {};
     try {
       payload = JSON.parse(String(row.payload_json));
     } catch {
@@ -101,8 +94,6 @@ export async function getPendingChatOutbox(): Promise<ChatOutboxEntry[]> {
       text: payload.text ?? '',
       metadataJson: payload.metadata ? JSON.stringify(payload.metadata) : null,
       replyToMessageId: payload.replyToMessageId ?? null,
-      type: payload.type ?? null,
-      mediaUri: payload.mediaUri ?? null,
       state: String(row.state),
       attemptCount: Number(row.attempt_count),
       lastError: row.last_error === null ? null : String(row.last_error),
@@ -116,7 +107,6 @@ export async function getPendingChatOutbox(): Promise<ChatOutboxEntry[]> {
  * Remove an outbox entry after successful send.
  */
 export async function removeChatOutboxEntry(operationId: string): Promise<void> {
-  if (!isDbAvailable()) return;
   const db = await getDb();
   db.execute(
     `DELETE FROM mutation_outbox WHERE operation_id = ?;`,
@@ -133,7 +123,6 @@ export async function markChatOutboxEntryFailed(
   operationId: string,
   error: string,
 ): Promise<void> {
-  if (!isDbAvailable()) return;
   const db = await getDb();
   db.execute(
     `UPDATE mutation_outbox
@@ -162,20 +151,41 @@ export async function drainChatOutbox(
 
   for (const entry of entries) {
     try {
+      const metadata = entry.metadataJson ? JSON.parse(entry.metadataJson) : undefined;
+      const meta = metadata ?? {};
+      // The backend send route requires top-level `type` and `mediaUri` for
+      // image/video/voice messages — they cannot be replayed from metadata
+      // alone. Extract them from the durable metadata so the drain call
+      // mirrors the original optimistic send shape.
+      const options: {
+        type?: 'text' | 'image' | 'video' | 'voice';
+        mediaUri?: string;
+        replyToMessageId?: string;
+      } = {};
+      if (entry.replyToMessageId) {
+        options.replyToMessageId = entry.replyToMessageId;
+      }
+      const metaType = meta.type;
+      if (metaType === 'image' || metaType === 'video' || metaType === 'voice') {
+        options.type = metaType;
+        if (typeof meta.mediaUri === 'string') {
+          options.mediaUri = meta.mediaUri;
+        }
+      }
       await sendConversationMessageOnApi(
         entry.conversationId,
         entry.text,
-        entry.metadataJson ? JSON.parse(entry.metadataJson) : undefined,
+        metadata,
         entry.clientMessageId,
-        {
-          replyToMessageId: entry.replyToMessageId ?? undefined,
-          type: entry.type as any ?? undefined,
-          mediaUri: entry.mediaUri ?? undefined,
-        },
+        options,
       );
       await removeChatOutboxEntry(entry.operationId);
       onReconciled?.(entry.conversationId, entry.clientMessageId);
     } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 400) {
+        await removeChatOutboxEntry(entry.operationId);
+        continue;
+      }
       const errorMsg = error instanceof Error ? error.message : String(error);
       await markChatOutboxEntryFailed(entry.operationId, errorMsg);
     }

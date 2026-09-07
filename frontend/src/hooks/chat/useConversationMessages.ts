@@ -25,20 +25,18 @@ import { AppState } from "react-native";
 import { type FlashListRef } from "@shopify/flash-list";
 
 import { useStore } from "../../store/useStore";
-import type { Message as ConversationMessage } from '../../domain';
 import {
   fetchConversationMessagesFromApi,
   sendConversationMessageOnApi,
   deleteConversationMessageOnApi,
-  editConversationMessageOnApi,
   mapApiMessageToConversationMessage,
+  markConversationReadBatchOnApi,
 } from "../../services/chatApi";
 import { uploadMedia } from "../../services/mediaUpload";
 import { enqueueChatMessage, drainChatOutbox } from "../../services/chatOutbox";
 import {
   useChatMessageEvent,
   useChatMessageDeletedEvent,
-  useChatMessageEditedEvent,
   useChatReactionEvent,
   useChatReadReceiptEvent,
   realtimePayloadToMessage,
@@ -47,15 +45,10 @@ import {
 } from "../../services/realtimeClient";
 import { useRealtimeResnapshot } from "../../platform/realtime";
 import { requestPushPermissionWithSoftAsk } from "../../lib/pushPermission";
-import { containsOffPlatformPaymentPattern } from "../../utils/chatSafetyWarnings";
+import { ApiRequestError } from "../../lib/apiClient";
 import { isVideoUri } from "../../utils/media";
 import { makeStableId, createStableId } from "../../utils/createStableId";
 import { t } from "../../i18n";
-
-/** P2-03: Edit window — must match the backend default (15 minutes). Used
- *  only for frontend UX (hiding the edit action after the window closes);
- *  the backend enforces it authoritatively. */
-const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000;
 import type { SuggestedReply } from "../../services/chatAgentsApi";
 import type { SupportedCurrencyCode } from "../../constants/currencies";
 import { DEFAULT_CURRENCY_CODE } from '../../constants/currencies';
@@ -63,6 +56,11 @@ import type { CurrencyDisplayMode } from "../../utils/currency";
 
 import type { Message } from "./types";
 import { INITIAL_MESSAGES, parseMessageDate } from "./types";
+
+// The canonical Message (re-exported from domain/conversation.ts via
+// ./types) is the single message shape. This alias is used in
+// store-interaction signatures for readability.
+type ConversationMessage = Message;
 
 interface UseConversationMessagesOptions {
   conversationId: string | undefined;
@@ -164,9 +162,6 @@ export function useConversationMessages({
   const [confirmation, setConfirmation] = useState<ConversationConfirmationRequest | null>(null);
   const clearConfirmation = useCallback(() => setConfirmation(null), []);
   const [composerSending, setComposerSending] = useState(false);
-  // P2-03: The id of the message currently being edited inline. When set,
-  // ChatMessageRow replaces that message's bubble with a TextInput.
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
   // Ref mirror of the local message list so async callbacks (e.g.
   // confirmAgentDraft) can read the latest messages without re-subscribing.
@@ -181,22 +176,16 @@ export function useConversationMessages({
   const wasUnreadOnOpenRef = useRef(false);
   const composerSendingRef = useRef(false);
   const pushPermissionAskedRef = useRef(false);
+  const lastBatchReadRef = useRef<string | null>(null);
 
   // Tracks how many messages the user has seen when last at the bottom.
   // When the user scrolls up, new messages arriving increment the unread
   // count shown on the scroll-to-bottom FAB (Instagram/WhatsApp pattern).
   const seenMessageCountRef = useRef(0);
 
-  // Sync local messages when hydrated store messages change.
-  // Guard against setting the same array reference — prevents an
-  // infinite loop when the parent passes a stable reference but the
-  // effect fires due to other state changes causing a re-render.
-  const lastHydratedRef = useRef<typeof hydratedMessages | null>(null);
+  // Sync local messages when hydrated store messages change
   useEffect(() => {
-    if (lastHydratedRef.current !== hydratedMessages) {
-      lastHydratedRef.current = hydratedMessages;
-      setMessages(hydratedMessages);
-    }
+    setMessages(hydratedMessages);
   }, [hydratedMessages]);
 
   // NetInfo listener — offline state + reconcile on reconnect
@@ -205,20 +194,69 @@ export function useConversationMessages({
     setIsSyncing(true);
     setSyncError(false);
     try {
-      const { messages: apiMessages, oldestCursor: oc, newestCursor: nc } = await fetchConversationMessagesFromApi(conversationId);
-      if (!apiMessages.length) return;
-      const syncedMessages = apiMessages.map(mapApiMessageToConversationMessage);
-      replaceConversationMessages(conversationId, syncedMessages);
+      const { messages: apiMessages, oldestCursor: oc, newestCursor: nc, hasMore } = await fetchConversationMessagesFromApi(conversationId);
+      if (!apiMessages.length) {
+        // P1-02: An empty full sync is authoritative — the server has no
+        // messages for this conversation. Converge the local state to the
+        // empty list instead of retaining stale local messages. In-flight
+        // optimistic messages (sending/draft) are preserved so a just-sent
+        // bubble is not wiped before the server confirms it.
+        const localMessages = messagesRef.current;
+        const preserved: Message[] = [];
+        for (const m of localMessages) {
+          if (m.status === 'sending' || m.status === 'draft') {
+            preserved.push(m);
+          }
+        }
+        replaceConversationMessages(conversationId, preserved as unknown as ConversationMessage[]);
+        setHasMoreOlder(Boolean(hasMore));
+        setOldestCursor(oc);
+        setNewestCursor(nc);
+        return;
+      }
+      const syncedMessages = apiMessages.map(
+        (p) => mapApiMessageToConversationMessage(p, currentUser?.id),
+      );
+
+      // P0.3: Sync reconciliation — preserve in-flight optimistic messages
+      // and mark unreconciled sent messages as failed instead of wiping them.
+      // Building sets of server-confirmed ids and clientMessageIds lets us
+      // detect which local messages the server has not yet acknowledged.
+      const serverIds = new Set(apiMessages.map((m) => m.id));
+      const serverClientIds = new Set(
+        apiMessages.map((m) => m.clientMessageId).filter(Boolean) as string[],
+      );
+      const localMessages = messagesRef.current;
+      const preserved: Message[] = [];
+      for (const m of localMessages) {
+        if (m.status === 'sending' || m.status === 'draft') {
+          // In-flight optimistic messages must survive sync — the server
+          // has not confirmed them yet.
+          preserved.push(m);
+        } else if (
+          (m.status === 'sent' || m.status === 'reconciling') &&
+          !serverIds.has(m.id) &&
+          !(m.clientMessageId && serverClientIds.has(m.clientMessageId))
+        ) {
+          // A previously sent/reconciling message that is absent from the
+          // server response has failed to persist — mark it as failed so
+          // the user can retry instead of silently losing it.
+          preserved.push({ ...m, status: 'failed' as const });
+        }
+      }
+      const merged = [...syncedMessages, ...preserved] as unknown as ConversationMessage[];
+
+      replaceConversationMessages(conversationId, merged);
       // P0.6: Capture cursors for incremental pagination.
       setOldestCursor(oc);
       setNewestCursor(nc);
-      setHasMoreOlder(Boolean(oc));
+      setHasMoreOlder(hasMore ?? Boolean(oc));
     } catch {
       setSyncError(true);
     } finally {
       setIsSyncing(false);
     }
-  }, [conversationId, replaceConversationMessages]);
+  }, [conversationId, currentUser?.id, replaceConversationMessages]);
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(
@@ -241,15 +279,17 @@ export function useConversationMessages({
     if (!conversationId || !oldestCursor || !hasMoreOlder || isLoadingOlder) return;
     setIsLoadingOlder(true);
     try {
-      const { messages: olderMessages, oldestCursor: oc } = await fetchConversationMessagesFromApi(
+      const { messages: olderMessages, oldestCursor: oc, hasMore } = await fetchConversationMessagesFromApi(
         conversationId,
         { before: oldestCursor },
       );
       if (!olderMessages.length) {
-        setHasMoreOlder(false);
+        setHasMoreOlder(hasMore ?? false);
         return;
       }
-      const mapped = olderMessages.map(mapApiMessageToConversationMessage) as Message[];
+      const mapped = olderMessages.map(
+        (p) => mapApiMessageToConversationMessage(p, currentUser?.id),
+      ) as Message[];
       setMessages((prev) => {
         // Dedup by id — if a resnapshot already loaded some of these.
         const existingIds = new Set(prev.map((m) => m.id));
@@ -257,13 +297,13 @@ export function useConversationMessages({
         return [...deduped, ...prev];
       });
       setOldestCursor(oc);
-      setHasMoreOlder(Boolean(oc));
+      setHasMoreOlder(hasMore ?? Boolean(oc));
     } catch {
       // Silently fail — the user can retry by scrolling up again.
     } finally {
       setIsLoadingOlder(false);
     }
-  }, [conversationId, oldestCursor, hasMoreOlder, isLoadingOlder]);
+  }, [conversationId, oldestCursor, hasMoreOlder, isLoadingOlder, currentUser?.id]);
 
   // AppState listener — sync on foreground
   useEffect(() => {
@@ -285,6 +325,9 @@ export function useConversationMessages({
   }, [conversationId, markConversationRead, conversationUnread]);
 
   // Auto-send offer message when arriving from MakeOfferScreen with an offerPayload
+  // P1-05: The offer is created on the server via listingOffersApi, which now
+  // also creates a chat message. The local bubble is optimistic and will be
+  // reconciled when the realtime event arrives with the server message ID.
   const offerPayloadRef = useRef(routeOfferPayload);
   offerPayloadRef.current = routeOfferPayload;
   useEffect(() => {
@@ -295,6 +338,8 @@ export function useConversationMessages({
       id: localId,
       type: "offer",
       sender: "me",
+      senderId: currentUser?.id ?? 'me',
+      timestamp: new Date().toISOString(),
       senderLabel: currentUser?.username ?? "you",
       text:
         (counterRound ?? 0) > 0
@@ -308,7 +353,8 @@ export function useConversationMessages({
         expiresAt,
         counterRound,
       },
-      status: "sent",
+      status: "sending",
+      clientMessageId: `offer_${offerId}`,
     };
     pushMessage(offerMsg);
     appendToConversationStore(offerMsg, currentUser?.id ?? "me");
@@ -377,27 +423,20 @@ export function useConversationMessages({
 
         const domainMessage = realtimePayloadToMessage(payload, currentUser?.id);
 
-        // Map the domain Message into the local chat Message shape used by
-        // this hook's UI state.
-        const localMessage: Message = {
-          id: domainMessage.id,
-          type:
-            domainMessage.type === "system"
-              ? "system"
-              : domainMessage.mediaType
-                ? "media"
-                : "text",
-          sender: domainMessage.sender === "me" ? "me" : "them",
-          senderId: domainMessage.senderId,
-          text: domainMessage.text,
-          isSystem: domainMessage.isSystem,
-          systemTitle: domainMessage.systemTitle,
-          date: domainMessage.timestamp,
-          mediaUri: domainMessage.mediaUri,
-          mediaType: domainMessage.mediaType,
-          status: "sent",
-          replyToMessageId: domainMessage.replyToMessageId,
-        };
+        // The canonical Message from realtimePayloadToMessage already has
+        // the correct shape (sender: 'me' | 'other' | 'system', type enum,
+        // lifecycle fields). No mapping is needed — append directly.
+        const localMessage: Message = domainMessage;
+
+        // Mark the incoming message as read immediately — the user is
+        // viewing the conversation and the message arrived live. Only mark
+        // messages from others (not our own echoed back).
+        if (conversationId && localMessage.sender === 'other' && !showScrollToBottom) {
+          void markConversationReadBatchOnApi(conversationId, {
+            upToMessageId: payload.id,
+          }).catch(() => undefined);
+          lastBatchReadRef.current = payload.id;
+        }
 
         setMessages((prev) => [...prev, localMessage]);
 
@@ -409,7 +448,7 @@ export function useConversationMessages({
 
         scheduleScrollToEnd();
       },
-      [conversationId, currentUser?.id, appendConversationMessage, scheduleScrollToEnd],
+      [conversationId, currentUser?.id, appendConversationMessage, scheduleScrollToEnd, showScrollToBottom],
     ),
   );
 
@@ -421,39 +460,6 @@ export function useConversationMessages({
     useCallback(
       (event: { messageId: string; scope: 'me' | 'everyone'; deletedBy: string }) => {
         setMessages((prev) => prev.filter((m) => m.id !== event.messageId));
-      },
-      [],
-    ),
-  );
-
-  // P2-03: Consume edit realtime events — reconcile the edited body and the
-  // "Edited" label when another participant (or this user's second device)
-  // edits a message. Skips the optimistic edit the editor already applied.
-  useChatMessageEditedEvent(
-    conversationId,
-    useCallback(
-      (event: {
-        messageId: string;
-        body: string;
-        editVersion: number;
-        editedAt: string | null;
-        editedBy: string;
-      }) => {
-        setMessages((prev) =>
-          prev.map((m) => {
-            if (m.id !== event.messageId) return m;
-            // Skip if we already have a newer or equal revision (optimistic
-            // edit applied locally before the realtime echo arrived).
-            if ((m.editVersion ?? 0) >= event.editVersion) return m;
-            return {
-              ...m,
-              text: event.body,
-              isEdited: true,
-              editedAt: event.editedAt,
-              editVersion: event.editVersion,
-            };
-          }),
-        );
       },
       [],
     ),
@@ -473,25 +479,31 @@ export function useConversationMessages({
             const isMe = event.userId === currentUser?.id;
             if (event.action === 'added') {
               if (idx >= 0) {
-                reactions[idx] = {
-                  ...reactions[idx],
-                  count: reactions[idx].count + 1,
-                  reactedByMe: reactions[idx].reactedByMe || isMe,
-                };
+                const existing = reactions[idx];
+                if (existing) {
+                  reactions[idx] = {
+                    ...existing,
+                    count: (existing.count ?? 0) + 1,
+                    reactedByMe: existing.reactedByMe || isMe,
+                  };
+                }
               } else {
-                reactions.push({ emoji: event.emoji, count: 1, reactedByMe: isMe });
+                reactions.push({ emoji: event.emoji, userIds: [event.userId], count: 1, reactedByMe: isMe });
               }
             } else {
               if (idx >= 0) {
-                const nextCount = reactions[idx].count - 1;
-                if (nextCount <= 0) {
-                  reactions.splice(idx, 1);
-                } else {
-                  reactions[idx] = {
-                    ...reactions[idx],
-                    count: nextCount,
-                    reactedByMe: reactions[idx].reactedByMe && !isMe ? true : !isMe && reactions[idx].reactedByMe,
-                  };
+                const existing = reactions[idx];
+                if (existing) {
+                  const nextCount = (existing.count ?? 0) - 1;
+                  if (nextCount <= 0) {
+                    reactions.splice(idx, 1);
+                  } else {
+                    reactions[idx] = {
+                      ...existing,
+                      count: nextCount,
+                      reactedByMe: existing.reactedByMe && !isMe ? true : !isMe && existing.reactedByMe,
+                    };
+                  }
                 }
               }
             }
@@ -506,18 +518,41 @@ export function useConversationMessages({
   // P0.9: Consume read receipt realtime events — when another participant
   // reads the conversation, mark all of our messages sent before the read
   // cursor as "read". This closes the second-device read-state gap.
+  // Per-message receipts: when messageIds is present, update readBy on
+  // those specific messages and derive readStatus from the readBy set.
   useChatReadReceiptEvent(
     conversationId,
     useCallback(
-      (event: { userId: string; readAt: string }) => {
+      (event: { userId: string; readAt: string; messageIds?: string[] }) => {
         if (event.userId === currentUser?.id) return; // ignore our own read
         const readAtTime = new Date(event.readAt).getTime();
+        const messageIdSet = event.messageIds ? new Set(event.messageIds) : null;
         setMessages((prev) =>
           prev.map((m) => {
-            if (m.sender !== 'me') return m;
+            if (m.sender !== 'me') {
+              if (!messageIdSet) return m;
+              if (!messageIdSet.has(m.id)) return m;
+              const readBy = [...new Set([...(m.readBy ?? []), event.userId])];
+              return { ...m, readBy };
+            }
+            // P0.4: Sending/failed messages have no `date` (msgTime = 0),
+            // which would always satisfy `msgTime <= readAtTime` and
+            // incorrectly mark them as read. Skip them explicitly.
+            if (m.status === 'sending' || m.status === 'failed') return m;
+
+            if (messageIdSet) {
+              if (!messageIdSet.has(m.id)) return m;
+              const readBy = [...new Set([...(m.readBy ?? []), event.userId])];
+              if (m.readStatus !== 'read') {
+                return { ...m, readBy, readStatus: 'read' as const };
+              }
+              return { ...m, readBy };
+            }
+
             const msgTime = m.date ? new Date(m.date).getTime() : 0;
             if (msgTime <= readAtTime && m.readStatus !== 'read') {
-              return { ...m, readStatus: 'read' as const };
+              const readBy = [...new Set([...(m.readBy ?? []), event.userId])];
+              return { ...m, readBy, readStatus: 'read' as const };
             }
             return m;
           }),
@@ -542,7 +577,7 @@ export function useConversationMessages({
   // P0.14: Drain the chat outbox on mount — in case messages were queued
   // while offline and the user is now opening the conversation.
   useEffect(() => {
-    void drainChatOutbox().catch(() => undefined);
+    void drainChatOutbox();
   }, []);
 
   // NOTE: confirmAgentDraft is defined after `appendToConversationStore`
@@ -557,11 +592,12 @@ export function useConversationMessages({
         senderId:
           senderIdOverride ?? (next.sender === "me" ? (currentUser?.id ?? "me") : "system"),
         text: next.text,
-        offerPrice: next.offer?.price,
+        offerPrice: next.offer?.offerPrice ?? next.offer?.price,
         originalPrice: next.offer?.originalPrice,
         offerStatus: next.offer?.status === "countered" ? "pending" : next.offer?.status,
         isSystem: senderIdOverride === "system",
         timestamp: "just now",
+        date: next.date ?? "just now",
         type:
           next.type === "offer" ? "offer" : next.type === "media" ? "text" : "text",
         sender: next.sender === "me" ? "me" : "other",
@@ -604,6 +640,8 @@ export function useConversationMessages({
           draftMsg.text ?? "",
           { agentId: draftMsg.senderId },
           clientMessageId,
+          undefined,
+          currentUser?.id,
         );
 
         // Replace the local draft with the server-confirmed message.
@@ -633,7 +671,7 @@ export function useConversationMessages({
         show("Failed to send agent draft. Tap to retry.", "error");
       }
     },
-    [conversationId, haptic, show, appendToConversationStore],
+    [conversationId, haptic, show, appendToConversationStore, currentUser?.id],
   );
 
   // Retry handler for failed agent drafts — re-invokes confirmAgentDraft,
@@ -654,13 +692,6 @@ export function useConversationMessages({
 
       haptic.light();
 
-      if (containsOffPlatformPaymentPattern(trimmed)) {
-        show(
-          "Reminder: Keep payments in Thryftverse to stay protected by Buyer Protection.",
-          "error",
-        );
-      }
-
       setComposerSending(true);
 
       const localId = makeStableId('msg', 7);
@@ -674,6 +705,8 @@ export function useConversationMessages({
         id: localId,
         type: "text",
         sender: "me",
+        senderId: currentUser?.id ?? 'me',
+        timestamp: new Date().toISOString(),
         senderLabel: currentUser?.username ?? "you",
         text: trimmed,
         status: "sending",
@@ -697,7 +730,7 @@ export function useConversationMessages({
 
       sendConversationMessageOnApi(conversationId, trimmed, undefined, clientMessageId, {
         replyToMessageId: replyTo?.id,
-      })
+      }, currentUser?.id)
         .then((serverMsg) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -706,7 +739,19 @@ export function useConversationMessages({
           );
           performance.mark("chat:delivered");
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          if (err instanceof ApiRequestError && err.status === 400) {
+            show(
+              "This message was blocked to protect you from potential scams. Keep payments on the platform.",
+              "error",
+            );
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === localId ? { ...m, status: "failed" as const } : m,
+              ),
+            );
+            return;
+          }
           // P0.2: A dropped response is an UNKNOWN outcome, not a known
           // failure. The server may have accepted the message. Mark as
           // "reconciling" — the user sees a quiet pending state, not a
@@ -759,10 +804,13 @@ export function useConversationMessages({
   );
 
   const sendMediaMessage = useCallback(
-    async (msgId: string, uri: string, mediaType: "image" | "video", caption?: string, existingCanonicalUrl?: string) => {
+    async (msgId: string, uri: string, mediaType: "image" | "video", caption?: string, existingCanonicalUrl?: string, stableClientMessageId?: string) => {
       if (!conversationId) return;
       // P0-MSG-2: stable clientMessageId for idempotent media send/retry.
-      const clientMessageId = createStableId('cmsg');
+      // Reuse the id stamped on the optimistic message so a manual retry
+      // after an unknown server outcome deduplicates on the backend instead
+      // of creating a second message.
+      const clientMessageId = stableClientMessageId ?? createStableId('cmsg');
 
       // P0.7: If a canonical URL from a previous successful upload already
       // exists (retry scenario), reuse it — do NOT re-upload. Re-uploading
@@ -799,6 +847,7 @@ export function useConversationMessages({
         { mediaUri: canonicalUrl, mediaType },
         clientMessageId,
         { type: mediaType, mediaUri: canonicalUrl },
+        currentUser?.id,
       )
         .then((serverMsg) => {
           setMessages((prev) =>
@@ -807,7 +856,19 @@ export function useConversationMessages({
             ),
           );
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          if (err instanceof ApiRequestError && err.status === 400) {
+            show(
+              "This message was blocked to protect you from potential scams. Keep payments on the platform.",
+              "error",
+            );
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === msgId ? { ...m, status: "failed" as const, uploadStatus: "sent" as const, mediaUri: canonicalUrl } : m,
+              ),
+            );
+            return;
+          }
           // P0.4: The upload succeeded but the message send response was
           // dropped — this is an UNKNOWN outcome, not a known failure. The
           // server may have created the message. Enter reconciling state and
@@ -824,7 +885,7 @@ export function useConversationMessages({
             clientMessageId,
             text: caption ?? "",
             metadata: { mediaUri: canonicalUrl, type: mediaType },
-          }).catch(() => undefined);
+          });
         });
 
       if (!pushPermissionAskedRef.current) {
@@ -832,7 +893,7 @@ export function useConversationMessages({
         requestPushPermissionWithSoftAsk("chat").catch(() => undefined);
       }
     },
-    [conversationId, show],
+    [conversationId, show, currentUser?.id],
   );
 
   // ---------------------------------------------------------------------------
@@ -841,9 +902,11 @@ export function useConversationMessages({
   // the durable outbox, just like media and text.
   // ---------------------------------------------------------------------------
   const sendVoiceMessage = useCallback(
-    async (msgId: string, draft: { uri: string; fileName: string; contentType: string; durationMs: number; sizeBytes: number }, existingCanonicalUrl?: string) => {
+    async (msgId: string, draft: { uri: string; fileName: string; contentType: string; durationMs: number; sizeBytes: number }, existingCanonicalUrl?: string, stableClientMessageId?: string) => {
       if (!conversationId) return;
-      const clientMessageId = createStableId('cmsg');
+      // P0-MSG-2: reuse the clientMessageId stamped on the optimistic voice
+      // bubble so a retry after an unknown outcome deduplicates server-side.
+      const clientMessageId = stableClientMessageId ?? createStableId('cmsg');
 
       let canonicalUrl: string;
       if (existingCanonicalUrl && existingCanonicalUrl.startsWith('http')) {
@@ -876,6 +939,7 @@ export function useConversationMessages({
         { mediaUri: canonicalUrl, mediaType: 'voice' as const, ...voiceMetadata },
         clientMessageId,
         { type: 'voice' as const, mediaUri: canonicalUrl },
+        currentUser?.id,
       )
         .then((serverMsg) => {
           setMessages((prev) =>
@@ -895,18 +959,24 @@ export function useConversationMessages({
             clientMessageId,
             text: '',
             metadata: { mediaUri: canonicalUrl, type: 'voice', ...voiceMetadata },
-          }).catch(() => undefined);
+          });
         });
     },
-    [conversationId, show],
+    [conversationId, show, currentUser?.id],
   );
 
   const createVoiceMessage = useCallback(
     (draft: { uri: string; fileName: string; contentType: string; durationMs: number; sizeBytes: number }): Message => {
+      // P0-06: Generate the clientMessageId BEFORE creating the optimistic
+      // bubble so retry reuses the same id — the server dedups on
+      // (conversation_id, sender_user_id, client_message_id).
+      const clientMessageId = createStableId('cmsg');
       return {
         id: makeStableId('msg_voice', 7),
         type: 'voice',
         sender: 'me',
+        senderId: currentUser?.id ?? 'me',
+        timestamp: new Date().toISOString(),
         senderLabel: currentUser?.username ?? 'you',
         text: '',
         voiceUri: draft.uri,
@@ -914,6 +984,7 @@ export function useConversationMessages({
         voiceContainer: 'm4a',
         voiceCodec: 'aac',
         uploadStatus: 'uploading',
+        clientMessageId,
       };
     },
     [currentUser?.username],
@@ -927,7 +998,7 @@ export function useConversationMessages({
       appendToConversationStore(outgoing, currentUser?.id ?? 'me');
       haptic.success();
       scheduleScrollToEnd();
-      sendVoiceMessage(outgoing.id, draft);
+      sendVoiceMessage(outgoing.id, draft, undefined, outgoing.clientMessageId);
     },
     [conversationId, createVoiceMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendVoiceMessage],
   );
@@ -943,7 +1014,7 @@ export function useConversationMessages({
           // re-upload the local draft if still a file:// URI.
           const alreadyUploaded = msg.voiceUri.startsWith('http');
           setTimeout(() => {
-            void sendVoiceMessage(
+            sendVoiceMessage(
               msgId,
               {
                 uri: alreadyUploaded ? msg.voiceUri! : msg.voiceUri!,
@@ -953,6 +1024,7 @@ export function useConversationMessages({
                 sizeBytes: 0,
               },
               alreadyUploaded ? msg.voiceUri : undefined,
+              msg.clientMessageId,
             );
           }, 0);
           return prev.map((m) =>
@@ -965,30 +1037,17 @@ export function useConversationMessages({
         // pass it so sendMediaMessage skips re-upload and only retries the
         // message send with the same clientMessageId.
         const alreadyUploaded = msg.mediaUri.startsWith('http');
-        if (msg.mediaType === 'document') {
-          setTimeout(
-            () => void sendDocumentMessage(
-              msgId,
-              msg.mediaUri!,
-              msg.documentName ?? 'File',
-              msg.documentMimeType,
-              msg.text || undefined,
-              alreadyUploaded ? msg.mediaUri : undefined,
-            ),
-            0,
-          );
-        } else {
-          setTimeout(
-            () => void sendMediaMessage(
-              msgId,
-              msg.mediaUri!,
-              msg.mediaType as "image" | "video",
-              msg.text || undefined,
-              alreadyUploaded ? msg.mediaUri : undefined,
-            ),
-            0,
-          );
-        }
+        setTimeout(
+          () => sendMediaMessage(
+            msgId,
+            msg.mediaUri!,
+            msg.mediaType!,
+            msg.text || undefined,
+            alreadyUploaded ? msg.mediaUri : undefined,
+            msg.clientMessageId,
+          ),
+          0,
+        );
         return prev.map((m) =>
           m.id === msgId ? { ...m, uploadStatus: "uploading" as const } : m,
         );
@@ -1009,7 +1068,7 @@ export function useConversationMessages({
         const clientMessageId = msg.clientMessageId ?? createStableId('cmsg');
         // Trigger send after state update
         setTimeout(() => {
-          sendConversationMessageOnApi(conversationId, msg.text!, undefined, clientMessageId)
+          sendConversationMessageOnApi(conversationId, msg.text!, undefined, clientMessageId, undefined, currentUser?.id)
             .then((serverMsg) => {
               setMessages((p) =>
                 p.map((m) =>
@@ -1036,7 +1095,7 @@ export function useConversationMessages({
       });
       haptic.light();
     },
-    [conversationId, show, haptic],
+    [conversationId, show, haptic, currentUser?.id],
   );
 
   const createMediaMessage = useCallback(
@@ -1046,11 +1105,14 @@ export function useConversationMessages({
         id: makeStableId(`msg_${mediaType}`, 7),
         type: "media",
         sender: "me",
+        senderId: currentUser?.id ?? 'me',
+        timestamp: new Date().toISOString(),
         senderLabel: currentUser?.username ?? "you",
         text: "",
         mediaUri: uri,
         mediaType,
         uploadStatus: "uploading",
+        clientMessageId: createStableId('cmsg'),
       };
     },
     [currentUser?.username],
@@ -1072,112 +1134,10 @@ export function useConversationMessages({
       appendToConversationStore(outgoing, currentUser?.id ?? "me");
       haptic.success();
       scheduleScrollToEnd();
-      void sendMediaMessage(outgoing.id, uri, mediaType, outgoing.text || undefined);
+      sendMediaMessage(outgoing.id, uri, mediaType, outgoing.text || undefined, undefined, outgoing.clientMessageId);
       setPendingAttachment(null);
     },
     [createMediaMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendMediaMessage],
-  );
-
-  // ── Document message send ───────────────────────────────────────────
-  // Documents (PDF, ZIP, etc.) are uploaded via the same media platform,
-  // then sent as type: 'document' with documentName/documentMimeType in
-  // metadata. The backend stores them in chat_message_attachments with
-  // kind='document'.
-  const sendDocumentMessage = useCallback(
-    async (msgId: string, uri: string, fileName: string, mimeType?: string, caption?: string, existingCanonicalUrl?: string) => {
-      if (!conversationId) return;
-      const clientMessageId = createStableId('cmsg');
-
-      let canonicalUrl: string;
-      if (existingCanonicalUrl && existingCanonicalUrl.startsWith('http')) {
-        canonicalUrl = existingCanonicalUrl;
-      } else {
-        try {
-          const uploaded = await uploadMedia(uri, 'uploads');
-          canonicalUrl = uploaded.publicUrl;
-        } catch {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId ? { ...m, uploadStatus: "failed" as const } : m,
-            ),
-          );
-          show("Upload failed. Tap to retry.", "error");
-          return;
-        }
-      }
-
-      sendConversationMessageOnApi(
-        conversationId,
-        caption ?? "",
-        { documentUri: canonicalUrl, documentName: fileName, documentMimeType: mimeType, mediaUri: canonicalUrl, mediaType: 'document' },
-        clientMessageId,
-        { type: 'document', mediaUri: canonicalUrl },
-      )
-        .then((serverMsg) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId ? { ...m, id: serverMsg.id, uploadStatus: "sent" as const, documentUri: canonicalUrl } : m,
-            ),
-          );
-        })
-        .catch(() => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId ? { ...m, status: "reconciling" as const, uploadStatus: "sent" as const, documentUri: canonicalUrl } : m,
-            ),
-          );
-          enqueueChatMessage({
-            conversationId,
-            text: caption ?? "",
-            metadata: { documentUri: canonicalUrl, documentName: fileName, documentMimeType: mimeType, mediaUri: canonicalUrl, mediaType: 'document' },
-            clientMessageId,
-            type: 'document',
-            mediaUri: canonicalUrl,
-          });
-        });
-    },
-    [conversationId, setMessages, show],
-  );
-
-  const createDocumentMessage = useCallback(
-    (uri: string, fileName: string, mimeType?: string): Message => {
-      return {
-        id: makeStableId('msg_doc', 7),
-        type: "media",
-        sender: "me",
-        senderLabel: currentUser?.username ?? "you",
-        text: "",
-        mediaUri: uri,
-        mediaType: "image",
-        uploadStatus: "uploading",
-        documentUri: uri,
-        documentName: fileName,
-        documentMimeType: mimeType,
-      };
-    },
-    [currentUser?.username],
-  );
-
-  const handleSendPendingDocument = useCallback(
-    (
-      caption: string,
-      pendingDocument: { uri: string; name: string; mimeType?: string } | null,
-      setPendingDocument: (v: null) => void,
-    ) => {
-      if (!pendingDocument) return;
-      const { uri, name, mimeType } = pendingDocument;
-      const outgoing = createDocumentMessage(uri, name, mimeType);
-      if (caption) {
-        outgoing.text = caption;
-      }
-      pushMessage(outgoing);
-      appendToConversationStore(outgoing, currentUser?.id ?? "me");
-      haptic.success();
-      scheduleScrollToEnd();
-      void sendDocumentMessage(outgoing.id, uri, name, mimeType, outgoing.text || undefined);
-      setPendingDocument(null);
-    },
-    [createDocumentMessage, pushMessage, appendToConversationStore, currentUser?.id, haptic, scheduleScrollToEnd, sendDocumentMessage],
   );
 
   const scheduleUndoClear = useCallback(() => {
@@ -1293,80 +1253,6 @@ export function useConversationMessages({
     [conversationId, haptic, show, scheduleUndoClear],
   );
 
-  // P2-03: Inline message editing. The hook owns the editing message id so
-  // ChatMessageRow can swap the bubble for a TextInput. `saveEdit` applies an
-  // optimistic update (new text + isEdited label), calls the API, and reverts
-  // to the prior text on failure. The realtime echo is reconciled by
-  // `useChatMessageEditedEvent` above (skipped when the optimistic revision
-  // already matches).
-  const startEdit = useCallback((msg: Message) => {
-    setEditingMessageId(msg.id);
-  }, []);
-
-  const cancelEdit = useCallback(() => {
-    setEditingMessageId(null);
-  }, []);
-
-  const saveEdit = useCallback(
-    async (messageId: string, newText: string) => {
-      const trimmed = newText.trim();
-      const target = messagesRef.current.find((m) => m.id === messageId);
-      if (!target || !conversationId) {
-        setEditingMessageId(null);
-        return;
-      }
-      if (!trimmed || trimmed === (target.text ?? "")) {
-        // No-op edit — just close the editor.
-        setEditingMessageId(null);
-        return;
-      }
-
-      const previousText = target.text;
-      const previousEditVersion = target.editVersion ?? 0;
-      const nextEditVersion = previousEditVersion + 1;
-
-      // Optimistic update — apply the new text and "Edited" label immediately.
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId
-            ? {
-                ...m,
-                text: trimmed,
-                isEdited: true,
-                editedAt: new Date().toISOString(),
-                editVersion: nextEditVersion,
-              }
-            : m,
-        ),
-      );
-      setEditingMessageId(null);
-      haptic.light();
-
-      try {
-        await editConversationMessageOnApi(conversationId, messageId, trimmed);
-        // The realtime echo reconciles editVersion/editedAt from the server.
-        // No further local mutation needed.
-      } catch {
-        // Revert to the pre-edit state.
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId
-              ? {
-                  ...m,
-                  text: previousText,
-                  isEdited: previousEditVersion > 0,
-                  editedAt: m.editedAt,
-                  editVersion: previousEditVersion,
-                }
-              : m,
-          ),
-        );
-        show("Failed to edit message. Please try again.", "error");
-      }
-    },
-    [conversationId, haptic, show],
-  );
-
   // When the user is at the bottom, record the seen message count so
   // unread messages arriving while scrolled up can be counted for the
   // scroll-to-bottom FAB badge (Instagram/WhatsApp pattern).
@@ -1431,7 +1317,7 @@ export function useConversationMessages({
   const unreadDividerIndex = useMemo(() => {
     if (!wasUnreadOnOpenRef.current) return -1;
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].sender === "them" && !messages[i].isSystem) {
+      if (messages[i].sender === "other" && !messages[i].isSystem) {
         return i;
       }
     }
@@ -1444,6 +1330,15 @@ export function useConversationMessages({
       const isNearBottom =
         contentSize.height - contentOffset.y - layoutMeasurement.height < 150;
       setShowScrollToBottom(!isNearBottom);
+      if (isNearBottom && conversationId) {
+        const latest = messagesRef.current[messagesRef.current.length - 1];
+        if (latest && latest.id !== lastBatchReadRef.current && latest.sender !== 'me') {
+          lastBatchReadRef.current = latest.id;
+          void markConversationReadBatchOnApi(conversationId, {
+            upToMessageId: latest.id,
+          }).catch(() => undefined);
+        }
+      }
       // P0.6: Trigger incremental history load when the user scrolls near
       // the top. The FlashList's maintainVisibleContentPosition or the
       // screen's scroll-anchor logic preserves the visual position.
@@ -1451,7 +1346,7 @@ export function useConversationMessages({
         void loadOlderMessages();
       }
     },
-    [hasMoreOlder, isLoadingOlder, loadOlderMessages],
+    [hasMoreOlder, isLoadingOlder, loadOlderMessages, conversationId],
   );
 
   return {
@@ -1482,16 +1377,9 @@ export function useConversationMessages({
     handleRetrySendMessage,
     createMediaMessage,
     handleSendPendingAttachment,
-    sendDocumentMessage,
-    createDocumentMessage,
-    handleSendPendingDocument,
     handleUndoDelete,
     handleBulkDelete,
     handleDeleteMessage,
-    editingMessageId,
-    startEdit,
-    cancelEdit,
-    saveEdit,
     confirmation,
     clearConfirmation,
     dateSeparatorIndices,
