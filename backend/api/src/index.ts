@@ -135,6 +135,7 @@ import {
   enqueuePushNotificationJob,
   enqueueMediaIngestJob,
   enqueueDsarExportJob,
+  enqueueSellerTrustRecomputeJob,
   startBackgroundWorkers,
 } from './lib/queues.js';
 import {
@@ -280,6 +281,7 @@ import {
   aggregateAnalyticsDaily,
   processBackupExpiryCheck,
   processDsarExport,
+  processSellerTrustRecompute,
 } from './workers/handlers/index.js';
 import {
   evaluatePriceAlertsForListing,
@@ -9759,6 +9761,36 @@ function stopAnalyticsAggregationScheduler(): void {
   }
   clearInterval(analyticsAggregationTimer);
   analyticsAggregationTimer = null;
+}
+
+let sellerTrustRecomputeTimer: NodeJS.Timeout | null = null;
+
+function startSellerTrustRecomputeScheduler(): void {
+  if (sellerTrustRecomputeTimer) {
+    return;
+  }
+
+  const enqueueRecompute = () => {
+    void enqueueSellerTrustRecomputeJob('scheduled').catch((error) => {
+      app.log.error({ err: error }, 'Failed scheduling seller trust recompute job');
+    });
+  };
+
+  // Daily recompute of the seller_trust projection. The BullMQ jobId is
+  // day-bucketed, so overlapping schedulers collapse into a single run.
+  sellerTrustRecomputeTimer = setInterval(enqueueRecompute, 24 * 60 * 60 * 1000);
+  sellerTrustRecomputeTimer.unref?.();
+
+  // Run once shortly after startup so a fresh deploy heals stale projections.
+  setTimeout(enqueueRecompute, 60_000);
+}
+
+function stopSellerTrustRecomputeScheduler(): void {
+  if (!sellerTrustRecomputeTimer) {
+    return;
+  }
+  clearInterval(sellerTrustRecomputeTimer);
+  sellerTrustRecomputeTimer = null;
 }
 
 let pushReceiptReconciliationTimer: NodeJS.Timeout | null = null;
@@ -34021,8 +34053,68 @@ app.get('/users/:userId/co-own/holdings', async (request, reply) => {
     avg_entry_price_gbp: number;
     realized_pnl_gbp: number;
     updated_at: string;
+    reserved_units: number | string;
+    best_bid_gbp: number | string | null;
+    sale_depth_units: number | string | null;
+    estimated_sale_proceeds_gbp: number | string | null;
   }>(
-    `SELECT * FROM coOwn_holdings WHERE user_id = $1 ORDER BY updated_at DESC`,
+    `
+      SELECT
+        h.user_id,
+        h.asset_id,
+        h.units_owned,
+        h.avg_entry_price_gbp,
+        h.realized_pnl_gbp,
+        h.updated_at,
+        COALESCE(reserved.reserved_units, 0)::int AS reserved_units,
+        sale.best_bid_gbp,
+        sale.sale_depth_units,
+        sale.estimated_sale_proceeds_gbp
+      FROM coOwn_holdings h
+      LEFT JOIN LATERAL (
+        SELECT SUM(r.reserved_units)::int AS reserved_units
+        FROM coown_order_reservations r
+        WHERE r.user_id = h.user_id
+          AND r.asset_id = h.asset_id
+          AND r.side = 'sell'
+          AND r.status IN ('active', 'placed')
+          AND r.expires_at > NOW()
+      ) reserved ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          MAX(depth.unit_price_gbp) FILTER (WHERE depth.take_units > 0) AS best_bid_gbp,
+          SUM(depth.take_units)::int AS sale_depth_units,
+          SUM(depth.take_units * depth.unit_price_gbp) AS estimated_sale_proceeds_gbp
+        FROM (
+          SELECT
+            priced.unit_price_gbp,
+            GREATEST(
+              0,
+              LEAST(
+                priced.remaining_units,
+                h.units_owned - (priced.cumulative_units - priced.remaining_units)
+              )
+            ) AS take_units
+          FROM (
+            SELECT
+              o.unit_price_gbp,
+              o.remaining_units,
+              SUM(o.remaining_units) OVER (
+                ORDER BY o.unit_price_gbp DESC, o.id DESC
+                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+              ) AS cumulative_units
+            FROM coOwn_orders o
+            WHERE o.asset_id = h.asset_id
+              AND o.side = 'buy'
+              AND o.user_id <> h.user_id
+              AND o.status IN ('open', 'partially_filled')
+              AND o.remaining_units > 0
+          ) priced
+        ) depth
+      ) sale ON TRUE
+      WHERE h.user_id = $1
+      ORDER BY h.updated_at DESC
+    `,
     [userId]
   );
 
@@ -34032,6 +34124,13 @@ app.get('/users/:userId/co-own/holdings', async (request, reply) => {
     unitsOwned: row.units_owned,
     avgEntryPriceGbp: Number(row.avg_entry_price_gbp),
     realizedPnlGbp: Number(row.realized_pnl_gbp),
+    reservedUnits: Number(row.reserved_units ?? 0),
+    bestBidGbp: row.best_bid_gbp === null ? null : Number(row.best_bid_gbp),
+    saleDepthUnits: row.sale_depth_units === null ? 0 : Number(row.sale_depth_units),
+    estimatedSaleProceedsGbp: row.estimated_sale_proceeds_gbp === null
+      ? null
+      : Number(row.estimated_sale_proceeds_gbp),
+    saleProceedsAsOf: new Date().toISOString(),
     updatedAt: row.updated_at,
   }));
 
@@ -34120,6 +34219,9 @@ const start = async () => {
         handleAnalyticsAggregationJob: async () => {
           await aggregateAnalyticsDaily();
         },
+        handleSellerTrustRecomputeJob: async ({ reason }) => {
+          await processSellerTrustRecompute({ reason });
+        },
         handleBackupExpiryJob: async ({ reason }) => {
           await processBackupExpiryCheck({ reason });
         },
@@ -34139,6 +34241,7 @@ const start = async () => {
     startDomainOutboxScheduler();
     startRetentionSweepScheduler();
     startAnalyticsAggregationScheduler();
+    startSellerTrustRecomputeScheduler();
     startPushReceiptReconciliationScheduler();
     startScheduledPublicationSweepScheduler();
     startPlatformReconciliationScheduler();

@@ -25,6 +25,7 @@ export interface CoOwnMarketHighlight {
   unitPriceLabel: string;
   localReferenceLabel: string;
   availabilityLabel: string;
+  liquidityLabel?: string;
   allocatedPct: number;
   statusLabel: string;
   status: 'open' | 'closed' | 'paused';
@@ -106,7 +107,7 @@ export function CoOwnMarketHighlightsCarousel({
         activeOpacity={0.96}
         hapticFeedback="light"
         accessibilityRole="button"
-        accessibilityLabel={`${item.title}, ${item.unitPriceLabel} per unit, ${item.localReferenceLabel}, ${item.availabilityLabel}, ${item.statusLabel}`}
+        accessibilityLabel={`${item.title}, ${item.unitPriceLabel} per unit, ${item.localReferenceLabel}, ${item.availabilityLabel}, ${item.liquidityLabel ?? 'Liquidity unavailable'}, ${item.statusLabel}`}
         accessibilityHint="Opens this market"
       >
         <CachedImage
@@ -148,6 +149,7 @@ export function CoOwnMarketHighlightsCarousel({
               <Ionicons name="arrow-forward" size={14} color={colors.scrimTextPrimary} />
             </View>
           </View>
+          {item.liquidityLabel ? <Text style={styles.liquidity} numberOfLines={1} maxFontSizeMultiplier={1.2}>{item.liquidityLabel}</Text> : null}
         </View>
       </AnimatedPressable>
     );
@@ -300,6 +302,12 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: TypographyV2.meta.fontFamily,
     fontVariant: ['tabular-nums'],
+  },
+  liquidity: {
+    color: colors.scrimTextSecondary,
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: TypographyV2.meta.fontFamily,
   },
   progressTrack: {
     height: 2,

@@ -60,6 +60,10 @@ export interface BackupExpiryJobData {
   reason: 'scheduled' | 'manual';
 }
 
+export interface SellerTrustRecomputeJobData {
+  reason: 'scheduled' | 'manual';
+}
+
 export interface DsarExportJobData {
   requestId: string;
   userId: string;
@@ -187,7 +191,8 @@ type InfraJobData =
   | PushReceiptReconciliationJobData
   | ScheduledPublicationSweepJobData
   | BackupExpiryJobData
-  | DsarExportJobData;
+  | DsarExportJobData
+  | SellerTrustRecomputeJobData;
 
 interface QueueHandlers {
   handlePushJob: (job: PushJobData) => Promise<void>;
@@ -202,6 +207,7 @@ interface QueueHandlers {
   handleScheduledPublicationSweepJob: (job: ScheduledPublicationSweepJobData) => Promise<void>;
   handleBackupExpiryJob: (job: BackupExpiryJobData) => Promise<void>;
   handleDsarExportJob: (job: DsarExportJobData) => Promise<void>;
+  handleSellerTrustRecomputeJob: (job: SellerTrustRecomputeJobData) => Promise<void>;
   handleMediaIngestJob: (job: MediaIngestJobData) => Promise<void>;
   handleMediaEmbeddingJob: (job: MediaEmbeddingJobData) => Promise<void>;
   handleModerationTriageJob: (job: ModerationTriageJobData) => Promise<void>;
@@ -512,6 +518,8 @@ export function startBackgroundWorkers(
             await handlers.handleBackupExpiryJob(job.data as BackupExpiryJobData);
           } else if (job.name === 'dsar_export') {
             await handlers.handleDsarExportJob(job.data as DsarExportJobData);
+          } else if (job.name === 'seller_trust_recompute') {
+            await handlers.handleSellerTrustRecomputeJob(job.data as SellerTrustRecomputeJobData);
           }
 
           const durationMs = Date.now() - jobStart;
@@ -997,8 +1005,7 @@ export async function enqueueRetentionSweepJob(
   );
 }
 
-export async function enqueueAnalyticsAggregationJob(
-  reason: AnalyticsAggregationJobData['reason'] = 'scheduled',
+export async function enqueueAnalyticsAggregationJob(  reason: AnalyticsAggregationJobData['reason'] = 'scheduled',
 ): Promise<void> {
   const timeBucket = Math.floor(Date.now() / (15 * 60 * 1000));
   await infraQueue.add(
@@ -1013,6 +1020,28 @@ export async function enqueueAnalyticsAggregationJob(
       },
       removeOnComplete: true,
       removeOnFail: 100,
+    },
+  );
+}
+
+export async function enqueueSellerTrustRecomputeJob(
+  reason: SellerTrustRecomputeJobData['reason'] = 'scheduled',
+): Promise<void> {
+  // Daily bucket: at most one recompute sweep per day per reason, so
+  // overlapping schedulers collapse into a single run.
+  const timeBucket = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
+  await infraQueue.add(
+    'seller_trust_recompute',
+    { reason },
+    {
+      jobId: `seller_trust_recompute_${reason}_${timeBucket}`,
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 30_000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 200,
     },
   );
 }

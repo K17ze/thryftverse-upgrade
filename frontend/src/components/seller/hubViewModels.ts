@@ -92,6 +92,26 @@ export function toSavedRailItems(
   return listings.filter((l) => ids.has(l.id)).slice(0, 6).map((l) => toRailItem(l, formatMoney));
 }
 
+/**
+ * Seller Hub triage summary — the seller's next action, stated once.
+ * Pure and unit-testable: ship count plus the sum of evidenced consequence
+ * amounts. Zero at-stake omits money language at the call site.
+ */
+export function summarizeTriage(
+  tasks: SellerHubTask[]
+): { pendingOrdersCount: number; atStakeGbp: number } {
+  return {
+    pendingOrdersCount: tasks
+      .filter((t) => t.type === 'ship_order')
+      .reduce((sum, t) => sum + t.count, 0),
+    atStakeGbp: tasks.reduce(
+      (sum, t) =>
+        sum + (t.consequence?.amountGbp != null && t.consequence.amountGbp > 0 ? t.consequence.amountGbp : 0),
+      0,
+    ),
+  };
+}
+
 /** The seller's own live catalog, from the dedicated own-listings endpoint. */
 export function toOwnListingRailItems(
   items: ListingApiItem[],

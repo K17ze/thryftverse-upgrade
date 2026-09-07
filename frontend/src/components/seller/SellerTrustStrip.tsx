@@ -10,6 +10,8 @@ import type { SellerHubTrust } from '../../services/sellerHubApi';
 export interface SellerTrustStripProps {
   /** Backend-evidenced trust posture. Null (or all-empty) renders nothing. */
   trust: SellerHubTrust | null;
+  /** True when the projection is older than the recompute cadence. Qualifies, never hides. */
+  stale?: boolean;
 }
 
 interface TrustChip {
@@ -30,7 +32,7 @@ function formatDispatch(days: number): string {
  * count ("96% positive · 212 sales"), response and dispatch are stated as
  * facts, and anything without a backend row is omitted — never placeholder.
  */
-export const SellerTrustStrip: React.FC<SellerTrustStripProps> = ({ trust }) => {
+export const SellerTrustStrip: React.FC<SellerTrustStripProps> = ({ trust, stale = false }) => {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -65,12 +67,14 @@ export const SellerTrustStrip: React.FC<SellerTrustStripProps> = ({ trust }) => 
 
   if (chips.length === 0) return null;
 
+  const accessibilityLabel = `Seller reputation: ${chips.map((c) => c.text).join(', ')}${stale ? ', may be out of date' : ''}`;
+
   return (
     <View
       style={styles.container}
       accessible={true}
       accessibilityRole="text"
-      accessibilityLabel={`Seller reputation: ${chips.map((c) => c.text).join(', ')}`}
+      accessibilityLabel={accessibilityLabel}
     >
       {chips.map((chip) => (
         <View key={chip.id} style={styles.chip}>
@@ -80,6 +84,14 @@ export const SellerTrustStrip: React.FC<SellerTrustStripProps> = ({ trust }) => 
           </Text>
         </View>
       ))}
+      {stale ? (
+        <View style={styles.chip}>
+          <AppIcon concept="pending" size={IconSize.xs} color="textMuted" opticalCenter accessible={false} />
+          <Text style={[styles.chipText, { color: colors.textMuted }]} numberOfLines={1}>
+            May be out of date
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 };

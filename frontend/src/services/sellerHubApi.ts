@@ -49,6 +49,32 @@ export interface SellerHubMoney {
   nextPayoutAt: string | null;
 }
 
+/**
+ * Seller trust posture, projected from the backend-owned seller_trust row.
+ * Null when the seller has no trust row — render nothing (fail-closed).
+ * Individual signals may be null — hide per-signal chips, never placeholders.
+ */
+export interface SellerHubTrust {
+  responseRatePct: number | null;
+  avgDispatchDays: number | null;
+  totalSales: number;
+  positiveRatingPct: number | null;
+  /** Last recompute time of the projection. Null when unknown. */
+  calculatedAt: string | null;
+}
+
+/**
+ * Near-winner: an active listing with real 30-day view volume and zero
+ * 30-day sales. Empty array = none found; null = source unavailable.
+ */
+export interface SellerHubOpportunity {
+  listingId: string;
+  title: string;
+  imageUrl: string | null;
+  priceGbp: number | null;
+  views30d: number;
+}
+
 export interface SellerHubBusinessPulse {
   period: '30d';
   grossSalesGbp: number;
@@ -85,6 +111,8 @@ export interface SellerHubOverview {
     listedValueGbp: number;
   };
   businessPulse: SellerHubBusinessPulse | null;
+  trust: SellerHubTrust | null;
+  opportunities: SellerHubOpportunity[] | null;
 }
 
 interface SellerHubOverviewResponse {

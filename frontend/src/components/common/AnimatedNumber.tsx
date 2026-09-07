@@ -22,21 +22,29 @@ export interface AnimatedNumberProps {
   format: (value: number) => string;
   /** Animation duration in ms. */
   duration?: number;
+  /**
+   * When false, the first value renders instantly and only later changes
+   * animate. Motion must explain a state change, never decorate a mount.
+   */
+  animateOnMount?: boolean;
   style?: StyleProp<TextStyle>;
   testID?: string;
 }
 
-/** Animates from the previously displayed value to `value` (from 0 on mount). */
+/** Animates from the previously displayed value to `value` (from 0 on mount unless animateOnMount is false). */
 export function AnimatedNumber({
   value,
   format,
   duration = 900,
+  animateOnMount = true,
   style,
   testID,
 }: AnimatedNumberProps): React.ReactElement {
   const reducedMotion = useReducedMotion();
-  const [text, setText] = useState(() => format(reducedMotion ? value : 0));
-  const displayed = useRef(0);
+  const instantFirst = reducedMotion || !animateOnMount;
+  const [text, setText] = useState(() => format(instantFirst ? value : 0));
+  const displayed = useRef(instantFirst ? value : 0);
+  const mounted = useRef(false);
   const current = useSharedValue(0);
   const from = useSharedValue(0);
   const to = useSharedValue(0);
@@ -57,8 +65,19 @@ export function AnimatedNumber({
     if (reducedMotion) {
       displayed.current = value;
       setText(formatRef.current(value));
+      mounted.current = true;
       return;
     }
+    if (!animateOnMount && !mounted.current) {
+      mounted.current = true;
+      displayed.current = value;
+      from.value = value;
+      to.value = value;
+      current.value = value;
+      setText(formatRef.current(value));
+      return;
+    }
+    mounted.current = true;
     from.value = displayed.current;
     to.value = value;
     lastStep.value = -1;
@@ -66,7 +85,7 @@ export function AnimatedNumber({
       duration,
       easing: Easing.out(Easing.cubic),
     });
-  }, [value, duration, reducedMotion, current, from, to, lastStep]);
+  }, [value, duration, reducedMotion, animateOnMount, current, from, to, lastStep]);
 
   useAnimatedReaction(
     () =>

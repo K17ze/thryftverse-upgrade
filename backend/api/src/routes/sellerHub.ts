@@ -82,6 +82,36 @@ interface SellerOverviewV2 {
     /** Order count change vs the previous 30-day period (percentage points). Null when previous period had zero orders. */
     ordersPrevPeriodPct: number | null;
   } | null;
+  /**
+   * Seller trust posture, projected from the backend-owned seller_trust row
+   * (response_rate, ship_within_days, total_sales, positive_rating_pct).
+   * Null when the seller has no trust row yet — the UI renders nothing
+   * (fail-closed: no badge without a backend row). Individual signals may
+   * still be null; the UI hides per-signal chips it cannot evidence.
+   */
+  trust: {
+    responseRatePct: number | null;
+    avgDispatchDays: number | null;
+    totalSales: number;
+    positiveRatingPct: number | null;
+    /**
+     * When the projection was last recomputed (seller_trust.calculated_at).
+     * Null when unknown. The UI qualifies signals older than 36h as stale.
+     */
+    calculatedAt: string | null;
+  } | null;
+  /**
+   * Near-winners: active listings with real 30-day view volume and zero
+   * 30-day sales. Empty array means none found (not an error); null means
+   * the interactions source is unavailable. Highest views first, max 4.
+   */
+  opportunities: {
+    listingId: string;
+    title: string;
+    imageUrl: string | null;
+    priceGbp: number | null;
+    views30d: number;
+  }[] | null;
 }
 
 // ── Batch command types ──
@@ -140,6 +170,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       payoutAvailable,
       trustAvailable,
       reserveHoldsAvailable,
+      interactionsAvailable,
     ] = await Promise.all([
       tableExists(readDb, 'orders'),
       tableExists(readDb, 'listing_offers'),
@@ -147,6 +178,7 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       tableExists(readDb, 'payout_accounts'),
       tableExists(readDb, 'seller_trust'),
       tableExists(readDb, 'payout_reserve_holds'),
+      tableExists(readDb, 'interactions'),
     ]);
 
     // ── Inventory counts (real, uncapped) ──
@@ -632,6 +664,113 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
       freshness.business_pulse = { asOf: generatedAt, state: 'unavailable' };
     }
 
+    // ── Trust posture (backend-owned seller_trust projection) ──
+    // Fail-closed: no row → trust is null and the UI renders no trust UI.
+    // A row with null columns still returns the row; the UI hides only the
+    // signals it cannot evidence. Freshness is real: it derives from the
+    // row's calculated_at (daily recompute cadence + 12h tolerance), never
+    // from request time — a stale projection is labelled stale, not fresh.
+    let trust: SellerOverviewV2['trust'] = null;
+    if (trustAvailable) {
+      try {
+        const trustResult = await readDb.query<{
+          response_rate: string | null;
+          ship_within_days: string | null;
+          total_sales: string | null;
+          positive_rating_pct: string | null;
+          calculated_at: string | null;
+        }>(
+          `
+          SELECT response_rate::text, ship_within_days::text,
+                 total_sales::text, positive_rating_pct::text,
+                 calculated_at::text
+          FROM seller_trust
+          WHERE user_id = $1
+          LIMIT 1
+        `,
+          [sellerId],
+        );
+        const row = trustResult.rows[0];
+        if (row) {
+          const toNum = (v: string | null): number | null => {
+            if (v == null) return null;
+            const n = Number(v);
+            return Number.isFinite(n) ? n : null;
+          };
+          trust = {
+            responseRatePct: toNum(row.response_rate),
+            avgDispatchDays: toNum(row.ship_within_days),
+            totalSales: Math.max(0, parseInt(row.total_sales ?? '0', 10) || 0),
+            positiveRatingPct: toNum(row.positive_rating_pct),
+            calculatedAt: row.calculated_at,
+          };
+          const ageMs = row.calculated_at ? Date.now() - new Date(row.calculated_at).getTime() : NaN;
+          freshness.trust = {
+            asOf: row.calculated_at ?? generatedAt,
+            state: Number.isFinite(ageMs) && ageMs <= 36 * 60 * 60 * 1000 ? 'fresh' : 'stale',
+          };
+        } else {
+          freshness.trust = { asOf: generatedAt, state: 'unavailable' };
+        }
+      } catch {
+        freshness.trust = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.trust = { asOf: generatedAt, state: 'unavailable' };
+    }
+
+    // ── Near-winners (Etsy 2026 playbook: high views + zero sales) ──
+    // Active listings with ≥10 qualified views in 30d and no settled sale
+    // in 30d, highest views first. Empty array = none found (render nothing);
+    // null = interactions source unavailable (render nothing, no lecture).
+    let opportunities: SellerOverviewV2['opportunities'] = null;
+    if (interactionsAvailable && ordersAvailable) {
+      try {
+        const oppResult = await readDb.query<{
+          id: string;
+          title: string;
+          image_url: string | null;
+          price_gbp: string | null;
+          views: string;
+        }>(
+          `
+          SELECT l.id, l.title, l.image_url, l.price_gbp::text,
+                 COUNT(i.id) FILTER (
+                   WHERE i.action IN ('view', 'qualified_detail_view')
+                     AND i.created_at >= NOW() - INTERVAL '30 days'
+                 ) AS views
+          FROM listings l
+          LEFT JOIN interactions i ON i.listing_id = l.id
+          LEFT JOIN orders o ON o.listing_id = l.id
+            AND o.status IN ('paid', 'shipped', 'delivered')
+            AND o.paid_at >= NOW() - INTERVAL '30 days'
+          WHERE l.seller_id = $1 AND l.status = 'active'
+          GROUP BY l.id
+          HAVING COUNT(i.id) FILTER (
+                   WHERE i.action IN ('view', 'qualified_detail_view')
+                     AND i.created_at >= NOW() - INTERVAL '30 days'
+                 ) >= 10
+             AND COUNT(o.id) = 0
+          ORDER BY views DESC
+          LIMIT 4
+        `,
+          [sellerId],
+        );
+        opportunities = oppResult.rows.map((r) => ({
+          listingId: r.id,
+          title: r.title,
+          imageUrl: r.image_url,
+          priceGbp: r.price_gbp != null ? Number(r.price_gbp) : null,
+          views30d: parseInt(r.views ?? '0', 10) || 0,
+        }));
+        freshness.opportunities = { asOf: generatedAt, state: 'fresh' };
+      } catch {
+        freshness.opportunities = { asOf: generatedAt, state: 'unavailable' };
+      }
+    } else {
+      freshness.opportunities = { asOf: generatedAt, state: 'unavailable' };
+    }
+
     const overview: SellerOverviewV2 = {
       schemaVersion: 2,
       generatedAt,
@@ -648,6 +787,8 @@ export const registerSellerHubRoutes = ({ app, readDb, db }: SellerHubRouteDepen
         listedValueGbp: parseFloat(String(inventory.active_value ?? '0')) || 0,
       },
       businessPulse,
+      trust,
+      opportunities,
     };
 
     return { ok: true, overview };

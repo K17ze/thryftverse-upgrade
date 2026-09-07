@@ -5,4 +5,6 @@ export { SellerOrdersModule, type SellerOrdersModuleProps, type SellerOrderPrevi
 export { SellerAnalyticsModule, type SellerAnalyticsModuleProps, type SellerSparklinePoint } from './SellerAnalyticsModule';
 export { SellerClosetModule, type SellerClosetModuleProps } from './SellerClosetModule';
 export { SellerListingsModule, type SellerListingsModuleProps } from './SellerListingsModule';
+export { SellerOpportunitiesModule, type SellerOpportunitiesModuleProps } from './SellerOpportunitiesModule';
+export { SellerHubDock, type SellerHubDockProps } from './SellerHubDock';
 export { SellerThumbRail, type SellerThumbRailProps, type SellerThumbRailItem } from './SellerThumbRail';

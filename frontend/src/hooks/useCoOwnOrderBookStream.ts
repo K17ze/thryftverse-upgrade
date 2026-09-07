@@ -70,6 +70,8 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [hasGap, setHasGap] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [lastSequence, setLastSequence] = useState<number | null>(null);
+  const [isForegroundStale, setIsForegroundStale] = useState(false);
   const lastSequenceRef = useRef<number | null>(null);
   const snapshotRequestRef = useRef(0);
 
@@ -84,8 +86,10 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
       if (requestId !== snapshotRequestRef.current) return;
       setOrderBook(snapshot);
       lastSequenceRef.current = snapshot.snapshotSequence;
+      setLastSequence(snapshot.snapshotSequence);
       setHasGap(false);
       setHasError(false);
+      setIsForegroundStale(false);
     } catch {
       if (requestId !== snapshotRequestRef.current) return;
       // Network error — keep existing book, mark as not streaming
@@ -147,6 +151,7 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
       asks.sort((a, b) => a.unitPriceGbp - b.unitPriceGbp);
 
       lastSequenceRef.current = delta.sequence;
+      setLastSequence(delta.sequence);
       return {
         ...prev,
         bids,
@@ -166,6 +171,8 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
       setIsStreaming(false);
       setHasError(false);
       setHasGap(false);
+      setLastSequence(null);
+      setIsForegroundStale(false);
       lastSequenceRef.current = null;
       return;
     }
@@ -175,6 +182,8 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
     setOrderBook(null);
     setHasError(false);
     setHasGap(false);
+    setLastSequence(null);
+    setIsForegroundStale(false);
     lastSequenceRef.current = null;
     snapshotRequestRef.current += 1;
 
@@ -232,6 +241,7 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
     const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       if (nextState === 'active' && assetId) {
         // App returned to foreground — re-fetch snapshot
+        setIsForegroundStale(true);
         void fetchSnapshot();
       }
     });
@@ -243,6 +253,8 @@ export function useCoOwnOrderBookStream(assetId: string | null) {
     isStreaming,
     hasGap,
     hasError,
+    lastSequence,
+    isForegroundStale,
     refetch: fetchSnapshot,
   };
 }

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme, type ThemeColors } from '../../theme/ThemeContext';
 import { Space, Radius, FontFamily, Control } from '../../theme/designTokens';
 import { TypographyV2 } from '../../theme/typography.v2';
+import { Motion } from '../../theme/motionTokens';
 import { AnimatedPressable } from '../AnimatedPressable';
 import { AppIcon } from '../common/AppIcon';
 import { AnimatedNumber } from '../common/AnimatedNumber';
@@ -68,6 +69,8 @@ export const SellerExecutiveHero: React.FC<SellerExecutiveHeroProps> = ({
             <AnimatedNumber
               value={availableGbp}
               format={formatMoney}
+              duration={Motion.duration.slow}
+              animateOnMount={false}
               style={[styles.availableHeroValue, { color: colors.textPrimary }]}
             />
           ) : (

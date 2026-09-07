@@ -85,3 +85,6 @@ export type { MessageEncryptionBackfillJobData } from './messageEncryptionBackfi
 
 export { processDsarExport, cleanupExpiredDsarExports } from './dsarExportHandler.js';
 export type { DsarExportJobData } from './dsarExportHandler.js';
+
+export { processSellerTrustRecompute } from './sellerTrustRecomputeHandler.js';
+export type { SellerTrustRecomputeJobData } from './sellerTrustRecomputeHandler.js';

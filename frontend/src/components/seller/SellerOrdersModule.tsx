@@ -40,6 +40,8 @@ export interface SellerOrdersModuleProps {
   tasks: SellerHubTask[];
   topTask: SellerHubTask | null;
   pendingOrdersCount: number;
+  /** Sum of evidenced consequence amounts across tasks. Zero omits money language. */
+  atStakeGbp?: number;
   orders30dCount: number;
   tasksStale?: boolean;
   formatMoney: (value: number | null | undefined) => string;
@@ -95,18 +97,18 @@ function isUrgentDue(dueLabel: string | null): boolean {
 }
 
 function consequenceCopy(task: SellerHubTask): string {
-  if (task.type === 'ship_order') return 'Payout held until dispatched.';
+  if (task.type === 'ship_order') return 'Payout held.';
   switch (task.consequence?.kind) {
     case 'money':
-      return 'Payout held until resolved.';
+      return 'Payout held.';
     case 'buyer':
-      return 'Buyer awaiting response.';
+      return 'Buyer waiting.';
     case 'trust':
-      return 'Affects your seller rating.';
+      return 'Affects rating.';
     case 'listing':
-      return 'Visibility restricted until resolved.';
+      return 'Visibility restricted.';
     default:
-      return 'Respond promptly to maintain your rating.';
+      return 'Respond soon.';
   }
 }
 
@@ -116,6 +118,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
   tasks,
   topTask,
   pendingOrdersCount,
+  atStakeGbp = 0,
   orders30dCount,
   tasksStale = false,
   formatMoney,
@@ -161,6 +164,25 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
         </AnimatedPressable>
       </View>
 
+      {/* ── Triage summary — the seller's next action, stated once ── */}
+      {(pendingOrdersCount > 0 || atStakeGbp > 0) && (
+        <Text style={styles.triageLine} accessibilityRole="text">
+          {pendingOrdersCount > 0 ? (
+            <Text style={[styles.triageShip, { color: colors.danger }]}>
+              {pendingOrdersCount} to ship
+            </Text>
+          ) : null}
+          {pendingOrdersCount > 0 && atStakeGbp > 0 ? (
+            <Text style={{ color: colors.textMuted }}> · </Text>
+          ) : null}
+          {atStakeGbp > 0 ? (
+            <Text style={{ color: colors.textSecondary }}>
+              {formatMoney(atStakeGbp)} at stake
+            </Text>
+          ) : null}
+        </Text>
+      )}
+
       {/* ── Media rail (skeleton while loading) ── */}
       {isOrdersLoading ? (
         <ScrollView
@@ -201,7 +223,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
                       uri={order.imageUri}
                       style={styles.thumb}
                       contentFit="cover"
-                      downscaleWidth={176}
+                      downscaleWidth={264}
                     />
                   ) : (
                     <View style={[styles.thumb, styles.thumbEmpty]}>
@@ -270,7 +292,7 @@ export const SellerOrdersModule: React.FC<SellerOrdersModuleProps> = ({
                 style={styles.taskRow}
                 onPress={() => onNavigateToTask(task)}
                 activeOpacity={0.7}
-                scaleValue={0.99}
+                scaleValue={0.985}
                 hapticFeedback="light"
                 accessibilityRole="button"
                 accessibilityLabel={`${taskTitle(task)}${dueLabel ? `, ${dueLabel}` : ''}`}
@@ -365,6 +387,17 @@ function createStyles(colors: ThemeColors) {
       fontFamily: FontFamily.semibold,
       color: colors.brand,
     },
+    triageLine: {
+      paddingHorizontal: Space.md,
+      marginTop: Space.xxs,
+      fontSize: TypographyV2.meta.size,
+      lineHeight: TypographyV2.meta.lineHeight,
+      fontFamily: FontFamily.semibold,
+      fontVariant: ['tabular-nums'],
+    },
+    triageShip: {
+      fontVariant: ['tabular-nums'],
+    },
 
     // ── Media rail — flat canvas, image radius IS the containment ──
     railContent: {
@@ -373,15 +406,15 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: Space.xxs,
     },
     orderCard: {
-      width: 96,
+      width: 140,
     },
     thumbWrap: {
-      width: 96,
-      height: 96,
+      width: 132,
+      height: 132,
     },
     thumb: {
-      width: 96,
-      height: 96,
+      width: 132,
+      height: 132,
       borderRadius: Radius.md,
     },
     thumbEmpty: {
@@ -499,11 +532,11 @@ function createStyles(colors: ThemeColors) {
 
     // ── Skeletons — media-shaped, no spinners ──
     skeletonCard: {
-      width: 96,
+      width: 140,
     },
     skeletonThumb: {
-      width: 96,
-      height: 96,
+      width: 132,
+      height: 132,
       borderRadius: Radius.md,
       backgroundColor: colors.surfaceAlt,
     },

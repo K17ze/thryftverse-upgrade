@@ -24,6 +24,7 @@ import {
   processCatalogImportRetention,
   processCatalogImportReconcile,
   processRetentionSweep,
+  processSellerTrustRecompute,
   aggregateAnalyticsDaily,
   sweepScheduledPublications,
   processBackupExpiryCheck,
@@ -113,6 +114,9 @@ async function main(): Promise<void> {
       },
       handleRetentionSweepJob: async ({ reason }) => {
         await processRetentionSweep({ reason });
+      },
+      handleSellerTrustRecomputeJob: async ({ reason }) => {
+        await processSellerTrustRecompute({ reason });
       },
       handleAnalyticsAggregationJob: async ({ reason }) => {
         await aggregateAnalyticsDaily();
