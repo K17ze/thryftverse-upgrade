@@ -88,22 +88,8 @@ type NavT = NativeStackNavigationProp<RootStackParamList>;
 // mockData because this screen must not depend on mock data types.
 
 // ── Corporate action row helpers ──
-// The detail route takes display labels; build them from the action record
-// without fabricating values (null → the detail screen shows em dashes).
-function formatDayMonth(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
-
-function corporateActionDateLabel(action: CoOwnCorporateAction): string {
-  const source = action.payableDate ?? action.recordDate ?? action.exDate ?? action.createdAt;
-  return new Date(source).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function corporateActionAmountLabel(action: CoOwnCorporateAction): string | undefined {
-  if (action.perUnitValueGbpMinor == null) return undefined;
-  const major = action.perUnitValueGbpMinor / 100;
-  return `${major >= 0 ? '+' : ''}${formatCoOwnIze(major)}`;
-}
+// Extracted to corporateActionHelpers.ts — shared with AssetOwnershipSection.
+import { formatDayMonth, corporateActionDateLabel, corporateActionAmountLabel } from '../components/coown/asset-detail/corporateActionHelpers';
 
 export default function AssetDetailScreen() {
   useScreenCaptureProtection();

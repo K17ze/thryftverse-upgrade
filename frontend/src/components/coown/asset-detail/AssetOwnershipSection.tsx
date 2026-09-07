@@ -8,6 +8,7 @@ import { formatCoOwnIze } from '../../../utils/currency';
 import type { CoOwnCorporateAction, CoOwnDistribution, MarketCoOwnAsset } from '../../../services/marketApi';
 import { CoOwnCorporateActionRow, type CoOwnCorporateActionStatus, type CoOwnCorporateActionType } from '../';
 import { CommerceDetailDisclosureRow, CommerceDetailSection } from '../../commerce/detail';
+import { formatDayMonth, corporateActionAmountLabel } from './corporateActionHelpers';
 
 export interface AssetOwnershipSectionProps {
   isHolder: boolean;
@@ -66,16 +67,6 @@ const ACTION_STATUS_MAP: Record<string, CoOwnCorporateActionStatus> = {
   settled: 'completed',
   cancelled: 'cancelled',
 };
-
-function formatDayMonth(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
-
-function corporateActionAmountLabel(action: CoOwnCorporateAction): string | undefined {
-  if (action.perUnitValueGbpMinor == null) return undefined;
-  const major = action.perUnitValueGbpMinor / 100;
-  return `${major >= 0 ? '+' : ''}${formatCoOwnIze(major)}`;
-}
 
 export function AssetOwnershipSection({
   isHolder,
