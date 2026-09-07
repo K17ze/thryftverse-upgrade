@@ -213,8 +213,8 @@ describe('product-detail-flagship-reconstruction: Co-Own market snapshot fronten
     expect(src).not.toContain('(asset as any).candles');
   });
 
-  it('staleness computation prefers the versioned market snapshot timestamp', () => {
-    expect(src).toContain('asset.marketSnapshot?.asOf');
+  it('staleness computation prefers the source-backed market snapshot timestamp', () => {
+    expect(src).toContain('snapshot?.sourceAsOf');
   });
 });
 
@@ -281,21 +281,18 @@ describe('product-detail-flagship-reconstruction: Auction terminal dock', () => 
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-// Spec 03_COOWN: Bid/Ask truncation safety on narrow screens
+// Spec 03_COOWN: Order book typography consistency
 // ───────────────────────────────────────────────────────────────────────────
-describe('product-detail-flagship-reconstruction: Co-Own order book truncation', () => {
+// adjustsFontSizeToFit was removed to maintain stable design-token
+// typography. numberOfLines={1} handles truncation instead.
+describe('product-detail-flagship-reconstruction: Co-Own order book typography', () => {
   const src = readComponent('coown/CoOwnOrderBook.tsx');
 
-  it('price column uses adjustsFontSizeToFit to prevent truncation', () => {
-    expect(src).toContain('adjustsFontSizeToFit');
-    expect(src).toContain('minimumFontScale');
+  it('price column uses numberOfLines for truncation', () => {
+    expect(src).toContain('numberOfLines={1}');
   });
 
-  it('all three order book columns (price, size, total) have font fitting', () => {
-    // Count occurrences of adjustsFontSizeToFit — should be at least 3
-    // (one per column).
-    const matches = src.match(/adjustsFontSizeToFit/g);
-    expect(matches).toBeTruthy();
-    expect(matches!.length).toBeGreaterThanOrEqual(3);
+  it('does not use adjustsFontSizeToFit (stable typography)', () => {
+    expect(src).not.toContain('adjustsFontSizeToFit');
   });
 });

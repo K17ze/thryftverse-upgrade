@@ -47,7 +47,6 @@ import {
   CommerceDetailSellerRow,
   CommerceDetailMediaRail,
 } from '../components/commerce/detail';
-import { CachedImage } from '../components/CachedImage';
 import { resolveCoOwnConversation } from '../utils/coOwnMessaging';
 import {
   buildCoOwnViewModel,
@@ -67,6 +66,7 @@ import {
   AssetMarketSection,
   AssetOwnershipSection,
   AssetDetailDock,
+  RelatedAssetsRail,
   CoOwnSegmentNav,
   type CoOwnDetailTab,
 } from '../components/coown/asset-detail';
@@ -1178,71 +1178,12 @@ export default function AssetDetailScreen() {
             State coverage: loading (heading + spinner), empty (hidden),
             error (hidden — discovery enhancement), populated (rail).
             ════════════════════════════════════════════════════════════ */}
-        {(relatedAssets.length > 0 || relatedAssetsLoading) && (
-          <View style={styles.relatedAssetsSection}>
-            <Text style={[styles.relatedAssetsHeading, { color: colors.textPrimary }]}>
-              More from {issuerUsername}
-            </Text>
-            {relatedAssetsLoading ? (
-              <View style={styles.relatedAssetsLoadingRow}>
-                <ActivityIndicator size="small" color={colors.textMuted} />
-              </View>
-            ) : (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.relatedAssetsRail}
-              >
-                {relatedAssets.map((relAsset) => {
-                  const relAvailable = relAsset.availableUnits > 0;
-                  const relPriceLabel = relAsset.marketSnapshot?.lastExecutionPriceGbp != null
-                    ? formatCoOwnIze(relAsset.marketSnapshot.lastExecutionPriceGbp)
-                    : formatCoOwnIze(relAsset.unitPriceGbp);
-                  return (
-                    <Pressable
-                      key={relAsset.id}
-                      onPress={() => navigation.push('AssetDetail', { assetId: relAsset.id })}
-                      style={({ pressed }) => [
-                        styles.relatedAssetChip,
-                        pressed && { opacity: 0.7 },
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${relAsset.title}, ${relPriceLabel} per unit, ${relAvailable ? 'units available' : 'fully allocated'}`}
-                    >
-                      {relAsset.imageUrl ? (
-                        <CachedImage
-                          uri={relAsset.imageUrl}
-                          style={styles.relatedAssetImage}
-                          contentFit="cover"
-                        />
-                      ) : (
-                        <View style={[styles.relatedAssetImage, { backgroundColor: colors.surfaceAlt }]} />
-                      )}
-                      <Text
-                        style={[styles.relatedAssetTitle, { color: colors.textPrimary }]}
-                        numberOfLines={1}
-                        maxFontSizeMultiplier={1.2}
-                      >
-                        {relAsset.title}
-                      </Text>
-                      <Text style={[styles.relatedAssetPrice, { color: colors.textSecondary }]}>
-                        {relPriceLabel}
-                      </Text>
-                      <View style={styles.relatedAssetStatusRow}>
-                        <View style={[styles.relatedAssetDot, {
-                          backgroundColor: relAvailable ? colors.success : colors.textMuted,
-                        }]} />
-                        <Text style={[styles.relatedAssetStatus, { color: colors.textMuted }]} numberOfLines={1}>
-                          {relAvailable ? `${relAsset.availableUnits} left` : 'Allocated'}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
-        )}
+        <RelatedAssetsRail
+          assets={relatedAssets}
+          loading={relatedAssetsLoading}
+          issuerUsername={issuerUsername}
+          onPressAsset={(assetId) => navigation.push('AssetDetail', { assetId })}
+        />
 
       </Reanimated.ScrollView>
 
@@ -1427,57 +1368,5 @@ const styles = StyleSheet.create({
     lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.medium,
     letterSpacing: TypographyV2.meta.letterSpacing,
-  },
-  // ── Related Assets rail ──
-  relatedAssetsSection: {
-    marginTop: Space.lg,
-    paddingHorizontal: Space.md,
-  },
-  relatedAssetsHeading: {
-    fontSize: TypographyV2.sectionTitle.size,
-    fontFamily: FontFamily.bold,
-    marginBottom: Space.sm,
-  },
-  relatedAssetsRail: {
-    gap: Space.md,
-    paddingRight: Space.md,
-  },
-  relatedAssetsLoadingRow: {
-    paddingVertical: Space.sm,
-  },
-  relatedAssetChip: {
-    width: 140,
-    gap: 4,
-  },
-  relatedAssetImage: {
-    width: '100%',
-    height: 84,
-    borderRadius: Radius.sm,
-    marginBottom: 4,
-  },
-  relatedAssetTitle: {
-    fontSize: TypographyV2.caption.size,
-    fontFamily: FontFamily.semibold,
-    lineHeight: TypographyV2.caption.lineHeight,
-  },
-  relatedAssetPrice: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.medium,
-    fontVariant: ['tabular-nums'],
-  },
-  relatedAssetStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  relatedAssetDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  relatedAssetStatus: {
-    fontSize: 10,
-    fontFamily: FontFamily.regular,
   },
 });
