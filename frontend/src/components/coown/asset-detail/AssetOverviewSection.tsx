@@ -5,46 +5,65 @@ import { Space, FontFamily, Radius, PressScale } from '../../../theme/designToke
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { formatCoOwnIze } from '../../../utils/currency';
-import type { MarketCoOwnAsset } from '../../../services/marketApi';
+import { fetchCoOwnPriceHistory, type MarketCoOwnAsset, type PriceCandle } from '../../../services/marketApi';
 import {
   CommerceDetailDisclosureRow,
   CommerceDetailSection,
   CommerceDetailMetricRow,
-  CommerceDetailUnavailableInline,
 } from '../../commerce/detail';
-import { CoOwnPriceChart, CoOwnCandleChart, type CoOwnCandleRange } from '../';
+import { CoOwnCandleChart, type CoOwnCandleRange } from '../';
 import type { AssetLifecycleState, CandleDataPoint, DossierDocument } from './types';
 
 export interface AssetOverviewSectionProps {
   asset: MarketCoOwnAsset;
+  /** Embedded candles from the asset response — the fallback while the
+   * ranged history loads, fails, or comes back empty. */
   candleData: CandleDataPoint[];
-  hasCandleData: boolean;
   candleRange: CoOwnCandleRange;
   onCandleRangeChange: (range: CoOwnCandleRange) => void;
   showVolume: boolean;
+  onToggleVolume?: () => void;
   lastExecutionPriceGbp: number | null;
   appraisedValuePerUnitGbp: number | null;
   referenceVsAppraisalPct: number | null;
-  fundamentalsExpanded?: boolean;
-  onToggleFundamentals?: () => void;
   dossierSummary: string;
   dossierDocuments: DossierDocument[];
   hasDocuments: boolean;
-  diligenceSectionExpanded?: boolean;
-  onToggleDiligence?: () => void;
   onOpenDiligence: () => void;
   onOpenRiskDisclosure: () => void;
-  onNavigateToIssue?: () => void;
   lifecycleState: AssetLifecycleState;
+}
+
+/** Range → server price-history query. All chart ranges map to a
+ * supported server interval ('1h' | '4h' | '1d' | '1w'). */
+const RANGE_HISTORY_PARAMS: Record<CoOwnCandleRange, { interval: '1h' | '4h' | '1d' | '1w'; limit: number }> = {
+  '1D': { interval: '1h', limit: 48 },
+  '1W': { interval: '4h', limit: 42 },
+  '1M': { interval: '1d', limit: 30 },
+  '3M': { interval: '1d', limit: 90 },
+  '1Y': { interval: '1w', limit: 52 },
+  'ALL': { interval: '1w', limit: 52 },
+};
+
+/** Minor-unit candles → chart points in GBP. */
+function toCandlePoints(candles: PriceCandle[]): CandleDataPoint[] {
+  return candles.map((c) => ({
+    t: new Date(c.timestamp).getTime(),
+    o: c.openGbpMinor / 100,
+    h: c.highGbpMinor / 100,
+    l: c.lowGbpMinor / 100,
+    c: c.closeGbpMinor / 100,
+    v: c.volumeUnits,
+  }));
 }
 
 export function AssetOverviewSection({
   asset,
   candleData,
-  hasCandleData,
   candleRange,
   onCandleRangeChange,
   showVolume,
+  onToggleVolume,
   lastExecutionPriceGbp,
   appraisedValuePerUnitGbp,
   referenceVsAppraisalPct,
@@ -56,6 +75,43 @@ export function AssetOverviewSection({
   lifecycleState,
 }: AssetOverviewSectionProps) {
   const { colors, isDark } = useAppTheme();
+
+  // ── Ranged price history ──
+  // The chart's range chips drive a real fetch. Previous candles stay
+  // rendered while the next range loads; on error or an empty result the
+  // embedded asset candles remain the fallback — never an empty flash,
+  // never fabricated candles.
+  const [historyCandles, setHistoryCandles] = React.useState<CandleDataPoint[] | null>(null);
+  const [historyLoading, setHistoryLoading] = React.useState(false);
+  const [historyFailed, setHistoryFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setHistoryLoading(true);
+    setHistoryFailed(false);
+    // Drop the previous range's candles immediately so the chart never
+    // renders stale data under the new range label; the embedded asset
+    // candles cover the gap until the fetch resolves.
+    setHistoryCandles(null);
+    void fetchCoOwnPriceHistory(asset.id, RANGE_HISTORY_PARAMS[candleRange])
+      .then(({ candles }) => {
+        if (cancelled) return;
+        setHistoryCandles(candles.length > 0 ? toCandlePoints(candles) : null);
+        setHistoryFailed(false);
+        setHistoryLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setHistoryCandles(null);
+        setHistoryFailed(true);
+        setHistoryLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [asset.id, candleRange]);
+
+  const chartCandles = historyCandles ?? candleData;
+  const hasChartCandles = chartCandles.length > 0;
+  const volumeAvailable = chartCandles.some((c) => c.v > 0);
 
   const appraisalDateLabel = asset.appraisalValuedAt
     ? `Valuation updated ${new Date(asset.appraisalValuedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
@@ -152,29 +208,54 @@ export function AssetOverviewSection({
             <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Valuation Benchmark</Text>
             <Text style={[styles.subHeading, { color: colors.textSecondary }]}>
               {referenceVsAppraisalPct != null
-                ? `Reference vs appraisal · ${Math.abs(referenceVsAppraisalPct).toFixed(1)}% ${referenceVsAppraisalPct >= 0 ? 'premium' : 'discount'}`
-                : 'Reference vs appraisal benchmark'}
+                ? `Reference vs appraisal · ${Math.abs(referenceVsAppraisalPct).toFixed(1)}% ${referenceVsAppraisalPct >= 0 ? 'premium' : 'discount'}${historyLoading ? ' · loading…' : ''}`
+                : historyLoading
+                  ? 'Loading price history…'
+                  : 'Reference vs appraisal benchmark'}
             </Text>
           </View>
+          {hasChartCandles && volumeAvailable && onToggleVolume ? (
+            <Pressable
+              onPress={onToggleVolume}
+              hitSlop={8}
+              style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel={showVolume ? 'Hide volume bars' : 'Show volume bars'}
+              accessibilityState={{ selected: showVolume }}
+            >
+              <Ionicons
+                name="bar-chart-outline"
+                size={14}
+                color={showVolume ? colors.brand : colors.textMuted}
+              />
+              <Text style={[styles.linkText, { color: showVolume ? colors.brand : colors.textMuted }]}>
+                Volume
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
-        {/* Candle chart or sparse notice */}
-        {hasCandleData ? (
+        {/* Candle chart or sparse notice — previous candles stay up while
+            the next range loads; embedded candles cover error/empty. */}
+        {hasChartCandles ? (
           <View style={styles.chartWrapper}>
             <CoOwnCandleChart
-              candles={candleData}
+              candles={chartCandles}
               range={candleRange}
               onRangeChange={onCandleRangeChange}
-              showVolume={showVolume}
+              showVolume={showVolume && volumeAvailable}
+              lastPrice={lastExecutionPriceGbp ?? undefined}
             />
           </View>
-        ) : undefined}
-
-        {!hasCandleData && (
+        ) : (
           <View style={[styles.sparseChartNotice, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}>
             <Ionicons name="analytics-outline" size={24} color={colors.textMuted} />
             <Text style={[styles.sparseChartTitle, { color: colors.textPrimary }]}>
-              {lifecycleState === 'initialOffering' ? 'Primary Offering Benchmark' : 'No execution history yet'}
+              {historyFailed
+                ? 'Price history unavailable'
+                : lifecycleState === 'initialOffering'
+                  ? 'Primary Offering Benchmark'
+                  : 'No execution history yet'}
             </Text>
             <Text style={[styles.sparseChartBody, { color: colors.textSecondary }]}>
               Offering unit price of {formatCoOwnIze(asset.unitPriceGbp)} is benchmarked against independent appraisal of {appraisedValuePerUnitGbp != null ? formatCoOwnIze(appraisedValuePerUnitGbp) : 'recorded value'}.

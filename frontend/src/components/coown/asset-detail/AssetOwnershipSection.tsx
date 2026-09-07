@@ -1,18 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, FontFamily, Radius, PressScale } from '../../../theme/designTokens';
+import { Space, FontFamily, Radius } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { formatCoOwnIze } from '../../../utils/currency';
-import type { MarketCoOwnAsset, CoOwnDistribution } from '../../../services/marketApi';
-import type { CoOwnRightsRow } from '../';
-import type { AssetLifecycleState } from './types';
+import type { CoOwnCorporateAction, CoOwnDistribution } from '../../../services/marketApi';
+import { CoOwnCorporateActionRow, type CoOwnCorporateActionStatus, type CoOwnCorporateActionType } from '../';
+import { CommerceDetailDisclosureRow } from '../../commerce/detail';
 
 export interface AssetOwnershipSectionProps {
-  asset: MarketCoOwnAsset;
   isHolder: boolean;
-  isIssuer: boolean;
   yourUnits: number | null;
   viewerPct: number | null;
   avgEntryPriceGbp: number | null;
@@ -21,23 +19,57 @@ export interface AssetOwnershipSectionProps {
   yourSegmentPct: number;
   otherHoldersSegmentPct: number;
   availableSegmentPct: number;
-  allocatedPct: number;
   availableUnits: number;
   totalUnits: number;
-  rightsRows: CoOwnRightsRow[];
-  hasIncompleteRights: boolean;
   onOpenRights: () => void;
   lastDistribution: CoOwnDistribution | null;
   lastDistributionAmount: number | null;
   lastDistributionDate: string | null;
   lastDistributionPerUnit: number | null;
   onNavigateToDistributionHistory: () => void;
-  feePct: number;
-  lifecycleState: AssetLifecycleState;
+  /** Latest corporate actions, already limited (null = not loaded / failed → section omitted). */
+  corporateActions: CoOwnCorporateAction[] | null;
+  onNavigateToCorporateAction: (action: CoOwnCorporateAction) => void;
+  onOpenBuyout: () => void;
+}
+
+/** Backend action types → row types. Unknown types are skipped, never guessed. */
+const ACTION_TYPE_MAP: Record<string, CoOwnCorporateActionType> = {
+  distribution: 'distribution',
+  operating_cost: 'operating_cost',
+  new_issuance: 'new_issuance',
+  split: 'split',
+  consolidation: 'consolidation',
+  buyback: 'buyback',
+  compulsory_buyout: 'compulsory_buyout',
+  revaluation: 'revaluation',
+  insurance_proceeds: 'insurance_proceeds',
+  liquidation: 'liquidation',
+  vote: 'vote',
+  governance: 'vote',
+  exit: 'liquidation',
+};
+
+const ACTION_STATUS_MAP: Record<string, CoOwnCorporateActionStatus> = {
+  announced: 'pending',
+  open: 'pending',
+  executing: 'effective',
+  executed: 'effective',
+  settled: 'completed',
+  cancelled: 'cancelled',
+};
+
+function formatDayMonth(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function corporateActionAmountLabel(action: CoOwnCorporateAction): string | undefined {
+  if (action.perUnitValueGbpMinor == null) return undefined;
+  const major = action.perUnitValueGbpMinor / 100;
+  return `${major >= 0 ? '+' : ''}${formatCoOwnIze(major)}`;
 }
 
 export function AssetOwnershipSection({
-  asset,
   isHolder,
   yourUnits,
   viewerPct,
@@ -47,30 +79,30 @@ export function AssetOwnershipSection({
   yourSegmentPct,
   otherHoldersSegmentPct,
   availableSegmentPct,
-  allocatedPct,
   availableUnits,
   totalUnits,
-  rightsRows,
-  hasIncompleteRights,
   onOpenRights,
   lastDistribution,
   lastDistributionAmount,
   lastDistributionDate,
   lastDistributionPerUnit,
   onNavigateToDistributionHistory,
-  feePct,
-  lifecycleState,
+  corporateActions,
+  onNavigateToCorporateAction,
+  onOpenBuyout,
 }: AssetOwnershipSectionProps) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
 
   const isUp = unrealizedPnlGbp != null && unrealizedPnlGbp >= 0;
-  const pnlColor = isUp ? colors.success : colors.warning;
+  // Financial direction token pair — coownUp/coownDown are the documented
+  // tokens for position P/L (ThemeContext), not success/warning.
+  const pnlColor = isUp ? colors.coownUp : colors.coownDown;
 
   return (
     <View style={styles.container}>
       {/* ── 1. Your Position Card (when user owns units) ── */}
       {isHolder && yourUnits != null && yourUnits > 0 ? (
-        <View style={[styles.cardSurface, { backgroundColor: isDark ? '#111C16' : '#F2FAF5', borderColor: colors.success }]}>
+        <View style={[styles.cardSurface, { backgroundColor: colors.successSubtle, borderColor: colors.success }]}>
           <View style={styles.sectionHeaderRow}>
             <View style={styles.positionTitleGroup}>
               <Ionicons name="pie-chart" size={18} color={colors.success} />
@@ -126,10 +158,10 @@ export function AssetOwnershipSection({
             <View style={[styles.barSegment, { width: `${yourSegmentPct}%`, backgroundColor: colors.brand }]} />
           ) : null}
           {otherHoldersSegmentPct > 0 ? (
-            <View style={[styles.barSegment, { width: `${otherHoldersSegmentPct}%`, backgroundColor: isDark ? '#4B5563' : '#9CA3AF' }]} />
+            <View style={[styles.barSegment, { width: `${otherHoldersSegmentPct}%`, backgroundColor: colors.textMuted }]} />
           ) : null}
           {availableSegmentPct > 0 ? (
-            <View style={[styles.barSegment, { width: `${availableSegmentPct}%`, backgroundColor: isDark ? '#22C55E' : '#16A34A' }]} />
+            <View style={[styles.barSegment, { width: `${availableSegmentPct}%`, backgroundColor: colors.success }]} />
           ) : null}
         </View>
 
@@ -144,13 +176,13 @@ export function AssetOwnershipSection({
             </View>
           ) : null}
           <View style={styles.legendItem}>
-            <View style={[styles.legendColorBox, { backgroundColor: isDark ? '#4B5563' : '#9CA3AF' }]} />
+            <View style={[styles.legendColorBox, { backgroundColor: colors.textMuted }]} />
             <Text style={[styles.legendText, { color: colors.textSecondary }]}>
               Other Co-Owners ({Math.max(0, totalUnits - availableUnits - (yourUnits || 0))})
             </Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendColorBox, { backgroundColor: isDark ? '#22C55E' : '#16A34A' }]} />
+            <View style={[styles.legendColorBox, { backgroundColor: colors.success }]} />
             <Text style={[styles.legendText, { color: colors.textSecondary }]}>
               Available Float ({availableUnits})
             </Text>
@@ -211,9 +243,47 @@ export function AssetOwnershipSection({
             </View>
           </View>
         </View>
+
+        <CommerceDetailDisclosureRow
+          label="Buyout offers"
+          summary="Whole-asset acquisition offers"
+          onPress={onOpenBuyout}
+          accessibilityLabel="View buyout offers for this asset"
+        />
       </View>
 
-      {/* ── 4. Distributions & Yield ── */}
+      {/* ── 4. Corporate actions & events ──
+          Latest lifecycle events as timeline rows. Omitted entirely when
+          nothing has been published — no placeholder. */}
+      {corporateActions && corporateActions.length > 0 ? (
+        <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Corporate actions & events</Text>
+          </View>
+          <View style={styles.actionList}>
+            {corporateActions.map((action) => {
+              const rowType = ACTION_TYPE_MAP[action.actionType];
+              if (!rowType) return null;
+              const dateSource = action.payableDate ?? action.recordDate ?? action.exDate ?? action.createdAt;
+              return (
+                <CoOwnCorporateActionRow
+                  key={action.id}
+                  type={rowType}
+                  status={ACTION_STATUS_MAP[action.status] ?? 'pending'}
+                  dateLabel={new Date(dateSource).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  effectLabel={action.description ?? action.title}
+                  amountLabel={corporateActionAmountLabel(action)}
+                  recordDateLabel={action.recordDate ? `Record date: ${formatDayMonth(action.recordDate)}` : undefined}
+                  paymentDateLabel={action.payableDate ? `Payment: ${formatDayMonth(action.payableDate)}` : undefined}
+                  onPress={() => onNavigateToCorporateAction(action)}
+                />
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
+      {/* ── 5. Distributions & Yield ── */}
       <View style={[styles.cardSurface, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderSubtle }]}>
         <View style={styles.sectionHeaderRow}>
           <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Distributions & Yield</Text>
@@ -362,6 +432,9 @@ const styles = StyleSheet.create({
   rightsBlock: {
     gap: Space.sm,
     marginTop: Space.xs,
+  },
+  actionList: {
+    gap: Space.xs,
   },
   rightRow: {
     flexDirection: 'row',

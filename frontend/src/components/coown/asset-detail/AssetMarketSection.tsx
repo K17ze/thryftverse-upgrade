@@ -1,14 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Space, FontFamily, Radius, PressScale } from '../../../theme/designTokens';
+import { Space, FontFamily, Radius } from '../../../theme/designTokens';
 import { TypographyV2 } from '../../../theme/typography.v2';
 import { useAppTheme } from '../../../theme/ThemeContext';
 import { formatCoOwnIze } from '../../../utils/currency';
-import type {
-  MarketCoOwnAsset,
-  CoOwnOrderBookSnapshot,
-  CoOwnOrderBookEntry,
+import {
+  listCoOwnExecutions,
+  type MarketCoOwnAsset,
+  type MarketCoOwnExecution,
+  type CoOwnOrderBookSnapshot,
+  type CoOwnOrderBookEntry,
 } from '../../../services/marketApi';
 import {
   CommerceDetailSection,
@@ -36,10 +38,6 @@ export interface AssetMarketSectionProps {
   dataStale: boolean;
   dataStaleAgeLabel?: string;
   onRefresh: () => void;
-  marketSectionExpanded?: boolean;
-  onToggleMarketSection?: () => void;
-  orderBookExpanded?: boolean;
-  onToggleOrderBook?: () => void;
   allocatedPct: number;
   availableUnits: number;
   totalUnits: number;
@@ -69,6 +67,56 @@ export function AssetMarketSection({
   lifecycleState,
 }: AssetMarketSectionProps) {
   const { colors, isDark } = useAppTheme();
+
+  // ── Execution tape — last settled trades for this asset ──
+  // The public executions feed carries no counterparty or side data, so the
+  // tape prints time · price · units only. Failed/reversed settlements are
+  // not trades and never print.
+  const [executions, setExecutions] = React.useState<MarketCoOwnExecution[] | null>(null);
+  const [executionsLoading, setExecutionsLoading] = React.useState(true);
+  const [executionsFailed, setExecutionsFailed] = React.useState(false);
+
+  const loadExecutions = React.useCallback(() => {
+    let cancelled = false;
+    setExecutionsLoading(true);
+    setExecutionsFailed(false);
+    // Clear the previous asset's tape immediately so a slow response for the
+    // old asset can never overwrite the new asset's feed.
+    setExecutions(null);
+    void listCoOwnExecutions(asset.id, { limit: 25 })
+      .then((result) => {
+        if (cancelled) return;
+        const settled = result.items
+          .filter((e) => e.settlementStatus == null || e.settlementStatus === 'settled')
+          .slice(0, 8);
+        setExecutions(settled);
+        setExecutionsLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setExecutions(null);
+        setExecutionsFailed(true);
+        setExecutionsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [asset.id]);
+
+  React.useEffect(() => {
+    const cleanup = loadExecutions();
+    return cleanup;
+  }, [loadExecutions]);
+
+  const tapeExecutions = executions ?? [];
+
+  // ── 24h market stats — one compact strip under the transaction surface.
+  // Null segments are omitted, never rendered as zeros.
+  const snapshot = asset.marketSnapshot ?? null;
+  const movePct24h = snapshot?.marketMovePct24h ?? asset.marketMovePct24h ?? null;
+  const volume24hGbp = snapshot?.volume24hGbp ?? asset.volume24hGbp ?? null;
+  const statsSpreadGbp = snapshot?.bestBidGbp != null && snapshot?.bestAskGbp != null
+    ? Math.max(0, snapshot.bestAskGbp - snapshot.bestBidGbp)
+    : spreadGbp;
+  const hasStatsStrip = movePct24h != null || volume24hGbp != null || statsSpreadGbp != null;
 
   const isMarketOpen = asset.isOpen && !reconciliationActive && !isOffline;
   const hasBidsOrAsks =
@@ -114,12 +162,50 @@ export function AssetMarketSection({
 
   return (
     <View style={styles.container}>
-      {/* ── 1. Transaction Surface with family="co_own" ── */}
+      {/* ── 1. Transaction Surface with family="co_own" ──
+          The 24h stats line rides the surface's status row — one compact
+          label:value strip under the dominant price, hairline-separated.
+          Null segments are omitted entirely. */}
       <CommerceDetailTransactionSurface
         family="co_own"
         primaryLabel={transactionPrimaryLabel}
         primaryValue={transactionPrimaryValue}
         secondaryLabel={transactionSecondaryLabel}
+        statusRow={
+          hasStatsStrip ? (
+            <View style={styles.statsStrip}>
+              {movePct24h != null ? (
+                <>
+                  <Text style={[styles.statsLabel, { color: colors.textMuted }]}>24h</Text>
+                  <Text
+                    style={[
+                      styles.statsValue,
+                      {
+                        color: movePct24h > 0
+                          ? colors.coownUp
+                          : movePct24h < 0
+                            ? colors.coownDown
+                            : colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {movePct24h > 0 ? '+' : movePct24h < 0 ? '−' : ''}{Math.abs(movePct24h).toFixed(1)}%
+                  </Text>
+                </>
+              ) : null}
+              {volume24hGbp != null ? (
+                <Text style={[styles.statsValue, { color: colors.textMuted }]}>
+                  Vol {formatCoOwnIze(volume24hGbp)}
+                </Text>
+              ) : null}
+              {statsSpreadGbp != null ? (
+                <Text style={[styles.statsValue, { color: colors.textMuted }]}>
+                  Spread {formatCoOwnIze(statsSpreadGbp)}
+                </Text>
+              ) : null}
+            </View>
+          ) : undefined
+        }
         headlineAside={
           <View
             style={[
@@ -168,11 +254,6 @@ export function AssetMarketSection({
             <Text style={[styles.depthStatusText, { color: colors.textSecondary }]}>
               {depthStatusLabel}
             </Text>
-            {spreadGbp != null && spreadGbp > 0 ? (
-              <Text style={[styles.spreadText, { color: colors.textMuted }]}>
-                · Spread: {formatCoOwnIze(spreadGbp)}
-              </Text>
-            ) : null}
           </View>
 
           {/* Price alert action */}
@@ -227,42 +308,48 @@ export function AssetMarketSection({
         )}
       </CommerceDetailSection>
 
-      {/* ── 3. Recent Market Executions ── */}
-      <CommerceDetailSection label="Recent executions">
-        {asset.marketSnapshot?.lastExecutionPriceGbp != null ? (
-          <View style={styles.tradeExecutionRow}>
-            <View style={styles.tradeExecutionLeft}>
-              <Ionicons name="swap-horizontal" size={16} color={colors.brand} />
-              <View>
-                <Text style={[styles.tradeExecutionPrice, { color: colors.textPrimary }]}>
-                  {formatCoOwnIze(asset.marketSnapshot.lastExecutionPriceGbp)}
+      {/* ── 3. Execution tape — last settled trades ── */}
+      {executionsLoading ? null : executionsFailed ? (
+        <CommerceDetailSection label="Recent executions">
+          <CommerceDetailUnavailableInline
+            title="Executions unavailable"
+            body="Recent trades could not be loaded."
+            onRetry={loadExecutions}
+          />
+        </CommerceDetailSection>
+      ) : tapeExecutions.length > 0 ? (
+        <CommerceDetailSection label="Recent executions">
+          <View>
+            {tapeExecutions.map((execution, idx) => (
+              <View
+                key={execution.id}
+                style={[styles.tapeRow, idx > 0 && { borderTopColor: colors.borderSubtle }]}
+              >
+                <Text style={[styles.tapeTime, { color: colors.textMuted }]}>
+                  {new Date(execution.executedAt).toLocaleTimeString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
                 </Text>
-                <Text style={[styles.tradeExecutionMeta, { color: colors.textMuted }]}>
-                  {asset.marketSnapshot.lastExecutionAt
-                    ? new Date(asset.marketSnapshot.lastExecutionAt).toLocaleString('en-GB', {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    : 'Recent trade'}
+                <Text style={[styles.tapePrice, { color: colors.textPrimary }]}>
+                  {formatCoOwnIze(execution.unitPriceGbp)}
+                </Text>
+                <Text style={[styles.tapeUnits, { color: colors.textSecondary }]}>
+                  {execution.units} units
                 </Text>
               </View>
-            </View>
-            <View style={styles.tradeExecutionRight}>
-              <Text style={[styles.tradeVolumeText, { color: colors.textSecondary }]}>
-                Settled · ONEZE
-              </Text>
-            </View>
+            ))}
           </View>
-        ) : (
+        </CommerceDetailSection>
+      ) : (
+        <CommerceDetailSection label="Recent executions">
           <View style={styles.noTradesBox}>
             <Text style={[styles.noTradesText, { color: colors.textMuted }]}>
-              No trades yet. Initial issuance is currently offered at {formatCoOwnIze(asset.unitPriceGbp)}.
+              No trades yet
             </Text>
           </View>
-        )}
-      </CommerceDetailSection>
+        </CommerceDetailSection>
+      )}
 
       {/* ── 4. Trading Rules & Circuit Breakers ── */}
       <CommerceDetailSection label="Trading parameters">
@@ -327,10 +414,6 @@ const styles = StyleSheet.create({
     fontSize: TypographyV2.meta.size,
     fontFamily: FontFamily.medium,
   },
-  spreadText: {
-    fontSize: TypographyV2.meta.size,
-    fontFamily: FontFamily.regular,
-  },
   alertActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -384,32 +467,56 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-  tradeExecutionRow: {
+  statsStrip: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Space.xs,
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    gap: Space.xs,
   },
-  tradeExecutionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-  },
-  tradeExecutionPrice: {
-    fontSize: TypographyV2.bodyStrong.size,
-    fontFamily: FontFamily.bold,
+  statsLabel: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.medium,
+    letterSpacing: TypographyV2.meta.letterSpacing,
     fontVariant: ['tabular-nums'],
   },
-  tradeExecutionMeta: {
-    fontSize: 11,
+  statsValue: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.semibold,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
+  },
+  tapeRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'transparent',
+    paddingVertical: Space.xs + 2,
+    gap: Space.sm,
+  },
+  tapeTime: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
     fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
+    flexShrink: 0,
   },
-  tradeExecutionRight: {
-    alignItems: 'flex-end',
+  tapePrice: {
+    flex: 1,
+    fontSize: TypographyV2.captionElevated.size,
+    lineHeight: TypographyV2.captionElevated.lineHeight,
+    fontFamily: FontFamily.semibold,
+    fontVariant: ['tabular-nums'],
   },
-  tradeVolumeText: {
-    fontSize: TypographyV2.caption.size,
-    fontFamily: FontFamily.medium,
+  tapeUnits: {
+    fontSize: TypographyV2.meta.size,
+    lineHeight: TypographyV2.meta.lineHeight,
+    fontFamily: FontFamily.regular,
+    letterSpacing: TypographyV2.meta.letterSpacing,
+    fontVariant: ['tabular-nums'],
+    flexShrink: 0,
   },
   noTradesBox: {
     paddingVertical: Space.sm,

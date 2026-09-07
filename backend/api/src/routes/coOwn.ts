@@ -907,6 +907,131 @@ app.patch('/co-own/price-alerts/:id', async (request, reply) => {
   };
 });
 
+/* ── Co-Own Distributions ── */
+
+// GET /co-own/distributions — list distributions.
+//
+// coown_distributions rows are per-recipient (each row is one holder's
+// payment), so the listing is identity-scoped:
+//   • Authenticated callers receive only their own distributions, optionally
+//     filtered by assetId, cursor-paginated on (created_at, id).
+//   • Anonymous callers receive per-asset aggregate facts only (total
+//     distributed, distribution count, latest per-unit rate, latest
+//     distribution date). recipient_user_id and individual amounts are never
+//     exposed on the public path.
+app.get('/co-own/distributions', async (request) => {
+  const querySchema = z.object({
+    assetId: z.string().min(2).max(128).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    cursor: z.string().optional(),
+  });
+  const query = querySchema.parse(request.query);
+
+  const authUserId = request.authUser?.userId;
+
+  if (authUserId) {
+    // Cursor is base64-encoded "createdAt|id" (same scheme as /feed/discover)
+    // so pagination stays stable when distributions share a created_at
+    // (NOW() is transaction-scoped, so batched inserts share timestamps).
+    // created_at::text preserves microsecond precision across the round-trip.
+    let cursorCreatedAt: string | null = null;
+    let cursorId: string | null = null;
+    if (query.cursor) {
+      try {
+        const decoded = Buffer.from(query.cursor, 'base64').toString('utf-8');
+        const parts = decoded.split('|');
+        if (parts.length === 2) {
+          [cursorCreatedAt, cursorId] = parts;
+        }
+      } catch {
+        // Invalid cursor — treat as first page
+      }
+    }
+
+    const result = await db.query<{
+      id: string;
+      asset_id: string;
+      amount_gbp_minor: string | number;
+      units_at_record: string | number;
+      per_unit_gbp_minor: string | number;
+      distribution_type: string;
+      status: string;
+      reference: string | null;
+      created_at: string;
+      created_at_text: string;
+      settled_at: string | null;
+    }>(
+      `SELECT id, asset_id, amount_gbp_minor, units_at_record, per_unit_gbp_minor,
+              distribution_type, status, reference, created_at,
+              created_at::text AS created_at_text, settled_at
+       FROM coown_distributions
+       WHERE recipient_user_id = $1
+         AND ($2::text IS NULL OR asset_id = $2)
+         AND ($3::timestamptz IS NULL OR (created_at, id) < ($3::timestamptz, $4::text))
+       ORDER BY created_at DESC, id DESC
+       LIMIT $5`,
+      [authUserId, query.assetId ?? null, cursorCreatedAt, cursorId, query.limit]
+    );
+
+    const lastRow = result.rows[result.rows.length - 1];
+
+    return {
+      ok: true,
+      scope: 'user',
+      items: result.rows.map((row) => ({
+        id: row.id,
+        assetId: row.asset_id,
+        amountGbpMinor: Number(row.amount_gbp_minor),
+        unitsAtRecord: Number(row.units_at_record),
+        perUnitGbpMinor: Number(row.per_unit_gbp_minor),
+        distributionType: row.distribution_type,
+        status: row.status,
+        reference: row.reference,
+        createdAt: row.created_at,
+        settledAt: row.settled_at,
+      })),
+      nextCursor: result.rows.length === query.limit
+        ? Buffer.from(`${lastRow.created_at_text}|${lastRow.id}`).toString('base64')
+        : null,
+    };
+  }
+
+  // Anonymous callers get per-asset aggregates only — never per-recipient rows.
+  const aggregateResult = await db.query<{
+    asset_id: string;
+    total_distributed_gbp_minor: string | number;
+    distribution_count: string | number;
+    latest_per_unit_gbp_minor: string | number | null;
+    latest_distribution_at: string | null;
+  }>(
+    `SELECT asset_id,
+            COALESCE(SUM(amount_gbp_minor), 0)::bigint AS total_distributed_gbp_minor,
+            COUNT(*)::int AS distribution_count,
+            (array_agg(per_unit_gbp_minor ORDER BY created_at DESC, id DESC))[1] AS latest_per_unit_gbp_minor,
+            MAX(created_at) AS latest_distribution_at
+     FROM coown_distributions
+     WHERE ($1::text IS NULL OR asset_id = $1)
+     GROUP BY asset_id
+     ORDER BY MAX(created_at) DESC, asset_id ASC
+     LIMIT $2`,
+    [query.assetId ?? null, query.limit]
+  );
+
+  return {
+    ok: true,
+    scope: 'asset_aggregates',
+    items: [],
+    nextCursor: null,
+    aggregates: aggregateResult.rows.map((row) => ({
+      assetId: row.asset_id,
+      totalDistributedGbpMinor: Number(row.total_distributed_gbp_minor),
+      distributionCount: Number(row.distribution_count),
+      latestPerUnitGbpMinor: row.latest_per_unit_gbp_minor == null ? null : Number(row.latest_per_unit_gbp_minor),
+      latestDistributionAt: row.latest_distribution_at,
+    })),
+  };
+});
+
 /* ── Co-Own Price History (OHLCV) ── */
 
 // GET /co-own/assets/:assetId/price-history — aggregated OHLCV candles
@@ -1001,6 +1126,101 @@ app.get('/co-own/assets/:assetId/price-history', async (request) => {
       tradeCount: Number(row.trade_count),
     })),
   };
+});
+
+/* ── Co-Own Corporate Actions (public market data) ── */
+
+interface CoOwnCorporateActionRow {
+  id: string;
+  asset_id: string;
+  action_type: string;
+  title: string;
+  description: string | null;
+  per_unit_value_gbp_minor: string | number | null;
+  total_value_gbp_minor: string | number | null;
+  record_date: string | null;
+  ex_date: string | null;
+  payable_date: string | null;
+  status: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+// DB row → public payload. Corporate actions are public market information;
+// the table carries every column the client contract expects (title is
+// NOT NULL in migration 103), so the mapping is a direct snake→camel pass.
+function toCorporateActionPayload(row: CoOwnCorporateActionRow) {
+  return {
+    id: row.id,
+    assetId: row.asset_id,
+    actionType: row.action_type,
+    title: row.title,
+    description: row.description,
+    perUnitValueGbpMinor: row.per_unit_value_gbp_minor == null ? null : Number(row.per_unit_value_gbp_minor),
+    totalValueGbpMinor: row.total_value_gbp_minor == null ? null : Number(row.total_value_gbp_minor),
+    recordDate: row.record_date,
+    exDate: row.ex_date,
+    payableDate: row.payable_date,
+    status: row.status,
+    metadata: row.metadata ?? null,
+    createdAt: row.created_at,
+  };
+}
+
+// GET /co-own/corporate-actions — list corporate actions across assets
+app.get('/co-own/corporate-actions', async (request) => {
+  const querySchema = z.object({
+    assetId: z.string().min(2).max(128).optional(),
+    type: z.string().trim().min(1).max(64).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  });
+  const { assetId, type, limit } = querySchema.parse(request.query);
+
+  const result = await db.query<CoOwnCorporateActionRow>(
+    `SELECT id, asset_id, action_type, title, description,
+            per_unit_value_gbp_minor, total_value_gbp_minor,
+            record_date, ex_date, payable_date, status, metadata, created_at
+     FROM coown_corporate_actions
+     WHERE ($1::text IS NULL OR asset_id = $1)
+       AND ($2::text IS NULL OR action_type = $2)
+     ORDER BY created_at DESC
+     LIMIT $3`,
+    [assetId ?? null, type ?? null, limit]
+  );
+
+  return { ok: true, items: result.rows.map(toCorporateActionPayload) };
+});
+
+// GET /co-own/assets/:assetId/corporate-actions — corporate actions for one asset
+app.get('/co-own/assets/:assetId/corporate-actions', async (request, reply) => {
+  const paramsSchema = z.object({ assetId: z.string().min(2).max(128) });
+  const { assetId } = paramsSchema.parse(request.params);
+
+  const querySchema = z.object({
+    type: z.string().trim().min(1).max(64).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  });
+  const { type, limit } = querySchema.parse(request.query);
+
+  const assetExists = await db.query('SELECT id FROM coOwn_assets WHERE id = $1 LIMIT 1', [assetId]);
+  if (!assetExists.rowCount) {
+    reply.code(404);
+    return { ok: false, error: 'Co-Own asset not found' };
+  }
+
+  const result = await db.query<CoOwnCorporateActionRow>(
+    `SELECT id, asset_id, action_type, title, description,
+            per_unit_value_gbp_minor, total_value_gbp_minor,
+            record_date, ex_date, payable_date, status, metadata, created_at
+     FROM coown_corporate_actions
+     WHERE asset_id = $1
+       AND ($2::text IS NULL OR action_type = $2)
+     ORDER BY created_at DESC
+     LIMIT $3`,
+    [assetId, type ?? null, limit]
+  );
+
+  return { ok: true, items: result.rows.map(toCorporateActionPayload) };
 });
 
 /* ── Co-Own Governance Voting ── */

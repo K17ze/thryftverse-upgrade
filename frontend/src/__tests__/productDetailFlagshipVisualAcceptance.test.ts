@@ -256,10 +256,17 @@ describe('product-detail-flagship-reconstruction: visual acceptance', () => {
 
   // ── 8. Buyout contradiction resolved ──
   describe('buyout contradiction resolved', () => {
-    it('AssetDetailScreen does not navigate to fake Buyout screen', () => {
+    it('AssetDetailScreen links to the real Buyout screen with an assetId', () => {
+      // Buyout is a real screen (BuyoutScreen, registered in AppNavigator)
+      // backed by real endpoints (GET/POST /co-own/assets/:assetId/buyout-offers,
+      // POST /co-own/buyout-offers/:offerId/accept). The old "fake Buyout"
+      // contradiction no longer exists; the entry point is now required so
+      // holders can reach exit offers from the asset they own.
       const src = readScreen('AssetDetailScreen.tsx');
-      expect(src).not.toContain("navigation.navigate('Buyout'");
-      expect(src).not.toContain("navigate('Buyout'");
+      const ownershipSection = read(resolve(COMPONENTS, 'coown/asset-detail/AssetOwnershipSection.tsx'));
+      const buyoutWiring = src + ownershipSection;
+      expect(buyoutWiring).toContain("navigate('Buyout'");
+      expect(buyoutWiring).toContain('assetId');
     });
   });
 

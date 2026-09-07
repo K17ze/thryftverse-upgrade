@@ -75,21 +75,20 @@ describe('co-own-detail flagship closure (spec 03_COOWN)', () => {
 
   // ── §4 Candle gating ──
   describe('candle gating', () => {
-    it('only renders candle chart when hasCandleData is true', () => {
-      expect(src).toContain('hasCandleData');
+    it('screen forwards embedded candles to the overview section', () => {
       expect(src).toContain('candleData');
     });
 
     it('does not pass empty candles array to CoOwnCandleChart', () => {
-      // The old code passed candles={[]}. The new code passes
-      // candles={candleData} only when hasCandleData is true.
+      // The old code passed candles={[]}. The new code gates on
+      // hasChartCandles (ranged history with embedded-candle fallback).
       expect(src).not.toContain('candles={[]}');
     });
 
-    it('candleChart is undefined when no candle data', () => {
+    it('chart renders only when ranged/embedded candles exist', () => {
       const overviewSection = readSection('AssetOverviewSection.tsx');
-      expect(overviewSection).toMatch(/hasCandleData \? \(/);
-      expect(overviewSection).toMatch(/: undefined/);
+      expect(overviewSection).toMatch(/hasChartCandles \? \(/);
+      expect(overviewSection).toContain('historyCandles ?? candleData');
     });
   });
 

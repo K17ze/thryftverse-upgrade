@@ -20,7 +20,10 @@ import { Space, Radius, FontFamily, DockConstants, Control, PressScale } from '.
 import { TypographyV2 } from '../theme/typography.v2';
 import {
   fetchCoOwnDistributions,
+  fetchCoOwnAssetCorporateActions,
+  listUserMarketHistory,
   type CoOwnDistribution,
+  type CoOwnCorporateAction,
   type MarketCoOwnAsset,
 } from '../services/marketApi';
 import { parseApiError } from '../lib/apiClient';
@@ -100,6 +103,24 @@ interface RecommendationItem {
   [key: string]: unknown;
 }
 
+// ── Corporate action row helpers ──
+// The detail route takes display labels; build them from the action record
+// without fabricating values (null → the detail screen shows em dashes).
+function formatDayMonth(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function corporateActionDateLabel(action: CoOwnCorporateAction): string {
+  const source = action.payableDate ?? action.recordDate ?? action.exDate ?? action.createdAt;
+  return new Date(source).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function corporateActionAmountLabel(action: CoOwnCorporateAction): string | undefined {
+  if (action.perUnitValueGbpMinor == null) return undefined;
+  const major = action.perUnitValueGbpMinor / 100;
+  return `${major >= 0 ? '+' : ''}${formatCoOwnIze(major)}`;
+}
+
 export default function AssetDetailScreen() {
   useScreenCaptureProtection();
   const navigation = useNavigation<NavT>();
@@ -130,6 +151,9 @@ export default function AssetDetailScreen() {
   const holdingsError = currentUser?.id ? holdingsQuery.isError : false;
 
   const [lastDistribution, setLastDistribution] = React.useState<CoOwnDistribution | null>(null);
+  const [corporateActions, setCorporateActions] = React.useState<CoOwnCorporateAction[] | null>(null);
+  const [hasActiveOrders, setHasActiveOrders] = React.useState(false);
+  const [refreshKey, setRefreshKey] = React.useState(0);
   const [isResolvingConversation, setIsResolvingConversation] = React.useState(false);
   const [fullscreenIndex, setFullscreenIndex] = React.useState(0);
   const [pendingTradeSide, setPendingTradeSide] = React.useState<'buy' | 'sell' | null>(null);
@@ -138,17 +162,13 @@ export default function AssetDetailScreen() {
   const [activeTab, setActiveTab] = React.useState<CoOwnDetailTab>('overview');
 
   // ── Sheet/expansion state (discriminated union for modal sheets) ──
-  const { sheets, open: openSheet, close: closeSheet, toggle: toggleExpansion, setExpansion } = useAssetDetailSheets();
+  const { sheets, open: openSheet, close: closeSheet } = useAssetDetailSheets();
   const {
     fullscreenVisible,
-    orderBookExpanded,
-    fundamentalsExpanded,
     guideVisible,
     rightsSheetVisible,
     overflowVisible,
     supplySheetVisible,
-    marketSectionExpanded,
-    diligenceSectionExpanded,
     riskDisclosureVisible,
   } = sheets;
 
@@ -197,7 +217,9 @@ export default function AssetDetailScreen() {
     }
   });
 
-  // ── Last distribution fetch — most recent settled distribution for this asset ──
+  // ── Last distribution fetch — most recent distribution for this asset.
+  // The unclaimed badge treats only non-settled distributions as unclaimed;
+  // a settled distribution is history, not an outstanding payout.
   React.useEffect(() => {
     if (!assetId) return;
     let cancelled = false;
@@ -207,11 +229,48 @@ export default function AssetDetailScreen() {
         setLastDistribution(result.items[0] ?? null);
       })
       .catch(() => {
-        if (!cancelled) return;
+        if (cancelled) return;
         setLastDistribution(null);
       });
     return () => { cancelled = true; };
-  }, [assetId]);
+  }, [assetId, refreshKey]);
+
+  // ── Corporate actions — latest 3 events for the ownership timeline ──
+  React.useEffect(() => {
+    if (!assetId) return;
+    let cancelled = false;
+    void fetchCoOwnAssetCorporateActions(assetId, { limit: 3 })
+      .then((items) => {
+        if (cancelled) return;
+        setCorporateActions(items);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCorporateActions(null);
+      });
+    return () => { cancelled = true; };
+  }, [assetId, refreshKey]);
+
+  // ── Active orders badge — the user's own co-own market history carries
+  // order status; open/partially_filled entries for this asset light the
+  // Market tab dot. Recent-window check (latest 50 entries), never fabricated.
+  React.useEffect(() => {
+    if (!assetId || !currentUser?.id) return;
+    let cancelled = false;
+    void listUserMarketHistory(currentUser.id, { channel: 'co-own', limit: 50 })
+      .then((page) => {
+        if (cancelled) return;
+        setHasActiveOrders(page.items.some((item) =>
+          item.referenceId === assetId
+          && (item.status === 'open' || item.status === 'partially_filled')
+        ));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setHasActiveOrders(false);
+      });
+    return () => { cancelled = true; };
+  }, [assetId, currentUser?.id, refreshKey]);
 
   // Track when asset data first arrives for staleness computation
   React.useEffect(() => {
@@ -236,10 +295,13 @@ export default function AssetDetailScreen() {
   }, [holdingsQuery, currentUser?.id]);
 
   // Pull-to-refresh — reloads asset, order book, and holdings in parallel.
+  // Bumping refreshKey also re-runs the distributions, corporate-actions,
+  // and active-orders effects so every surface on the screen refreshes.
   // Recourse status is fetched by the Due Diligence screen independently.
   const handleRefresh = React.useCallback(() => {
     if (!assetId) return;
     setRefreshing(true);
+    setRefreshKey((k) => k + 1);
     void Promise.allSettled([
       assetQuery.refetch(),
       refetchOrderBook(),
@@ -466,7 +528,6 @@ export default function AssetDetailScreen() {
       : undefined;
 
   const apiCandles = asset.candles ?? [];
-  const hasCandleData = apiCandles.length > 0;
   const candleData = apiCandles.map((c) => ({
     t: new Date(c.timestamp).getTime(),
     o: c.openGbp,
@@ -880,31 +941,26 @@ export default function AssetDetailScreen() {
         <CoOwnSegmentNav
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          hasActiveOrders={false}
-          hasUnclaimedDistributions={lastDistribution != null}
+          hasActiveOrders={hasActiveOrders}
+          hasUnclaimedDistributions={lastDistribution != null && lastDistribution.status !== 'settled'}
         />
 
         {activeTab === 'overview' && (
           <AssetOverviewSection
             asset={asset}
             candleData={candleData}
-            hasCandleData={hasCandleData}
             candleRange={candleRange}
             onCandleRangeChange={setCandleRange}
             showVolume={showVolume}
+            onToggleVolume={() => setShowVolume((v) => !v)}
             lastExecutionPriceGbp={marketSnapshot?.lastExecutionPriceGbp ?? null}
             appraisedValuePerUnitGbp={appraisedValuePerUnitGbp}
             referenceVsAppraisalPct={referenceVsAppraisalPct}
-            fundamentalsExpanded={fundamentalsExpanded}
-            onToggleFundamentals={() => toggleExpansion('fundamentals')}
             dossierSummary={dossierSummary}
             dossierDocuments={dossierDocuments}
             hasDocuments={hasDocuments}
-            diligenceSectionExpanded={diligenceSectionExpanded}
-            onToggleDiligence={() => toggleExpansion('diligenceSection')}
             onOpenDiligence={() => navigation.navigate('AssetDueDiligence', { assetId: asset.id })}
             onOpenRiskDisclosure={() => openSheet('riskDisclosure')}
-            onNavigateToIssue={() => navigation.navigate('CoOwnIssue', { assetId: asset.id })}
             lifecycleState={lifecycleState}
           />
         )}
@@ -928,10 +984,6 @@ export default function AssetDetailScreen() {
             dataStale={dataStale}
             dataStaleAgeLabel={dataStaleAgeLabel}
             onRefresh={handleRefresh}
-            marketSectionExpanded={marketSectionExpanded}
-            onToggleMarketSection={() => toggleExpansion('marketSection')}
-            orderBookExpanded={orderBookExpanded}
-            onToggleOrderBook={() => toggleExpansion('orderBook')}
             allocatedPct={allocatedPct}
             availableUnits={availableUnits}
             totalUnits={totalUnits}
@@ -946,9 +998,7 @@ export default function AssetDetailScreen() {
 
         {activeTab === 'ownership' && (
           <AssetOwnershipSection
-            asset={asset}
             isHolder={isHolder}
-            isIssuer={isIssuer}
             yourUnits={yourUnits}
             viewerPct={viewerPct}
             avgEntryPriceGbp={avgEntryPriceGbp}
@@ -957,19 +1007,27 @@ export default function AssetDetailScreen() {
             yourSegmentPct={yourSegmentPct}
             otherHoldersSegmentPct={otherHoldersSegmentPct}
             availableSegmentPct={availableSegmentPct}
-            allocatedPct={allocatedPct}
             availableUnits={availableUnits}
             totalUnits={totalUnits}
-            rightsRows={rightsRows}
-            hasIncompleteRights={hasIncompleteRights}
             onOpenRights={() => openSheet('rights')}
             lastDistribution={lastDistribution}
             lastDistributionAmount={lastDistributionAmount}
             lastDistributionDate={lastDistributionDate}
             lastDistributionPerUnit={lastDistributionPerUnit}
             onNavigateToDistributionHistory={() => navigation.navigate('DistributionHistory', { assetId: asset.id })}
-            feePct={feePct}
-            lifecycleState={lifecycleState}
+            corporateActions={corporateActions}
+            onNavigateToCorporateAction={(action) => navigation.navigate('CorporateActionDetail', {
+              assetId: asset.id,
+              actionType: action.actionType,
+              dateLabel: corporateActionDateLabel(action),
+              effectLabel: action.description ?? action.title,
+              amountLabel: corporateActionAmountLabel(action),
+              status: action.status,
+              recordDateLabel: action.recordDate ? `Record date: ${formatDayMonth(action.recordDate)}` : undefined,
+              paymentDateLabel: action.payableDate ? `Payment: ${formatDayMonth(action.payableDate)}` : undefined,
+              actionId: action.id,
+            })}
+            onOpenBuyout={() => navigation.navigate('Buyout', { assetId: asset.id })}
           />
         )}
 
@@ -1233,7 +1291,7 @@ export default function AssetDetailScreen() {
         isWatched={isWatched}
         onPriceAlert={() => {
           closeSheet('overflow');
-          openPriceAlert();
+          navigation.navigate('CoOwnPriceAlerts');
         }}
         onReport={() => {
           closeSheet('overflow');

@@ -64,6 +64,44 @@
 - All co-own tests pass (140/140 in the 4 affected files).
 - 6 pre-existing group chat failures remain (unrelated to co-own).
 
+## Wave 4 — Asset Detail flagship trading surface (Kalshi/Polymarket benchmark)
+
+Research: live web research on Kalshi market screen + Polymarket event page (see `research-ledger-asset-detail-2026-09.md`); full repo archaeology audit of Asset Detail data flow.
+
+### Backend
+- Added `GET /co-own/distributions` (was missing — DistributionHistoryScreen 404'd): authenticated user-scoped rows with keyset cursor pagination; anonymous path returns per-asset aggregates only, no per-user data.
+- Added `GET /co-own/corporate-actions` and `GET /co-own/assets/:assetId/corporate-actions` (were missing — CorporateActionDetailScreen 404'd): assetId/type/limit filters, 404 for missing asset, exact CoOwnCorporateAction contract mapping.
+
+### Frontend — Market tab
+- 24h stats strip: `24h ±X.X% · Vol · Spread` under the transaction surface, direction-colored (coownUp/coownDown), null segments omitted entirely.
+- Execution tape: last 8 settled executions (time · price · units) with cancellation guard, stale-tape clearing on asset switch, inline error + retry. Public feed carries no side data, so no side glyphs are fabricated.
+
+### Frontend — Overview tab
+- Real ranged price history: range chips now drive `fetchCoOwnPriceHistory` (1D→1h/48, 1W→4h/42, 1M→1d/30, 3M→1d/90, 1Y/ALL→1w/52). Previous candles no longer leak across ranges; embedded asset candles are the fallback; loading/error states honest.
+- Volume toggle wired end-to-end (was dead state); chart receives lastPrice.
+
+### Frontend — Ownership tab
+- Corporate actions & events block (up to 3 rows, unknown backend types skipped, never guessed).
+- Buyout offers disclosure row → real Buyout screen (backend routes + P0-hardened auth from Wave 3).
+- Hard-coded hex colors replaced with theme tokens (successSubtle/textMuted/success); P&L uses financial-direction tokens.
+
+### Frontend — screen wiring
+- `hasActiveOrders` no longer hard-coded false: owner-scoped market history checked for open/partially_filled orders on this asset (recent-50 window, documented approximation).
+- `hasUnclaimedDistributions` now status-based (non-settled only), not "any distribution exists".
+- Pull-to-refresh now bumps a refreshKey so distributions, corporate actions, and active orders refresh with asset/orderbook/holdings.
+- Dead expansion props removed from screen + sections.
+
+### Adversarial review + repairs (fresh-context reviewer)
+- P0 fixed: inverted `.catch` guards in three effects left previous asset's distribution/corporate-actions/active-orders state visible after an asset switch with a failing fetch.
+- P1 fixed: stale candles under a new range label (history state now reset on range change and error).
+- P1 fixed: execution tape race (cancellation guard + tape cleared on asset switch + limit raised to 25 to survive settled-filtering).
+- P1 fixed: pull-to-refresh now refreshes all new data sources.
+- P1 fixed: hard-coded colors in ownership section → theme tokens.
+- Documented P2/P3 (deferred): cursor off-by-one (empty final page possible), silent failure states in ownership rows, remaining card-density in overview/ownership sections, static source-string test weakness, 50-entry active-orders window.
+
+### Tests
+- Updated 2 stale source-analysis tests: candle gating (now `hasChartCandles` with ranged history) and buyout navigation (Buyout is now a real screen — assertion inverted from prohibition to requirement).
+
 ## Current status
 
-TypeScript (frontend + backend) passes. 1719 tests pass, 6 pre-existing group chat failures remain (unrelated). Native visual capture and accessibility traversal remain pending because no configured native device is available.
+TypeScript (frontend + backend) passes. 82/83 test files pass; the only failing file is the pre-existing group-chat parity suite (6 tests, unrelated to co-own). Native visual capture and accessibility traversal remain pending because no configured native device is available.
