@@ -76,7 +76,7 @@ export function AssetMarketSection({
   onCancelOrder,
   cancellingOrderId = null,
 }: AssetMarketSectionProps) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
 
   // ── Execution tape — last settled trades for this asset ──
   // The public executions feed carries no counterparty or side data, so the

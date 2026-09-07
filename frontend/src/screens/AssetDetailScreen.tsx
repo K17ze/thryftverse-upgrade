@@ -14,7 +14,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { RootStackParamList } from '../navigation/types';
 import { openProfile } from '../navigation/openProfile';
 import { useStore } from '../store/useStore';
-import { Space, DockConstants, Control, PressScale } from '../theme/designTokens';
+import { Space, DockConstants } from '../theme/designTokens';
 import {
   fetchCoOwnDistributions,
   fetchCoOwnAssetCorporateActions,
@@ -43,7 +43,6 @@ import {
   CommerceDetailHeader,
   CommerceDetailMediaRail,
 } from '../components/commerce/detail';
-import { resolveCoOwnConversation } from '../utils/coOwnMessaging';
 import {
   buildCoOwnViewModel,
   useProductSocialState,
